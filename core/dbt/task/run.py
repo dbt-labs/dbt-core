@@ -587,100 +587,52 @@ class MicrobatchModelRunnerOLD(ModelRunner):
         materialization_macro: MacroProtocol,
     ) -> RunResult:
         # TODO: This method should be moved to the batch runner
-        # TODO: This method has gotten a little large. It may be time to break it up into more manageable parts.
 
-        ######
-        # TODO: this section should move to a separte function in the batch orchestration runner
-        event_time_start = getattr(self.config.args, "EVENT_TIME_START", None)
-        event_time_end = getattr(self.config.args, "EVENT_TIME_END", None)
+        batch = self.batches[self.batch_idx]
+        # call materialization_macro to get a batch-level run result
+        start_time = time.perf_counter()
+        try:
+            # Update jinja context with batch context members
+            jinja_context = microbatch_builder.build_jinja_context_for_batch(
+                incremental_batch=self.relation_exists
+            )
+            context.update(jinja_context)
 
-        if os.environ.get("DBT_EXPERIMENTAL_SAMPLE_MODE") and getattr(
-            self.config.args, "SAMPLE", None
-        ):
-            event_time_start = self.config.args.sample.start
-            event_time_end = self.config.args.sample.end
+            # Materialize batch and cache any materialized relations
+            result = MacroGenerator(
+                materialization_macro, context, stack=context["context_macro_stack"]
+            )()
+            for relation in self._materialization_relations(result, model):
+                self.adapter.cache_added(relation.incorporate(dbt_created=True))
 
-        microbatch_builder = MicrobatchBuilder(
-            model=model,
-            is_incremental=self._is_incremental(model),
-            event_time_start=event_time_start,
-            event_time_end=event_time_end,
-            default_end_time=get_invocation_started_at(),
-        )
-
-        if self.batch_idx is None:
-            # Note currently (9/30/2024) model.previous_batch_results is only ever _not_ `None`
-            # IFF `dbt retry` is being run and the microbatch model had batches which
-            # failed on the run of the model (which is being retried)
-            if model.previous_batch_results is None:
-                end = microbatch_builder.build_end_time()
-                start = microbatch_builder.build_start_time(end)
-                batches = microbatch_builder.build_batches(start, end)
-            else:
-                batches = model.previous_batch_results.failed
-                # If there is batch info, then don't run as full_refresh and do force is_incremental
-                # not doing this risks blowing away the work that has already been done
-                if self._has_relation(model=model):
-                    self.relation_exists = True
-
-            batch_result = self._build_run_microbatch_model_result(model)
-            self.batches = {batch_idx: batches[batch_idx] for batch_idx in range(len(batches))}
-            ######
-
-        else:
-            batch = self.batches[self.batch_idx]
-            # call materialization_macro to get a batch-level run result
-            start_time = time.perf_counter()
-            try:
-                # Update jinja context with batch context members
-                jinja_context = microbatch_builder.build_jinja_context_for_batch(
-                    incremental_batch=self.relation_exists
-                )
-                context.update(jinja_context)
-
-                # Materialize batch and cache any materialized relations
-                result = MacroGenerator(
-                    materialization_macro, context, stack=context["context_macro_stack"]
-                )()
-                for relation in self._materialization_relations(result, model):
-                    self.adapter.cache_added(relation.incorporate(dbt_created=True))
-
-                # Build result of executed batch
-                batch_run_result = self._build_succesful_run_batch_result(
-                    model, context, batch, time.perf_counter() - start_time
-                )
-                batch_result = batch_run_result
-
-                # At least one batch has been inserted successfully!
-                # Can proceed incrementally + in parallel
-                self.relation_exists = True
-
-            except (KeyboardInterrupt, SystemExit):
-                # reraise it for GraphRunnableTask.execute_nodes to handle
-                raise
-            except Exception as e:
-                fire_event(
-                    GenericExceptionOnRun(
-                        unique_id=self.node.unique_id,
-                        exc=f"Exception on worker thread. {str(e)}",
-                        node_info=self.node.node_info,
-                    )
-                )
-                batch_run_result = self._build_failed_run_batch_result(
-                    model, batch, time.perf_counter() - start_time
-                )
-
+            # Build result of executed batch
+            batch_run_result = self._build_succesful_run_batch_result(
+                model, context, batch, time.perf_counter() - start_time
+            )
             batch_result = batch_run_result
 
-        return batch_result
+            # At least one batch has been inserted successfully!
+            # Can proceed incrementally + in parallel
+            self.relation_exists = True
 
-    def _has_relation(self, model) -> bool:
-        # TODO: Should move to microbatch orchestration runner
-        relation_info = self.adapter.Relation.create_from(self.config, model)
-        relation = self.adapter.get_relation(
-            relation_info.database, relation_info.schema, relation_info.name
-        )
-        return relation is not None
+        except (KeyboardInterrupt, SystemExit):
+            # reraise it for GraphRunnableTask.execute_nodes to handle
+            raise
+        except Exception as e:
+            fire_event(
+                GenericExceptionOnRun(
+                    unique_id=self.node.unique_id,
+                    exc=f"Exception on worker thread. {str(e)}",
+                    node_info=self.node.node_info,
+                )
+            )
+            batch_run_result = self._build_failed_run_batch_result(
+                model, batch, time.perf_counter() - start_time
+            )
+
+        batch_result = batch_run_result
+
+        return batch_result
 
     def should_run_in_parallel(self) -> bool:
         # TODO: Should move to batch runner
@@ -698,25 +650,6 @@ class MicrobatchModelRunnerOLD(ModelRunner):
             run_in_parallel = not self.node.has_this
 
         return run_in_parallel
-
-    def _is_incremental(self, model) -> bool:
-        # TODO: Remove. This is a temporary method. We're working with adapters on
-        # a strategy to ensure we can access the `is_incremental` logic without drift
-        relation_info = self.adapter.Relation.create_from(self.config, model)
-        relation = self.adapter.get_relation(
-            relation_info.database, relation_info.schema, relation_info.name
-        )
-        if (
-            relation is not None
-            and relation.type == "table"
-            and model.config.materialized == "incremental"
-        ):
-            if model.config.full_refresh is not None:
-                return not model.config.full_refresh
-            else:
-                return not getattr(self.config.args, "FULL_REFRESH", False)
-        else:
-            return False
 
     def _execute_model(
         self,
@@ -746,10 +679,75 @@ class MicrobatchBatchRunner(ModelRunner):
 class MicrobatchModelRunner(ModelRunner):
     """Handles the orchestration of batches to run for a given microbatch model"""
 
+    def _has_relation(self, model: ModelNode) -> bool:
+        """Check whether the relation for the model exists in the data warehouse"""
+        relation_info = self.adapter.Relation.create_from(self.config, model)
+        relation = self.adapter.get_relation(
+            relation_info.database, relation_info.schema, relation_info.name
+        )
+        return relation is not None
+
+    def _is_incremental(self, model) -> bool:
+        """Check whether the model should be run `incrementally` or as `full refresh`"""
+        # TODO: Remove this whole function. This should be a temporary method. We're working with adapters on
+        # a strategy to ensure we can access the `is_incremental` logic without drift
+        relation_info = self.adapter.Relation.create_from(self.config, model)
+        relation = self.adapter.get_relation(
+            relation_info.database, relation_info.schema, relation_info.name
+        )
+        if (
+            relation is not None
+            and relation.type == "table"
+            and model.config.materialized == "incremental"
+        ):
+            if model.config.full_refresh is not None:
+                return not model.config.full_refresh
+            else:
+                return not getattr(self.config.args, "FULL_REFRESH", False)
+        else:
+            return False
+
+    def get_batches(self, model: ModelNode) -> Dict[int, BatchType]:
+        """Get the batches that should be run for the model"""
+
+        # TODO: All of this setup for creating MicrobatchBuilder should _only_
+        # hapen if their are failed batches for us to retry
+
+        # Intially set the start/end to values from args
+        event_time_start = getattr(self.config.args, "EVENT_TIME_START", None)
+        event_time_end = getattr(self.config.args, "EVENT_TIME_END", None)
+
+        # If we're in sample mode, alter start/end to sample values
+        if os.environ.get("DBT_EXPERIMENTAL_SAMPLE_MODE") and getattr(
+            self.config.args, "SAMPLE", None
+        ):
+            event_time_start = self.config.args.sample.start
+            event_time_end = self.config.args.sample.end
+
+        microbatch_builder = MicrobatchBuilder(
+            model=model,
+            is_incremental=self._is_incremental(model),
+            event_time_start=event_time_start,
+            event_time_end=event_time_end,
+            default_end_time=get_invocation_started_at(),
+        )
+
+        # Note currently (02/23/2025) model.previous_batch_results is only ever _not_ `None`
+        # IFF `dbt retry` is being run and the microbatch model had batches which
+        # failed on the run of the model (which is being retried)
+        if model.previous_batch_results is None:
+            end = microbatch_builder.build_end_time()
+            start = microbatch_builder.build_start_time(end)
+            batches = microbatch_builder.build_batches(start, end)
+        else:
+            batches = model.previous_batch_results.failed
+
+        return {batch_idx: batches[batch_idx] for batch_idx in range(len(batches))}
+
     def execute(self, model: ModelNode, manifest: Manifest) -> RunResult:
         # Execution really means orchestration in this case
 
-        batches = []  # TODO calculate batches
+        batches = self.get_batches(model=model)
         relation_exists = True  # TODO retrieve existance of relation
         result = RunResult()  # TODO add some better details to this
 
