@@ -334,7 +334,7 @@ class ModelRunner(CompileRunner):
         return self._execute_model(hook_ctx, context_config, model, context, materialization_macro)
 
 
-class MicrobatchModelRunner(ModelRunner):
+class MicrobatchModelRunnerOLD(ModelRunner):
     def __init__(self, config, adapter, node, node_index: int, num_nodes: int):
         super().__init__(config, adapter, node, node_index, num_nodes)
 
@@ -735,6 +735,18 @@ class MicrobatchModelRunner(ModelRunner):
             self.adapter.post_model_hook(context_config, hook_ctx)
 
         return batch_result
+
+
+class MicrobatchBatchRunner(ModelRunner):
+    """Handles the running of individual batches"""
+
+    pass
+
+
+class MicrobatchModelRunner(ModelRunner):
+    """Handles the orchestration of batches to run for a given microbatch model"""
+
+    pass
 
 
 class RunTask(CompileTask):
