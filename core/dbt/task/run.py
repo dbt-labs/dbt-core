@@ -474,8 +474,8 @@ class MicrobatchModelRunnerOLD(ModelRunner):
             self.print_batch_start_line()
 
     def after_execute(self, result) -> None:
-        # TODO move to microbatch orchestration runner
-        # Note: Might need to add empty `after_execute` to batch runner
+        # TODO move to batch runner
+        # Note: Might need to add empty `after_execute` to microbatch orchestration runner
         if self.batch_idx is not None:
             self.print_batch_result_line(result)
 
@@ -746,48 +746,44 @@ class MicrobatchBatchRunner(ModelRunner):
 class MicrobatchModelRunner(ModelRunner):
     """Handles the orchestration of batches to run for a given microbatch model"""
 
-    def handle_microbatch_model(
-        self,
-        runner: MicrobatchModelRunner,
-        pool: ThreadPool,
-    ) -> RunResult:
-        # TODO: This method should happen in a microbatch organization runner
-        # handling the orchestration of batches here results in blocking the main
-        # thread in multi threaded environments
+    def execute(self, model: ModelNode, manifest: Manifest) -> RunResult:
+        # Execution really means orchestration in this case
 
-        # Initial run computes batch metadata
-        # TODO: We shouldn't have to call a runner to calculate the batches, no, and relationship existence
-        result = self.call_runner(runner)
-        batches, node, relation_exists = runner.batches, runner.node, runner.relation_exists
+        batches = []  # TODO calculate batches
+        relation_exists = True  # TODO retrieve existance of relation
+        result = RunResult()  # TODO add some better details to this
 
-        # Return early if model should be skipped, or there are no batches to execute
-        if result.status == RunStatus.Skipped:
-            return result
-        elif len(runner.batches) == 0:
-            return result
+        # TODO: This might not be necessary once we implement do_skip
+        # if result.status == RunStatus.Skipped:
+        #     return result
+
+        if len(batches) == 0:
+            # TODO: What should we return here?
+            pass
 
         batch_results: List[RunResult] = []
         batch_idx = 0
 
         # Run first batch not in parallel
+        # TODO How do we access the parent task to submit the batch?
         relation_exists = self._submit_batch(
-            node=node,
-            adapter=runner.adapter,
+            node=model,
+            adapter=self.adapter,
             relation_exists=relation_exists,
             batches=batches,
             batch_idx=batch_idx,
             batch_results=batch_results,
-            pool=pool,
+            pool=pool,  # TODO how do we get the pool
             force_sequential_run=True,
         )
         batch_idx += 1
         skip_batches = batch_results[0].status != RunStatus.Success
 
         # Run all batches except first and last batch, in parallel if possible
-        while batch_idx < len(runner.batches) - 1:
+        while batch_idx < len(batches) - 1:
             relation_exists = self._submit_batch(
-                node=node,
-                adapter=runner.adapter,
+                node=model,
+                adapter=self.adapter,
                 relation_exists=relation_exists,
                 batches=batches,
                 batch_idx=batch_idx,
@@ -805,8 +801,8 @@ class MicrobatchModelRunner(ModelRunner):
         if len(batches) != 1:
             # Final batch runs once all others complete to ensure post_hook runs at the end
             self._submit_batch(
-                node=node,
-                adapter=runner.adapter,
+                node=model,
+                adapter=self.adapter,
                 relation_exists=relation_exists,
                 batches=batches,
                 batch_idx=batch_idx,
@@ -817,11 +813,13 @@ class MicrobatchModelRunner(ModelRunner):
             )
 
         # Finalize run: merge results, track model run, and print final result line
-        runner.merge_batch_results(result, batch_results)
-        # TODO: this line should go away, as the `after_execute` should handle it once this function
-        # is moved to a runner
-        track_model_run(runner.node_index, runner.num_nodes, result, adapter=runner.adapter)
-        runner.print_result_line(result)
+        self.merge_batch_results(
+            result, batch_results
+        )  # TODO: move get access to merge_batch_results
+
+        # TODO: Is it okay that these goes away? (after_execute should handle them)
+        # track_model_run(runner.node_index, runner.num_nodes, result, adapter=runner.adapter)
+        # self.print_result_line(result)
 
         return result
 
