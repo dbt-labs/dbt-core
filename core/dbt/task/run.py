@@ -338,11 +338,14 @@ class MicrobatchModelRunner(ModelRunner):
     def __init__(self, config, adapter, node, node_index: int, num_nodes: int):
         super().__init__(config, adapter, node, node_index, num_nodes)
 
+        # Make non-optional
         self.batch_idx: Optional[int] = None
         self.batches: Dict[int, BatchType] = {}
         self.relation_exists: bool = False
 
     def compile(self, manifest: Manifest):
+        # TODO: Move to batch runner
+        # TODO: microbatch orchestration runner should have an empty compile
         if self.batch_idx is not None:
             batch = self.batches[self.batch_idx]
 
@@ -370,25 +373,31 @@ class MicrobatchModelRunner(ModelRunner):
         return self.node
 
     def set_batch_idx(self, batch_idx: int) -> None:
+        # TODO: goodbye (direct property of batch runner instead)
         self.batch_idx = batch_idx
 
     def set_relation_exists(self, relation_exists: bool) -> None:
+        # TODO: goodbye (direct property of batch runner instead)
         self.relation_exists = relation_exists
 
     def set_batches(self, batches: Dict[int, BatchType]) -> None:
+        # TODO: goodbye (direct property of batch runner instead)
         self.batches = batches
 
     @property
     def batch_start(self) -> Optional[datetime]:
+        # TODO: This should go away in entirety :thinky:
         if self.batch_idx is None:
             return None
         else:
             return self.batches[self.batch_idx][0]
 
     def describe_node(self) -> str:
+        # TODO: Move to microbatch orchestration runner AND batch runner
         return f"{self.node.language} microbatch model {self.get_node_representation()}"
 
     def describe_batch(self) -> str:
+        # TODO: Move to batch runner
         batch_start = self.batch_start
         if batch_start is None:
             return ""
@@ -403,6 +412,9 @@ class MicrobatchModelRunner(ModelRunner):
         self,
         result: RunResult,
     ):
+        # TODO: Move to batch runner
+
+        # TODO: This should go away
         if self.batch_idx is None:
             return
 
@@ -431,9 +443,13 @@ class MicrobatchModelRunner(ModelRunner):
         )
 
     def print_batch_start_line(self) -> None:
+        # TODO: Move to batch runner
+
+        # TODO: This should go away
         if self.batch_idx is None:
             return
 
+        # TODO: This should go away as the batch start is now guaranteed
         batch_start = self.batches[self.batch_idx][0]
         if batch_start is None:
             return
@@ -449,16 +465,22 @@ class MicrobatchModelRunner(ModelRunner):
         )
 
     def before_execute(self) -> None:
+        # TODO: Split into two method
+        # The first part of the if statement should move to the microbatch orchestration runner
+        # The second should move to the batch runner
         if self.batch_idx is None:
             self.print_start_line()
         else:
             self.print_batch_start_line()
 
     def after_execute(self, result) -> None:
+        # TODO move to microbatch orchestration runner
+        # Note: Might need to add empty `after_execute` to batch runner
         if self.batch_idx is not None:
             self.print_batch_result_line(result)
 
     def merge_batch_results(self, result: RunResult, batch_results: List[RunResult]):
+        # TODO: move to microbatch orchestration runner
         """merge batch_results into result"""
         if result.batch_results is None:
             result.batch_results = BatchResults()
@@ -490,6 +512,9 @@ class MicrobatchModelRunner(ModelRunner):
             result.batch_results.successful += self.node.previous_batch_results.successful
 
     def on_skip(self):
+        # TODO: Split into two method
+        # The first part of the if statement should move to the microbatch orchestration runner
+        # The second should move to the batch runner
         # If node.batch is None, then we're dealing with skipping of the entire node
         if self.batch_idx is None:
             return super().on_skip()
@@ -515,6 +540,7 @@ class MicrobatchModelRunner(ModelRunner):
         batch: BatchType,
         elapsed_time: float = 0.0,
     ) -> RunResult:
+        # TODO: move to batch runner
         run_result = self._build_run_model_result(model, context, elapsed_time)
         run_result.batch_results = BatchResults(successful=[batch])
         return run_result
@@ -525,6 +551,7 @@ class MicrobatchModelRunner(ModelRunner):
         batch: BatchType,
         elapsed_time: float = 0.0,
     ) -> RunResult:
+        # TODO: move to batch runner
         return RunResult(
             node=model,
             status=RunStatus.Error,
@@ -538,6 +565,7 @@ class MicrobatchModelRunner(ModelRunner):
         )
 
     def _build_run_microbatch_model_result(self, model: ModelNode) -> RunResult:
+        # TODO: Move to microbatch orchestration runner
         return RunResult(
             node=model,
             status=RunStatus.Success,
@@ -558,7 +586,11 @@ class MicrobatchModelRunner(ModelRunner):
         context: Dict[str, Any],
         materialization_macro: MacroProtocol,
     ) -> RunResult:
+        # TODO: This method should be moved to the batch runner
         # TODO: This method has gotten a little large. It may be time to break it up into more manageable parts.
+
+        ######
+        # TODO: this section should move to a separte function in the batch orchestration runner
         event_time_start = getattr(self.config.args, "EVENT_TIME_START", None)
         event_time_end = getattr(self.config.args, "EVENT_TIME_END", None)
 
@@ -593,6 +625,7 @@ class MicrobatchModelRunner(ModelRunner):
 
             batch_result = self._build_run_microbatch_model_result(model)
             self.batches = {batch_idx: batches[batch_idx] for batch_idx in range(len(batches))}
+            ######
 
         else:
             batch = self.batches[self.batch_idx]
@@ -642,6 +675,7 @@ class MicrobatchModelRunner(ModelRunner):
         return batch_result
 
     def _has_relation(self, model) -> bool:
+        # TODO: Should move to microbatch orchestration runner
         relation_info = self.adapter.Relation.create_from(self.config, model)
         relation = self.adapter.get_relation(
             relation_info.database, relation_info.schema, relation_info.name
@@ -649,6 +683,7 @@ class MicrobatchModelRunner(ModelRunner):
         return relation is not None
 
     def should_run_in_parallel(self) -> bool:
+        # TODO: Should move to batch runner
         if not self.adapter.supports(Capability.MicrobatchConcurrency):
             run_in_parallel = False
         elif not self.relation_exists:
@@ -691,6 +726,7 @@ class MicrobatchModelRunner(ModelRunner):
         context: Dict[str, Any],
         materialization_macro: MacroProtocol,
     ) -> RunResult:
+        # TODO: Move to batch runner
         try:
             batch_result = self._execute_microbatch_materialization(
                 model, context, materialization_macro
@@ -746,7 +782,12 @@ class RunTask(CompileTask):
         runner: MicrobatchModelRunner,
         pool: ThreadPool,
     ) -> RunResult:
+        # TODO: This method should happen in a microbatch organization runner
+        # handling the orchestration of batches here results in blocking the main
+        # thread in multi threaded environments
+
         # Initial run computes batch metadata
+        # TODO: We shouldn't have to call a runner to calculate the batches, no, and relationship existence
         result = self.call_runner(runner)
         batches, node, relation_exists = runner.batches, runner.node, runner.relation_exists
 
@@ -808,6 +849,8 @@ class RunTask(CompileTask):
 
         # Finalize run: merge results, track model run, and print final result line
         runner.merge_batch_results(result, batch_results)
+        # TODO: this line should go away, as the `after_execute` should handle it once this function
+        # is moved to a runner
         track_model_run(runner.node_index, runner.num_nodes, result, adapter=runner.adapter)
         runner.print_result_line(result)
 
@@ -840,6 +883,9 @@ class RunTask(CompileTask):
         batch_runner = MicrobatchModelRunner(
             self.config, adapter, node_copy, self.run_count, self.num_nodes
         )
+
+        # TODO: These should go away. Instead the new batch specific runner
+        # should take these as arguments
         batch_runner.set_batch_idx(batch_idx)
         batch_runner.set_relation_exists(relation_exists)
         batch_runner.set_batches(batches)
