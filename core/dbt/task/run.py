@@ -746,46 +746,6 @@ class MicrobatchBatchRunner(ModelRunner):
 class MicrobatchModelRunner(ModelRunner):
     """Handles the orchestration of batches to run for a given microbatch model"""
 
-    pass
-
-
-class RunTask(CompileTask):
-    def __init__(
-        self,
-        args: Flags,
-        config: RuntimeConfig,
-        manifest: Manifest,
-        batch_map: Optional[Dict[str, BatchResults]] = None,
-    ) -> None:
-        super().__init__(args, config, manifest)
-        self.batch_map = batch_map
-
-    def raise_on_first_error(self) -> bool:
-        return False
-
-    def get_hook_sql(self, adapter, hook, idx, num_hooks, extra_context) -> str:
-        if self.manifest is None:
-            raise DbtInternalError("compile_node called before manifest was loaded")
-
-        compiled = self.compiler.compile_node(hook, self.manifest, extra_context)
-        statement = compiled.compiled_code
-        hook_index = hook.index or num_hooks
-        hook_obj = get_hook(statement, index=hook_index)
-        return hook_obj.sql or ""
-
-    def handle_job_queue(self, pool, callback):
-        node = self.job_queue.get()
-        self._raise_set_error()
-        runner = self.get_runner(node)
-        # we finally know what we're running! Make sure we haven't decided
-        # to skip it due to upstream failures
-        if runner.node.unique_id in self._skipped_children:
-            cause = self._skipped_children.pop(runner.node.unique_id)
-            runner.do_skip(cause=cause)
-
-        args = [runner]
-        self._submit(pool, args, callback)
-
     def handle_microbatch_model(
         self,
         runner: MicrobatchModelRunner,
@@ -864,6 +824,44 @@ class RunTask(CompileTask):
         runner.print_result_line(result)
 
         return result
+
+
+class RunTask(CompileTask):
+    def __init__(
+        self,
+        args: Flags,
+        config: RuntimeConfig,
+        manifest: Manifest,
+        batch_map: Optional[Dict[str, BatchResults]] = None,
+    ) -> None:
+        super().__init__(args, config, manifest)
+        self.batch_map = batch_map
+
+    def raise_on_first_error(self) -> bool:
+        return False
+
+    def get_hook_sql(self, adapter, hook, idx, num_hooks, extra_context) -> str:
+        if self.manifest is None:
+            raise DbtInternalError("compile_node called before manifest was loaded")
+
+        compiled = self.compiler.compile_node(hook, self.manifest, extra_context)
+        statement = compiled.compiled_code
+        hook_index = hook.index or num_hooks
+        hook_obj = get_hook(statement, index=hook_index)
+        return hook_obj.sql or ""
+
+    def handle_job_queue(self, pool, callback):
+        node = self.job_queue.get()
+        self._raise_set_error()
+        runner = self.get_runner(node)
+        # we finally know what we're running! Make sure we haven't decided
+        # to skip it due to upstream failures
+        if runner.node.unique_id in self._skipped_children:
+            cause = self._skipped_children.pop(runner.node.unique_id)
+            runner.do_skip(cause=cause)
+
+        args = [runner]
+        self._submit(pool, args, callback)
 
     def _submit_batch(
         self,
