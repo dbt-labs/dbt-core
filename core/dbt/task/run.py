@@ -748,7 +748,8 @@ class MicrobatchModelRunner(ModelRunner):
         # Execution really means orchestration in this case
 
         batches = self.get_batches(model=model)
-        relation_exists = True  # TODO retrieve existance of relation
+        # TODO: We should de-dupe this call with the call we also do in get_batches
+        relation_exists = self._has_relation(model=model)
         result = RunResult()  # TODO add some better details to this
 
         # TODO: This might not be necessary once we implement do_skip
