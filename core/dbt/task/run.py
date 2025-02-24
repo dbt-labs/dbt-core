@@ -564,22 +564,6 @@ class MicrobatchModelRunnerOLD(ModelRunner):
             batch_results=BatchResults(failed=[batch]),
         )
 
-    def _build_run_microbatch_model_result(self, model: ModelNode) -> RunResult:
-        # TODO: Move to microbatch orchestration runner
-        return RunResult(
-            node=model,
-            status=RunStatus.Success,
-            timing=[],
-            thread_id=threading.current_thread().name,
-            # The execution_time here doesn't get propagated to logs because
-            # `safe_run_hooks` handles the elapsed time at the node level
-            execution_time=0,
-            message="",
-            adapter_response={},
-            failures=0,
-            batch_results=BatchResults(),
-        )
-
     def _execute_microbatch_materialization(
         self,
         model: ModelNode,
@@ -707,6 +691,21 @@ class MicrobatchModelRunner(ModelRunner):
         else:
             return False
 
+    def _initial_run_microbatch_model_result(self, model: ModelNode) -> RunResult:
+        return RunResult(
+            node=model,
+            status=RunStatus.Success,
+            timing=[],
+            thread_id=threading.current_thread().name,
+            # The execution_time here doesn't get propagated to logs because
+            # `safe_run_hooks` handles the elapsed time at the node level
+            execution_time=0,
+            message="",
+            adapter_response={},
+            failures=0,
+            batch_results=BatchResults(),
+        )
+
     def get_batches(self, model: ModelNode) -> Dict[int, BatchType]:
         """Get the batches that should be run for the model"""
 
@@ -750,15 +749,14 @@ class MicrobatchModelRunner(ModelRunner):
         batches = self.get_batches(model=model)
         # TODO: We should de-dupe this call with the call we also do in get_batches
         relation_exists = self._has_relation(model=model)
-        result = RunResult()  # TODO add some better details to this
+        result = self._initial_run_microbatch_model_result(model=model)
 
         # TODO: This might not be necessary once we implement do_skip
         # if result.status == RunStatus.Skipped:
         #     return result
 
         if len(batches) == 0:
-            # TODO: What should we return here?
-            pass
+            return result
 
         batch_results: List[RunResult] = []
         batch_idx = 0
