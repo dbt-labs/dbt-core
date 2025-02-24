@@ -378,62 +378,6 @@ class MicrobatchModelRunnerOLD(ModelRunner):
         # TODO: Move to microbatch orchestration runner AND batch runner
         return f"{self.node.language} microbatch model {self.get_node_representation()}"
 
-    def print_batch_result_line(
-        self,
-        result: RunResult,
-    ):
-        # TODO: Move to batch runner
-
-        # TODO: This should go away
-        if self.batch_idx is None:
-            return
-
-        description = self.describe_batch()
-        group = group_lookup.get(self.node.unique_id)
-        if result.status == NodeStatus.Error:
-            status = result.status
-            level = EventLevel.ERROR
-        elif result.status == NodeStatus.Skipped:
-            status = result.status
-            level = EventLevel.INFO
-        else:
-            status = result.message
-            level = EventLevel.INFO
-        fire_event(
-            LogBatchResult(
-                description=description,
-                status=status,
-                batch_index=self.batch_idx + 1,
-                total_batches=len(self.batches),
-                execution_time=result.execution_time,
-                node_info=self.node.node_info,
-                group=group,
-            ),
-            level=level,
-        )
-
-    def print_batch_start_line(self) -> None:
-        # TODO: Move to batch runner
-
-        # TODO: This should go away
-        if self.batch_idx is None:
-            return
-
-        # TODO: This should go away as the batch start is now guaranteed
-        batch_start = self.batches[self.batch_idx][0]
-        if batch_start is None:
-            return
-
-        batch_description = self.describe_batch()
-        fire_event(
-            LogStartBatch(
-                description=batch_description,
-                batch_index=self.batch_idx + 1,
-                total_batches=len(self.batches),
-                node_info=self.node.node_info,
-            )
-        )
-
     def before_execute(self) -> None:
         # TODO: Split into two method
         # The first part of the if statement should move to the microbatch orchestration runner
@@ -601,6 +545,44 @@ class MicrobatchBatchRunner(ModelRunner):
             batch_start, self.node.config.batch_size
         )
         return f"batch {formatted_batch_start} of {self.get_node_representation()}"
+
+    def print_batch_result_line(self, result: RunResult):
+        description = self.describe_batch()
+        group = group_lookup.get(self.node.unique_id)
+
+        if result.status == NodeStatus.Error:
+            status = result.status
+            level = EventLevel.ERROR
+        elif result.status == NodeStatus.Skipped:
+            status = result.status
+            level = EventLevel.INFO
+        else:
+            status = result.message
+            level = EventLevel.INFO
+
+        fire_event(
+            LogBatchResult(
+                description=description,
+                status=status,
+                batch_index=self.batch_idx + 1,
+                total_batches=len(self.batches),
+                execution_time=result.execution_time,
+                node_info=self.node.node_info,
+                group=group,
+            ),
+            level=level,
+        )
+
+    def print_batch_start_line(self) -> None:
+        batch_description = self.describe_batch()
+        fire_event(
+            LogStartBatch(
+                description=batch_description,
+                batch_index=self.batch_idx + 1,
+                total_batches=len(self.batches),
+                node_info=self.node.node_info,
+            )
+        )
 
     def should_run_in_parallel(self) -> bool:
         if not self.adapter.supports(Capability.MicrobatchConcurrency):
