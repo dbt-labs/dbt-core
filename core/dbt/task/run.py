@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import functools
 import os
 import threading
@@ -663,6 +665,30 @@ class MicrobatchBatchRunner(ModelRunner):
 class MicrobatchModelRunner(ModelRunner):
     """Handles the orchestration of batches to run for a given microbatch model"""
 
+    def __init__(self, config, adapter, node, node_index: int, num_nodes: int):
+        super().__init__(config, adapter, node, node_index, num_nodes)
+
+        self._parent_task: Optional[RunTask] = None
+        self._pool: Optional[ThreadPool] = None
+
+    @property
+    def parent_task(self) -> RunTask:
+        if self._parent_task is None:
+            raise DbtInternalError(
+                msg="Tried to access `parent_task` of `MicrobatchModelRunner` before it was available"
+            )
+
+        return self._parent_task
+
+    @property
+    def pool(self) -> ThreadPool:
+        if self._pool is None:
+            raise DbtInternalError(
+                msg="Tried to access `pool` of `MicrobatchModelRunner` before it was available"
+            )
+
+        return self._pool
+
     def _has_relation(self, model: ModelNode) -> bool:
         """Check whether the relation for the model exists in the data warehouse"""
         relation_info = self.adapter.Relation.create_from(self.config, model)
@@ -762,15 +788,14 @@ class MicrobatchModelRunner(ModelRunner):
         batch_idx = 0
 
         # Run first batch not in parallel
-        # TODO How do we access the parent task to submit the batch?
-        relation_exists = self._submit_batch(
+        relation_exists = self.parent_task._submit_batch(
             node=model,
             adapter=self.adapter,
             relation_exists=relation_exists,
             batches=batches,
             batch_idx=batch_idx,
             batch_results=batch_results,
-            pool=pool,  # TODO how do we get the pool
+            pool=self.pool,
             force_sequential_run=True,
         )
         batch_idx += 1
@@ -778,14 +803,14 @@ class MicrobatchModelRunner(ModelRunner):
 
         # Run all batches except first and last batch, in parallel if possible
         while batch_idx < len(batches) - 1:
-            relation_exists = self._submit_batch(
+            relation_exists = self.parent_task._submit_batch(
                 node=model,
                 adapter=self.adapter,
                 relation_exists=relation_exists,
                 batches=batches,
                 batch_idx=batch_idx,
                 batch_results=batch_results,
-                pool=pool,
+                pool=self.pool,
                 skip=skip_batches,
             )
             batch_idx += 1
@@ -797,14 +822,14 @@ class MicrobatchModelRunner(ModelRunner):
         # Only run "last" batch if there is more than one batch
         if len(batches) != 1:
             # Final batch runs once all others complete to ensure post_hook runs at the end
-            self._submit_batch(
+            self.parent_task._submit_batch(
                 node=model,
                 adapter=self.adapter,
                 relation_exists=relation_exists,
                 batches=batches,
                 batch_idx=batch_idx,
                 batch_results=batch_results,
-                pool=pool,
+                pool=self.pool,
                 force_sequential_run=True,
                 skip=skip_batches,
             )
@@ -854,6 +879,10 @@ class RunTask(CompileTask):
         if runner.node.unique_id in self._skipped_children:
             cause = self._skipped_children.pop(runner.node.unique_id)
             runner.do_skip(cause=cause)
+
+        if isinstance(runner, MicrobatchModelRunner):
+            runner._parent_task = self
+            runner._pool = pool
 
         args = [runner]
         self._submit(pool, args, callback)
