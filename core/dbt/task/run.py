@@ -576,23 +576,6 @@ class MicrobatchModelRunnerOLD(ModelRunner):
 
         return batch_result
 
-    def should_run_in_parallel(self) -> bool:
-        # TODO: Should move to batch runner
-        if not self.adapter.supports(Capability.MicrobatchConcurrency):
-            run_in_parallel = False
-        elif not self.relation_exists:
-            # If the relation doesn't exist, we can't run in parallel
-            run_in_parallel = False
-        elif self.node.config.concurrent_batches is not None:
-            # If the relation exists and the `concurrent_batches` config isn't None, use the config value
-            run_in_parallel = self.node.config.concurrent_batches
-        else:
-            # If the relation exists, the `concurrent_batches` config is None, check if the model self references `this`.
-            # If the model self references `this` then we assume the model batches _can't_ be run in parallel
-            run_in_parallel = not self.node.has_this
-
-        return run_in_parallel
-
     def _execute_model(
         self,
         hook_ctx: Any,
@@ -631,6 +614,22 @@ class MicrobatchBatchRunner(ModelRunner):
         self.batch_idx = batch_idx
         self.batches = batches
         self.relation_exists = relation_exists
+
+    def should_run_in_parallel(self) -> bool:
+        if not self.adapter.supports(Capability.MicrobatchConcurrency):
+            run_in_parallel = False
+        elif not self.relation_exists:
+            # If the relation doesn't exist, we can't run in parallel
+            run_in_parallel = False
+        elif self.node.config.concurrent_batches is not None:
+            # If the relation exists and the `concurrent_batches` config isn't None, use the config value
+            run_in_parallel = self.node.config.concurrent_batches
+        else:
+            # If the relation exists, the `concurrent_batches` config is None, check if the model self references `this`.
+            # If the model self references `this` then we assume the model batches _can't_ be run in parallel
+            run_in_parallel = not self.node.has_this
+
+        return run_in_parallel
 
 
 class MicrobatchModelRunner(ModelRunner):
