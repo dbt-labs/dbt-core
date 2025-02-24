@@ -345,35 +345,6 @@ class MicrobatchModelRunnerOLD(ModelRunner):
         self.batches: Dict[int, BatchType] = {}
         self.relation_exists: bool = False
 
-    def compile(self, manifest: Manifest):
-        # TODO: Move to batch runner
-        # TODO: microbatch orchestration runner should have an empty compile
-        if self.batch_idx is not None:
-            batch = self.batches[self.batch_idx]
-
-            # LEGACY: Set start/end in context prior to re-compiling (Will be removed for 1.10+)
-            # TODO: REMOVE before 1.10 GA
-            self.node.config["__dbt_internal_microbatch_event_time_start"] = batch[0]
-            self.node.config["__dbt_internal_microbatch_event_time_end"] = batch[1]
-            # Create batch context on model node prior to re-compiling
-            self.node.batch = BatchContext(
-                id=MicrobatchBuilder.batch_id(batch[0], self.node.config.batch_size),
-                event_time_start=batch[0],
-                event_time_end=batch[1],
-            )
-            # Recompile node to re-resolve refs with event time filters rendered, update context
-            self.compiler.compile_node(
-                self.node,
-                manifest,
-                {},
-                split_suffix=MicrobatchBuilder.format_batch_start(
-                    batch[0], self.node.config.batch_size
-                ),
-            )
-
-        # Skips compilation for non-batch runs
-        return self.node
-
     def on_skip(self):
         # TODO: Split into two method
         # The first part of the if statement should move to the microbatch orchestration runner
@@ -594,6 +565,31 @@ class MicrobatchBatchRunner(ModelRunner):
 
         return run_in_parallel
 
+    def compile(self, manifest: Manifest):
+        batch = self.batches[self.batch_idx]
+
+        # LEGACY: Set start/end in context prior to re-compiling (Will be removed for 1.10+)
+        # TODO: REMOVE before 1.10 GA
+        self.node.config["__dbt_internal_microbatch_event_time_start"] = batch[0]
+        self.node.config["__dbt_internal_microbatch_event_time_end"] = batch[1]
+        # Create batch context on model node prior to re-compiling
+        self.node.batch = BatchContext(
+            id=MicrobatchBuilder.batch_id(batch[0], self.node.config.batch_size),
+            event_time_start=batch[0],
+            event_time_end=batch[1],
+        )
+        # Recompile node to re-resolve refs with event time filters rendered, update context
+        self.compiler.compile_node(
+            self.node,
+            manifest,
+            {},
+            split_suffix=MicrobatchBuilder.format_batch_start(
+                batch[0], self.node.config.batch_size
+            ),
+        )
+
+        return self.node
+
 
 class MicrobatchModelRunner(ModelRunner):
     """Handles the orchestration of batches to run for a given microbatch model"""
@@ -735,6 +731,10 @@ class MicrobatchModelRunner(ModelRunner):
             batches = model.previous_batch_results.failed
 
         return {batch_idx: batches[batch_idx] for batch_idx in range(len(batches))}
+
+    def compile(self, manifest: Manifest):
+        """Don't do anything here because this runner doesn't need to compile anything"""
+        return self.node
 
     def execute(self, model: ModelNode, manifest: Manifest) -> RunResult:
         # Execution really means orchestration in this case
