@@ -378,21 +378,6 @@ class MicrobatchModelRunnerOLD(ModelRunner):
         # TODO: Move to microbatch orchestration runner AND batch runner
         return f"{self.node.language} microbatch model {self.get_node_representation()}"
 
-    def before_execute(self) -> None:
-        # TODO: Split into two method
-        # The first part of the if statement should move to the microbatch orchestration runner
-        # The second should move to the batch runner
-        if self.batch_idx is None:
-            self.print_start_line()
-        else:
-            self.print_batch_start_line()
-
-    def after_execute(self, result) -> None:
-        # TODO move to batch runner
-        # Note: Might need to add empty `after_execute` to microbatch orchestration runner
-        if self.batch_idx is not None:
-            self.print_batch_result_line(result)
-
     def on_skip(self):
         # TODO: Split into two method
         # The first part of the if statement should move to the microbatch orchestration runner
@@ -583,6 +568,14 @@ class MicrobatchBatchRunner(ModelRunner):
                 node_info=self.node.node_info,
             )
         )
+
+    def before_execute(self) -> None:
+        # TODO: if we rename `print_batch_start_line` we can probably remove this function
+        self.print_batch_start_line()
+
+    def after_execute(self, result) -> None:
+        # TODO: if we rename `print_batch_result_line` we can probably remove this function
+        self.print_batch_result_line(result)
 
     def should_run_in_parallel(self) -> bool:
         if not self.adapter.supports(Capability.MicrobatchConcurrency):
