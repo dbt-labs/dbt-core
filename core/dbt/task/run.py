@@ -374,10 +374,6 @@ class MicrobatchModelRunnerOLD(ModelRunner):
         # Skips compilation for non-batch runs
         return self.node
 
-    def describe_node(self) -> str:
-        # TODO: Move to microbatch orchestration runner AND batch runner
-        return f"{self.node.language} microbatch model {self.get_node_representation()}"
-
     def on_skip(self):
         # TODO: Split into two method
         # The first part of the if statement should move to the microbatch orchestration runner
@@ -524,6 +520,11 @@ class MicrobatchBatchRunner(ModelRunner):
         self.batches = batches
         self.relation_exists = relation_exists
 
+    def describe_node(self) -> str:
+        # TODO: I'm not sure if we actually need this. We should try removing it once everything
+        # is running and seeing if not having it breaks anything
+        return f"{self.node.language} microbatch model {self.get_node_representation()}"
+
     def describe_batch(self) -> str:
         batch_start = self.batches[self.batch_idx][0]
         formatted_batch_start = MicrobatchBuilder.format_batch_start(
@@ -663,6 +664,9 @@ class MicrobatchModelRunner(ModelRunner):
             failures=0,
             batch_results=BatchResults(),
         )
+
+    def describe_node(self) -> str:
+        return f"{self.node.language} microbatch model {self.get_node_representation()}"
 
     def merge_batch_results(self, result: RunResult, batch_results: List[RunResult]):
         """merge batch_results into result"""
