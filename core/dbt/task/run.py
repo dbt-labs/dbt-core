@@ -374,18 +374,6 @@ class MicrobatchModelRunnerOLD(ModelRunner):
         # Skips compilation for non-batch runs
         return self.node
 
-    def set_batch_idx(self, batch_idx: int) -> None:
-        # TODO: goodbye (direct property of batch runner instead)
-        self.batch_idx = batch_idx
-
-    def set_relation_exists(self, relation_exists: bool) -> None:
-        # TODO: goodbye (direct property of batch runner instead)
-        self.relation_exists = relation_exists
-
-    def set_batches(self, batches: Dict[int, BatchType]) -> None:
-        # TODO: goodbye (direct property of batch runner instead)
-        self.batches = batches
-
     @property
     def batch_start(self) -> Optional[datetime]:
         # TODO: This should go away in entirety :thinky:
@@ -627,7 +615,22 @@ class MicrobatchModelRunnerOLD(ModelRunner):
 class MicrobatchBatchRunner(ModelRunner):
     """Handles the running of individual batches"""
 
-    pass
+    def __init__(
+        self,
+        config,
+        adapter,
+        node,
+        node_index: int,
+        num_nodes: int,
+        batch_idx: int,
+        batches: Dict[int, BatchType],
+        relation_exists: bool,
+    ):
+        super().__init__(config, adapter, node, node_index, num_nodes)
+
+        self.batch_idx = batch_idx
+        self.batches = batches
+        self.relation_exists = relation_exists
 
 
 class MicrobatchModelRunner(ModelRunner):
@@ -909,15 +912,16 @@ class RunTask(CompileTask):
         # TODO: We should be doing self.get_runner, however doing so
         # currently causes the tracking of how many nodes there are to
         # increment when we don't want it to
-        batch_runner = MicrobatchModelRunner(
-            self.config, adapter, node_copy, self.run_count, self.num_nodes
+        batch_runner = MicrobatchBatchRunner(
+            self.config,
+            adapter,
+            node_copy,
+            self.run_count,
+            self.num_nodes,
+            batch_idx,
+            batches,
+            relation_exists,
         )
-
-        # TODO: These should go away. Instead the new batch specific runner
-        # should take these as arguments
-        batch_runner.set_batch_idx(batch_idx)
-        batch_runner.set_relation_exists(relation_exists)
-        batch_runner.set_batches(batches)
 
         if skip:
             batch_runner.do_skip()
