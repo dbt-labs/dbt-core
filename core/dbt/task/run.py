@@ -374,29 +374,9 @@ class MicrobatchModelRunnerOLD(ModelRunner):
         # Skips compilation for non-batch runs
         return self.node
 
-    @property
-    def batch_start(self) -> Optional[datetime]:
-        # TODO: This should go away in entirety :thinky:
-        if self.batch_idx is None:
-            return None
-        else:
-            return self.batches[self.batch_idx][0]
-
     def describe_node(self) -> str:
         # TODO: Move to microbatch orchestration runner AND batch runner
         return f"{self.node.language} microbatch model {self.get_node_representation()}"
-
-    def describe_batch(self) -> str:
-        # TODO: Move to batch runner
-        batch_start = self.batch_start
-        if batch_start is None:
-            return ""
-
-        # Only visualize date if batch_start year/month/day
-        formatted_batch_start = MicrobatchBuilder.format_batch_start(
-            batch_start, self.node.config.batch_size
-        )
-        return f"batch {formatted_batch_start} of {self.get_node_representation()}"
 
     def print_batch_result_line(
         self,
@@ -614,6 +594,13 @@ class MicrobatchBatchRunner(ModelRunner):
         self.batch_idx = batch_idx
         self.batches = batches
         self.relation_exists = relation_exists
+
+    def describe_batch(self) -> str:
+        batch_start = self.batches[self.batch_idx][0]
+        formatted_batch_start = MicrobatchBuilder.format_batch_start(
+            batch_start, self.node.config.batch_size
+        )
+        return f"batch {formatted_batch_start} of {self.get_node_representation()}"
 
     def should_run_in_parallel(self) -> bool:
         if not self.adapter.supports(Capability.MicrobatchConcurrency):
