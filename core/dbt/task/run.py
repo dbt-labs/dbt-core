@@ -481,38 +481,6 @@ class MicrobatchModelRunnerOLD(ModelRunner):
         if self.batch_idx is not None:
             self.print_batch_result_line(result)
 
-    def merge_batch_results(self, result: RunResult, batch_results: List[RunResult]):
-        # TODO: move to microbatch orchestration runner
-        """merge batch_results into result"""
-        if result.batch_results is None:
-            result.batch_results = BatchResults()
-
-        for batch_result in batch_results:
-            if batch_result.batch_results is not None:
-                result.batch_results += batch_result.batch_results
-            result.execution_time += batch_result.execution_time
-
-        num_successes = len(result.batch_results.successful)
-        num_failures = len(result.batch_results.failed)
-        if num_failures == 0:
-            status = RunStatus.Success
-            msg = "SUCCESS"
-        elif num_successes == 0:
-            status = RunStatus.Error
-            msg = "ERROR"
-        else:
-            status = RunStatus.PartialSuccess
-            msg = f"PARTIAL SUCCESS ({num_successes}/{num_successes + num_failures})"
-        result.status = status
-        result.message = msg
-
-        result.batch_results.successful = sorted(result.batch_results.successful)
-        result.batch_results.failed = sorted(result.batch_results.failed)
-
-        # # If retrying, propagate previously successful batches into final result, even thoguh they were not run in this invocation
-        if self.node.previous_batch_results is not None:
-            result.batch_results.successful += self.node.previous_batch_results.successful
-
     def on_skip(self):
         # TODO: Split into two method
         # The first part of the if statement should move to the microbatch orchestration runner
@@ -732,6 +700,37 @@ class MicrobatchModelRunner(ModelRunner):
             batch_results=BatchResults(),
         )
 
+    def merge_batch_results(self, result: RunResult, batch_results: List[RunResult]):
+        """merge batch_results into result"""
+        if result.batch_results is None:
+            result.batch_results = BatchResults()
+
+        for batch_result in batch_results:
+            if batch_result.batch_results is not None:
+                result.batch_results += batch_result.batch_results
+            result.execution_time += batch_result.execution_time
+
+        num_successes = len(result.batch_results.successful)
+        num_failures = len(result.batch_results.failed)
+        if num_failures == 0:
+            status = RunStatus.Success
+            msg = "SUCCESS"
+        elif num_successes == 0:
+            status = RunStatus.Error
+            msg = "ERROR"
+        else:
+            status = RunStatus.PartialSuccess
+            msg = f"PARTIAL SUCCESS ({num_successes}/{num_successes + num_failures})"
+        result.status = status
+        result.message = msg
+
+        result.batch_results.successful = sorted(result.batch_results.successful)
+        result.batch_results.failed = sorted(result.batch_results.failed)
+
+        # # If retrying, propagate previously successful batches into final result, even thoguh they were not run in this invocation
+        if self.node.previous_batch_results is not None:
+            result.batch_results.successful += self.node.previous_batch_results.successful
+
     def get_batches(self, model: ModelNode) -> Dict[int, BatchType]:
         """Get the batches that should be run for the model"""
 
@@ -816,6 +815,7 @@ class MicrobatchModelRunner(ModelRunner):
             batch_idx += 1
 
         # Wait until all submitted batches have completed
+        # TODO, we should track this in a better manner, like maybe a queue
         while len(batch_results) != batch_idx:
             pass
 
@@ -835,9 +835,7 @@ class MicrobatchModelRunner(ModelRunner):
             )
 
         # Finalize run: merge results, track model run, and print final result line
-        self.merge_batch_results(
-            result, batch_results
-        )  # TODO: move get access to merge_batch_results
+        self.merge_batch_results(result, batch_results)
 
         # TODO: Is it okay that these goes away? (after_execute should handle them)
         # track_model_run(runner.node_index, runner.num_nodes, result, adapter=runner.adapter)
