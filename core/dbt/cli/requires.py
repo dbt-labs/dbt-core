@@ -2,9 +2,11 @@ import importlib.util
 import os
 import time
 import traceback
+import zipfile
 from functools import update_wrapper
 from typing import Optional
 
+import requests
 from click import Context
 
 import dbt.tracking
@@ -26,7 +28,7 @@ from dbt.events.types import (
     ResourceReport,
 )
 from dbt.exceptions import DbtProjectError, FailFastError
-from dbt.flags import get_flag_dict, set_flags
+from dbt.flags import get_flag_dict, get_flags, set_flags
 from dbt.mp_context import get_mp_context
 from dbt.parser.manifest import parse_manifest
 from dbt.plugins import set_up_plugin_manager
@@ -49,6 +51,62 @@ from dbt_common.record import (
     get_record_types_from_env,
 )
 from dbt_common.utils import cast_dict_to_dict_of_strings
+
+ARTIFACTS_TO_UPLOAD = {
+    "run": ["manifest.json", "catalog.json"],
+    "freshness": ["sources.json"],
+    "generate": [],
+}
+
+
+def upload_artifacts(project_dir, target_path, command):
+    # read configurations
+    try:
+        project = load_project(
+            project_dir, version_check=False, profile=UnsetProfile(), cli_vars=None
+        )
+        if not project.dbt_cloud or "tenant" not in project.dbt_cloud:
+            raise DbtProjectError("dbt_cloud.tenant not found in dbt_project.yml")
+        tenant = project.dbt_cloud["tenant"]
+    except Exception as e:
+        raise DbtProjectError(f"Error reading dbt_cloud.tenant from dbt_project.yml: {str(e)}")
+    print(f"Uploading artifacts from {target_path} for command {command}")
+    if not target_path:
+        target_path = "target"
+    # zip the artifacts
+    if command in ARTIFACTS_TO_UPLOAD:
+        zip_file_name = f"{command}.zip"
+        with zipfile.ZipFile(zip_file_name, "w") as z:
+            for artifact in ARTIFACTS_TO_UPLOAD[command]:
+                z.write(os.path.join(target_path, artifact), artifact)
+
+        # read token, account_id, environment_id from env vars
+        token = os.getenv("DBT_CLOUD_TOKEN")
+        if not token:
+            raise DbtException("DBT_CLOUD_TOKEN environment variable not set")
+
+        account_id = os.getenv("DBT_CLOUD_ACCOUNT_ID")
+        if not account_id:
+            raise DbtException("DBT_CLOUD_ACCOUNT_ID environment variable not set")
+
+        environment_id = os.getenv("DBT_CLOUD_ENVIRONMENT_ID")
+        if not environment_id:
+            raise DbtException("DBT_CLOUD_ENVIRONMENT_ID environment variable not set")
+        # upload the zip file to API
+        url = f"https://{tenant}.dbt.com/api/private/accounts/{account_id}/environments/{environment_id}/ingest/run"
+        headers = {
+            "Accept": "application/json",
+            "X-Invocation-Id": "12334",
+            "Authorization": f"Token {token}",
+        }
+
+        with open(zip_file_name, "rb") as f:
+            response = requests.post(url=url, headers=headers, data=f.read())
+            if response.status_code != 200:
+                print(f"Error uploading artifacts: {response.status_code}")
+                print(response.text)
+    else:
+        print(f"No artifacts to upload for command {command}")
 
 
 def preflight(func):
@@ -164,6 +222,13 @@ def postflight(func):
         finally:
             # Fire ResourceReport, but only on systems which support the resource
             # module. (Skip it on Windows).
+            try:
+                upload_artifacts(
+                    get_flags().project_dir, get_flags().target_path, ctx.command.name
+                )
+            except Exception as e:
+                print(f"Error uploading artifacts: {e}")
+
             if importlib.util.find_spec("resource") is not None:
                 import resource
 
