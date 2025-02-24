@@ -345,28 +345,6 @@ class MicrobatchModelRunnerOLD(ModelRunner):
         self.batches: Dict[int, BatchType] = {}
         self.relation_exists: bool = False
 
-    def on_skip(self):
-        # TODO: Split into two method
-        # The first part of the if statement should move to the microbatch orchestration runner
-        # The second should move to the batch runner
-        # If node.batch is None, then we're dealing with skipping of the entire node
-        if self.batch_idx is None:
-            return super().on_skip()
-        else:
-            result = RunResult(
-                node=self.node,
-                status=RunStatus.Skipped,
-                timing=[],
-                thread_id=threading.current_thread().name,
-                execution_time=0.0,
-                message="SKIPPED",
-                adapter_response={},
-                failures=1,
-                batch_results=BatchResults(failed=[self.batches[self.batch_idx]]),
-            )
-            self.print_batch_result_line(result=result)
-            return result
-
     def _build_succesful_run_batch_result(
         self,
         model: ModelNode,
@@ -564,6 +542,21 @@ class MicrobatchBatchRunner(ModelRunner):
             run_in_parallel = not self.node.has_this
 
         return run_in_parallel
+
+    def on_skip(self):
+        result = RunResult(
+            node=self.node,
+            status=RunStatus.Skipped,
+            timing=[],
+            thread_id=threading.current_thread().name,
+            execution_time=0.0,
+            message="SKIPPED",
+            adapter_response={},
+            failures=1,
+            batch_results=BatchResults(failed=[self.batches[self.batch_idx]]),
+        )
+        self.print_batch_result_line(result=result)
+        return result
 
     def compile(self, manifest: Manifest):
         batch = self.batches[self.batch_idx]
