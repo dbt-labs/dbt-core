@@ -349,12 +349,14 @@ class MicrobatchBatchRunner(ModelRunner):
         batch_idx: int,
         batches: Dict[int, BatchType],
         relation_exists: bool,
+        incremental_batch: bool,
     ):
         super().__init__(config, adapter, node, node_index, num_nodes)
 
         self.batch_idx = batch_idx
         self.batches = batches
         self.relation_exists = relation_exists
+        self.incremental_batch = incremental_batch
 
     def describe_node(self) -> str:
         # TODO: I'm not sure if we actually need this. We should try removing it once everything
@@ -513,7 +515,7 @@ class MicrobatchBatchRunner(ModelRunner):
             # Update jinja context with batch context members
             jinja_context = MicrobatchBuilder.build_jinja_context_for_batch(
                 model=model,
-                incremental_batch=self.relation_exists,
+                incremental_batch=self.incremental_batch,
             )
             context.update(jinja_context)
 
@@ -744,6 +746,7 @@ class MicrobatchModelRunner(ModelRunner):
             batch_results=batch_results,
             pool=self.pool,
             force_sequential_run=True,
+            incremental_batch=self._is_incremental(model=model),
         )
         batch_idx += 1
         skip_batches = batch_results[0].status != RunStatus.Success
@@ -844,6 +847,7 @@ class RunTask(CompileTask):
         pool: ThreadPool,
         force_sequential_run: bool = False,
         skip: bool = False,
+        incremental_batch: bool = True,
     ):
         node_copy = deepcopy(node)
         # Only run pre_hook(s) for first batch
@@ -866,6 +870,7 @@ class RunTask(CompileTask):
             batch_idx,
             batches,
             relation_exists,
+            incremental_batch,
         )
 
         if skip:
