@@ -511,8 +511,9 @@ class MicrobatchBatchRunner(ModelRunner):
         start_time = time.perf_counter()
         try:
             # Update jinja context with batch context members
-            jinja_context = microbatch_builder.build_jinja_context_for_batch(
-                incremental_batch=self.relation_exists
+            jinja_context = MicrobatchBuilder.build_jinja_context_for_batch(
+                model=model,
+                incremental_batch=self.relation_exists,
             )
             context.update(jinja_context)
 
