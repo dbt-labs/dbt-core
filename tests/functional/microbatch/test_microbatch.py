@@ -967,7 +967,7 @@ class TestMicrobatchCanRunParallelOrSequential(BaseMicrobatchTest):
     def test_microbatch(
         self, mocker: MockerFixture, project, batch_exc_catcher: EventCatcher
     ) -> None:
-        mocked_srip = mocker.patch("dbt.task.run.MicrobatchModelRunner.should_run_in_parallel")
+        mocked_srip = mocker.patch("dbt.task.run.MicrobatchBatchRunner.should_run_in_parallel")
 
         # Should be run in parallel
         mocked_srip.return_value = True
@@ -1007,7 +1007,7 @@ class TestFirstAndLastBatchAlwaysSequential(BaseMicrobatchTest):
     def test_microbatch(
         self, mocker: MockerFixture, project, batch_exc_catcher: EventCatcher
     ) -> None:
-        mocked_srip = mocker.patch("dbt.task.run.MicrobatchModelRunner.should_run_in_parallel")
+        mocked_srip = mocker.patch("dbt.task.run.MicrobatchBatchRunner.should_run_in_parallel")
 
         # Should be run in parallel
         mocked_srip.return_value = True
