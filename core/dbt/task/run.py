@@ -336,119 +336,6 @@ class ModelRunner(CompileRunner):
         return self._execute_model(hook_ctx, context_config, model, context, materialization_macro)
 
 
-class MicrobatchModelRunnerOLD(ModelRunner):
-    def __init__(self, config, adapter, node, node_index: int, num_nodes: int):
-        super().__init__(config, adapter, node, node_index, num_nodes)
-
-        # Make non-optional
-        self.batch_idx: Optional[int] = None
-        self.batches: Dict[int, BatchType] = {}
-        self.relation_exists: bool = False
-
-    def _build_succesful_run_batch_result(
-        self,
-        model: ModelNode,
-        context: Dict[str, Any],
-        batch: BatchType,
-        elapsed_time: float = 0.0,
-    ) -> RunResult:
-        # TODO: move to batch runner
-        run_result = self._build_run_model_result(model, context, elapsed_time)
-        run_result.batch_results = BatchResults(successful=[batch])
-        return run_result
-
-    def _build_failed_run_batch_result(
-        self,
-        model: ModelNode,
-        batch: BatchType,
-        elapsed_time: float = 0.0,
-    ) -> RunResult:
-        # TODO: move to batch runner
-        return RunResult(
-            node=model,
-            status=RunStatus.Error,
-            timing=[],
-            thread_id=threading.current_thread().name,
-            execution_time=elapsed_time,
-            message="ERROR",
-            adapter_response={},
-            failures=1,
-            batch_results=BatchResults(failed=[batch]),
-        )
-
-    def _execute_microbatch_materialization(
-        self,
-        model: ModelNode,
-        context: Dict[str, Any],
-        materialization_macro: MacroProtocol,
-    ) -> RunResult:
-        # TODO: This method should be moved to the batch runner
-
-        batch = self.batches[self.batch_idx]
-        # call materialization_macro to get a batch-level run result
-        start_time = time.perf_counter()
-        try:
-            # Update jinja context with batch context members
-            jinja_context = microbatch_builder.build_jinja_context_for_batch(
-                incremental_batch=self.relation_exists
-            )
-            context.update(jinja_context)
-
-            # Materialize batch and cache any materialized relations
-            result = MacroGenerator(
-                materialization_macro, context, stack=context["context_macro_stack"]
-            )()
-            for relation in self._materialization_relations(result, model):
-                self.adapter.cache_added(relation.incorporate(dbt_created=True))
-
-            # Build result of executed batch
-            batch_run_result = self._build_succesful_run_batch_result(
-                model, context, batch, time.perf_counter() - start_time
-            )
-            batch_result = batch_run_result
-
-            # At least one batch has been inserted successfully!
-            # Can proceed incrementally + in parallel
-            self.relation_exists = True
-
-        except (KeyboardInterrupt, SystemExit):
-            # reraise it for GraphRunnableTask.execute_nodes to handle
-            raise
-        except Exception as e:
-            fire_event(
-                GenericExceptionOnRun(
-                    unique_id=self.node.unique_id,
-                    exc=f"Exception on worker thread. {str(e)}",
-                    node_info=self.node.node_info,
-                )
-            )
-            batch_run_result = self._build_failed_run_batch_result(
-                model, batch, time.perf_counter() - start_time
-            )
-
-        batch_result = batch_run_result
-
-        return batch_result
-
-    def _execute_model(
-        self,
-        hook_ctx: Any,
-        context_config: Any,
-        model: ModelNode,
-        context: Dict[str, Any],
-        materialization_macro: MacroProtocol,
-    ) -> RunResult:
-        # TODO: Move to batch runner
-        try:
-            batch_result = self._execute_microbatch_materialization(
-                model, context, materialization_macro
-            )
-        finally:
-            self.adapter.post_model_hook(context_config, hook_ctx)
-
-        return batch_result
-
-
 class MicrobatchBatchRunner(ModelRunner):
     """Handles the running of individual batches"""
 
@@ -582,6 +469,105 @@ class MicrobatchBatchRunner(ModelRunner):
         )
 
         return self.node
+
+    def _build_succesful_run_batch_result(
+        self,
+        model: ModelNode,
+        context: Dict[str, Any],
+        batch: BatchType,
+        elapsed_time: float = 0.0,
+    ) -> RunResult:
+        run_result = self._build_run_model_result(model, context, elapsed_time)
+        run_result.batch_results = BatchResults(successful=[batch])
+        return run_result
+
+    def _build_failed_run_batch_result(
+        self,
+        model: ModelNode,
+        batch: BatchType,
+        elapsed_time: float = 0.0,
+    ) -> RunResult:
+        return RunResult(
+            node=model,
+            status=RunStatus.Error,
+            timing=[],
+            thread_id=threading.current_thread().name,
+            execution_time=elapsed_time,
+            message="ERROR",
+            adapter_response={},
+            failures=1,
+            batch_results=BatchResults(failed=[batch]),
+        )
+
+    def _execute_microbatch_materialization(
+        self,
+        model: ModelNode,
+        context: Dict[str, Any],
+        materialization_macro: MacroProtocol,
+    ) -> RunResult:
+
+        batch = self.batches[self.batch_idx]
+        # call materialization_macro to get a batch-level run result
+        start_time = time.perf_counter()
+        try:
+            # Update jinja context with batch context members
+            jinja_context = microbatch_builder.build_jinja_context_for_batch(
+                incremental_batch=self.relation_exists
+            )
+            context.update(jinja_context)
+
+            # Materialize batch and cache any materialized relations
+            result = MacroGenerator(
+                materialization_macro, context, stack=context["context_macro_stack"]
+            )()
+            for relation in self._materialization_relations(result, model):
+                self.adapter.cache_added(relation.incorporate(dbt_created=True))
+
+            # Build result of executed batch
+            batch_run_result = self._build_succesful_run_batch_result(
+                model, context, batch, time.perf_counter() - start_time
+            )
+            batch_result = batch_run_result
+
+            # At least one batch has been inserted successfully!
+            # Can proceed incrementally + in parallel
+            self.relation_exists = True
+
+        except (KeyboardInterrupt, SystemExit):
+            # reraise it for GraphRunnableTask.execute_nodes to handle
+            raise
+        except Exception as e:
+            fire_event(
+                GenericExceptionOnRun(
+                    unique_id=self.node.unique_id,
+                    exc=f"Exception on worker thread. {str(e)}",
+                    node_info=self.node.node_info,
+                )
+            )
+            batch_run_result = self._build_failed_run_batch_result(
+                model, batch, time.perf_counter() - start_time
+            )
+
+        batch_result = batch_run_result
+
+        return batch_result
+
+    def _execute_model(
+        self,
+        hook_ctx: Any,
+        context_config: Any,
+        model: ModelNode,
+        context: Dict[str, Any],
+        materialization_macro: MacroProtocol,
+    ) -> RunResult:
+        try:
+            batch_result = self._execute_microbatch_materialization(
+                model, context, materialization_macro
+            )
+        finally:
+            self.adapter.post_model_hook(context_config, hook_ctx)
+
+        return batch_result
 
 
 class MicrobatchModelRunner(ModelRunner):
