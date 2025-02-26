@@ -9,6 +9,7 @@ import pytest
 from psycopg2 import DatabaseError
 from pytest_mock import MockerFixture
 
+from core.dbt.task.run import MicrobatchBatchRunner
 from dbt.adapters.contracts.connection import AdapterResponse
 from dbt.adapters.postgres import PostgresAdapter
 from dbt.artifacts.resources.base import FileHash
@@ -174,6 +175,25 @@ class TestMicrobatchModelRunner:
             num_nodes=1,
         )
 
+    @pytest.fixture
+    def batch_runner(
+        self,
+        postgres_adapter: PostgresAdapter,
+        table_model: ModelNode,
+        runtime_config: RuntimeConfig,
+    ) -> MicrobatchBatchRunner:
+        return MicrobatchBatchRunner(
+            config=runtime_config,
+            adapter=postgres_adapter,
+            node=table_model,
+            node_index=1,
+            num_nodes=1,
+            batch_idx=0,
+            batches=[],
+            relation_exists=False,
+            incremental_batch=False,
+        )
+
     @pytest.mark.parametrize(
         "has_relation,relation_type,materialized,full_refresh_config,full_refresh_flag,expectation",
         [
@@ -267,22 +287,22 @@ class TestMicrobatchModelRunner:
     def test_should_run_in_parallel(
         self,
         mocker: MockerFixture,
-        model_runner: MicrobatchModelRunner,
+        batch_runner: MicrobatchBatchRunner,
         adapter_microbatch_concurrency: bool,
         has_relation: bool,
         concurrent_batches: Optional[bool],
         has_this: bool,
         expectation: bool,
     ) -> None:
-        model_runner.node._has_this = has_this
-        model_runner.node.config = ModelConfig(concurrent_batches=concurrent_batches)
-        model_runner.set_relation_exists(has_relation)
+        batch_runner.node._has_this = has_this
+        batch_runner.node.config = ModelConfig(concurrent_batches=concurrent_batches)
+        batch_runner.relation_exists = has_relation
 
-        mocked_supports = mocker.patch.object(model_runner.adapter, "supports")
+        mocked_supports = mocker.patch.object(batch_runner.adapter, "supports")
         mocked_supports.return_value = adapter_microbatch_concurrency
 
         # Assert result of should_run_in_parallel
-        assert model_runner.should_run_in_parallel() == expectation
+        assert batch_runner.should_run_in_parallel() == expectation
 
 
 class TestRunTask:
