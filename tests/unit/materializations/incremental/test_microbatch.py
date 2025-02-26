@@ -490,10 +490,10 @@ class TestMicrobatchBuilder:
         assert actual_batches == expected_batches
 
     def test_build_jinja_context_for_incremental_batch(self, microbatch_model):
-        microbatch_builder = MicrobatchBuilder(
-            model=microbatch_model, is_incremental=True, event_time_start=None, event_time_end=None
+        context = MicrobatchBuilder.build_jinja_context_for_batch(
+            model=microbatch_model,
+            incremental_batch=True,
         )
-        context = microbatch_builder.build_jinja_context_for_batch(incremental_batch=True)
 
         assert context["model"] == microbatch_model.to_dict()
         assert context["sql"] == microbatch_model.compiled_code
@@ -503,10 +503,10 @@ class TestMicrobatchBuilder:
         assert context["should_full_refresh"]() is False
 
     def test_build_jinja_context_for_incremental_batch_false(self, microbatch_model):
-        microbatch_builder = MicrobatchBuilder(
-            model=microbatch_model, is_incremental=True, event_time_start=None, event_time_end=None
+        context = MicrobatchBuilder.build_jinja_context_for_batch(
+            model=microbatch_model,
+            incremental_batch=False,
         )
-        context = microbatch_builder.build_jinja_context_for_batch(incremental_batch=False)
 
         assert context["model"] == microbatch_model.to_dict()
         assert context["sql"] == microbatch_model.compiled_code
