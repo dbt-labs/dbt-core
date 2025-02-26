@@ -46,9 +46,10 @@ class TestSemanticManifest:
     def test_require_yaml_configuration_for_mf_time_spines(
         self, manifest: Manifest, metricflow_time_spine_model: ModelNode
     ):
-        with patch("dbt.contracts.graph.semantic_manifest.get_flags") as patched_get_flags, patch(
-            "dbt.contracts.graph.semantic_manifest.deprecations"
-        ) as patched_deprecations:
+        with (
+            patch("dbt.contracts.graph.semantic_manifest.get_flags") as patched_get_flags,
+            patch("dbt.contracts.graph.semantic_manifest.deprecations") as patched_deprecations,
+        ):
             patched_get_flags.return_value.require_yaml_configuration_for_mf_time_spines = False
             manifest.nodes[metricflow_time_spine_model.unique_id] = metricflow_time_spine_model
             sm_manifest = SemanticManifest(manifest)
@@ -136,9 +137,10 @@ class TestSemanticManifest:
         should_error: bool,
         flag_value: bool,
     ):
-        with patch("dbt.contracts.graph.semantic_manifest.get_flags") as patched_get_flags, patch(
-            "dbt.contracts.graph.semantic_manifest.deprecations"
-        ) as patched_deprecations:
+        with (
+            patch("dbt.contracts.graph.semantic_manifest.get_flags") as patched_get_flags,
+            patch("dbt.contracts.graph.semantic_manifest.deprecations") as patched_deprecations,
+        ):
             patched_get_flags.return_value.require_nested_cumulative_type_params = flag_value
             manifest.metrics["metric.test.my_metric"] = Metric(
                 name="my_metric",

@@ -47,9 +47,10 @@ def test_run_task_cancel_connections(
     def mock_run_queue(*args, **kwargs):
         raise exception_to_raise("Test exception")
 
-    with patch.object(RunTask, "run_queue", mock_run_queue), patch.object(
-        RunTask, "_cancel_connections"
-    ) as mock_cancel_connections:
+    with (
+        patch.object(RunTask, "run_queue", mock_run_queue),
+        patch.object(RunTask, "_cancel_connections") as mock_cancel_connections,
+    ):
 
         set_from_args(Namespace(write_json=False), None)
         task = RunTask(
@@ -65,8 +66,9 @@ def test_run_task_cancel_connections(
 def test_run_task_preserve_edges():
     mock_node_selector = MagicMock()
     mock_spec = MagicMock()
-    with patch.object(RunTask, "get_node_selector", return_value=mock_node_selector), patch.object(
-        RunTask, "get_selection_spec", return_value=mock_spec
+    with (
+        patch.object(RunTask, "get_node_selector", return_value=mock_node_selector),
+        patch.object(RunTask, "get_selection_spec", return_value=mock_spec),
     ):
         task = RunTask(get_flags(), None, None)
         task.get_graph_queue()

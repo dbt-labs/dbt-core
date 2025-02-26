@@ -211,8 +211,7 @@ class BaseRunner(metaclass=ABCMeta):
 
         result = self.safe_run(manifest)
         self.node.update_event_status(
-            node_status=result.status,
-            finished_at=datetime.now(ZoneInfo("UTC")).isoformat()
+            node_status=result.status, finished_at=datetime.now(ZoneInfo("UTC")).isoformat()
         )
 
         if not self.node.is_ephemeral_model:

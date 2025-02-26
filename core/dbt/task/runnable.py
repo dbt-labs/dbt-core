@@ -226,7 +226,8 @@ class GraphRunnableTask(ConfiguredTask):
     def call_runner(self, runner: BaseRunner) -> RunResult:
         with log_contextvars(node_info=runner.node.node_info):
             runner.node.update_event_status(
-                started_at=datetime.now(ZoneInfo("UTC")).isoformat(), node_status=RunningStatus.Started
+                started_at=datetime.now(ZoneInfo("UTC")).isoformat(),
+                node_status=RunningStatus.Started,
             )
             fire_event(
                 NodeStart(
@@ -563,7 +564,9 @@ class GraphRunnableTask(ConfiguredTask):
             elapsed = time.time() - self.started_at
             self.print_results_line(self.node_results, elapsed)
             result = self.get_result(
-                results=self.node_results, elapsed_time=elapsed, generated_at=datetime.now(ZoneInfo("UTC"))
+                results=self.node_results,
+                elapsed_time=elapsed,
+                generated_at=datetime.now(ZoneInfo("UTC")),
             )
 
         return result

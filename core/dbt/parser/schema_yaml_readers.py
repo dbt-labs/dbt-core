@@ -72,7 +72,7 @@ from dbt_semantic_interfaces.type_enums import (
 
 
 def parse_where_filter(
-    where: Optional[Union[List[str], str]]
+    where: Optional[Union[List[str], str]],
 ) -> Optional[WhereFilterIntersection]:
     if where is None:
         return None
