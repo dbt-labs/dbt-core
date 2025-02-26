@@ -131,7 +131,8 @@ class BuildTask(RunTask):
             runner.do_skip(cause=cause)
 
         if isinstance(runner, MicrobatchModelRunner):
-            return self.handle_microbatch_model(runner, pool)
+            runner._parent_task = self
+            runner._pool = pool
 
         return self.call_runner(runner)
 
@@ -146,10 +147,11 @@ class BuildTask(RunTask):
             runner.do_skip(cause=cause)
 
         if isinstance(runner, MicrobatchModelRunner):
-            callback(self.handle_microbatch_model(runner, pool))
-        else:
-            args = [runner]
-            self._submit(pool, args, callback)
+            runner._parent_task = self
+            runner._pool = pool
+
+        args = [runner]
+        self._submit(pool, args, callback)
 
     # Make a map of model unique_ids to selected unit test unique_ids,
     # for processing before the model.
