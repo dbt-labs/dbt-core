@@ -95,7 +95,7 @@ class GraphRunnableTask(ConfiguredTask):
         self.run_count: int = 0
         self.started_at: float = 0
         self._node_span_context_mapping: Dict[str, SpanContext] = {}
-        self._dbt_tracer = trace.get_tracer("com.dbt.runner")
+        self._dbt_tracer = trace.get_tracer("dbt.runner")
 
         if self.args.state:
             self.previous_state = PreviousState(
@@ -527,7 +527,7 @@ class GraphRunnableTask(ConfiguredTask):
     def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
         with adapter.connection_named("master"):
             self.defer_to_manifest()
-            with self._dbt_tracer.start_as_current_span("metadata setup") as _:
+            with self._dbt_tracer.start_as_current_span("metadata.setup"):
                 self.populate_adapter_cache(adapter)
             return RunStatus.Success
 
@@ -713,7 +713,6 @@ class GraphRunnableTask(ConfiguredTask):
         create_futures = []
         # TODO: following has a mypy issue because profile and project config
         # defines threads as int and HasThreadingConfig defines it as Optional[int]
-
         with dbt_common.utils.executor(self.config) as tpe:  # type: ignore
             for req in required_databases:
                 if req.database is None:

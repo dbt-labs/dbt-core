@@ -701,7 +701,7 @@ class RunTask(CompileTask):
     ) -> None:
         super().__init__(args, config, manifest)
         self.batch_map = batch_map
-        self._dbt_tracer = trace.get_tracer("com.dbt.runner")
+        self._dbt_tracer = trace.get_tracer("dbt.runner")
 
     def raise_on_first_error(self) -> bool:
         return False
@@ -1000,7 +1000,7 @@ class RunTask(CompileTask):
         with adapter.connection_named("master"):
             self.defer_to_manifest()
             required_schemas = self.get_model_schemas(adapter, selected_uids)
-            with self._dbt_tracer.start_as_current_span("metadata setup") as _:
+            with self._dbt_tracer.start_as_current_span("metadata.setup"):
                 self.create_schemas(adapter, required_schemas)
                 self.populate_adapter_cache(adapter, required_schemas)
             self.populate_microbatch_batches(selected_uids)
