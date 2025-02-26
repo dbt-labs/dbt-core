@@ -331,6 +331,7 @@ class ModelRunner(CompileRunner):
             )
 
         hook_ctx = self.adapter.pre_model_hook(context_config)
+
         return self._execute_model(hook_ctx, context_config, model, context, materialization_macro)
 
 

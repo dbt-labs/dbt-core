@@ -711,6 +711,7 @@ class GraphRunnableTask(ConfiguredTask):
 
         list_futures = []
         create_futures = []
+
         # TODO: following has a mypy issue because profile and project config
         # defines threads as int and HasThreadingConfig defines it as Optional[int]
         with dbt_common.utils.executor(self.config) as tpe:  # type: ignore
