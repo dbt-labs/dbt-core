@@ -157,8 +157,20 @@ class TestDbtRunnerHooks:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "models.sql": "select 1 as id",
-            "model2.sql": "select * from {{ ref('models') }}",
+            "models.sql": """
+                            {{ config(
+                                pre_hook=["select 1", "select 1/0"],
+                                post_hook="select 2/0",
+                            ) }}
+                            select 1 as id
+                        """,
+            "model2.sql": """
+                            {{ config(
+                                pre_hook=["select 1"],
+                                post_hook="select 2",
+                            ) }}
+                            select * from {{ ref('models') }}
+                        """,
         }
 
     @pytest.fixture(scope="class")
@@ -179,21 +191,41 @@ class TestDbtRunnerHooks:
         dbt.invoke(["run", "--select", "models", "model2"])
         assert get_node_info() == {}
         exported_spans = span_exporter.get_finished_spans()
-        assert len(exported_spans) == 3
-        assert exported_spans[0].instrumentation_scope.name == "com.dbt.runner"
+        assert len(exported_spans) == 4
+        assert exported_spans[0].instrumentation_scope.name == "dbt.runner"
         span_names = [span.name for span in exported_spans]
         span_names.sort()
-        assert span_names == ["model.test.model2", "model.test.models", "on-run-end"]
+        assert span_names == [
+            "metadata.setup",
+            "model.test.model2",
+            "model.test.models",
+            "on-run-end",
+        ]
         model2_span = None
         models_span = None
+        metadata_span = None
         for span in exported_spans:
             if span.name == "model.test.model2":
                 model2_span = span
             if span.name == "model.test.models":
                 models_span = span
+            if span.name == "metadata.setup":
+                metadata_span = span
+
+        # verify node span attributes
+        assert "node.status" in models_span.attributes
+        assert "node.materialization" in models_span.attributes
+        assert "node.database" in models_span.attributes
+        assert "node.schema" in models_span.attributes
 
         # verify span links
         assert len(model2_span.links) == 1
-        assert model2_span.links[0].attributes["parent_model_fqn"] == "model.test.models"
+        assert model2_span.links[0].attributes["upstream.name"] == "model.test.models"
         assert model2_span.links[0].context.span_id == models_span.context.span_id
         assert model2_span.links[0].context.trace_id == models_span.context.trace_id
+
+        # verify metadata span attributes
+        assert metadata_span is not None
+
+        # verify attributes of run-start/run-end span
+        assert "node.status" in models_span.attributes

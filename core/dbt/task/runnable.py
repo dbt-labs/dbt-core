@@ -236,7 +236,7 @@ class GraphRunnableTask(ConfiguredTask):
                     links.append(
                         Link(
                             self._node_span_context_mapping[parent_node],
-                            {"parent_model_fqn": parent_node},
+                            {"upstream.name": parent_node},
                         ),
                     )
         with log_contextvars(node_info=node_info), self._dbt_tracer.start_as_current_span(
