@@ -4,6 +4,7 @@ from argparse import Namespace
 from datetime import datetime
 from pathlib import Path
 from typing import Mapping
+from zoneinfo import ZoneInfo
 
 import pytest  # type: ignore
 import yaml
@@ -75,7 +76,7 @@ from dbt_common.tests import enable_test_caching
 def prefix():
     # create a directory name that will be unique per test session
     _randint = random.randint(0, 9999)
-    _runtime_timedelta = datetime.utcnow() - datetime(1970, 1, 1, 0, 0, 0)
+    _runtime_timedelta = datetime.now(ZoneInfo("UTC")) - datetime(1970, 1, 1, 0, 0, 0, tzinfo=ZoneInfo("UTC"))
     _runtime = (int(_runtime_timedelta.total_seconds() * 1e6)) + _runtime_timedelta.microseconds
     prefix = f"test{_runtime}{_randint:04}"
     return prefix

@@ -4,6 +4,7 @@ from dataclasses import replace
 from datetime import datetime
 from itertools import chain
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from zoneinfo import ZoneInfo
 
 import agate
 
@@ -223,7 +224,7 @@ class GenerateTask(CompileTask):
                 return CatalogArtifact.from_results(
                     nodes={},
                     sources={},
-                    generated_at=datetime.utcnow(),
+                    generated_at=datetime.now(ZoneInfo("UTC")),
                     errors=None,
                     compile_results=compile_results,
                 )
@@ -303,7 +304,7 @@ class GenerateTask(CompileTask):
         results = self.get_catalog_results(
             nodes=nodes,
             sources=sources,
-            generated_at=datetime.utcnow(),
+            generated_at=datetime.now(ZoneInfo("UTC")),
             compile_results=compile_results,
             errors=errors,
         )

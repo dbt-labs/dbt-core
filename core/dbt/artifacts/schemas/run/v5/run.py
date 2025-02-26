@@ -5,6 +5,7 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, Iterable, Optional, Sequence, Tuple
+from zoneinfo import ZoneInfo
 
 # https://github.com/dbt-labs/dbt-core/issues/10098
 # Needed for Mashumaro serialization of RunResult below
@@ -101,7 +102,7 @@ class RunExecutionResult(
 ):
     results: Sequence[RunResult]
     args: Dict[str, Any] = field(default_factory=dict)
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=(lambda: datetime.now(ZoneInfo("UTC"))))
 
     def write(self, path: str):
         writable = RunResultsArtifact.from_execution_results(

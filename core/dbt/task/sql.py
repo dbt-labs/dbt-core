@@ -2,6 +2,7 @@ import traceback
 from abc import abstractmethod
 from datetime import datetime
 from typing import Generic, TypeVar
+from zoneinfo import ZoneInfo
 
 import dbt.exceptions
 import dbt_common.exceptions.base
@@ -68,7 +69,7 @@ class SqlCompileRunner(GenericSqlRunner[RemoteCompileResult]):
             compiled_code=compiled_node.compiled_code,
             node=compiled_node,
             timing=[],  # this will get added later
-            generated_at=datetime.utcnow(),
+            generated_at=datetime.now(ZoneInfo("UTC")),
         )
 
     def from_run_result(self, result, start_time, timing_info) -> RemoteCompileResult:
@@ -77,7 +78,7 @@ class SqlCompileRunner(GenericSqlRunner[RemoteCompileResult]):
             compiled_code=result.compiled_code,
             node=result.node,
             timing=timing_info,
-            generated_at=datetime.utcnow(),
+            generated_at=datetime.now(ZoneInfo("UTC")),
         )
 
 
@@ -96,7 +97,7 @@ class SqlExecuteRunner(GenericSqlRunner[RemoteRunResult]):
             node=compiled_node,
             table=table,
             timing=[],
-            generated_at=datetime.utcnow(),
+            generated_at=datetime.now(ZoneInfo("UTC")),
         )
 
     def from_run_result(self, result, start_time, timing_info) -> RemoteRunResult:
@@ -106,5 +107,5 @@ class SqlExecuteRunner(GenericSqlRunner[RemoteRunResult]):
             node=result.node,
             table=result.table,
             timing=timing_info,
-            generated_at=datetime.utcnow(),
+            generated_at=datetime.now(ZoneInfo("UTC")),
         )

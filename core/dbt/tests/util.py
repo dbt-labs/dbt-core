@@ -7,6 +7,7 @@ from datetime import datetime
 from io import StringIO
 from typing import Any, Callable, Dict, List, Optional
 from unittest import mock
+from zoneinfo import ZoneInfo
 
 import pytz
 import yaml
@@ -284,7 +285,7 @@ def check_result_nodes_by_unique_id(results, unique_ids):
 def check_datetime_between(timestr, start, end=None):
     datefmt = "%Y-%m-%dT%H:%M:%S.%fZ"
     if end is None:
-        end = datetime.utcnow()
+        end = datetime.now(ZoneInfo("UTC"))
     parsed = datetime.strptime(timestr, datefmt)
     assert start <= parsed
     assert end >= parsed

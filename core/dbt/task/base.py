@@ -7,6 +7,7 @@ from contextlib import nullcontext
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
+from zoneinfo import ZoneInfo
 
 import dbt.exceptions
 import dbt_common.exceptions.base
@@ -210,7 +211,8 @@ class BaseRunner(metaclass=ABCMeta):
 
         result = self.safe_run(manifest)
         self.node.update_event_status(
-            node_status=result.status, finished_at=datetime.utcnow().isoformat()
+            node_status=result.status,
+            finished_at=datetime.now(ZoneInfo("UTC")).isoformat()
         )
 
         if not self.node.is_ephemeral_model:
