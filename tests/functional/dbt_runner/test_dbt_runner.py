@@ -159,15 +159,15 @@ class TestDbtRunnerHooks:
         return {
             "models.sql": """
                             {{ config(
-                                pre_hook=["select 1", "select 1/0"],
-                                post_hook="select 2/0",
+                                pre_hook=["select 1"],
+                                post_hook="select 2",
                             ) }}
                             select 1 as id
                         """,
             "model2.sql": """
                             {{ config(
-                                pre_hook=["select 1"],
-                                post_hook="select 2",
+                                pre_hook=["select 1", "select 1/0"],
+                                post_hook="select 2/0",
                             ) }}
                             select * from {{ ref('models') }}
                         """,
@@ -191,11 +191,17 @@ class TestDbtRunnerHooks:
         dbt.invoke(["run", "--select", "models", "model2"])
         assert get_node_info() == {}
         exported_spans = span_exporter.get_finished_spans()
-        assert len(exported_spans) == 4
+        assert len(exported_spans) == 10
         assert exported_spans[0].instrumentation_scope.name == "dbt.runner"
         span_names = [span.name for span in exported_spans]
         span_names.sort()
         assert span_names == [
+            "hook_span",  # default view postgres view is calling run_hooks 2 times for pre-hook and 2 times for post hook.
+            "hook_span",
+            "hook_span",
+            "hook_span",
+            "hook_span",
+            "hook_span",
             "metadata.setup",
             "model.test.model2",
             "model.test.models",
