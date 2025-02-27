@@ -1,0 +1,6 @@
+kind: Features
+body: Support Python 3.13
+time: 2025-02-28T00:01:53.832242792+09:00
+custom:
+    Author: FomalhautWeisszwerg
+    Issue: "11106"
