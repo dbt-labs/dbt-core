@@ -2,6 +2,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Sequence
+from zoneinfo import ZoneInfo
 
 from dbt.artifacts.schemas.base import VersionedSchema, schema_version
 from dbt.artifacts.schemas.results import ExecutionResult, TimingInfo
@@ -28,7 +29,7 @@ class RemoteCompileResultMixin(VersionedSchema):
 @dataclass
 @schema_version("remote-compile-result", 1)
 class RemoteCompileResult(RemoteCompileResultMixin):
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=(lambda: datetime.now(ZoneInfo("UTC"))))
 
     @property
     def error(self) -> None:
@@ -41,7 +42,7 @@ class RemoteCompileResult(RemoteCompileResultMixin):
 class RemoteExecutionResult(ExecutionResult):
     results: Sequence[RunResult]
     args: Dict[str, Any] = field(default_factory=dict)
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=(lambda: datetime.now(ZoneInfo("UTC"))))
 
     def write(self, path: str) -> None:
         writable = RunResultsArtifact.from_execution_results(
@@ -76,4 +77,4 @@ class ResultTable(dbtClassMixin):
 @schema_version("remote-run-result", 1)
 class RemoteRunResult(RemoteCompileResultMixin):
     table: ResultTable
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=(lambda: datetime.now(ZoneInfo("UTC"))))

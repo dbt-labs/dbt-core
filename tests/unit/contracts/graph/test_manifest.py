@@ -6,6 +6,7 @@ from copy import deepcopy
 from datetime import datetime
 from itertools import product
 from unittest import mock
+from zoneinfo import ZoneInfo
 
 import freezegun
 import pytest
@@ -377,7 +378,7 @@ class ManifestTest(unittest.TestCase):
             exposures={},
             metrics={},
             selectors={},
-            metadata=ManifestMetadata(generated_at=datetime.utcnow()),
+            metadata=ManifestMetadata(generated_at=datetime.now(ZoneInfo("UTC"))),
             semantic_models={},
             saved_queries={},
         )
@@ -400,7 +401,7 @@ class ManifestTest(unittest.TestCase):
                 "child_map": {},
                 "group_map": {},
                 "metadata": {
-                    "generated_at": "2018-02-14T09:15:13Z",
+                    "generated_at": "2018-02-14T09:15:13+00:00Z",
                     "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json",
                     "dbt_version": dbt.version.__version__,
                     "env": {ENV_KEY_NAME: "value"},
@@ -433,10 +434,10 @@ class ManifestTest(unittest.TestCase):
             exposures={},
             metrics={},
             selectors={},
-            metadata=ManifestMetadata(generated_at=datetime.utcnow()),
+            metadata=ManifestMetadata(generated_at=datetime.now(ZoneInfo("UTC"))),
         )
         serialized = manifest.writable_manifest().to_dict(omit_none=True)
-        self.assertEqual(serialized["metadata"]["generated_at"], "2018-02-14T09:15:13Z")
+        self.assertEqual(serialized["metadata"]["generated_at"], "2018-02-14T09:15:13+00:00Z")
         self.assertEqual(serialized["metadata"]["user_id"], mock_user.id)
         self.assertFalse(serialized["metadata"]["send_anonymous_usage_stats"])
         self.assertEqual(serialized["docs"], {})
@@ -533,12 +534,12 @@ class ManifestTest(unittest.TestCase):
     def test_no_nodes_with_metadata(self, mock_user):
         mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
         dbt_common.invocation._INVOCATION_ID = "01234567-0123-0123-0123-0123456789ab"
-        dbt_common.invocation._INVOCATION_STARTED_AT = datetime.utcnow()
+        dbt_common.invocation._INVOCATION_STARTED_AT = datetime.now(ZoneInfo("UTC"))
         set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
         metadata = ManifestMetadata(
             project_id="098f6bcd4621d373cade4e832627b4f6",
             adapter_type="postgres",
-            generated_at=datetime.utcnow(),
+            generated_at=datetime.now(ZoneInfo("UTC")),
             invocation_started_at=dbt_common.invocation._INVOCATION_STARTED_AT,
             user_id="cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
             send_anonymous_usage_stats=False,
@@ -575,7 +576,7 @@ class ManifestTest(unittest.TestCase):
                 "group_map": {},
                 "docs": {},
                 "metadata": {
-                    "generated_at": "2018-02-14T09:15:13Z",
+                    "generated_at": "2018-02-14T09:15:13+00:00Z",
                     "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json",
                     "dbt_version": dbt.version.__version__,
                     "project_id": "098f6bcd4621d373cade4e832627b4f6",
@@ -892,9 +893,10 @@ class MixedManifestTest(unittest.TestCase):
     def test_no_nodes(self, mock_user):
         mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
         set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
-        invocation_started_at = datetime.utcnow()
+        invocation_started_at = datetime.now(ZoneInfo("UTC"))
+        generated_at = datetime.now(ZoneInfo("UTC"))
         metadata = ManifestMetadata(
-            generated_at=datetime.utcnow(),
+            generated_at=generated_at,
             invocation_id="01234567-0123-0123-0123-0123456789ab",
             invocation_started_at=invocation_started_at,
         )
@@ -925,7 +927,7 @@ class MixedManifestTest(unittest.TestCase):
                 "child_map": {},
                 "group_map": {},
                 "metadata": {
-                    "generated_at": "2018-02-14T09:15:13Z",
+                    "generated_at": "2018-02-14T09:15:13+00:00Z",
                     "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json",
                     "dbt_version": dbt.version.__version__,
                     "invocation_id": "01234567-0123-0123-0123-0123456789ab",
@@ -952,12 +954,12 @@ class MixedManifestTest(unittest.TestCase):
             docs={},
             disabled={},
             selectors={},
-            metadata=ManifestMetadata(generated_at=datetime.utcnow()),
+            metadata=ManifestMetadata(generated_at=datetime.now(ZoneInfo("UTC"))),
             files={},
             exposures={},
         )
         serialized = manifest.writable_manifest().to_dict(omit_none=True)
-        self.assertEqual(serialized["metadata"]["generated_at"], "2018-02-14T09:15:13Z")
+        self.assertEqual(serialized["metadata"]["generated_at"], "2018-02-14T09:15:13+00:00Z")
         self.assertEqual(serialized["disabled"], {})
         parent_map = serialized["parent_map"]
         child_map = serialized["child_map"]

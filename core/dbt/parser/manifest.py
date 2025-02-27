@@ -951,7 +951,7 @@ class ManifestLoader:
                 is_partial_parsable, reparse_reason = self.is_partial_parsable(manifest)
                 if is_partial_parsable:
                     # We don't want to have stale generated_at dates
-                    manifest.metadata.generated_at = datetime.datetime.utcnow()
+                    manifest.metadata.generated_at = datetime.datetime.now(datetime.UTC)
                     # or invocation_ids
                     manifest.metadata.invocation_id = get_invocation_id()
                     return manifest
