@@ -131,8 +131,8 @@ class BuildTask(RunTask):
             runner.do_skip(cause=cause)
 
         if isinstance(runner, MicrobatchModelRunner):
-            runner._parent_task = self
-            runner._pool = pool
+            runner.set_parent_task(self)
+            runner.set_pool(pool)
 
         return self.call_runner(runner)
 
@@ -147,8 +147,8 @@ class BuildTask(RunTask):
             runner.do_skip(cause=cause)
 
         if isinstance(runner, MicrobatchModelRunner):
-            runner._parent_task = self
-            runner._pool = pool
+            runner.set_parent_task(self)
+            runner.set_pool(pool)
 
         args = [runner]
         self._submit(pool, args, callback)

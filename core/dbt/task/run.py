@@ -565,11 +565,17 @@ class MicrobatchModelRunner(ModelRunner):
         self._parent_task: Optional[RunTask] = None
         self._pool: Optional[DbtThreadPool] = None
 
+    def set_parent_task(self, parent_task: RunTask) -> None:
+        self._parent_task = parent_task
+
+    def set_pool(self, pool: DbtThreadPool) -> None:
+        self._pool = pool
+
     @property
     def parent_task(self) -> RunTask:
         if self._parent_task is None:
             raise DbtInternalError(
-                msg="Tried to access `parent_task` of `MicrobatchModelRunner` before it was available"
+                msg="Tried to access `parent_task` of `MicrobatchModelRunner` before it was set"
             )
 
         return self._parent_task
@@ -578,7 +584,7 @@ class MicrobatchModelRunner(ModelRunner):
     def pool(self) -> DbtThreadPool:
         if self._pool is None:
             raise DbtInternalError(
-                msg="Tried to access `pool` of `MicrobatchModelRunner` before it was available"
+                msg="Tried to access `pool` of `MicrobatchModelRunner` before it was set"
             )
 
         return self._pool
@@ -840,8 +846,8 @@ class RunTask(CompileTask):
             runner.do_skip(cause=cause)
 
         if isinstance(runner, MicrobatchModelRunner):
-            runner._parent_task = self
-            runner._pool = pool
+            runner.set_parent_task(self)
+            runner.set_pool(pool)
 
         args = [runner]
         self._submit(pool, args, callback)
