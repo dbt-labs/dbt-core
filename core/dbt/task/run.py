@@ -358,11 +358,6 @@ class MicrobatchBatchRunner(ModelRunner):
         self.relation_exists = relation_exists
         self.incremental_batch = incremental_batch
 
-    def describe_node(self) -> str:
-        # TODO: I'm not sure if we actually need this. We should try removing it once everything
-        # is running and seeing if not having it breaks anything
-        return f"{self.node.language} microbatch model {self.get_node_representation()}"
-
     def describe_batch(self) -> str:
         batch_start = self.batches[self.batch_idx][0]
         formatted_batch_start = MicrobatchBuilder.format_batch_start(
