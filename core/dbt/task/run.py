@@ -824,10 +824,6 @@ class MicrobatchModelRunner(ModelRunner):
         # Finalize run: merge results, track model run, and print final result line
         self.merge_batch_results(result, batch_results)
 
-        # TODO: Is it okay that these goes away? (after_execute should handle them)
-        # track_model_run(runner.node_index, runner.num_nodes, result, adapter=runner.adapter)
-        # self.print_result_line(result)
-
         return result
 
 
