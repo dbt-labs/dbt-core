@@ -728,7 +728,6 @@ class MicrobatchModelRunner(ModelRunner):
         # Execution really means orchestration in this case
 
         batches = self.get_batches(model=model)
-        # TODO: We should de-dupe this call with the call we also do in get_batches
         relation_exists = self._has_relation(model=model)
         result = self._initial_run_microbatch_model_result(model=model)
 
