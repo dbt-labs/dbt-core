@@ -677,6 +677,30 @@ class MicrobatchModelRunner(ModelRunner):
         if self.node.previous_batch_results is not None:
             result.batch_results.successful += self.node.previous_batch_results.successful
 
+    def _update_result_with_unfinished_batches(
+        self, result: RunResult, batches: Dict[int, BatchType]
+    ) -> None:
+        """This method is really only to be used when the execution of a microbatch model is halted before all batches have had a chance to run"""
+        batches_finished: Set[BatchType] = set()
+
+        if result.batch_results:
+            # build list of finished batches
+            batches_finished = batches_finished.union(set(result.batch_results.successful))
+            batches_finished = batches_finished.union(set(result.batch_results.failed))
+        else:
+            # instantiate `batch_results` if it was `None`
+            result.batch_results = BatchResults()
+
+        # skipped batches are any batch that was expected but didn't finish
+        batches_expected = {batch for _, batch in batches.items()}
+        skipped_batches = batches_expected.difference(batches_finished)
+
+        result.batch_results.failed.extend(list(skipped_batches))
+
+        # We call this method, even though we are merging no new results, as it updates
+        # the result witht he appropriate status (Success/Partial/Failed)
+        self.merge_batch_results(result, [])
+
     def get_batches(self, model: ModelNode) -> Dict[int, BatchType]:
         """Get the batches that should be run for the model"""
 
@@ -766,9 +790,21 @@ class MicrobatchModelRunner(ModelRunner):
             batch_idx += 1
 
         # Wait until all submitted batches have completed
-        # TODO, we should track this in a better manner, like maybe a queue
         while len(batch_results) != batch_idx:
-            pass
+            # Check if the pool was closed, because if it was, then the main thread is trying to exit.
+            # If the main thread is trying to exit, we need to shutdown. If we _don't_ shutdown, then
+            # batches will continue to execute and we'll delay the run from stopping
+            if self.pool.is_closed():
+                # It's technically possible for more results to come in while we clean up
+                # instead we're going to say the didn't finish, regardless of if they finished
+                # or not. Thus, lets get a copy of the results as they exist right "now".
+                frozen_batch_results = deepcopy(batch_results)
+                self.merge_batch_results(result, frozen_batch_results)
+                self._update_result_with_unfinished_batches(result, batches)
+                return result
+
+            # breifly sleep so that this thread doesn't go brrrrr while waiting
+            time.sleep(0.1)
 
         # Only run "last" batch if there is more than one batch
         if len(batches) != 1:
