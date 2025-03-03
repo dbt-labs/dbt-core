@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix microbatch execution to not block main thread nor hang
+time: 2025-03-03T13:14:40.432874-06:00
+custom:
+  Author: QMalcolm
+  Issue: 11243 11306
