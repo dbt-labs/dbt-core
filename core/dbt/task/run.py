@@ -684,12 +684,7 @@ class MicrobatchModelRunner(ModelRunner):
         # the result witht he appropriate status (Success/Partial/Failed)
         self.merge_batch_results(result, [])
 
-    def get_batches(self, model: ModelNode) -> Dict[int, BatchType]:
-        """Get the batches that should be run for the model"""
-
-        # TODO: All of this setup for creating MicrobatchBuilder should _only_
-        # hapen if their are failed batches for us to retry
-
+    def get_microbatch_builder(self, model: ModelNode) -> MicrobatchBuilder:
         # Intially set the start/end to values from args
         event_time_start = getattr(self.config.args, "EVENT_TIME_START", None)
         event_time_end = getattr(self.config.args, "EVENT_TIME_END", None)
@@ -701,7 +696,7 @@ class MicrobatchModelRunner(ModelRunner):
             event_time_start = self.config.args.sample.start
             event_time_end = self.config.args.sample.end
 
-        microbatch_builder = MicrobatchBuilder(
+        return MicrobatchBuilder(
             model=model,
             is_incremental=self._is_incremental(model),
             event_time_start=event_time_start,
@@ -709,10 +704,14 @@ class MicrobatchModelRunner(ModelRunner):
             default_end_time=get_invocation_started_at(),
         )
 
+    def get_batches(self, model: ModelNode) -> Dict[int, BatchType]:
+        """Get the batches that should be run for the model"""
+
         # Note currently (02/23/2025) model.previous_batch_results is only ever _not_ `None`
         # IFF `dbt retry` is being run and the microbatch model had batches which
         # failed on the run of the model (which is being retried)
         if model.previous_batch_results is None:
+            microbatch_builder = self.get_microbatch_builder(model)
             end = microbatch_builder.build_end_time()
             start = microbatch_builder.build_start_time(end)
             batches = microbatch_builder.build_batches(start, end)
