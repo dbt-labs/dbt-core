@@ -7,7 +7,6 @@ import time
 from copy import deepcopy
 from dataclasses import asdict
 from datetime import datetime
-from multiprocessing.pool import ThreadPool
 from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple, Type
 
 from dbt import tracking, utils
@@ -43,6 +42,7 @@ from dbt.events.types import (
 )
 from dbt.exceptions import CompilationError, DbtInternalError, DbtRuntimeError
 from dbt.graph import ResourceTypeSelector
+from dbt.graph.thread_pool import DbtThreadPool
 from dbt.hooks import get_hook_dict
 from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt.node_types import NodeType, RunHookType
@@ -580,7 +580,7 @@ class MicrobatchModelRunner(ModelRunner):
         super().__init__(config, adapter, node, node_index, num_nodes)
 
         self._parent_task: Optional[RunTask] = None
-        self._pool: Optional[ThreadPool] = None
+        self._pool: Optional[DbtThreadPool] = None
 
     @property
     def parent_task(self) -> RunTask:
@@ -592,7 +592,7 @@ class MicrobatchModelRunner(ModelRunner):
         return self._parent_task
 
     @property
-    def pool(self) -> ThreadPool:
+    def pool(self) -> DbtThreadPool:
         if self._pool is None:
             raise DbtInternalError(
                 msg="Tried to access `pool` of `MicrobatchModelRunner` before it was available"
@@ -844,7 +844,7 @@ class RunTask(CompileTask):
         batches: Dict[int, BatchType],
         batch_idx: int,
         batch_results: List[RunResult],
-        pool: ThreadPool,
+        pool: DbtThreadPool,
         force_sequential_run: bool = False,
         skip: bool = False,
         incremental_batch: bool = True,
@@ -876,21 +876,26 @@ class RunTask(CompileTask):
         if skip:
             batch_runner.do_skip()
 
-        if not force_sequential_run and batch_runner.should_run_in_parallel():
-            fire_event(
-                MicrobatchExecutionDebug(
-                    msg=f"{batch_runner.describe_batch()} is being run concurrently"
+        if not pool.is_closed():
+            if not force_sequential_run and batch_runner.should_run_in_parallel():
+                fire_event(
+                    MicrobatchExecutionDebug(
+                        msg=f"{batch_runner.describe_batch()} is being run concurrently"
+                    )
                 )
-            )
-            self._submit(pool, [batch_runner], batch_results.append)
+                self._submit(pool, [batch_runner], batch_results.append)
+            else:
+                fire_event(
+                    MicrobatchExecutionDebug(
+                        msg=f"{batch_runner.describe_batch()} is being run sequentially"
+                    )
+                )
+                batch_results.append(self.call_runner(batch_runner))
+                relation_exists = batch_runner.relation_exists
         else:
-            fire_event(
-                MicrobatchExecutionDebug(
-                    msg=f"{batch_runner.describe_batch()} is being run sequentially"
-                )
+            batch_results.append(
+                batch_runner._build_failed_run_batch_result(node_copy, batches[batch_idx])
             )
-            batch_results.append(self.call_runner(batch_runner))
-            relation_exists = batch_runner.relation_exists
 
         return relation_exists
 
