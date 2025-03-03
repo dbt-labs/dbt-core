@@ -365,10 +365,7 @@ class MicrobatchBatchRunner(ModelRunner):
         )
         return f"batch {formatted_batch_start} of {self.get_node_representation()}"
 
-    def print_batch_result_line(self, result: RunResult):
-        description = self.describe_batch()
-        group = group_lookup.get(self.node.unique_id)
-
+    def print_result_line(self, result: RunResult):
         if result.status == NodeStatus.Error:
             status = result.status
             level = EventLevel.ERROR
@@ -381,35 +378,26 @@ class MicrobatchBatchRunner(ModelRunner):
 
         fire_event(
             LogBatchResult(
-                description=description,
+                description=self.describe_batch(),
                 status=status,
                 batch_index=self.batch_idx + 1,
                 total_batches=len(self.batches),
                 execution_time=result.execution_time,
                 node_info=self.node.node_info,
-                group=group,
+                group=group_lookup.get(self.node.unique_id),
             ),
             level=level,
         )
 
-    def print_batch_start_line(self) -> None:
-        batch_description = self.describe_batch()
+    def print_start_line(self) -> None:
         fire_event(
             LogStartBatch(
-                description=batch_description,
+                description=self.describe_batch(),
                 batch_index=self.batch_idx + 1,
                 total_batches=len(self.batches),
                 node_info=self.node.node_info,
             )
         )
-
-    def before_execute(self) -> None:
-        # TODO: if we rename `print_batch_start_line` we can probably remove this function
-        self.print_batch_start_line()
-
-    def after_execute(self, result) -> None:
-        # TODO: if we rename `print_batch_result_line` we can probably remove this function
-        self.print_batch_result_line(result)
 
     def should_run_in_parallel(self) -> bool:
         if not self.adapter.supports(Capability.MicrobatchConcurrency):
@@ -439,7 +427,7 @@ class MicrobatchBatchRunner(ModelRunner):
             failures=1,
             batch_results=BatchResults(failed=[self.batches[self.batch_idx]]),
         )
-        self.print_batch_result_line(result=result)
+        self.print_result_line(result=result)
         return result
 
     def compile(self, manifest: Manifest):
