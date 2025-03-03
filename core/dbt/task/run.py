@@ -732,10 +732,7 @@ class MicrobatchModelRunner(ModelRunner):
         relation_exists = self._has_relation(model=model)
         result = self._initial_run_microbatch_model_result(model=model)
 
-        # TODO: This might not be necessary once we implement do_skip
-        # if result.status == RunStatus.Skipped:
-        #     return result
-
+        # No batches to run, so return initial result
         if len(batches) == 0:
             return result
 
