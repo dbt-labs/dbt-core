@@ -562,7 +562,9 @@ class MicrobatchModelRunner(ModelRunner):
     def __init__(self, config, adapter, node, node_index: int, num_nodes: int):
         super().__init__(config, adapter, node, node_index, num_nodes)
 
+        # The parent task is necessary because we need access to the `_submit_batch` and `submit` methods
         self._parent_task: Optional[RunTask] = None
+        # The pool is necessary because we need to batches to be executed within the same thread pool
         self._pool: Optional[DbtThreadPool] = None
 
     def set_parent_task(self, parent_task: RunTask) -> None:
