@@ -24,4 +24,4 @@ runs:
         ls -la ${{ github.action_path }}/../../../test/setup_db.sh
         ls -la ${{ github.action_path }}/setup_db.sh
         echo "Running setup_db.sh"
-        sudo -u postgres bash ${{ github.action_path }}/../../../test/setup_db.sh
+        sudo -u postgres bash . ${{ github.action_path }}/../../../test/setup_db.sh
