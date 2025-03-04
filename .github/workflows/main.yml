@@ -188,9 +188,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Set up postgres (linux)
+      - name: "Set up postgres (linux)"
         if: runner.os == 'Linux'
-        uses: ./.github/actions/setup-postgres-linux
+        run: make setup-db
 
       - name: Set up postgres (macos)
         if: runner.os == 'macOS'
