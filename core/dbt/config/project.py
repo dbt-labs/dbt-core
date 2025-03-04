@@ -206,7 +206,7 @@ def load_raw_project(project_root: str) -> Dict[str, Any]:
 
 
 def _query_comment_from_cfg(
-    cfg_query_comment: Union[QueryComment, NoValue, str, None]
+    cfg_query_comment: Union[QueryComment, NoValue, str, None],
 ) -> QueryComment:
     if not cfg_query_comment:
         return QueryComment(comment="")

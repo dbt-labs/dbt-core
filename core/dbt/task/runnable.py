@@ -5,6 +5,7 @@ from concurrent.futures import as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import AbstractSet, Dict, Iterable, List, Optional, Set, Tuple, Type, Union
+from zoneinfo import ZoneInfo
 
 import dbt.exceptions
 import dbt.tracking
@@ -225,7 +226,8 @@ class GraphRunnableTask(ConfiguredTask):
     def call_runner(self, runner: BaseRunner) -> RunResult:
         with log_contextvars(node_info=runner.node.node_info):
             runner.node.update_event_status(
-                started_at=datetime.utcnow().isoformat(), node_status=RunningStatus.Started
+                started_at=datetime.now(ZoneInfo("UTC")).isoformat(),
+                node_status=RunningStatus.Started,
             )
             fire_event(
                 NodeStart(
@@ -432,7 +434,7 @@ class GraphRunnableTask(ConfiguredTask):
             run_result = self.get_result(
                 results=self.node_results,
                 elapsed_time=time.time() - self.started_at,
-                generated_at=datetime.utcnow(),
+                generated_at=datetime.now(ZoneInfo("UTC")),
             )
 
             if self.args.write_json and hasattr(run_result, "write"):
@@ -564,7 +566,9 @@ class GraphRunnableTask(ConfiguredTask):
             elapsed = time.time() - self.started_at
             self.print_results_line(self.node_results, elapsed)
             result = self.get_result(
-                results=self.node_results, elapsed_time=elapsed, generated_at=datetime.utcnow()
+                results=self.node_results,
+                elapsed_time=elapsed,
+                generated_at=datetime.now(ZoneInfo("UTC")),
             )
 
         return result
@@ -587,7 +591,7 @@ class GraphRunnableTask(ConfiguredTask):
                 warn_or_error(NothingToDo())
                 result = self.get_result(
                     results=[],
-                    generated_at=datetime.utcnow(),
+                    generated_at=datetime.now(ZoneInfo("UTC")),
                     elapsed_time=0.0,
                 )
             else:

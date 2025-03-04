@@ -3,6 +3,7 @@ import threading
 import traceback
 from datetime import datetime
 from typing import TYPE_CHECKING, List
+from zoneinfo import ZoneInfo
 
 import dbt_common.exceptions
 from dbt.adapters.factory import get_adapter
@@ -116,7 +117,7 @@ class RunOperationTask(ConfiguredTask):
         )
 
         results = RunResultsArtifact.from_execution_results(
-            generated_at=end or datetime.utcnow(),
+            generated_at=end or datetime.now(ZoneInfo("UTC")),
             elapsed_time=execution_time,
             args={
                 k: v
