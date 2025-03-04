@@ -180,15 +180,14 @@ jobs:
       DD_SERVICE: ${{ github.event.repository.name }}
 
     services:
-      # Label used to access the postgres service container
-      localhost:
+      # Label used to access the service container
+      postgres:
         # Docker Hub image
         image: postgres
         # Provide the password for postgres
         env:
           POSTGRES_PASSWORD: password
           POSTGRES_USER: postgres
-          POSTGRES_HOST: localhost
         # Set health checks to wait until postgres has started
         options: >-
           --health-cmd pg_isready

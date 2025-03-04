@@ -9,7 +9,7 @@ PGUSER="${PGUSER:-postgres}"
 export PGUSER
 PGPORT="${PGPORT:-5432}"
 export PGPORT
-PGHOST="${PGHOST:-localhost}"
+PGHOST="${PGHOST:-postgres}"
 
 for i in {1..10}; do
 	if pg_isready -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" ; then
