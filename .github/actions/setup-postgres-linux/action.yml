@@ -16,6 +16,8 @@ runs:
         sudo systemctl start postgresql
         sudo systemctl enable postgresql
         pg_isready
+        echo "Updating setup_db.sh script ownership."
         sudo chown postgres ${{ github.action_path }}/setup_db.sh
         sudo chown postgres ${{ github.action_path }}/../../../test/setup_db.sh
+        echo "Running setup_db.sh"
         sudo -u postgres bash ${{ github.action_path }}/setup_db.sh
