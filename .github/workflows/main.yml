@@ -206,17 +206,17 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      # - name: Set up postgres (linux)
-      #   if: runner.os == 'Linux'
-      #   uses: ./.github/actions/setup-postgres-linux
+      - name: Set up postgres (linux)
+        # if: runner.os == 'Linux'
+        uses: ./.github/actions/setup-postgres-linux
 
-      - name: Set up postgres (macos)
-        if: runner.os == 'macOS'
-        uses: ./.github/actions/setup-postgres-macos
+      # - name: Set up postgres (macos)
+      #   if: runner.os == 'macOS'
+      #   uses: ./.github/actions/setup-postgres-macos
 
-      - name: Set up postgres (windows)
-        if: runner.os == 'Windows'
-        uses: ./.github/actions/setup-postgres-windows
+      # - name: Set up postgres (windows)
+      #   if: runner.os == 'Windows'
+      #   uses: ./.github/actions/setup-postgres-windows
 
       - name: Install python tools
         run: |
