@@ -179,6 +179,24 @@ jobs:
       DD_ENV: ci
       DD_SERVICE: ${{ github.event.repository.name }}
 
+    services:
+      # Label used to access the service container
+      postgres:
+        # Docker Hub image
+        image: postgres
+        # Provide the password for postgres
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_USER: postgres
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
@@ -188,9 +206,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Set up postgres (linux)
-        if: runner.os == 'Linux'
-        uses: ./.github/actions/setup-postgres-linux
+      # - name: Set up postgres (linux)
+      #   if: runner.os == 'Linux'
+      #   uses: ./.github/actions/setup-postgres-linux
 
       - name: Set up postgres (macos)
         if: runner.os == 'macOS'
