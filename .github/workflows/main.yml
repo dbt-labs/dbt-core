@@ -209,6 +209,10 @@ jobs:
       - name: Run postgres setup script
         run: |
           ./test/setup_db.sh
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGPASSWORD: password
 
       # - name: Set up postgres (linux)
       #   # if: runner.os == 'Linux'
