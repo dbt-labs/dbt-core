@@ -163,8 +163,9 @@ jobs:
       fail-fast: false
       matrix:
         python-version: [ "3.9", "3.10", "3.11", "3.12" ]
-        os: [ubuntu-24.04]
+        os: [ubuntu-latest]
         split-group: ${{ fromJson(needs.integration-metadata.outputs.split-groups) }}
+        # this include is where we add the mac and windows os
         include: ${{ fromJson(needs.integration-metadata.outputs.include) }}
     env:
       TOXENV: integration

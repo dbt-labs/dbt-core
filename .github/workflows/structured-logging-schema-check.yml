@@ -45,7 +45,7 @@ jobs:
   # run the performance measurements on the current or default branch
   test-schema:
     name: Test Log Schema
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     needs:
       - integration-metadata
