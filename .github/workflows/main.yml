@@ -115,7 +115,7 @@ jobs:
           name: unit_results_${{ matrix.python-version }}-${{ steps.date.outputs.date }}.csv
           path: unit_results.csv
 
-  integration:
+  integration-postgres:
     name: integration test / python ${{ matrix.python-version }} / ${{ matrix.os }}
 
     runs-on: ${{ matrix.os }}
@@ -125,13 +125,102 @@ jobs:
       fail-fast: false
       matrix:
         python-version: [ "3.9", "3.10", "3.11" ]
-        os: [ubuntu-20.04]
+        os: [ubuntu-latest]
+
+    env:
+      TOXENV: integration
+      PYTEST_ADDOPTS: "-v --color=yes -n4 --csv integration_results.csv"
+      DBT_INVOCATION_ENV: github-actions
+      DBT_TEST_USER_1: dbt_test_user_1
+      DBT_TEST_USER_2: dbt_test_user_2
+      DBT_TEST_USER_3: dbt_test_user_3
+      DD_CIVISIBILITY_AGENTLESS_ENABLED: true
+      DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+      DD_SITE: datadoghq.com
+      DD_ENV: ci
+      DD_SERVICE: ${{ github.event.repository.name }}
+
+    services:
+      # Label used to access the service container
+      postgres:
+        # Docker Hub image
+        image: postgres
+        # Provide the password for postgres
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_USER: postgres
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run postgres setup script
+        run: |
+          ./test/setup_db.sh
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGPASSWORD: password
+
+      - name: Install python tools
+        run: |
+          python -m pip install --user --upgrade pip
+          python -m pip --version
+          python -m pip install tox
+          tox --version
+
+      - name: Run integration tests
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 90
+          max_attempts: 3
+          command: tox -- --ddtrace
+
+      - name: Get current date
+        if: always()
+        id: date
+        run: |
+          CURRENT_DATE=$(date +'%Y-%m-%dT%H_%M_%S') # no colons allowed for artifacts
+          echo "date=$CURRENT_DATE" >> $GITHUB_OUTPUT
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs_${{ matrix.python-version }}_${{ matrix.os }}_${{ steps.date.outputs.date }}
+          path: ./logs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration_results_${{ matrix.python-version }}_${{ matrix.os }}_${{ steps.date.outputs.date }}.csv
+          path: integration_results.csv
+
+  integration-mac-windows:
+    name: integration test / python ${{ matrix.python-version }} / ${{ matrix.os }}
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
         include:
           - python-version: 3.9
             os: windows-latest
           - python-version: 3.9
             os: macos-14
-
     env:
       TOXENV: integration
       PYTEST_ADDOPTS: "-v --color=yes -n4 --csv integration_results.csv"
@@ -154,10 +243,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Set up postgres (linux)
-        if: runner.os == 'Linux'
-        uses: ./.github/actions/setup-postgres-linux
-
       - name: Set up postgres (macos)
         if: runner.os == 'macOS'
         uses: ./.github/actions/setup-postgres-macos
@@ -176,7 +261,7 @@ jobs:
       - name: Run integration tests
         uses: nick-fields/retry@v3
         with:
-          timeout_minutes: 30
+          timeout_minutes: 90
           max_attempts: 3
           command: tox -- --ddtrace
 
@@ -190,7 +275,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: logs_${{ matrix.python-version }}_${{ matrix.os }}_${{ matrix.split-group }}_${{ steps.date.outputs.date }}
+          name: logs_${{ matrix.python-version }}_${{ matrix.os }}_${{ steps.date.outputs.date }}
           path: ./logs
 
       - uses: actions/upload-artifact@v4
