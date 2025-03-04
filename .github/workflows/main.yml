@@ -125,7 +125,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: [ "3.9", "3.10", "3.11" ]
-        os: [ubuntu-20.04]
+        os: [ubuntu-latest]
 
     env:
       TOXENV: integration
@@ -213,8 +213,6 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
-    needs:
-      - integration-metadata
     strategy:
       fail-fast: false
       matrix:
@@ -277,7 +275,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: logs_${{ matrix.python-version }}_${{ matrix.os }}_${{ matrix.split-group }}_${{ steps.date.outputs.date }}
+          name: logs_${{ matrix.python-version }}_${{ matrix.os }}_${{ steps.date.outputs.date }}
           path: ./logs
 
       - uses: actions/upload-artifact@v4
