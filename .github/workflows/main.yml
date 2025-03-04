@@ -180,8 +180,8 @@ jobs:
       DD_SERVICE: ${{ github.event.repository.name }}
 
     services:
-      # Label used to access the service container
-      postgres:
+      # Label used to access the postgres service container
+      localhost:
         # Docker Hub image
         image: postgres
         # Provide the password for postgres
@@ -189,13 +189,14 @@ jobs:
           POSTGRES_PASSWORD: password
           POSTGRES_USER: postgres
           POSTGRES_HOST: localhost
-          POSTGRES_PORT: 5432
         # Set health checks to wait until postgres has started
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+        ports:
+          - 5432:5432
 
     steps:
       - name: Check out the repository
