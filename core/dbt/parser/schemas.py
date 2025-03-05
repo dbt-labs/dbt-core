@@ -301,6 +301,11 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
                         block.path.relative_path, snapshot["name"] + ".sql"
                     )
                 )
+
+                # This is used to initially populate `raw_code`, which must not be empty to pass validation.
+                if block.file.contents is None:
+                    block.file.contents = ""
+
                 snapshot_node = parser._create_parsetime_node(
                     block,
                     compiled_path,
