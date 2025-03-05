@@ -1,6 +1,0 @@
-kind: Dependencies
-body: Upgrading dbt-semantic-interfaces to 0.8.3 for custom grain support in offset windows
-time: 2024-11-12T16:38:15.351519-05:00
-custom:
-    Author: WilliamDee
-    Issue: None

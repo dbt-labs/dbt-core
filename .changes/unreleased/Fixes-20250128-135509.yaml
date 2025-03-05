@@ -1,6 +1,0 @@
-kind: Fixes
-body: Loosen validation on freshness to accomodate previously wrong but harmless config.
-time: 2025-01-28T13:55:09.318833-08:00
-custom:
-  Author: ChenyuLInx peterallenwebb
-  Issue: "11123"

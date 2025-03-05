@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix for custom fields in generic test config for not_null and unique tests
-time: 2025-01-10T15:58:24.479245-05:00
-custom:
-  Author: gshank
-  Issue: "11208"
