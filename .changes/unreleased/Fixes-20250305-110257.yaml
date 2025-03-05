@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fixes parsing errors when using the new YAML format for snapshots
+time: 2025-03-05T11:02:57.829685Z
+custom:
+    Author: amardatar
+    Issue: "11164"
