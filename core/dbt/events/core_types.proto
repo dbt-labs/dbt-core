@@ -39,6 +39,7 @@ message NodeInfo {
     string node_finished_at = 8;
     google.protobuf.Struct meta = 9;
     NodeRelation node_relation = 10;
+    string node_checksum = 11;
 }
 
 // TimingInfoMsg
