@@ -9,6 +9,7 @@ import jinja2.nativetypes  # type: ignore
 import jinja2.nodes
 import jinja2.parser
 import jinja2.sandbox
+from opentelemetry import trace
 
 from dbt.contracts.graph.nodes import GenericTestNode
 from dbt.exceptions import (
@@ -57,6 +58,7 @@ class MacroGenerator(CallableMacroGenerator):
         super().__init__(macro, context)
         self.node = node
         self.stack = stack
+        self.macro_tracer = trace.get_tracer("dbt.runner")
 
     # This adds the macro's unique id to the node's 'depends_on'
     @contextmanager
@@ -78,8 +80,15 @@ class MacroGenerator(CallableMacroGenerator):
 
     # this makes MacroGenerator objects callable like functions
     def __call__(self, *args, **kwargs):
-        with self.track_call():
-            return self.call_macro(*args, **kwargs)
+        if "run_hooks" == self.get_name() and len(*args) > 0:
+            span_name = kwargs["span_name"] if "span_name" in kwargs else "hook_span"
+            # Its supper hard to close the open span reliably within the macro (without try catch support in jinja).
+            # Hence, wrapping it in python.
+            with self.track_call(), self.macro_tracer.start_as_current_span(span_name):
+                return self.call_macro(*args, **kwargs)
+        else:
+            with self.track_call():
+                return self.call_macro(*args, **kwargs)
 
 
 class UnitTestMacroGenerator(MacroGenerator):

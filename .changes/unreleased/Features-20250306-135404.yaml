@@ -1,0 +1,6 @@
+kind: Features
+body: Support DBT instrumentation using opentelemetry
+time: 2025-03-06T13:54:04.564064-08:00
+custom:
+    Author: sfc-gh-vguttha
+    Issue: "11367"
