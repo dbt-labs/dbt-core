@@ -531,7 +531,6 @@ def make_source_snapshot(pkg: str, name: str, source: SourceDefinition, path=Non
             nodes=[source.unique_id],
             macros=[],
         ),
-        # relation=f"source('{source.source_name}', '{source.name}')",
         config=SnapshotConfig(
             strategy="check",
             unique_key="'dummy'",
