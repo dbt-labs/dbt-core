@@ -7,6 +7,7 @@ from dbt.contracts.files import (
     AnySourceFile,
     ParseFileType,
     SchemaSourceFile,
+    SourceFile,
     parse_file_type_to_parser,
 )
 from dbt.contracts.graph.manifest import Manifest
@@ -398,7 +399,7 @@ class PartialParsing:
     def remove_mssat_file(self, source_file: AnySourceFile):
         # nodes [unique_ids] -- SQL files
         # There should always be a node for a SQL file
-        if not hasattr(source_file, "nodes") or not source_file.nodes:
+        if not isinstance(source_file, SourceFile) or not source_file.nodes:
             return
         # There is generally only 1 node for SQL files, except for macros and snapshots
         for unique_id in source_file.nodes:
