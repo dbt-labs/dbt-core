@@ -307,6 +307,16 @@ snapshots:
           - not_null
 """
 
+snapshots_pg__source_snapshot_yml = """
+snapshots:
+  - name: snapshot_source
+    relation: "source('information_schema', 'tables')"
+    config:
+      unique_key: "table_schema || '-' || table_name"
+      strategy: check
+      check_cols: all
+"""
+
 snapshots_pg__snapshot_mod_yml = """
 snapshots:
   - name: snapshot_actual
@@ -416,4 +426,24 @@ snapshots_check_col_noconfig__snapshot_sql = """
     {{ config(check_cols='all') }}
     select * from {{target.database}}.{{schema}}.seed
 {% endsnapshot %}
+"""
+
+
+sources_pg__source_yml = """
+sources:
+  - name: information_schema
+    database: dbt
+    schema: information_schema
+    tables:
+      - name: tables
+"""
+
+sources_pg__source_mod_yml = """
+sources:
+  - name: information_schema
+    database: dbt
+    schema: information_schema
+    tables:
+      - name: tables
+        description: tables
 """
