@@ -13,17 +13,47 @@ from dbt.contracts.files import (
     SchemaSourceFile,
     SourceFile,
 )
+from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.nodes import SnapshotNode, SourceDefinition
 from dbt.node_types import NodeType
 from dbt.parser.partial import PartialParsing
 from dbt.tests.util import safe_set_invocation_context
 from tests.unit.utils import normalize
-from tests.unit.utils.manifest import make_generic_test, make_model
+from tests.unit.utils.manifest import (
+    make_generic_test,
+    make_manifest,
+    make_model,
+    make_singular_test,
+    make_source,
+    make_source_snapshot,
+)
 
 PROJECT_NAME = "my_test"
 
 
 @pytest.fixture
-def files() -> Dict[str, BaseSourceFile]:
+def singular_test():
+    st = make_singular_test(
+        PROJECT_NAME, "my_singular_test", "select 1 where false", path="tests/my_singular_test.sql"
+    )
+    st.patch_path = "my_test://tests/tests.yml"
+    return st
+
+
+@pytest.fixture
+def source() -> SourceDefinition:
+    return make_source(PROJECT_NAME, "my_source", "my_source_table", path="models/schema.yml")
+
+
+@pytest.fixture
+def source_snapshot(source) -> SnapshotNode:
+    return make_source_snapshot(
+        PROJECT_NAME, "my_test_source_snapshot", source, path="models/schema.yml"
+    )
+
+
+@pytest.fixture
+def files(singular_test, source, source_snapshot) -> Dict[str, BaseSourceFile]:
     project_root = "/users/root"
     sql_model_file = SourceFile(
         path=FilePath(
@@ -95,10 +125,46 @@ def files() -> Dict[str, BaseSourceFile]:
                 {"name": "python_model", "description": "python"},
                 {"name": "not_null", "model": "test.my_test.test_my_model"},
             ],
+            "sources": [
+                {"name": source.source_name, "tables": [{"name": source.name}]},
+            ],
+            "snapshots": [
+                {
+                    "name": source_snapshot.name,
+                    "relation": f"source('{source.source_name}', '{source.name}')",
+                },
+            ],
         },
         ndp=["model.my_test.my_model"],
         env_vars={},
         data_tests={"models": {"not_null": {"test.my_test.test_my_model": []}}},
+        snapshots=[f"snapshot.{PROJECT_NAME}.{source_snapshot.name}"],
+        sources=[f"source.{PROJECT_NAME}.{source.source_name}.{source.name}"],
+    )
+    singular_test_sql_file = SourceFile(
+        path=FilePath(
+            project_root=project_root,
+            searched_path="tests",
+            relative_path=f"{singular_test.name}.sql",
+            modification_time=time.time(),
+        ),
+        checksum=FileHash.from_contents("a test"),
+        project_name=PROJECT_NAME,
+        parse_file_type=ParseFileType.SingularTest,
+        nodes=[f"test.{PROJECT_NAME}.{singular_test.name}"],
+        env_vars=[],
+    )
+    singular_test_yml_file = SourceFile(
+        path=FilePath(
+            project_root=project_root,
+            searched_path="tests",
+            relative_path="tests.yml",
+            modification_time=time.time(),
+        ),
+        checksum=FileHash.from_contents("a test"),
+        project_name=PROJECT_NAME,
+        parse_file_type=ParseFileType.Schema,
+        env_vars=[],
     )
     return {
         schema_file.file_id: schema_file,
@@ -106,11 +172,13 @@ def files() -> Dict[str, BaseSourceFile]:
         sql_model_file_untouched.file_id: sql_model_file_untouched,
         python_model_file.file_id: python_model_file,
         python_model_file_untouched.file_id: python_model_file_untouched,
+        singular_test_sql_file.file_id: singular_test_sql_file,
+        singular_test_yml_file.file_id: singular_test_yml_file,
     }
 
 
 @pytest.fixture
-def nodes() -> List[NodeType]:
+def nodes(singular_test, source, source_snapshot) -> List[NodeType]:
     patch_path = "my_test://" + normalize("models/schema.yml")
     my_model = make_model(PROJECT_NAME, "my_model", "", patch_path=patch_path)
     return [
@@ -121,7 +189,15 @@ def nodes() -> List[NodeType]:
             PROJECT_NAME, "python_model_untouched", "", language="python", patch_path=patch_path
         ),
         make_generic_test(PROJECT_NAME, "test", my_model, {}),
+        singular_test,
+        source,
+        source_snapshot,
     ]
+
+
+@pytest.fixture
+def manifest(files, nodes, source) -> Manifest:
+    return make_manifest(files=files, nodes=nodes, sources=[source])
 
 
 @pytest.fixture
@@ -189,7 +265,7 @@ def test_schedule_macro_nodes_for_parsing_basic(partial_parsing):
     }
 
 
-def test_schedule_nodes_for_parsing_versioning(partial_parsing) -> None:
+def test_schedule_nodes_for_parsing_versioning(partial_parsing, source) -> None:
     # Modify schema file to add versioning
     schema_file_id = "my_test://" + normalize("models/schema.yml")
     partial_parsing.new_files[schema_file_id].checksum = FileHash.from_contents("changed")
@@ -204,6 +280,9 @@ def test_schedule_nodes_for_parsing_versioning(partial_parsing) -> None:
             },
             {"name": "python_model", "description": "python"},
             {"name": "not_null", "model": "test.my_test.test_my_model"},
+        ],
+        "sources": [
+            {"name": source.source_name, "tables": [{"name": source.name}]},
         ],
     }
     with mock.patch.object(
@@ -225,6 +304,15 @@ class TestFileDiff:
         saved_files["my_test://models/python_model_untouched.py"].checksum = (
             FileHash.from_contents("something new")
         )
+        saved_files["my_test://models/schema.yml"].dfy["sources"][0]["tables"][0][
+            "description"
+        ] = "test"
+        saved_files["my_test://models/schema.yml"].checksum = FileHash.from_contents(
+            "something new"
+        )
+        saved_files["my_test://tests/my_singular_test.sql"].checksum = FileHash.from_contents(
+            "something new"
+        )
         return PartialParsing(manifest, saved_files)
 
     def test_build_file_diff_basic(self, partial_parsing):
@@ -232,9 +320,23 @@ class TestFileDiff:
         assert set(partial_parsing.file_diff["unchanged"]) == {
             "my_test://models/my_model_untouched.sql",
             "my_test://models/my_model.sql",
-            "my_test://models/schema.yml",
             "my_test://models/python_model.py",
+            "my_test://tests/tests.yml",
         }
-        assert partial_parsing.file_diff["changed"] == [
-            "my_test://models/python_model_untouched.py"
+        assert set(partial_parsing.file_diff["changed"]) == {
+            "my_test://models/python_model_untouched.py",
+            "my_test://tests/my_singular_test.sql",
+        }
+        assert partial_parsing.file_diff["changed_schema_files"] == [
+            "my_test://models/schema.yml",
         ]
+
+    def test_get_parsing_files(self, partial_parsing):
+        project_parser_files = partial_parsing.get_parsing_files()
+        assert project_parser_files == {
+            PROJECT_NAME: {
+                "ModelParser": ["my_test://models/python_model_untouched.py"],
+                "SchemaParser": ["my_test://models/schema.yml"],
+                "SingularTestParser": ["my_test://tests/my_singular_test.sql"],
+            },
+        }
