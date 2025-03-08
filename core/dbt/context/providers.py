@@ -258,7 +258,6 @@ class BaseResolver(metaclass=abc.ABCMeta):
             and target.config.event_time
             and isinstance(self.model, (ModelNode, SnapshotNode))
         ):
-
             # Handling of microbatch models
             if (
                 isinstance(self.model, ModelNode)
@@ -281,6 +280,7 @@ class BaseResolver(metaclass=abc.ABCMeta):
                     )
                     event_time_filter = EventTimeFilter(
                         field_name=target.config.event_time,
+                        filter_format=target.config.event_time_filter_format,
                         start=start,
                         end=end,
                     )
@@ -289,6 +289,7 @@ class BaseResolver(metaclass=abc.ABCMeta):
                 else:
                     event_time_filter = EventTimeFilter(
                         field_name=target.config.event_time,
+                        filter_format=target.config.event_time_filter_format,
                         start=self.model.batch.event_time_start,
                         end=self.model.batch.event_time_end,
                     )
@@ -297,6 +298,7 @@ class BaseResolver(metaclass=abc.ABCMeta):
             elif sample_mode:
                 event_time_filter = EventTimeFilter(
                     field_name=target.config.event_time,
+                    filter_format=target.config.event_time_filter_format,
                     start=self.config.args.sample.start,
                     end=self.config.args.sample.end,
                 )
