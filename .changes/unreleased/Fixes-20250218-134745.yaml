@@ -1,0 +1,6 @@
+kind: Fixes
+body: _get_doc_blocks is crashing parsing if .format is called
+time: 2025-02-18T13:47:45.659731Z
+custom:
+    Author: aranke
+    Issue: "11310"

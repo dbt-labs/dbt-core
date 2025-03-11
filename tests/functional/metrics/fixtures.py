@@ -462,6 +462,8 @@ semantic_models:
     dimensions:
       - name: purchased_at
         type: TIME
+        type_params:
+          time_granularity: day
     entities:
       - name: purchase
         type: primary
@@ -494,6 +496,16 @@ metrics:
           name: sum_order_revenue
         denominator:
           name: count_orders
+
+    - name: sum_order_revenue_plus_one_custom_offset_window
+      label: "Total order revenue, plus 1 with custom offset window"
+      description: "The total order revenue plus 1 offset by 1 martian day"
+      type: derived
+      type_params:
+        metrics:
+          - name: sum_order_revenue
+            offset_window: 1 martian_day
+        expr: "sum_order_revenue + 1"
 """
 
 disabled_metric_level_schema_yml = """
@@ -736,6 +748,8 @@ semantic_models:
     dimensions:
       - name: purchased_at
         type: TIME
+        type_params:
+          time_granularity: day
     entities:
       - name: purchase
         type: primary
@@ -796,6 +810,21 @@ metrics:
       type: cumulative
       type_params:
         measure: num_visits
+    # TODO: Re-enable this when custom grain is supported for this type
+    # - name: visits_martian_day
+    #   label: Visits since start of martian_day
+    #   type: cumulative
+    #   type_params:
+    #     measure: num_visits
+    #     cumulative_type_params:
+    #       grain_to_date: martian_day
+    # - name: visits_martian_day_window
+    #   label: Visits since start of martian_day window
+    #   type: cumulative
+    #   type_params:
+    #     measure: num_visits
+    #     cumulative_type_params:
+    #       window: 1 martian_day
 """
 
 conversion_metric_yml = """
@@ -809,6 +838,25 @@ metrics:
           base_measure: num_visits
           conversion_measure: num_orders
           entity: purchase
+    - name: converted_orders_over_visits_with_window
+      label: Number of orders converted from visits with window
+      type: conversion
+      type_params:
+        conversion_type_params:
+          base_measure: num_visits
+          conversion_measure: num_orders
+          entity: purchase
+          window: 4 day
+    # TODO: Re-enable this when custom grain is supported for this type
+    # - name: converted_orders_over_visits_with_custom_window
+    #   label: Number of orders converted from visits with custom window
+    #   type: conversion
+    #   type_params:
+    #     conversion_type_params:
+    #       base_measure: num_visits
+    #       conversion_measure: num_orders
+    #       entity: purchase
+    #       window: 4 martian_day
 """
 
 filtered_metrics_yml = """

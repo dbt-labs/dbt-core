@@ -41,6 +41,7 @@ from dbt.events.types import (
 )
 from dbt.flags import get_flags
 from dbt.graph import Graph
+from dbt.task import group_lookup
 from dbt.task.printer import print_run_result_error
 from dbt_common.events.contextvars import get_node_info
 from dbt_common.events.functions import fire_event
@@ -227,6 +228,7 @@ class BaseRunner(metaclass=ABCMeta):
         agate_table=None,
         adapter_response=None,
         failures=None,
+        batch_results=None,
     ):
         execution_time = time.time() - start_time
         thread_id = threading.current_thread().name
@@ -242,6 +244,7 @@ class BaseRunner(metaclass=ABCMeta):
             agate_table=agate_table,
             adapter_response=adapter_response,
             failures=failures,
+            batch_results=batch_results,
         )
 
     def error_result(self, node, message, start_time, timing_info):
@@ -272,6 +275,7 @@ class BaseRunner(metaclass=ABCMeta):
             agate_table=result.agate_table,
             adapter_response=result.adapter_response,
             failures=result.failures,
+            batch_results=result.batch_results,
         )
 
     def compile_and_execute(self, manifest: Manifest, ctx: ExecutionContext):
@@ -421,6 +425,8 @@ class BaseRunner(metaclass=ABCMeta):
             # if this model was skipped due to an upstream ephemeral model
             # failure, print a special 'error skip' message.
             # Include skip_cause NodeStatus
+            group = group_lookup.get(self.node.unique_id)
+
             if self._skip_caused_by_ephemeral_failure():
                 fire_event(
                     LogSkipBecauseError(
@@ -429,6 +435,7 @@ class BaseRunner(metaclass=ABCMeta):
                         index=self.node_index,
                         total=self.num_nodes,
                         status=self.skip_cause.status,
+                        group=group,
                     )
                 )
                 # skip_cause here should be the run_result from the ephemeral model
@@ -456,6 +463,7 @@ class BaseRunner(metaclass=ABCMeta):
                         index=self.node_index,
                         total=self.num_nodes,
                         node_info=self.node.node_info,
+                        group=group,
                     )
                 )
 

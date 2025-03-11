@@ -1,5 +1,6 @@
 import pickle
 import re
+from argparse import Namespace
 from dataclasses import replace
 
 import pytest
@@ -22,6 +23,11 @@ from tests.unit.utils import (
     assert_symmetric,
     replace_config,
 )
+
+
+@pytest.fixture
+def args_for_flags() -> Namespace:
+    return Namespace(state_modified_compare_vars=False)
 
 
 def norm_whitespace(string):
@@ -139,6 +145,7 @@ def basic_uncompiled_dict():
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         },
         "unrendered_config": {},
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
     }
 
@@ -183,6 +190,7 @@ def basic_compiled_dict():
             "contract": {"enforced": False, "alias_types": True},
             "docs": {"show": True},
             "access": "protected",
+            "lookback": 1,
         },
         "docs": {"show": True},
         "columns": {},
@@ -197,9 +205,11 @@ def basic_compiled_dict():
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         },
         "unrendered_config": {},
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
         "access": "protected",
         "constraints": [],
+        "doc_blocks": [],
     }
 
 
@@ -227,10 +237,12 @@ def test_basic_compiled_model(basic_compiled_dict, basic_compiled_model):
     assert node.is_ephemeral is False
 
 
-def test_invalid_extra_fields_model(minimal_uncompiled_dict):
-    bad_extra = minimal_uncompiled_dict
-    bad_extra["notvalid"] = "nope"
-    assert_fails_validation(bad_extra, ModelNode)
+def test_extra_fields_model_okay(minimal_uncompiled_dict):
+    extra = minimal_uncompiled_dict
+    extra["notvalid"] = "nope"
+    # Model still load fine with extra fields
+    loaded_model = ModelNode.from_dict(extra)
+    assert not hasattr(loaded_model, "notvalid")
 
 
 def test_invalid_bad_type_model(minimal_uncompiled_dict):
@@ -458,6 +470,7 @@ def basic_uncompiled_schema_test_dict():
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         },
         "unrendered_config": {},
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
     }
 
@@ -515,7 +528,9 @@ def basic_compiled_schema_test_dict():
         "unrendered_config": {
             "severity": "warn",
         },
+        "unrendered_config_call_dict": {},
         "config_call_dict": {},
+        "doc_blocks": [],
     }
 
 

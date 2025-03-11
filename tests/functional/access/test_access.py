@@ -470,3 +470,48 @@ class TestAccessDbtProjectConfig:
         assert model_two.access == AccessType.Private
         assert model_three.group == "marts"
         assert model_three.access == AccessType.Public
+
+
+models_yml = """
+models:
+  - name: accounts
+    description: >
+      All accounts with whom we have done business. This is a very sensitive asset.
+    access: private
+    group: sales
+
+    columns:
+      - name: name
+        description: Name of the account.
+        tests:
+          - not_null
+          - unique
+
+groups:
+  - name: sales
+    owner:
+      name: sales_owner
+"""
+
+accounts_sql = """
+select 'Jane' as name
+"""
+
+
+class TestGenericTestRestrictAccess:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models.yml": models_yml,
+            "accounts.sql": accounts_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "restrict-access": True,
+        }
+
+    def test_generic_tests(self, project):
+        run_dbt(["run"])
+        run_dbt(["test"])

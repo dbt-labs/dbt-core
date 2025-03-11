@@ -4,6 +4,7 @@ import time
 from typing import AbstractSet, Dict, List, Optional, Type
 
 from dbt import deprecations
+from dbt.adapters.base import BaseAdapter
 from dbt.adapters.base.impl import FreshnessResponse
 from dbt.adapters.base.relation import BaseRelation
 from dbt.adapters.capability import Capability
@@ -14,6 +15,8 @@ from dbt.artifacts.schemas.freshness import (
     PartialSourceFreshnessResult,
     SourceFreshnessResult,
 )
+from dbt.clients import jinja
+from dbt.context.providers import RuntimeProvider, SourceContext
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import HookNode, SourceDefinition
 from dbt.contracts.results import RunStatus
@@ -113,7 +116,22 @@ class FreshnessRunner(BaseRunner):
             adapter_response: Optional[AdapterResponse] = None
             freshness: Optional[FreshnessResponse] = None
 
-            if compiled_node.loaded_at_field is not None:
+            if compiled_node.loaded_at_query is not None:
+                # within the context user can have access to `this`, `source_node`(`model` will point to the same thing),  etc
+                compiled_code = jinja.get_rendered(
+                    compiled_node.loaded_at_query,
+                    SourceContext(
+                        compiled_node, self.config, manifest, RuntimeProvider(), None
+                    ).to_dict(),
+                    compiled_node,
+                )
+                adapter_response, freshness = self.adapter.calculate_freshness_from_custom_sql(
+                    relation,
+                    compiled_code,
+                    macro_resolver=manifest,
+                )
+                status = compiled_node.freshness.status(freshness["age"])
+            elif compiled_node.loaded_at_field is not None:
                 adapter_response, freshness = self.adapter.calculate_freshness(
                     relation,
                     compiled_node.loaded_at_field,
@@ -145,7 +163,6 @@ class FreshnessRunner(BaseRunner):
                 raise DbtRuntimeError(
                     f"Could not compute freshness for source {compiled_node.name}: no 'loaded_at_field' provided and {self.adapter.type()} adapter does not support metadata-based freshness checks."
                 )
-
         # adapter_response was not returned in previous versions, so this will be None
         # we cannot call to_dict() on NoneType
         if adapter_response:
@@ -204,10 +221,25 @@ class FreshnessTask(RunTask):
             resource_types=[NodeType.Source],
         )
 
-    def before_run(self, adapter, selected_uids: AbstractSet[str]) -> None:
-        super().before_run(adapter, selected_uids)
-        if adapter.supports(Capability.TableLastModifiedMetadataBatch):
-            self.populate_metadata_freshness_cache(adapter, selected_uids)
+    def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
+        populate_metadata_freshness_cache_status = RunStatus.Success
+
+        before_run_status = super().before_run(adapter, selected_uids)
+
+        if before_run_status == RunStatus.Success and adapter.supports(
+            Capability.TableLastModifiedMetadataBatch
+        ):
+            populate_metadata_freshness_cache_status = self.populate_metadata_freshness_cache(
+                adapter, selected_uids
+            )
+
+        if (
+            before_run_status == RunStatus.Success
+            and populate_metadata_freshness_cache_status == RunStatus.Success
+        ):
+            return RunStatus.Success
+        else:
+            return RunStatus.Error
 
     def get_runner(self, node) -> BaseRunner:
         freshness_runner = super().get_runner(node)
@@ -243,7 +275,9 @@ class FreshnessTask(RunTask):
                 deprecations.warn("source-freshness-project-hooks")
             return []
 
-    def populate_metadata_freshness_cache(self, adapter, selected_uids: AbstractSet[str]) -> None:
+    def populate_metadata_freshness_cache(
+        self, adapter, selected_uids: AbstractSet[str]
+    ) -> RunStatus:
         if self.manifest is None:
             raise DbtInternalError("Manifest must be set to populate metadata freshness cache")
 
@@ -266,6 +300,7 @@ class FreshnessTask(RunTask):
                 batch_metadata_sources
             )
             self._metadata_freshness_cache.update(metadata_freshness_results)
+            return RunStatus.Success
         except Exception as e:
             # This error handling is intentionally very coarse.
             # If anything goes wrong during batch metadata calculation, we can safely
@@ -276,6 +311,7 @@ class FreshnessTask(RunTask):
                 Note(msg=f"Metadata freshness could not be computed in batch: {e}"),
                 EventLevel.WARN,
             )
+            return RunStatus.Error
 
     def get_freshness_metadata_cache(self) -> Dict[BaseRelation, FreshnessResult]:
         return self._metadata_freshness_cache

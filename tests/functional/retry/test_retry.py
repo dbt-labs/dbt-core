@@ -5,7 +5,7 @@ import pytest
 
 from dbt.contracts.results import RunStatus, TestStatus
 from dbt.exceptions import DbtRuntimeError, TargetNotFoundError
-from dbt.tests.util import rm_file, run_dbt, write_file
+from dbt.tests.util import rm_file, run_dbt, update_config_file, write_file
 from tests.functional.retry.fixtures import (
     macros__alter_timezone_sql,
     models__sample_model,
@@ -365,3 +365,92 @@ class TestRetryTargetPathFlag:
         results = run_dbt(["retry", "--state", "artifacts", "--target-path", "my_target_path"])
         assert len(results) == 1
         assert Path("my_target_path").is_dir()
+
+
+class TestRetryHooksAlwaysRun:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "on-run-start": ["select 1;"],
+            "on-run-end": ["select 2;"],
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": models__sample_model,
+        }
+
+    def test_retry_hooks_always_run(self, project):
+        res = run_dbt(["run", "--target-path", "target"], expect_pass=False)
+        assert len(res) == 3
+
+        write_file(models__second_model, "models", "sample_model.sql")
+        res = run_dbt(["retry", "--state", "target"])
+        assert len(res) == 3
+
+
+class TestFixRetryHook:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "flags": {
+                "skip_nodes_if_on_run_start_fails": True,
+            },
+            "on-run-start": [
+                "select 1 as id",
+                "select column_does_not_exist",
+                "select 2 as id",
+            ],
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": "select 1 as id, 1 as foo",
+            "second_model.sql": models__second_model,
+            "union_model.sql": models__union_model,
+        }
+
+    def test_fix_retry_hook(self, project):
+        res = run_dbt(["run"], expect_pass=False)
+        assert {r.node.unique_id: r.status for r in res.results} == {
+            "operation.test.test-on-run-start-0": RunStatus.Success,
+            "operation.test.test-on-run-start-1": RunStatus.Error,
+            "operation.test.test-on-run-start-2": RunStatus.Skipped,
+            "model.test.sample_model": RunStatus.Skipped,
+            "model.test.second_model": RunStatus.Skipped,
+            "model.test.union_model": RunStatus.Skipped,
+        }
+
+        res = run_dbt(["retry"], expect_pass=False)
+        assert {r.node.unique_id: r.status for r in res.results} == {
+            "operation.test.test-on-run-start-0": RunStatus.Success,
+            "operation.test.test-on-run-start-1": RunStatus.Error,
+            "operation.test.test-on-run-start-2": RunStatus.Skipped,
+            "model.test.sample_model": RunStatus.Skipped,
+            "model.test.second_model": RunStatus.Skipped,
+            "model.test.union_model": RunStatus.Skipped,
+        }
+
+        new_dbt_project_yml = {
+            "flags": {
+                "skip_nodes_if_on_run_start_fails": True,
+            },
+            "on-run-start": [
+                "select 1 as id",
+                "select 3 as id",
+                "select 2 as id",
+            ],
+        }
+
+        update_config_file(new_dbt_project_yml, project.project_root, "dbt_project.yml")
+        res = run_dbt(["retry"])
+        assert {r.node.unique_id: r.status for r in res.results} == {
+            "operation.test.test-on-run-start-0": RunStatus.Success,
+            "operation.test.test-on-run-start-1": RunStatus.Success,
+            "operation.test.test-on-run-start-2": RunStatus.Success,
+            "model.test.sample_model": RunStatus.Success,
+            "model.test.second_model": RunStatus.Success,
+            "model.test.union_model": RunStatus.Success,
+        }

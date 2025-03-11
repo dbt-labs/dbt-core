@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Improve speed of tree traversal when finding children, increasing build speed for some selectors
-time: 2024-08-09T13:02:34.759905-07:00
-custom:
-    Author: ttusing
-    Issue: "10434"

@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Additional type hints for `core/dbt/version.py`
-time: 2024-08-27T10:50:14.047859-05:00
-custom:
-  Author: QMalcolm
-  Issue: "10612"

@@ -18,8 +18,7 @@ from dbt.events.base_types import (
     TestLevel,
     WarnLevel,
 )
-from dbt.events.types import RunResultError
-from dbt.task.printer import print_run_result_error
+from dbt.task.printer import print_run_end_messages
 from dbt_common.events import types
 from dbt_common.events.base_types import msg_from_base_event
 from dbt_common.events.event_manager import EventManager, TestEventManager
@@ -157,6 +156,9 @@ sample_values = [
         package_name="my_package", materialization_name="view"
     ),
     core_types.SourceFreshnessProjectHooksNotRun(),
+    core_types.MFTimespineWithoutYamlConfigurationDeprecation(),
+    core_types.MFCumulativeTypeParamsDeprecation(),
+    core_types.MicrobatchMacroOutsideOfBatchesDeprecation(),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),
@@ -286,6 +288,8 @@ sample_values = [
     core_types.WarnStateTargetEqual(state_path=""),
     core_types.FreshnessConfigProblem(msg=""),
     core_types.SemanticValidationFailure(msg=""),
+    core_types.MicrobatchModelNoEventTimeInputs(model_name=""),
+    core_types.InvalidConcurrentBatchesConfig(num_models=1, adapter_type=""),
     # M - Deps generation ======================
     core_types.GitSparseCheckoutSubdirectory(subdir=""),
     core_types.GitProgressCheckoutRevision(revision=""),
@@ -319,6 +323,8 @@ sample_values = [
     core_types.DepsScrubbedPackageName(package_name=""),
     core_types.DepsUnpinned(revision="", git=""),
     core_types.NoNodesForSelectionCriteria(spec_raw=""),
+    # P - Artifacts ======================
+    core_types.ArtifactWritten(artifact_type="manifest", artifact_path="path/to/artifact.json"),
     # Q - Node execution ======================
     core_types.RunningOperationCaughtError(exc=""),
     core_types.CompileComplete(),
@@ -331,6 +337,14 @@ sample_values = [
         num_models=0,
         execution_time=0,
         num_failures=0,
+    ),
+    core_types.LogNodeResult(
+        description="",
+        status="",
+        index=0,
+        total=0,
+        execution_time=0,
+        msg="",
     ),
     core_types.LogStartLine(description="", index=0, total=0),
     core_types.LogModelResult(
@@ -415,6 +429,15 @@ sample_values = [
     core_types.SnapshotTimestampWarning(
         snapshot_time_data_type="DATETIME", updated_at_data_type="DATETIMEZ"
     ),
+    core_types.MicrobatchExecutionDebug(msg=""),
+    core_types.LogStartBatch(description="", batch_index=0, total_batches=0),
+    core_types.LogBatchResult(
+        description="",
+        status="",
+        batch_index=0,
+        total_batches=0,
+        execution_time=0,
+    ),
     # W - Node testing ======================
     core_types.CatchableExceptionOnRun(exc=""),
     core_types.InternalErrorOnRun(build_path="", exc=""),
@@ -439,7 +462,9 @@ sample_values = [
     core_types.OpenCommand(open_cmd="", profiles_dir=""),
     core_types.RunResultWarning(resource_type="", node_name="", path=""),
     core_types.RunResultFailure(resource_type="", node_name="", path=""),
-    core_types.StatsLine(stats={"error": 0, "skip": 0, "pass": 0, "warn": 0, "total": 0}),
+    core_types.StatsLine(
+        stats={"error": 0, "skip": 0, "pass": 0, "warn": 0, "noop": 0, "total": 0}
+    ),
     core_types.RunResultError(msg=""),
     core_types.RunResultErrorNoMessage(status=""),
     core_types.SQLCompiledPath(path=""),
@@ -517,7 +542,7 @@ T = TypeVar("T")
 
 
 def test_date_serialization():
-    ti = TimingInfo("test")
+    ti = TimingInfo("compile")
     ti.begin()
     ti.end()
     ti_dict = ti.to_dict()
@@ -537,10 +562,7 @@ def test_bad_serialization():
     with pytest.raises(Exception) as excinfo:
         types.Note(param_event_doesnt_have="This should break")
 
-    assert (
-        str(excinfo.value)
-        == "[Note]: Unable to parse dict {'param_event_doesnt_have': 'This should break'}"
-    )
+    assert 'has no field named "param_event_doesnt_have" at "Note"' in str(excinfo.value)
 
 
 def test_single_run_error():
@@ -550,22 +572,40 @@ def test_single_run_error():
         event_mgr = TestEventManager()
         ctx_set_event_manager(event_mgr)
 
+        class MockNode:
+            unique_id: str = ""
+            node_info = None
+            resource_type: str = "model"
+            name: str = "my_model"
+            original_file_path: str = "path/to/model.sql"
+
         error_result = RunResult(
             status=RunStatus.Error,
             timing=[],
             thread_id="",
             execution_time=0.0,
-            node=None,
+            node=MockNode(),
             adapter_response=dict(),
             message="oh no!",
-            failures=[],
+            failures=1,
+            batch_results=None,
         )
+        results = [error_result]
+        print_run_end_messages(results)
 
-        print_run_result_error(error_result)
-        events = [e for e in event_mgr.event_history if isinstance(e[0], RunResultError)]
+        summary_event = [
+            e for e in event_mgr.event_history if isinstance(e[0], core_types.EndOfRunSummary)
+        ]
+        run_result_error_events = [
+            e for e in event_mgr.event_history if isinstance(e[0], core_types.RunResultError)
+        ]
 
-        assert len(events) == 1
-        assert events[0][0].msg == "oh no!"
+        # expect correct plural
+        assert "partial successes" in summary_event[0][0].message()
+
+        # expect one error to show up
+        assert len(run_result_error_events) == 1
+        assert run_result_error_events[0][0].msg == "oh no!"
 
     finally:
         # Set an empty event manager unconditionally on exit. This is an early

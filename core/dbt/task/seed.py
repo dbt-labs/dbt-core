@@ -6,14 +6,14 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.events.types import LogSeedResult, LogStartLine, SeedHeader
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
+from dbt.task import group_lookup
 from dbt.task.base import BaseRunner
+from dbt.task.printer import print_run_end_messages
+from dbt.task.run import ModelRunner, RunTask
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Formatting
 from dbt_common.exceptions import DbtInternalError
-
-from .printer import print_run_end_messages
-from .run import ModelRunner, RunTask
 
 
 class SeedRunner(ModelRunner):
@@ -41,6 +41,7 @@ class SeedRunner(ModelRunner):
 
     def print_result_line(self, result):
         model = result.node
+        group = group_lookup.get(model.unique_id)
         level = EventLevel.ERROR if result.status == NodeStatus.Error else EventLevel.INFO
         fire_event(
             LogSeedResult(
@@ -52,6 +53,7 @@ class SeedRunner(ModelRunner):
                 schema=self.node.schema,
                 relation=model.alias,
                 node_info=model.node_info,
+                group=group,
             ),
             level=level,
         )

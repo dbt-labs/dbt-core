@@ -2,15 +2,16 @@ import os
 import threading
 import traceback
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 import dbt_common.exceptions
 from dbt.adapters.factory import get_adapter
-from dbt.artifacts.schemas.results import RunStatus, TimingInfo
+from dbt.artifacts.schemas.results import RunStatus, TimingInfo, collect_timing_info
 from dbt.artifacts.schemas.run import RunResult, RunResultsArtifact
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.nodes import HookNode
 from dbt.events.types import (
+    ArtifactWritten,
     LogDebugStackTrace,
     RunningOperationCaughtError,
     RunningOperationUncaughtError,
@@ -18,7 +19,6 @@ from dbt.events.types import (
 from dbt.node_types import NodeType
 from dbt.task.base import ConfiguredTask
 from dbt_common.events.functions import fire_event
-from dbt_common.exceptions import DbtInternalError
 
 RESULT_FILE_NAME = "run_results.json"
 
@@ -51,25 +51,29 @@ class RunOperationTask(ConfiguredTask):
         return res
 
     def run(self) -> RunResultsArtifact:
-        start = datetime.utcnow()
-        self.compile_manifest()
+        timing: List[TimingInfo] = []
+
+        with collect_timing_info("compile", timing.append):
+            self.compile_manifest()
+
+        start = timing[0].started_at
 
         success = True
-
         package_name, macro_name = self._get_macro_parts()
 
-        try:
-            self._run_unsafe(package_name, macro_name)
-        except dbt_common.exceptions.DbtBaseException as exc:
-            fire_event(RunningOperationCaughtError(exc=str(exc)))
-            fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))
-            success = False
-        except Exception as exc:
-            fire_event(RunningOperationUncaughtError(exc=str(exc)))
-            fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))
-            success = False
+        with collect_timing_info("execute", timing.append):
+            try:
+                self._run_unsafe(package_name, macro_name)
+            except dbt_common.exceptions.DbtBaseException as exc:
+                fire_event(RunningOperationCaughtError(exc=str(exc)))
+                fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))
+                success = False
+            except Exception as exc:
+                fire_event(RunningOperationUncaughtError(exc=str(exc)))
+                fire_event(LogDebugStackTrace(exc_info=traceback.format_exc()))
+                success = False
 
-        end = datetime.utcnow()
+        end = timing[1].completed_at
 
         macro = (
             self.manifest.find_macro_by_name(macro_name, self.config.project_name, package_name)
@@ -81,14 +85,16 @@ class RunOperationTask(ConfiguredTask):
             unique_id = macro.unique_id
             fqn = unique_id.split(".")
         else:
-            raise DbtInternalError(
+            raise dbt_common.exceptions.UndefinedMacroError(
                 f"dbt could not find a macro with the name '{macro_name}' in any package"
             )
+
+        execution_time = (end - start).total_seconds() if start and end else 0.0
 
         run_result = RunResult(
             adapter_response={},
             status=RunStatus.Success if success else RunStatus.Error,
-            execution_time=(end - start).total_seconds(),
+            execution_time=execution_time,
             failures=0 if success else 1,
             message=None,
             node=HookNode(
@@ -105,12 +111,13 @@ class RunOperationTask(ConfiguredTask):
                 original_file_path="",
             ),
             thread_id=threading.current_thread().name,
-            timing=[TimingInfo(name=macro_name, started_at=start, completed_at=end)],
+            timing=timing,
+            batch_results=None,
         )
 
         results = RunResultsArtifact.from_execution_results(
-            generated_at=end,
-            elapsed_time=(end - start).total_seconds(),
+            generated_at=end or datetime.utcnow(),
+            elapsed_time=execution_time,
             args={
                 k: v
                 for k, v in self.args.__dict__.items()
@@ -123,6 +130,11 @@ class RunOperationTask(ConfiguredTask):
 
         if self.args.write_json:
             results.write(result_path)
+            fire_event(
+                ArtifactWritten(
+                    artifact_type=results.__class__.__name__, artifact_path=result_path
+                )
+            )
 
         return results
 

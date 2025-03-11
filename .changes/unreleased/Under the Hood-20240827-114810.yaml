@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Fix type errors in `dbt/core/task/clean.py`
-time: 2024-08-27T11:48:10.438173-05:00
-custom:
-  Author: QMalcolm
-  Issue: "10616"

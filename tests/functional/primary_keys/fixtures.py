@@ -11,6 +11,16 @@ models:
           - unique
 """
 
+invalid_model_unique_test = """
+models:
+  - name: simple_model
+    data_tests:
+      - unique:
+          column_name: null
+    columns:
+      - name: id
+"""
+
 simple_model_disabled_unique_test = """
 models:
   - name: simple_model
@@ -38,6 +48,16 @@ models:
     tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [id, color]
+"""
+
+invalid_model_unique_combo_of_columns = """
+models:
+  - name: simple_model
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [null]
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: "test"
 """
 
 simple_model_constraints = """

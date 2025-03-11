@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from dbt.tests.util import run_dbt, run_dbt_and_capture
@@ -73,6 +75,18 @@ class TestShowSingle(ShowBase):
         assert "Previewing node 'sample_model'" not in log_output
         assert "sample_num" in log_output
         assert "sample_bool" in log_output
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(log_output)
+
+    def test_select_single_model_json_quiet(self, project):
+        run_dbt(["build"])
+        (_, log_output) = run_dbt_and_capture(
+            ["show", "--quiet", "--select", "sample_model", "--output", "json"]
+        )
+        assert "Previewing node 'sample_model'" not in log_output
+        assert "sample_num" in log_output
+        assert "sample_bool" in log_output
+        json.loads(log_output)
 
 
 class TestShowNumeric(ShowBase):
@@ -119,6 +133,15 @@ class TestShowInline(ShowBase):
         assert "sample_num" in log_output
         assert "sample_bool" in log_output
 
+    def test_inline_pass_quiet(self, project):
+        run_dbt(["build"])
+        (_, log_output) = run_dbt_and_capture(
+            ["show", "--quiet", "--inline", "select * from {{ ref('sample_model') }}"]
+        )
+        assert "Previewing inline node" not in log_output
+        assert "sample_num" in log_output
+        assert "sample_bool" in log_output
+
 
 class TestShowInlineFail(ShowBase):
     def test_inline_fail(self, project):
@@ -130,6 +153,53 @@ class TestShowInlineFailDB(ShowBase):
     def test_inline_fail_database_error(self, project):
         with pytest.raises(DbtRuntimeError, match="Database Error"):
             run_dbt(["show", "--inline", "slect asdlkjfsld;j"])
+
+
+class TestShowInlineDirect(ShowBase):
+
+    def test_inline_direct_pass(self, project):
+        query = f"select * from {project.test_schema}.sample_seed"
+        (_, log_output) = run_dbt_and_capture(["show", "--inline-direct", query])
+        assert "Previewing inline node" in log_output
+        assert "sample_num" in log_output
+        assert "sample_bool" in log_output
+
+        # This is a bit of a hack. Unfortunately, the test teardown code
+        # expects that dbt loaded an adapter with a macro context the last
+        # time it was called. The '--inline-direct' parameter used on the
+        # previous run explicitly disables macros. So now we call 'dbt seed',
+        # which will load the adapter fully and satisfy the teardown code.
+        run_dbt(["seed"])
+
+    def test_inline_direct_pass_quiet(self, project):
+        query = f"select * from {project.test_schema}.sample_seed"
+        (_, log_output) = run_dbt_and_capture(["show", "--quiet", "--inline-direct", query])
+        assert "Previewing inline node" not in log_output
+        assert "sample_num" in log_output
+        assert "sample_bool" in log_output
+
+        # See prior test for explanation of why this is here
+        run_dbt(["seed"])
+
+    def test_inline_direct_pass_no_limit(self, project):
+        query = f"select * from {project.test_schema}.sample_seed"
+        (_, log_output) = run_dbt_and_capture(["show", "--inline-direct", query, "--limit", -1])
+        assert "Previewing inline node" in log_output
+        assert "sample_num" in log_output
+        assert "sample_bool" in log_output
+
+        # See prior test for explanation of why this is here
+        run_dbt(["seed"])
+
+
+class TestShowInlineDirectFail(ShowBase):
+
+    def test_inline_fail_database_error(self, project):
+        with pytest.raises(DbtRuntimeError, match="Database Error"):
+            run_dbt(["show", "--inline-direct", "slect asdlkjfsld;j"])
+
+        # See prior test for explanation of why this is here
+        run_dbt(["seed"])
 
 
 class TestShowEphemeral(ShowBase):

@@ -3,7 +3,6 @@ import time
 from abc import abstractmethod
 from concurrent.futures import as_completed
 from datetime import datetime
-from multiprocessing.dummy import Pool as ThreadPool
 from pathlib import Path
 from typing import AbstractSet, Dict, Iterable, List, Optional, Set, Tuple, Type, Union
 
@@ -11,7 +10,7 @@ import dbt.exceptions
 import dbt.tracking
 import dbt.utils
 import dbt_common.utils.formatting
-from dbt.adapters.base import BaseRelation
+from dbt.adapters.base import BaseAdapter, BaseRelation
 from dbt.adapters.factory import get_adapter
 from dbt.artifacts.schemas.results import (
     BaseResult,
@@ -23,9 +22,10 @@ from dbt.artifacts.schemas.run import RunExecutionResult, RunResult
 from dbt.cli.flags import Flags
 from dbt.config.runtime import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import ResultNode
+from dbt.contracts.graph.nodes import Exposure, ResultNode
 from dbt.contracts.state import PreviousState
 from dbt.events.types import (
+    ArtifactWritten,
     ConcurrencyLine,
     DefaultSelector,
     EndRunResult,
@@ -36,6 +36,7 @@ from dbt.events.types import (
     NodeStart,
     NothingToDo,
     QueryCancelationUnsupported,
+    SkippingDetails,
 )
 from dbt.exceptions import DbtInternalError, DbtRuntimeError, FailFastError
 from dbt.flags import get_flags
@@ -46,16 +47,17 @@ from dbt.graph import (
     UniqueId,
     parse_difference,
 )
+from dbt.graph.thread_pool import DbtThreadPool
 from dbt.parser.manifest import write_manifest
+from dbt.task import group_lookup
 from dbt.task.base import BaseRunner, ConfiguredTask
+from dbt.task.printer import print_run_end_messages, print_run_result_error
 from dbt_common.context import _INVOCATION_CONTEXT_VAR, get_invocation_context
 from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.contextvars import log_contextvars, task_contextvars
 from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.events.types import Formatting
 from dbt_common.exceptions import NotImplementedError
-
-from .printer import print_run_end_messages, print_run_result_error
 
 RESULT_FILE_NAME = "run_results.json"
 
@@ -65,8 +67,16 @@ class GraphRunnableMode(StrEnum):
     Independent = "independent"
 
 
+def mark_node_as_skipped(
+    node: ResultNode, executed_node_ids: Set[str], message: Optional[str]
+) -> Optional[RunResult]:
+    if node.unique_id not in executed_node_ids:
+        return RunResult.from_node(node, RunStatus.Skipped, message)
+    return None
+
+
 class GraphRunnableTask(ConfiguredTask):
-    MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error]
+    MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error, NodeStatus.PartialSuccess]
 
     def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
         super().__init__(args, config, manifest)
@@ -174,6 +184,8 @@ class GraphRunnableTask(ConfiguredTask):
                 self._flattened_nodes.append(self.manifest.saved_queries[uid])
             elif uid in self.manifest.unit_tests:
                 self._flattened_nodes.append(self.manifest.unit_tests[uid])
+            elif uid in self.manifest.exposures:
+                self._flattened_nodes.append(self.manifest.exposures[uid])
             else:
                 raise DbtInternalError(
                     f"Node selection returned {uid}, expected a node, a source, or a unit test"
@@ -222,7 +234,12 @@ class GraphRunnableTask(ConfiguredTask):
             )
             try:
                 result = runner.run_with_hooks(self.manifest)
+            except (KeyboardInterrupt, SystemExit) as exe:
+                result = None
+                thread_exception: Union[KeyboardInterrupt, SystemExit, Exception] = exe
+                raise
             except Exception as e:
+                result = None
                 thread_exception = e
             finally:
                 if result is not None:
@@ -251,6 +268,7 @@ class GraphRunnableTask(ConfiguredTask):
                         adapter_response={},
                         message=msg,
                         failures=None,
+                        batch_results=None,
                         node=runner.node,
                     )
 
@@ -260,7 +278,10 @@ class GraphRunnableTask(ConfiguredTask):
 
         fail_fast = get_flags().FAIL_FAST
 
-        if result.status in (NodeStatus.Error, NodeStatus.Fail) and fail_fast:
+        if (
+            result.status in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.PartialSuccess)
+            and fail_fast
+        ):
             self._raise_next_tick = FailFastError(
                 msg="Failing early due to test failure or runtime error",
                 result=result,
@@ -386,27 +407,22 @@ class GraphRunnableTask(ConfiguredTask):
 
     def execute_nodes(self):
         num_threads = self.config.threads
-        target_name = self.config.target_name
 
-        fire_event(
-            ConcurrencyLine(
-                num_threads=num_threads, target_name=target_name, node_count=self.num_nodes
-            )
+        pool = DbtThreadPool(
+            num_threads, self._pool_thread_initializer, [get_invocation_context()]
         )
-        fire_event(Formatting(""))
-
-        pool = ThreadPool(num_threads, self._pool_thread_initializer, [get_invocation_context()])
         try:
             self.run_queue(pool)
         except FailFastError as failure:
             self._cancel_connections(pool)
 
-            executed_node_ids = [r.node.unique_id for r in self.node_results]
+            executed_node_ids = {r.node.unique_id for r in self.node_results}
+            message = "Skipping due to fail_fast"
 
-            for r in self._flattened_nodes:
-                if r.unique_id not in executed_node_ids:
+            for node in self._flattened_nodes:
+                if node.unique_id not in executed_node_ids:
                     self.node_results.append(
-                        RunResult.from_node(r, RunStatus.Skipped, "Skipping due to fail_fast")
+                        mark_node_as_skipped(node, executed_node_ids, message)
                     )
 
             print_run_result_error(failure.result)
@@ -421,6 +437,12 @@ class GraphRunnableTask(ConfiguredTask):
 
             if self.args.write_json and hasattr(run_result, "write"):
                 run_result.write(self.result_path())
+                fire_event(
+                    ArtifactWritten(
+                        artifact_type=run_result.__class__.__name__,
+                        artifact_path=self.result_path(),
+                    )
+                )
 
             self._cancel_connections(pool)
             print_run_end_messages(self.node_results, keyboard_interrupt=True)
@@ -478,10 +500,11 @@ class GraphRunnableTask(ConfiguredTask):
                 {"adapter_cache_construction_elapsed": cache_populate_time}
             )
 
-    def before_run(self, adapter, selected_uids: AbstractSet[str]):
+    def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
         with adapter.connection_named("master"):
             self.defer_to_manifest()
             self.populate_adapter_cache(adapter)
+            return RunStatus.Success
 
     def after_run(self, adapter, results) -> None:
         pass
@@ -491,10 +514,50 @@ class GraphRunnableTask(ConfiguredTask):
 
     def execute_with_hooks(self, selected_uids: AbstractSet[str]):
         adapter = get_adapter(self.config)
+
+        fire_event(Formatting(""))
+        fire_event(
+            ConcurrencyLine(
+                num_threads=self.config.threads,
+                target_name=self.config.target_name,
+                node_count=self.num_nodes,
+            )
+        )
+        fire_event(Formatting(""))
+
         self.started_at = time.time()
         try:
-            self.before_run(adapter, selected_uids)
-            res = self.execute_nodes()
+            before_run_status = self.before_run(adapter, selected_uids)
+            if before_run_status == RunStatus.Success or (
+                not get_flags().skip_nodes_if_on_run_start_fails
+            ):
+                res = self.execute_nodes()
+            else:
+                executed_node_ids = {
+                    r.node.unique_id for r in self.node_results if hasattr(r, "node")
+                }
+
+                res = []
+
+                for index, node in enumerate(self._flattened_nodes or []):
+                    group = group_lookup.get(node.unique_id)
+
+                    if node.unique_id not in executed_node_ids:
+                        fire_event(
+                            SkippingDetails(
+                                resource_type=node.resource_type,
+                                schema=node.schema,
+                                node_name=node.name,
+                                index=index + 1,
+                                total=self.num_nodes,
+                                node_info=node.node_info,
+                                group=group,
+                            )
+                        )
+                        skipped_node_result = mark_node_as_skipped(node, executed_node_ids, None)
+                        if skipped_node_result:
+                            self.node_results.append(skipped_node_result)
+
             self.after_run(adapter, res)
         finally:
             adapter.cleanup_connections()
@@ -521,7 +584,6 @@ class GraphRunnableTask(ConfiguredTask):
                 )
 
             if len(self._flattened_nodes) == 0:
-                fire_event(Formatting(""))
                 warn_or_error(NothingToDo())
                 result = self.get_result(
                     results=[],
@@ -529,7 +591,6 @@ class GraphRunnableTask(ConfiguredTask):
                     elapsed_time=0.0,
                 )
             else:
-                fire_event(Formatting(""))
                 selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
                 result = self.execute_with_hooks(selected_uids)
 
@@ -549,6 +610,11 @@ class GraphRunnableTask(ConfiguredTask):
             write_manifest(self.manifest, self.config.project_target_path)
             if hasattr(result, "write"):
                 result.write(self.result_path())
+                fire_event(
+                    ArtifactWritten(
+                        artifact_type=result.__class__.__name__, artifact_path=self.result_path()
+                    )
+                )
 
         self.task_end_messages(result.results)
         return result
@@ -558,18 +624,19 @@ class GraphRunnableTask(ConfiguredTask):
         if results is None:
             return False
 
-        failures = [
-            r
-            for r in results
-            if r.status
-            in (
-                NodeStatus.RuntimeErr,
-                NodeStatus.Error,
-                NodeStatus.Fail,
-                NodeStatus.Skipped,  # propogate error message causing skip
-            )
-        ]
-        return len(failures) == 0
+        num_runtime_errors = len([r for r in results if r.status == NodeStatus.RuntimeErr])
+        num_errors = len([r for r in results if r.status == NodeStatus.Error])
+        num_fails = len([r for r in results if r.status == NodeStatus.Fail])
+        num_skipped = len(
+            [
+                r
+                for r in results
+                if r.status == NodeStatus.Skipped and not isinstance(r.node, Exposure)
+            ]
+        )
+        num_partial_success = len([r for r in results if r.status == NodeStatus.PartialSuccess])
+        num_total = num_runtime_errors + num_errors + num_fails + num_skipped + num_partial_success
+        return num_total == 0
 
     def get_model_schemas(self, adapter, selected_uids: Iterable[str]) -> Set[BaseRelation]:
         if self.manifest is None:

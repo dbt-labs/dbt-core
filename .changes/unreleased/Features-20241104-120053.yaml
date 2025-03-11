@@ -1,0 +1,6 @@
+kind: Features
+body: Add new hard_deletes="new_record" mode for snapshots.
+time: 2024-11-04T12:00:53.95191-05:00
+custom:
+  Author: peterallenwebb
+  Issue: "10235"

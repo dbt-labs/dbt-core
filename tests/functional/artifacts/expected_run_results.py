@@ -21,6 +21,7 @@ def expected_run_results():
             "compiled": True,
             "compiled_code": ANY,
             "relation_name": ANY,
+            "batch_results": None,
         },
         {
             "status": "success",
@@ -34,6 +35,7 @@ def expected_run_results():
             "compiled": True,
             "compiled_code": ANY,
             "relation_name": ANY,
+            "batch_results": None,
         },
         {
             "status": "success",
@@ -47,6 +49,7 @@ def expected_run_results():
             "compiled": None,
             "compiled_code": ANY,
             "relation_name": None,
+            "batch_results": None,
         },
         {
             "status": "success",
@@ -60,6 +63,7 @@ def expected_run_results():
             "compiled": True,
             "compiled_code": ANY,
             "relation_name": ANY,
+            "batch_results": None,
         },
         {
             "status": "success",
@@ -73,6 +77,7 @@ def expected_run_results():
             "compiled": True,
             "compiled_code": ANY,
             "relation_name": None,
+            "batch_results": None,
         },
         {
             "status": "success",
@@ -86,6 +91,7 @@ def expected_run_results():
             "compiled": True,
             "compiled_code": ANY,
             "relation_name": None,
+            "batch_results": None,
         },
         {
             "status": "success",
@@ -99,6 +105,7 @@ def expected_run_results():
             "compiled": True,
             "compiled_code": ANY,
             "relation_name": None,
+            "batch_results": None,
         },
     ]
 
@@ -117,6 +124,7 @@ def expected_references_run_results():
             "compiled": True,
             "compiled_code": ANY,
             "relation_name": ANY,
+            "batch_results": None,
         },
         {
             "status": "success",
@@ -130,6 +138,7 @@ def expected_references_run_results():
             "compiled": True,
             "compiled_code": ANY,
             "relation_name": ANY,
+            "batch_results": None,
         },
         {
             "status": "success",
@@ -143,6 +152,7 @@ def expected_references_run_results():
             "compiled": None,
             "compiled_code": ANY,
             "relation_name": ANY,
+            "batch_results": None,
         },
         {
             "status": "success",
@@ -156,6 +166,7 @@ def expected_references_run_results():
             "compiled": True,
             "compiled_code": ANY,
             "relation_name": ANY,
+            "batch_results": None,
         },
     ]
 
@@ -174,6 +185,7 @@ def expected_versions_run_results():
             "compiled": True,
             "compiled_code": ANY,
             "relation_name": ANY,
+            "batch_results": None,
         },
         {
             "status": "success",
@@ -187,6 +199,7 @@ def expected_versions_run_results():
             "compiled": True,
             "compiled_code": ANY,
             "relation_name": ANY,
+            "batch_results": None,
         },
         {
             "status": "success",
@@ -200,6 +213,7 @@ def expected_versions_run_results():
             "compiled": True,
             "compiled_code": ANY,
             "relation_name": ANY,
+            "batch_results": None,
         },
         {
             "status": "success",
@@ -213,6 +227,7 @@ def expected_versions_run_results():
             "compiled": True,
             "compiled_code": ANY,
             "relation_name": ANY,
+            "batch_results": None,
         },
         {
             "status": "success",
@@ -226,6 +241,7 @@ def expected_versions_run_results():
             "compiled": True,
             "compiled_code": ANY,
             "relation_name": ANY,
+            "batch_results": None,
         },
         {
             "status": "success",
@@ -239,5 +255,6 @@ def expected_versions_run_results():
             "compiled": True,
             "compiled_code": ANY,
             "relation_name": ANY,
+            "batch_results": None,
         },
     ]

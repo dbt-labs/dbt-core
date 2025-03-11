@@ -20,6 +20,7 @@ from typing_extensions import Protocol
 
 from dbt import selected_resources
 from dbt.adapters.base.column import Column
+from dbt.adapters.base.relation import EventTimeFilter
 from dbt.adapters.contracts.connection import AdapterResponse
 from dbt.adapters.exceptions import MissingConfigError
 from dbt.adapters.factory import (
@@ -27,13 +28,20 @@ from dbt.adapters.factory import (
     get_adapter_package_names,
     get_adapter_type_names,
 )
-from dbt.artifacts.resources import NodeVersion, RefArgs
+from dbt.artifacts.resources import (
+    NodeConfig,
+    NodeVersion,
+    RefArgs,
+    SeedConfig,
+    SourceConfig,
+)
 from dbt.clients.jinja import (
     MacroGenerator,
     MacroStack,
     UnitTestMacroGenerator,
     get_rendered,
 )
+from dbt.clients.jinja_static import statically_parse_unrendered_config
 from dbt.config import IsFQNResource, Project, RuntimeConfig
 from dbt.constants import DEFAULT_ENV_PLACEHOLDER
 from dbt.context.base import Var, contextmember, contextproperty
@@ -50,9 +58,11 @@ from dbt.contracts.graph.nodes import (
     Exposure,
     Macro,
     ManifestNode,
+    ModelNode,
     Resource,
     SeedNode,
     SemanticModel,
+    SnapshotNode,
     SourceDefinition,
     UnitTestNode,
 )
@@ -76,6 +86,8 @@ from dbt.exceptions import (
     SecretEnvVarLocationError,
     TargetNotFoundError,
 )
+from dbt.flags import get_flags
+from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt.node_types import ModelLanguage, NodeType
 from dbt.utils import MultiDict, args_to_dict
 from dbt_common.clients.jinja import MacroProtocol
@@ -230,6 +242,67 @@ class BaseResolver(metaclass=abc.ABCMeta):
     def resolve_limit(self) -> Optional[int]:
         return 0 if getattr(self.config.args, "EMPTY", False) else None
 
+    def resolve_event_time_filter(self, target: ManifestNode) -> Optional[EventTimeFilter]:
+        event_time_filter = None
+        sample_mode = bool(
+            os.environ.get("DBT_EXPERIMENTAL_SAMPLE_MODE")
+            and getattr(self.config.args, "sample", None)
+        )
+
+        # TODO The number of branches here is getting rough. We should consider ways to simplify
+        # what is going on to make it easier to maintain
+
+        # Only do event time filtering if the base node has the necessary event time configs
+        if (
+            isinstance(target.config, (NodeConfig, SeedConfig, SourceConfig))
+            and target.config.event_time
+            and isinstance(self.model, (ModelNode, SnapshotNode))
+        ):
+
+            # Handling of microbatch models
+            if (
+                isinstance(self.model, ModelNode)
+                and self.model.config.materialized == "incremental"
+                and self.model.config.incremental_strategy == "microbatch"
+                and self.manifest.use_microbatch_batches(project_name=self.config.project_name)
+                and self.model.batch is not None
+            ):
+                # Sample mode microbatch models
+                if sample_mode:
+                    start = (
+                        self.config.args.sample.start
+                        if self.config.args.sample.start > self.model.batch.event_time_start
+                        else self.model.batch.event_time_start
+                    )
+                    end = (
+                        self.config.args.sample.end
+                        if self.config.args.sample.end < self.model.batch.event_time_end
+                        else self.model.batch.event_time_end
+                    )
+                    event_time_filter = EventTimeFilter(
+                        field_name=target.config.event_time,
+                        start=start,
+                        end=end,
+                    )
+
+                # Regular microbatch models
+                else:
+                    event_time_filter = EventTimeFilter(
+                        field_name=target.config.event_time,
+                        start=self.model.batch.event_time_start,
+                        end=self.model.batch.event_time_end,
+                    )
+
+            # Sample mode _non_ microbatch models
+            elif sample_mode:
+                event_time_filter = EventTimeFilter(
+                    field_name=target.config.event_time,
+                    start=self.config.args.sample.start,
+                    end=self.config.args.sample.end,
+                )
+
+        return event_time_filter
+
     @abc.abstractmethod
     def __call__(self, *args: str) -> Union[str, RelationProxy, MetricReference]:
         pass
@@ -371,6 +444,14 @@ class ParseConfigObject(Config):
         # not call it!
         if self.context_config is None:
             raise DbtRuntimeError("At parse time, did not receive a context config")
+
+        # Track unrendered opts to build parsed node unrendered_config later on
+        if get_flags().state_modified_compare_more_unrendered_values:
+            unrendered_config = statically_parse_unrendered_config(self.model.raw_code)
+            if unrendered_config:
+                self.context_config.add_unrendered_config_call(unrendered_config)
+
+        # Use rendered opts to populate context_config
         self.context_config.add_config_call(opts)
         return ""
 
@@ -545,7 +626,11 @@ class RuntimeRefResolver(BaseRefResolver):
     def create_relation(self, target_model: ManifestNode) -> RelationProxy:
         if target_model.is_ephemeral_model:
             self.model.set_cte(target_model.unique_id, None)
-            return self.Relation.create_ephemeral_from(target_model, limit=self.resolve_limit)
+            return self.Relation.create_ephemeral_from(
+                target_model,
+                limit=self.resolve_limit,
+                event_time_filter=self.resolve_event_time_filter(target_model),
+            )
         elif (
             hasattr(target_model, "defer_relation")
             and target_model.defer_relation
@@ -563,10 +648,18 @@ class RuntimeRefResolver(BaseRefResolver):
             )
         ):
             return self.Relation.create_from(
-                self.config, target_model.defer_relation, limit=self.resolve_limit
+                self.config,
+                target_model.defer_relation,
+                limit=self.resolve_limit,
+                event_time_filter=self.resolve_event_time_filter(target_model),
             )
         else:
-            return self.Relation.create_from(self.config, target_model, limit=self.resolve_limit)
+            return self.Relation.create_from(
+                self.config,
+                target_model,
+                limit=self.resolve_limit,
+                event_time_filter=self.resolve_event_time_filter(target_model),
+            )
 
     def validate(
         self,
@@ -600,6 +693,11 @@ class OperationRefResolver(RuntimeRefResolver):
 
 
 class RuntimeUnitTestRefResolver(RuntimeRefResolver):
+    @property
+    def resolve_limit(self) -> Optional[int]:
+        # Unit tests should never respect --empty flag or provide a limit since they are based on fake data.
+        return None
+
     def resolve(
         self,
         target_name: str,
@@ -633,10 +731,27 @@ class RuntimeSourceResolver(BaseSourceResolver):
                 target_kind="source",
                 disabled=(isinstance(target_source, Disabled)),
             )
-        return self.Relation.create_from(self.config, target_source, limit=self.resolve_limit)
+
+        # Source quoting does _not_ respect global configs in dbt_project.yml, as documented here:
+        # https://docs.getdbt.com/reference/project-configs/quoting
+        # Use an object with an empty quoting field to bypass any settings in self.
+        class SourceQuotingBaseConfig:
+            quoting: Dict[str, Any] = {}
+
+        return self.Relation.create_from(
+            SourceQuotingBaseConfig(),
+            target_source,
+            limit=self.resolve_limit,
+            event_time_filter=self.resolve_event_time_filter(target_source),
+        )
 
 
 class RuntimeUnitTestSourceResolver(BaseSourceResolver):
+    @property
+    def resolve_limit(self) -> Optional[int]:
+        # Unit tests should never respect --empty flag or provide a limit since they are based on fake data.
+        return None
+
     def resolve(self, source_name: str, table_name: str):
         target_source = self.manifest.resolve_source(
             source_name,
@@ -810,7 +925,7 @@ T = TypeVar("T")
 
 # Base context collection, used for parsing configs.
 class ProviderContext(ManifestContext):
-    # subclasses are MacroContext, ModelContext, TestContext
+    # subclasses are MacroContext, ModelContext, TestContext, SourceContext
     def __init__(
         self,
         model,
@@ -823,7 +938,7 @@ class ProviderContext(ManifestContext):
             raise DbtInternalError(f"Invalid provider given to context: {provider}")
         # mypy appeasement - we know it'll be a RuntimeConfig
         self.config: RuntimeConfig
-        self.model: Union[Macro, ManifestNode] = model
+        self.model: Union[Macro, ManifestNode, SourceDefinition] = model
         super().__init__(config, manifest, model.package_name)
         self.sql_results: Dict[str, Optional[AttrDict]] = {}
         self.context_config: Optional[ContextConfig] = context_config
@@ -933,7 +1048,20 @@ class ProviderContext(ManifestContext):
         # macros/source defs aren't 'writeable'.
         if isinstance(self.model, (Macro, SourceDefinition)):
             raise MacrosSourcesUnWriteableError(node=self.model)
-        self.model.build_path = self.model.get_target_write_path(self.config.target_path, "run")
+
+        split_suffix = None
+        if (
+            isinstance(self.model, ModelNode)
+            and self.model.config.get("incremental_strategy") == "microbatch"
+        ):
+            split_suffix = MicrobatchBuilder.format_batch_start(
+                self.model.config.get("__dbt_internal_microbatch_event_time_start"),
+                self.model.config.batch_size,
+            )
+
+        self.model.build_path = self.model.get_target_write_path(
+            self.config.target_path, "run", split_suffix=split_suffix
+        )
         self.model.write_node(self.config.project_root, self.model.build_path, payload)
         return ""
 
@@ -1475,6 +1603,20 @@ class MacroContext(ProviderContext):
             self._search_package = search_package
 
 
+class SourceContext(ProviderContext):
+    # SourceContext is being used to render jinja SQL during execution of
+    # custom SQL in source freshness. It is not used for parsing.
+    model: SourceDefinition
+
+    @contextproperty()
+    def this(self) -> Optional[RelationProxy]:
+        return self.db_wrapper.Relation.create_from(self.config, self.model)
+
+    @contextproperty()
+    def source_node(self) -> SourceDefinition:
+        return self.model
+
+
 class ModelContext(ProviderContext):
     model: ManifestNode
 
@@ -1597,7 +1739,7 @@ class UnitTestContext(ModelContext):
         if self.model.this_input_node_unique_id:
             this_node = self.manifest.expect(self.model.this_input_node_unique_id)
             self.model.set_cte(this_node.unique_id, None)  # type: ignore
-            return self.adapter.Relation.add_ephemeral_prefix(this_node.name)
+            return self.adapter.Relation.add_ephemeral_prefix(this_node.identifier)  # type: ignore
         return None
 
 

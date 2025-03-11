@@ -17,6 +17,7 @@ from tests.functional.sources.fixtures import (
     error_models_model_sql,
     error_models_schema_yml,
     filtered_models_schema_yml,
+    freshness_via_custom_sql_schema_yml,
     freshness_via_metadata_schema_yml,
     override_freshness_models_schema_yml,
 )
@@ -129,12 +130,12 @@ class SuccessfulSourceFreshnessTest(BaseSourcesTest):
         ]
 
     def _assert_project_hooks_called(self, logs: str):
-        assert "Running 1 on-run-start hook" in logs
-        assert "Running 1 on-run-end hook" in logs
+        assert "test.on-run-start.0" in logs
+        assert "test.on-run-start.0" in logs
 
     def _assert_project_hooks_not_called(self, logs: str):
-        assert "Running 1 on-run-start hook" not in logs
-        assert "Running 1 on-run-end hook" not in logs
+        assert "test.on-run-end.0" not in logs
+        assert "test.on-run-end.0" not in logs
 
 
 class TestSourceFreshness(SuccessfulSourceFreshnessTest):
@@ -578,3 +579,18 @@ class TestHooksInSourceFreshnessDefault(SuccessfulSourceFreshnessTest):
         )
         # default behaviour - no hooks run in source freshness
         self._assert_project_hooks_not_called(log_output)
+
+
+class TestSourceFreshnessCustomSQL(SuccessfulSourceFreshnessTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"schema.yml": freshness_via_custom_sql_schema_yml}
+
+    def test_source_freshness_custom_sql(self, project):
+        result = self.run_dbt_with_vars(project, ["source", "freshness"], expect_pass=True)
+        # They are the same source but different queries were executed for each
+        assert {r.node.name: r.status for r in result} == {
+            "source_a": "warn",
+            "source_b": "warn",
+            "source_c": "pass",
+        }

@@ -173,14 +173,17 @@ class NodeSelector(MethodManager):
             semantic_model = self.manifest.semantic_models[unique_id]
             return semantic_model.config.enabled
         elif unique_id in self.manifest.unit_tests:
-            return True
+            unit_test = self.manifest.unit_tests[unique_id]
+            return unit_test.config.enabled
         elif unique_id in self.manifest.saved_queries:
             saved_query = self.manifest.saved_queries[unique_id]
             return saved_query.config.enabled
-
-        node = self.manifest.nodes[unique_id]
-
-        return node.config.enabled
+        elif unique_id in self.manifest.exposures:
+            exposure = self.manifest.exposures[unique_id]
+            return exposure.config.enabled
+        else:
+            node = self.manifest.nodes[unique_id]
+            return node.config.enabled
 
     def _is_empty_node(self, unique_id: UniqueId) -> bool:
         if unique_id in self.manifest.nodes:
@@ -333,9 +336,9 @@ class NodeSelector(MethodManager):
 
     def get_graph_queue(self, spec: SelectionSpec, preserve_edges: bool = True) -> GraphQueue:
         """Returns a queue over nodes in the graph that tracks progress of
-        dependecies.
+        dependencies.
         """
-        # Filtering hapens in get_selected
+        # Filtering happens in get_selected
         selected_nodes = self.get_selected(spec)
         # Save to global variable
         selected_resources.set_selected_resources(selected_nodes)

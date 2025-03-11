@@ -158,14 +158,8 @@ def _parse_versions(versions: Union[List[str], str]) -> List[VersionSpecifier]:
     return [VersionSpecifier.from_version_string(v) for v in versions]
 
 
-def _all_source_paths(
-    model_paths: List[str],
-    seed_paths: List[str],
-    snapshot_paths: List[str],
-    analysis_paths: List[str],
-    macro_paths: List[str],
-) -> List[str]:
-    paths = chain(model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths)
+def _all_source_paths(*args: List[str]) -> List[str]:
+    paths = chain(*args)
     # Strip trailing slashes since the path is the same even though the name is not
     stripped_paths = map(lambda s: s.rstrip("/"), paths)
     return list(set(stripped_paths))
@@ -204,6 +198,9 @@ def load_raw_project(project_root: str) -> Dict[str, Any]:
 
     if not isinstance(project_dict, dict):
         raise DbtProjectError(f"{DBT_PROJECT_FILE_NAME} does not parse to a dictionary")
+
+    if "tests" in project_dict and "data_tests" not in project_dict:
+        project_dict["data_tests"] = project_dict.pop("tests")
 
     return project_dict
 
@@ -409,7 +406,7 @@ class PartialProject(RenderComponents):
         snapshot_paths: List[str] = value_or(cfg.snapshot_paths, ["snapshots"])
 
         all_source_paths: List[str] = _all_source_paths(
-            model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths
+            model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths, test_paths
         )
 
         docs_paths: List[str] = value_or(cfg.docs_paths, all_source_paths)
@@ -652,6 +649,7 @@ class Project:
             self.snapshot_paths,
             self.analysis_paths,
             self.macro_paths,
+            self.test_paths,
         )
 
     @property
