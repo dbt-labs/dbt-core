@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import functools
-import os
 import threading
 import time
 from copy import deepcopy
@@ -698,9 +697,7 @@ class MicrobatchModelRunner(ModelRunner):
         event_time_end = getattr(self.config.args, "EVENT_TIME_END", None)
 
         # If we're in sample mode, alter start/end to sample values
-        if os.environ.get("DBT_EXPERIMENTAL_SAMPLE_MODE") and getattr(
-            self.config.args, "SAMPLE", None
-        ):
+        if getattr(self.config.args, "SAMPLE", None) is not None:
             event_time_start = self.config.args.sample.start
             event_time_end = self.config.args.sample.end
 
