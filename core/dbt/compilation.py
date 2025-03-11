@@ -614,6 +614,15 @@ class Compiler:
                 node,
             )
 
+            # we update the model context to run in full refresh mode to get the full refresh sql
+            # this is required when on_schema_change is set to full_refresh
+            context["flags"].FULL_REFRESH = True
+            node.compiled_code_full_refresh = jinja.get_rendered(
+                node.raw_code,
+                context,
+                node,
+            )
+
         node.compiled = True
 
         # relation_name is set at parse time, except for tests without store_failures,
