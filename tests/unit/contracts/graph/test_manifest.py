@@ -383,6 +383,7 @@ class ManifestTest(unittest.TestCase):
         )
 
         invocation_id = dbt_common.invocation._INVOCATION_ID
+        invocation_started_at = dbt_common.invocation._INVOCATION_STARTED_AT
         mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
         set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
         self.assertEqual(
@@ -404,6 +405,7 @@ class ManifestTest(unittest.TestCase):
                     "dbt_version": dbt.version.__version__,
                     "env": {ENV_KEY_NAME: "value"},
                     "invocation_id": invocation_id,
+                    "invocation_started_at": str(invocation_started_at).replace(" ", "T") + "Z",
                     "send_anonymous_usage_stats": False,
                     "user_id": "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
                 },
@@ -531,11 +533,13 @@ class ManifestTest(unittest.TestCase):
     def test_no_nodes_with_metadata(self, mock_user):
         mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
         dbt_common.invocation._INVOCATION_ID = "01234567-0123-0123-0123-0123456789ab"
+        dbt_common.invocation._INVOCATION_STARTED_AT = datetime.utcnow()
         set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
         metadata = ManifestMetadata(
             project_id="098f6bcd4621d373cade4e832627b4f6",
             adapter_type="postgres",
             generated_at=datetime.utcnow(),
+            invocation_started_at=dbt_common.invocation._INVOCATION_STARTED_AT,
             user_id="cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
             send_anonymous_usage_stats=False,
         )
@@ -553,6 +557,9 @@ class ManifestTest(unittest.TestCase):
             saved_queries={},
         )
 
+        invocation_started_at = (
+            str(dbt_common.invocation._INVOCATION_STARTED_AT).replace(" ", "T") + "Z"
+        )
         self.assertEqual(
             manifest.writable_manifest().to_dict(omit_none=True),
             {
@@ -576,6 +583,7 @@ class ManifestTest(unittest.TestCase):
                     "send_anonymous_usage_stats": False,
                     "adapter_type": "postgres",
                     "invocation_id": "01234567-0123-0123-0123-0123456789ab",
+                    "invocation_started_at": invocation_started_at,
                     "env": {ENV_KEY_NAME: "value"},
                 },
                 "disabled": {},
@@ -884,8 +892,11 @@ class MixedManifestTest(unittest.TestCase):
     def test_no_nodes(self, mock_user):
         mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
         set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
+        invocation_started_at = datetime.utcnow()
         metadata = ManifestMetadata(
-            generated_at=datetime.utcnow(), invocation_id="01234567-0123-0123-0123-0123456789ab"
+            generated_at=datetime.utcnow(),
+            invocation_id="01234567-0123-0123-0123-0123456789ab",
+            invocation_started_at=invocation_started_at,
         )
         manifest = Manifest(
             nodes={},
@@ -918,6 +929,7 @@ class MixedManifestTest(unittest.TestCase):
                     "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json",
                     "dbt_version": dbt.version.__version__,
                     "invocation_id": "01234567-0123-0123-0123-0123456789ab",
+                    "invocation_started_at": str(invocation_started_at).replace(" ", "T") + "Z",
                     "env": {ENV_KEY_NAME: "value"},
                     "send_anonymous_usage_stats": False,
                     "user_id": "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",

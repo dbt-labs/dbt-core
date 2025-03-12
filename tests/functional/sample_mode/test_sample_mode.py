@@ -1,11 +1,9 @@
-import os
 from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import Optional
 
 import freezegun
 import pytest
 import pytz
-from pytest_mock import MockerFixture
 
 from dbt.artifacts.resources.types import BatchSize
 from dbt.event_time.sample_window import SampleWindow
@@ -95,6 +93,20 @@ SELECT * FROM {{ ref("input_model") }}
 {% endif %}
 """
 
+snapshot_input_model_sql = """
+{% snapshot snapshot_input_model %}
+    {{ config(strategy='timestamp', unique_key='id', updated_at='event_time', event_time='event_time') }}
+
+    select * from {{ ref('input_model') }}
+{% endsnapshot %}
+"""
+
+model_from_snapshot_sql = """
+{{ config(materialized='table') }}
+
+SELECT * FROM {{ ref('snapshot_input_model') }}
+"""
+
 
 class BaseSampleMode:
     # TODO This is now used in 3 test files, it might be worth turning into a full test utility method
@@ -107,6 +119,10 @@ class BaseSampleMode:
             run_dbt(["show", "--inline", f"select * from {relation}"])
 
             assert result[0] == expected_row_count
+
+    def drop_table(self, project, relation_name: str):
+        relation = relation_from_name(project.adapter, "snapshot_input_model")
+        project.run_sql(f"drop table if exists {relation}")
 
 
 class TestBasicSampleMode(BaseSampleMode):
@@ -122,25 +138,24 @@ class TestBasicSampleMode(BaseSampleMode):
         return EventCatcher(event_to_catch=JinjaLogInfo)  # type: ignore
 
     @pytest.mark.parametrize(
-        "sample_mode_available,run_sample_mode,expected_row_count",
+        "dbt_command,run_sample_mode,expected_row_count",
         [
-            (True, True, 2),
-            (True, False, 3),
-            (False, True, 3),
-            (False, False, 3),
+            ("run", True, 2),
+            ("run", False, 3),
+            ("build", True, 2),
+            ("build", False, 3),
         ],
     )
     @freezegun.freeze_time("2025-01-03T02:03:0Z")
     def test_sample_mode(
         self,
         project,
-        mocker: MockerFixture,
         event_catcher: EventCatcher,
-        sample_mode_available: bool,
+        dbt_command: str,
         run_sample_mode: bool,
         expected_row_count: int,
     ):
-        run_args = ["run"]
+        run_args = [dbt_command]
         expected_sample = None
         if run_sample_mode:
             run_args.append("--sample=1 day")
@@ -148,9 +163,6 @@ class TestBasicSampleMode(BaseSampleMode):
                 start=datetime(2025, 1, 2, 2, 3, 0, 0, tzinfo=pytz.UTC),
                 end=datetime(2025, 1, 3, 2, 3, 0, 0, tzinfo=pytz.UTC),
             )
-
-        if sample_mode_available:
-            mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_SAMPLE_MODE": "1"})
 
         _ = run_dbt(run_args, callbacks=[event_catcher.catch])
         assert len(event_catcher.caught_events) == 1
@@ -178,52 +190,24 @@ class TestMicrobatchSampleMode(BaseSampleMode):
     def event_time_end_catcher(self) -> EventCatcher:
         return EventCatcher(event_to_catch=JinjaLogInfo, predicate=lambda event: "batch.event_time_end" in event.info.msg)  # type: ignore
 
-    @pytest.mark.parametrize(
-        "sample_mode_available,expected_batches,expected_filters",
-        [
-            (
-                True,
-                [
-                    ("2025-01-01 00:00:00", "2025-01-02 00:00:00"),
-                    ("2025-01-02 00:00:00", "2025-01-03 00:00:00"),
-                    ("2025-01-03 00:00:00", "2025-01-04 00:00:00"),
-                ],
-                [
-                    "event_time >= '2025-01-01 02:03:00+00:00' and event_time < '2025-01-02 00:00:00+00:00'",
-                    "event_time >= '2025-01-02 00:00:00+00:00' and event_time < '2025-01-03 00:00:00+00:00'",
-                    "event_time >= '2025-01-03 00:00:00+00:00' and event_time < '2025-01-03 02:03:00+00:00'",
-                ],
-            ),
-            (
-                False,
-                [
-                    ("2024-12-31 00:00:00", "2025-01-01 00:00:00"),
-                    ("2025-01-01 00:00:00", "2025-01-02 00:00:00"),
-                    ("2025-01-02 00:00:00", "2025-01-03 00:00:00"),
-                    ("2025-01-03 00:00:00", "2025-01-04 00:00:00"),
-                ],
-                [
-                    "event_time >= '2024-12-31 00:00:00+00:00' and event_time < '2025-01-01 00:00:00+00:00'",
-                    "event_time >= '2025-01-01 00:00:00+00:00' and event_time < '2025-01-02 00:00:00+00:00'",
-                    "event_time >= '2025-01-02 00:00:00+00:00' and event_time < '2025-01-03 00:00:00+00:00'",
-                    "event_time >= '2025-01-03 00:00:00+00:00' and event_time < '2025-01-04 00:00:00+00:00'",
-                ],
-            ),
-        ],
-    )
     @freezegun.freeze_time("2025-01-03T02:03:0Z")
     def test_sample_mode(
         self,
         project,
-        mocker: MockerFixture,
         event_time_end_catcher: EventCatcher,
         event_time_start_catcher: EventCatcher,
-        sample_mode_available: bool,
-        expected_batches: List[Tuple[str, str]],
-        expected_filters: List[str],
     ):
-        if sample_mode_available:
-            mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_SAMPLE_MODE": "True"})
+        expected_batches = [
+            ("2025-01-01 00:00:00", "2025-01-02 00:00:00"),
+            ("2025-01-02 00:00:00", "2025-01-03 00:00:00"),
+            ("2025-01-03 00:00:00", "2025-01-04 00:00:00"),
+        ]
+        expected_filters = [
+            "event_time >= '2025-01-01 02:03:00+00:00' and event_time < '2025-01-02 00:00:00+00:00'",
+            "event_time >= '2025-01-02 00:00:00+00:00' and event_time < '2025-01-03 00:00:00+00:00'",
+            "event_time >= '2025-01-03 00:00:00+00:00' and event_time < '2025-01-03 02:03:00+00:00'",
+        ]
+
         _ = run_dbt(
             ["run", "--sample=2 day"],
             callbacks=[event_time_end_catcher.catch, event_time_start_catcher.catch],
@@ -272,29 +256,24 @@ class TestIncrementalModelSampleModeRelative(BaseSampleMode):
         return EventCatcher(event_to_catch=JinjaLogInfo, predicate=lambda event: "is_incremental: True" in event.info.msg)  # type: ignore
 
     @pytest.mark.parametrize(
-        "sample_mode_available,sample,expected_rows",
+        "sample,expected_rows",
         [
-            (True, None, 6),
-            (True, "3 days", 6),
-            (True, "2 days", 5),
-            (False, "2 days", 6),
+            (None, 6),
+            ("3 days", 6),
+            ("2 days", 5),
         ],
     )
     @freezegun.freeze_time("2025-01-06T18:03:0Z")
     def test_incremental_model_sample(
         self,
         project,
-        mocker: MockerFixture,
         event_catcher: EventCatcher,
-        sample_mode_available: bool,
         sample: Optional[str],
         expected_rows: int,
     ):
         # writing the input_model is necessary because we've parametrized the test
         # thus the "later_input_model" will still be present on the "non-first" runs
         write_file(input_model_sql, "models", "input_model.sql")
-        if sample_mode_available:
-            mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_SAMPLE_MODE": "True"})
 
         # --full-refresh is necessary because we've parametrized the test
         _ = run_dbt(["run", "--full-refresh"], callbacks=[event_catcher.catch])
@@ -339,30 +318,25 @@ class TestIncrementalModelSampleModeSpecific(BaseSampleMode):
         return EventCatcher(event_to_catch=JinjaLogInfo, predicate=lambda event: "is_incremental: True" in event.info.msg)  # type: ignore
 
     @pytest.mark.parametrize(
-        "sample_mode_available,sample,expected_rows",
+        "sample,expected_rows",
         [
-            (True, None, 6),
-            (True, "{'start': '2025-01-03', 'end': '2025-01-07'}", 6),
-            (True, "{'start': '2025-01-04', 'end': '2025-01-06'}", 5),
-            (True, "{'start': '2025-01-05', 'end': '2025-01-07'}", 5),
-            (True, "{'start': '2024-12-31', 'end': '2025-01-03'}", 3),
-            (False, "{'start': '2024-12-31', 'end': '2025-01-03'}", 6),
+            (None, 6),
+            ("{'start': '2025-01-03', 'end': '2025-01-07'}", 6),
+            ("{'start': '2025-01-04', 'end': '2025-01-06'}", 5),
+            ("{'start': '2025-01-05', 'end': '2025-01-07'}", 5),
+            ("{'start': '2024-12-31', 'end': '2025-01-03'}", 3),
         ],
     )
     def test_incremental_model_sample(
         self,
         project,
-        mocker: MockerFixture,
         event_catcher: EventCatcher,
-        sample_mode_available: bool,
         sample: Optional[str],
         expected_rows: int,
     ):
         # writing the input_model is necessary because we've parametrized the test
         # thus the "later_input_model" will still be present on the "non-first" runs
         write_file(input_model_sql, "models", "input_model.sql")
-        if sample_mode_available:
-            mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_SAMPLE_MODE": "True"})
 
         # --full-refresh is necessary because we've parametrized the test
         _ = run_dbt(["run", "--full-refresh"], callbacks=[event_catcher.catch])
@@ -406,29 +380,22 @@ class TestSampleSeedRefs(BaseSampleMode):
         }
 
     @pytest.mark.parametrize(
-        "sample_mode_available,run_sample_mode,expected_row_count",
+        "run_sample_mode,expected_row_count",
         [
-            (True, True, 2),
-            (True, False, 3),
-            (False, True, 3),
-            (False, False, 3),
+            (True, 2),
+            (False, 3),
         ],
     )
     @freezegun.freeze_time("2025-01-03T02:03:0Z")
     def test_sample_mode(
         self,
         project,
-        mocker: MockerFixture,
-        sample_mode_available: bool,
         run_sample_mode: bool,
         expected_row_count: int,
     ):
         run_args = ["run"]
         if run_sample_mode:
             run_args.append("--sample=1 day")
-
-        if sample_mode_available:
-            mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_SAMPLE_MODE": "1"})
 
         _ = run_dbt(["seed"])
         _ = run_dbt(run_args)
@@ -437,3 +404,98 @@ class TestSampleSeedRefs(BaseSampleMode):
             relation_name="sample_input_seed",
             expected_row_count=expected_row_count,
         )
+
+
+class TestSamplingModelFromSnapshot(BaseSampleMode):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def snapshots(self):
+        return {
+            "snapshot_input_model.sql": snapshot_input_model_sql,
+        }
+
+    @pytest.mark.parametrize(
+        "run_sample_mode,expected_row_count",
+        [
+            (True, 2),
+            (False, 3),
+        ],
+    )
+    @freezegun.freeze_time("2025-01-03T02:03:0Z")
+    def test_sample_mode(
+        self,
+        project,
+        run_sample_mode: bool,
+        expected_row_count: int,
+    ):
+        run_args = ["build"]
+        if run_sample_mode:
+            run_args.append("--sample=1 day")
+
+        _ = run_dbt(run_args)
+        self.assert_row_count(
+            project=project,
+            relation_name="snapshot_input_model",
+            expected_row_count=expected_row_count,
+        )
+        self.drop_table(project, "snapshot_input_model")
+
+
+class TestSamplingSnapshot(BaseSampleMode):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def snapshots(self):
+        return {
+            "snapshot_input_model.sql": snapshot_input_model_sql,
+        }
+
+    @pytest.mark.parametrize(
+        "run_sample_mode,expected_row_count",
+        [
+            (True, 2),
+            (False, 3),
+        ],
+    )
+    @freezegun.freeze_time("2025-01-03T02:03:0Z")
+    def test_sample_mode(
+        self,
+        project,
+        run_sample_mode: bool,
+        expected_row_count: int,
+    ):
+        run_args = ["build"]
+
+        # create the snapshot before building a model that depends on it
+        _ = run_dbt(run_args)
+        # Snapshot should always have 3 in this test because we don't sample it
+        self.assert_row_count(
+            project=project,
+            relation_name="snapshot_input_model",
+            expected_row_count=3,
+        )
+
+        if run_sample_mode:
+            run_args.append("--sample=1 day")
+
+        # create model that depends on the snapshot
+        write_file(
+            model_from_snapshot_sql, project.project_root, "models", "model_from_snapshot.sql"
+        )
+
+        _ = run_dbt(run_args)
+        self.assert_row_count(
+            project=project,
+            relation_name="model_from_snapshot",
+            expected_row_count=expected_row_count,
+        )
+        self.drop_table(project, "snapshot_input_model")

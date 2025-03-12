@@ -3,7 +3,6 @@ import time
 from abc import abstractmethod
 from concurrent.futures import as_completed
 from datetime import datetime
-from multiprocessing.dummy import Pool as ThreadPool
 from pathlib import Path
 from typing import AbstractSet, Dict, Iterable, List, Optional, Set, Tuple, Type, Union
 
@@ -48,6 +47,7 @@ from dbt.graph import (
     UniqueId,
     parse_difference,
 )
+from dbt.graph.thread_pool import DbtThreadPool
 from dbt.parser.manifest import write_manifest
 from dbt.task import group_lookup
 from dbt.task.base import BaseRunner, ConfiguredTask
@@ -408,7 +408,9 @@ class GraphRunnableTask(ConfiguredTask):
     def execute_nodes(self):
         num_threads = self.config.threads
 
-        pool = ThreadPool(num_threads, self._pool_thread_initializer, [get_invocation_context()])
+        pool = DbtThreadPool(
+            num_threads, self._pool_thread_initializer, [get_invocation_context()]
+        )
         try:
             self.run_queue(pool)
         except FailFastError as failure:

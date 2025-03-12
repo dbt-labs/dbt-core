@@ -28,6 +28,16 @@
             }
           ]
         },
+        "invocation_started_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "env": {
           "type": "object",
           "additionalProperties": {

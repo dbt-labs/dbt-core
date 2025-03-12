@@ -16,12 +16,12 @@ on:
     types: [opened, synchronize, reopened, edited]
   # retrigger check on review events
   pull_request_review:
-    types: [submitted, dismissed]
+    types: [submitted, edited, dismissed]
 
 # only run this once per PR at a time
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: false  # wait for in-progress runs to complete to prevent race condition
 
 env:
     required_approvals: 2
@@ -38,11 +38,13 @@ jobs:
       - name: "Dismiss previous workflow runs"
         run: |
           # Get all check runs for this PR's SHA
-          checks=$(gh api repos/${{ github.repository }}/commits/${{ github.event.pull_request.head.sha }}/check-runs \
+          cleanup_checks=$(gh api repos/${{ github.repository }}/commits/${{ github.event.pull_request.head.sha }}/check-runs \
+            --jq '.check_runs[] | select(.name == "Cleanup Previous Runs")')
+          review_checks=$(gh api repos/${{ github.repository }}/commits/${{ github.event.pull_request.head.sha }}/check-runs \
             --jq '.check_runs[] | select(.name == "Validate Additional Reviews")')
 
           # For each check run from this workflow (except current), dismiss it
-          echo "$checks" | jq -r '. | select(.id != ${{ github.run_id }}) | .id' | \
+          { echo "$cleanup_checks"; echo "$review_checks"; } | jq -r '. | select(.id != ${{ github.run_id }}) | .id' | \
           while read -r check_id; do
             echo "Dismissing check $check_id"
             gh api repos/${{ github.repository }}/check-runs/$check_id \
@@ -109,14 +111,17 @@ jobs:
 
             # Get all reviews
             REVIEWS=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews)
-
-            # Count approved reviews from core team members
+            # Count approved reviews from core team members (only most recent review per user)
             CORE_APPROVALS=0
             while IFS= read -r member; do
-              echo "$member"
-              echo "$user"
-              APPROVED=$(echo "$REVIEWS" | jq --arg user "$member" \
-                '.[] | select(.user.login == $user and .state == "APPROVED") | .user.login' | wc -l)
+              echo "member: $member"
+              APPROVED=$(echo "$REVIEWS" | jq --arg user "$member" '
+                group_by(.user.login) |
+                map(select(.[0].user.login == $user) |
+                    sort_by(.submitted_at) |
+                    last) |
+                map(select(.state == "APPROVED")) |
+                length')
               CORE_APPROVALS=$((CORE_APPROVALS + APPROVED))
             done <<< "${{ steps.core_members.outputs.membership }}"
 
@@ -126,7 +131,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: "Notify and fail if not enough approvals"
-        if: ${{ steps.artifact_files_changed.outputs.artifact_changes == 'true' && steps.check_approvals.outputs.CORE_APPROVALS != env.required_approvals }}
+        if: ${{ steps.artifact_files_changed.outputs.artifact_changes == 'true' && steps.check_approvals.outputs.CORE_APPROVALS < fromJSON(env.required_approvals) }}
         run: |
           title="PR Approval Requirements Not Met"
           message="Changes to artifact directory files requires at least ${{ env.required_approvals }} approvals from core team members. Current number of core team approvals: ${{ steps.check_approvals.outputs.CORE_APPROVALS }} "
@@ -134,7 +139,7 @@ jobs:
           exit 1
 
       - name: "Notify of sufficient approvals"
-        if: ${{ steps.artifact_files_changed.outputs.artifact_changes == 'true' && steps.check_approvals.outputs.CORE_APPROVALS >= env.required_approvals }}
+        if: ${{ steps.artifact_files_changed.outputs.artifact_changes == 'true' && steps.check_approvals.outputs.CORE_APPROVALS >= fromJSON(env.required_approvals) }}
         run: |
           title="Extra requirements met"
           message="Changes to artifact directory files requires at least ${{ env.required_approvals }} approvals from core team members. Current number of core team approvals: ${{ steps.check_approvals.outputs.CORE_APPROVALS }} "
