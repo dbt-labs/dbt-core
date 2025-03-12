@@ -234,6 +234,7 @@ class NodeInfoMixin:
                 "alias": getattr(self, "alias", None),
                 "relation_name": getattr(self, "relation_name", None),
             },
+            "node_checksum": getattr(getattr(self, "checksum", None), "checksum", None),
         }
         return node_info
 
