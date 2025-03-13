@@ -100,12 +100,16 @@ class UnitTestManifestLoader:
             overrides=test_case.overrides,
         )
 
-        ctx = generate_parse_exposure(
+        # patch for bigquery unittest with sql_header
+        from dbt.context.providers import generate_runtime_unit_test_context
+        ctx = generate_runtime_unit_test_context(unit_test_node, self.root_project, self.manifest)
+        ctx.update(generate_parse_exposure(
             unit_test_node,  # type: ignore
             self.root_project,
             self.manifest,
             test_case.package_name,
-        )
+        ))
+
         get_rendered(unit_test_node.raw_code, ctx, unit_test_node, capture_macros=True)
         # unit_test_node now has a populated refs/sources
 
