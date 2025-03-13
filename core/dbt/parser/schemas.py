@@ -20,6 +20,7 @@ from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import SchemaSourceFile, SourceFile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import (
+    Macro,
     ModelNode,
     ParsedMacroPatch,
     ParsedNodePatch,
@@ -1259,10 +1260,33 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
             raise DuplicateMacroPatchNameError(patch, existing_file_path)
         source_file.macro_patches[patch.name] = unique_id
 
+        self._check_patch_arguments(macro, patch)
+
         # former macro.patch code
         macro.patch_path = patch.file_id
         macro.description = patch.description
         macro.created_at = time.time()
         macro.meta = patch.meta
         macro.docs = patch.docs
-        macro.arguments = patch.arguments
+
+        macro.arguments = patch.arguments if patch.arguments else macro.arguments
+
+    def _check_patch_arguments(self, macro: Macro, patch: ParsedMacroPatch) -> None:
+        if not patch.arguments:
+            return
+
+        for i, patch_arg in enumerate(patch.arguments):
+            if i >= len(macro.arguments):
+                fire_event(
+                    Note(
+                        f"Extra argument {patch_arg.name} in macro {macro.name} which does not appear in its definition."
+                    )
+                )
+            else:
+                macro_arg = macro.arguments[i]
+                if patch_arg.name != macro_arg.name:
+                    fire_event(
+                        Note(
+                            f"Argument {patch_arg.name} in macro {macro.name} does not match its definition."
+                        )
+                    )

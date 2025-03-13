@@ -2,6 +2,7 @@ from typing import Iterable, List
 
 import jinja2
 
+from dbt.artifacts.resources.v1.macro import MacroArgument
 from dbt.clients.jinja import get_supported_languages
 from dbt.contracts.files import FilePath, SourceFile
 from dbt.contracts.graph.nodes import Macro
@@ -94,10 +95,17 @@ class MacroParser(BaseParser[Macro]):
 
             name: str = macro.name.replace(MACRO_PREFIX, "")
             node = self.parse_macro(block, base_node, name)
+            node.arguments = self._extract_args(macro)
             # get supported_languages for materialization macro
             if block.block_type_name == "materialization":
                 node.supported_languages = get_supported_languages(macro)
             yield node
+
+    def _extract_args(self, macro) -> List[MacroArgument]:
+        try:
+            return list([MacroArgument(name=arg.name) for arg in macro.args])
+        except Exception:
+            return []
 
     def parse_file(self, block: FileBlock):
         assert isinstance(block.file, SourceFile)
