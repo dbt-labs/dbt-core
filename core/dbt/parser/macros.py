@@ -8,6 +8,7 @@ from dbt.contracts.files import FilePath, SourceFile
 from dbt.contracts.graph.nodes import Macro
 from dbt.contracts.graph.unparsed import UnparsedMacro
 from dbt.exceptions import ParsingError
+from dbt.flags import get_flags
 from dbt.node_types import NodeType
 from dbt.parser.base import BaseParser
 from dbt.parser.search import FileBlock, filesystem_search
@@ -95,7 +96,10 @@ class MacroParser(BaseParser[Macro]):
 
             name: str = macro.name.replace(MACRO_PREFIX, "")
             node = self.parse_macro(block, base_node, name)
-            node.arguments = self._extract_args(macro)
+
+            if get_flags().validate_macro_args:
+                node.arguments = self._extract_args(macro)
+
             # get supported_languages for materialization macro
             if block.block_type_name == "materialization":
                 node.supported_languages = get_supported_languages(macro)
