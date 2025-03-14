@@ -1273,8 +1273,6 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
             raise DuplicateMacroPatchNameError(patch, existing_file_path)
         source_file.macro_patches[patch.name] = unique_id
 
-        self._check_patch_arguments(macro, patch)
-
         # former macro.patch code
         macro.patch_path = patch.file_id
         macro.description = patch.description
@@ -1282,7 +1280,7 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
         macro.meta = patch.meta
         macro.docs = patch.docs
 
-        if get_flags().validate_macro_args:
+        if getattr(get_flags(), "validate_macro_args", False):
             self._check_patch_arguments(macro, patch)
             macro.arguments = patch.arguments if patch.arguments else macro.arguments
         else:

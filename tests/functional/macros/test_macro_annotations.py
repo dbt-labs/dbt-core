@@ -100,12 +100,12 @@ class TestMacroTypeWarnings:
     def project_config_update(self):
         return {"flags": {"validate_macro_args": True}}
 
-    def test_macro_name_enforcement(self, project) -> None:
+    def test_macro_type_warnings(self, project) -> None:
         events: List[EventMsg] = []
         run_dbt(["parse"], callbacks=[events.append])
-        msg = "Argument my_misnamed_arg_2 in yaml for macro my_macro has an invalid type"
+        msg = "Argument my_arg_2 in the yaml for macro my_macro has an invalid type"
         assert any([e for e in events if e.info.msg.startswith(msg) and e.info.level == "warn"])
-        msg = "Argument my_misnamed_arg_3 in yaml for macro my_macro has an invalid type"
+        msg = "Argument my_arg_3 in the yaml for macro my_macro has an invalid type"
         assert any([e for e in events if e.info.msg.startswith(msg) and e.info.level == "warn"])
 
 
