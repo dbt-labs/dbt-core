@@ -51,6 +51,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceDefinition,
 )
 from dbt.events.types import (
+    InvalidMacroAnnotation,
     MacroNotFoundForPatch,
     NoNodeForYamlKey,
     UnsupportedConstraintMaterialization,
@@ -1293,17 +1294,24 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
         for macro_arg, patch_arg in zip(macro.arguments, patch.arguments):
             if patch_arg.name != macro_arg.name:
                 msg = f"Argument {patch_arg.name} in yaml for macro {macro.name} does not match the jinja definition."
-                fire_event(Note(msg=msg), EventLevel.WARN)
+                self._fire_macro_arg_warning(msg, macro)
 
         if len(patch.arguments) != len(macro.arguments):
             msg = f"The number of arguments in the yaml for macro {macro.name} does not match the jinja definition."
-            fire_event(Note(msg=msg), EventLevel.WARN)
+            self._fire_macro_arg_warning(msg, macro)
 
         for patch_arg in patch.arguments:
             arg_type = patch_arg.type
             if arg_type is not None and arg_type.strip() != "" and not is_valid_type(arg_type):
                 msg = f"Argument {patch_arg.name} in the yaml for macro {macro.name} has an invalid type."
-                fire_event(Note(msg=msg), EventLevel.WARN)
+                self._fire_macro_arg_warning(msg, macro)
+
+    def _fire_macro_arg_warning(self, msg: str, macro: Macro) -> None:
+        warn_or_error(
+            InvalidMacroAnnotation(
+                msg=msg, macro_unique_id=macro.unique_id, macro_file_path=macro.original_file_path
+            )
+        )
 
 
 # valid type names, along with the number of parameters they require

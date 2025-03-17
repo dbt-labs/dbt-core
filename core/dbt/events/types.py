@@ -977,6 +977,14 @@ class InvalidConcurrentBatchesConfig(WarnLevel):
         return line_wrap_message(warning_tag(description))
 
 
+class InvalidMacroAnnotation(WarnLevel):
+    def code(self) -> str:
+        return "I076"
+
+    def message(self) -> str:
+        return self.msg
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================
