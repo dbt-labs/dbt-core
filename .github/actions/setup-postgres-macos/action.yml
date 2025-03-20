@@ -7,7 +7,14 @@ runs:
       run: |
         brew install postgresql@16
         brew link postgresql@16 --force
-        brew services start postgresql@16
+
+        # Add the services tap and ensure PATH is updated
+        brew tap homebrew/services
+        export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"
+
+        # Start PostgreSQL using the full command instead of brew services
+        pg_ctl -D /opt/homebrew/var/postgresql@16 start
+
         echo "Check PostgreSQL service is running"
         i=10
         COMMAND='pg_isready'
@@ -22,5 +29,6 @@ runs:
             sleep 10
             ((i--))
         done
+
         createuser -s postgres
         bash ${{ github.action_path }}/setup_db.sh
