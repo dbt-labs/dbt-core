@@ -370,7 +370,7 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
 
     runtime_config = ctx.obj["runtime_config"]
 
-    catalogs = ctx.obj["catalogs"] if "catalogs" in ctx.obj else None
+    catalogs = ctx.obj["catalogs"] if "catalogs" in ctx.obj else []
     active_write_integrations = [get_active_write_integration(catalog) for catalog in catalogs]
 
     # if a manifest has already been set on the context, don't overwrite it
