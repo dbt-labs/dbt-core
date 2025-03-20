@@ -939,9 +939,17 @@ message InvalidConcurrentBatchesConfigMsg {
     InvalidConcurrentBatchesConfig data = 2;
 }
 
+// I076
+message InvalidMacroAnnotation {
+    string msg = 1;
+    string macro_unique_id = 2;
+    string macro_file_path = 3;
+}
 
-// M - Deps generation
-
+message InvalidMacroAnnotationMsg {
+    CoreEventInfo info = 1;
+    InvalidMacroAnnotation data = 2;
+}
 
 
 // M - Deps generation

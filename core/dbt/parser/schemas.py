@@ -1,9 +1,21 @@
 import datetime
 import pathlib
+import re
 import time
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, Type, TypeVar
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generic,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+)
 
 from dbt.artifacts.resources import RefArgs
 from dbt.artifacts.resources.v1.model import (
@@ -20,6 +32,7 @@ from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import SchemaSourceFile, SourceFile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import (
+    Macro,
     ModelNode,
     ParsedMacroPatch,
     ParsedNodePatch,
@@ -38,6 +51,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceDefinition,
 )
 from dbt.events.types import (
+    InvalidMacroAnnotation,
     MacroNotFoundForPatch,
     NoNodeForYamlKey,
     UnsupportedConstraintMaterialization,
@@ -56,6 +70,7 @@ from dbt.exceptions import (
     YamlParseDictError,
     YamlParseListError,
 )
+from dbt.flags import get_flags
 from dbt.node_types import AccessType, NodeType
 from dbt.parser.base import SimpleParser
 from dbt.parser.common import (
@@ -1265,4 +1280,108 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
         macro.created_at = time.time()
         macro.meta = patch.meta
         macro.docs = patch.docs
-        macro.arguments = patch.arguments
+
+        if getattr(get_flags(), "validate_macro_args", False):
+            self._check_patch_arguments(macro, patch)
+            macro.arguments = patch.arguments if patch.arguments else macro.arguments
+        else:
+            macro.arguments = patch.arguments
+
+    def _check_patch_arguments(self, macro: Macro, patch: ParsedMacroPatch) -> None:
+        if not patch.arguments:
+            return
+
+        for macro_arg, patch_arg in zip(macro.arguments, patch.arguments):
+            if patch_arg.name != macro_arg.name:
+                msg = f"Argument {patch_arg.name} in yaml for macro {macro.name} does not match the jinja definition."
+                self._fire_macro_arg_warning(msg, macro)
+
+        if len(patch.arguments) != len(macro.arguments):
+            msg = f"The number of arguments in the yaml for macro {macro.name} does not match the jinja definition."
+            self._fire_macro_arg_warning(msg, macro)
+
+        for patch_arg in patch.arguments:
+            arg_type = patch_arg.type
+            if arg_type is not None and arg_type.strip() != "" and not is_valid_type(arg_type):
+                msg = f"Argument {patch_arg.name} in the yaml for macro {macro.name} has an invalid type."
+                self._fire_macro_arg_warning(msg, macro)
+
+    def _fire_macro_arg_warning(self, msg: str, macro: Macro) -> None:
+        warn_or_error(
+            InvalidMacroAnnotation(
+                msg=msg, macro_unique_id=macro.unique_id, macro_file_path=macro.original_file_path
+            )
+        )
+
+
+# valid type names, along with the number of parameters they require
+macro_types: Dict[str, int] = {
+    "str": 0,
+    "string": 0,
+    "bool": 0,
+    "int": 0,
+    "integer": 0,
+    "float": 0,
+    "any": 0,
+    "list": 1,
+    "dict": 2,
+    "optional": 1,
+    "relation": 0,
+    "column": 0,
+}
+
+
+def is_valid_type(buffer: str) -> bool:
+    buffer = buffer.replace(" ", "").replace("\t", "")
+    type_desc, remainder = match_type_desc(buffer)
+    return type_desc is not None and remainder == ""
+
+
+def match_type_desc(buffer: str) -> Tuple[Optional[str], str]:
+    """A matching buffer is a type name followed by an argument list with
+    the correct number of arguments."""
+    type_name, remainder = match_type_name(buffer)
+    if type_name is None:
+        return None, buffer
+    attr_list, remainder = match_arg_list(remainder, macro_types[type_name])
+    if attr_list is None:
+        return None, buffer
+    return type_name + attr_list, remainder
+
+
+alpha_pattern = re.compile(r"[a-z]+")
+
+
+def match_type_name(buffer: str) -> Tuple[Optional[str], str]:
+    """A matching buffer starts with one of the valid type names from macro_types"""
+    match = alpha_pattern.match(buffer)
+    if match is not None and buffer[: match.end(0)] in macro_types:
+        return buffer[: match.end(0)], buffer[match.end(0) :]
+    else:
+        return None, buffer
+
+
+def match_arg_list(buffer: str, arg_count: int) -> Tuple[Optional[str], str]:
+    """A matching buffer must begin with '[', followed by exactly arg_count type
+    specs, followed by ']'"""
+
+    if arg_count == 0:
+        return "", buffer
+
+    if not buffer.startswith("["):
+        return None, buffer
+
+    remainder = buffer[1:]
+    for i in range(arg_count):
+        type_desc, remainder = match_type_desc(remainder)
+        if type_desc is None:
+            return None, buffer
+        if i != arg_count - 1:
+            if not remainder.startswith(","):
+                return None, buffer
+            remainder = remainder[1:]
+
+    if not remainder.startswith("]"):
+        return None, buffer
+    else:
+        return "", remainder[1:]
