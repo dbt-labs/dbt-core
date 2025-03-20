@@ -244,10 +244,7 @@ class BaseResolver(metaclass=abc.ABCMeta):
 
     def resolve_event_time_filter(self, target: ManifestNode) -> Optional[EventTimeFilter]:
         event_time_filter = None
-        sample_mode = bool(
-            os.environ.get("DBT_EXPERIMENTAL_SAMPLE_MODE")
-            and getattr(self.config.args, "sample", None)
-        )
+        sample_mode = getattr(self.config.args, "sample", None) is not None
 
         # TODO The number of branches here is getting rough. We should consider ways to simplify
         # what is going on to make it easier to maintain

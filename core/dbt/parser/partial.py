@@ -7,6 +7,7 @@ from dbt.contracts.files import (
     AnySourceFile,
     ParseFileType,
     SchemaSourceFile,
+    SourceFile,
     parse_file_type_to_parser,
 )
 from dbt.contracts.graph.manifest import Manifest
@@ -344,7 +345,11 @@ class PartialParsing:
         if node.patch_path:
             file_id = node.patch_path
             # it might be changed...  then what?
-            if file_id not in self.file_diff["deleted"] and file_id in self.saved_files:
+            if (
+                file_id not in self.file_diff["deleted"]
+                and file_id in self.saved_files
+                and source_file.parse_file_type in parse_file_type_to_key
+            ):
                 # Schema files should already be updated if this comes from a node,
                 # but this code is also called when updating groups and exposures.
                 # This might save the old schema file element, so when the schema file
@@ -391,10 +396,10 @@ class PartialParsing:
         self.saved_files[new_source_file.file_id] = deepcopy(new_source_file)
         self.add_to_pp_files(new_source_file)
 
-    def remove_mssat_file(self, source_file):
+    def remove_mssat_file(self, source_file: AnySourceFile):
         # nodes [unique_ids] -- SQL files
         # There should always be a node for a SQL file
-        if not source_file.nodes:
+        if not isinstance(source_file, SourceFile) or not source_file.nodes:
             return
         # There is generally only 1 node for SQL files, except for macros and snapshots
         for unique_id in source_file.nodes:
