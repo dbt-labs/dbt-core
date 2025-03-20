@@ -37,10 +37,17 @@ def load_single_catalog(raw_catalog: Dict[str, Any], renderer: SecretRenderer) -
     Catalog.validate(rendered_catalog)
 
     write_integrations = []
+    write_integration_names = set()
 
     for raw_write_integration in rendered_catalog.get("write_integrations", []):
+        if raw_write_integration["name"] in write_integration_names:
+            raise DbtCatalogsError(
+                f"Catalog '{rendered_catalog['name']}' cannot have multiple 'write_integrations' with the same name: {raw_write_integration['name']}."
+            )
+
         # We're going to let the adapter validate the integration config
         write_integrations.append(CoreCatalogIntegrationConfig(**raw_write_integration))
+        write_integration_names.add(raw_write_integration["name"])
 
     # Validate + set default active_write_integration if unset
     active_write_integration = rendered_catalog.get("active_write_integration")
