@@ -1,6 +1,6 @@
 from dbt.artifacts.resources.base import BaseResource, Docs, FileHash, GraphResource
 from dbt.artifacts.resources.v1.analysis import Analysis
-from dbt.artifacts.resources.v1.catalog import Catalog, CatalogIntegration, Catalogs
+from dbt.artifacts.resources.v1.catalog import Catalog, CoreCatalogIntegrationConfig
 
 # alias to latest resource definitions
 from dbt.artifacts.resources.v1.components import (

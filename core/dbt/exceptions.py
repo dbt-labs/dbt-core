@@ -110,6 +110,10 @@ class DbtProfileError(DbtConfigError):
     pass
 
 
+class DbtCatalogsError(DbtConfigError):
+    pass
+
+
 class DbtExclusivePropertyUseError(DbtConfigError):
     pass
 
