@@ -5,7 +5,7 @@ from dbt.artifacts.resources import Catalog, CoreCatalogIntegrationConfig
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config.renderer import SecretRenderer
 from dbt.constants import CATALOGS_FILE_NAME
-from dbt.exceptions import DbtCatalogsError, YamlLoadError
+from dbt.exceptions import YamlLoadError
 from dbt_common.clients.system import load_file_contents
 from dbt_common.exceptions import CompilationError, DbtValidationError
 
@@ -32,7 +32,7 @@ def load_single_catalog(raw_catalog: Dict[str, Any], renderer: SecretRenderer) -
     try:
         rendered_catalog = renderer.render_data(raw_catalog)
     except CompilationError as exc:
-        raise DbtCatalogsError(str(exc)) from exc
+        raise DbtValidationError(str(exc)) from exc
 
     Catalog.validate(rendered_catalog)
 
@@ -41,7 +41,7 @@ def load_single_catalog(raw_catalog: Dict[str, Any], renderer: SecretRenderer) -
 
     for raw_write_integration in rendered_catalog.get("write_integrations", []):
         if raw_write_integration["name"] in write_integration_names:
-            raise DbtCatalogsError(
+            raise DbtValidationError(
                 f"Catalog '{rendered_catalog['name']}' cannot have multiple 'write_integrations' with the same name: {raw_write_integration['name']}."
             )
 
