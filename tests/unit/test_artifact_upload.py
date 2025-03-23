@@ -4,7 +4,11 @@ import uuid
 from unittest import mock
 from unittest.mock import MagicMock, call, patch
 
-from dbt.cli.artifact_upload import ArtifactUploadConfig, upload_artifacts
+from dbt.cli.artifact_upload import (
+    ArtifactUploadConfig,
+    _retry_with_backoff,
+    upload_artifacts,
+)
 from dbt.constants import MANIFEST_FILE_NAME, RUN_RESULTS_FILE_NAME
 from dbt.exceptions import DbtProjectError
 from dbt_common.exceptions import DbtBaseException
@@ -53,6 +57,65 @@ class TestArtifactUploadConfig(unittest.TestCase):
             self.assertEqual(self.config.get_headers(), expected_headers)
 
 
+class TestRetryWithBackoff(unittest.TestCase):
+    def setUp(self):
+        self.time_sleep_patcher = patch("dbt.cli.artifact_upload.time.sleep")
+        self.mock_sleep = self.time_sleep_patcher.start()
+
+    def tearDown(self):
+        self.time_sleep_patcher.stop()
+
+    def test_successful_first_try(self):
+        """Test that function returns immediately on success."""
+        func = MagicMock(return_value=(True, "success"))
+        result = _retry_with_backoff("operation", func)
+        self.assertEqual(result, "success")
+        func.assert_called_once()
+        self.mock_sleep.assert_not_called()
+
+    def test_successful_after_retry(self):
+        """Test that function retries and succeeds."""
+        func = MagicMock(side_effect=[(False, "fail"), (True, "success")])
+        result = _retry_with_backoff("operation", func)
+        self.assertEqual(result, "success")
+        self.assertEqual(func.call_count, 2)
+        self.mock_sleep.assert_called_once_with(1)  # First retry delay
+
+    def test_failure_after_max_retries(self):
+        """Test that function raises exception after max retries."""
+        func = MagicMock(return_value=(False, "fail"))
+        with self.assertRaises(DbtBaseException) as context:
+            _retry_with_backoff("operation", func, max_retries=3)
+        self.assertIn("Error operation: fail", str(context.exception))
+        self.assertEqual(func.call_count, 3)
+        # Sleep should be called twice (after first and second attempts)
+        self.assertEqual(self.mock_sleep.call_count, 2)
+        self.assertEqual(self.mock_sleep.call_args_list, [call(1), call(2)])  # Exponential backoff
+
+    def test_request_exception_handling(self):
+        """Test that RequestException is caught and retried."""
+        import requests
+
+        func = MagicMock(
+            side_effect=[requests.RequestException("Network error"), (True, "success")]
+        )
+        result = _retry_with_backoff("operation", func)
+        self.assertEqual(result, "success")
+        self.assertEqual(func.call_count, 2)
+        self.mock_sleep.assert_called_once_with(1)
+
+    def test_request_exception_max_retries(self):
+        """Test that RequestException raises after max retries."""
+        import requests
+
+        func = MagicMock(side_effect=requests.RequestException("Network error"))
+        with self.assertRaises(DbtBaseException) as context:
+            _retry_with_backoff("operation", func, max_retries=3)
+        self.assertIn("Error operation: Network error", str(context.exception))
+        self.assertEqual(func.call_count, 3)
+        self.assertEqual(self.mock_sleep.call_count, 2)
+
+
 class TestUploadArtifacts(unittest.TestCase):
     def setUp(self):
         self.project_dir = "/fake/project/dir"
@@ -68,6 +131,8 @@ class TestUploadArtifacts(unittest.TestCase):
         self.requests_patch_patcher = patch("dbt.cli.artifact_upload.requests.patch")
         self.open_patcher = patch("builtins.open", mock.mock_open(read_data=b"test data"))
         self.fire_event_patcher = patch("dbt.cli.artifact_upload.fire_event")
+        self.retry_patcher = patch("dbt.cli.artifact_upload._retry_with_backoff")
+        self.time_sleep_patcher = patch("dbt.cli.artifact_upload.time.sleep")
 
         # Start patchers
         self.mock_load_project = self.load_project_patcher.start()
@@ -78,6 +143,8 @@ class TestUploadArtifacts(unittest.TestCase):
         self.mock_requests_patch = self.requests_patch_patcher.start()
         self.mock_open = self.open_patcher.start()
         self.mock_fire_event = self.fire_event_patcher.start()
+        self.mock_retry = self.retry_patcher.start()
+        self.mock_sleep = self.time_sleep_patcher.start()
 
         # Configure mocks
         self.mock_project = MagicMock()
@@ -104,6 +171,9 @@ class TestUploadArtifacts(unittest.TestCase):
         self.mock_patch_response.status_code = 204
         self.mock_requests_patch.return_value = self.mock_patch_response
 
+        # Mock retry to pass through to the first result
+        self.mock_retry.side_effect = lambda operation_name, func, max_retries=3: func()[1]
+
         # Setup the env var for the test
         self.original_token = os.environ.get("DBT_CLOUD_TOKEN")
         self.original_account_id = os.environ.get("DBT_CLOUD_ACCOUNT_ID")
@@ -122,6 +192,8 @@ class TestUploadArtifacts(unittest.TestCase):
         self.requests_patch_patcher.stop()
         self.open_patcher.stop()
         self.fire_event_patcher.stop()
+        self.retry_patcher.stop()
+        self.time_sleep_patcher.stop()
         if self.original_token:
             os.environ["DBT_CLOUD_TOKEN"] = self.original_token
         if self.original_account_id:
@@ -142,6 +214,7 @@ class TestUploadArtifacts(unittest.TestCase):
         self.mock_load_project.assert_not_called()
         self.mock_zipfile.assert_not_called()
         self.mock_requests_post.assert_not_called()
+        self.mock_retry.assert_not_called()
 
     def test_upload_artifacts_successful_upload(self):
         # Set up mock for ZipFile context manager
@@ -164,14 +237,12 @@ class TestUploadArtifacts(unittest.TestCase):
         ]
         mock_zipfile_instance.write.assert_has_calls(expected_artifact_calls)
 
-        # Verify API calls
-        self.mock_requests_post.assert_called_once()
-        self.mock_requests_put.assert_called_once_with(
-            url="https://test-upload-url.com", data=b"test data"
-        )
-        self.mock_requests_patch.assert_called_once_with(
-            url=mock.ANY, headers=mock.ANY, json={"upload_status": "SUCCESS"}
-        )
+        # Verify retry was called for each step
+        self.assertEqual(self.mock_retry.call_count, 3)
+        retry_calls = [call_args[0][0] for call_args in self.mock_retry.call_args_list]
+        self.assertIn("creating ingest request", retry_calls)
+        self.assertIn("uploading artifacts", retry_calls)
+        self.assertIn("completing ingest", retry_calls)
 
         # Verify fire_event was called with ArtifactUploadSuccess
         success_event_call = [
@@ -204,38 +275,50 @@ class TestUploadArtifacts(unittest.TestCase):
             upload_artifacts(self.project_dir, self.target_path, self.command)
 
         self.assertIn("tenant not found", str(context.exception))
+        self.mock_retry.assert_not_called()
 
-    def test_upload_artifacts_create_ingest_failure(self):
-        # Set up failed POST response
-        self.mock_post_response.status_code = 500
-        self.mock_post_response.text = "Internal server error"
+    def test_upload_artifacts_with_retry_failures(self):
+        # Set up mock for ZipFile context manager
+        mock_zipfile_instance = MagicMock()
+        self.mock_zipfile.return_value.__enter__.return_value = mock_zipfile_instance
 
-        # Verify that the function raises an exception
+        # Make retry raise exceptions for each step
+        self.mock_retry.side_effect = [
+            DbtBaseException("Error creating ingest request: Mock failure"),
+            DbtBaseException("Error uploading artifacts: Mock failure"),
+            DbtBaseException("Error completing ingest: Mock failure"),
+        ]
+
+        # Test each step failing
+        # 1. Create ingest failure
         with self.assertRaises(DbtBaseException) as context:
             upload_artifacts(self.project_dir, self.target_path, self.command)
-
         self.assertIn("Error creating ingest request", str(context.exception))
+        self.mock_retry.reset_mock()
 
-    def test_upload_artifacts_upload_failure(self):
-        # Set up successful POST but failed PUT
-        self.mock_put_response.status_code = 500
-        self.mock_put_response.text = "Upload failed"
+        # Reset the side effect for the next test
+        self.mock_retry.side_effect = [
+            self.mock_post_response,  # First call succeeds
+            DbtBaseException("Error uploading artifacts: Mock failure"),
+            DbtBaseException("Error completing ingest: Mock failure"),
+        ]
 
-        # Verify that the function raises an exception
+        # 2. Upload failure
         with self.assertRaises(DbtBaseException) as context:
             upload_artifacts(self.project_dir, self.target_path, self.command)
-
         self.assertIn("Error uploading artifacts", str(context.exception))
+        self.mock_retry.reset_mock()
 
-    def test_upload_artifacts_complete_failure(self):
-        # Set up successful POST and PUT but failed PATCH
-        self.mock_patch_response.status_code = 500
-        self.mock_patch_response.text = "Complete failed"
+        # Reset the side effect for the next test
+        self.mock_retry.side_effect = [
+            self.mock_post_response,  # First call succeeds
+            self.mock_put_response,  # Second call succeeds
+            DbtBaseException("Error completing ingest: Mock failure"),
+        ]
 
-        # Verify that the function raises an exception
+        # 3. Complete failure
         with self.assertRaises(DbtBaseException) as context:
             upload_artifacts(self.project_dir, self.target_path, self.command)
-
         self.assertIn("Error completing ingest", str(context.exception))
 
 

@@ -1,4 +1,5 @@
 import os
+import time
 import uuid
 import zipfile
 
@@ -16,6 +17,8 @@ from dbt.events.types import ArtifactUploadSkipped, ArtifactUploadSuccess
 from dbt.exceptions import DbtProjectError
 from dbt_common.events.functions import fire_event
 from dbt_common.exceptions import DbtBaseException as DbtException
+
+MAX_RETRIES = 3
 
 EXECUTION_ARTIFACTS = [MANIFEST_FILE_NAME, RUN_RESULTS_FILE_NAME]
 
@@ -55,6 +58,40 @@ class ArtifactUploadConfig(BaseSettings):
         }
 
 
+def _retry_with_backoff(operation_name, func, max_retries=MAX_RETRIES):
+    """Execute a function with exponential backoff retry logic.
+
+    Args:
+        operation_name: Name of the operation for error messages
+        func: Function to execute that returns (success, result)
+        max_retries: Maximum number of retry attempts
+
+    Returns:
+        The result from the function if successful
+
+    Raises:
+        DbtException: If all retry attempts fail
+    """
+    retry_delay = 1
+    for attempt in range(max_retries):
+        try:
+            success, result = func()
+            if success:
+                return result
+
+            if attempt == max_retries - 1:  # Last attempt
+                raise DbtException(f"Error {operation_name}: {result}")
+
+            time.sleep(retry_delay)
+            retry_delay *= 2  # exponential backoff
+        except requests.RequestException as e:
+            if attempt == max_retries - 1:  # Last attempt
+                raise DbtException(f"Error {operation_name}: {str(e)}")
+
+            time.sleep(retry_delay)
+            retry_delay *= 2  # exponential backoff
+
+
 def upload_artifacts(project_dir, target_path, command):
     # Check if there are artifacts to upload for this command
     if command not in ARTIFACTS_TO_UPLOAD:
@@ -83,33 +120,35 @@ def upload_artifacts(project_dir, target_path, command):
         for artifact in ARTIFACTS_TO_UPLOAD[command]:
             z.write(os.path.join(target_path, artifact), artifact)
 
-    # Step 1: Create ingest request
-    response = requests.post(url=config.get_ingest_url(), headers=config.get_headers())
-    if response.status_code != 200:
-        raise DbtException(
-            f"Error creating ingest request: {response.status_code}, {response.text}"
-        )
+    # Step 1: Create ingest request with retry
+    def create_ingest():
+        response = requests.post(url=config.get_ingest_url(), headers=config.get_headers())
+        return response.status_code == 200, response
 
+    response = _retry_with_backoff("creating ingest request", create_ingest)
     response_data = response.json()
     ingest_id = response_data["data"]["id"]
     upload_url = response_data["data"]["upload_url"]
-    # Step 2: Upload the zip file to the provided URL
+
+    # Step 2: Upload the zip file to the provided URL with retry
     with open(zip_file_name, "rb") as f:
-        upload_response = requests.put(url=upload_url, data=f.read())
-        if upload_response.status_code not in (200, 204):
-            raise DbtException(
-                f"Error uploading artifacts: {upload_response.status_code}, {upload_response.text}"
-            )
+        file_data = f.read()
 
-    # Step 3: Mark the ingest as successful
-    complete_response = requests.patch(
-        url=config.get_complete_url(ingest_id),
-        headers=config.get_headers(),
-        json={"upload_status": "SUCCESS"},
-    )
+        def upload_file():
+            upload_response = requests.put(url=upload_url, data=file_data)
+            return upload_response.status_code in (200, 204), upload_response
 
-    if complete_response.status_code != 204:
-        raise DbtException(
-            f"Error completing ingest: {complete_response.status_code}, {complete_response.text}"
+        _retry_with_backoff("uploading artifacts", upload_file)
+
+    # Step 3: Mark the ingest as successful with retry
+    def complete_ingest():
+        complete_response = requests.patch(
+            url=config.get_complete_url(ingest_id),
+            headers=config.get_headers(),
+            json={"upload_status": "SUCCESS"},
         )
+        return complete_response.status_code == 204, complete_response
+
+    _retry_with_backoff("completing ingest", complete_ingest)
+
     fire_event(ArtifactUploadSuccess(msg=f"command {command} completed successfully"))
