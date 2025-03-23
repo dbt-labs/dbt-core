@@ -25,7 +25,7 @@ with open(os.path.join(this_directory, "README.md")) as f:
 
 
 package_name = "dbt-core"
-package_version = "1.10.0a1"
+package_version = "1.10.0b1"
 description = """With dbt, data analysts and engineers can build analytics \
 the way engineers build applications."""
 
@@ -93,6 +93,7 @@ setup(
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
     ],
     python_requires=">=3.9",
 )
