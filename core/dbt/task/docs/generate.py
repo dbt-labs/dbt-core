@@ -30,7 +30,7 @@ from dbt.artifacts.schemas.catalog import (
     TableMetadata,
 )
 from dbt.artifacts.schemas.results import NodeStatus
-from dbt.constants import MANIFEST_FILE_NAME
+from dbt.constants import CATALOG_FILENAME, MANIFEST_FILE_NAME
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import ResultNode
 from dbt.events.types import ArtifactWritten
@@ -45,8 +45,6 @@ from dbt_common.clients.system import load_file_contents
 from dbt_common.dataclass_schema import ValidationError
 from dbt_common.events.functions import fire_event
 from dbt_common.exceptions import DbtInternalError
-
-CATALOG_FILENAME = "catalog.json"
 
 
 def get_stripped_prefix(source: Dict[str, Any], prefix: str) -> Dict[str, Any]:

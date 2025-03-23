@@ -7,6 +7,7 @@ from dbt.artifacts.schemas.results import NodeStatus
 from dbt.cli.flags import Flags
 from dbt.cli.types import Command as CliCommand
 from dbt.config import RuntimeConfig
+from dbt.constants import RUN_RESULTS_FILE_NAME
 from dbt.contracts.state import load_result_state
 from dbt.flags import get_flags, set_flags
 from dbt.graph import GraphQueue
@@ -74,7 +75,7 @@ class RetryTask(ConfiguredTask):
         # load previous run results
         state_path = args.state or config.target_path
         self.previous_results = load_result_state(
-            Path(config.project_root) / Path(state_path) / "run_results.json"
+            Path(config.project_root) / Path(state_path) / RUN_RESULTS_FILE_NAME
         )
         if not self.previous_results:
             raise DbtRuntimeError(

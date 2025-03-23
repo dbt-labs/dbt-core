@@ -8,6 +8,7 @@ import dbt_common.exceptions
 from dbt.adapters.factory import get_adapter
 from dbt.artifacts.schemas.results import RunStatus, TimingInfo, collect_timing_info
 from dbt.artifacts.schemas.run import RunResult, RunResultsArtifact
+from dbt.constants import RUN_RESULTS_FILE_NAME
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.nodes import HookNode
 from dbt.events.types import (
@@ -19,9 +20,6 @@ from dbt.events.types import (
 from dbt.node_types import NodeType
 from dbt.task.base import ConfiguredTask
 from dbt_common.events.functions import fire_event
-
-RESULT_FILE_NAME = "run_results.json"
-
 
 if TYPE_CHECKING:
     import agate
@@ -126,7 +124,7 @@ class RunOperationTask(ConfiguredTask):
             results=[run_result],
         )
 
-        result_path = os.path.join(self.config.project_target_path, RESULT_FILE_NAME)
+        result_path = os.path.join(self.config.project_target_path, RUN_RESULTS_FILE_NAME)
 
         if self.args.write_json:
             results.write(result_path)

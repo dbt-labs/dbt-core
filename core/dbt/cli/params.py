@@ -761,3 +761,10 @@ write_json = click.option(
     help="Whether or not to write the manifest.json and run_results.json files to the target directory",
     default=True,
 )
+
+upload_artifacts = click.option(
+    "--upload-artifacts/--no-upload-artifacts",
+    envvar="DBT_CLOUD_UPLOAD_ARTIFACTS",
+    help="Whether or not to upload the artifacts to the dbt Cloud API",
+    default=False,
+)
