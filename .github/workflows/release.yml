@@ -160,7 +160,7 @@ jobs:
 
     needs: [bump-version-generate-changelog, build-test-package]
 
-    uses: dbt-labs/dbt-release/.github/workflows/github-release.yml@er/fix-test-releasen
+    uses: dbt-labs/dbt-release/.github/workflows/github-release.yml@er/fix-test-release
 
     with:
       sha: ${{ needs.bump-version-generate-changelog.outputs.final_sha }}
