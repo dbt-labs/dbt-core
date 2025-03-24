@@ -9,6 +9,7 @@ from dbt.contracts.graph.nodes import (
     Exposure,
     GraphMemberNode,
     Metric,
+    ModelNode,
     SourceDefinition,
 )
 from dbt.node_types import NodeType
@@ -41,6 +42,8 @@ class GraphQueue:
         # things that have been popped off the queue but not finished
         # and worker thread reservations
         self.in_progress: Set[UniqueId] = set()
+        # microbatch nodes that have been popped off the queue but not finished
+        self.in_progress_microbatch: Set[UniqueId] = set()
         # things that are in the queue
         self.queued: Set[UniqueId] = set()
         # this lock controls most things
@@ -131,9 +134,15 @@ class GraphQueue:
         exceptions.
         """
         _, node_id = self.inner.get(block=block, timeout=timeout)
+        node = self.manifest.expect(node_id)
+        is_microbatch = (
+            isinstance(node, ModelNode) and node.config.incremental_strategy == "microbatch"
+        )
+
         with self.lock:
-            self._mark_in_progress(node_id)
-        return self.manifest.expect(node_id)
+            self._mark_in_progress(node_id, is_microbatch=is_microbatch)
+
+        return node
 
     def __len__(self) -> int:
         """The length of the queue is the number of tasks left for the queue to
@@ -182,13 +191,14 @@ class GraphQueue:
         """
         with self.lock:
             self.in_progress.remove(node_id)
+            self.in_progress_microbatch.remove(node_id)
             successors = list(self.graph.successors(node_id))
             self.graph.remove_node(node_id)
             self._find_new_additions(successors)
             self.inner.task_done()
             self.some_task_done.notify_all()
 
-    def _mark_in_progress(self, node_id: UniqueId) -> None:
+    def _mark_in_progress(self, node_id: UniqueId, is_microbatch: bool = False) -> None:
         """Mark the node as 'in progress'.
 
         Callers must hold the lock.
@@ -197,6 +207,7 @@ class GraphQueue:
         """
         self.queued.remove(node_id)
         self.in_progress.add(node_id)
+        self.in_progress_microbatch.add(node_id)
 
     def join(self) -> None:
         """Join the queue. Blocks until all tasks are marked as done.
