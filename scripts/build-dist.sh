@@ -17,9 +17,8 @@ mkdir -p "$DBT_PATH"/dist
 rm -rf "$DBT_PATH"/core/dist
 rm -rf "$DBT_PATH"core/build
 cd "$DBT_PATH"/core
-$PYTHON_BIN setup.py bdist_wheel
-$PYTHON_BIN -m build --sdist
-cp -r "$DBT_PATH"/core/dist/* "$DBT_PATH"/dist/
+$PYTHON_BIN setup.py sdist bdist_wheel
+cp -r "$DBT_PATH"/"core"/dist/* "$DBT_PATH"/dist/
 
 
 set +x
