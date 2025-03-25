@@ -85,15 +85,12 @@ def _retry_with_backoff(operation_name, func, max_retries=MAX_RETRIES, retry_cod
                 raise DbtException(f"Error {operation_name}: {result}")
             if attempt == max_retries - 1:  # Last attempt
                 raise DbtException(f"Error {operation_name}: {result}")
-
-            time.sleep(retry_delay)
-            retry_delay *= 2  # exponential backoff
         except requests.RequestException as e:
             if attempt == max_retries - 1:  # Last attempt
                 raise DbtException(f"Error {operation_name}: {str(e)}")
 
-            time.sleep(retry_delay)
-            retry_delay *= 2  # exponential backoff
+        time.sleep(retry_delay)
+        retry_delay *= 2  # exponential backoff
 
 
 def upload_artifacts(project_dir, target_path, command):
