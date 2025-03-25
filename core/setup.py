@@ -36,7 +36,6 @@ setup(
     description=description,
     long_description=long_description,
     long_description_content_type="text/markdown",
-    metadata_version="2.2",
     author="dbt Labs",
     author_email="info@dbtlabs.com",
     url="https://github.com/dbt-labs/dbt-core",
