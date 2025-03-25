@@ -32,7 +32,9 @@ class TestArtifactUploadConfig(unittest.TestCase):
 
     def test_get_complete_url(self):
         ingest_id = "9012"
-        expected_url = "https://test-tenant.dbt.com/api/private/accounts/1234/environments/5678/ingests/9012/complete/"
+        expected_url = (
+            "https://test-tenant.dbt.com/api/private/accounts/1234/environments/5678/ingests/9012/"
+        )
         self.assertEqual(self.config.get_complete_url(ingest_id), expected_url)
 
     def test_get_headers_with_invocation_id(self):

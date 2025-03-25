@@ -6,6 +6,7 @@ import zipfile
 import requests
 from pydantic import BaseSettings
 
+import dbt.tracking
 from dbt.config.runtime import UnsetProfile, load_project
 from dbt.constants import (
     CATALOG_FILENAME,
@@ -46,7 +47,7 @@ class ArtifactUploadConfig(BaseSettings):
         return f"https://{self.tenant_hostname}/api/private/accounts/{self.DBT_CLOUD_ACCOUNT_ID}/environments/{self.DBT_CLOUD_ENVIRONMENT_ID}/ingests/"
 
     def get_complete_url(self, ingest_id):
-        return f"{self.get_ingest_url()}{ingest_id}/complete/"
+        return f"{self.get_ingest_url()}{ingest_id}/"
 
     def get_headers(self, invocation_id=None):
         if invocation_id is None:
@@ -157,3 +158,5 @@ def upload_artifacts(project_dir, target_path, command):
     _retry_with_backoff("completing ingest", complete_ingest)
 
     fire_event(ArtifactUploadSuccess(msg=f"command {command} completed successfully"))
+    if dbt.tracking.active_user is not None:
+        dbt.tracking.track_artifact_upload({"command": command})

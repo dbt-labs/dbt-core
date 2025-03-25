@@ -763,8 +763,8 @@ write_json = click.option(
 )
 
 upload_artifacts = click.option(
-    "--upload-artifacts/--no-upload-artifacts",
-    envvar="DBT_UPLOAD_ARTIFACTS",
+    "--upload-to-artifacts-ingest-api/--no-upload-to-artifacts-ingest-api",
+    envvar="DBT_UPLOAD_TO_ARTIFACTS_INGEST_API",
     help="Whether or not to upload the artifacts to the dbt Cloud API",
     default=False,
 )

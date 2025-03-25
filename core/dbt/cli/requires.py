@@ -167,7 +167,7 @@ def postflight(func):
             # Fire ResourceReport, but only on systems which support the resource
             # module. (Skip it on Windows).
             try:
-                if get_flags().upload_artifacts:
+                if get_flags().upload_to_artifacts_ingest_api:
                     upload_artifacts(
                         get_flags().project_dir, get_flags().target_path, ctx.command.name
                     )
