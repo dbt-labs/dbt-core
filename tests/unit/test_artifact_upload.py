@@ -17,7 +17,7 @@ from dbt_common.exceptions import DbtBaseException
 class TestArtifactUploadConfig(unittest.TestCase):
     def setUp(self):
         self.config = ArtifactUploadConfig(
-            tenant="test-tenant",
+            tenant_hostname="test-tenant.dbt.com",
             DBT_CLOUD_TOKEN="test-token",
             DBT_CLOUD_ACCOUNT_ID="1234",
             DBT_CLOUD_ENVIRONMENT_ID="5678",
@@ -75,7 +75,9 @@ class TestRetryWithBackoff(unittest.TestCase):
 
     def test_successful_after_retry(self):
         """Test that function retries and succeeds."""
-        func = MagicMock(side_effect=[(False, "fail"), (True, "success")])
+        mock_response = MagicMock()
+        mock_response.status_code = 503
+        func = MagicMock(side_effect=[(False, mock_response), (True, "success")])
         result = _retry_with_backoff("operation", func)
         self.assertEqual(result, "success")
         self.assertEqual(func.call_count, 2)
@@ -83,14 +85,27 @@ class TestRetryWithBackoff(unittest.TestCase):
 
     def test_failure_after_max_retries(self):
         """Test that function raises exception after max retries."""
-        func = MagicMock(return_value=(False, "fail"))
+        mock_response = MagicMock()
+        mock_response.status_code = 503
+        func = MagicMock(return_value=(False, mock_response))
         with self.assertRaises(DbtBaseException) as context:
             _retry_with_backoff("operation", func, max_retries=3)
-        self.assertIn("Error operation: fail", str(context.exception))
+        self.assertIn("Error operation", str(context.exception))
         self.assertEqual(func.call_count, 3)
         # Sleep should be called twice (after first and second attempts)
         self.assertEqual(self.mock_sleep.call_count, 2)
         self.assertEqual(self.mock_sleep.call_args_list, [call(1), call(2)])  # Exponential backoff
+
+    def test_non_retryable_status_code(self):
+        """Test that non-retryable status codes raise immediately."""
+        mock_response = MagicMock()
+        mock_response.status_code = 400  # Not in retry_codes
+        func = MagicMock(return_value=(False, mock_response))
+        with self.assertRaises(DbtBaseException) as context:
+            _retry_with_backoff("operation", func)
+        self.assertIn("Error operation", str(context.exception))
+        self.assertEqual(func.call_count, 1)
+        self.mock_sleep.assert_not_called()
 
     def test_request_exception_handling(self):
         """Test that RequestException is caught and retried."""
@@ -114,6 +129,16 @@ class TestRetryWithBackoff(unittest.TestCase):
         self.assertIn("Error operation: Network error", str(context.exception))
         self.assertEqual(func.call_count, 3)
         self.assertEqual(self.mock_sleep.call_count, 2)
+
+    def test_custom_retry_codes(self):
+        """Test that custom retry codes are respected."""
+        mock_response = MagicMock()
+        mock_response.status_code = 429  # Too Many Requests
+        func = MagicMock(side_effect=[(False, mock_response), (True, "success")])
+        result = _retry_with_backoff("operation", func, retry_codes=[429, 503])
+        self.assertEqual(result, "success")
+        self.assertEqual(func.call_count, 2)
+        self.mock_sleep.assert_called_once_with(1)
 
 
 class TestUploadArtifacts(unittest.TestCase):
@@ -148,7 +173,7 @@ class TestUploadArtifacts(unittest.TestCase):
 
         # Configure mocks
         self.mock_project = MagicMock()
-        self.mock_project.dbt_cloud = {"tenant": "test-tenant"}
+        self.mock_project.dbt_cloud = {"tenant_hostname": "test-tenant"}
         self.mock_load_project.return_value = self.mock_project
 
         self.mock_os_path_join.side_effect = lambda path, file: f"{path}/{file}"
@@ -274,7 +299,7 @@ class TestUploadArtifacts(unittest.TestCase):
         with self.assertRaises(DbtProjectError) as context:
             upload_artifacts(self.project_dir, self.target_path, self.command)
 
-        self.assertIn("tenant not found", str(context.exception))
+        self.assertIn("tenant_hostname not found", str(context.exception))
         self.mock_retry.assert_not_called()
 
     def test_upload_artifacts_with_retry_failures(self):

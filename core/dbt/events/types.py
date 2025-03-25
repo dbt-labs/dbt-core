@@ -2195,7 +2195,7 @@ class ArtifactUploadError(ErrorLevel):
         return "Z061"
 
     def message(self) -> str:
-        return f"Error uploading artifacts to dbt Cloud: {self.msg}"
+        return f"Error uploading artifacts to artifact ingestion API: {self.msg}"
 
 
 class ArtifactUploadSuccess(InfoLevel):
@@ -2203,7 +2203,7 @@ class ArtifactUploadSuccess(InfoLevel):
         return "Z062"
 
     def message(self) -> str:
-        return f"Artifacts uploaded successfully to dbt Cloud: {self.msg}"
+        return f"Artifacts uploaded successfully to artifact ingestion API: {self.msg}"
 
 
 class ArtifactUploadSkipped(DebugLevel):

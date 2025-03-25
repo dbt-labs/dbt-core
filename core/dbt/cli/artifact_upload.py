@@ -37,13 +37,13 @@ ARTIFACTS_TO_UPLOAD = {
 
 
 class ArtifactUploadConfig(BaseSettings):
-    tenant: str
+    tenant_hostname: str
     DBT_CLOUD_TOKEN: str
     DBT_CLOUD_ACCOUNT_ID: str
     DBT_CLOUD_ENVIRONMENT_ID: str
 
     def get_ingest_url(self):
-        return f"https://{self.tenant}.dbt.com/api/private/accounts/{self.DBT_CLOUD_ACCOUNT_ID}/environments/{self.DBT_CLOUD_ENVIRONMENT_ID}/ingests/"
+        return f"https://{self.tenant_hostname}/api/private/accounts/{self.DBT_CLOUD_ACCOUNT_ID}/environments/{self.DBT_CLOUD_ENVIRONMENT_ID}/ingests/"
 
     def get_complete_url(self, ingest_id):
         return f"{self.get_ingest_url()}{ingest_id}/complete/"
@@ -58,7 +58,7 @@ class ArtifactUploadConfig(BaseSettings):
         }
 
 
-def _retry_with_backoff(operation_name, func, max_retries=MAX_RETRIES):
+def _retry_with_backoff(operation_name, func, max_retries=MAX_RETRIES, retry_codes=None):
     """Execute a function with exponential backoff retry logic.
 
     Args:
@@ -72,6 +72,8 @@ def _retry_with_backoff(operation_name, func, max_retries=MAX_RETRIES):
     Raises:
         DbtException: If all retry attempts fail
     """
+    if retry_codes is None:
+        retry_codes = [500, 502, 503, 504]
     retry_delay = 1
     for attempt in range(max_retries):
         try:
@@ -79,6 +81,8 @@ def _retry_with_backoff(operation_name, func, max_retries=MAX_RETRIES):
             if success:
                 return result
 
+            if result.status_code not in retry_codes:
+                raise DbtException(f"Error {operation_name}: {result}")
             if attempt == max_retries - 1:  # Last attempt
                 raise DbtException(f"Error {operation_name}: {result}")
 
@@ -103,13 +107,17 @@ def upload_artifacts(project_dir, target_path, command):
         project = load_project(
             project_dir, version_check=False, profile=UnsetProfile(), cli_vars=None
         )
-        if not project.dbt_cloud or "tenant" not in project.dbt_cloud:
-            raise DbtProjectError("dbt_cloud.tenant not found in dbt_project.yml")
-        tenant = project.dbt_cloud["tenant"]
+        if not project.dbt_cloud or "tenant_hostname" not in project.dbt_cloud:
+            raise DbtProjectError("dbt_cloud.tenant_hostname not found in dbt_project.yml")
+        tenant_hostname = project.dbt_cloud["tenant_hostname"]
+        if not tenant_hostname:
+            raise DbtProjectError("dbt_cloud.tenant_hostname is empty in dbt_project.yml")
     except Exception as e:
-        raise DbtProjectError(f"Error reading dbt_cloud.tenant from dbt_project.yml: {str(e)}")
+        raise DbtProjectError(
+            f"Error reading dbt_cloud.tenant_hostname from dbt_project.yml: {str(e)}"
+        )
 
-    config = ArtifactUploadConfig(tenant=tenant)
+    config = ArtifactUploadConfig(tenant_hostname=tenant_hostname)
 
     if not target_path:
         target_path = "target"
