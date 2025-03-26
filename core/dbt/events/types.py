@@ -2185,3 +2185,30 @@ class ResourceReport(DebugLevel):
 
     def message(self) -> str:
         return f"Resource report: {self.to_json()}"
+
+
+# Artifact Upload Events #
+
+
+class ArtifactUploadError(ErrorLevel):
+    def code(self) -> str:
+        return "Z061"
+
+    def message(self) -> str:
+        return f"Error uploading artifacts to artifact ingestion API: {self.msg}"
+
+
+class ArtifactUploadSuccess(InfoLevel):
+    def code(self) -> str:
+        return "Z062"
+
+    def message(self) -> str:
+        return f"Artifacts uploaded successfully to artifact ingestion API: {self.msg}"
+
+
+class ArtifactUploadSkipped(DebugLevel):
+    def code(self) -> str:
+        return "Z063"
+
+    def message(self) -> str:
+        return f"Artifacts skipped for command : {self.msg}"

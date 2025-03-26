@@ -16,6 +16,7 @@ from dbt.artifacts.schemas.freshness import (
     SourceFreshnessResult,
 )
 from dbt.clients import jinja
+from dbt.constants import SOURCE_RESULT_FILE_NAME
 from dbt.context.providers import RuntimeProvider, SourceContext
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import HookNode, SourceDefinition
@@ -31,8 +32,6 @@ from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
 from .base import BaseRunner
 from .printer import print_run_result_error
 from .run import RunTask
-
-RESULT_FILE_NAME = "sources.json"
 
 
 class FreshnessRunner(BaseRunner):
@@ -206,7 +205,7 @@ class FreshnessTask(RunTask):
         if self.args.output:
             return os.path.realpath(self.args.output)
         else:
-            return os.path.join(self.config.project_target_path, RESULT_FILE_NAME)
+            return os.path.join(self.config.project_target_path, SOURCE_RESULT_FILE_NAME)
 
     def raise_on_first_error(self) -> bool:
         return False

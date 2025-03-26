@@ -80,6 +80,7 @@ setup(
         "pyyaml>=6.0",
         "daff>=1.3.46",
         "typing-extensions>=4.4",
+        "pydantic<2",
         # ----
     ],
     zip_safe=False,

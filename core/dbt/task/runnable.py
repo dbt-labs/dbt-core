@@ -21,6 +21,7 @@ from dbt.artifacts.schemas.results import (
 from dbt.artifacts.schemas.run import RunExecutionResult, RunResult
 from dbt.cli.flags import Flags
 from dbt.config.runtime import RuntimeConfig
+from dbt.constants import RUN_RESULTS_FILE_NAME
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import Exposure, ResultNode
 from dbt.contracts.state import PreviousState
@@ -58,8 +59,6 @@ from dbt_common.events.contextvars import log_contextvars, task_contextvars
 from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.events.types import Formatting
 from dbt_common.exceptions import NotImplementedError
-
-RESULT_FILE_NAME = "run_results.json"
 
 
 class GraphRunnableMode(StrEnum):
@@ -200,7 +199,7 @@ class GraphRunnableTask(ConfiguredTask):
         raise NotImplementedError("Not Implemented")
 
     def result_path(self) -> str:
-        return os.path.join(self.config.project_target_path, RESULT_FILE_NAME)
+        return os.path.join(self.config.project_target_path, RUN_RESULTS_FILE_NAME)
 
     def get_runner(self, node) -> BaseRunner:
         adapter = get_adapter(self.config)

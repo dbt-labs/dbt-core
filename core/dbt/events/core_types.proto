@@ -2231,3 +2231,34 @@ message ResourceReportMsg {
     CoreEventInfo info = 1;
     ResourceReport data = 2;
 }
+
+
+// Z061
+message ArtifactUploadError {
+    string msg = 1;
+}
+
+message ArtifactUploadErrorMsg {
+    CoreEventInfo info = 1;
+    ArtifactUploadError data = 2;
+}
+
+// Z062
+message ArtifactUploadSuccess {
+    string msg = 1;
+}
+
+message ArtifactUploadSuccessMsg {
+    CoreEventInfo info = 1;
+    ArtifactUploadSuccess data = 2;
+}
+
+// Z063
+message ArtifactUploadSkipped {
+    string msg = 1;
+}
+
+message ArtifactUploadSkippedMsg {
+    CoreEventInfo info = 1;
+    ArtifactUploadSkipped data = 2;
+}

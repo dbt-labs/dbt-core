@@ -489,6 +489,9 @@ sample_values = [
     core_types.ListCmdOut(),
     types.Note(msg="This is a note."),
     core_types.ResourceReport(),
+    core_types.ArtifactUploadSuccess(),
+    core_types.ArtifactUploadError(),
+    core_types.ArtifactUploadSkipped(),
 ]
 
 
