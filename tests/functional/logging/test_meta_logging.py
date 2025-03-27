@@ -14,9 +14,7 @@ def models():
     return {"model1.sql": model1, "model2.sql": model2, "model3.sql": model3}
 
 
-# This test checks that various events contain node_info,
-# which is supplied by the log_contextvars context manager
-def test_meta(project, logs_dir):
+def run_and_capture_node_info_logs(logs_dir):
     run_dbt(["--log-format=json", "run"])
 
     # get log file
@@ -35,12 +33,35 @@ def test_meta(project, logs_dir):
         if "node_info" not in log_dct["data"]:
             continue
 
-        print(f"--- log_dct: {log_dct}")
-        node_info = log_dct["data"]["node_info"]
-        node_path = node_info["node_path"]
-        if node_path == "model1.sql":
-            assert node_info["meta"] == {}
-        elif node_path == "model2.sql":
-            assert node_info["meta"] == {"owners": ["team1", "team2"]}
-        elif node_path == "model3.sql":
-            assert node_info["meta"] == {"key": 1}
+        yield log_dct["data"]["node_info"]
+
+
+# This test checks that various events contain node_info,
+# which is supplied by the log_contextvars context manager
+def test_meta(project, logs_dir):
+    for node_info_log in run_and_capture_node_info_logs(logs_dir):
+        if node_info_log["unique_id"] == "model.test.model1":
+            assert node_info_log["meta"] == {}
+        elif node_info_log["unique_id"] == "model.test.model2":
+            assert node_info_log["meta"] == {"owners": ["team1", "team2"]}
+        elif node_info_log["unique_id"] == "model.test.model3":
+            assert node_info_log["meta"] == {"key": 1}
+
+
+def test_checksum(project, logs_dir):
+    for node_info_log in run_and_capture_node_info_logs(logs_dir):
+        if node_info_log["unique_id"] == "model.test.model1":
+            assert (
+                node_info_log["node_checksum"]
+                == "7a72de8ca68190cc1f3a600b99ad24ce701817a5674222778845eb939c64aa76"
+            )
+        elif node_info_log["unique_id"] == "model.test.model2":
+            assert (
+                node_info_log["node_checksum"]
+                == "4e5b7658359b9a7fec6aa3cbad98ab07725927ccce59ec6e511e599e000b0fd3"
+            )
+        elif node_info_log["unique_id"] == "model.test.model3":
+            assert (
+                node_info_log["node_checksum"]
+                == "99c67d153920066d43168cc495240f185cec9d8cd552e7778e08437e66f44da7"
+            )

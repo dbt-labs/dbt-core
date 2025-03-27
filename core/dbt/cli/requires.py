@@ -9,6 +9,7 @@ from click import Context
 
 import dbt.tracking
 from dbt.adapters.factory import adapter_management, get_adapter, register_adapter
+from dbt.cli.artifact_upload import upload_artifacts
 from dbt.cli.exceptions import ExceptionExit, ResultExit
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
@@ -17,6 +18,7 @@ from dbt.context.providers import generate_runtime_macro_context
 from dbt.context.query_header import generate_query_header_context
 from dbt.events.logging import setup_event_logger
 from dbt.events.types import (
+    ArtifactUploadError,
     CommandCompleted,
     MainEncounteredError,
     MainReportArgs,
@@ -26,7 +28,7 @@ from dbt.events.types import (
     ResourceReport,
 )
 from dbt.exceptions import DbtProjectError, FailFastError
-from dbt.flags import get_flag_dict, set_flags
+from dbt.flags import get_flag_dict, get_flags, set_flags
 from dbt.mp_context import get_mp_context
 from dbt.parser.manifest import parse_manifest
 from dbt.plugins import set_up_plugin_manager
@@ -164,6 +166,15 @@ def postflight(func):
         finally:
             # Fire ResourceReport, but only on systems which support the resource
             # module. (Skip it on Windows).
+            try:
+                if get_flags().upload_to_artifacts_ingest_api:
+                    upload_artifacts(
+                        get_flags().project_dir, get_flags().target_path, ctx.command.name
+                    )
+
+            except Exception as e:
+                fire_event(ArtifactUploadError(msg=str(e)))
+
             if importlib.util.find_spec("resource") is not None:
                 import resource
 

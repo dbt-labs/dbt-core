@@ -1,16 +1,16 @@
-git+https://github.com/dbt-labs/dbt-adapters.git@main
+git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters
 git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter
 git+https://github.com/dbt-labs/dbt-common.git@main
-git+https://github.com/dbt-labs/dbt-postgres.git@main
+git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-postgres
 # black must match what's in .pre-commit-config.yaml to be sure local env matches CI
 black==24.3.0
 bumpversion
-ddtrace==2.3.0
+ddtrace==2.21.3
 docutils
 # flake8 must match what's in .pre-commit-config.yaml to be sure local env matches CI
 flake8==4.0.1
 flaky
-freezegun>=1.4.0,<1.5
+freezegun>=1.5.1
 hypothesis
 ipdb
 # isort must match what's in .pre-commit-config.yaml to be sure local env matches CI
@@ -34,6 +34,7 @@ types-PyYAML
 types-Jinja2
 types-mock
 types-protobuf>=5.0,<6.0
+types-python-dateutil
 types-pytz
 types-requests
 types-setuptools

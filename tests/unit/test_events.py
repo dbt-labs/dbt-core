@@ -290,6 +290,7 @@ sample_values = [
     core_types.SemanticValidationFailure(msg=""),
     core_types.MicrobatchModelNoEventTimeInputs(model_name=""),
     core_types.InvalidConcurrentBatchesConfig(num_models=1, adapter_type=""),
+    core_types.InvalidMacroAnnotation(msg="", macro_file_path="", macro_unique_id=""),
     # M - Deps generation ======================
     core_types.GitSparseCheckoutSubdirectory(subdir=""),
     core_types.GitProgressCheckoutRevision(revision=""),
@@ -488,6 +489,9 @@ sample_values = [
     core_types.ListCmdOut(),
     types.Note(msg="This is a note."),
     core_types.ResourceReport(),
+    core_types.ArtifactUploadSuccess(),
+    core_types.ArtifactUploadError(),
+    core_types.ArtifactUploadSkipped(),
 ]
 
 

@@ -39,6 +39,7 @@ message NodeInfo {
     string node_finished_at = 8;
     google.protobuf.Struct meta = 9;
     NodeRelation node_relation = 10;
+    string node_checksum = 11;
 }
 
 // TimingInfoMsg
@@ -939,9 +940,17 @@ message InvalidConcurrentBatchesConfigMsg {
     InvalidConcurrentBatchesConfig data = 2;
 }
 
+// I076
+message InvalidMacroAnnotation {
+    string msg = 1;
+    string macro_unique_id = 2;
+    string macro_file_path = 3;
+}
 
-// M - Deps generation
-
+message InvalidMacroAnnotationMsg {
+    CoreEventInfo info = 1;
+    InvalidMacroAnnotation data = 2;
+}
 
 
 // M - Deps generation
@@ -1415,6 +1424,7 @@ message LogSnapshotResult {
     float execution_time = 6;
     map<string, string> cfg = 7;
     string result_message = 8;
+    Group group = 9;
 }
 
 message LogSnapshotResultMsg {
@@ -1432,6 +1442,7 @@ message LogSeedResult {
     float execution_time = 6;
     string schema = 7;
     string relation = 8;
+    Group group = 9;
 }
 
 message LogSeedResultMsg {
@@ -1605,6 +1616,7 @@ message SkippingDetails {
     string node_name = 4;
     int32 index = 5;
     int32 total = 6;
+    Group group = 7;
 }
 
 message SkippingDetailsMsg {
@@ -2064,6 +2076,7 @@ message LogSkipBecauseError {
     int32 index = 3;
     int32 total = 4;
     string status = 5;
+    Group group = 6;
 }
 
 message LogSkipBecauseErrorMsg {
@@ -2217,4 +2230,35 @@ message ResourceReport {
 message ResourceReportMsg {
     CoreEventInfo info = 1;
     ResourceReport data = 2;
+}
+
+
+// Z061
+message ArtifactUploadError {
+    string msg = 1;
+}
+
+message ArtifactUploadErrorMsg {
+    CoreEventInfo info = 1;
+    ArtifactUploadError data = 2;
+}
+
+// Z062
+message ArtifactUploadSuccess {
+    string msg = 1;
+}
+
+message ArtifactUploadSuccessMsg {
+    CoreEventInfo info = 1;
+    ArtifactUploadSuccess data = 2;
+}
+
+// Z063
+message ArtifactUploadSkipped {
+    string msg = 1;
+}
+
+message ArtifactUploadSkippedMsg {
+    CoreEventInfo info = 1;
+    ArtifactUploadSkipped data = 2;
 }

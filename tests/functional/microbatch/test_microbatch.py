@@ -5,8 +5,6 @@ import pytest
 from pytest_mock import MockerFixture
 
 from dbt.events.types import (
-    ArtifactWritten,
-    EndOfRunSummary,
     GenericExceptionOnRun,
     InvalidConcurrentBatchesConfig,
     JinjaLogDebug,
@@ -909,38 +907,6 @@ class TestMicrbobatchModelsRunWithSameCurrentTime(BaseMicrobatchTest):
         assert microbatch_model_last_batch == second_microbatch_model_last_batch
 
 
-class TestMicrobatchModelStoppedByKeyboardInterrupt(BaseMicrobatchTest):
-    @pytest.fixture
-    def catch_eors(self) -> EventCatcher:
-        return EventCatcher(EndOfRunSummary)
-
-    @pytest.fixture
-    def catch_aw(self) -> EventCatcher:
-        return EventCatcher(
-            event_to_catch=ArtifactWritten,
-            predicate=lambda event: event.data.artifact_type == "RunExecutionResult",
-        )
-
-    def test_microbatch(
-        self,
-        mocker: MockerFixture,
-        project,
-        catch_eors: EventCatcher,
-        catch_aw: EventCatcher,
-    ) -> None:
-        mocked_fbs = mocker.patch(
-            "dbt.materializations.incremental.microbatch.MicrobatchBuilder.format_batch_start"
-        )
-        mocked_fbs.side_effect = KeyboardInterrupt
-        try:
-            run_dbt(["run"], callbacks=[catch_eors.catch, catch_aw.catch])
-            assert False, "KeyboardInterrupt failed to stop batch execution"
-        except KeyboardInterrupt:
-            assert len(catch_eors.caught_events) == 1
-            assert "Exited because of keyboard interrupt" in catch_eors.caught_events[0].info.msg
-            assert len(catch_aw.caught_events) == 1
-
-
 class TestMicrobatchModelSkipped(BaseMicrobatchTest):
     @pytest.fixture(scope="class")
     def models(self):
@@ -967,7 +933,7 @@ class TestMicrobatchCanRunParallelOrSequential(BaseMicrobatchTest):
     def test_microbatch(
         self, mocker: MockerFixture, project, batch_exc_catcher: EventCatcher
     ) -> None:
-        mocked_srip = mocker.patch("dbt.task.run.MicrobatchModelRunner.should_run_in_parallel")
+        mocked_srip = mocker.patch("dbt.task.run.MicrobatchBatchRunner.should_run_in_parallel")
 
         # Should be run in parallel
         mocked_srip.return_value = True
@@ -1007,7 +973,7 @@ class TestFirstAndLastBatchAlwaysSequential(BaseMicrobatchTest):
     def test_microbatch(
         self, mocker: MockerFixture, project, batch_exc_catcher: EventCatcher
     ) -> None:
-        mocked_srip = mocker.patch("dbt.task.run.MicrobatchModelRunner.should_run_in_parallel")
+        mocked_srip = mocker.patch("dbt.task.run.MicrobatchBatchRunner.should_run_in_parallel")
 
         # Should be run in parallel
         mocked_srip.return_value = True

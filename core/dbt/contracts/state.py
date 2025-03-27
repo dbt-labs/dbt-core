@@ -5,6 +5,7 @@ from dbt.artifacts.exceptions import IncompatibleSchemaError
 from dbt.artifacts.schemas.freshness import FreshnessExecutionResultArtifact
 from dbt.artifacts.schemas.manifest import WritableManifest
 from dbt.artifacts.schemas.run import RunResultsArtifact
+from dbt.constants import RUN_RESULTS_FILE_NAME
 from dbt.contracts.graph.manifest import Manifest
 from dbt.events.types import WarnStateTargetEqual
 from dbt_common.events.functions import fire_event
@@ -43,7 +44,7 @@ class PreviousState:
                 exc.add_filename(str(manifest_path))
                 raise
 
-        results_path = self.project_root / self.state_path / "run_results.json"
+        results_path = self.project_root / self.state_path / RUN_RESULTS_FILE_NAME
         self.results = load_result_state(results_path)
 
         sources_path = self.project_root / self.state_path / "sources.json"

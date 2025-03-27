@@ -1,0 +1,6 @@
+kind: Features
+body: Allow for sampling of ref'd seeds
+time: 2025-02-12T17:37:43.554156-06:00
+custom:
+  Author: QMalcolm
+  Issue: "11300"

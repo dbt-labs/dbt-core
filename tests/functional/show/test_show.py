@@ -181,6 +181,16 @@ class TestShowInlineDirect(ShowBase):
         # See prior test for explanation of why this is here
         run_dbt(["seed"])
 
+    def test_inline_direct_pass_no_limit(self, project):
+        query = f"select * from {project.test_schema}.sample_seed"
+        (_, log_output) = run_dbt_and_capture(["show", "--inline-direct", query, "--limit", -1])
+        assert "Previewing inline node" in log_output
+        assert "sample_num" in log_output
+        assert "sample_bool" in log_output
+
+        # See prior test for explanation of why this is here
+        run_dbt(["seed"])
+
 
 class TestShowInlineDirectFail(ShowBase):
 

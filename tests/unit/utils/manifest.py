@@ -11,6 +11,7 @@ from dbt.artifacts.resources import (
     Owner,
     QueryParams,
     RefArgs,
+    SnapshotConfig,
     TestConfig,
     TestMetadata,
     WhereFilter,
@@ -37,6 +38,7 @@ from dbt.contracts.graph.nodes import (
     SeedNode,
     SemanticModel,
     SingularTestNode,
+    SnapshotNode,
     SourceDefinition,
     UnitTestDefinition,
 )
@@ -505,6 +507,35 @@ def make_saved_query(pkg: str, name: str, metric: str, path=None):
         unique_id=f"saved_query.{pkg}.{name}",
         original_file_path=path,
         fqn=[pkg, "saved_queries", name],
+    )
+
+
+def make_source_snapshot(pkg: str, name: str, source: SourceDefinition, path=None) -> SnapshotNode:
+    if path is None:
+        path = "schema.yml"
+
+    return SnapshotNode(
+        database=source.database,
+        schema=source.schema,
+        name=name,
+        resource_type=NodeType.Snapshot,
+        package_name=source.package_name,
+        path=path,
+        original_file_path=path,
+        unique_id=f"snapshot.{pkg}.{name}",
+        fqn=[pkg, "snapshot", name],
+        alias=None,
+        checksum="",
+        sources=[[source.source_name, source.name]],
+        depends_on=DependsOn(
+            nodes=[source.unique_id],
+            macros=[],
+        ),
+        config=SnapshotConfig(
+            strategy="check",
+            unique_key="'dummy'",
+            check_cols="all",
+        ),
     )
 
 
@@ -1016,7 +1047,7 @@ def make_manifest(
     groups: List[Group] = [],
     macros: List[Macro] = [],
     metrics: List[Metric] = [],
-    nodes: List[ModelNode] = [],
+    nodes: List[ManifestNode] = [],
     saved_queries: List[SavedQuery] = [],
     selectors: Dict[str, Any] = {},
     semantic_models: List[SemanticModel] = [],

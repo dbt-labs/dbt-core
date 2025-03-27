@@ -234,6 +234,7 @@ class NodeInfoMixin:
                 "alias": getattr(self, "alias", None),
                 "relation_name": getattr(self, "relation_name", None),
             },
+            "node_checksum": getattr(getattr(self, "checksum", None), "checksum", None),
         }
         return node_info
 
@@ -1531,7 +1532,7 @@ class Group(GroupResource, BaseNode):
         return {
             "name": self.name,
             "package_name": self.package_name,
-            "owner": self.owner.to_dict(omit_none=True),
+            "owner": {k: str(v) for k, v in self.owner.to_dict(omit_none=True).items()},
         }
 
 

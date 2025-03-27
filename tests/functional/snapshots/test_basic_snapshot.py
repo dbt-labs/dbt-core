@@ -23,8 +23,11 @@ from tests.functional.snapshots.fixtures import (
     snapshots_pg__snapshot_no_target_schema_sql,
     snapshots_pg__snapshot_sql,
     snapshots_pg__snapshot_yml,
+    snapshots_pg__source_snapshot_yml,
     snapshots_pg_custom__snapshot_sql,
     snapshots_pg_custom_namespaced__snapshot_sql,
+    sources_pg__source_mod_yml,
+    sources_pg__source_yml,
 )
 
 snapshots_check_col__snapshot_sql = """
@@ -382,20 +385,24 @@ class BasicYaml(Basic):
     def snapshots(self):
         """Overrides the same function in Basic to use the YAML method of
         defining a snapshot."""
-        return {"snapshot.yml": snapshots_pg__snapshot_yml}
+        return {
+            "snapshot.yml": snapshots_pg__snapshot_yml,
+            "source_snapshot.yml": snapshots_pg__source_snapshot_yml,
+        }
 
     @pytest.fixture(scope="class")
     def models(self):
         """Overrides the same function in Basic to use a modified version of
         schema.yml without snapshot config."""
         return {
+            "sources.yml": sources_pg__source_yml,
             "ref_snapshot.sql": models__ref_snapshot_sql,
         }
 
 
 class TestBasicSnapshotYaml(BasicYaml):
     def test_basic_snapshot_yaml(self, project):
-        snapshot_setup(project, num_snapshot_models=1)
+        snapshot_setup(project, num_snapshot_models=2)
 
 
 class TestYamlSnapshotPartialParsing(BasicYaml):
@@ -403,6 +410,12 @@ class TestYamlSnapshotPartialParsing(BasicYaml):
         manifest = run_dbt(["parse"])
         snapshot_id = "snapshot.test.snapshot_actual"
         assert snapshot_id in manifest.nodes
+        snapshot = manifest.nodes[snapshot_id]
+        assert snapshot.meta["owner"] == "a_owner"
+
+        # change an unrelated source file
+        write_file(sources_pg__source_mod_yml, "models", "sources.yml")
+        manifest = run_dbt(["parse"])
         snapshot = manifest.nodes[snapshot_id]
         assert snapshot.meta["owner"] == "a_owner"
 
