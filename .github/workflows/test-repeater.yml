@@ -99,9 +99,13 @@ jobs:
         run: make setup-db
 
         # mac and windows don't use make due to limitations with docker with those runners in GitHub
-      - name: "Set up postgres (macos)"
-        if: inputs.os == 'macos-14'
-        uses: ./.github/actions/setup-postgres-macos
+      - name: Set up postgres (macos)
+        if: runner.os == 'macOS'
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: ./test/setup_db.sh
 
       - name: "Set up postgres (windows)"
         if: inputs.os == 'windows-latest'
