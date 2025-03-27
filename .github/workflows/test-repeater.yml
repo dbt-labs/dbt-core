@@ -101,11 +101,11 @@ jobs:
         # mac and windows don't use make due to limitations with docker with those runners in GitHub
       - name: Set up postgres (macos)
         if: runner.os == 'macOS'
-        uses: Wandalen/wretry.action@v3
+        uses: nick-fields/retry@v3
         with:
-          action: ./.github/actions/setup-postgres-macos
-          attempt_limit: 3
-          time_out: 300000 # 5 minutes in milliseconds
+          timeout_minutes: 10
+          max_attempts: 3
+          command: ./test/setup_db.sh
 
       - name: "Set up postgres (windows)"
         if: inputs.os == 'windows-latest'

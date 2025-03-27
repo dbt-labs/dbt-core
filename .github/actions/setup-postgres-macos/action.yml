@@ -1,7 +1,0 @@
-name: "Set up postgres (macos)"
-description: "Set up postgres service on macos vm for dbt integration tests"
-runs:
-  using: "composite"
-  steps:
-    - shell: bash
-      run: bash ${{ github.action_path }}/setup_db.sh
