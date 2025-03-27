@@ -289,7 +289,7 @@ jobs:
         with:
           timeout_minutes: 10
           max_attempts: 3
-          command: bash ./github/actions/setup-postgres-macos/setup_db.sh
+          command: ./test/setup_db.sh
 
       - name: Set up postgres (windows)
         if: runner.os == 'Windows'
