@@ -1,5 +1,5 @@
 kind: Fixes
-body: Error occurs if default_profiles_dir does not exist
+body: Fallback to current working directory (CWD) for `profiles_dir` if `profiles.yml` not found in CWD and `$HOME/.dbt`
 time: 2025-02-10T00:01:07.477255+09:00
 custom:
     Author: tnk-ysk
