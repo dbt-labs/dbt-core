@@ -284,7 +284,11 @@ jobs:
 
       - name: Set up postgres (macos)
         if: runner.os == 'macOS'
-        uses: ./.github/actions/setup-postgres-macos
+        uses: Wandalen/wretry.action@v3
+        with:
+          action: ./.github/actions/setup-postgres-macos
+          attempt_limit: 3
+          time_out: 300000 # 5 minutes in milliseconds
 
       - name: Set up postgres (windows)
         if: runner.os == 'Windows'
