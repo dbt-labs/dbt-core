@@ -605,7 +605,6 @@ class TestMicrobatchBuilder:
     @pytest.mark.parametrize(
         "batch_size,start_time,expected_formatted_start_time",
         [
-            (BatchSize.year, None, ""),
             (BatchSize.year, datetime(2020, 1, 1, 1), "20200101"),
             (BatchSize.month, datetime(2020, 1, 1, 1), "20200101"),
             (BatchSize.day, datetime(2020, 1, 1, 1), "20200101"),
@@ -618,7 +617,6 @@ class TestMicrobatchBuilder:
     @pytest.mark.parametrize(
         "batch_size,batch_start,expected_formatted_batch_start",
         [
-            (BatchSize.year, None, ""),
             (BatchSize.year, datetime(2020, 1, 1, 1), "20200101"),
             (BatchSize.month, datetime(2020, 1, 1, 1), "20200101"),
             (BatchSize.day, datetime(2020, 1, 1, 1), "20200101"),
