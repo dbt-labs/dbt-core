@@ -1282,5 +1282,5 @@ class TestCompilationErrorOnSingleBatchRun(BaseMicrobatchTest):
         }
 
     def test_microbatch(self, project) -> None:
-        _, console_output = run_dbt_and_capture(["run"], expect_pass=True)
+        _, console_output = run_dbt_and_capture(["run"], expect_pass=False)
         assert "Completed with 1 error, 0 partial successes, and 0 warnings" in console_output
