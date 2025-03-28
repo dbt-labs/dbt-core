@@ -57,6 +57,21 @@ microbatch_model_sql = """
 select * from {{ ref('input_model') }}
 """
 
+microbatch_model_hour_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='hour', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
+select * from {{ ref('input_model') }}
+"""
+
+microbatch_model_month_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='month', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
+select * from {{ ref('input_model') }}
+"""
+
+microbatch_model_year_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='year', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
+select * from {{ ref('input_model') }}
+"""
+
 microbatch_model_with_pre_and_post_sql = """
 {{ config(
         materialized='incremental',
@@ -838,6 +853,111 @@ class TestMicrobatchCompiledRunPaths(BaseMicrobatchTest):
             "models",
             "microbatch_model",
             "microbatch_model_2020-01-03.sql",
+        )
+
+
+class TestMicrobatchCompiledRunPathsHourly(BaseMicrobatchTest):
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_hour_sql,
+        }
+
+    def test_run_with_event_time(self, project):
+        # run all partitions from start - 2 expected rows in output, one failed
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run"])
+
+        # Compiled paths - batch compilations
+        assert read_file(
+            project.project_root,
+            "target",
+            "compiled",
+            "test",
+            "models",
+            "microbatch_model",
+            "microbatch_model_2020-01-03T13.sql",
+        )
+        assert read_file(
+            project.project_root,
+            "target",
+            "run",
+            "test",
+            "models",
+            "microbatch_model",
+            "microbatch_model_2020-01-03T13.sql",
+        )
+
+
+class TestMicrobatchCompiledRunPathsMonthly(BaseMicrobatchTest):
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_month_sql,
+        }
+
+    def test_run_with_event_time(self, project):
+        # run all partitions from start - 2 expected rows in output, one failed
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run"])
+
+        # Compiled paths - batch compilations
+        assert read_file(
+            project.project_root,
+            "target",
+            "compiled",
+            "test",
+            "models",
+            "microbatch_model",
+            "microbatch_model_2020-01.sql",
+        )
+        assert read_file(
+            project.project_root,
+            "target",
+            "run",
+            "test",
+            "models",
+            "microbatch_model",
+            "microbatch_model_2020-01.sql",
+        )
+
+
+class TestMicrobatchCompiledRunPathsYearly(BaseMicrobatchTest):
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_year_sql,
+        }
+
+    def test_run_with_event_time(self, project):
+        # run all partitions from start - 2 expected rows in output, one failed
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run"])
+
+        # Compiled paths - batch compilations
+        assert read_file(
+            project.project_root,
+            "target",
+            "compiled",
+            "test",
+            "models",
+            "microbatch_model",
+            "microbatch_model_2020.sql",
+        )
+        assert read_file(
+            project.project_root,
+            "target",
+            "run",
+            "test",
+            "models",
+            "microbatch_model",
+            "microbatch_model_2020.sql",
         )
 
 

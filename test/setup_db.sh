@@ -1,5 +1,33 @@
 #!/bin/bash
 set -x
+
+brew install postgresql@16
+brew link postgresql@16 --force
+
+# Add the services tap and ensure PATH is updated
+brew tap homebrew/services
+export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"
+
+# Start PostgreSQL using the full command instead of brew services
+pg_ctl -D /opt/homebrew/var/postgresql@16 start
+
+echo "Check PostgreSQL service is running"
+i=10
+COMMAND='pg_isready'
+while [ $i -gt -1 ]; do
+    if [ $i == 0 ]; then
+        echo "PostgreSQL service not ready, all attempts exhausted"
+        exit 1
+    fi
+    echo "Check PostgreSQL service status"
+    eval $COMMAND && break
+    echo "PostgreSQL service not ready, wait 10 more sec, attempts left: $i"
+    sleep 10
+    ((i--))
+done
+
+createuser -s postgres
+
 env | grep '^PG'
 
 # If you want to run this script for your own postgresql (run with

@@ -603,15 +603,31 @@ class TestMicrobatchBuilder:
         assert MicrobatchBuilder.truncate_timestamp(timestamp, batch_size) == expected_timestamp
 
     @pytest.mark.parametrize(
-        "batch_size,batch_start,expected_formatted_batch_start",
+        "batch_size,start_time,expected_formatted_start_time",
         [
-            (BatchSize.year, datetime(2020, 1, 1, 1), "2020-01-01"),
-            (BatchSize.month, datetime(2020, 1, 1, 1), "2020-01-01"),
-            (BatchSize.day, datetime(2020, 1, 1, 1), "2020-01-01"),
-            (BatchSize.hour, datetime(2020, 1, 1, 1), "2020-01-01 01:00:00"),
+            (BatchSize.year, datetime(2020, 1, 1, 1), "2020"),
+            (BatchSize.month, datetime(2020, 1, 1, 1), "202001"),
+            (BatchSize.day, datetime(2020, 1, 1, 1), "20200101"),
+            (BatchSize.hour, datetime(2020, 1, 1, 1), "20200101T01"),
         ],
     )
-    def test_format_batch_start(self, batch_size, batch_start, expected_formatted_batch_start):
+    def test_batch_id(
+        self, batch_size: BatchSize, start_time: datetime, expected_formatted_start_time: str
+    ) -> None:
+        assert MicrobatchBuilder.batch_id(start_time, batch_size) == expected_formatted_start_time
+
+    @pytest.mark.parametrize(
+        "batch_size,batch_start,expected_formatted_batch_start",
+        [
+            (BatchSize.year, datetime(2020, 1, 1, 1), "2020"),
+            (BatchSize.month, datetime(2020, 1, 1, 1), "2020-01"),
+            (BatchSize.day, datetime(2020, 1, 1, 1), "2020-01-01"),
+            (BatchSize.hour, datetime(2020, 1, 1, 1), "2020-01-01T01"),
+        ],
+    )
+    def test_format_batch_start(
+        self, batch_size: BatchSize, batch_start: datetime, expected_formatted_batch_start: str
+    ) -> None:
         assert (
             MicrobatchBuilder.format_batch_start(batch_start, batch_size)
             == expected_formatted_batch_start
