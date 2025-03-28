@@ -829,7 +829,7 @@ class JinjaLogDebug(DebugLevel):
         return self.msg
 
 
-class UnpinnedRefNewVersionAvailable(InfoLevel):
+class UnpinnedRefNewVersionAvailable(WarnLevel):
     def code(self) -> str:
         return "I064"
 
