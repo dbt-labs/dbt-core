@@ -42,7 +42,7 @@ IGNORE_PARENT_FLAGS = {
     "warn_error",
 }
 
-ALLOW_CLI_OVERRIDE_FLAGS = {"vars"}
+ALLOW_CLI_OVERRIDE_FLAGS = {"vars", "threads"}
 
 TASK_DICT = {
     "build": BuildTask,
