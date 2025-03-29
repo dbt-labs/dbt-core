@@ -192,6 +192,7 @@ def cli(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def build(ctx, **kwargs):
@@ -567,6 +568,7 @@ def parse(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def run(ctx, **kwargs):
