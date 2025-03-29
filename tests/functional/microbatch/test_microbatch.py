@@ -1,4 +1,5 @@
 import json
+from typing import Dict
 from unittest import mock
 
 import pytest
@@ -1231,3 +1232,55 @@ class TestCanSilenceInvalidConcurrentBatchesConfigWarning(BaseMicrobatchTest):
             )
         # Because we silenced the warning, it shouldn't get fired
         assert len(event_catcher.caught_events) == 0
+
+
+single_batch_microbatch_model_sql = """
+{{
+    config(
+        materialized='incremental',
+        incremental_strategy='microbatch',
+        unique_key='tmp',
+        event_time='tmp',
+        begin=modules.datetime.datetime.now(),
+        lookback=0,
+        batch_size='day',
+        meta={'param': 'invalid_param'},
+        pre_hook=[
+            validate_param('param1')
+        ]
+    )
+}}
+
+SELECT current_date as tmp
+"""
+
+validate_param_macro_sql = """
+{% macro validate_param(valid_param) %}
+    {% set current_param = config.get('meta')['param'] %}
+
+    {% if execute %}
+        {% if current_param != valid_param %}
+            {% set exceptions_message = "Invalid param: " ~ current_param ~ ", valid param: " ~ valid_param %}
+            {% do exceptions.raise_compiler_error(exceptions_message) %}
+        {% endif %}
+    {% endif %}
+{% endmacro %}
+"""
+
+
+class TestCompilationErrorOnSingleBatchRun(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self) -> Dict[str, str]:
+        return {
+            "microbatch_model.sql": single_batch_microbatch_model_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self) -> Dict[str, str]:
+        return {
+            "validate_param.sql": validate_param_macro_sql,
+        }
+
+    def test_microbatch(self, project) -> None:
+        _, console_output = run_dbt_and_capture(["run"], expect_pass=False)
+        assert "Completed with 1 error, 0 partial successes, and 0 warnings" in console_output
