@@ -1,0 +1,6 @@
+kind: Fixes
+body: Enable silencing warnings for `UnpinnedRefNewVersionAvailable` messages
+time: 2025-03-27T20:09:54.537604-06:00
+custom:
+    Author: dbeatty10 nicholasyager
+    Issue: "11221"
