@@ -1,9 +1,10 @@
 import pytest
+
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_replace import (
-    seeds__data_replace_csv,
     models__test_replace_sql,
     models__test_replace_yml,
+    seeds__data_replace_csv,
 )
 
 

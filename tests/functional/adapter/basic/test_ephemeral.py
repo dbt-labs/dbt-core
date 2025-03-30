@@ -1,18 +1,20 @@
-import pytest
 import os
+
+import pytest
+
 from dbt.tests.util import (
-    run_dbt,
-    get_manifest,
     check_relations_equal,
     check_result_nodes_by_name,
+    get_manifest,
     relation_from_name,
+    run_dbt,
 )
 from tests.functional.adapter.basic.files import (
-    seeds_base_csv,
     base_ephemeral_sql,
-    ephemeral_view_sql,
     ephemeral_table_sql,
+    ephemeral_view_sql,
     schema_base_yml,
+    seeds_base_csv,
 )
 
 

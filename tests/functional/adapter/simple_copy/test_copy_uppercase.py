@@ -1,18 +1,18 @@
 import pytest
-from dbt.tests.util import run_dbt, check_relations_equal
 
+from dbt.tests.util import check_relations_equal, run_dbt
 from tests.functional.adapter.simple_copy.fixtures import (
-    _PROPERTIES__SCHEMA_YML,
-    _SEEDS__SEED_INITIAL,
     _MODELS__ADVANCED_INCREMENTAL,
     _MODELS__COMPOUND_SORT,
     _MODELS__DISABLED,
     _MODELS__EMPTY,
-    _MODELS_GET_AND_REF_UPPERCASE,
     _MODELS__INCREMENTAL,
     _MODELS__INTERLEAVED_SORT,
     _MODELS__MATERIALIZED,
     _MODELS__VIEW_MODEL,
+    _MODELS_GET_AND_REF_UPPERCASE,
+    _PROPERTIES__SCHEMA_YML,
+    _SEEDS__SEED_INITIAL,
 )
 
 

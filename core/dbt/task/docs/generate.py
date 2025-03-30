@@ -1,55 +1,50 @@
 import os
 import shutil
 from dataclasses import replace
-from datetime import timezone, datetime
-from typing import Dict, List, Any, Optional, Tuple, Set, Iterable
-import agate
+from datetime import datetime, timezone
 from itertools import chain
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
-import dbt_common.utils.formatting
-from dbt_common.dataclass_schema import ValidationError
-from dbt_common.clients.system import load_file_contents
+import agate
 
-from dbt.task.docs import DOCS_INDEX_FILE_PATH
-from dbt.task.compile import CompileTask
-
-from dbt.adapters.factory import get_adapter
-
-from dbt.graph.graph import UniqueId
-from dbt.contracts.graph.nodes import ResultNode
-from dbt.contracts.graph.manifest import Manifest
-from dbt.artifacts.schemas.results import NodeStatus
-from dbt.artifacts.schemas.catalog import (
-    TableMetadata,
-    CatalogTable,
-    CatalogResults,
-    PrimitiveDict,
-    CatalogKey,
-    StatsItem,
-    StatsDict,
-    ColumnMetadata,
-    CatalogArtifact,
-)
-from dbt_common.exceptions import DbtInternalError
-from dbt.exceptions import AmbiguousCatalogMatchError
-from dbt.graph import ResourceTypeSelector
-from dbt.node_types import EXECUTABLE_NODE_TYPES, NodeType
-from dbt_common.events.functions import fire_event
-from dbt.adapters.events.types import (
-    WriteCatalogFailure,
-    CatalogWritten,
-    CannotGenerateDocs,
-    BuildingCatalog,
-)
-from dbt.parser.manifest import write_manifest
-import dbt.utils
 import dbt.compilation
 import dbt.exceptions
-from dbt.constants import (
-    MANIFEST_FILE_NAME,
+import dbt.utils
+import dbt_common.utils.formatting
+from dbt.adapters.events.types import (
+    BuildingCatalog,
+    CannotGenerateDocs,
+    CatalogWritten,
+    WriteCatalogFailure,
 )
-
-CATALOG_FILENAME = "catalog.json"
+from dbt.adapters.factory import get_adapter
+from dbt.artifacts.schemas.catalog import (
+    CatalogArtifact,
+    CatalogKey,
+    CatalogResults,
+    CatalogTable,
+    ColumnMetadata,
+    PrimitiveDict,
+    StatsDict,
+    StatsItem,
+    TableMetadata,
+)
+from dbt.artifacts.schemas.results import NodeStatus
+from dbt.constants import CATALOG_FILENAME, MANIFEST_FILE_NAME
+from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.nodes import ResultNode
+from dbt.events.types import ArtifactWritten
+from dbt.exceptions import AmbiguousCatalogMatchError
+from dbt.graph import ResourceTypeSelector
+from dbt.graph.graph import UniqueId
+from dbt.node_types import EXECUTABLE_NODE_TYPES, NodeType
+from dbt.parser.manifest import write_manifest
+from dbt.task.compile import CompileTask
+from dbt.task.docs import DOCS_INDEX_FILE_PATH
+from dbt_common.clients.system import load_file_contents
+from dbt_common.dataclass_schema import ValidationError
+from dbt_common.events.functions import fire_event
+from dbt_common.exceptions import DbtInternalError
 
 
 def get_stripped_prefix(source: Dict[str, Any], prefix: str) -> Dict[str, Any]:
@@ -313,6 +308,10 @@ class GenerateTask(CompileTask):
 
         catalog_path = os.path.join(self.config.project_target_path, CATALOG_FILENAME)
         results.write(catalog_path)
+        fire_event(
+            ArtifactWritten(artifact_type=results.__class__.__name__, artifact_path=catalog_path)
+        )
+
         if self.args.compile:
             write_manifest(self.manifest, self.config.project_target_path)
 

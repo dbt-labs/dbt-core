@@ -1,7 +1,7 @@
-from dbt.artifacts.schemas.catalog import CatalogArtifact
-from dbt.tests.util import run_dbt
 import pytest
 
+from dbt.artifacts.schemas.catalog import CatalogArtifact
+from dbt.tests.util import run_dbt
 from tests.functional.adapter.catalog import files
 
 

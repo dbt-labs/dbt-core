@@ -1,38 +1,35 @@
 import copy
 import os
-from pathlib import Path
 import re
 import shutil
+from pathlib import Path
 from typing import Optional
 
-import yaml
 import click
+import yaml
 
 import dbt.config
 import dbt_common.clients.system
+from dbt.adapters.factory import get_include_paths, load_plugin
 from dbt.config.profile import read_profile
-from dbt_common.exceptions import DbtRuntimeError
-from dbt.flags import get_flags
-from dbt.version import _get_adapter_plugin_names
-from dbt.adapters.factory import load_plugin, get_include_paths
-
 from dbt.contracts.util import Identifier as ProjectName
-
-from dbt_common.events.functions import fire_event
 from dbt.events.types import (
-    StarterProjectPath,
     ConfigFolderDirectory,
+    InvalidProfileTemplateYAML,
     NoSampleProfileFound,
+    ProfileWrittenWithProjectTemplateYAML,
     ProfileWrittenWithSample,
     ProfileWrittenWithTargetTemplateYAML,
-    ProfileWrittenWithProjectTemplateYAML,
-    SettingUpProfile,
-    InvalidProfileTemplateYAML,
-    ProjectNameAlreadyExists,
     ProjectCreated,
+    ProjectNameAlreadyExists,
+    SettingUpProfile,
+    StarterProjectPath,
 )
-
+from dbt.flags import get_flags
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
+from dbt.version import _get_adapter_plugin_names
+from dbt_common.events.functions import fire_event
+from dbt_common.exceptions import DbtRuntimeError
 
 DOCS_URL = "https://docs.getdbt.com/docs/configure-your-profile"
 SLACK_URL = "https://community.getdbt.com/"
@@ -55,7 +52,9 @@ click_type_mapping = {
 class InitTask(BaseTask):
     def copy_starter_repo(self, project_name: str) -> None:
         # Lazy import to avoid ModuleNotFoundError
-        from dbt.include.starter_project import PACKAGE_PATH as starter_project_directory
+        from dbt.include.starter_project import (
+            PACKAGE_PATH as starter_project_directory,
+        )
 
         fire_event(StarterProjectPath(dir=starter_project_directory))
         shutil.copytree(

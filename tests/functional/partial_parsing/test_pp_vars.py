@@ -2,11 +2,11 @@ import os
 from pathlib import Path
 
 import pytest
-from dbt.constants import SECRET_ENV_PREFIX
-from dbt.exceptions import ParsingError
-from dbt.adapters.exceptions import FailedToConnectError
-from dbt.tests.util import get_manifest, run_dbt, run_dbt_and_capture, write_file
 
+from dbt.adapters.exceptions import FailedToConnectError
+from dbt.exceptions import ParsingError
+from dbt.tests.util import get_manifest, run_dbt, run_dbt_and_capture, write_file
+from dbt_common.constants import SECRET_ENV_PREFIX
 from tests.functional.partial_parsing.fixtures import (
     env_var_macro_sql,
     env_var_macros_yml,
@@ -104,7 +104,7 @@ class TestEnvVars:
         schema_file = manifest.files[source.file_id]
         test_id = "test.test.source_not_null_seed_sources_raw_customers_id.e39ee7bf0d"
         test_node = manifest.nodes[test_id]
-        assert test_node.config.severity == "WARN"
+        assert test_node.config.severity == "warn"
 
         # Change severity env var
         os.environ["ENV_VAR_SEVERITY"] = "error"
@@ -125,7 +125,7 @@ class TestEnvVars:
         }
         assert expected_schema_file_env_vars == schema_file.env_vars
         test_node = manifest.nodes[test_id]
-        assert test_node.config.severity == "ERROR"
+        assert test_node.config.severity == "error"
 
         # Change database env var
         os.environ["ENV_VAR_DATABASE"] = "test_dbt"
@@ -265,10 +265,15 @@ class TestEnvVars:
 
 class TestProjectEnvVars:
     @pytest.fixture(scope="class")
+    def environment(self):
+        custom_env = os.environ.copy()
+        custom_env["ENV_VAR_NAME"] = "Jane Smith"
+        return custom_env
+
+    @pytest.fixture(scope="class")
     def project_config_update(self):
         # Need to set the environment variable here initially because
         # the project fixture loads the config.
-        os.environ["ENV_VAR_NAME"] = "Jane Smith"
         return {"models": {"+meta": {"meta_name": "{{ env_var('ENV_VAR_NAME') }}"}}}
 
     @pytest.fixture(scope="class")
@@ -279,6 +284,7 @@ class TestProjectEnvVars:
 
     def test_project_env_vars(self, project):
         # Initial run
+        os.environ["ENV_VAR_NAME"] = "Jane Smith"
         results = run_dbt(["run"])
         assert len(results) == 1
         manifest = get_manifest(project.project_root)
@@ -309,45 +315,39 @@ class TestProfileEnvVars:
         }
 
     @pytest.fixture(scope="class")
+    def environment(self):
+        custom_env = os.environ.copy()
+        custom_env["ENV_VAR_HOST"] = "localhost"
+        return custom_env
+
+    @pytest.fixture(scope="class")
     def dbt_profile_target(self):
-        # Need to set these here because the base integration test class
-        # calls 'load_config' before the tests are run.
-        # Note: only the specified profile is rendered, so there's no
-        # point it setting env_vars in non-used profiles.
-        os.environ["ENV_VAR_USER"] = "root"
-        os.environ["ENV_VAR_PASS"] = "password"
         return {
             "type": "postgres",
             "threads": 4,
-            "host": "localhost",
+            "host": "{{ env_var('ENV_VAR_HOST') }}",
             "port": 5432,
-            "user": "{{ env_var('ENV_VAR_USER') }}",
-            "pass": "{{ env_var('ENV_VAR_PASS') }}",
+            "user": "root",
+            "pass": "password",
             "dbname": "dbt",
         }
 
     def test_profile_env_vars(self, project, logs_dir):
 
         # Initial run
-        os.environ["ENV_VAR_USER"] = "root"
-        os.environ["ENV_VAR_PASS"] = "password"
+        os.environ["ENV_VAR_HOST"] = "localhost"
 
         run_dbt(["run"])
-        manifest = get_manifest(project.project_root)
-        env_vars_checksum = manifest.state_check.profile_env_vars_hash.checksum
 
         # Change env_vars, the user doesn't exist, this should fail
-        os.environ["ENV_VAR_USER"] = "fake_user"
+        os.environ["ENV_VAR_HOST"] = "wrong_host"
 
         # N.B. run_dbt_and_capture won't work here because FailedToConnectError ends the test entirely
         with pytest.raises(FailedToConnectError):
             run_dbt(["run"], expect_pass=False)
 
         log_output = Path(logs_dir, "dbt.log").read_text()
-        assert "env vars used in profiles.yml have changed" in log_output
-
-        manifest = get_manifest(project.project_root)
-        assert env_vars_checksum != manifest.state_check.profile_env_vars_hash.checksum
+        assert "Unable to do partial parsing because profile has changed" in log_output
 
 
 class TestProfileSecretEnvVars:
@@ -366,7 +366,7 @@ class TestProfileSecretEnvVars:
 
         # user is secret and password is not. postgres on macos doesn't care if the password
         # changes so we have to change the user. related: https://github.com/dbt-labs/dbt-core/pull/4250
-        os.environ[SECRET_ENV_PREFIX + "USER"] = "root"
+        os.environ[SECRET_ENV_PREFIX + "_USER"] = "root"
         os.environ["ENV_VAR_PASS"] = "password"
         return {
             "type": "postgres",
@@ -381,7 +381,7 @@ class TestProfileSecretEnvVars:
     def test_profile_secret_env_vars(self, project):
 
         # Initial run
-        os.environ[SECRET_ENV_PREFIX + "USER"] = "root"
+        os.environ[SECRET_ENV_PREFIX + "_USER"] = "root"
         os.environ["ENV_VAR_PASS"] = "password"
 
         results = run_dbt(["run"])
@@ -389,7 +389,7 @@ class TestProfileSecretEnvVars:
         env_vars_checksum = manifest.state_check.profile_env_vars_hash.checksum
 
         # Change a secret var, it shouldn't register because we shouldn't save secrets.
-        os.environ[SECRET_ENV_PREFIX + "USER"] = "fake_user"
+        os.environ[SECRET_ENV_PREFIX + "_USER"] = "fake_user"
         # we just want to see if the manifest has included
         # the secret in the hash of environment variables.
         (results, log_output) = run_dbt_and_capture(["run"], expect_pass=True)

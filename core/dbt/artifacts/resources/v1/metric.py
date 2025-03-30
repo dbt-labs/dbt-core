@@ -1,6 +1,7 @@
 import time
-
 from dataclasses import dataclass, field
+from typing import Any, Dict, List, Literal, Optional
+
 from dbt.artifacts.resources.base import GraphResource
 from dbt.artifacts.resources.types import NodeType
 from dbt.artifacts.resources.v1.components import DependsOn, RefArgs
@@ -14,10 +15,9 @@ from dbt_semantic_interfaces.references import MeasureReference, MetricReference
 from dbt_semantic_interfaces.type_enums import (
     ConversionCalculationType,
     MetricType,
+    PeriodAggregation,
     TimeGranularity,
 )
-from typing import Any, Dict, List, Literal, Optional
-
 
 """
 The following classes are dataclasses which are used to construct the Metric
@@ -46,7 +46,15 @@ class MetricInputMeasure(dbtClassMixin):
 @dataclass
 class MetricTimeWindow(dbtClassMixin):
     count: int
-    granularity: TimeGranularity
+    granularity: str
+
+    @property
+    def window_string(self) -> str:  # noqa: D
+        return f"{self.count} {self.granularity}"
+
+    @property
+    def is_standard_granularity(self) -> bool:  # noqa: D
+        return self.granularity.casefold() in {item.value.casefold() for item in TimeGranularity}
 
 
 @dataclass
@@ -55,7 +63,7 @@ class MetricInput(dbtClassMixin):
     filter: Optional[WhereFilterIntersection] = None
     alias: Optional[str] = None
     offset_window: Optional[MetricTimeWindow] = None
-    offset_to_grain: Optional[TimeGranularity] = None
+    offset_to_grain: Optional[str] = None
 
     def as_reference(self) -> MetricReference:
         return MetricReference(element_name=self.name)
@@ -81,6 +89,13 @@ class ConversionTypeParams(dbtClassMixin):
 
 
 @dataclass
+class CumulativeTypeParams(dbtClassMixin):
+    window: Optional[MetricTimeWindow] = None
+    grain_to_date: Optional[str] = None
+    period_agg: PeriodAggregation = PeriodAggregation.FIRST
+
+
+@dataclass
 class MetricTypeParams(dbtClassMixin):
     measure: Optional[MetricInputMeasure] = None
     input_measures: List[MetricInputMeasure] = field(default_factory=list)
@@ -88,9 +103,12 @@ class MetricTypeParams(dbtClassMixin):
     denominator: Optional[MetricInput] = None
     expr: Optional[str] = None
     window: Optional[MetricTimeWindow] = None
-    grain_to_date: Optional[TimeGranularity] = None
+    grain_to_date: Optional[TimeGranularity] = (
+        None  # legacy, use cumulative_type_params.grain_to_date
+    )
     metrics: Optional[List[MetricInput]] = None
     conversion_type_params: Optional[ConversionTypeParams] = None
+    cumulative_type_params: Optional[CumulativeTypeParams] = None
 
 
 @dataclass
@@ -113,6 +131,7 @@ class Metric(GraphResource):
     type_params: MetricTypeParams
     filter: Optional[WhereFilterIntersection] = None
     metadata: Optional[SourceFileMetadata] = None
+    time_granularity: Optional[str] = None
     resource_type: Literal[NodeType.Metric]
     meta: Dict[str, Any] = field(default_factory=dict, metadata=MergeBehavior.Update.meta())
     tags: List[str] = field(default_factory=list)

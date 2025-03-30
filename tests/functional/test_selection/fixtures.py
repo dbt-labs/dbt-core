@@ -1,6 +1,4 @@
 import pytest
-from dbt.tests.fixtures.project import write_project_files
-
 
 tests__cf_a_b_sql = """
 select * from {{ ref('model_a') }}
@@ -84,13 +82,3 @@ def models():
         "model_b.sql": models__model_b_sql,
         "model_a.sql": models__model_a_sql,
     }
-
-
-@pytest.fixture(scope="class")
-def project_files(
-    project_root,
-    tests,
-    models,
-):
-    write_project_files(project_root, "tests", tests)
-    write_project_files(project_root, "models", models)

@@ -1,9 +1,9 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 
 from dbt.artifacts.resources import NodeVersion
-from dbt.node_types import NodeType, AccessType
+from dbt.node_types import AccessType, NodeType
 
 
 @dataclass

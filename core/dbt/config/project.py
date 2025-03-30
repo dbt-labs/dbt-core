@@ -1,58 +1,49 @@
+import os
 from copy import deepcopy
 from dataclasses import dataclass, field
 from itertools import chain
-from typing import (
-    List,
-    Dict,
-    Any,
-    Optional,
-    TypeVar,
-    Union,
-    Mapping,
-)
+from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union
+
 from typing_extensions import Protocol, runtime_checkable
 
-import os
-
-from dbt.flags import get_flags
 from dbt import deprecations
-from dbt.constants import (
-    DEPENDENCIES_FILE_NAME,
-    PACKAGES_FILE_NAME,
-    PACKAGE_LOCK_HASH_KEY,
-    DBT_PROJECT_FILE_NAME,
-)
-from dbt_common.clients.system import path_exists, load_file_contents
-from dbt.clients.yaml_helper import load_yaml_text
 from dbt.adapters.contracts.connection import QueryComment
+from dbt.clients.yaml_helper import load_yaml_text
+from dbt.config.selectors import SelectorDict
+from dbt.config.utils import normalize_warn_error_options
+from dbt.constants import (
+    DBT_PROJECT_FILE_NAME,
+    DEPENDENCIES_FILE_NAME,
+    PACKAGE_LOCK_HASH_KEY,
+    PACKAGES_FILE_NAME,
+)
+from dbt.contracts.project import PackageConfig
+from dbt.contracts.project import Project as ProjectContract
+from dbt.contracts.project import ProjectFlags, ProjectPackageMetadata, SemverString
 from dbt.exceptions import (
+    DbtExclusivePropertyUseError,
     DbtProjectError,
+    DbtRuntimeError,
     ProjectContractBrokenError,
     ProjectContractError,
-    DbtRuntimeError,
 )
-from dbt_common.exceptions import SemverError
+from dbt.flags import get_flags
 from dbt.graph import SelectionSpec
+from dbt.node_types import NodeType
+from dbt.utils import MultiDict, coerce_dict_str, md5
+from dbt.version import get_installed_version
+from dbt_common.clients.system import load_file_contents, path_exists
+from dbt_common.dataclass_schema import ValidationError
+from dbt_common.exceptions import SemverError
 from dbt_common.helper_types import NoValue
 from dbt_common.semver import VersionSpecifier, versions_compatible
-from dbt.version import get_installed_version
-from dbt.utils import MultiDict, md5, coerce_dict_str
-from dbt.node_types import NodeType
-from dbt.config.selectors import SelectorDict
-from dbt.contracts.project import (
-    Project as ProjectContract,
-    SemverString,
-    ProjectFlags,
-)
-from dbt.contracts.project import PackageConfig, ProjectPackageMetadata
-from dbt_common.dataclass_schema import ValidationError
+
 from .renderer import DbtProjectYamlRenderer, PackageRenderer
 from .selectors import (
+    SelectorConfig,
     selector_config_from_data,
     selector_data_from_root,
-    SelectorConfig,
 )
-
 
 INVALID_VERSION_ERROR = """\
 This version of dbt is not supported with the '{package}' package.
@@ -167,14 +158,8 @@ def _parse_versions(versions: Union[List[str], str]) -> List[VersionSpecifier]:
     return [VersionSpecifier.from_version_string(v) for v in versions]
 
 
-def _all_source_paths(
-    model_paths: List[str],
-    seed_paths: List[str],
-    snapshot_paths: List[str],
-    analysis_paths: List[str],
-    macro_paths: List[str],
-) -> List[str]:
-    paths = chain(model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths)
+def _all_source_paths(*args: List[str]) -> List[str]:
+    paths = chain(*args)
     # Strip trailing slashes since the path is the same even though the name is not
     stripped_paths = map(lambda s: s.rstrip("/"), paths)
     return list(set(stripped_paths))
@@ -213,6 +198,9 @@ def load_raw_project(project_root: str) -> Dict[str, Any]:
 
     if not isinstance(project_dict, dict):
         raise DbtProjectError(f"{DBT_PROJECT_FILE_NAME} does not parse to a dictionary")
+
+    if "tests" in project_dict and "data_tests" not in project_dict:
+        project_dict["data_tests"] = project_dict.pop("tests")
 
     return project_dict
 
@@ -418,7 +406,7 @@ class PartialProject(RenderComponents):
         snapshot_paths: List[str] = value_or(cfg.snapshot_paths, ["snapshots"])
 
         all_source_paths: List[str] = _all_source_paths(
-            model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths
+            model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths, test_paths
         )
 
         docs_paths: List[str] = value_or(cfg.docs_paths, all_source_paths)
@@ -489,6 +477,7 @@ class PartialProject(RenderComponents):
                 rendered.selectors_dict["selectors"]
             )
         dbt_cloud = cfg.dbt_cloud
+        flags: Dict[str, Any] = cfg.flags
 
         project = Project(
             project_name=name,
@@ -533,6 +522,7 @@ class PartialProject(RenderComponents):
             project_env_vars=project_env_vars,
             restrict_access=cfg.restrict_access,
             dbt_cloud=dbt_cloud,
+            flags=flags,
         )
         # sanity check - this means an internal issue
         project.validate()
@@ -576,11 +566,6 @@ class PartialProject(RenderComponents):
             packages_specified_path,
         ) = package_and_project_data_from_root(project_root)
         selectors_dict = selector_data_from_root(project_root)
-
-        if "flags" in project_dict:
-            # We don't want to include "flags" in the Project,
-            # it goes in ProjectFlags
-            project_dict.pop("flags")
 
         return cls.from_dicts(
             project_root=project_root,
@@ -654,6 +639,7 @@ class Project:
     project_env_vars: Dict[str, Any]
     restrict_access: bool
     dbt_cloud: Dict[str, Any]
+    flags: Dict[str, Any]
 
     @property
     def all_source_paths(self) -> List[str]:
@@ -663,6 +649,7 @@ class Project:
             self.snapshot_paths,
             self.analysis_paths,
             self.macro_paths,
+            self.test_paths,
         )
 
     @property
@@ -733,6 +720,7 @@ class Project:
                 "require-dbt-version": [v.to_version_string() for v in self.dbt_version],
                 "restrict-access": self.restrict_access,
                 "dbt-cloud": self.dbt_cloud,
+                "flags": self.flags,
             }
         )
         if self.query_comment:
@@ -830,15 +818,21 @@ def read_project_flags(project_dir: str, profiles_dir: str) -> ProjectFlags:
 
         if profile_project_flags:
             # This can't use WARN_ERROR or WARN_ERROR_OPTIONS because they're in
-            # the config that we're loading. Uses special "warn" method.
-            deprecations.warn("project-flags-moved")
+            # the config that we're loading. Uses special "buffer" method and fired after flags are initialized in preflight.
+            deprecations.buffer("project-flags-moved")
             project_flags = profile_project_flags
 
         if project_flags is not None:
+            # handle collapsing `include` and `error` as well as collapsing `exclude` and `warn`
+            # for warn_error_options
+            warn_error_options = project_flags.get("warn_error_options", {})
+            normalize_warn_error_options(warn_error_options)
+
             ProjectFlags.validate(project_flags)
             return ProjectFlags.from_dict(project_flags)
-    except (DbtProjectError) as exc:
-        # We don't want to eat the DbtProjectError for UserConfig to ProjectFlags
+    except (DbtProjectError, DbtExclusivePropertyUseError) as exc:
+        # We don't want to eat the DbtProjectError for UserConfig to ProjectFlags or
+        # DbtConfigError for warn_error_options munging
         raise exc
     except (DbtRuntimeError, ValidationError):
         pass

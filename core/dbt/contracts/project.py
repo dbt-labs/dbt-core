@@ -1,20 +1,20 @@
-from dbt import deprecations
-from dbt.contracts.util import list_str, Identifier
+from dataclasses import dataclass, field
+from typing import Any, ClassVar, Dict, List, Optional, Union
+
+from mashumaro.jsonschema.annotations import Pattern
+from mashumaro.types import SerializableType
+from typing_extensions import Annotated
+
 from dbt.adapters.contracts.connection import QueryComment
-from dbt_common.helper_types import NoValue
+from dbt.contracts.util import Identifier, list_str
 from dbt_common.contracts.util import Mergeable
 from dbt_common.dataclass_schema import (
-    dbtClassMixin,
-    ValidationError,
     ExtensibleDbtClassMixin,
+    ValidationError,
+    dbtClassMixin,
     dbtMashConfig,
 )
-from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Union, Any, ClassVar
-from typing_extensions import Annotated
-from mashumaro.types import SerializableType
-from mashumaro.jsonschema.annotations import Pattern
-
+from dbt_common.helper_types import NoValue
 
 DEFAULT_SEND_ANONYMOUS_USAGE_STATS = True
 
@@ -78,6 +78,16 @@ class GitPackage(Package):
 
 
 @dataclass
+class PrivatePackage(Package):
+    private: str
+    provider: Optional[str] = None
+    revision: Optional[RawVersion] = None
+    warn_unpinned: Optional[bool] = field(default=None, metadata={"alias": "warn-unpinned"})
+    subdirectory: Optional[str] = None
+    unrendered: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class RegistryPackage(Package):
     package: str
     version: Union[RawVersion, List[RawVersion]]
@@ -91,7 +101,7 @@ class RegistryPackage(Package):
             return [str(self.version)]
 
 
-PackageSpec = Union[LocalPackage, TarballPackage, GitPackage, RegistryPackage]
+PackageSpec = Union[LocalPackage, TarballPackage, GitPackage, RegistryPackage, PrivatePackage]
 
 
 @dataclass
@@ -101,13 +111,26 @@ class PackageConfig(dbtClassMixin):
     @classmethod
     def validate(cls, data):
         for package in data.get("packages", data):
+            # This can happen when the target is a variable that is not filled and results in hangs
+            if isinstance(package, dict):
+                if package.get("package") == "":
+                    raise ValidationError(
+                        "A hub package is missing the value. It is a required property."
+                    )
+                if package.get("local") == "":
+                    raise ValidationError(
+                        "A local package is missing the value. It is a required property."
+                    )
+                if package.get("git") == "":
+                    raise ValidationError(
+                        "A git package is missing the value. It is a required property."
+                    )
             if isinstance(package, dict) and package.get("package"):
                 if not package["version"]:
                     raise ValidationError(
                         f"{package['package']} is missing the version. When installing from the Hub "
                         "package index, version is a required property"
                     )
-
                 if "/" not in package["package"]:
                     raise ValidationError(
                         f"{package['package']} was not found in the package index. Packages on the index "
@@ -235,6 +258,7 @@ class Project(dbtClassMixin):
     query_comment: Optional[Union[QueryComment, NoValue, str]] = field(default_factory=NoValue)
     restrict_access: bool = False
     dbt_cloud: Optional[Dict[str, Any]] = None
+    flags: Dict[str, Any] = field(default_factory=dict)
 
     class Config(dbtMashConfig):
         # These tell mashumaro to use aliases for jsonschema and for "from_dict"
@@ -288,10 +312,6 @@ class Project(dbtClassMixin):
             raise ValidationError(
                 "Invalid project config: cannot have both 'tests' and 'data_tests' defined"
             )
-        if "tests" in data:
-            deprecations.warn(
-                "project-test-config", deprecated_path="tests", exp_path="data_tests"
-            )
 
 
 @dataclass
@@ -308,7 +328,6 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     populate_cache: Optional[bool] = None
     printer_width: Optional[int] = None
     send_anonymous_usage_stats: bool = DEFAULT_SEND_ANONYMOUS_USAGE_STATS
-    source_freshness_run_project_hooks: bool = False
     static_parser: Optional[bool] = None
     use_colors: Optional[bool] = None
     use_colors_file: Optional[bool] = None
@@ -318,9 +337,32 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     warn_error_options: Optional[Dict[str, Union[str, List[str]]]] = None
     write_json: Optional[bool] = None
 
+    # legacy behaviors - https://github.com/dbt-labs/dbt-core/blob/main/docs/guides/behavior-change-flags.md
+    require_batched_execution_for_custom_microbatch_strategy: bool = False
+    require_explicit_package_overrides_for_builtin_materializations: bool = True
+    require_resource_names_without_spaces: bool = False
+    source_freshness_run_project_hooks: bool = False
+    skip_nodes_if_on_run_start_fails: bool = False
+    state_modified_compare_more_unrendered_values: bool = False
+    state_modified_compare_vars: bool = False
+    require_yaml_configuration_for_mf_time_spines: bool = False
+    require_nested_cumulative_type_params: bool = False
+    validate_macro_args: bool = False
+
     @property
     def project_only_flags(self) -> Dict[str, Any]:
-        return {"source_freshness_run_project_hooks": self.source_freshness_run_project_hooks}
+        return {
+            "require_batched_execution_for_custom_microbatch_strategy": self.require_batched_execution_for_custom_microbatch_strategy,
+            "require_explicit_package_overrides_for_builtin_materializations": self.require_explicit_package_overrides_for_builtin_materializations,
+            "require_resource_names_without_spaces": self.require_resource_names_without_spaces,
+            "source_freshness_run_project_hooks": self.source_freshness_run_project_hooks,
+            "skip_nodes_if_on_run_start_fails": self.skip_nodes_if_on_run_start_fails,
+            "state_modified_compare_more_unrendered_values": self.state_modified_compare_more_unrendered_values,
+            "state_modified_compare_vars": self.state_modified_compare_vars,
+            "require_yaml_configuration_for_mf_time_spines": self.require_yaml_configuration_for_mf_time_spines,
+            "require_nested_cumulative_type_params": self.require_nested_cumulative_type_params,
+            "validate_macro_args": self.validate_macro_args,
+        }
 
 
 @dataclass

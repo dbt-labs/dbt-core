@@ -1,23 +1,18 @@
 import dataclasses
+import functools
 from datetime import datetime
-from typing import ClassVar, Type, TypeVar, Dict, Any, Optional
-
-from dbt_common.clients.system import write_json, read_json
-from dbt.exceptions import (
-    DbtInternalError,
-    DbtRuntimeError,
-    IncompatibleSchemaError,
-)
-from dbt.version import __version__
-
-from dbt_common.events.functions import get_metadata_vars
-from dbt_common.invocation import get_invocation_id
-from dbt_common.dataclass_schema import dbtClassMixin
+from typing import Any, ClassVar, Dict, Optional, Type, TypeVar
 
 from mashumaro.jsonschema import build_json_schema
 from mashumaro.jsonschema.dialects import DRAFT_2020_12
-import functools
 
+from dbt.artifacts.exceptions import IncompatibleSchemaError
+from dbt.version import __version__
+from dbt_common.clients.system import read_json, write_json
+from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.events.functions import get_metadata_vars
+from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
+from dbt_common.invocation import get_invocation_id, get_invocation_started_at
 
 BASE_SCHEMAS_URL = "https://schemas.getdbt.com/"
 SCHEMA_PATH = "dbt/{name}/v{version}.json"
@@ -38,7 +33,7 @@ class SchemaVersion:
 
 class Writable:
     def write(self, path: str):
-        write_json(path, self.to_dict(omit_none=False))  # type: ignore
+        write_json(path, self.to_dict(omit_none=False, context={"artifact": True}))  # type: ignore
 
 
 class Readable:
@@ -62,10 +57,13 @@ class BaseArtifactMetadata(dbtClassMixin):
     dbt_version: str = __version__
     generated_at: datetime = dataclasses.field(default_factory=datetime.now)
     invocation_id: Optional[str] = dataclasses.field(default_factory=get_invocation_id)
+    invocation_started_at: Optional[datetime] = dataclasses.field(
+        default_factory=get_invocation_started_at
+    )
     env: Dict[str, str] = dataclasses.field(default_factory=get_metadata_vars)
 
-    def __post_serialize__(self, dct):
-        dct = super().__post_serialize__(dct)
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
         if dct["generated_at"] and dct["generated_at"].endswith("+00:00"):
             dct["generated_at"] = dct["generated_at"].replace("+00:00", "") + "Z"
         return dct
@@ -82,8 +80,11 @@ class BaseArtifactMetadata(dbtClassMixin):
 #   remote-compile-result
 #   remote-execution-result
 #   remote-run-result
+S = TypeVar("S", bound="VersionedSchema")
+
+
 def schema_version(name: str, version: int):
-    def inner(cls: Type[VersionedSchema]):
+    def inner(cls: Type[S]):
         cls.dbt_schema_version = SchemaVersion(
             name=name,
             version=version,
@@ -93,7 +94,7 @@ def schema_version(name: str, version: int):
     return inner
 
 
-# This is used in the ArtifactMixin and RemoteResult classes
+# This is used in the ArtifactMixin and RemoteCompileResultMixin classes
 @dataclasses.dataclass
 class VersionedSchema(dbtClassMixin):
     dbt_schema_version: ClassVar[SchemaVersion]

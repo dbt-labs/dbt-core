@@ -1,12 +1,13 @@
 import pytest
-from dbt.tests.util import run_dbt, check_relations_equal, relation_from_name
+
 from dbt.artifacts.schemas.results import RunStatus
+from dbt.tests.util import check_relations_equal, relation_from_name, run_dbt
 from tests.functional.adapter.basic.files import (
-    seeds_base_csv,
-    seeds_added_csv,
-    schema_base_yml,
-    incremental_sql,
     incremental_not_schema_change_sql,
+    incremental_sql,
+    schema_base_yml,
+    seeds_added_csv,
+    seeds_base_csv,
 )
 
 

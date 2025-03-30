@@ -1,22 +1,21 @@
 # special support for CLI argument parsing.
 # TODO: Remove as part of https://github.com/dbt-labs/dbt-core/issues/6701
-from dbt.flags import get_flags
-from copy import deepcopy
 import itertools
-from dbt.clients.yaml_helper import yaml, Loader, Dumper  # noqa: F401
+from copy import deepcopy
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-from typing import Dict, List, Optional, Tuple, Any, Union
-
+from dbt.clients.yaml_helper import Dumper, Loader, yaml  # noqa: F401
 from dbt.contracts.selection import SelectorDefinition, SelectorFile
+from dbt.flags import get_flags
 from dbt_common.exceptions import DbtInternalError, DbtValidationError
 
 from .selector_spec import (
-    SelectionUnion,
-    SelectionSpec,
-    SelectionIntersection,
-    SelectionDifference,
-    SelectionCriteria,
     IndirectSelection,
+    SelectionCriteria,
+    SelectionDifference,
+    SelectionIntersection,
+    SelectionSpec,
+    SelectionUnion,
 )
 
 INTERSECTION_DELIMITER = ","
@@ -28,7 +27,6 @@ DEFAULT_EXCLUDES: List[str] = []
 def parse_union(
     components: List[str],
     expect_exists: bool,
-    indirect_selection: IndirectSelection = IndirectSelection.Eager,
 ) -> SelectionUnion:
     # turn ['a b', 'c'] -> ['a', 'b', 'c']
     raw_specs = itertools.chain.from_iterable(r.split(" ") for r in components)
@@ -37,7 +35,7 @@ def parse_union(
     # ['a', 'b', 'c,d'] -> union('a', 'b', intersection('c', 'd'))
     for raw_spec in raw_specs:
         intersection_components: List[SelectionSpec] = [
-            SelectionCriteria.from_single_spec(part, indirect_selection=indirect_selection)
+            SelectionCriteria.from_single_spec(part)
             for part in raw_spec.split(INTERSECTION_DELIMITER)
         ]
         union_components.append(
@@ -56,41 +54,25 @@ def parse_union(
     )
 
 
-def parse_union_from_default(
-    raw: Optional[List[str]],
-    default: List[str],
-    indirect_selection: IndirectSelection = IndirectSelection.Eager,
-) -> SelectionUnion:
+def parse_union_from_default(raw: Optional[List[str]], default: List[str]) -> SelectionUnion:
     components: List[str]
     expect_exists: bool
     if raw is None:
-        return parse_union(
-            components=default, expect_exists=False, indirect_selection=indirect_selection
-        )
+        return parse_union(components=default, expect_exists=False)
     else:
-        return parse_union(
-            components=raw, expect_exists=True, indirect_selection=indirect_selection
-        )
+        return parse_union(components=raw, expect_exists=True)
 
 
 def parse_difference(
-    include: Optional[List[str]], exclude: Optional[List[str]], indirect_selection: Any
+    include: Optional[List[str]], exclude: Optional[List[str]]
 ) -> SelectionDifference:
 
     if include == ():
         include = None
 
-    included = parse_union_from_default(
-        include, DEFAULT_INCLUDES, indirect_selection=IndirectSelection(indirect_selection)
-    )
-    flags = get_flags()
-    excluded = parse_union_from_default(
-        exclude, DEFAULT_EXCLUDES, indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION)
-    )
-    return SelectionDifference(
-        components=[included, excluded],
-        indirect_selection=IndirectSelection(flags.INDIRECT_SELECTION),
-    )
+    included = parse_union_from_default(include, DEFAULT_INCLUDES)
+    excluded = parse_union_from_default(exclude, DEFAULT_EXCLUDES)
+    return SelectionDifference(components=[included, excluded])
 
 
 RawDefinition = Union[str, Dict[str, Any]]

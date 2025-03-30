@@ -150,7 +150,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.8"
+          python-version: "3.9"
 
       - name: Install dbt
         run: pip install dbt-postgres==${{ needs.set-variables.outputs.release_id }}
@@ -253,7 +253,7 @@ jobs:
           push: 'origin origin/${{ matrix.target-branch }}'
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           author: 'Github Build Bot <buildbot@fishtownanalytics.com>'
           base: ${{ matrix.base-branch }}

@@ -1,13 +1,10 @@
-import pytest
 import pathlib
-from dbt.tests.util import (
-    run_dbt,
-    get_manifest,
-    write_file,
-    rm_file,
-    read_file,
-)
+from typing import Dict
+
+import pytest
+
 from dbt.exceptions import DuplicateVersionedUnversionedError
+from dbt.tests.util import get_manifest, read_file, rm_file, run_dbt, write_file
 
 model_one_sql = """
 select 1 as fun
@@ -124,3 +121,39 @@ class TestVersionedModels:
         write_file(model_one_sql, project.project_root, "models", "model_one.sql")
         with pytest.raises(DuplicateVersionedUnversionedError):
             run_dbt(["parse"])
+
+
+model_unversioned_schema_yml = """
+models:
+    - name: model_one
+      description: "The first model"
+"""
+
+
+model_versioned_schema_yml = """
+models:
+    - name: model_one
+      description: "The first model"
+      latest_version: 1
+      versions:
+        - v: 1
+"""
+
+
+class TestAddingVersioningToModel:
+    @pytest.fixture(scope="class")
+    def models(self) -> Dict[str, str]:
+        return {
+            "model_one.sql": model_one_sql,
+            "model_one_downstream.sql": model_one_downstream_sql,
+            "schema.yml": model_unversioned_schema_yml,
+        }
+
+    def test_pp_newly_versioned_models(self, project) -> None:
+        results = run_dbt(["run"])
+        assert len(results) == 2
+
+        # update schema.yml block - model_one is now versioned
+        write_file(model_versioned_schema_yml, project.project_root, "models", "schema.yml")
+        results = run_dbt(["--partial-parse", "run"])
+        assert len(results) == 2

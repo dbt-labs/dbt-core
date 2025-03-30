@@ -1,5 +1,5 @@
+from dbt.tests.util import check_relations_equal, get_relation_columns, run_dbt
 from tests.functional.adapter.utils.base_utils import BaseUtils
-from dbt.tests.util import run_dbt, check_relations_equal, get_relation_columns
 
 
 class BaseArrayUtils(BaseUtils):

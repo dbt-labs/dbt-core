@@ -1,11 +1,12 @@
 import pytest
+
+from dbt.tests.util import relation_from_name, run_dbt
 from tests.functional.adapter.utils.base_utils import macros__equals_sql
 from tests.functional.adapter.utils.fixture_equals import (
-    SEEDS__DATA_EQUALS_CSV,
     MODELS__EQUAL_VALUES_SQL,
     MODELS__NOT_EQUAL_VALUES_SQL,
+    SEEDS__DATA_EQUALS_CSV,
 )
-from dbt.tests.util import run_dbt, relation_from_name
 
 
 class BaseEquals:

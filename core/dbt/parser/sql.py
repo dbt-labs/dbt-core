@@ -3,13 +3,13 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from dbt.contracts.graph.manifest import SourceFile
-from dbt.contracts.graph.nodes import SqlNode, Macro
+from dbt.contracts.graph.nodes import Macro, SqlNode
 from dbt.contracts.graph.unparsed import UnparsedMacro
-from dbt_common.exceptions import DbtInternalError
 from dbt.node_types import NodeType
 from dbt.parser.base import SimpleSQLParser
 from dbt.parser.macros import MacroParser
 from dbt.parser.search import FileBlock
+from dbt_common.exceptions import DbtInternalError
 
 
 @dataclass

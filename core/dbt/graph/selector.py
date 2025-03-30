@@ -1,22 +1,18 @@
-from typing import Set, List, Optional, Tuple
+from typing import List, Optional, Set, Tuple
+
+from dbt import selected_resources
+from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.nodes import GraphMemberNode
+from dbt.contracts.state import PreviousState
+from dbt.events.types import NoNodesForSelectionCriteria, SelectorReportInvalidSelector
+from dbt.exceptions import DbtInternalError, InvalidSelectorError
+from dbt.node_types import NodeType
+from dbt_common.events.functions import fire_event, warn_or_error
 
 from .graph import Graph, UniqueId
 from .queue import GraphQueue
 from .selector_methods import MethodManager
-from .selector_spec import SelectionCriteria, SelectionSpec, IndirectSelection
-
-from dbt_common.events.functions import fire_event, warn_or_error
-from dbt.events.types import SelectorReportInvalidSelector, NoNodesForSelectionCriteria
-from dbt.node_types import NodeType
-from dbt.exceptions import (
-    DbtInternalError,
-    InvalidSelectorError,
-)
-from dbt.contracts.graph.nodes import GraphMemberNode
-from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.state import PreviousState
-
-from dbt import selected_resources
+from .selector_spec import IndirectSelection, SelectionCriteria, SelectionSpec
 
 
 def get_package_names(nodes):
@@ -91,12 +87,15 @@ class NodeSelector(MethodManager):
             )
             return set(), set()
 
+        neighbors = self.collect_specified_neighbors(spec, collected)
+        selected = collected | neighbors
+
+        # if --indirect-selection EMPTY, do not expand to adjacent tests
         if spec.indirect_selection == IndirectSelection.Empty:
-            return collected, set()
+            return selected, set()
         else:
-            neighbors = self.collect_specified_neighbors(spec, collected)
             direct_nodes, indirect_nodes = self.expand_selection(
-                selected=(collected | neighbors), indirect_selection=spec.indirect_selection
+                selected=selected, indirect_selection=spec.indirect_selection
             )
             return direct_nodes, indirect_nodes
 
@@ -174,17 +173,24 @@ class NodeSelector(MethodManager):
             semantic_model = self.manifest.semantic_models[unique_id]
             return semantic_model.config.enabled
         elif unique_id in self.manifest.unit_tests:
-            return True
+            unit_test = self.manifest.unit_tests[unique_id]
+            return unit_test.config.enabled
         elif unique_id in self.manifest.saved_queries:
             saved_query = self.manifest.saved_queries[unique_id]
             return saved_query.config.enabled
-
-        node = self.manifest.nodes[unique_id]
-
-        if self.include_empty_nodes:
-            return node.config.enabled
+        elif unique_id in self.manifest.exposures:
+            exposure = self.manifest.exposures[unique_id]
+            return exposure.config.enabled
         else:
-            return not node.empty and node.config.enabled
+            node = self.manifest.nodes[unique_id]
+            return node.config.enabled
+
+    def _is_empty_node(self, unique_id: UniqueId) -> bool:
+        if unique_id in self.manifest.nodes:
+            node = self.manifest.nodes[unique_id]
+            return node.empty
+        else:
+            return False
 
     def node_is_match(self, node: GraphMemberNode) -> bool:
         """Determine if a node is a match for the selector. Non-match nodes
@@ -216,7 +222,12 @@ class NodeSelector(MethodManager):
         """Return the subset of selected nodes that is a match for this
         selector.
         """
-        return {unique_id for unique_id in selected if self._is_match(unique_id)}
+        return {
+            unique_id
+            for unique_id in selected
+            if self._is_match(unique_id)
+            and (self.include_empty_nodes or not self._is_empty_node(unique_id))
+        }
 
     def expand_selection(
         self,
@@ -323,18 +334,18 @@ class NodeSelector(MethodManager):
 
         return filtered_nodes
 
-    def get_graph_queue(self, spec: SelectionSpec) -> GraphQueue:
+    def get_graph_queue(self, spec: SelectionSpec, preserve_edges: bool = True) -> GraphQueue:
         """Returns a queue over nodes in the graph that tracks progress of
-        dependecies.
+        dependencies.
         """
-        # Filtering hapens in get_selected
+        # Filtering happens in get_selected
         selected_nodes = self.get_selected(spec)
         # Save to global variable
         selected_resources.set_selected_resources(selected_nodes)
         # Construct a new graph using the selected_nodes
         new_graph = self.full_graph.get_subset_graph(selected_nodes)
         # should we give a way here for consumers to mutate the graph?
-        return GraphQueue(new_graph.graph, self.manifest, selected_nodes)
+        return GraphQueue(new_graph.graph, self.manifest, selected_nodes, preserve_edges)
 
 
 class ResourceTypeSelector(NodeSelector):

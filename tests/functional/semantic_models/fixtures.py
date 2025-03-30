@@ -240,6 +240,12 @@ semantic_models:
         agg: sum
         agg_time_dimension: ds
         create_metric: true
+      - name: txn_revenue_with_label
+        label: "Transaction Revenue with label"
+        expr: revenue
+        agg: sum
+        agg_time_dimension: ds
+        create_metric: true
       - name: sum_of_things
         expr: 2
         agg: sum
@@ -318,4 +324,170 @@ final as (
 
 select *
 from final
+"""
+
+multi_sm_schema_yml = """
+models:
+  - name: fct_revenue
+    description: This is the model fct_revenue.
+
+semantic_models:
+  - name: revenue
+    description: This is the first semantic model.
+    model: ref('fct_revenue')
+
+    defaults:
+      agg_time_dimension: ds
+
+    measures:
+      - name: txn_revenue
+        expr: revenue
+        agg: sum
+        agg_time_dimension: ds
+        create_metric: true
+      - name: sum_of_things
+        expr: 2
+        agg: sum
+        agg_time_dimension: ds
+
+    dimensions:
+      - name: ds
+        type: time
+        expr: created_at
+        type_params:
+          time_granularity: day
+
+    entities:
+      - name: user
+        type: foreign
+        expr: user_id
+      - name: id
+        type: primary
+
+  - name: alt_revenue
+    description: This is the second revenue semantic model.
+    model: ref('fct_revenue')
+
+    defaults:
+      agg_time_dimension: ads
+
+    measures:
+      - name: alt_txn_revenue
+        expr: revenue
+        agg: sum
+        agg_time_dimension: ads
+        create_metric: true
+      - name: alt_sum_of_things
+        expr: 2
+        agg: sum
+        agg_time_dimension: ads
+
+    dimensions:
+      - name: ads
+        type: time
+        expr: created_at
+        type_params:
+          time_granularity: day
+
+    entities:
+      - name: user
+        type: foreign
+        expr: user_id
+      - name: id
+        type: primary
+
+metrics:
+  - name: simple_metric
+    label: Simple Metric
+    type: simple
+    type_params:
+      measure: sum_of_things
+"""
+
+semantic_model_dimensions_entities_measures_meta_config = """
+version: 2
+
+semantic_models:
+  - name: semantic_people
+    label: "Semantic People"
+    model: ref('people')
+    dimensions:
+      - name: favorite_color
+        label: "Favorite Color"
+        type: categorical
+        config:
+          meta:
+            dimension: one
+      - name: created_at
+        label: "Created At"
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: years_tenure
+        label: "Years Tenure"
+        agg: SUM
+        expr: tenure
+        config:
+          meta:
+            measure: two
+      - name: people
+        label: "People"
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        label: "Primary ID"
+        type: primary
+        config:
+          meta:
+            entity: three
+    defaults:
+      agg_time_dimension: created_at
+"""
+
+semantic_model_meta_clobbering_yml = """
+version: 2
+
+semantic_models:
+  - name: semantic_people
+    label: "Semantic People"
+    model: ref('people')
+    config:
+      meta:
+        model_level: "should_be_inherited"
+        component_level: "should_be_overridden"
+    dimensions:
+      - name: favorite_color
+        label: "Favorite Color"
+        type: categorical
+        config:
+          meta:
+            component_level: "dimension_override"
+      - name: created_at
+        label: "Created At"
+        type: TIME
+        type_params:
+          time_granularity: day
+    measures:
+      - name: years_tenure
+        label: "Years Tenure"
+        agg: SUM
+        expr: tenure
+        config:
+          meta:
+            component_level: "measure_override"
+      - name: people
+        label: "People"
+        agg: count
+        expr: id
+    entities:
+      - name: id
+        label: "Primary ID"
+        type: primary
+        config:
+          meta:
+            component_level: "entity_override"
+    defaults:
+      agg_time_dimension: created_at
 """

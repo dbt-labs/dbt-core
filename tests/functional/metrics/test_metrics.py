@@ -1,37 +1,40 @@
 import pytest
 
+from dbt.artifacts.resources.v1.metric import CumulativeTypeParams, MetricTimeWindow
 from dbt.cli.main import dbtRunner
 from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import ParsingError
-from dbt.tests.util import run_dbt, get_manifest
-
-
+from dbt.tests.util import get_manifest, run_dbt
+from dbt_semantic_interfaces.type_enums.period_agg import PeriodAggregation
+from dbt_semantic_interfaces.type_enums.time_granularity import TimeGranularity
 from tests.functional.metrics.fixtures import (
-    conversion_semantic_model_purchasing_yml,
+    basic_metrics_yml,
     conversion_metric_yml,
-    mock_purchase_data_csv,
-    models_people_sql,
-    models_people_metrics_yml,
-    invalid_models_people_metrics_yml,
-    invalid_metrics_missing_model_yml,
-    invalid_metrics_missing_expression_yml,
-    names_with_spaces_metrics_yml,
-    names_with_special_chars_metrics_yml,
-    names_with_leading_numeric_metrics_yml,
-    long_name_metrics_yml,
-    downstream_model_sql,
-    invalid_derived_metric_contains_model_yml,
+    conversion_semantic_model_purchasing_yml,
+    cumulative_metric_yml,
     derived_metric_yml,
+    downstream_model_sql,
+    duplicate_measure_metric_yml,
+    filtered_metrics_yml,
+    invalid_derived_metric_contains_model_yml,
     invalid_metric_without_timestamp_with_time_grains_yml,
     invalid_metric_without_timestamp_with_window_yml,
+    invalid_metrics_missing_expression_yml,
+    invalid_metrics_missing_model_yml,
+    invalid_models_people_metrics_yml,
+    long_name_metrics_yml,
     metricflow_time_spine_sql,
+    mock_purchase_data_csv,
+    models_people_metrics_yml,
+    models_people_sql,
+    names_with_leading_numeric_metrics_yml,
+    names_with_spaces_metrics_yml,
+    names_with_special_chars_metrics_yml,
+    purchasing_model_sql,
     semantic_model_people_yml,
     semantic_model_purchasing_yml,
-    purchasing_model_sql,
-    filtered_metrics_yml,
-    basic_metrics_yml,
-    duplicate_measure_metric_yml,
 )
+from tests.functional.time_spines.fixtures import time_spine_yml
 
 
 class TestSimpleMetrics:
@@ -81,6 +84,11 @@ class TestSimpleMetrics:
             )
             == 2
         )
+        assert (
+            manifest.metrics["metric.test.number_of_people"].time_granularity
+            == TimeGranularity.MONTH.value
+        )
+        assert manifest.metrics["metric.test.collective_tenure"].time_granularity is None
 
 
 class TestInvalidRefMetrics:
@@ -244,6 +252,7 @@ class TestDerivedMetric:
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "semantic_models.yml": semantic_model_purchasing_yml,
             "derived_metric.yml": derived_metric_yml,
+            "time_spine.yml": time_spine_yml,
         }
 
     # not strictly necessary to use "real" mock data for this test
@@ -269,6 +278,7 @@ class TestDerivedMetric:
             "metric.test.count_orders",
             "metric.test.sum_order_revenue",
             "metric.test.average_order_value",
+            "metric.test.sum_order_revenue_plus_one_custom_offset_window",
         ]
         assert metric_ids == expected_metric_ids
 
@@ -290,12 +300,24 @@ class TestDerivedMetric:
             "metric.test.sum_order_revenue",
         ]
 
+        derived_metric_with_custom_offset_window = manifest.metrics[
+            "metric.test.sum_order_revenue_plus_one_custom_offset_window"
+        ]
+        assert len(derived_metric_with_custom_offset_window.input_metrics) == 1
+        assert derived_metric_with_custom_offset_window.input_metrics[
+            0
+        ].offset_window == MetricTimeWindow(count=1, granularity="martian_day")
+
         # actually compile
         results = run_dbt(["compile", "--select", "downstream_model"])
         compiled_code = results[0].node.compiled_code
 
         # make sure all these metrics properties show up in compiled SQL
         for metric_name in manifest.metrics:
+            if metric_name == "metric.test.sum_order_revenue_plus_one_custom_offset_window":
+                # Skip this metric
+                continue
+
             parsed_metric_node = manifest.metrics[metric_name]
             for property in [
                 "name",
@@ -354,6 +376,7 @@ class TestConversionMetric:
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
             "semantic_models.yml": conversion_semantic_model_purchasing_yml,
             "conversion_metric.yml": conversion_metric_yml,
+            "time_spine.yml": time_spine_yml,
         }
 
     @pytest.fixture(scope="class")
@@ -375,10 +398,13 @@ class TestConversionMetric:
         # make sure the metric is in the manifest
         manifest = get_manifest(project.project_root)
         metric_ids = list(manifest.metrics.keys())
-        expected_metric_ids = [
-            "metric.test.converted_orders_over_visits",
-        ]
-        assert metric_ids == expected_metric_ids
+        expected_metric_ids = {
+            "metric.test.converted_orders_over_visits": None,
+            "metric.test.converted_orders_over_visits_with_window": MetricTimeWindow(
+                count=4, granularity=TimeGranularity.DAY.value
+            ),
+        }
+        assert set(metric_ids) == set(expected_metric_ids.keys())
         assert manifest.metrics[
             "metric.test.converted_orders_over_visits"
         ].type_params.conversion_type_params
@@ -402,6 +428,75 @@ class TestConversionMetric:
             ].type_params.conversion_type_params.entity
             == "purchase"
         )
+        for (
+            metric_id,
+            expected_window,
+        ) in expected_metric_ids.items():
+            assert (
+                manifest.metrics[metric_id].type_params.conversion_type_params.window
+                == expected_window
+            ), f"Found unexpected conversion window for {metric_id}"
+
+
+class TestCumulativeMetric:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "purchasing.sql": purchasing_model_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_models.yml": conversion_semantic_model_purchasing_yml,
+            "cumulative_metric.yml": cumulative_metric_yml,
+            "time_spine.yml": time_spine_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {"mock_purchase_data.csv": mock_purchase_data_csv}
+
+    def test_cumulative_metric(self, project):
+        # initial parse
+        runner = dbtRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert isinstance(result.result, Manifest)
+
+        manifest = get_manifest(project.project_root)
+        metric_ids = set(manifest.metrics.keys())
+        expected_metric_ids_to_cumulative_type_params = {
+            "metric.test.weekly_visits": CumulativeTypeParams(
+                window=MetricTimeWindow(count=7, granularity=TimeGranularity.DAY.value),
+                period_agg=PeriodAggregation.AVERAGE,
+            ),
+            "metric.test.cumulative_orders": CumulativeTypeParams(
+                period_agg=PeriodAggregation.LAST
+            ),
+            "metric.test.orders_ytd": CumulativeTypeParams(
+                grain_to_date=TimeGranularity.YEAR.value, period_agg=PeriodAggregation.FIRST
+            ),
+            "metric.test.monthly_orders": CumulativeTypeParams(
+                window=MetricTimeWindow(count=1, granularity=TimeGranularity.MONTH.value),
+                period_agg=PeriodAggregation.AVERAGE,
+            ),
+            "metric.test.yearly_orders": CumulativeTypeParams(
+                window=MetricTimeWindow(count=1, granularity=TimeGranularity.YEAR.value),
+                period_agg=PeriodAggregation.FIRST,
+            ),
+            "metric.test.visits_mtd": CumulativeTypeParams(
+                grain_to_date=TimeGranularity.MONTH.value, period_agg=PeriodAggregation.FIRST
+            ),
+            "metric.test.cumulative_visits": CumulativeTypeParams(
+                period_agg=PeriodAggregation.FIRST
+            ),
+        }
+        assert metric_ids == set(expected_metric_ids_to_cumulative_type_params.keys())
+        for (
+            metric_id,
+            expected_cumulative_type_params,
+        ) in expected_metric_ids_to_cumulative_type_params.items():
+            assert (
+                manifest.metrics[metric_id].type_params.cumulative_type_params
+                == expected_cumulative_type_params
+            ), f"Found unexpected cumulative type params for {metric_id}"
 
 
 class TestFilterParsing:

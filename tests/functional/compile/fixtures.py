@@ -42,6 +42,15 @@ with recursive t(n) as (
 select sum(n) from t;
 """
 
+first_ephemeral_model_with_alias_sql = """
+{{ config(materialized = 'ephemeral', alias = 'first_alias') }}
+select 1 as fun
+"""
+
+second_ephemeral_model_with_alias_sql = """
+select * from {{ ref('first_ephemeral_model_with_alias') }}
+"""
+
 schema_yml = """
 version: 2
 

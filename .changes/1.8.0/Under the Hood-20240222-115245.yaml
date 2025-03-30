@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Remove references to dbt.tracking and dbt.flags from dbt/artifacts
-time: 2024-02-22T11:52:45.044853-06:00
-custom:
-  Author: emmyoop
-  Issue: "9390"

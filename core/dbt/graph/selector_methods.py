@@ -2,35 +2,41 @@ import abc
 from fnmatch import fnmatch
 from itertools import chain
 from pathlib import Path
-from typing import Set, List, Dict, Iterator, Tuple, Any, Union, Type, Optional, Callable
-
-from dbt_common.dataclass_schema import StrEnum
-
-from .graph import UniqueId
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import (
-    SingularTestNode,
     Exposure,
-    Metric,
     GenericTestNode,
-    SourceDefinition,
-    ResultNode,
     ManifestNode,
+    Metric,
     ModelNode,
-    UnitTestDefinition,
+    ResultNode,
     SavedQuery,
     SemanticModel,
+    SingularTestNode,
+    SourceDefinition,
+    UnitTestDefinition,
 )
 from dbt.contracts.graph.unparsed import UnparsedVersion
 from dbt.contracts.state import PreviousState
-from dbt_common.exceptions import (
-    DbtInternalError,
-    DbtRuntimeError,
-)
 from dbt.node_types import NodeType
+from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.contextvars import get_project_root
+from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
 
+from .graph import UniqueId
 
 SELECTOR_GLOB = "*"
 SELECTOR_DELIMITER = ":"
@@ -57,6 +63,7 @@ class MethodName(StrEnum):
     Version = "version"
     SemanticModel = "semantic_model"
     SavedQuery = "saved_query"
+    UnitTest = "unit_test"
 
 
 def is_selected_node(fqn: List[str], node_selector: str, is_versioned: bool) -> bool:
@@ -102,7 +109,7 @@ def is_selected_node(fqn: List[str], node_selector: str, is_versioned: bool) -> 
 
 
 SelectorTarget = Union[
-    SourceDefinition, ManifestNode, Exposure, Metric, SemanticModel, UnitTestDefinition
+    SourceDefinition, ManifestNode, Exposure, Metric, SemanticModel, UnitTestDefinition, SavedQuery
 ]
 
 
@@ -195,6 +202,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             self.metric_nodes(included_nodes),
             self.unit_tests(included_nodes),
             self.semantic_model_nodes(included_nodes),
+            self.saved_query_nodes(included_nodes),
         )
 
     def configurable_nodes(
@@ -274,7 +282,8 @@ class GroupSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """yields nodes from included in the specified group"""
         for unique_id, node in self.groupable_nodes(included_nodes):
-            if selector == node.config.get("group"):
+            node_group = node.config.get("group")
+            if node_group and fnmatch(node_group, selector):
                 yield unique_id
 
 
@@ -418,6 +427,31 @@ class SavedQuerySelectorMethod(SelectorMethod):
             yield unique_id
 
 
+class UnitTestSelectorMethod(SelectorMethod):
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        parts = selector.split(".")
+        target_package = SELECTOR_GLOB
+        if len(parts) == 1:
+            target_name = parts[0]
+        elif len(parts) == 2:
+            target_package, target_name = parts
+        else:
+            msg = (
+                'Invalid unit test selector value "{}". Saved queries must be of '
+                "the form ${{unit_test_name}} or "
+                "${{unit_test_package_name.unit_test_name}}"
+            ).format(selector)
+            raise DbtRuntimeError(msg)
+
+        for unique_id, node in self.unit_tests(included_nodes):
+            if not fnmatch(node.package_name, target_package):
+                continue
+            if not fnmatch(node.name, target_name):
+                continue
+
+            yield unique_id
+
+
 class PathSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """Yields nodes from included that match the given path."""
@@ -454,6 +488,10 @@ class FileSelectorMethod(SelectorMethod):
 class PackageSelectorMethod(SelectorMethod):
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         """Yields nodes from included that have the specified package"""
+        # `this` is an alias for the current dbt project name
+        if selector == "this" and self.manifest.metadata.project_name is not None:
+            selector = self.manifest.metadata.project_name
+
         for unique_id, node in self.all_nodes(included_nodes):
             if fnmatch(node.package_name, selector):
                 yield unique_id
@@ -642,16 +680,24 @@ class StateSelectorMethod(SelectorMethod):
     def check_modified_content(
         self, old: Optional[SelectorTarget], new: SelectorTarget, adapter_type: str
     ) -> bool:
+        different_contents = False
         if isinstance(
-            new, (SourceDefinition, Exposure, Metric, SemanticModel, UnitTestDefinition)
+            new,
+            (SourceDefinition, Exposure, Metric, SemanticModel, UnitTestDefinition, SavedQuery),
         ):
             # these all overwrite `same_contents`
             different_contents = not new.same_contents(old)  # type: ignore
-        else:
+        elif new:  # because we also pull in deleted/disabled nodes, this could be None
             different_contents = not new.same_contents(old, adapter_type)  # type: ignore
 
         upstream_macro_change = self.check_macros_modified(new)
-        return different_contents or upstream_macro_change
+
+        check_modified_contract = False
+        if isinstance(old, ModelNode):
+            func = self.check_modified_contract("same_contract", adapter_type)
+            check_modified_contract = func(old, new)
+
+        return different_contents or upstream_macro_change or check_modified_contract
 
     def check_unmodified_content(
         self, old: Optional[SelectorTarget], new: SelectorTarget, adapter_type: str
@@ -682,16 +728,15 @@ class StateSelectorMethod(SelectorMethod):
     ) -> Callable[[Optional[SelectorTarget], SelectorTarget], bool]:
         # get a function that compares two selector target based on compare method provided
         def check_modified_contract(old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
-            if hasattr(new, compare_method):
+            if new is None and hasattr(old, compare_method + "_removed"):
+                return getattr(old, compare_method + "_removed")()
+            elif hasattr(new, compare_method):
                 # when old body does not exist or old and new are not the same
                 return not old or not getattr(new, compare_method)(old, adapter_type)  # type: ignore
             else:
                 return False
 
         return check_modified_contract
-
-    def check_new(self, old: Optional[SelectorTarget], new: SelectorTarget) -> bool:
-        return old is None
 
     def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
         if self.previous_state is None or self.previous_state.manifest is None:
@@ -724,6 +769,7 @@ class StateSelectorMethod(SelectorMethod):
 
         manifest: Manifest = self.previous_state.manifest
 
+        keyword_args = {}  # initialize here to handle disabled node check below
         for unique_id, node in self.all_nodes(included_nodes):
             previous_node: Optional[SelectorTarget] = None
 
@@ -739,8 +785,9 @@ class StateSelectorMethod(SelectorMethod):
                 previous_node = SemanticModel.from_resource(manifest.semantic_models[unique_id])
             elif unique_id in manifest.unit_tests:
                 previous_node = UnitTestDefinition.from_resource(manifest.unit_tests[unique_id])
+            elif unique_id in manifest.saved_queries:
+                previous_node = SavedQuery.from_resource(manifest.saved_queries[unique_id])
 
-            keyword_args = {}
             if checker.__name__ in [
                 "same_contract",
                 "check_modified_content",
@@ -750,6 +797,26 @@ class StateSelectorMethod(SelectorMethod):
 
             if checker(previous_node, node, **keyword_args):  # type: ignore
                 yield unique_id
+
+        # checkers that can handle removed nodes
+        if checker.__name__ in [
+            "check_modified_contract",
+            "check_modified_content",
+            "check_unmodified_content",
+        ]:
+            # ignore included_nodes, since those cannot contain removed nodes
+            for previous_unique_id, previous_node in manifest.nodes.items():
+                # detect removed (deleted, renamed, or disabled) nodes
+                removed_node = None
+                if previous_unique_id in self.manifest.disabled.keys():
+                    removed_node = self.manifest.disabled[previous_unique_id][0]
+                elif previous_unique_id not in self.manifest.nodes.keys():
+                    removed_node = previous_node
+
+                if removed_node:
+                    # do not yield -- removed nodes should never be selected for downstream execution
+                    # as they are not part of the current project's manifest.nodes
+                    checker(removed_node, None, **keyword_args)  # type: ignore
 
 
 class ResultSelectorMethod(SelectorMethod):
@@ -872,6 +939,7 @@ class MethodManager:
         MethodName.Version: VersionSelectorMethod,
         MethodName.SemanticModel: SemanticModelSelectorMethod,
         MethodName.SavedQuery: SavedQuerySelectorMethod,
+        MethodName.UnitTest: UnitTestSelectorMethod,
     }
 
     def __init__(

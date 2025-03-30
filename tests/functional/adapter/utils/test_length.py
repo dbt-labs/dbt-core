@@ -1,9 +1,10 @@
 import pytest
+
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_length import (
-    seeds__data_length_csv,
     models__test_length_sql,
     models__test_length_yml,
+    seeds__data_length_csv,
 )
 
 

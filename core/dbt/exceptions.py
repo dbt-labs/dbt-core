@@ -1,22 +1,21 @@
+import io
 import json
 import re
-import io
-from typing import Any, Dict, List, Mapping, Optional, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Union
 
+from dbt.node_types import REFABLE_NODE_TYPES, AccessType, NodeType
+from dbt_common.constants import SECRET_ENV_PREFIX
+from dbt_common.dataclass_schema import ValidationError
 from dbt_common.exceptions import (
-    DbtRuntimeError,
+    CommandResultError,
     CompilationError,
-    DbtInternalError,
     DbtConfigError,
+    DbtInternalError,
+    DbtRuntimeError,
+    DbtValidationError,
     env_secrets,
     scrub_secrets,
-    DbtValidationError,
-    CommandResultError,
 )
-from dbt.node_types import NodeType, AccessType, REFABLE_NODE_TYPES
-
-from dbt_common.dataclass_schema import ValidationError
-
 
 if TYPE_CHECKING:
     import agate
@@ -77,34 +76,6 @@ class JSONValidationError(DbtValidationError):
         return (JSONValidationError, (self.typename, self.errors))
 
 
-class IncompatibleSchemaError(DbtRuntimeError):
-    def __init__(self, expected: str, found: Optional[str] = None) -> None:
-        self.expected = expected
-        self.found = found
-        self.filename = "input file"
-
-        super().__init__(msg=self.get_message())
-
-    def add_filename(self, filename: str):
-        self.filename = filename
-        self.msg = self.get_message()
-
-    def get_message(self) -> str:
-        found_str = "nothing"
-        if self.found is not None:
-            found_str = f'"{self.found}"'
-
-        msg = (
-            f'Expected a schema version of "{self.expected}" in '
-            f"{self.filename}, but found {found_str}. Are you running with a "
-            f"different version of dbt?"
-        )
-        return msg
-
-    CODE = 10014
-    MESSAGE = "Incompatible Schema"
-
-
 class AliasError(DbtValidationError):
     pass
 
@@ -139,6 +110,10 @@ class DbtProfileError(DbtConfigError):
     pass
 
 
+class DbtExclusivePropertyUseError(DbtConfigError):
+    pass
+
+
 class InvalidSelectorError(DbtRuntimeError):
     def __init__(self, name: str) -> None:
         self.name = name
@@ -158,6 +133,18 @@ class GraphDependencyNotFoundError(CompilationError):
 
     def get_message(self) -> str:
         msg = f"'{self.node.unique_id}' depends on '{self.dependency}' which is not in the graph!"
+        return msg
+
+
+class ForeignKeyConstraintToSyntaxError(CompilationError):
+    def __init__(self, node, expression: str) -> None:
+        self.expression = expression
+        self.node = node
+        super().__init__(msg=self.get_message())
+
+    def get_message(self) -> str:
+        msg = f"'{self.node.unique_id}' defines a foreign key constraint 'to' expression which is not valid 'ref' or 'source' syntax: {self.expression}."
+
         return msg
 
 
@@ -361,7 +348,10 @@ class RequiredVarNotFoundError(CompilationError):
         pretty_vars = json.dumps(dct, sort_keys=True, indent=4)
 
         msg = f"Required var '{self.var_name}' not found in config:\nVars supplied to {node_name} = {pretty_vars}"
-        return msg
+        return scrub_secrets(msg, self.var_secrets())
+
+    def var_secrets(self) -> List[str]:
+        return [v for k, v in self.merged.items() if k.startswith(SECRET_ENV_PREFIX) and v.strip()]
 
 
 class PackageNotFoundForMacroError(CompilationError):

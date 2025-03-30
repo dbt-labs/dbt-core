@@ -1,6 +1,0 @@
-kind: Features
-body: Remove legacy logger
-time: 2023-11-07T13:56:35.186648-08:00
-custom:
-  Author: colin-rogers-dbt
-  Issue: "8027"

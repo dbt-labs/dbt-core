@@ -2,71 +2,84 @@ import os
 import time
 from abc import abstractmethod
 from concurrent.futures import as_completed
-from datetime import timezone, datetime
-from multiprocessing.dummy import Pool as ThreadPool
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import AbstractSet, Optional, Dict, List, Set, Tuple, Iterable
-
-from dbt_common.context import get_invocation_context, _INVOCATION_CONTEXT_VAR
-import dbt_common.utils.formatting
+from typing import AbstractSet, Dict, Iterable, List, Optional, Set, Tuple, Type, Union
 
 import dbt.exceptions
 import dbt.tracking
 import dbt.utils
-from dbt.adapters.base import BaseRelation
+import dbt_common.utils.formatting
+from dbt.adapters.base import BaseAdapter, BaseRelation
 from dbt.adapters.factory import get_adapter
-from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import ResultNode
-from dbt.artifacts.schemas.results import NodeStatus, RunningStatus, RunStatus, BaseResult
+from dbt.artifacts.schemas.results import (
+    BaseResult,
+    NodeStatus,
+    RunningStatus,
+    RunStatus,
+)
 from dbt.artifacts.schemas.run import RunExecutionResult, RunResult
+from dbt.cli.flags import Flags
+from dbt.config.runtime import RuntimeConfig
+from dbt.constants import RUN_RESULTS_FILE_NAME
+from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.nodes import Exposure, ResultNode
 from dbt.contracts.state import PreviousState
+from dbt.events.types import (
+    ArtifactWritten,
+    ConcurrencyLine,
+    DefaultSelector,
+    EndRunResult,
+    GenericExceptionOnRun,
+    LogCancelLine,
+    MarkSkippedChildren,
+    NodeFinished,
+    NodeStart,
+    NothingToDo,
+    QueryCancelationUnsupported,
+    SkippingDetails,
+)
+from dbt.exceptions import DbtInternalError, DbtRuntimeError, FailFastError
+from dbt.flags import get_flags
+from dbt.graph import (
+    GraphQueue,
+    NodeSelector,
+    SelectionSpec,
+    UniqueId,
+    parse_difference,
+)
+from dbt.graph.thread_pool import DbtThreadPool
+from dbt.parser.manifest import write_manifest
+from dbt.task import group_lookup
+from dbt.task.base import BaseRunner, ConfiguredTask
+from dbt.task.printer import print_run_end_messages, print_run_result_error
+from dbt_common.context import _INVOCATION_CONTEXT_VAR, get_invocation_context
+from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.contextvars import log_contextvars, task_contextvars
 from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.events.types import Formatting
-from dbt.events.types import (
-    LogCancelLine,
-    DefaultSelector,
-    NodeStart,
-    NodeFinished,
-    QueryCancelationUnsupported,
-    ConcurrencyLine,
-    EndRunResult,
-    NothingToDo,
-    GenericExceptionOnRun,
-)
-from dbt.exceptions import (
-    DbtInternalError,
-    DbtRuntimeError,
-    FailFastError,
-)
 from dbt_common.exceptions import NotImplementedError
-from dbt.flags import get_flags
-from dbt.graph import GraphQueue, NodeSelector, SelectionSpec, parse_difference, UniqueId
-from dbt.logger import (
-    DbtProcessState,
-    TextOnly,
-    UniqueID,
-    TimestampNamed,
-    DbtModelState,
-    ModelMetadata,
-    NodeCount,
-)
-from dbt.parser.manifest import write_manifest
-from dbt.task.base import ConfiguredTask, BaseRunner
-from .printer import (
-    print_run_result_error,
-    print_run_end_messages,
-)
 
-RESULT_FILE_NAME = "run_results.json"
-RUNNING_STATE = DbtProcessState("running")
+
+class GraphRunnableMode(StrEnum):
+    Topological = "topological"
+    Independent = "independent"
+
+
+def mark_node_as_skipped(
+    node: ResultNode, executed_node_ids: Set[str], message: Optional[str]
+) -> Optional[RunResult]:
+    if node.unique_id not in executed_node_ids:
+        return RunResult.from_node(node, RunStatus.Skipped, message)
+    return None
 
 
 class GraphRunnableTask(ConfiguredTask):
-    MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error]
+    MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error, NodeStatus.PartialSuccess]
 
-    def __init__(self, args, config, manifest) -> None:
+    def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
         super().__init__(args, config, manifest)
+        self.config = config
         self._flattened_nodes: Optional[List[ResultNode]] = None
         self._raise_next_tick: Optional[DbtRuntimeError] = None
         self._skipped_children: Dict[str, Optional[RunResult]] = {}
@@ -105,14 +118,11 @@ class GraphRunnableTask(ConfiguredTask):
 
     def get_selection_spec(self) -> SelectionSpec:
         default_selector_name = self.config.get_default_selector_name()
-        # TODO:  The "eager" string below needs to be replaced with programatic access
-        #  to the default value for the indirect selection parameter in
-        # dbt.cli.params.indirect_selection
-        #
-        # Doing that is actually a little tricky, so I'm punting it to a new ticket GH #6397
-        indirect_selection = getattr(self.args, "INDIRECT_SELECTION", "eager")
-
-        if self.args.selector:
+        spec: Union[SelectionSpec, bool]
+        if hasattr(self.args, "inline") and self.args.inline:
+            # We want an empty selection spec.
+            spec = parse_difference(None, None)
+        elif self.args.selector:
             # use pre-defined selector (--selector)
             spec = self.config.get_selector(self.args.selector)
         elif not (self.selection_arg or self.exclusion_arg) and default_selector_name:
@@ -122,14 +132,16 @@ class GraphRunnableTask(ConfiguredTask):
         else:
             # This is what's used with no default selector and no selection
             # use --select and --exclude args
-            spec = parse_difference(self.selection_arg, self.exclusion_arg, indirect_selection)
-        return spec
+            spec = parse_difference(self.selection_arg, self.exclusion_arg)
+        # mypy complains because the return values of get_selector and parse_difference
+        # are different
+        return spec  # type: ignore
 
     @abstractmethod
     def get_node_selector(self) -> NodeSelector:
         raise NotImplementedError(f"get_node_selector not implemented for task {type(self)}")
 
-    def defer_to_manifest(self, adapter, selected_uids: AbstractSet[str]):
+    def defer_to_manifest(self):
         deferred_manifest = self._get_deferred_manifest()
         if deferred_manifest is None:
             return
@@ -137,22 +149,21 @@ class GraphRunnableTask(ConfiguredTask):
             raise DbtInternalError(
                 "Expected to defer to manifest, but there is no runtime manifest to defer from!"
             )
-        self.manifest.merge_from_artifact(
-            adapter=adapter,
-            other=deferred_manifest,
-            selected=selected_uids,
-            favor_state=bool(self.args.favor_state),
-        )
-        # We're rewriting the manifest because it's been mutated during merge_from_artifact.
-        # This is to reflect which nodes had been deferred to (= replaced with) their counterparts.
-        if self.args.write_json:
-            write_manifest(self.manifest, self.config.project_target_path)
+        self.manifest.merge_from_artifact(other=deferred_manifest)
 
     def get_graph_queue(self) -> GraphQueue:
         selector = self.get_node_selector()
         # Following uses self.selection_arg and self.exclusion_arg
         spec = self.get_selection_spec()
-        return selector.get_graph_queue(spec)
+
+        preserve_edges = True
+        if self.get_run_mode() == GraphRunnableMode.Independent:
+            preserve_edges = False
+
+        return selector.get_graph_queue(spec, preserve_edges)
+
+    def get_run_mode(self) -> GraphRunnableMode:
+        return GraphRunnableMode.Topological
 
     def _runtime_initialize(self):
         self.compile_manifest()
@@ -172,6 +183,8 @@ class GraphRunnableTask(ConfiguredTask):
                 self._flattened_nodes.append(self.manifest.saved_queries[uid])
             elif uid in self.manifest.unit_tests:
                 self._flattened_nodes.append(self.manifest.unit_tests[uid])
+            elif uid in self.manifest.exposures:
+                self._flattened_nodes.append(self.manifest.exposures[uid])
             else:
                 raise DbtInternalError(
                     f"Node selection returned {uid}, expected a node, a source, or a unit test"
@@ -179,14 +192,14 @@ class GraphRunnableTask(ConfiguredTask):
 
         self.num_nodes = len([n for n in self._flattened_nodes if not n.is_ephemeral_model])
 
-    def raise_on_first_error(self):
+    def raise_on_first_error(self) -> bool:
         return False
 
-    def get_runner_type(self, node):
+    def get_runner_type(self, node) -> Optional[Type[BaseRunner]]:
         raise NotImplementedError("Not Implemented")
 
-    def result_path(self):
-        return os.path.join(self.config.project_target_path, RESULT_FILE_NAME)
+    def result_path(self) -> str:
+        return os.path.join(self.config.project_target_path, RUN_RESULTS_FILE_NAME)
 
     def get_runner(self, node) -> BaseRunner:
         adapter = get_adapter(self.config)
@@ -202,63 +215,62 @@ class GraphRunnableTask(ConfiguredTask):
             num_nodes = self.num_nodes
 
         cls = self.get_runner_type(node)
+
+        if cls is None:
+            raise DbtInternalError("Could not find runner type for node.")
+
         return cls(self.config, adapter, node, run_count, num_nodes)
 
     def call_runner(self, runner: BaseRunner) -> RunResult:
-        uid_context = UniqueID(runner.node.unique_id)
-        with RUNNING_STATE, uid_context, log_contextvars(node_info=runner.node.node_info):
-            startctx = TimestampNamed("node_started_at")
-            index = self.index_offset(runner.node_index)
+        with log_contextvars(node_info=runner.node.node_info):
             runner.node.update_event_status(
                 started_at=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 node_status=RunningStatus.Started,
             )
-            extended_metadata = ModelMetadata(runner.node, index)
-
-            with startctx, extended_metadata:
-                fire_event(
-                    NodeStart(
-                        node_info=runner.node.node_info,
-                    )
+            fire_event(
+                NodeStart(
+                    node_info=runner.node.node_info,
                 )
-            status: Dict[str, str] = {}
-            result = None
-            thread_exception = None
+            )
             try:
                 result = runner.run_with_hooks(self.manifest)
+            except (KeyboardInterrupt, SystemExit) as exe:
+                result = None
+                thread_exception: Union[KeyboardInterrupt, SystemExit, Exception] = exe
+                raise
             except Exception as e:
+                result = None
                 thread_exception = e
             finally:
-                finishctx = TimestampNamed("finished_at")
-                with finishctx, DbtModelState(status):
-                    if result is not None:
-                        fire_event(
-                            NodeFinished(
-                                node_info=runner.node.node_info,
-                                run_result=result.to_msg_dict(),
-                            )
+                if result is not None:
+                    fire_event(
+                        NodeFinished(
+                            node_info=runner.node.node_info,
+                            run_result=result.to_msg_dict(),
                         )
-                    else:
-                        msg = f"Exception on worker thread. {thread_exception}"
+                    )
+                else:
+                    msg = f"Exception on worker thread. {thread_exception}"
 
-                        fire_event(
-                            GenericExceptionOnRun(
-                                unique_id=runner.node.unique_id,
-                                exc=str(thread_exception),
-                                node_info=runner.node.node_info,
-                            )
+                    fire_event(
+                        GenericExceptionOnRun(
+                            unique_id=runner.node.unique_id,
+                            exc=str(thread_exception),
+                            node_info=runner.node.node_info,
                         )
+                    )
 
-                        result = RunResult(
-                            status=RunStatus.Error,  # type: ignore
-                            timing=[],
-                            thread_id="",
-                            execution_time=0.0,
-                            adapter_response={},
-                            message=msg,
-                            failures=None,
-                            node=runner.node,
-                        )
+                    result = RunResult(
+                        status=RunStatus.Error,  # type: ignore
+                        timing=[],
+                        thread_id="",
+                        execution_time=0.0,
+                        adapter_response={},
+                        message=msg,
+                        failures=None,
+                        batch_results=None,
+                        node=runner.node,
+                    )
 
             # `_event_status` dict is only used for logging.  Make sure
             # it gets deleted when we're done with it
@@ -266,7 +278,10 @@ class GraphRunnableTask(ConfiguredTask):
 
         fail_fast = get_flags().FAIL_FAST
 
-        if result.status in (NodeStatus.Error, NodeStatus.Fail) and fail_fast:
+        if (
+            result.status in (NodeStatus.Error, NodeStatus.Fail, NodeStatus.PartialSuccess)
+            and fail_fast
+        ):
             self._raise_next_tick = FailFastError(
                 msg="Failing early due to test failure or runtime error",
                 result=result,
@@ -344,7 +359,7 @@ class GraphRunnableTask(ConfiguredTask):
         args = [runner]
         self._submit(pool, args, callback)
 
-    def _handle_result(self, result: RunResult):
+    def _handle_result(self, result: RunResult) -> None:
         """Mark the result as completed, insert the `CompileResultNode` into
         the manifest, and mark any descendants (potentially with a 'cause' if
         the result was an ephemeral model) as skipped.
@@ -392,30 +407,22 @@ class GraphRunnableTask(ConfiguredTask):
 
     def execute_nodes(self):
         num_threads = self.config.threads
-        target_name = self.config.target_name
 
-        # following line can be removed when legacy logger is removed
-        with NodeCount(self.num_nodes):
-            fire_event(
-                ConcurrencyLine(
-                    num_threads=num_threads, target_name=target_name, node_count=self.num_nodes
-                )
-            )
-        with TextOnly():
-            fire_event(Formatting(""))
-
-        pool = ThreadPool(num_threads, self._pool_thread_initializer, [get_invocation_context()])
+        pool = DbtThreadPool(
+            num_threads, self._pool_thread_initializer, [get_invocation_context()]
+        )
         try:
             self.run_queue(pool)
         except FailFastError as failure:
             self._cancel_connections(pool)
 
-            executed_node_ids = [r.node.unique_id for r in self.node_results]
+            executed_node_ids = {r.node.unique_id for r in self.node_results}
+            message = "Skipping due to fail_fast"
 
-            for r in self._flattened_nodes:
-                if r.unique_id not in executed_node_ids:
+            for node in self._flattened_nodes:
+                if node.unique_id not in executed_node_ids:
                     self.node_results.append(
-                        RunResult.from_node(r, RunStatus.Skipped, "Skipping due to fail_fast")
+                        mark_node_as_skipped(node, executed_node_ids, message)
                     )
 
             print_run_result_error(failure.result)
@@ -430,6 +437,12 @@ class GraphRunnableTask(ConfiguredTask):
 
             if self.args.write_json and hasattr(run_result, "write"):
                 run_result.write(self.result_path())
+                fire_event(
+                    ArtifactWritten(
+                        artifact_type=run_result.__class__.__name__,
+                        artifact_path=self.result_path(),
+                    )
+                )
 
             self._cancel_connections(pool)
             print_run_end_messages(self.node_results, keyboard_interrupt=True)
@@ -450,6 +463,13 @@ class GraphRunnableTask(ConfiguredTask):
     ) -> None:
         if self.graph is None:
             raise DbtInternalError("graph is None in _mark_dependent_errors")
+        fire_event(
+            MarkSkippedChildren(
+                unique_id=node_id,
+                status=result.status,
+                run_result=result.to_msg_dict(),
+            )
+        )
         for dep_node_id in self.graph.get_dependent_nodes(UniqueId(node_id)):
             self._skipped_children[dep_node_id] = cause
 
@@ -480,12 +500,13 @@ class GraphRunnableTask(ConfiguredTask):
                 {"adapter_cache_construction_elapsed": cache_populate_time}
             )
 
-    def before_run(self, adapter, selected_uids: AbstractSet[str]):
+    def before_run(self, adapter: BaseAdapter, selected_uids: AbstractSet[str]) -> RunStatus:
         with adapter.connection_named("master"):
+            self.defer_to_manifest()
             self.populate_adapter_cache(adapter)
-            self.defer_to_manifest(adapter, selected_uids)
+            return RunStatus.Success
 
-    def after_run(self, adapter, results):
+    def after_run(self, adapter, results) -> None:
         pass
 
     def print_results_line(self, node_results, elapsed):
@@ -493,10 +514,50 @@ class GraphRunnableTask(ConfiguredTask):
 
     def execute_with_hooks(self, selected_uids: AbstractSet[str]):
         adapter = get_adapter(self.config)
+
+        fire_event(Formatting(""))
+        fire_event(
+            ConcurrencyLine(
+                num_threads=self.config.threads,
+                target_name=self.config.target_name,
+                node_count=self.num_nodes,
+            )
+        )
+        fire_event(Formatting(""))
+
         self.started_at = time.time()
         try:
-            self.before_run(adapter, selected_uids)
-            res = self.execute_nodes()
+            before_run_status = self.before_run(adapter, selected_uids)
+            if before_run_status == RunStatus.Success or (
+                not get_flags().skip_nodes_if_on_run_start_fails
+            ):
+                res = self.execute_nodes()
+            else:
+                executed_node_ids = {
+                    r.node.unique_id for r in self.node_results if hasattr(r, "node")
+                }
+
+                res = []
+
+                for index, node in enumerate(self._flattened_nodes or []):
+                    group = group_lookup.get(node.unique_id)
+
+                    if node.unique_id not in executed_node_ids:
+                        fire_event(
+                            SkippingDetails(
+                                resource_type=node.resource_type,
+                                schema=node.schema,
+                                node_name=node.name,
+                                index=index + 1,
+                                total=self.num_nodes,
+                                node_info=node.node_info,
+                                group=group,
+                            )
+                        )
+                        skipped_node_result = mark_node_as_skipped(node, executed_node_ids, None)
+                        if skipped_node_result:
+                            self.node_results.append(skipped_node_result)
+
             self.after_run(adapter, res)
         finally:
             adapter.cleanup_connections()
@@ -525,8 +586,6 @@ class GraphRunnableTask(ConfiguredTask):
                 )
 
             if len(self._flattened_nodes) == 0:
-                with TextOnly():
-                    fire_event(Formatting(""))
                 warn_or_error(NothingToDo())
                 result = self.get_result(
                     results=[],
@@ -534,8 +593,6 @@ class GraphRunnableTask(ConfiguredTask):
                     elapsed_time=0.0,
                 )
             else:
-                with TextOnly():
-                    fire_event(Formatting(""))
                 selected_uids = frozenset(n.unique_id for n in self._flattened_nodes)
                 result = self.execute_with_hooks(selected_uids)
 
@@ -555,6 +612,11 @@ class GraphRunnableTask(ConfiguredTask):
             write_manifest(self.manifest, self.config.project_target_path)
             if hasattr(result, "write"):
                 result.write(self.result_path())
+                fire_event(
+                    ArtifactWritten(
+                        artifact_type=result.__class__.__name__, artifact_path=self.result_path()
+                    )
+                )
 
         self.task_end_messages(result.results)
         return result
@@ -564,18 +626,19 @@ class GraphRunnableTask(ConfiguredTask):
         if results is None:
             return False
 
-        failures = [
-            r
-            for r in results
-            if r.status
-            in (
-                NodeStatus.RuntimeErr,
-                NodeStatus.Error,
-                NodeStatus.Fail,
-                NodeStatus.Skipped,  # propogate error message causing skip
-            )
-        ]
-        return len(failures) == 0
+        num_runtime_errors = len([r for r in results if r.status == NodeStatus.RuntimeErr])
+        num_errors = len([r for r in results if r.status == NodeStatus.Error])
+        num_fails = len([r for r in results if r.status == NodeStatus.Fail])
+        num_skipped = len(
+            [
+                r
+                for r in results
+                if r.status == NodeStatus.Skipped and not isinstance(r.node, Exposure)
+            ]
+        )
+        num_partial_success = len([r for r in results if r.status == NodeStatus.PartialSuccess])
+        num_total = num_runtime_errors + num_errors + num_fails + num_skipped + num_partial_success
+        return num_total == 0
 
     def get_model_schemas(self, adapter, selected_uids: Iterable[str]) -> Set[BaseRelation]:
         if self.manifest is None:
@@ -626,7 +689,9 @@ class GraphRunnableTask(ConfiguredTask):
         list_futures = []
         create_futures = []
 
-        with dbt_common.utils.executor(self.config) as tpe:
+        # TODO: following has a mypy issue because profile and project config
+        # defines threads as int and HasThreadingConfig defines it as Optional[int]
+        with dbt_common.utils.executor(self.config) as tpe:  # type: ignore
             for req in required_databases:
                 if req.database is None:
                     name = "list_schemas"
@@ -667,7 +732,7 @@ class GraphRunnableTask(ConfiguredTask):
             args=dbt.utils.args_to_dict(self.args),
         )
 
-    def task_end_messages(self, results):
+    def task_end_messages(self, results) -> None:
         print_run_end_messages(results)
 
     def _get_previous_state(self) -> Optional[Manifest]:

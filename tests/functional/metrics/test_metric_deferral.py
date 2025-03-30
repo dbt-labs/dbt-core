@@ -1,7 +1,9 @@
 import os
-import pytest
-from dbt.tests.util import run_dbt, copy_file, write_file
 from pathlib import Path
+
+import pytest
+
+from dbt.tests.util import copy_file, run_dbt, write_file
 from tests.functional.metrics.fixtures import (
     metrics_1_yml,
     metrics_2_yml,

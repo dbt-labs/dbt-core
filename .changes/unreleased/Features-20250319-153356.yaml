@@ -1,0 +1,6 @@
+kind: Features
+body: Add support for Python 3.13!
+time: 2025-03-19T15:33:56.641753-04:00
+custom:
+    Author: peterallenwebb
+    Issue: "11401"

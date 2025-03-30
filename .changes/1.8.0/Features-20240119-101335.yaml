@@ -1,6 +1,0 @@
-kind: Features
-body: Added support for external nodes in unit test nodes
-time: 2024-01-19T10:13:35.589099-06:00
-custom:
-  Author: QMalcolm MichelleArk
-  Issue: "8944"

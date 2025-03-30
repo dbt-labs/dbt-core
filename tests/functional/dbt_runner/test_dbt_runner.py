@@ -1,11 +1,12 @@
+import os
 from unittest import mock
 
 import pytest
 
+from dbt.adapters.factory import FACTORY, reset_adapters
 from dbt.cli.exceptions import DbtUsageException
 from dbt.cli.main import dbtRunner
 from dbt.exceptions import DbtProjectError
-from dbt.adapters.factory import reset_adapters, FACTORY
 from dbt.tests.util import read_file, write_file
 from dbt.version import __version__ as dbt_version
 from dbt_common.events.contextvars import get_node_info
@@ -34,6 +35,9 @@ class TestDbtRunner:
         res = dbt.invoke(["--warn-error", "--warn-error-options", '{"include": "all"}', "deps"])
         assert type(res.exception) == DbtUsageException
         res = dbt.invoke(["deps", "--warn-error", "--warn-error-options", '{"include": "all"}'])
+        assert type(res.exception) == DbtUsageException
+
+        res = dbt.invoke(["compile", "--select", "models", "--inline", "select 1 as id"])
         assert type(res.exception) == DbtUsageException
 
     def test_invalid_command(self, dbt: dbtRunner) -> None:
@@ -93,6 +97,27 @@ class TestDbtRunner:
         # Check that the adapters are registered again.
         assert result.success
         assert len(FACTORY.adapters) == 1
+
+    def test_pass_in_args_variable(self, dbt):
+        args = ["--log-format", "text"]
+        args_before = args.copy()
+        dbt.invoke(args)
+        assert args == args_before
+
+    def test_directory_does_not_change(self, project, dbt: dbtRunner) -> None:
+        project_dir = os.getcwd()  # The directory where dbt_project.yml exists.
+        os.chdir("../")
+        cmd_execution_dir = os.getcwd()  # The directory where dbt command will be run
+
+        commands = ["init", "deps", "clean"]
+        for command in commands:
+            args = [command, "--project-dir", project_dir]
+            if command == "init":
+                args.append("--skip-profile-setup")
+            res = dbt.invoke(args)
+            after_dir = os.getcwd()
+            assert res.success is True
+            assert cmd_execution_dir == after_dir
 
 
 class TestDbtRunnerQueryComments:

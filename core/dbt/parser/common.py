@@ -1,21 +1,45 @@
-from dbt.artifacts.resources import ColumnInfo, NodeVersion
-from dbt_common.contracts.constraints import ColumnLevelConstraint, ConstraintType
-from dbt.contracts.graph.unparsed import (
-    HasColumnProps,
-    UnparsedColumn,
-    UnparsedNodeUpdate,
-    UnparsedMacroUpdate,
-    UnparsedAnalysisUpdate,
-    UnparsedExposure,
-    UnparsedModelUpdate,
-)
-from dbt.contracts.graph.unparsed import HasColumnTests, HasColumnDocs
-from dbt.contracts.graph.nodes import UnpatchedSourceDefinition
-from dbt.parser.search import FileBlock
-from typing import List, Dict, Any, TypeVar, Generic, Union, Optional
 from dataclasses import dataclass
-from dbt_common.exceptions import DbtInternalError
+from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
+
+from dbt.artifacts.resources import ColumnInfo, NodeVersion
+from dbt.contracts.graph.nodes import UnpatchedSourceDefinition
+from dbt.contracts.graph.unparsed import (
+    HasColumnDocs,
+    HasColumnProps,
+    HasColumnTests,
+    UnparsedAnalysisUpdate,
+    UnparsedColumn,
+    UnparsedExposure,
+    UnparsedMacroUpdate,
+    UnparsedModelUpdate,
+    UnparsedNodeUpdate,
+    UnparsedSingularTestUpdate,
+)
 from dbt.exceptions import ParsingError
+from dbt.node_types import NodeType
+from dbt.parser.search import FileBlock
+from dbt_common.contracts.constraints import ColumnLevelConstraint, ConstraintType
+from dbt_common.exceptions import DbtInternalError
+from dbt_semantic_interfaces.type_enums import TimeGranularity
+
+schema_file_keys_to_resource_types = {
+    "models": NodeType.Model,
+    "seeds": NodeType.Seed,
+    "snapshots": NodeType.Snapshot,
+    "sources": NodeType.Source,
+    "macros": NodeType.Macro,
+    "analyses": NodeType.Analysis,
+    "exposures": NodeType.Exposure,
+    "metrics": NodeType.Metric,
+    "semantic_models": NodeType.SemanticModel,
+    "saved_queries": NodeType.SavedQuery,
+}
+
+resource_types_to_schema_file_keys = {
+    v: k for (k, v) in schema_file_keys_to_resource_types.items()
+}
+
+schema_file_keys = list(schema_file_keys_to_resource_types.keys())
 
 
 def trimmed(inp: str) -> str:
@@ -35,6 +59,7 @@ Target = TypeVar(
     UnpatchedSourceDefinition,
     UnparsedExposure,
     UnparsedModelUpdate,
+    UnparsedSingularTestUpdate,
 )
 
 
@@ -183,13 +208,12 @@ class ParserRef:
         self.column_info: Dict[str, ColumnInfo] = {}
 
     def _add(self, column: HasColumnProps) -> None:
-        tags: List[str] = []
-        tags.extend(getattr(column, "tags", ()))
-        quote: Optional[bool]
+        tags: List[str] = getattr(column, "tags", [])
+        quote: Optional[bool] = None
+        granularity: Optional[TimeGranularity] = None
         if isinstance(column, UnparsedColumn):
             quote = column.quote
-        else:
-            quote = None
+            granularity = TimeGranularity(column.granularity) if column.granularity else None
 
         if any(
             c
@@ -207,6 +231,7 @@ class ParserRef:
             tags=tags,
             quote=quote,
             _extra=column.extra,
+            granularity=granularity,
         )
 
     @classmethod

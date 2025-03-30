@@ -1,14 +1,12 @@
 # Aliasing common Level classes in order to make custom, but not overly-verbose versions that have PROTO_TYPES_MODULE set to the core-specific generated types_pb2 module
-from dbt_common.events.base_types import (
-    BaseEvent,
-    DynamicLevel as CommonDyanicLevel,
-    TestLevel as CommonTestLevel,
-    DebugLevel as CommonDebugLevel,
-    InfoLevel as CommonInfoLevel,
-    WarnLevel as CommonWarnLevel,
-    ErrorLevel as CommonErrorLevel,
-)
 from dbt.events import core_types_pb2
+from dbt_common.events.base_types import BaseEvent
+from dbt_common.events.base_types import DebugLevel as CommonDebugLevel
+from dbt_common.events.base_types import DynamicLevel as CommonDyanicLevel
+from dbt_common.events.base_types import ErrorLevel as CommonErrorLevel
+from dbt_common.events.base_types import InfoLevel as CommonInfoLevel
+from dbt_common.events.base_types import TestLevel as CommonTestLevel
+from dbt_common.events.base_types import WarnLevel as CommonWarnLevel
 
 
 class CoreBaseEvent(BaseEvent):

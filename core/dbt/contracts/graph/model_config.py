@@ -1,22 +1,22 @@
-from dataclasses import field, dataclass
-from typing import Any, List, Optional, Dict, Type
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Type
 
 from dbt.artifacts.resources import (
     ExposureConfig,
     MetricConfig,
-    SavedQueryConfig,
-    SemanticModelConfig,
+    ModelConfig,
     NodeConfig,
+    SavedQueryConfig,
     SeedConfig,
-    TestConfig,
+    SemanticModelConfig,
     SnapshotConfig,
     SourceConfig,
-    ModelConfig,
+    TestConfig,
     UnitTestConfig,
 )
+from dbt.node_types import NodeType
 from dbt_common.contracts.config.base import BaseConfig
 from dbt_common.contracts.config.metadata import Metadata
-from dbt.node_types import NodeType
 
 
 def metas(*metas: Metadata) -> Dict[str, Any]:
@@ -36,12 +36,7 @@ def insensitive_patterns(*patterns: str):
 @dataclass
 class UnitTestNodeConfig(NodeConfig):
     expected_rows: List[Dict[str, Any]] = field(default_factory=list)
-
-
-@dataclass
-class EmptySnapshotConfig(NodeConfig):
-    materialized: str = "snapshot"
-    unique_key: Optional[str] = None  # override NodeConfig unique_key definition
+    expected_sql: Optional[str] = None
 
 
 RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
@@ -61,7 +56,6 @@ RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
 # base resource types are like resource types, except nothing has mandatory
 # configs.
 BASE_RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = RESOURCE_TYPES.copy()
-BASE_RESOURCE_TYPES.update({NodeType.Snapshot: EmptySnapshotConfig})
 
 
 def get_config_for(resource_type: NodeType, base=False) -> Type[BaseConfig]:

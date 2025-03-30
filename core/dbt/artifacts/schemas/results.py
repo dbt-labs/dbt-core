@@ -1,19 +1,21 @@
-from dbt.contracts.graph.nodes import ResultNode
-from dbt_common.events.functions import fire_event
-from dbt.events.types import TimingInfoCollected
-from dbt_common.events.contextvars import get_node_info
-from dbt_common.events.helpers import datetime_to_json_string
-from dbt.logger import TimingProcessor
-from dbt_common.utils import cast_to_str, cast_to_int
-from dbt_common.dataclass_schema import dbtClassMixin, StrEnum
-
 from dataclasses import dataclass
-from datetime import timezone, datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Sequence, Union
+
+from dbt.contracts.graph.nodes import ResultNode
+from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
+from dbt_common.events.helpers import datetime_to_json_string
+from dbt_common.utils import cast_to_int, cast_to_str
 
 
 @dataclass
 class TimingInfo(dbtClassMixin):
+    """
+    Represents a step in the execution of a node.
+    `name` should be one of: compile, execute, or other
+    Do not call directly, use `collect_timing_info` instead.
+    """
+
     name: str
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -25,7 +27,7 @@ class TimingInfo(dbtClassMixin):
         self.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     def to_msg_dict(self):
-        msg_dict = {"name": self.name}
+        msg_dict = {"name": str(self.name)}
         if self.started_at:
             msg_dict["started_at"] = datetime_to_json_string(self.started_at)
         if self.completed_at:
@@ -45,13 +47,6 @@ class collect_timing_info:
     def __exit__(self, exc_type, exc_value, traceback):
         self.timing_info.end()
         self.callback(self.timing_info)
-        # Note: when legacy logger is removed, we can remove the following line
-        with TimingProcessor(self.timing_info):
-            fire_event(
-                TimingInfoCollected(
-                    timing_info=self.timing_info.to_msg_dict(), node_info=get_node_info()
-                )
-            )
 
 
 class RunningStatus(StrEnum):
@@ -66,14 +61,18 @@ class NodeStatus(StrEnum):
     Fail = "fail"
     Warn = "warn"
     Skipped = "skipped"
+    PartialSuccess = "partial success"
     Pass = "pass"
     RuntimeErr = "runtime error"
+    NoOp = "no-op"
 
 
 class RunStatus(StrEnum):
     Success = NodeStatus.Success
     Error = NodeStatus.Error
     Skipped = NodeStatus.Skipped
+    PartialSuccess = NodeStatus.PartialSuccess
+    NoOp = NodeStatus.NoOp
 
 
 class TestStatus(StrEnum):

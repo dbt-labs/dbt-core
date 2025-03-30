@@ -1,7 +1,8 @@
-import pytest
-from dbt.tests.util import run_dbt, check_relations_equal
 from collections import namedtuple
 
+import pytest
+
+from dbt.tests.util import check_relations_equal, run_dbt
 
 models__merge_exclude_columns_sql = """
 {{ config(
@@ -114,3 +115,7 @@ class BaseMergeExcludeColumns:
             update_sql_file=None,
         )
         self.check_scenario_correctness(expected_fields, test_case_fields, project)
+
+
+class TestMergeExcludeColumns(BaseMergeExcludeColumns):
+    pass

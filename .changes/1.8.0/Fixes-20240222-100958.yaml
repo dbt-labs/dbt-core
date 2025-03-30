@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix node_info contextvar handling so incorrect node_info doesn't persist
-time: 2024-02-22T10:09:58.122809-05:00
-custom:
-  Author: gshank
-  Issue: "8866"

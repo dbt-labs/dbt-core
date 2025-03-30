@@ -1,8 +1,9 @@
-import pytest
 from unittest import mock
 
-from dbt.plugins.manifest import PluginNodes, ModelNodeArgs
-from dbt.tests.util import run_dbt, get_manifest
+import pytest
+
+from dbt.plugins.manifest import ModelNodeArgs, PluginNodes
+from dbt.tests.util import get_manifest, run_dbt
 
 sample_seed = """sample_num,sample_bool
 1,true

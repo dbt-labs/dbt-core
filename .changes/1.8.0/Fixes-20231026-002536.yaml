@@ -1,6 +1,0 @@
-kind: Fixes
-body: Add version to fqn when version==0
-time: 2023-10-26T00:25:36.259356-05:00
-custom:
-  Author: aranke
-  Issue: "8836"

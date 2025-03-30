@@ -1,14 +1,13 @@
+from dbt.artifacts.resources import Contract, TestConfig, TestMetadata
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.nodes import (
     DependsOn,
-    InjectedCTE,
-    ModelNode,
-    ModelConfig,
     GenericTestNode,
+    InjectedCTE,
+    ModelConfig,
+    ModelNode,
 )
 from dbt.node_types import NodeType
-
-from dbt.artifacts.resources import Contract, TestConfig, TestMetadata
 
 
 def model_node():
@@ -26,8 +25,8 @@ def model_node():
         sources=[],
         metrics=[],
         depends_on=DependsOn(),
-        deferred=True,
         description="",
+        primary_key=[],
         database="test_db",
         schema="test_schema",
         alias="bar",
@@ -59,7 +58,6 @@ def generic_test_node():
         sources=[],
         metrics=[],
         depends_on=DependsOn(),
-        deferred=False,
         description="",
         database="test_db",
         schema="dbt_test__audit",

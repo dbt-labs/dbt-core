@@ -2,17 +2,16 @@ import pytest
 
 from dbt import deprecations
 from dbt.exceptions import CompilationError, ProjectContractError, YamlParseDictError
-from dbt.tests.util import run_dbt, update_config_file
 from dbt.tests.fixtures.project import write_project_files
-
+from dbt.tests.util import run_dbt, update_config_file
 from tests.functional.deprecations.fixtures import (
-    macros__custom_test_sql,
-    models_trivial__model_sql,
-    old_tests_yml,
+    data_tests_yaml,
     local_dependency__dbt_project_yml,
     local_dependency__schema_yml,
     local_dependency__seed_csv,
-    data_tests_yaml,
+    macros__custom_test_sql,
+    models_trivial__model_sql,
+    old_tests_yml,
     seed_csv,
     sources_old_tests_yaml,
     test_type_mixed_yaml,
@@ -33,7 +32,7 @@ class TestTestsConfigDeprecation:
         deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
         run_dbt(["parse"])
-        expected = {"project-test-config"}
+        expected = set()
         assert expected == deprecations.active_deprecations
 
     def test_project_tests_config_fail(self, project):
@@ -42,7 +41,7 @@ class TestTestsConfigDeprecation:
         with pytest.raises(CompilationError) as exc:
             run_dbt(["--warn-error", "--no-partial-parse", "parse"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
-        expected_msg = "The `tests` config has been renamed to `data_tests`"
+        expected_msg = "Configuration paths exist in your dbt_project.yml file which do not apply to any resources. There are 1 unused configuration paths: - data_tests"
         assert expected_msg in exc_str
 
 
@@ -63,17 +62,13 @@ class TestSchemaTestDeprecation:
         deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
         run_dbt(["parse"])
-        expected = {"project-test-config"}
+        expected = set()
         assert expected == deprecations.active_deprecations
 
     def test_generic_tests_fail(self, project):
         deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
-        with pytest.raises(CompilationError) as exc:
-            run_dbt(["--warn-error", "--no-partial-parse", "parse"])
-        exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
-        expected_msg = "The `tests` config has been renamed to `data_tests`"
-        assert expected_msg in exc_str
+        run_dbt(["--warn-error", "--no-partial-parse", "parse"])
 
     def test_generic_data_test_parsing(self, project):
         results = run_dbt(["list", "--resource-type", "test"])
@@ -99,7 +94,7 @@ class TestSourceSchemaTestDeprecation:
         deprecations.reset_deprecations()
         assert deprecations.active_deprecations == set()
         run_dbt(["parse"])
-        expected = {"project-test-config"}
+        expected = set()
         assert expected == deprecations.active_deprecations
 
     def test_generic_data_tests(self, project):

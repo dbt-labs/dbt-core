@@ -1,6 +1,0 @@
-kind: Fixes
-body: Support saved queries in `dbt list`
-time: 2024-03-07T14:24:59.530072-05:00
-custom:
-  Author: QMalcolm jtcohen6
-  Issue: "9532"

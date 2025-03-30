@@ -1,26 +1,27 @@
 import json
+from typing import Iterator, List
 
+from dbt.cli.flags import Flags
+from dbt.config.runtime import RuntimeConfig
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import (
     Exposure,
-    SourceDefinition,
     Metric,
     SavedQuery,
     SemanticModel,
+    SourceDefinition,
     UnitTestDefinition,
 )
-from dbt.flags import get_flags
+from dbt.events.types import NoNodesSelected
 from dbt.graph import ResourceTypeSelector
+from dbt.node_types import NodeType
 from dbt.task.base import resource_types_from_args
 from dbt.task.runnable import GraphRunnableTask
-from dbt.task.test import TestSelector
-from dbt.node_types import NodeType
-from dbt_common.events.functions import (
-    fire_event,
-    warn_or_error,
-)
-from dbt.events.types import NoNodesSelected, ListCmdOut
-from dbt_common.exceptions import DbtRuntimeError, DbtInternalError
+from dbt.utils import JSONEncoder
 from dbt_common.events.contextvars import task_contextvars
+from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.types import PrintEvent
+from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
 
 
 class ListTask(GraphRunnableTask):
@@ -54,7 +55,7 @@ class ListTask(GraphRunnableTask):
         )
     )
 
-    def __init__(self, args, config, manifest) -> None:
+    def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
         super().__init__(args, config, manifest)
         if self.args.models:
             if self.args.select:
@@ -142,10 +143,11 @@ class ListTask(GraphRunnableTask):
                         if self.args.output_keys
                         else k in self.ALLOWED_KEYS
                     )
-                }
+                },
+                cls=JSONEncoder,
             )
 
-    def generate_paths(self):
+    def generate_paths(self) -> Iterator[str]:
         for node in self._iterate_selected_nodes():
             yield node.original_file_path
 
@@ -172,15 +174,12 @@ class ListTask(GraphRunnableTask):
         """Log, or output a plain, newline-delimited, and ready-to-pipe list of nodes found."""
         for result in results:
             self.node_results.append(result)
-            if get_flags().LOG_FORMAT == "json":
-                fire_event(ListCmdOut(msg=result))
-            else:
-                # Cleaner to leave as print than to mutate the logger not to print timestamps.
-                print(result)
+            # No formatting, still get to stdout when --quiet is used
+            fire_event(PrintEvent(msg=result))
         return self.node_results
 
     @property
-    def resource_types(self):
+    def resource_types(self) -> List[NodeType]:
         if self.args.models:
             return [NodeType.Model]
 
@@ -199,23 +198,16 @@ class ListTask(GraphRunnableTask):
         else:
             return self.args.select
 
-    def get_node_selector(self):
+    def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
             raise DbtInternalError("manifest and graph must be set to get perform node selection")
-        if self.resource_types == [NodeType.Test]:
-            return TestSelector(
-                graph=self.graph,
-                manifest=self.manifest,
-                previous_state=self.previous_state,
-            )
-        else:
-            return ResourceTypeSelector(
-                graph=self.graph,
-                manifest=self.manifest,
-                previous_state=self.previous_state,
-                resource_types=self.resource_types,
-                include_empty_nodes=True,
-            )
+        return ResourceTypeSelector(
+            graph=self.graph,
+            manifest=self.manifest,
+            previous_state=self.previous_state,
+            resource_types=self.resource_types,
+            include_empty_nodes=True,
+        )
 
     def interpret_results(self, results):
         # list command should always return 0 as exit code

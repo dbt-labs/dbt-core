@@ -23,6 +23,12 @@ seeds__data_listagg_output_csv = """group_col,expected,version
 3,"g, g, g",comma_whitespace_unordered
 3,"g",distinct_comma
 3,"g,g,g",no_params
+1,"c_|_b_|_a",top_ordered
+2,"p_|_a_|_1",top_ordered
+3,"g_|_g_|_g",top_ordered
+1,"c_|_b",top_ordered_limited
+2,"p_|_a",top_ordered_limited
+3,"g_|_g",top_ordered_limited
 """
 
 
@@ -85,6 +91,24 @@ calculate as (
         'no_params' as version
     from data
     where group_col = 3
+    group by group_col
+
+    union all
+
+    select
+        group_col,
+        {{ listagg('string_text', "'_|_'", "order by order_col desc") }} as actual,
+        'top_ordered' as version
+    from data
+    group by group_col
+
+    union all
+
+    select
+        group_col,
+        {{ listagg('string_text', "'_|_'", "order by order_col desc", 2) }} as actual,
+        'top_ordered_limited' as version
+    from data
     group by group_col
 
 )

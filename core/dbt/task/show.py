@@ -2,16 +2,19 @@ import io
 import threading
 import time
 
+from dbt.adapters.factory import get_adapter
+from dbt.artifacts.schemas.run import RunResult, RunStatus
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.nodes import SeedNode
-from dbt.artifacts.schemas.run import RunResult, RunStatus
+from dbt.events.types import ShowNode
+from dbt.flags import get_flags
+from dbt.task.base import ConfiguredTask
+from dbt.task.compile import CompileRunner, CompileTask
+from dbt.task.seed import SeedRunner
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Note
-from dbt.events.types import ShowNode
 from dbt_common.exceptions import DbtRuntimeError
-from dbt.task.compile import CompileTask, CompileRunner
-from dbt.task.seed import SeedRunner
 
 
 class ShowRunner(CompileRunner):
@@ -52,6 +55,7 @@ class ShowRunner(CompileRunner):
             adapter_response=adapter_response.to_dict(),
             agate_table=execute_result,
             failures=None,
+            batch_results=None,
         )
 
 
@@ -67,7 +71,7 @@ class ShowTask(CompileTask):
         else:
             return ShowRunner
 
-    def task_end_messages(self, results):
+    def task_end_messages(self, results) -> None:
         is_inline = bool(getattr(self.args, "inline", None))
 
         if is_inline:
@@ -105,10 +109,11 @@ class ShowTask(CompileTask):
                     is_inline=is_inline,
                     output_format=self.args.output,
                     unique_id=result.node.unique_id,
+                    quiet=get_flags().QUIET,
                 )
             )
 
-    def _handle_result(self, result):
+    def _handle_result(self, result) -> None:
         super()._handle_result(result)
 
         if (
@@ -117,3 +122,28 @@ class ShowTask(CompileTask):
             and (self.args.select or getattr(self.args, "inline", None))
         ):
             self.node_results.append(result)
+
+
+class ShowTaskDirect(ConfiguredTask):
+    def run(self):
+        adapter = get_adapter(self.config)
+        with adapter.connection_named("show", should_release_connection=False):
+            limit = None if self.args.limit < 0 else self.args.limit
+            response, table = adapter.execute(self.args.inline_direct, fetch=True, limit=limit)
+
+            output = io.StringIO()
+            if self.args.output == "json":
+                table.to_json(path=output)
+            else:
+                table.print_table(output=output, max_rows=None)
+
+            fire_event(
+                ShowNode(
+                    node_name="direct-query",
+                    preview=output.getvalue(),
+                    is_inline=True,
+                    output_format=self.args.output,
+                    unique_id="direct-query",
+                    quiet=get_flags().QUIET,
+                )
+            )

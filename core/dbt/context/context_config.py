@@ -1,15 +1,18 @@
 from abc import abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import List, Iterator, Dict, Any, TypeVar, Generic, Optional
+from typing import Any, Dict, Generic, Iterator, List, Optional, TypeVar
 
 from dbt.adapters.factory import get_config_class_by_name
-from dbt.config import RuntimeConfig, Project, IsFQNResource
+from dbt.config import IsFQNResource, Project, RuntimeConfig
 from dbt.contracts.graph.model_config import get_config_for
-from dbt_common.contracts.config.base import BaseConfig, _listify
-from dbt_common.exceptions import DbtInternalError
+from dbt.exceptions import SchemaConfigError
+from dbt.flags import get_flags
 from dbt.node_types import NodeType
 from dbt.utils import fqn_search
+from dbt_common.contracts.config.base import BaseConfig, merge_config_dicts
+from dbt_common.dataclass_schema import ValidationError
+from dbt_common.exceptions import DbtInternalError
 
 
 @dataclass
@@ -27,8 +30,7 @@ class ConfigSource:
     def __init__(self, project):
         self.project = project
 
-    def get_config_dict(self, resource_type: NodeType):
-        ...
+    def get_config_dict(self, resource_type: NodeType): ...
 
 
 class UnrenderedConfig(ConfigSource):
@@ -130,12 +132,12 @@ class BaseContextConfigGenerator(Generic[T]):
         return self._project_configs(self._active_project, fqn, resource_type)
 
     @abstractmethod
-    def _update_from_config(self, result: T, partial: Dict[str, Any], validate: bool = False) -> T:
-        ...
+    def _update_from_config(
+        self, result: T, partial: Dict[str, Any], validate: bool = False
+    ) -> T: ...
 
     @abstractmethod
-    def initial_result(self, resource_type: NodeType, base: bool) -> T:
-        ...
+    def initial_result(self, resource_type: NodeType, base: bool) -> T: ...
 
     def calculate_node_config(
         self,
@@ -181,8 +183,7 @@ class BaseContextConfigGenerator(Generic[T]):
         project_name: str,
         base: bool,
         patch_config_dict: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        ...
+    ) -> Dict[str, Any]: ...
 
 
 class ContextConfigGenerator(BaseContextConfigGenerator[C]):
@@ -238,8 +239,12 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
             base=base,
             patch_config_dict=patch_config_dict,
         )
-        finalized = config.finalize_and_validate()
-        return finalized.to_dict(omit_none=True)
+        try:
+            finalized = config.finalize_and_validate()
+            return finalized.to_dict(omit_none=True)
+        except ValidationError as exc:
+            # we got a ValidationError - probably bad types in config()
+            raise SchemaConfigError(exc, node=config) from exc
 
 
 class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
@@ -288,6 +293,7 @@ class ContextConfig:
         project_name: str,
     ) -> None:
         self._config_call_dict: Dict[str, Any] = {}
+        self._unrendered_config_call_dict: Dict[str, Any] = {}
         self._active_project = active_project
         self._fqn = fqn
         self._resource_type = resource_type
@@ -295,55 +301,11 @@ class ContextConfig:
 
     def add_config_call(self, opts: Dict[str, Any]) -> None:
         dct = self._config_call_dict
-        self._add_config_call(dct, opts)
+        merge_config_dicts(dct, opts)
 
-    @classmethod
-    def _add_config_call(cls, config_call_dict, opts: Dict[str, Any]) -> None:
-        # config_call_dict is already encountered configs, opts is new
-        # This mirrors code in _merge_field_value in model_config.py which is similar but
-        # operates on config objects.
-        for k, v in opts.items():
-            # MergeBehavior for post-hook and pre-hook is to collect all
-            # values, instead of overwriting
-            if k in BaseConfig.mergebehavior["append"]:
-                if not isinstance(v, list):
-                    v = [v]
-                if k in config_call_dict:  # should always be a list here
-                    config_call_dict[k].extend(v)
-                else:
-                    config_call_dict[k] = v
-
-            elif k in BaseConfig.mergebehavior["update"]:
-                if not isinstance(v, dict):
-                    raise DbtInternalError(f"expected dict, got {v}")
-                if k in config_call_dict and isinstance(config_call_dict[k], dict):
-                    config_call_dict[k].update(v)
-                else:
-                    config_call_dict[k] = v
-            elif k in BaseConfig.mergebehavior["dict_key_append"]:
-                if not isinstance(v, dict):
-                    raise DbtInternalError(f"expected dict, got {v}")
-                if k in config_call_dict:  # should always be a dict
-                    for key, value in v.items():
-                        extend = False
-                        # This might start with a +, to indicate we should extend the list
-                        # instead of just clobbering it
-                        if key.startswith("+"):
-                            extend = True
-                        if key in config_call_dict[k] and extend:
-                            # extend the list
-                            config_call_dict[k][key].extend(_listify(value))
-                        else:
-                            # clobber the list
-                            config_call_dict[k][key] = _listify(value)
-                else:
-                    # This is always a dictionary
-                    config_call_dict[k] = v
-                    # listify everything
-                    for key, value in config_call_dict[k].items():
-                        config_call_dict[k][key] = _listify(value)
-            else:
-                config_call_dict[k] = v
+    def add_unrendered_config_call(self, opts: Dict[str, Any]) -> None:
+        # Cannot perform complex merge behaviours on unrendered configs as they may not be appropriate types.
+        self._unrendered_config_call_dict.update(opts)
 
     def build_config_dict(
         self,
@@ -355,12 +317,24 @@ class ContextConfig:
         if rendered:
             # TODO CT-211
             src = ContextConfigGenerator(self._active_project)  # type: ignore[var-annotated]
+            config_call_dict = self._config_call_dict
         else:
             # TODO CT-211
             src = UnrenderedConfigGenerator(self._active_project)  # type: ignore[assignment]
 
+            # preserve legacy behaviour - using unreliable (potentially rendered) _config_call_dict
+            if get_flags().state_modified_compare_more_unrendered_values is False:
+                config_call_dict = self._config_call_dict
+            else:
+                # Prefer _config_call_dict if it is available and _unrendered_config_call_dict is not,
+                # as _unrendered_config_call_dict is unreliable for non-sql nodes (e.g. no jinja config block rendered for python models, etc)
+                if self._config_call_dict and not self._unrendered_config_call_dict:
+                    config_call_dict = self._config_call_dict
+                else:
+                    config_call_dict = self._unrendered_config_call_dict
+
         return src.calculate_node_config_dict(
-            config_call_dict=self._config_call_dict,
+            config_call_dict=config_call_dict,
             fqn=self._fqn,
             resource_type=self._resource_type,
             project_name=self._project_name,

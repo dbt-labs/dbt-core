@@ -1,6 +1,0 @@
-kind: Fixes
-body: Clearer no-op logging in stubbed SavedQueryRunner
-time: 2024-02-20T16:54:53.623096-05:00
-custom:
-  Author: jtcohen6
-  Issue: "9533"

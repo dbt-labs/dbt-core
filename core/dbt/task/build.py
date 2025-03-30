@@ -1,68 +1,39 @@
-import threading
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set, Type
 
-from .run import RunTask, ModelRunner as run_model_runner
-from .snapshot import SnapshotRunner as snapshot_model_runner
-from .seed import SeedRunner as seed_runner
-from .test import TestRunner as test_runner
-
-from dbt.artifacts.schemas.results import NodeStatus, RunStatus
+from dbt.artifacts.schemas.results import NodeStatus
 from dbt.artifacts.schemas.run import RunResult
-from dbt.graph import ResourceTypeSelector, GraphQueue, Graph
-from dbt.node_types import NodeType
-from dbt.task.test import TestSelector
-from dbt.task.base import BaseRunner, resource_types_from_args
-from dbt_common.events.functions import fire_event
-from dbt.events.types import LogNodeNoOpResult
+from dbt.cli.flags import Flags
+from dbt.config.runtime import RuntimeConfig
+from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import DbtInternalError
+from dbt.graph import Graph, GraphQueue, ResourceTypeSelector
+from dbt.node_types import NodeType
+from dbt.runners import ExposureRunner as exposure_runner
+from dbt.runners import SavedQueryRunner as saved_query_runner
+from dbt.task.base import BaseRunner, resource_types_from_args
+from dbt.task.run import MicrobatchModelRunner
 
-
-class SavedQueryRunner(BaseRunner):
-    # Stub. No-op Runner for Saved Queries, which require MetricFlow for execution.
-    @property
-    def description(self):
-        return f"saved query {self.node.name}"
-
-    def before_execute(self):
-        pass
-
-    def compile(self, manifest):
-        return self.node
-
-    def after_execute(self, result):
-        fire_event(
-            LogNodeNoOpResult(
-                description=self.description,
-                index=self.node_index,
-                total=self.num_nodes,
-                node_info=self.node.node_info,
-            )
-        )
-
-    def execute(self, compiled_node, manifest):
-        # no-op
-        return RunResult(
-            node=compiled_node,
-            status=RunStatus.Success,
-            timing=[],
-            thread_id=threading.current_thread().name,
-            execution_time=0,
-            message="NO-OP",
-            adapter_response={},
-            failures=0,
-            agate_table=None,
-        )
+from .run import ModelRunner as run_model_runner
+from .run import RunTask
+from .seed import SeedRunner as seed_runner
+from .snapshot import SnapshotRunner as snapshot_model_runner
+from .test import TestRunner as test_runner
 
 
 class BuildTask(RunTask):
     """The Build task processes all assets of a given process and attempts to
     'build' them in an opinionated fashion.  Every resource type outlined in
-    RUNNER_MAP will be processed by the mapped runner class.
+    RUNNER_MAP will be processed by the mapped runners class.
 
     I.E. a resource of type Model is handled by the ModelRunner which is
     imported as run_model_runner."""
 
-    MARK_DEPENDENT_ERRORS_STATUSES = [NodeStatus.Error, NodeStatus.Fail, NodeStatus.Skipped]
+    MARK_DEPENDENT_ERRORS_STATUSES = [
+        NodeStatus.Error,
+        NodeStatus.Fail,
+        NodeStatus.Skipped,
+        NodeStatus.PartialSuccess,
+    ]
 
     RUNNER_MAP = {
         NodeType.Model: run_model_runner,
@@ -70,16 +41,17 @@ class BuildTask(RunTask):
         NodeType.Seed: seed_runner,
         NodeType.Test: test_runner,
         NodeType.Unit: test_runner,
-        NodeType.SavedQuery: SavedQueryRunner,
+        NodeType.SavedQuery: saved_query_runner,
+        NodeType.Exposure: exposure_runner,
     }
     ALL_RESOURCE_VALUES = frozenset({x for x in RUNNER_MAP.keys()})
 
-    def __init__(self, args, config, manifest) -> None:
+    def __init__(self, args: Flags, config: RuntimeConfig, manifest: Manifest) -> None:
         super().__init__(args, config, manifest)
         self.selected_unit_tests: Set = set()
         self.model_to_unit_test_map: Dict[str, List] = {}
 
-    def resource_types(self, no_unit_tests=False):
+    def resource_types(self, no_unit_tests: bool = False) -> List[NodeType]:
         resource_types = resource_types_from_args(
             self.args, set(self.ALL_RESOURCE_VALUES), set(self.ALL_RESOURCE_VALUES)
         )
@@ -132,13 +104,13 @@ class BuildTask(RunTask):
 
     def handle_model_with_unit_tests_node(self, node, pool, callback):
         self._raise_set_error()
-        args = [node]
+        args = [node, pool]
         if self.config.args.single_threaded:
             callback(self.call_model_and_unit_tests_runner(*args))
         else:
             pool.apply_async(self.call_model_and_unit_tests_runner, args=args, callback=callback)
 
-    def call_model_and_unit_tests_runner(self, node) -> RunResult:
+    def call_model_and_unit_tests_runner(self, node, pool) -> RunResult:
         assert self.manifest
         for unit_test_unique_id in self.model_to_unit_test_map[node.unique_id]:
             unit_test_node = self.manifest.unit_tests[unit_test_unique_id]
@@ -157,6 +129,11 @@ class BuildTask(RunTask):
         if runner.node.unique_id in self._skipped_children:
             cause = self._skipped_children.pop(runner.node.unique_id)
             runner.do_skip(cause=cause)
+
+        if isinstance(runner, MicrobatchModelRunner):
+            runner.set_parent_task(self)
+            runner.set_pool(pool)
+
         return self.call_runner(runner)
 
     # handle non-model-plus-unit-tests nodes
@@ -168,11 +145,13 @@ class BuildTask(RunTask):
         if runner.node.unique_id in self._skipped_children:
             cause = self._skipped_children.pop(runner.node.unique_id)
             runner.do_skip(cause=cause)
+
+        if isinstance(runner, MicrobatchModelRunner):
+            runner.set_parent_task(self)
+            runner.set_pool(pool)
+
         args = [runner]
-        if self.config.args.single_threaded:
-            callback(self.call_runner(*args))
-        else:
-            pool.apply_async(self.call_runner, args=args, callback=callback)
+        self._submit(pool, args, callback)
 
     # Make a map of model unique_ids to selected unit test unique_ids,
     # for processing before the model.
@@ -193,12 +172,6 @@ class BuildTask(RunTask):
 
         resource_types = self.resource_types(no_unit_tests)
 
-        if resource_types == [NodeType.Test]:
-            return TestSelector(
-                graph=self.graph,
-                manifest=self.manifest,
-                previous_state=self.previous_state,
-            )
         return ResourceTypeSelector(
             graph=self.graph,
             manifest=self.manifest,
@@ -206,7 +179,13 @@ class BuildTask(RunTask):
             resource_types=resource_types,
         )
 
-    def get_runner_type(self, node):
+    def get_runner_type(self, node) -> Optional[Type[BaseRunner]]:
+        if (
+            node.resource_type == NodeType.Model
+            and super().get_runner_type(node) == MicrobatchModelRunner
+        ):
+            return MicrobatchModelRunner
+
         return self.RUNNER_MAP.get(node.resource_type)
 
     # Special build compile_manifest method to pass add_test_edges to the compiler

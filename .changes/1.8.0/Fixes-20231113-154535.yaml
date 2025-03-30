@@ -1,6 +1,0 @@
-kind: Fixes
-body: Use seed file from disk for unit testing if rows not specified in YAML config
-time: 2023-11-13T15:45:35.008565Z
-custom:
-  Author: aranke
-  Issue: "8652"

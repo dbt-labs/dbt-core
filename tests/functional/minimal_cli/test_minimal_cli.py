@@ -53,6 +53,38 @@ class TestBuild(BaseConfigProject):
         assert "SKIP=1" in result.output
 
 
+class TestBuildFailFast(BaseConfigProject):
+    def test_build(self, runner, project):
+        runner.invoke(cli, ["deps"])
+        result = runner.invoke(cli, ["build", "--fail-fast"])
+        # 1 seed, 1 model, 2 data tests
+        assert "PASS=4" in result.output
+        # 2 data tests
+        assert "ERROR=2" in result.output
+        # Singular test
+        assert "WARN=1" in result.output
+        # 1 snapshot
+        assert "SKIP=1" in result.output
+        # Skipping due to fail_fast is not shown when --debug is not specified.
+        assert "Skipping due to fail_fast" not in result.output
+
+
+class TestBuildFailFastDebug(BaseConfigProject):
+    def test_build(self, runner, project):
+        runner.invoke(cli, ["deps"])
+        result = runner.invoke(cli, ["build", "--fail-fast", "--debug"])
+        # 1 seed, 1 model, 2 data tests
+        assert "PASS=4" in result.output
+        # 2 data tests
+        assert "ERROR=2" in result.output
+        # Singular test
+        assert "WARN=1" in result.output
+        # 1 snapshot
+        assert "SKIP=1" in result.output
+        # Skipping due to fail_fast is shown when --debug is specified.
+        assert "Skipping due to fail_fast" in result.output
+
+
 class TestDocsGenerate(BaseConfigProject):
     def test_docs_generate(self, runner, project):
         runner.invoke(cli, ["deps"])

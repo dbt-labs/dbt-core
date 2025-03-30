@@ -1,23 +1,26 @@
-import os
 import json
+import os
+from datetime import datetime, timedelta, timezone
+
 import pytest
-from datetime import timezone, datetime, timedelta
 import yaml
 
 import dbt.version
+from dbt import deprecations
 from dbt.artifacts.schemas.freshness import FreshnessResult
 from dbt.artifacts.schemas.results import FreshnessStatus
 from dbt.cli.main import dbtRunner
+from dbt.tests.util import AnyFloat, AnyStringWith
 from tests.functional.sources.common_source_setup import BaseSourcesTest
 from tests.functional.sources.fixtures import (
-    error_models_schema_yml,
-    error_models_model_sql,
-    filtered_models_schema_yml,
-    override_freshness_models_schema_yml,
     collect_freshness_macro_override_previous_return_signature,
+    error_models_model_sql,
+    error_models_schema_yml,
+    filtered_models_schema_yml,
+    freshness_via_custom_sql_schema_yml,
     freshness_via_metadata_schema_yml,
+    override_freshness_models_schema_yml,
 )
-from dbt.tests.util import AnyStringWith, AnyFloat
 
 
 class SuccessfulSourceFreshnessTest(BaseSourcesTest):
@@ -125,6 +128,14 @@ class SuccessfulSourceFreshnessTest(BaseSourcesTest):
                 ],
             }
         ]
+
+    def _assert_project_hooks_called(self, logs: str):
+        assert "test.on-run-start.0" in logs
+        assert "test.on-run-start.0" in logs
+
+    def _assert_project_hooks_not_called(self, logs: str):
+        assert "test.on-run-end.0" not in logs
+        assert "test.on-run-end.0" not in logs
 
 
 class TestSourceFreshness(SuccessfulSourceFreshnessTest):
@@ -414,6 +425,44 @@ class TestMetadataFreshnessFails:
         assert "Could not compute freshness for source test_table" in freshness_result.message
 
 
+class TestSourceFreshnessProjectHooksNotRun(SuccessfulSourceFreshnessTest):
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "on-run-start": ["{{ log('on-run-start hooks called') }}"],
+            "on-run-end": ["{{ log('on-run-end hooks called') }}"],
+            "flags": {
+                "source_freshness_run_project_hooks": False,
+            },
+        }
+
+    @pytest.fixture(scope="class")
+    def global_deprecations(self):
+        deprecations.reset_deprecations()
+        yield
+        deprecations.reset_deprecations()
+
+    def test_hooks_do_run_for_source_freshness(
+        self,
+        project,
+        global_deprecations,
+    ):
+        assert deprecations.active_deprecations == set()
+        _, log_output = self.run_dbt_and_capture_with_vars(
+            project,
+            [
+                "source",
+                "freshness",
+            ],
+            expect_pass=False,
+        )
+        assert "on-run-start hooks called" not in log_output
+        assert "on-run-end hooks called" not in log_output
+        expected = {"source-freshness-project-hooks"}
+        assert expected == deprecations.active_deprecations
+
+
 class TestHooksInSourceFreshness(SuccessfulSourceFreshnessTest):
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -438,8 +487,8 @@ class TestHooksInSourceFreshness(SuccessfulSourceFreshnessTest):
             ],
             expect_pass=False,
         )
-        assert "on-run-start" in log_output
-        assert "on-run-end" in log_output
+
+        self._assert_project_hooks_called(log_output)
 
 
 class TestHooksInSourceFreshnessError:
@@ -492,7 +541,7 @@ class TestHooksInSourceFreshnessDisabled(SuccessfulSourceFreshnessTest):
             },
         }
 
-    def test_hooks_do_run_for_source_freshness(
+    def test_hooks_do_not_run_for_source_freshness(
         self,
         project,
     ):
@@ -504,8 +553,7 @@ class TestHooksInSourceFreshnessDisabled(SuccessfulSourceFreshnessTest):
             ],
             expect_pass=False,
         )
-        assert "on-run-start" not in log_output
-        assert "on-run-end" not in log_output
+        self._assert_project_hooks_not_called(log_output)
 
 
 class TestHooksInSourceFreshnessDefault(SuccessfulSourceFreshnessTest):
@@ -517,7 +565,7 @@ class TestHooksInSourceFreshnessDefault(SuccessfulSourceFreshnessTest):
             "on-run-end": ["{{ log('on-run-end hooks called') }}"],
         }
 
-    def test_hooks_do_run_for_source_freshness(
+    def test_hooks_do_not_run_for_source_freshness(
         self,
         project,
     ):
@@ -530,5 +578,19 @@ class TestHooksInSourceFreshnessDefault(SuccessfulSourceFreshnessTest):
             expect_pass=False,
         )
         # default behaviour - no hooks run in source freshness
-        assert "on-run-start" not in log_output
-        assert "on-run-end" not in log_output
+        self._assert_project_hooks_not_called(log_output)
+
+
+class TestSourceFreshnessCustomSQL(SuccessfulSourceFreshnessTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"schema.yml": freshness_via_custom_sql_schema_yml}
+
+    def test_source_freshness_custom_sql(self, project):
+        result = self.run_dbt_with_vars(project, ["source", "freshness"], expect_pass=True)
+        # They are the same source but different queries were executed for each
+        assert {r.node.name: r.status for r in result} == {
+            "source_a": "warn",
+            "source_b": "warn",
+            "source_c": "pass",
+        }

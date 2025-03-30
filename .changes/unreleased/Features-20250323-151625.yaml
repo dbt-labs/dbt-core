@@ -1,0 +1,6 @@
+kind: Features
+body: Support artifact upload to dbt Cloud
+time: 2025-03-23T15:16:25.160263-07:00
+custom:
+  Author: ChenyuLInx
+  Issue: "11418"

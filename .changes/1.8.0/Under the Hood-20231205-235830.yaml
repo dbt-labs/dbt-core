@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: remove manifest from adapter.set_relations_cache signature
-time: 2023-12-05T23:58:30.920144+09:00
-custom:
-  Author: michelleark
-  Issue: "9217"

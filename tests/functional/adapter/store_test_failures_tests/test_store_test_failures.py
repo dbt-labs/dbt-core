@@ -1,20 +1,16 @@
 import pytest
 
-from dbt.tests.util import (
-    check_relations_equal,
-    run_dbt,
-)
-
+from dbt.tests.util import check_relations_equal, run_dbt
 from tests.functional.adapter.store_test_failures_tests.fixtures import (
-    seeds__people,
+    models__file_model_but_with_a_no_good_very_long_name,
+    models__fine_model,
+    models__problematic_model,
+    properties__schema_yml,
     seeds__expected_accepted_values,
     seeds__expected_failing_test,
     seeds__expected_not_null_problematic_model_id,
     seeds__expected_unique_problematic_model_id,
-    properties__schema_yml,
-    models__problematic_model,
-    models__fine_model,
-    models__file_model_but_with_a_no_good_very_long_name,
+    seeds__people,
     tests__failing_test,
     tests__passing_test,
 )

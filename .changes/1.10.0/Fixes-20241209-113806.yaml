@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix debug log messages for microbatch batch execution information
+time: 2024-12-09T11:38:06.972743-06:00
+custom:
+  Author: MichelleArk QMalcolm
+  Issue: "11111"

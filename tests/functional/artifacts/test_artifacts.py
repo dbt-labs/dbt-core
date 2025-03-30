@@ -1,24 +1,31 @@
-import pytest
 import os
-from datetime import timezone, datetime
-import dbt
-import jsonschema
+from datetime import datetime, timezone
 
-from dbt.tests.util import run_dbt, get_artifact, check_datetime_between, run_dbt_and_capture
+import jsonschema
+import pytest
+
+import dbt
+from dbt.artifacts.schemas.results import RunStatus
+from dbt.artifacts.schemas.run import RunResultsArtifact
+from dbt.contracts.graph.manifest import WritableManifest
+from dbt.events.types import ArtifactWritten
+from dbt.tests.util import (
+    check_datetime_between,
+    get_artifact,
+    run_dbt,
+    run_dbt_and_capture,
+)
 from tests.functional.artifacts.expected_manifest import (
-    expected_seeded_manifest,
     expected_references_manifest,
+    expected_seeded_manifest,
     expected_versions_manifest,
 )
 from tests.functional.artifacts.expected_run_results import (
-    expected_run_results,
     expected_references_run_results,
+    expected_run_results,
     expected_versions_run_results,
 )
-
-from dbt.contracts.graph.manifest import WritableManifest
-from dbt.artifacts.schemas.results import RunStatus
-from dbt.artifacts.schemas.run import RunResultsArtifact
+from tests.utils import EventCatcher
 
 models__schema_yml = """
 version: 2
@@ -612,8 +619,9 @@ class TestVerifyArtifacts(BaseVerifyProject):
 
     # Test generic "docs generate" command
     def test_run_and_generate(self, project, manifest_schema_path, run_results_schema_path):
+        catcher = EventCatcher(ArtifactWritten)
         start_time = datetime.now(timezone.utc).replace(tzinfo=None)
-        results = run_dbt(["compile"])
+        results = run_dbt(args=["compile"], callbacks=[catcher.catch])
         assert len(results) == 7
         verify_manifest(
             project,
@@ -622,6 +630,54 @@ class TestVerifyArtifacts(BaseVerifyProject):
             manifest_schema_path,
         )
         verify_run_results(project, expected_run_results(), start_time, run_results_schema_path)
+        # manifest written twice, semantic manifest written twice, run results written once
+        assert len(catcher.caught_events) == 5
+        assert (
+            len(
+                [
+                    event
+                    for event in catcher.caught_events
+                    if event.data.artifact_type == "WritableManifest"
+                ]
+            )
+            > 0
+        )
+        assert (
+            len(
+                [
+                    event
+                    for event in catcher.caught_events
+                    if event.data.artifact_type == "SemanticManifest"
+                ]
+            )
+            > 0
+        )
+        assert (
+            len(
+                [
+                    event
+                    for event in catcher.caught_events
+                    if event.data.artifact_type == "RunExecutionResult"
+                ]
+            )
+            > 0
+        )
+
+    # Test artifact with additional fields load fine
+    def test_load_artifact(self, project, manifest_schema_path, run_results_schema_path):
+        catcher = EventCatcher(ArtifactWritten)
+        results = run_dbt(args=["compile"], callbacks=[catcher.catch])
+        assert len(results) == 7
+        manifest_dct = get_artifact(os.path.join(project.project_root, "target", "manifest.json"))
+        # add a field that is not in the schema
+        for _, node in manifest_dct["nodes"].items():
+            node["something_else"] = "something_else"
+        # load the manifest with the additional field
+        loaded_manifest = WritableManifest.from_dict(manifest_dct)
+
+        # successfully loaded the manifest with the additional field, but the field should not be present
+        for _, node in loaded_manifest.nodes.items():
+            assert not hasattr(node, "something_else")
 
 
 class TestVerifyArtifactsReferences(BaseVerifyProject):

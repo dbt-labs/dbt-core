@@ -1,30 +1,50 @@
 import enum
 from collections import defaultdict
 from dataclasses import dataclass, field, replace
-from itertools import chain, islice
-from mashumaro.mixins.msgpack import DataClassMessagePackMixin
+from itertools import chain
 from multiprocessing.synchronize import Lock
 from typing import (
+    Any,
+    Callable,
+    ClassVar,
     DefaultDict,
     Dict,
+    Generic,
     List,
-    Optional,
-    Union,
     Mapping,
     MutableMapping,
-    Any,
+    Optional,
     Set,
     Tuple,
     TypeVar,
-    Callable,
-    Generic,
-    AbstractSet,
-    ClassVar,
+    Union,
 )
+
 from typing_extensions import Protocol
 
-from dbt import tracking
+import dbt_common.exceptions
+import dbt_common.utils
+from dbt import deprecations, tracking
+from dbt.adapters.exceptions import (
+    DuplicateMacroInPackageError,
+    DuplicateMaterializationNameError,
+)
+from dbt.adapters.factory import get_adapter_package_names
+
+# to preserve import paths
+from dbt.artifacts.resources import BaseResource, DeferRelation, NodeVersion, RefArgs
+from dbt.artifacts.resources.v1.config import NodeConfig
+from dbt.artifacts.schemas.manifest import ManifestMetadata, UniqueID, WritableManifest
+from dbt.clients.jinja_static import statically_parse_ref_or_source
+from dbt.contracts.files import (
+    AnySourceFile,
+    FileHash,
+    FixtureSourceFile,
+    SchemaSourceFile,
+    SourceFile,
+)
 from dbt.contracts.graph.nodes import (
+    RESOURCE_CLASS_TO_NODE_CLASS,
     BaseNode,
     Documentation,
     Exposure,
@@ -35,57 +55,43 @@ from dbt.contracts.graph.nodes import (
     ManifestNode,
     Metric,
     ModelNode,
-    ResultNode,
     SavedQuery,
+    SeedNode,
     SemanticModel,
+    SingularTestNode,
+    SnapshotNode,
     SourceDefinition,
-    UnpatchedSourceDefinition,
     UnitTestDefinition,
     UnitTestFileFixture,
-    RESOURCE_CLASS_TO_NODE_CLASS,
+    UnpatchedSourceDefinition,
 )
 from dbt.contracts.graph.unparsed import SourcePatch, UnparsedVersion
-from dbt.flags import get_flags
-
-# to preserve import paths
-from dbt.artifacts.resources import (
-    NodeVersion,
-    DeferRelation,
-    BaseResource,
-)
-from dbt.artifacts.schemas.manifest import WritableManifest, ManifestMetadata, UniqueID
-from dbt.contracts.files import (
-    SourceFile,
-    SchemaSourceFile,
-    FileHash,
-    AnySourceFile,
-    FixtureSourceFile,
-)
 from dbt.contracts.util import SourceKey
-from dbt_common.dataclass_schema import dbtClassMixin
-
+from dbt.events.types import ArtifactWritten, UnpinnedRefNewVersionAvailable
 from dbt.exceptions import (
+    AmbiguousResourceNameRefError,
     CompilationError,
     DuplicateResourceNameError,
-    AmbiguousResourceNameRefError,
 )
-from dbt.adapters.exceptions import DuplicateMacroInPackageError, DuplicateMaterializationNameError
-from dbt_common.helper_types import PathSet
-from dbt_common.events.functions import fire_event
-from dbt_common.events.contextvars import get_node_info
-from dbt.events.types import MergedFromState, UnpinnedRefNewVersionAvailable
-from dbt.node_types import NodeType, AccessType, REFABLE_NODE_TYPES, VERSIONED_NODE_TYPES
+from dbt.flags import get_flags
 from dbt.mp_context import get_mp_context
-import dbt_common.utils
-import dbt_common.exceptions
-
+from dbt.node_types import (
+    REFABLE_NODE_TYPES,
+    VERSIONED_NODE_TYPES,
+    AccessType,
+    NodeType,
+)
+from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.events.contextvars import get_node_info
+from dbt_common.events.functions import fire_event
+from dbt_common.helper_types import PathSet
 
 PackageName = str
 DocName = str
 RefName = str
 
 
-def find_unique_id_for_package(storage, key, package: Optional[PackageName]):
+def find_unique_id_for_package(storage, key, package: Optional[PackageName]) -> Optional[UniqueID]:
     if key not in storage:
         return None
 
@@ -409,11 +415,11 @@ class DisabledLookup(dbtClassMixin):
         self.storage: Dict[str, Dict[PackageName, List[Any]]] = {}
         self.populate(manifest)
 
-    def populate(self, manifest):
+    def populate(self, manifest: "Manifest"):
         for node in list(chain.from_iterable(manifest.disabled.values())):
             self.add_node(node)
 
-    def add_node(self, node):
+    def add_node(self, node: GraphMemberNode) -> None:
         if node.search_name not in self.storage:
             self.storage[node.search_name] = {}
         if node.package_name not in self.storage[node.search_name]:
@@ -423,8 +429,12 @@ class DisabledLookup(dbtClassMixin):
     # This should return a list of disabled nodes. It's different from
     # the other Lookup functions in that it returns full nodes, not just unique_ids
     def find(
-        self, search_name, package: Optional[PackageName], version: Optional[NodeVersion] = None
-    ):
+        self,
+        search_name,
+        package: Optional[PackageName],
+        version: Optional[NodeVersion] = None,
+        resource_types: Optional[List[NodeType]] = None,
+    ) -> Optional[List[Any]]:
         if version:
             search_name = f"{search_name}.v{version}"
 
@@ -433,20 +443,70 @@ class DisabledLookup(dbtClassMixin):
 
         pkg_dct: Mapping[PackageName, List[Any]] = self.storage[search_name]
 
+        nodes = []
         if package is None:
             if not pkg_dct:
                 return None
             else:
-                return next(iter(pkg_dct.values()))
+                nodes = next(iter(pkg_dct.values()))
         elif package in pkg_dct:
-            return pkg_dct[package]
+            nodes = pkg_dct[package]
         else:
             return None
+
+        if resource_types is None:
+            return nodes
+        else:
+            new_nodes = []
+            for node in nodes:
+                if node.resource_type in resource_types:
+                    new_nodes.append(node)
+            if not new_nodes:
+                return None
+            else:
+                return new_nodes
 
 
 class AnalysisLookup(RefableLookup):
     _lookup_types: ClassVar[set] = set([NodeType.Analysis])
     _versioned_types: ClassVar[set] = set()
+
+
+class SingularTestLookup(dbtClassMixin):
+    def __init__(self, manifest: "Manifest") -> None:
+        self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
+        self.populate(manifest)
+
+    def get_unique_id(self, search_name, package: Optional[PackageName]) -> Optional[UniqueID]:
+        return find_unique_id_for_package(self.storage, search_name, package)
+
+    def find(
+        self, search_name, package: Optional[PackageName], manifest: "Manifest"
+    ) -> Optional[SingularTestNode]:
+        unique_id = self.get_unique_id(search_name, package)
+        if unique_id is not None:
+            return self.perform_lookup(unique_id, manifest)
+        return None
+
+    def add_singular_test(self, source: SingularTestNode) -> None:
+        if source.search_name not in self.storage:
+            self.storage[source.search_name] = {}
+
+        self.storage[source.search_name][source.package_name] = source.unique_id
+
+    def populate(self, manifest: "Manifest") -> None:
+        for node in manifest.nodes.values():
+            if isinstance(node, SingularTestNode):
+                self.add_singular_test(node)
+
+    def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> SingularTestNode:
+        if unique_id not in manifest.nodes:
+            raise dbt_common.exceptions.DbtInternalError(
+                f"Singular test {unique_id} found in cache but not found in manifest"
+            )
+        node = manifest.nodes[unique_id]
+        assert isinstance(node, SingularTestNode)
+        return node
 
 
 def _packages_to_search(
@@ -570,11 +630,29 @@ M = TypeVar("M", bound=MacroCandidate)
 
 
 class CandidateList(List[M]):
-    def last(self) -> Optional[Macro]:
+    def last_candidate(
+        self, valid_localities: Optional[List[Locality]] = None
+    ) -> Optional[MacroCandidate]:
+        """
+        Obtain the last (highest precedence) MacroCandidate from the CandidateList of any locality in valid_localities.
+        If valid_localities is not specified, return the last MacroCandidate of any locality.
+        """
         if not self:
             return None
         self.sort()
-        return self[-1].macro
+
+        if valid_localities is None:
+            return self[-1]
+
+        for candidate in reversed(self):
+            if candidate.locality in valid_localities:
+                return candidate
+
+        return None
+
+    def last(self) -> Optional[Macro]:
+        last_candidate = self.last_candidate()
+        return last_candidate.macro if last_candidate is not None else None
 
 
 def _get_locality(macro: Macro, root_project_name: str, internal_packages: Set[str]) -> Locality:
@@ -636,10 +714,10 @@ class MacroMethods:
         self._macros_by_name = {}
         self._macros_by_package = {}
 
-    def find_macro_by_name(
+    def find_macro_candidate_by_name(
         self, name: str, root_project_name: str, package: Optional[str]
-    ) -> Optional[Macro]:
-        """Find a macro in the graph by its name and package name, or None for
+    ) -> Optional[MacroCandidate]:
+        """Find a MacroCandidate in the graph by its name and package name, or None for
         any package. The root project name is used to determine priority:
          - locally defined macros come first
          - then imported macros
@@ -657,7 +735,15 @@ class MacroMethods:
             filter=filter,
         )
 
-        return candidates.last()
+        return candidates.last_candidate()
+
+    def find_macro_by_name(
+        self, name: str, root_project_name: str, package: Optional[str]
+    ) -> Optional[Macro]:
+        macro_candidate = self.find_macro_candidate_by_name(
+            name=name, root_project_name=root_project_name, package=package
+        )
+        return macro_candidate.macro if macro_candidate else None
 
     def find_generate_macro_by_name(
         self, component: str, root_project_name: str, imported_package: Optional[str] = None
@@ -699,9 +785,6 @@ class MacroMethods:
         filter: Optional[Callable[[MacroCandidate], bool]] = None,
     ) -> CandidateList:
         """Find macros by their name."""
-        # avoid an import cycle
-        from dbt.adapters.factory import get_adapter_package_names
-
         candidates: CandidateList = CandidateList()
 
         macros_by_name = self.get_macros_by_name()
@@ -783,7 +866,7 @@ ResourceClassT = TypeVar("ResourceClassT", bound="BaseResource")
 
 
 @dataclass
-class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
+class Manifest(MacroMethods, dbtClassMixin):
     """The manifest for the full graph, after parsing and during compilation."""
 
     # These attributes are both positional and by keyword. If an attribute
@@ -833,6 +916,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
     _analysis_lookup: Optional[AnalysisLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
+    _singular_test_lookup: Optional[SingularTestLookup] = field(
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
+    )
     _parsing_info: ParsingInfo = field(
         default_factory=ParsingInfo,
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
@@ -850,7 +936,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
 
-    def __pre_serialize__(self):
+    def __pre_serialize__(self, context: Optional[Dict] = None):
         # serialization won't work with anything except an empty source_patches because
         # tuple keys are not supported, so ensure it's empty
         self.source_patches = {}
@@ -930,7 +1016,33 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 for specificity, atype in enumerate(self._get_parent_adapter_types(adapter_type))
             )
         )
-        return candidates.last()
+        core_candidates = [
+            candidate for candidate in candidates if candidate.locality == Locality.Core
+        ]
+
+        materialization_candidate = candidates.last_candidate()
+        # If an imported materialization macro was found that also had a core candidate, fire a deprecation
+        if (
+            materialization_candidate is not None
+            and materialization_candidate.locality == Locality.Imported
+            and core_candidates
+        ):
+            # preserve legacy behaviour - allow materialization override
+            if (
+                get_flags().require_explicit_package_overrides_for_builtin_materializations
+                is False
+            ):
+                deprecations.warn(
+                    "package-materialization-override",
+                    package_name=materialization_candidate.macro.package_name,
+                    materialization_name=materialization_name,
+                )
+            else:
+                materialization_candidate = candidates.last_candidate(
+                    valid_localities=[Locality.Core, Locality.Root]
+                )
+
+        return materialization_candidate.macro if materialization_candidate else None
 
     def get_resource_fqns(self) -> Mapping[str, PathSet]:
         resource_fqns: Dict[str, Set[Tuple[str, ...]]] = {}
@@ -941,6 +1053,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self.metrics.values(),
             self.semantic_models.values(),
             self.saved_queries.values(),
+            self.unit_tests.values(),
         )
         for resource in all_resources:
             resource_type_plural = resource.resource_type.pluralize()
@@ -1047,6 +1160,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             metrics=cls._map_resources_to_map_nodes(writable_manifest.metrics),
             groups=cls._map_resources_to_map_nodes(writable_manifest.groups),
             semantic_models=cls._map_resources_to_map_nodes(writable_manifest.semantic_models),
+            saved_queries=cls._map_resources_to_map_nodes(writable_manifest.saved_queries),
             selectors={
                 selector_id: selector
                 for selector_id, selector in writable_manifest.selectors.items()
@@ -1113,7 +1227,9 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         )
 
     def write(self, path):
-        self.writable_manifest().write(path)
+        writable = self.writable_manifest()
+        writable.write(path)
+        fire_event(ArtifactWritten(artifact_type=writable.__class__.__name__, artifact_path=path))
 
     # Called in dbt.compilation.Linker.write_graph and
     # dbt.graph.queue.get and ._include_in_cost
@@ -1201,27 +1317,14 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         return self._analysis_lookup
 
     @property
+    def singular_test_lookup(self) -> SingularTestLookup:
+        if self._singular_test_lookup is None:
+            self._singular_test_lookup = SingularTestLookup(self)
+        return self._singular_test_lookup
+
+    @property
     def external_node_unique_ids(self):
         return [node.unique_id for node in self.nodes.values() if node.is_external_node]
-
-    def resolve_refs(
-        self,
-        source_node: ModelNode,
-        current_project: str,  # TODO: ModelNode is overly restrictive typing
-    ) -> List[MaybeNonSource]:
-        resolved_refs: List[MaybeNonSource] = []
-        for ref in source_node.refs:
-            resolved = self.resolve_ref(
-                source_node,
-                ref.name,
-                ref.package,
-                ref.version,
-                current_project,
-                source_node.package_name,
-            )
-            resolved_refs.append(resolved)
-
-        return resolved_refs
 
     # Called by dbt.parser.manifest._process_refs & ManifestLoader.check_for_model_deprecations
     def resolve_ref(
@@ -1248,7 +1351,12 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
 
             # it's possible that the node is disabled
             if disabled is None:
-                disabled = self.disabled_lookup.find(target_model_name, pkg, target_model_version)
+                disabled = self.disabled_lookup.find(
+                    target_model_name,
+                    pkg,
+                    version=target_model_version,
+                    resource_types=REFABLE_NODE_TYPES,
+                )
 
         if disabled:
             return Disabled(disabled[0])
@@ -1397,8 +1505,10 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         return is_private_ref and (
             not hasattr(node, "group")
             or not node.group
+            # Invalid reference because group does not match
             or node.group != target_model.group
-            or restrict_package_access
+            # Or, invalid because these are different namespaces (project/package) and restrict-access is enforced
+            or (node.package_name != target_model.package_name and restrict_package_access)
         )
 
     def is_invalid_protected_ref(
@@ -1421,49 +1531,35 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             node.package_name != target_model.package_name and restrict_package_access
         )
 
-    # Called by GraphRunnableTask.defer_to_manifest
-    def merge_from_artifact(
-        self,
-        adapter,
-        other: "Manifest",
-        selected: AbstractSet[UniqueID],
-        favor_state: bool = False,
-    ) -> None:
-        """Given the selected unique IDs and a writable manifest, update this
-        manifest by replacing any unselected nodes with their counterpart.
+    # Called in GraphRunnableTask.before_run, RunTask.before_run, CloneTask.before_run
+    def merge_from_artifact(self, other: "Manifest") -> None:
+        """Update this manifest by adding the 'defer_relation' attribute to all nodes
+        with a counterpart in the stateful manifest used for deferral.
 
         Only non-ephemeral refable nodes are examined.
         """
         refables = set(REFABLE_NODE_TYPES)
-        merged = set()
         for unique_id, node in other.nodes.items():
             current = self.nodes.get(unique_id)
-            if current and (
-                node.resource_type in refables
-                and not node.is_ephemeral
-                and unique_id not in selected
-                and (
-                    not adapter.get_relation(current.database, current.schema, current.identifier)
-                    or favor_state
-                )
-            ):
-                merged.add(unique_id)
-                self.nodes[unique_id] = replace(node, deferred=True)
-
-            # for all other nodes, add 'defer_relation'
-            elif current and node.resource_type in refables and not node.is_ephemeral:
+            if current and node.resource_type in refables and not node.is_ephemeral:
+                assert isinstance(node.config, NodeConfig)  # this makes mypy happy
                 defer_relation = DeferRelation(
-                    node.database, node.schema, node.alias, node.relation_name
+                    database=node.database,
+                    schema=node.schema,
+                    alias=node.alias,
+                    relation_name=node.relation_name,
+                    resource_type=node.resource_type,
+                    name=node.name,
+                    description=node.description,
+                    compiled_code=(node.compiled_code if not isinstance(node, SeedNode) else None),
+                    meta=node.meta,
+                    tags=node.tags,
+                    config=node.config,
                 )
                 self.nodes[unique_id] = replace(current, defer_relation=defer_relation)
 
-        # Rebuild the flat_graph, which powers the 'graph' context variable,
-        # now that we've deferred some nodes
+        # Rebuild the flat_graph, which powers the 'graph' context variable
         self.build_flat_graph()
-
-        # log up to 5 items
-        sample = list(islice(merged, 5))
-        fire_event(MergedFromState(num_merged=len(merged), sample=sample))
 
     # Methods that were formerly in ParseResult
     def add_macro(self, source_file: SourceFile, macro: Macro):
@@ -1517,12 +1613,14 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             if isinstance(node, GenericTestNode):
                 assert test_from
                 source_file.add_test(node.unique_id, test_from)
-            if isinstance(node, Metric):
+            elif isinstance(node, Metric):
                 source_file.metrics.append(node.unique_id)
-            if isinstance(node, Exposure):
+            elif isinstance(node, Exposure):
                 source_file.exposures.append(node.unique_id)
-            if isinstance(node, Group):
+            elif isinstance(node, Group):
                 source_file.groups.append(node.unique_id)
+            elif isinstance(node, SnapshotNode):
+                source_file.snapshots.append(node.unique_id)
         elif isinstance(source_file, FixtureSourceFile):
             pass
         else:
@@ -1533,13 +1631,15 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         self.exposures[exposure.unique_id] = exposure
         source_file.exposures.append(exposure.unique_id)
 
-    def add_metric(self, source_file: SchemaSourceFile, metric: Metric, generated: bool = False):
+    def add_metric(
+        self, source_file: SchemaSourceFile, metric: Metric, generated_from: Optional[str] = None
+    ):
         _check_duplicates(metric, self.metrics)
         self.metrics[metric.unique_id] = metric
-        if not generated:
+        if not generated_from:
             source_file.metrics.append(metric.unique_id)
         else:
-            source_file.generated_metrics.append(metric.unique_id)
+            source_file.add_metrics_from_measures(generated_from, metric.unique_id)
 
     def add_group(self, source_file: SchemaSourceFile, group: Group):
         _check_duplicates(group, self.groups)
@@ -1553,7 +1653,7 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         else:
             self.disabled[node.unique_id] = [node]
 
-    def add_disabled(self, source_file: AnySourceFile, node: ResultNode, test_from=None):
+    def add_disabled(self, source_file: AnySourceFile, node: GraphMemberNode, test_from=None):
         self.add_disabled_nofile(node)
         if isinstance(source_file, SchemaSourceFile):
             if isinstance(node, GenericTestNode):
@@ -1567,6 +1667,8 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
                 source_file.semantic_models.append(node.unique_id)
             if isinstance(node, Exposure):
                 source_file.exposures.append(node.unique_id)
+            if isinstance(node, UnitTestDefinition):
+                source_file.unit_tests.append(node.unique_id)
         elif isinstance(source_file, FixtureSourceFile):
             pass
         else:
@@ -1600,6 +1702,22 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
         source_file.saved_queries.append(saved_query.unique_id)
 
     # end of methods formerly in ParseResult
+
+    def find_node_from_ref_or_source(
+        self, expression: str
+    ) -> Optional[Union[ModelNode, SourceDefinition]]:
+        ref_or_source = statically_parse_ref_or_source(expression)
+
+        node = None
+        if isinstance(ref_or_source, RefArgs):
+            node = self.ref_lookup.find(
+                ref_or_source.name, ref_or_source.package, ref_or_source.version, self
+            )
+        else:
+            source_name, source_table_name = ref_or_source[0], ref_or_source[1]
+            node = self.source_lookup.find(f"{source_name}.{source_table_name}", None, self)
+
+        return node
 
     # Provide support for copy.deepcopy() - we just need to avoid the lock!
     # pickle and deepcopy use this. It returns a callable object used to
@@ -1635,8 +1753,27 @@ class Manifest(MacroMethods, DataClassMessagePackMixin, dbtClassMixin):
             self._semantic_model_by_measure_lookup,
             self._disabled_lookup,
             self._analysis_lookup,
+            self._singular_test_lookup,
         )
         return self.__class__, args
+
+    def _microbatch_macro_is_core(self, project_name: str) -> bool:
+        microbatch_is_core = False
+        candidate = self.find_macro_candidate_by_name(
+            name="get_incremental_microbatch_sql", root_project_name=project_name, package=None
+        )
+
+        # We want to check for "Core", because "Core" basically means "builtin"
+        if candidate is not None and candidate.locality == Locality.Core:
+            microbatch_is_core = True
+
+        return microbatch_is_core
+
+    def use_microbatch_batches(self, project_name: str) -> bool:
+        return (
+            get_flags().require_batched_execution_for_custom_microbatch_strategy
+            or self._microbatch_macro_is_core(project_name=project_name)
+        )
 
 
 class MacroManifest(MacroMethods):
@@ -1644,9 +1781,9 @@ class MacroManifest(MacroMethods):
         self.macros = macros
         self.metadata = ManifestMetadata(
             user_id=tracking.active_user.id if tracking.active_user else None,
-            send_anonymous_usage_stats=get_flags().SEND_ANONYMOUS_USAGE_STATS
-            if tracking.active_user
-            else None,
+            send_anonymous_usage_stats=(
+                get_flags().SEND_ANONYMOUS_USAGE_STATS if tracking.active_user else None
+            ),
         )
         # This is returned by the 'graph' context property
         # in the ProviderContext class.

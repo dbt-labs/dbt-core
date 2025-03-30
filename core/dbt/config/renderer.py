@@ -1,19 +1,19 @@
-from typing import Dict, Any, Tuple, Optional, Union, Callable
 import re
 from datetime import date
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
-from dbt.clients.jinja import get_rendered
-from dbt_common.clients.jinja import catch_jinja
-from dbt.constants import SECRET_ENV_PREFIX, DEPENDENCIES_FILE_NAME
-from dbt.context.target import TargetContext
-from dbt.context.secret import SecretContext, SECRET_PLACEHOLDER
-from dbt.context.base import BaseContext
 from dbt.adapters.contracts.connection import HasCredentials
+from dbt.clients.jinja import get_rendered
+from dbt.constants import DEPENDENCIES_FILE_NAME, SECRET_PLACEHOLDER
+from dbt.context.base import BaseContext
+from dbt.context.secret import SecretContext
+from dbt.context.target import TargetContext
 from dbt.exceptions import DbtProjectError
+from dbt_common.clients.jinja import catch_jinja
+from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt_common.context import get_invocation_context
 from dbt_common.exceptions import CompilationError, RecursionError
 from dbt_common.utils import deep_map_render
-
 
 Keypath = Tuple[Union[str, int], ...]
 

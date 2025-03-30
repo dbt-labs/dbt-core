@@ -1,34 +1,34 @@
 from dataclasses import dataclass, field
-from typing import Mapping, Iterable, Tuple, Optional, Dict, List, Any, Union
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
 from uuid import UUID
 
-from dbt.artifacts.schemas.base import (
-    BaseArtifactMetadata,
-    ArtifactMixin,
-    schema_version,
-    get_artifact_schema_version,
-)
-from dbt.artifacts.schemas.upgrades import upgrade_manifest_json
 from dbt.artifacts.resources import (
+    Analysis,
     Documentation,
     Exposure,
+    GenericTest,
     Group,
+    HookNode,
     Macro,
     Metric,
-    SavedQuery,
-    SemanticModel,
-    SourceDefinition,
-    UnitTestDefinition,
-    Seed,
-    Analysis,
-    SingularTest,
-    HookNode,
     Model,
-    SqlOperation,
-    GenericTest,
+    SavedQuery,
+    Seed,
+    SemanticModel,
+    SingularTest,
     Snapshot,
+    SourceDefinition,
+    SqlOperation,
+    UnitTestDefinition,
 )
-
+from dbt.artifacts.schemas.base import (
+    ArtifactMixin,
+    BaseArtifactMetadata,
+    get_artifact_schema_version,
+    schema_version,
+)
+from dbt.artifacts.schemas.upgrades import upgrade_manifest_json
+from dbt_common.exceptions import DbtInternalError
 
 NodeEdgeMap = Dict[str, List[str]]
 UniqueID = str
@@ -182,10 +182,12 @@ class WritableManifest(ArtifactMixin):
             data = upgrade_manifest_json(data, manifest_schema_version)
         return cls.from_dict(data)
 
-    def __post_serialize__(self, dct):
-        for unique_id, node in dct["nodes"].items():
-            if "config_call_dict" in node:
-                del node["config_call_dict"]
-            if "defer_relation" in node:
-                del node["defer_relation"]
-        return dct
+    @classmethod
+    def validate(cls, _):
+        # When dbt try to load an artifact with additional optional fields
+        # that are not present in the schema, from_dict will work fine.
+        # As long as validate is not called, the schema will not be enforced.
+        # This is intentional, as it allows for safer schema upgrades.
+        raise DbtInternalError(
+            "The WritableManifest should never be validated directly to allow for schema upgrades."
+        )

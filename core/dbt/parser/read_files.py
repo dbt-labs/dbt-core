@@ -1,26 +1,28 @@
 import os
-import pathspec  # type: ignore
 import pathlib
 from dataclasses import dataclass, field
-from dbt_common.clients.system import load_file_contents
-from dbt.contracts.files import (
-    FilePath,
-    ParseFileType,
-    SourceFile,
-    FileHash,
-    AnySourceFile,
-    SchemaSourceFile,
-    FixtureSourceFile,
-)
+from typing import Dict, List, Mapping, MutableMapping, Optional, Protocol
+
+import pathspec  # type: ignore
+
 from dbt.config import Project
-from dbt_common.dataclass_schema import dbtClassMixin
-from dbt.parser.schemas import yaml_from_file, schema_file_keys
-from dbt.exceptions import ParsingError
-from dbt.parser.search import filesystem_search
-from typing import Optional, Dict, List, Mapping, MutableMapping
+from dbt.contracts.files import (
+    AnySourceFile,
+    FileHash,
+    FilePath,
+    FixtureSourceFile,
+    ParseFileType,
+    SchemaSourceFile,
+    SourceFile,
+)
 from dbt.events.types import InputFileDiffError
+from dbt.exceptions import ParsingError
+from dbt.parser.common import schema_file_keys
+from dbt.parser.schemas import yaml_from_file
+from dbt.parser.search import filesystem_search
+from dbt_common.clients.system import load_file_contents
+from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.functions import fire_event
-from typing import Protocol
 
 
 @dataclass
@@ -145,11 +147,11 @@ def get_source_files(project, paths, extension, parse_file_type, saved_files, ig
         if parse_file_type == ParseFileType.Seed:
             fb_list.append(load_seed_source_file(fp, project.project_name))
         # singular tests live in /tests but only generic tests live
-        # in /tests/generic so we want to skip those
+        # in /tests/generic and fixtures in /tests/fixture so we want to skip those
         else:
             if parse_file_type == ParseFileType.SingularTest:
                 path = pathlib.Path(fp.relative_path)
-                if path.parts[0] == "generic":
+                if path.parts[0] in ["generic", "fixtures"]:
                     continue
             file = load_source_file(fp, parse_file_type, project.project_name, saved_files)
             # only append the list if it has contents. added to fix #3568
@@ -431,7 +433,7 @@ def get_file_types_for_project(project):
         },
         ParseFileType.Fixture: {
             "paths": project.fixture_paths,
-            "extensions": [".csv"],
+            "extensions": [".csv", ".sql"],
             "parser": "FixtureParser",
         },
     }

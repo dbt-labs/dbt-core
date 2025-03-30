@@ -1,4 +1,5 @@
 import pytest
+
 from dbt.node_types import NodeType
 
 node_type_pluralizations = {

@@ -1,6 +1,0 @@
-kind: Features
-body: Enable inline csv fixtures in unit tests
-time: 2023-09-28T16:32:05.573776-04:00
-custom:
-  Author: gshank
-  Issue: "8626"

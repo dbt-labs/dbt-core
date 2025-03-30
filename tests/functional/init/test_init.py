@@ -1,13 +1,13 @@
-import click
 import os
-import yaml
-import pytest
 from pathlib import Path
 from unittest import mock
 from unittest.mock import Mock, call
 
-from dbt.exceptions import DbtRuntimeError
+import click
+import pytest
+import yaml
 
+from dbt.exceptions import DbtRuntimeError
 from dbt.tests.util import run_dbt
 
 

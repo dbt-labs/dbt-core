@@ -1,0 +1,18 @@
+semantic_models:
+  - name: my_sm
+    model: ref('outer')
+    defaults:
+      agg_time_dimension: created_at
+    entities:
+      - name: my_entity
+        type: primary
+        expr: id
+    dimensions:
+      - name: created_at
+        type: time
+        type_params:
+          time_granularity: day
+    measures:
+      - name: total_outer_count
+        agg: count
+        expr: 1

@@ -1,25 +1,28 @@
 import os
 import sys
 from dataclasses import dataclass
+from datetime import datetime
 from importlib import import_module
 from pathlib import Path
 from pprint import pformat as pf
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 
-from click import Context, get_current_context, Parameter
-from click.core import Command as ClickCommand, Group, ParameterSource
+from click import Context, Parameter, get_current_context
+from click.core import Command as ClickCommand
+from click.core import Group, ParameterSource
+
 from dbt.cli.exceptions import DbtUsageException
 from dbt.cli.resolvers import default_log_path, default_project_dir
 from dbt.cli.types import Command as CliCommand
 from dbt.config.project import read_project_flags
 from dbt.contracts.project import ProjectFlags
+from dbt.deprecations import fire_buffered_deprecations, renamed_env_var
+from dbt.events import ALL_EVENT_NAMES
 from dbt_common import ui
+from dbt_common.clients import jinja
 from dbt_common.events import functions
 from dbt_common.exceptions import DbtInternalError
-from dbt_common.clients import jinja
-from dbt.deprecations import renamed_env_var
 from dbt_common.helper_types import WarnErrorOptions
-from dbt.events import ALL_EVENT_NAMES
 
 if os.name != "nt":
     # https://bugs.python.org/issue41567
@@ -35,6 +38,7 @@ FLAGS_DEFAULTS = {
     "STRICT_MODE": False,
     "STORE_FAILURES": False,
     "INTROSPECT": True,
+    "STATE_MODIFIED_COMPARE_VARS": False,
 }
 
 DEPRECATED_PARAMS = {
@@ -55,6 +59,7 @@ def convert_config(config_name, config_value):
         ret = WarnErrorOptions(
             include=config_value.get("include", []),
             exclude=config_value.get("exclude", []),
+            silence=config_value.get("silence", []),
             valid_error_names=ALL_EVENT_NAMES,
         )
     return ret
@@ -89,6 +94,8 @@ class Flags:
         # Set the default flags.
         for key, value in FLAGS_DEFAULTS.items():
             object.__setattr__(self, key, value)
+        # Use to handle duplicate params in _assign_params
+        flags_defaults_list = list(FLAGS_DEFAULTS.keys())
 
         if ctx is None:
             ctx = get_current_context()
@@ -170,13 +177,29 @@ class Flags:
                         old_name=dep_param.envvar,
                         new_name=new_param.envvar,
                     )
+                # end deprecated_params
 
                 # Set the flag value.
-                is_duplicate = hasattr(self, param_name.upper())
+                is_duplicate = (
+                    hasattr(self, param_name.upper())
+                    and param_name.upper() not in flags_defaults_list
+                )
+                # First time through, set as though FLAGS_DEFAULTS hasn't been set, so not a duplicate.
+                # Subsequent pass (to process "parent" params) should be treated as duplicates.
+                if param_name.upper() in flags_defaults_list:
+                    flags_defaults_list.remove(param_name.upper())
+                # Note: the following determines whether parameter came from click default,
+                # not from FLAGS_DEFAULTS in __init__.
                 is_default = ctx.get_parameter_source(param_name) == ParameterSource.DEFAULT
+                is_envvar = ctx.get_parameter_source(param_name) == ParameterSource.ENVIRONMENT
+
                 flag_name = (new_name or param_name).upper()
 
-                if (is_duplicate and not is_default) or not is_duplicate:
+                # envvar flags are assigned in either parent or child context if there
+                # isn't an overriding cli command flag.
+                # If the flag has been encountered as a child cli flag, we don't
+                # want to overwrite with parent envvar, since the commandline flag takes precedence.
+                if (is_duplicate and not (is_default or is_envvar)) or not is_duplicate:
                     object.__setattr__(self, flag_name, param_value)
 
                 # Track default assigned params.
@@ -287,6 +310,13 @@ class Flags:
             params_assigned_from_default, ["WARN_ERROR", "WARN_ERROR_OPTIONS"]
         )
 
+        # Handle arguments mutually exclusive with INLINE
+        self._assert_mutually_exclusive(params_assigned_from_default, ["SELECT", "INLINE"])
+        self._assert_mutually_exclusive(params_assigned_from_default, ["SELECTOR", "INLINE"])
+
+        # Check event_time configs for validity
+        self._validate_event_time_configs()
+
         # Support lower cased access for legacy code.
         params = set(
             x for x in dir(self) if not callable(getattr(self, x)) and not x.startswith("__")
@@ -313,7 +343,9 @@ class Flags:
         """
         set_flag = None
         for flag in group:
-            flag_set_by_user = flag.lower() not in params_assigned_from_default
+            flag_set_by_user = (
+                hasattr(self, flag) and flag.lower() not in params_assigned_from_default
+            )
             if flag_set_by_user and set_flag:
                 raise DbtUsageException(
                     f"{flag.lower()}: not allowed with argument {set_flag.lower()}"
@@ -321,12 +353,44 @@ class Flags:
             elif flag_set_by_user:
                 set_flag = flag
 
+    def _validate_event_time_configs(self) -> None:
+        event_time_start: datetime = (
+            getattr(self, "EVENT_TIME_START") if hasattr(self, "EVENT_TIME_START") else None
+        )
+        event_time_end: datetime = (
+            getattr(self, "EVENT_TIME_END") if hasattr(self, "EVENT_TIME_END") else None
+        )
+
+        # only do validations if at least one of `event_time_start` or `event_time_end` are specified
+        if event_time_start is not None or event_time_end is not None:
+
+            # These `ifs`, combined with the parent `if` make it so that `event_time_start` and
+            # `event_time_end` are mutually required
+            if event_time_start is None:
+                raise DbtUsageException(
+                    "The flag `--event-time-end` was specified, but `--event-time-start` was not. "
+                    "When specifying `--event-time-end`, `--event-time-start` must also be present."
+                )
+            if event_time_end is None:
+                raise DbtUsageException(
+                    "The flag `--event-time-start` was specified, but `--event-time-end` was not. "
+                    "When specifying `--event-time-start`, `--event-time-end` must also be present."
+                )
+
+            # This `if` just is a sanity check that `event_time_start` is before `event_time_end`
+            if event_time_start >= event_time_end:
+                raise DbtUsageException(
+                    "Value for `--event-time-start` must be less than `--event-time-end`"
+                )
+
     def fire_deprecations(self):
         """Fires events for deprecated env_var usage."""
         [dep_fn() for dep_fn in self.deprecated_env_var_warnings]
         # It is necessary to remove this attr from the class so it does
         # not get pickled when written to disk as json.
         object.__delattr__(self, "deprecated_env_var_warnings")
+
+        fire_buffered_deprecations()
 
     @classmethod
     def from_dict(cls, command: CliCommand, args_dict: Dict[str, Any]) -> "Flags":
@@ -351,6 +415,11 @@ class Flags:
         # Set globals for common.jinja
         if getattr(self, "MACRO_DEBUGGING", None) is not None:
             jinja.MACRO_DEBUGGING = getattr(self, "MACRO_DEBUGGING")
+
+    # This is here to prevent mypy from complaining about all of the
+    # attributes which we added dynamically.
+    def __getattr__(self, name: str) -> Any:
+        return super().__getattribute__(name)  # type: ignore
 
 
 CommandParams = List[str]

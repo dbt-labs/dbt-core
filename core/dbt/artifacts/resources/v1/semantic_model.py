@@ -1,6 +1,8 @@
 import time
-
 from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Sequence
+
+from dbt.artifacts.resources import SourceFileMetadata
 from dbt.artifacts.resources.base import GraphResource
 from dbt.artifacts.resources.v1.components import DependsOn, RefArgs
 from dbt_common.contracts.config.base import BaseConfig, CompareBehavior, MergeBehavior
@@ -19,9 +21,6 @@ from dbt_semantic_interfaces.type_enums import (
     EntityType,
     TimeGranularity,
 )
-from dbt.artifacts.resources import SourceFileMetadata
-from typing import Any, Dict, List, Optional, Sequence
-
 
 """
 The classes in this file are dataclasses which are used to construct the Semantic
@@ -30,6 +29,14 @@ what is specified in their protocol definitions in dbt-semantic-interfaces.
 Their protocol definitions can be found here:
 https://github.com/dbt-labs/dbt-semantic-interfaces/blob/main/dbt_semantic_interfaces/protocols/semantic_model.py
 """
+
+
+@dataclass
+class SemanticLayerElementConfig(dbtClassMixin):
+    meta: Dict[str, Any] = field(
+        default_factory=dict,
+        metadata=MergeBehavior.Update.meta(),
+    )
 
 
 @dataclass
@@ -42,7 +49,7 @@ class NodeRelation(dbtClassMixin):
     alias: str
     schema_name: str  # TODO: Could this be called simply "schema" so we could reuse StateRelation?
     database: Optional[str] = None
-    relation_name: Optional[str] = None
+    relation_name: Optional[str] = ""
 
 
 # ====================================
@@ -73,6 +80,7 @@ class Dimension(dbtClassMixin):
     type_params: Optional[DimensionTypeParams] = None
     expr: Optional[str] = None
     metadata: Optional[SourceFileMetadata] = None
+    config: Optional[SemanticLayerElementConfig] = None
 
     @property
     def reference(self) -> DimensionReference:
@@ -107,6 +115,7 @@ class Entity(dbtClassMixin):
     label: Optional[str] = None
     role: Optional[str] = None
     expr: Optional[str] = None
+    config: Optional[SemanticLayerElementConfig] = None
 
     @property
     def reference(self) -> EntityReference:
@@ -148,6 +157,7 @@ class Measure(dbtClassMixin):
     agg_params: Optional[MeasureAggregationParameters] = None
     non_additive_dimension: Optional[NonAdditiveDimension] = None
     agg_time_dimension: Optional[str] = None
+    config: Optional[SemanticLayerElementConfig] = None
 
     @property
     def reference(self) -> MeasureReference:

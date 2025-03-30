@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.tests.util import run_dbt, get_manifest, write_file, write_config_file
+from dbt.tests.util import get_manifest, run_dbt, write_config_file, write_file
 
 dbt_project_yml = """
 models:

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Handle `--limit -1` properly in `ShowTaskDirect` so that it propagates None instead of a negative int
+time: 2025-02-07T13:14:24.725503-05:00
+custom:
+    Author: WilliamDee
+    Issue: None

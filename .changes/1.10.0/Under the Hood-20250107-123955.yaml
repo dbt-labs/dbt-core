@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Change exception type from DbtInternalException to UndefinedMacroError when
+  macro not found in 'run operation' command
+time: 2025-01-07T12:39:55.234321-05:00
+custom:
+  Author: michelleark
+  Issue: "11192"

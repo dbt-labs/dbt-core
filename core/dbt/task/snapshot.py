@@ -1,21 +1,25 @@
-from .run import ModelRunner, RunTask
+from typing import Optional, Type
 
-from dbt_common.exceptions import DbtInternalError
-from dbt_common.events.functions import fire_event
-from dbt_common.events.base_types import EventLevel
+from dbt.artifacts.schemas.results import NodeStatus
 from dbt.events.types import LogSnapshotResult
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType
-from dbt.artifacts.schemas.results import NodeStatus
+from dbt.task import group_lookup
+from dbt.task.base import BaseRunner
+from dbt.task.run import ModelRunner, RunTask
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import fire_event
+from dbt_common.exceptions import DbtInternalError
 from dbt_common.utils import cast_dict_to_dict_of_strings
 
 
 class SnapshotRunner(ModelRunner):
-    def describe_node(self):
+    def describe_node(self) -> str:
         return "snapshot {}".format(self.get_node_representation())
 
     def print_result_line(self, result):
         model = result.node
+        group = group_lookup.get(model.unique_id)
         cfg = model.config.to_dict(omit_none=True)
         level = EventLevel.ERROR if result.status == NodeStatus.Error else EventLevel.INFO
         fire_event(
@@ -28,13 +32,14 @@ class SnapshotRunner(ModelRunner):
                 execution_time=result.execution_time,
                 node_info=model.node_info,
                 result_message=result.message,
+                group=group,
             ),
             level=level,
         )
 
 
 class SnapshotTask(RunTask):
-    def raise_on_first_error(self):
+    def raise_on_first_error(self) -> bool:
         return False
 
     def get_node_selector(self):
@@ -47,5 +52,5 @@ class SnapshotTask(RunTask):
             resource_types=[NodeType.Snapshot],
         )
 
-    def get_runner_type(self, _):
+    def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:
         return SnapshotRunner

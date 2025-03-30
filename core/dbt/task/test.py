@@ -1,46 +1,52 @@
-import daff
 import io
 import json
 import re
-from dataclasses import dataclass
-from dbt.utils import _coerce_decimal, strtobool
-from dbt_common.events.format import pluralize
-from dbt_common.dataclass_schema import dbtClassMixin
 import threading
-from typing import Dict, Any, Optional, Union, List, TYPE_CHECKING, Tuple
+from dataclasses import dataclass
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Collection,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
 
-from .compile import CompileRunner
-from .run import RunTask
+import daff
 
+from dbt.adapters.exceptions import MissingMaterializationError
+from dbt.artifacts.schemas.catalog import PrimitiveDict
+from dbt.artifacts.schemas.results import TestStatus
+from dbt.artifacts.schemas.run import RunResult
+from dbt.clients.jinja import MacroGenerator
+from dbt.context.providers import generate_runtime_model_context
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import (
+    GenericTestNode,
+    SingularTestNode,
     TestNode,
     UnitTestDefinition,
     UnitTestNode,
-    GenericTestNode,
-    SingularTestNode,
 )
-from dbt.contracts.graph.manifest import Manifest
-from dbt.artifacts.schemas.results import TestStatus
-from dbt.artifacts.schemas.run import RunResult
-from dbt.artifacts.schemas.catalog import PrimitiveDict
-from dbt.context.providers import generate_runtime_model_context
-from dbt.clients.jinja import MacroGenerator
-from dbt_common.events.functions import fire_event
-from dbt.events.types import (
-    LogTestResult,
-    LogStartLine,
-)
-from dbt.exceptions import DbtInternalError, BooleanError
-from dbt_common.exceptions import DbtBaseException, DbtRuntimeError
-from dbt.adapters.exceptions import MissingMaterializationError
-from dbt.graph import (
-    ResourceTypeSelector,
-)
-from dbt.node_types import NodeType
-from dbt.parser.unit_tests import UnitTestManifestLoader
+from dbt.events.types import LogStartLine, LogTestResult
+from dbt.exceptions import BooleanError, DbtInternalError
 from dbt.flags import get_flags
+from dbt.graph import ResourceTypeSelector
+from dbt.node_types import TEST_NODE_TYPES, NodeType
+from dbt.parser.unit_tests import UnitTestManifestLoader
+from dbt.task import group_lookup
+from dbt.task.base import BaseRunner, resource_types_from_args
+from dbt.task.compile import CompileRunner
+from dbt.task.run import RunTask
+from dbt.utils import _coerce_decimal, strtobool
+from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.events.format import pluralize
+from dbt_common.events.functions import fire_event
+from dbt_common.exceptions import DbtBaseException, DbtRuntimeError
 from dbt_common.ui import green, red
-
 
 if TYPE_CHECKING:
     import agate
@@ -88,18 +94,22 @@ class UnitTestResultData(dbtClassMixin):
 class TestRunner(CompileRunner):
     _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
-    def describe_node_name(self):
+    def describe_node_name(self) -> str:
         if self.node.resource_type == NodeType.Unit:
             name = f"{self.node.model}::{self.node.versioned_name}"
             return name
         else:
             return self.node.name
 
-    def describe_node(self):
+    def describe_node(self) -> str:
         return f"{self.node.resource_type} {self.describe_node_name()}"
 
     def print_result_line(self, result):
         model = result.node
+        group = group_lookup.get(model.unique_id)
+        attached_node = (
+            result.node.attached_node if isinstance(result.node, GenericTestNode) else None
+        )
 
         fire_event(
             LogTestResult(
@@ -110,6 +120,8 @@ class TestRunner(CompileRunner):
                 execution_time=result.execution_time,
                 node_info=model.node_info,
                 num_failures=result.failures,
+                group=group,
+                attached_node=attached_node,
             ),
             level=LogTestResult.status_to_level(str(result.status)),
         )
@@ -124,11 +136,13 @@ class TestRunner(CompileRunner):
             )
         )
 
-    def before_execute(self):
+    def before_execute(self) -> None:
         self.print_start_line()
 
     def execute_data_test(self, data_test: TestNode, manifest: Manifest) -> TestResultData:
         context = generate_runtime_model_context(data_test, self.config, manifest)
+
+        hook_ctx = self.adapter.pre_model_hook(context["config"])
 
         materialization_macro = manifest.find_materialization_macro_by_name(
             self.config.project_name, data_test.get_materialization(), self.adapter.type()
@@ -146,8 +160,12 @@ class TestRunner(CompileRunner):
 
         # generate materialization macro
         macro_func = MacroGenerator(materialization_macro, context)
-        # execute materialization macro
-        macro_func()
+        try:
+            # execute materialization macro
+            macro_func()
+        finally:
+            self.adapter.post_model_hook(context, hook_ctx)
+
         # load results from context
         # could eventually be returned directly by materialization
         result = context["load_result"]("main")
@@ -202,6 +220,8 @@ class TestRunner(CompileRunner):
         # materialization, not compile the node.compiled_code
         context = generate_runtime_model_context(unit_test_node, self.config, unit_test_manifest)
 
+        hook_ctx = self.adapter.pre_model_hook(context["config"])
+
         materialization_macro = unit_test_manifest.find_materialization_macro_by_name(
             self.config.project_name, unit_test_node.get_materialization(), self.adapter.type()
         )
@@ -219,14 +239,16 @@ class TestRunner(CompileRunner):
 
         # generate materialization macro
         macro_func = MacroGenerator(materialization_macro, context)
-        # execute materialization macro
         try:
+            # execute materialization macro
             macro_func()
         except DbtBaseException as e:
             raise DbtRuntimeError(
                 f"An error occurred during execution of unit test '{unit_test_def.name}'. "
                 f"There may be an error in the unit test definition: check the data types.\n {e}"
             )
+        finally:
+            self.adapter.post_model_hook(context, hook_ctx)
 
         # load results from context
         # could eventually be returned directly by materialization
@@ -280,7 +302,9 @@ class TestRunner(CompileRunner):
             message = f"Got {num_errors}, configured to fail if {test.config.error_if}"
             failures = result.failures
         elif result.should_warn:
-            if get_flags().WARN_ERROR:
+            if get_flags().WARN_ERROR or get_flags().WARN_ERROR_OPTIONS.includes(
+                LogTestResult.__name__
+            ):
                 status = TestStatus.Fail
                 message = f"Got {num_errors}, configured to fail if {test.config.warn_if}"
             else:
@@ -299,6 +323,7 @@ class TestRunner(CompileRunner):
             message=message,
             adapter_response=result.adapter_response,
             failures=failures,
+            batch_results=None,
         )
         return run_result
 
@@ -324,9 +349,10 @@ class TestRunner(CompileRunner):
             message=message,
             adapter_response=result.adapter_response,
             failures=failures,
+            batch_results=None,
         )
 
-    def after_execute(self, result):
+    def after_execute(self, result) -> None:
         self.print_result_line(result)
 
     def _get_unit_test_agate_table(self, result_table, actual_or_expected: str):
@@ -340,15 +366,16 @@ class TestRunner(CompileRunner):
     def _get_daff_diff(
         self, expected: "agate.Table", actual: "agate.Table", ordered: bool = False
     ) -> daff.TableDiff:
-
-        expected_daff_table = daff.PythonTableView(list_rows_from_table(expected))
-        actual_daff_table = daff.PythonTableView(list_rows_from_table(actual))
-
-        alignment = daff.Coopy.compareTables(expected_daff_table, actual_daff_table).align()
-        result = daff.PythonTableView([])
+        # Sort expected and actual inputs prior to creating daff diff to ensure order insensitivity
+        # https://github.com/paulfitz/daff/issues/200
+        expected_daff_table = daff.PythonTableView(list_rows_from_table(expected, sort=True))
+        actual_daff_table = daff.PythonTableView(list_rows_from_table(actual, sort=True))
 
         flags = daff.CompareFlags()
         flags.ordered = ordered
+
+        alignment = daff.Coopy.compareTables(expected_daff_table, actual_daff_table, flags).align()
+        result = daff.PythonTableView([])
 
         diff = daff.TableDiff(alignment, flags)
         diff.hilite(result)
@@ -365,16 +392,6 @@ class TestRunner(CompileRunner):
         return rendered
 
 
-class TestSelector(ResourceTypeSelector):
-    def __init__(self, graph, manifest, previous_state) -> None:
-        super().__init__(
-            graph=graph,
-            manifest=manifest,
-            previous_state=previous_state,
-            resource_types=[NodeType.Test, NodeType.Unit],
-        )
-
-
 class TestTask(RunTask):
     """
     Testing:
@@ -384,19 +401,30 @@ class TestTask(RunTask):
 
     __test__ = False
 
-    def raise_on_first_error(self):
+    def raise_on_first_error(self) -> bool:
         return False
 
-    def get_node_selector(self) -> TestSelector:
+    @property
+    def resource_types(self) -> List[NodeType]:
+        resource_types: Collection[NodeType] = resource_types_from_args(
+            self.args, set(TEST_NODE_TYPES), set(TEST_NODE_TYPES)
+        )
+
+        # filter out any non-test node types
+        resource_types = [rt for rt in resource_types if rt in TEST_NODE_TYPES]
+        return list(resource_types)
+
+    def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
             raise DbtInternalError("manifest and graph must be set to get perform node selection")
-        return TestSelector(
+        return ResourceTypeSelector(
             graph=self.graph,
             manifest=self.manifest,
             previous_state=self.previous_state,
+            resource_types=self.resource_types,
         )
 
-    def get_runner_type(self, _):
+    def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:
         return TestRunner
 
 
@@ -410,10 +438,25 @@ def json_rows_from_table(table: "agate.Table") -> List[Dict[str, Any]]:
 
 
 # This was originally in agate_helper, but that was moved out into dbt_common
-def list_rows_from_table(table: "agate.Table") -> List[Any]:
-    "Convert a table to a list of lists, where the first element represents the header"
-    rows = [[col.name for col in table.columns]]
+def list_rows_from_table(table: "agate.Table", sort: bool = False) -> List[Any]:
+    """
+    Convert given table to a list of lists, where the first element represents the header
+
+    By default, sort is False and no sort order is applied to the non-header rows of the given table.
+
+    If sort is True, sort the non-header rows hierarchically, treating None values as lower in order.
+    Examples:
+        * [['a','b','c'],[4,5,6],[1,2,3]] -> [['a','b','c'],[1,2,3],[4,5,6]]
+        * [['a','b','c'],[4,5,6],[1,null,3]] -> [['a','b','c'],[1,null,3],[4,5,6]]
+        * [['a','b','c'],[4,5,6],[null,2,3]] -> [['a','b','c'],[4,5,6],[null,2,3]]
+    """
+    header = [col.name for col in table.columns]
+
+    rows = []
     for row in table.rows:
         rows.append(list(row.values()))
 
-    return rows
+    if sort:
+        rows = sorted(rows, key=lambda x: [(elem is None, elem) for elem in x])
+
+    return [header] + rows

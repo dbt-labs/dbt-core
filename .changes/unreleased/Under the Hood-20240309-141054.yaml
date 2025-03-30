@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Improve dbt CLI speed
-time: 2024-03-09T14:10:54.549618-05:00
-custom:
-  Author: dwreeves
-  Issue: "4627"

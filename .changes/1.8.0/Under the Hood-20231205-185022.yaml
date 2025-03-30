@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Move BaseConfig, Metadata and various other contract classes from model_config
-  to common/contracts/config
-time: 2023-12-05T18:50:22.321229-08:00
-custom:
-  Author: colin-rorgers-dbt
-  Issue: "8919"

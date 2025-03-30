@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix cased comparison in catalog-retrieval function.
-time: 2023-10-30T09:37:34.258612-04:00
-custom:
-  Author: peterallenwebb
-  Issue: "8939"

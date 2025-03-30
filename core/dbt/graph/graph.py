@@ -1,7 +1,8 @@
-from typing import Set, Iterable, Iterator, Optional, NewType
-from itertools import product
-import networkx as nx  # type: ignore
 from functools import partial
+from itertools import product
+from typing import Iterable, Iterator, NewType, Optional, Set
+
+import networkx as nx  # type: ignore
 
 from dbt_common.exceptions import DbtInternalError
 
@@ -58,18 +59,52 @@ class Graph:
     def select_children(
         self, selected: Set[UniqueId], max_depth: Optional[int] = None
     ) -> Set[UniqueId]:
-        descendants: Set[UniqueId] = set()
-        for node in selected:
-            descendants.update(self.descendants(node, max_depth))
-        return descendants
+        """Returns all nodes which are descendants of the 'selected' set.
+        Nodes in the 'selected' set are counted as children only if
+        they are descendants of other nodes in the 'selected' set."""
+        children: Set[UniqueId] = set()
+        i = 0
+        while len(selected) > 0 and (max_depth is None or i < max_depth):
+            next_layer: Set[UniqueId] = set()
+            for node in selected:
+                next_layer.update(
+                    iter(
+                        e[1]
+                        for e in self.graph.out_edges(node)
+                        if e[1] not in children
+                        and self.filter_edges_by_type(e[0], e[1], "parent_test")
+                    )
+                )
+            children.update(next_layer)
+            selected = next_layer
+            i += 1
+
+        return children
 
     def select_parents(
         self, selected: Set[UniqueId], max_depth: Optional[int] = None
     ) -> Set[UniqueId]:
-        ancestors: Set[UniqueId] = set()
-        for node in selected:
-            ancestors.update(self.ancestors(node, max_depth))
-        return ancestors
+        """Returns all nodes which are ancestors of the 'selected' set.
+        Nodes in the 'selected' set are counted as parents only if
+        they are ancestors of other nodes in the 'selected' set."""
+        parents: Set[UniqueId] = set()
+        i = 0
+        while len(selected) > 0 and (max_depth is None or i < max_depth):
+            next_layer: Set[UniqueId] = set()
+            for node in selected:
+                next_layer.update(
+                    iter(
+                        e[0]
+                        for e in self.graph.in_edges(node)
+                        if e[0] not in parents
+                        and self.filter_edges_by_type(e[0], e[1], "parent_test")
+                    )
+                )
+            parents.update(next_layer)
+            selected = next_layer
+            i += 1
+
+        return parents
 
     def select_successors(self, selected: Set[UniqueId]) -> Set[UniqueId]:
         successors: Set[UniqueId] = set()

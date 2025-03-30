@@ -1,4 +1,5 @@
 import pytest
+
 from dbt.tests.util import run_dbt
 from tests.functional.adapter.column_types.fixtures import (
     macro_test_is_type_sql,

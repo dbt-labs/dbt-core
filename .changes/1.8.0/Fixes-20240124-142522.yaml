@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix retry command run from CLI
-time: 2024-01-24T14:25:22.846199-08:00
-custom:
-  Author: ChenyuLInx
-  Issue: "9444"

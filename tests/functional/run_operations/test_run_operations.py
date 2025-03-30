@@ -3,17 +3,22 @@ import os
 import pytest
 import yaml
 
-from dbt_common.exceptions import DbtInternalError
+from dbt.artifacts.schemas.results import RunStatus
 from dbt.tests.util import (
     check_table_does_exist,
-    run_dbt,
-    write_file,
     mkdir,
-    run_dbt_and_capture,
     rm_dir,
     rm_file,
+    run_dbt,
+    run_dbt_and_capture,
+    write_file,
 )
-from tests.functional.run_operations.fixtures import happy_macros_sql, sad_macros_sql, model_sql
+from dbt_common.exceptions import UndefinedMacroError
+from tests.functional.run_operations.fixtures import (
+    happy_macros_sql,
+    model_sql,
+    sad_macros_sql,
+)
 
 
 class TestOperations:
@@ -76,7 +81,7 @@ class TestOperations:
 
     def test_macro_missing(self, project):
         with pytest.raises(
-            DbtInternalError,
+            UndefinedMacroError,
             match="dbt could not find a macro with the name 'this_macro_does_not_exist' in any package",
         ):
             self.run_operation("this_macro_does_not_exist", False)
@@ -131,9 +136,25 @@ name: 'pkg'
         run_dbt(["deps"])
 
         results, log_output = run_dbt_and_capture(["run-operation", "something_cool"])
+
+        for result in results:
+            if result.status == RunStatus.Skipped:
+                continue
+
+            timing_keys = [timing.name for timing in result.timing]
+            assert timing_keys == ["compile", "execute"]
+
         assert "something cool" in log_output
 
         results, log_output = run_dbt_and_capture(["run-operation", "pkg.something_cool"])
+
+        for result in results:
+            if result.status == RunStatus.Skipped:
+                continue
+
+            timing_keys = [timing.name for timing in result.timing]
+            assert timing_keys == ["compile", "execute"]
+
         assert "something cool" in log_output
 
         rm_dir("pkg")

@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Make dbt-core compatible with Python 3.12
-time: 2024-02-21T14:50:58.983559Z
-custom:
-  Author: l1xnan aranke
-  Issue: "9007"

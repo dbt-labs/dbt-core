@@ -1,38 +1,43 @@
-import pathlib
 import itertools
 import os
+import pathlib
+from typing import Any, Dict, List, Optional, Union
 
-from typing import List, Dict, Optional, Union, Any
+from dbt.adapters.factory import get_adapter, get_adapter_package_names
 from dbt.artifacts.resources import NodeVersion, RefArgs
-from dbt.parser.base import SimpleParser
-from dbt.parser.generic_test_builders import TestBuilder
-from dbt.parser.search import FileBlock
+from dbt.clients.jinja import add_rendered_test_kwargs, get_rendered
+from dbt.context.configured import SchemaYamlVars, generate_schema_yml_context
+from dbt.context.context_config import ContextConfig
+from dbt.context.macro_resolver import MacroResolver
 from dbt.context.providers import generate_test_context
+from dbt.contracts.files import FileHash
+from dbt.contracts.graph.nodes import (
+    GenericTestNode,
+    GraphMemberNode,
+    ManifestNode,
+    UnpatchedSourceDefinition,
+)
+from dbt.contracts.graph.unparsed import UnparsedColumn, UnparsedNodeUpdate
+from dbt.exceptions import (
+    CompilationError,
+    ParsingError,
+    SchemaConfigError,
+    TestConfigError,
+)
+from dbt.node_types import NodeType
+from dbt.parser.base import SimpleParser
 from dbt.parser.common import (
-    TestBlock,
-    Testable,
-    TestDef,
     GenericTestBlock,
+    Testable,
+    TestBlock,
+    TestDef,
     VersionedTestBlock,
     trimmed,
 )
-from dbt.contracts.graph.unparsed import UnparsedNodeUpdate, UnparsedColumn
-from dbt.contracts.graph.nodes import (
-    GenericTestNode,
-    UnpatchedSourceDefinition,
-    ManifestNode,
-    GraphMemberNode,
-)
-from dbt.context.context_config import ContextConfig
-from dbt.context.configured import generate_schema_yml_context, SchemaYamlVars
+from dbt.parser.generic_test_builders import TestBuilder
+from dbt.parser.search import FileBlock
+from dbt.utils import get_pseudo_test_path, md5
 from dbt_common.dataclass_schema import ValidationError
-from dbt.exceptions import SchemaConfigError, CompilationError, ParsingError, TestConfigError
-from dbt.contracts.files import FileHash
-from dbt.utils import md5, get_pseudo_test_path
-from dbt.clients.jinja import get_rendered, add_rendered_test_kwargs
-from dbt.adapters.factory import get_adapter, get_adapter_package_names
-from dbt.node_types import NodeType
-from dbt.context.macro_resolver import MacroResolver
 
 
 # This parser handles the tests that are defined in "schema" (yaml) files, on models,
@@ -91,6 +96,7 @@ class SchemaGenericTestParser(SimpleParser):
         test_metadata: Dict[str, Any],
         file_key_name: str,
         column_name: Optional[str],
+        description: str,
     ) -> GenericTestNode:
 
         HASH_LENGTH = 10
@@ -129,6 +135,7 @@ class SchemaGenericTestParser(SimpleParser):
             "column_name": column_name,
             "checksum": FileHash.empty().to_dict(omit_none=True),
             "file_key_name": file_key_name,
+            "description": description,
         }
         try:
             GenericTestNode.validate(dct)
@@ -195,7 +202,9 @@ class SchemaGenericTestParser(SimpleParser):
 
         # this is the ContextConfig that is used in render_update
         config: ContextConfig = self.initial_config(fqn)
-
+        # Adding the builder's config to the ContextConfig
+        # is needed to ensure the config makes it to the pre_model hook which dbt-snowflake needs
+        config.add_config_call(builder.config)
         # builder.args contains keyword args for the test macro,
         # not configs which have been separated out in the builder.
         # The keyword args are not completely rendered until compilation.
@@ -222,6 +231,7 @@ class SchemaGenericTestParser(SimpleParser):
             column_name=column_name,
             test_metadata=metadata,
             file_key_name=file_key_name,
+            description=builder.description,
         )
         self.render_test_update(node, config, builder, schema_file_id)
 
@@ -276,7 +286,7 @@ class SchemaGenericTestParser(SimpleParser):
         # to the context in rendering processing
         node.depends_on.add_macro(macro_unique_id)
         if macro_unique_id in ["macro.dbt.test_not_null", "macro.dbt.test_unique"]:
-            config_call_dict = builder.get_static_config()
+            config_call_dict = builder.config
             config._config_call_dict = config_call_dict
             # This sets the config from dbt_project
             self.update_parsed_node_config(node, config)

@@ -1,8 +1,7 @@
 import pytest
 
-from dbt.tests.util import run_dbt
 from dbt.tests.fixtures.project import write_project_files
-
+from dbt.tests.util import run_dbt
 from tests.fixtures.dbt_integration_project import dbt_integration_project  # noqa: F401
 from tests.functional.graph_selection.fixtures import SelectionFixtures
 

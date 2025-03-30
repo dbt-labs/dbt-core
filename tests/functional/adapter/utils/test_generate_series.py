@@ -1,4 +1,5 @@
 import pytest
+
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_generate_series import (
     models__test_generate_series_sql,

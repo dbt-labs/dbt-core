@@ -1,143 +1,133 @@
-from copy import deepcopy
-from dataclasses import dataclass
-from dataclasses import field
-from datetime import timezone, datetime, date
-import os
-import traceback
-from typing import (
-    Dict,
-    Optional,
-    Mapping,
-    Callable,
-    Any,
-    List,
-    Type,
-    Union,
-    Tuple,
-    Set,
-)
-from itertools import chain
-import time
-
-from dbt.context.manifest import generate_query_header_context
-from dbt.contracts.graph.semantic_manifest import SemanticManifest
-from dbt_common.events.base_types import EventLevel
-import dbt_common.utils
 import json
+import os
 import pprint
-from dbt.mp_context import get_mp_context
-import msgpack
+import time
+import traceback
+from copy import deepcopy
+from dataclasses import dataclass, field
+from datetime import date, datetime, timezone
+from itertools import chain
+from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Type, Union
 
+import msgpack
+from jinja2.nodes import Call
+
+import dbt.deprecations
 import dbt.exceptions
 import dbt.tracking
 import dbt.utils
-from dbt.flags import get_flags
-
+import dbt_common.utils
+from dbt import plugins
+from dbt.adapters.capability import Capability
 from dbt.adapters.factory import (
     get_adapter,
-    get_relation_class_by_name,
     get_adapter_package_names,
+    get_relation_class_by_name,
     register_adapter,
 )
+from dbt.artifacts.resources import FileHash, NodeRelation, NodeVersion
+from dbt.artifacts.resources.types import BatchSize
+from dbt.artifacts.schemas.base import Writable
+from dbt.clients.jinja import MacroStack, get_rendered
+from dbt.clients.jinja_static import statically_extract_macro_calls
+from dbt.config import Project, RuntimeConfig
 from dbt.constants import (
     MANIFEST_FILE_NAME,
     PARTIAL_PARSE_FILE_NAME,
     SEMANTIC_MANIFEST_FILE_NAME,
 )
-from dbt_common.helper_types import PathSet
-from dbt_common.events.functions import fire_event, get_invocation_id, warn_or_error
-from dbt_common.events.types import (
-    Note,
-)
-from dbt.events.types import (
-    PartialParsingErrorProcessingFile,
-    PartialParsingError,
-    ParsePerfInfoPath,
-    PartialParsingSkipParsing,
-    UnableToPartialParse,
-    PartialParsingNotEnabled,
-    ParsedFileLoadFailed,
-    InvalidDisabledTargetInTestNode,
-    NodeNotFoundOrDisabled,
-    StateCheckVarsHash,
-    DeprecatedModel,
-    DeprecatedReference,
-    UpcomingReferenceDeprecation,
-)
-from dbt.logger import DbtProcessState
-from dbt.node_types import NodeType, AccessType
-from dbt.clients.jinja import get_rendered, MacroStack
-from dbt.clients.jinja_static import statically_extract_macro_calls
-from dbt_common.clients.system import (
-    make_directory,
-    path_exists,
-    read_json,
-    write_file,
-)
-from dbt.config import Project, RuntimeConfig
+from dbt.context.configured import generate_macro_context
 from dbt.context.docs import generate_runtime_docs_context
 from dbt.context.macro_resolver import MacroResolver, TestMacroNamespace
-from dbt.context.configured import generate_macro_context
 from dbt.context.providers import ParseProvider, generate_runtime_macro_context
+from dbt.context.query_header import generate_query_header_context
 from dbt.contracts.files import ParseFileType, SchemaSourceFile
-from dbt.parser.read_files import (
-    ReadFilesFromFileSystem,
-    load_source_file,
-    FileDiff,
-    ReadFilesFromDiff,
-    ReadFiles,
-)
-from dbt.parser.partial import PartialParsing, special_override_macros
 from dbt.contracts.graph.manifest import (
-    Manifest,
     Disabled,
     MacroManifest,
+    Manifest,
     ManifestStateCheck,
     ParsingInfo,
 )
 from dbt.contracts.graph.nodes import (
-    SourceDefinition,
-    Macro,
     Exposure,
+    GenericTestNode,
+    Macro,
+    ManifestNode,
     Metric,
+    ModelNode,
+    ResultNode,
     SavedQuery,
     SeedNode,
+    SemanticManifestNode,
     SemanticModel,
-    ManifestNode,
-    ResultNode,
-    ModelNode,
+    SourceDefinition,
 )
-from dbt.artifacts.resources import NodeRelation, NodeVersion, FileHash
-from dbt.artifacts.schemas.base import Writable
+from dbt.contracts.graph.semantic_manifest import SemanticManifest
+from dbt.events.types import (
+    ArtifactWritten,
+    DeprecatedModel,
+    DeprecatedReference,
+    InvalidConcurrentBatchesConfig,
+    InvalidDisabledTargetInTestNode,
+    MicrobatchModelNoEventTimeInputs,
+    NodeNotFoundOrDisabled,
+    ParsedFileLoadFailed,
+    ParsePerfInfoPath,
+    PartialParsingError,
+    PartialParsingErrorProcessingFile,
+    PartialParsingNotEnabled,
+    PartialParsingSkipParsing,
+    SpacesInResourceNameDeprecation,
+    StateCheckVarsHash,
+    UnableToPartialParse,
+    UpcomingReferenceDeprecation,
+)
 from dbt.exceptions import (
-    TargetNotFoundError,
     AmbiguousAliasError,
     InvalidAccessTypeError,
+    TargetNotFoundError,
+    scrub_secrets,
 )
-from dbt.parser.base import Parser
+from dbt.flags import get_flags
+from dbt.mp_context import get_mp_context
+from dbt.node_types import AccessType, NodeType
 from dbt.parser.analysis import AnalysisParser
-from dbt.parser.generic_test import GenericTestParser
-from dbt.parser.singular_test import SingularTestParser
+from dbt.parser.base import Parser
 from dbt.parser.docs import DocumentationParser
 from dbt.parser.fixtures import FixtureParser
+from dbt.parser.generic_test import GenericTestParser
 from dbt.parser.hooks import HookParser
 from dbt.parser.macros import MacroParser
 from dbt.parser.models import ModelParser
+from dbt.parser.partial import PartialParsing, special_override_macros
+from dbt.parser.read_files import (
+    FileDiff,
+    ReadFiles,
+    ReadFilesFromDiff,
+    ReadFilesFromFileSystem,
+    load_source_file,
+)
 from dbt.parser.schemas import SchemaParser
 from dbt.parser.search import FileBlock
 from dbt.parser.seeds import SeedParser
+from dbt.parser.singular_test import SingularTestParser
 from dbt.parser.snapshots import SnapshotParser
 from dbt.parser.sources import SourcePatcher
 from dbt.parser.unit_tests import process_models_for_unit_test
 from dbt.version import __version__
-
+from dbt_common.clients.jinja import parse
+from dbt_common.clients.system import make_directory, path_exists, read_json, write_file
+from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt_common.dataclass_schema import StrEnum, dbtClassMixin
-from dbt import plugins
-
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import fire_event, get_invocation_id, warn_or_error
+from dbt_common.events.types import Note
+from dbt_common.exceptions.base import DbtValidationError
+from dbt_common.helper_types import PathSet
 from dbt_semantic_interfaces.enum_extension import assert_values_exhausted
 from dbt_semantic_interfaces.type_enums import MetricType
 
-PARSING_STATE = DbtProcessState("parsing")
 PERF_INFO_FILE_NAME = "perf_info.json"
 
 
@@ -228,7 +218,7 @@ class ManifestLoaderInfo(dbtClassMixin, Writable):
     projects: List[ProjectLoaderInfo] = field(default_factory=list)
     _project_index: Dict[str, ProjectLoaderInfo] = field(default_factory=dict)
 
-    def __post_serialize__(self, dct):
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
         del dct["_project_index"]
         return dct
 
@@ -240,12 +230,12 @@ class ManifestLoader:
     def __init__(
         self,
         root_project: RuntimeConfig,
-        all_projects: Mapping[str, Project],
+        all_projects: Mapping[str, RuntimeConfig],
         macro_hook: Optional[Callable[[Manifest], Any]] = None,
         file_diff: Optional[FileDiff] = None,
     ) -> None:
         self.root_project: RuntimeConfig = root_project
-        self.all_projects: Mapping[str, Project] = all_projects
+        self.all_projects: Mapping[str, RuntimeConfig] = all_projects
         self.file_diff = file_diff
         self.manifest: Manifest = Manifest()
         self.new_manifest = self.manifest
@@ -310,33 +300,32 @@ class ManifestLoader:
                 file_diff_dct = read_json(file_diff_path)
                 file_diff = FileDiff.from_dict(file_diff_dct)
 
-        with PARSING_STATE:  # set up logbook.Processor for parsing
-            # Start performance counting
-            start_load_all = time.perf_counter()
+        # Start performance counting
+        start_load_all = time.perf_counter()
 
-            projects = config.load_dependencies()
-            loader = cls(
-                config,
-                projects,
-                macro_hook=macro_hook,
-                file_diff=file_diff,
-            )
+        projects = config.load_dependencies()
+        loader = cls(
+            config,
+            projects,
+            macro_hook=macro_hook,
+            file_diff=file_diff,
+        )
 
-            manifest = loader.load()
+        manifest = loader.load()
 
-            _check_manifest(manifest, config)
-            manifest.build_flat_graph()
+        _check_manifest(manifest, config)
+        manifest.build_flat_graph()
 
-            # This needs to happen after loading from a partial parse,
-            # so that the adapter has the query headers from the macro_hook.
-            loader.save_macros_to_adapter(adapter)
+        # This needs to happen after loading from a partial parse,
+        # so that the adapter has the query headers from the macro_hook.
+        loader.save_macros_to_adapter(adapter)
 
-            # Save performance info
-            loader._perf_info.load_all_elapsed = time.perf_counter() - start_load_all
-            loader.track_project_load()
+        # Save performance info
+        loader._perf_info.load_all_elapsed = time.perf_counter() - start_load_all
+        loader.track_project_load()
 
-            if write_perf_info:
-                loader.write_perf_info(config.project_target_path)
+        if write_perf_info:
+            loader.write_perf_info(config.project_target_path)
 
         return manifest
 
@@ -483,8 +472,11 @@ class ManifestLoader:
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
             self.process_saved_queries(self.root_project)
+            self.process_model_inferred_primary_keys()
             self.check_valid_group_config()
             self.check_valid_access_property()
+            self.check_valid_snapshot_config()
+            self.check_valid_microbatch_config()
 
             semantic_manifest = SemanticManifest(self.manifest)
             if not semantic_manifest.validate():
@@ -520,6 +512,10 @@ class ManifestLoader:
             self.write_manifest_for_partial_parse()
 
         self.check_for_model_deprecations()
+        self.check_for_spaces_in_resource_names()
+        self.check_for_microbatch_deprecations()
+        self.check_forcing_batch_concurrency()
+        self.check_microbatch_model_has_a_filtered_input()
 
         return self.manifest
 
@@ -586,12 +582,11 @@ class ManifestLoader:
         return project_parser_files
 
     def check_for_model_deprecations(self):
+        # build parent and child_maps
+        self.manifest.build_parent_and_child_maps()
         for node in self.manifest.nodes.values():
-            if isinstance(node, ModelNode):
-                if (
-                    node.deprecation_date
-                    and node.deprecation_date < datetime.now(timezone.utc).astimezone()
-                ):
+            if isinstance(node, ModelNode) and node.deprecation_date:
+                if node.is_past_deprecation_date:
                     warn_or_error(
                         DeprecatedModel(
                             model_name=node.name,
@@ -599,27 +594,85 @@ class ManifestLoader:
                             deprecation_date=node.deprecation_date.isoformat(),
                         )
                     )
+                # At this point _process_refs should already have been called, and
+                # we just rebuilt the parent and child maps.
+                # Get the child_nodes and check for deprecations.
+                child_nodes = self.manifest.child_map[node.unique_id]
+                for child_unique_id in child_nodes:
+                    child_node = self.manifest.nodes.get(child_unique_id)
+                    if not isinstance(child_node, ModelNode):
+                        continue
+                    if node.is_past_deprecation_date:
+                        event_cls = DeprecatedReference
+                    else:
+                        event_cls = UpcomingReferenceDeprecation
 
-                resolved_refs = self.manifest.resolve_refs(node, self.root_project.project_name)
-                resolved_model_refs = [r for r in resolved_refs if isinstance(r, ModelNode)]
-                node.depends_on
-                for resolved_ref in resolved_model_refs:
-                    if resolved_ref.deprecation_date:
-                        if resolved_ref.deprecation_date < datetime.now(timezone.utc).astimezone():
-                            event_cls = DeprecatedReference
-                        else:
-                            event_cls = UpcomingReferenceDeprecation
-
-                        warn_or_error(
-                            event_cls(
-                                model_name=node.name,
-                                ref_model_package=resolved_ref.package_name,
-                                ref_model_name=resolved_ref.name,
-                                ref_model_version=version_to_str(resolved_ref.version),
-                                ref_model_latest_version=str(resolved_ref.latest_version),
-                                ref_model_deprecation_date=resolved_ref.deprecation_date.isoformat(),
-                            )
+                    warn_or_error(
+                        event_cls(
+                            model_name=child_node.name,
+                            ref_model_package=node.package_name,
+                            ref_model_name=node.name,
+                            ref_model_version=version_to_str(node.version),
+                            ref_model_latest_version=str(node.latest_version),
+                            ref_model_deprecation_date=node.deprecation_date.isoformat(),
                         )
+                    )
+
+    def check_for_spaces_in_resource_names(self):
+        """Validates that resource names do not contain spaces
+
+        If `DEBUG` flag is `False`, logs only first bad model name
+        If `DEBUG` flag is `True`, logs every bad model name
+        If `REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES` is `True`, logs are `ERROR` level and an exception is raised if any names are bad
+        If `REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES` is `False`, logs are `WARN` level
+        """
+        improper_resource_names = 0
+        level = (
+            EventLevel.ERROR
+            if self.root_project.args.REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES
+            else EventLevel.WARN
+        )
+
+        flags = get_flags()
+
+        for node in self.manifest.nodes.values():
+            if " " in node.name:
+                if improper_resource_names == 0 or flags.DEBUG:
+                    fire_event(
+                        SpacesInResourceNameDeprecation(
+                            unique_id=node.unique_id,
+                            level=level.value,
+                        ),
+                        level=level,
+                    )
+                improper_resource_names += 1
+
+        if improper_resource_names > 0:
+            if level == EventLevel.WARN:
+                dbt.deprecations.warn(
+                    "resource-names-with-spaces",
+                    count_invalid_names=improper_resource_names,
+                    show_debug_hint=(not flags.DEBUG),
+                )
+            else:  # ERROR level
+                raise DbtValidationError("Resource names cannot contain spaces")
+
+    def check_for_microbatch_deprecations(self) -> None:
+        if not get_flags().require_batched_execution_for_custom_microbatch_strategy:
+            has_microbatch_model = False
+            for _, node in self.manifest.nodes.items():
+                if (
+                    isinstance(node, ModelNode)
+                    and node.config.materialized == "incremental"
+                    and node.config.incremental_strategy == "microbatch"
+                ):
+                    has_microbatch_model = True
+                    break
+
+            if has_microbatch_model and not self.manifest._microbatch_macro_is_core(
+                self.root_project.project_name
+            ):
+                dbt.deprecations.warn("microbatch-macro-outside-of-batches-deprecation")
 
     def load_and_parse_macros(self, project_parser_files):
         for project in self.all_projects.values():
@@ -651,7 +704,7 @@ class ManifestLoader:
     # 'parser_types'
     def parse_project(
         self,
-        project: Project,
+        project: RuntimeConfig,
         parser_files,
         parser_types: List[Type[Parser]],
     ) -> None:
@@ -787,8 +840,12 @@ class ManifestLoader:
         plugin_model_nodes = pm.get_nodes().models
         for node_arg in plugin_model_nodes.values():
             node = ModelNode.from_args(node_arg)
-            # node may already exist from package or running project - in which case we should avoid clobbering it with an external node
-            if node.unique_id not in self.manifest.nodes:
+            # node may already exist from package or running project (even if it is disabled),
+            # in which case we should avoid clobbering it with an external node
+            if (
+                node.unique_id not in self.manifest.nodes
+                and node.unique_id not in self.manifest.disabled
+            ):
                 self.manifest.add_node_nofile(node)
                 manifest_nodes_modified = True
 
@@ -835,13 +892,6 @@ class ManifestLoader:
             )
             valid = False
             reparse_reason = ReparseReason.proj_env_vars_changed
-        if (
-            self.manifest.state_check.profile_env_vars_hash
-            != manifest.state_check.profile_env_vars_hash
-        ):
-            fire_event(UnableToPartialParse(reason="env vars used in profiles.yml have changed"))
-            valid = False
-            reparse_reason = ReparseReason.prof_env_vars_changed
 
         missing_keys = {
             k
@@ -953,6 +1003,9 @@ class ManifestLoader:
         # of env_vars, that would need to change.
         # We are using the parsed cli_vars instead of config.args.vars, in order
         # to sort them and avoid reparsing because of ordering issues.
+        secret_vars = [
+            v for k, v in config.cli_vars.items() if k.startswith(SECRET_ENV_PREFIX) and v.strip()
+        ]
         stringified_cli_vars = pprint.pformat(config.cli_vars)
         vars_hash = FileHash.from_contents(
             "\x00".join(
@@ -967,7 +1020,7 @@ class ManifestLoader:
         fire_event(
             StateCheckVarsHash(
                 checksum=vars_hash.checksum,
-                vars=stringified_cli_vars,
+                vars=scrub_secrets(stringified_cli_vars, secret_vars),
                 profile=config.args.profile,
                 target=config.args.target,
                 version=__version__,
@@ -982,18 +1035,18 @@ class ManifestLoader:
             env_var_str += f"{key}:{config.project_env_vars[key]}|"
         project_env_vars_hash = FileHash.from_contents(env_var_str)
 
-        # Create a FileHash of the env_vars in the project
-        key_list = list(config.profile_env_vars.keys())
-        key_list.sort()
-        env_var_str = ""
-        for key in key_list:
-            env_var_str += f"{key}:{config.profile_env_vars[key]}|"
-        profile_env_vars_hash = FileHash.from_contents(env_var_str)
+        # Create a hash of the connection_info, which user has access to in
+        # jinja context. Thus attributes here may affect the parsing result.
+        # Ideally we should not expose all of the connection info to the jinja.
 
-        # Create a FileHash of the profile file
-        profile_path = os.path.join(get_flags().PROFILES_DIR, "profiles.yml")
-        with open(profile_path) as fp:
-            profile_hash = FileHash.from_contents(fp.read())
+        # Renaming this variable mean that we will have to do a whole lot more
+        # change to make sure the previous manifest can be loaded correctly.
+        # This is an example of naming should be chosen based on the functionality
+        # rather than the implementation details.
+        connection_keys = list(config.credentials.connection_info())
+        # avoid reparsing because of ordering issues
+        connection_keys.sort()
+        profile_hash = FileHash.from_contents(pprint.pformat(connection_keys))
 
         # Create a FileHashes for dbt_project for all dependencies
         project_hashes = {}
@@ -1005,7 +1058,6 @@ class ManifestLoader:
         # Create the ManifestStateCheck object
         state_check = ManifestStateCheck(
             project_env_vars_hash=project_env_vars_hash,
-            profile_env_vars_hash=profile_env_vars_hash,
             vars_hash=vars_hash,
             profile_hash=profile_hash,
             project_hashes=project_hashes,
@@ -1013,12 +1065,11 @@ class ManifestLoader:
         return state_check
 
     def save_macros_to_adapter(self, adapter):
-        macro_manifest = MacroManifest(self.manifest.macros)
-        adapter.set_macro_resolver(macro_manifest)
+        adapter.set_macro_resolver(self.manifest)
         # This executes the callable macro_hook and sets the
         # query headers
         # This executes the callable macro_hook and sets the query headers
-        query_header_context = generate_query_header_context(adapter.config, macro_manifest)
+        query_header_context = generate_query_header_context(adapter.config, self.manifest)
         self.macro_hook(query_header_context)
 
     # This creates a MacroManifest which contains the macros in
@@ -1051,18 +1102,16 @@ class ManifestLoader:
         macro_hook: Callable[[Manifest], Any],
         base_macros_only=False,
     ) -> Manifest:
-        with PARSING_STATE:
-            # base_only/base_macros_only: for testing only,
-            # allows loading macros without running 'dbt deps' first
-            projects = root_config.load_dependencies(base_only=base_macros_only)
+        # base_only/base_macros_only: for testing only,
+        # allows loading macros without running 'dbt deps' first
+        projects = root_config.load_dependencies(base_only=base_macros_only)
 
-            # This creates a loader object, including result,
-            # and then throws it away, returning only the
-            # manifest
-            loader = cls(root_config, projects, macro_hook)
-            macro_manifest = loader.create_macro_manifest()
+        # This creates a loader object, including result,
+        # and then throws it away, returning only the
+        # manifest
+        loader = cls(root_config, projects, macro_hook)
 
-        return macro_manifest
+        return loader.create_macro_manifest()
 
     # Create tracking event for saving performance info
     def track_project_load(self):
@@ -1127,12 +1176,45 @@ class ManifestLoader:
 
     def process_saved_queries(self, config: RuntimeConfig):
         """Processes SavedQuery nodes to populate their `depends_on`."""
+        # Note: This will also capture various nodes which have been re-parsed
+        # because they refer to some other changed node, so there will be
+        # false positives. Ideally we would compare actual changes.
+        semantic_manifest_changed = False
+        semantic_manifest_nodes: chain[SemanticManifestNode] = chain(
+            self.manifest.saved_queries.values(),
+            self.manifest.semantic_models.values(),
+            self.manifest.metrics.values(),
+        )
+        for node in semantic_manifest_nodes:
+            # Check if this node has been modified in this parsing run
+            if node.created_at > self.started_at:
+                semantic_manifest_changed = True
+                break  # as soon as we run into one changed node we can stop
+        if semantic_manifest_changed is False:
+            return
+
         current_project = config.project_name
         for saved_query in self.manifest.saved_queries.values():
             # TODO:
             # 1. process `where` of SavedQuery for `depends_on`s
             # 2. process `group_by` of SavedQuery for `depends_on``
             _process_metrics_for_node(self.manifest, current_project, saved_query)
+
+    def process_model_inferred_primary_keys(self):
+        """Processes Model nodes to populate their `primary_key`."""
+        model_to_generic_test_map: Dict[str, List[GenericTestNode]] = {}
+        for node in self.manifest.nodes.values():
+            if not isinstance(node, ModelNode):
+                continue
+            if node.created_at < self.started_at:
+                continue
+            if not model_to_generic_test_map:
+                model_to_generic_test_map = self.build_model_to_generic_tests_map()
+            generic_tests: List[GenericTestNode] = []
+            if node.unique_id in model_to_generic_test_map:
+                generic_tests = model_to_generic_test_map[node.unique_id]
+            primary_key = node.infer_primary_key(generic_tests)
+            node.primary_key = sorted(primary_key)
 
     def update_semantic_model(self, semantic_model) -> None:
         # This has to be done at the end of parsing because the referenced model
@@ -1162,7 +1244,7 @@ class ManifestLoader:
                 self.manifest,
                 config.project_name,
             )
-            _process_docs_for_node(ctx, node)
+            _process_docs_for_node(ctx, node, self.manifest)
         for source in self.manifest.sources.values():
             if source.created_at < self.started_at:
                 continue
@@ -1172,7 +1254,7 @@ class ManifestLoader:
                 self.manifest,
                 config.project_name,
             )
-            _process_docs_for_source(ctx, source)
+            _process_docs_for_source(ctx, source, self.manifest)
         for macro in self.manifest.macros.values():
             if macro.created_at < self.started_at:
                 continue
@@ -1324,10 +1406,140 @@ class ManifestLoader:
                     materialization=node.get_materialization(),
                 )
 
+    def check_valid_snapshot_config(self):
+        # Snapshot config can be set in either SQL files or yaml files,
+        # so we need to validate afterward.
+        for node in self.manifest.nodes.values():
+            if node.resource_type != NodeType.Snapshot:
+                continue
+            if node.created_at < self.started_at:
+                continue
+            node.config.final_validate()
+
+    def check_valid_microbatch_config(self):
+        if self.manifest.use_microbatch_batches(project_name=self.root_project.project_name):
+            for node in self.manifest.nodes.values():
+                if (
+                    node.config.materialized == "incremental"
+                    and node.config.incremental_strategy == "microbatch"
+                ):
+                    # Required configs: event_time, batch_size, begin
+                    event_time = node.config.event_time
+                    if event_time is None:
+                        raise dbt.exceptions.ParsingError(
+                            f"Microbatch model '{node.name}' must provide an 'event_time' (string) config that indicates the name of the event time column."
+                        )
+                    if not isinstance(event_time, str):
+                        raise dbt.exceptions.ParsingError(
+                            f"Microbatch model '{node.name}' must provide an 'event_time' config of type string, but got: {type(event_time)}."
+                        )
+
+                    begin = node.config.begin
+                    if begin is None:
+                        raise dbt.exceptions.ParsingError(
+                            f"Microbatch model '{node.name}' must provide a 'begin' (datetime) config that indicates the earliest timestamp the microbatch model should be built from."
+                        )
+
+                    # Try to cast begin to a datetime using same format as mashumaro for consistency with other yaml-provided datetimes
+                    # Mashumaro default: https://github.com/Fatal1ty/mashumaro/blob/4ac16fd060a6c651053475597b58b48f958e8c5c/README.md?plain=1#L1186
+                    if isinstance(begin, str):
+                        try:
+                            begin = datetime.datetime.fromisoformat(begin)
+                            node.config.begin = begin
+                        except Exception:
+                            raise dbt.exceptions.ParsingError(
+                                f"Microbatch model '{node.name}' must provide a 'begin' config of valid datetime (ISO format), but got: {begin}."
+                            )
+
+                    if not isinstance(begin, datetime.datetime):
+                        raise dbt.exceptions.ParsingError(
+                            f"Microbatch model '{node.name}' must provide a 'begin' config of type datetime, but got: {type(begin)}."
+                        )
+
+                    batch_size = node.config.batch_size
+                    valid_batch_sizes = [size.value for size in BatchSize]
+                    if batch_size not in valid_batch_sizes:
+                        raise dbt.exceptions.ParsingError(
+                            f"Microbatch model '{node.name}' must provide a 'batch_size' config that is one of {valid_batch_sizes}, but got: {batch_size}."
+                        )
+
+                    # Optional config: lookback (int)
+                    lookback = node.config.lookback
+                    if not isinstance(lookback, int) and lookback is not None:
+                        raise dbt.exceptions.ParsingError(
+                            f"Microbatch model '{node.name}' must provide the optional 'lookback' config as type int, but got: {type(lookback)})."
+                        )
+
+                    # optional config: concurrent_batches (bool)
+                    concurrent_batches = node.config.concurrent_batches
+                    if not isinstance(concurrent_batches, bool) and concurrent_batches is not None:
+                        raise dbt.exceptions.ParsingError(
+                            f"Microbatch model '{node.name}' optional 'concurrent_batches' config must be of type `bool` if specified, but got: {type(concurrent_batches)})."
+                        )
+
+    def check_forcing_batch_concurrency(self) -> None:
+        if self.manifest.use_microbatch_batches(project_name=self.root_project.project_name):
+            adapter = get_adapter(self.root_project)
+
+            if not adapter.supports(Capability.MicrobatchConcurrency):
+                models_forcing_concurrent_batches = 0
+                for node in self.manifest.nodes.values():
+                    if (
+                        hasattr(node.config, "concurrent_batches")
+                        and node.config.concurrent_batches is True
+                    ):
+                        models_forcing_concurrent_batches += 1
+
+                if models_forcing_concurrent_batches > 0:
+                    warn_or_error(
+                        InvalidConcurrentBatchesConfig(
+                            num_models=models_forcing_concurrent_batches,
+                            adapter_type=adapter.type(),
+                        )
+                    )
+
+    def check_microbatch_model_has_a_filtered_input(self):
+        if self.manifest.use_microbatch_batches(project_name=self.root_project.project_name):
+            for node in self.manifest.nodes.values():
+                if (
+                    node.config.materialized == "incremental"
+                    and node.config.incremental_strategy == "microbatch"
+                ):
+                    # Validate upstream node event_time (if configured)
+                    has_input_with_event_time_config = False
+                    for input_unique_id in node.depends_on.nodes:
+                        input_node = self.manifest.expect(unique_id=input_unique_id)
+                        input_event_time = input_node.config.event_time
+                        if input_event_time:
+                            if not isinstance(input_event_time, str):
+                                raise dbt.exceptions.ParsingError(
+                                    f"Microbatch model '{node.name}' depends on an input node '{input_node.name}' with an 'event_time' config of invalid (non-string) type: {type(input_event_time)}."
+                                )
+                            has_input_with_event_time_config = True
+
+                    if not has_input_with_event_time_config:
+                        fire_event(MicrobatchModelNoEventTimeInputs(model_name=node.name))
+
     def write_perf_info(self, target_path: str):
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)
         write_file(path, json.dumps(self._perf_info, cls=dbt.utils.JSONEncoder, indent=4))
         fire_event(ParsePerfInfoPath(path=path))
+
+    def build_model_to_generic_tests_map(self) -> Dict[str, List[GenericTestNode]]:
+        """Return a list of generic tests that are attached to the given model, including disabled tests"""
+        model_to_generic_tests_map: Dict[str, List[GenericTestNode]] = {}
+        for _, node in self.manifest.nodes.items():
+            if isinstance(node, GenericTestNode) and node.attached_node:
+                if node.attached_node not in model_to_generic_tests_map:
+                    model_to_generic_tests_map[node.attached_node] = []
+                model_to_generic_tests_map[node.attached_node].append(node)
+        for _, nodes in self.manifest.disabled.items():
+            for disabled_node in nodes:
+                if isinstance(disabled_node, GenericTestNode) and disabled_node.attached_node:
+                    if disabled_node.attached_node not in model_to_generic_tests_map:
+                        model_to_generic_tests_map[disabled_node.attached_node] = []
+                    model_to_generic_tests_map[disabled_node.attached_node].append(disabled_node)
+        return model_to_generic_tests_map
 
 
 def invalid_target_fail_unless_test(
@@ -1449,13 +1661,55 @@ def _check_manifest(manifest: Manifest, config: RuntimeConfig) -> None:
 DocsContextCallback = Callable[[ResultNode], Dict[str, Any]]
 
 
+def _get_doc_blocks(description: str, manifest: Manifest, node_package: str) -> List[str]:
+    ast = parse(description)
+    doc_blocks: List[str] = []
+
+    if not hasattr(ast, "body"):
+        return doc_blocks
+
+    for statement in ast.body:
+        for node in statement.nodes:
+            if (
+                isinstance(node, Call)
+                and hasattr(node, "node")
+                and hasattr(node, "args")
+                and hasattr(node.node, "name")
+                and node.node.name == "doc"
+            ):
+                doc_args = [arg.value for arg in node.args]
+
+                if len(doc_args) == 1:
+                    package, name = None, doc_args[0]
+                elif len(doc_args) == 2:
+                    package, name = doc_args
+                else:
+                    continue
+
+                if not manifest.metadata.project_name:
+                    continue
+
+                resolved_doc = manifest.resolve_doc(
+                    name, package, manifest.metadata.project_name, node_package
+                )
+
+                if resolved_doc:
+                    doc_blocks.append(resolved_doc.unique_id)
+
+    return doc_blocks
+
+
 # node and column descriptions
 def _process_docs_for_node(
     context: Dict[str, Any],
     node: ManifestNode,
+    manifest: Manifest,
 ):
+    node.doc_blocks = _get_doc_blocks(node.description, manifest, node.package_name)
     node.description = get_rendered(node.description, context)
+
     for column_name, column in node.columns.items():
+        column.doc_blocks = _get_doc_blocks(column.description, manifest, node.package_name)
         column.description = get_rendered(column.description, context)
 
 
@@ -1463,18 +1717,16 @@ def _process_docs_for_node(
 def _process_docs_for_source(
     context: Dict[str, Any],
     source: SourceDefinition,
+    manifest: Manifest,
 ):
-    table_description = source.description
-    source_description = source.source_description
-    table_description = get_rendered(table_description, context)
-    source_description = get_rendered(source_description, context)
-    source.description = table_description
-    source.source_description = source_description
+    source.doc_blocks = _get_doc_blocks(source.description, manifest, source.package_name)
+    source.description = get_rendered(source.description, context)
+
+    source.source_description = get_rendered(source.source_description, context)
 
     for column in source.columns.values():
-        column_desc = column.description
-        column_desc = get_rendered(column_desc, context)
-        column.description = column_desc
+        column.doc_blocks = _get_doc_blocks(column.description, manifest, source.package_name)
+        column.description = get_rendered(column.description, context)
 
 
 # macro argument descriptions
@@ -1832,7 +2084,7 @@ def process_node(config: RuntimeConfig, manifest: Manifest, node: ManifestNode):
     _process_sources_for_node(manifest, config.project_name, node)
     _process_refs(manifest, config.project_name, node, config.dependencies)
     ctx = generate_runtime_docs_context(config, node, manifest, config.project_name)
-    _process_docs_for_node(ctx, node)
+    _process_docs_for_node(ctx, node, manifest)
 
 
 def write_semantic_manifest(manifest: Manifest, target_path: str) -> None:
@@ -1849,7 +2101,12 @@ def write_manifest(manifest: Manifest, target_path: str, which: Optional[str] = 
     write_semantic_manifest(manifest=manifest, target_path=target_path)
 
 
-def parse_manifest(runtime_config, write_perf_info, write, write_json):
+def parse_manifest(
+    runtime_config: RuntimeConfig,
+    write_perf_info: bool,
+    write: bool,
+    write_json: bool,
+) -> Manifest:
     register_adapter(runtime_config, get_mp_context())
     adapter = get_adapter(runtime_config)
     adapter.set_macro_context_generator(generate_runtime_macro_context)
@@ -1858,10 +2115,16 @@ def parse_manifest(runtime_config, write_perf_info, write, write_json):
         write_perf_info=write_perf_info,
     )
 
+    # If we should (over)write the manifest in the target path, do that now
     if write and write_json:
         write_manifest(manifest, runtime_config.project_target_path)
         pm = plugins.get_plugin_manager(runtime_config.project_name)
         plugin_artifacts = pm.get_manifest_artifacts(manifest)
         for path, plugin_artifact in plugin_artifacts.items():
             plugin_artifact.write(path)
+            fire_event(
+                ArtifactWritten(
+                    artifact_type=plugin_artifact.__class__.__name__, artifact_path=path
+                )
+            )
     return manifest

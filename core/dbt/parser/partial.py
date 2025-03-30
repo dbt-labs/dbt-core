@@ -1,24 +1,22 @@
 import os
 from copy import deepcopy
-from typing import MutableMapping, Dict, List, Callable
+from typing import Callable, Dict, List, MutableMapping, Union
 
-from dbt.contracts.graph.manifest import Manifest
+from dbt.constants import DEFAULT_ENV_PLACEHOLDER
 from dbt.contracts.files import (
     AnySourceFile,
     ParseFileType,
-    parse_file_type_to_parser,
     SchemaSourceFile,
+    SourceFile,
+    parse_file_type_to_parser,
 )
-from dbt_common.context import get_invocation_context
-from dbt_common.events.functions import fire_event
-from dbt_common.events.base_types import EventLevel
-from dbt.events.types import (
-    PartialParsingEnabled,
-    PartialParsingFile,
-)
-from dbt.constants import DEFAULT_ENV_PLACEHOLDER
+from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.nodes import AnalysisNode, ModelNode, SeedNode, SnapshotNode
+from dbt.events.types import PartialParsingEnabled, PartialParsingFile
 from dbt.node_types import NodeType
-
+from dbt_common.context import get_invocation_context
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import fire_event
 
 mssat_files = (
     ParseFileType.Model,
@@ -347,7 +345,11 @@ class PartialParsing:
         if node.patch_path:
             file_id = node.patch_path
             # it might be changed...  then what?
-            if file_id not in self.file_diff["deleted"] and file_id in self.saved_files:
+            if (
+                file_id not in self.file_diff["deleted"]
+                and file_id in self.saved_files
+                and source_file.parse_file_type in parse_file_type_to_key
+            ):
                 # Schema files should already be updated if this comes from a node,
                 # but this code is also called when updating groups and exposures.
                 # This might save the old schema file element, so when the schema file
@@ -394,10 +396,10 @@ class PartialParsing:
         self.saved_files[new_source_file.file_id] = deepcopy(new_source_file)
         self.add_to_pp_files(new_source_file)
 
-    def remove_mssat_file(self, source_file):
+    def remove_mssat_file(self, source_file: AnySourceFile):
         # nodes [unique_ids] -- SQL files
         # There should always be a node for a SQL file
-        if not source_file.nodes:
+        if not isinstance(source_file, SourceFile) or not source_file.nodes:
             return
         # There is generally only 1 node for SQL files, except for macros and snapshots
         for unique_id in source_file.nodes:
@@ -662,10 +664,14 @@ class PartialParsing:
             key_diff = self.get_diff_for(dict_key, saved_yaml_dict, new_yaml_dict)
             if key_diff["changed"]:
                 for elem in key_diff["changed"]:
+                    if dict_key == "snapshots" and "relation" in elem:
+                        self.delete_yaml_snapshot(schema_file, elem)
                     self.delete_schema_mssa_links(schema_file, dict_key, elem)
                     self.merge_patch(schema_file, dict_key, elem, True)
             if key_diff["deleted"]:
                 for elem in key_diff["deleted"]:
+                    if dict_key == "snapshots" and "relation" in elem:
+                        self.delete_yaml_snapshot(schema_file, elem)
                     self.delete_schema_mssa_links(schema_file, dict_key, elem)
             if key_diff["added"]:
                 for elem in key_diff["added"]:
@@ -677,6 +683,8 @@ class PartialParsing:
                         continue
                     elem = self.get_schema_element(new_yaml_dict[dict_key], name)
                     if elem:
+                        if dict_key == "snapshots" and "relation" in elem:
+                            self.delete_yaml_snapshot(schema_file, elem)
                         self.delete_schema_mssa_links(schema_file, dict_key, elem)
                         self.merge_patch(schema_file, dict_key, elem, True)
 
@@ -723,6 +731,7 @@ class PartialParsing:
         handle_change("semantic_models", self.delete_schema_semantic_model)
         handle_change("unit_tests", self.delete_schema_unit_test)
         handle_change("saved_queries", self.delete_schema_saved_query)
+        handle_change("data_tests", self.delete_schema_data_test_patch)
 
     def _handle_element_change(
         self, schema_file, saved_yaml_dict, new_yaml_dict, env_var_changes, dict_key: str, delete
@@ -812,11 +821,12 @@ class PartialParsing:
                 pp_dict[key].append(patch)
 
         schema_file.delete_from_env_vars(key, patch["name"])
+        schema_file.delete_from_unrendered_configs(key, patch["name"])
         self.add_to_pp_files(schema_file)
 
     # For model, seed, snapshot, analysis schema dictionary keys,
     # delete the patches and tests from the patch
-    def delete_schema_mssa_links(self, schema_file, dict_key, elem):
+    def delete_schema_mssa_links(self, schema_file, dict_key, elem) -> None:
         # find elem node unique_id in node_patches
         prefix = key_to_prefix[dict_key]
         elem_unique_ids = []
@@ -831,15 +841,18 @@ class PartialParsing:
         # remove elem node and remove unique_id from node_patches
         for elem_unique_id in elem_unique_ids:
             # might have been already removed
+            # For all-yaml snapshots, we don't do this, since the node
+            # should have already been removed.
             if (
                 elem_unique_id in self.saved_manifest.nodes
                 or elem_unique_id in self.saved_manifest.disabled
             ):
+                nodes: List[Union[ModelNode, SeedNode, SnapshotNode, AnalysisNode]] = []
                 if elem_unique_id in self.saved_manifest.nodes:
-                    nodes = [self.saved_manifest.nodes.pop(elem_unique_id)]
+                    nodes = [self.saved_manifest.nodes.pop(elem_unique_id)]  # type: ignore[list-item]
                 else:
                     # The value of disabled items is a list of nodes
-                    nodes = self.saved_manifest.disabled.pop(elem_unique_id)
+                    nodes = self.saved_manifest.disabled.pop(elem_unique_id)  # type: ignore[assignment]
                 # need to add the node source_file to pp_files
                 for node in nodes:
                     file_id = node.file_id
@@ -852,9 +865,9 @@ class PartialParsing:
                     # if the node's group has changed - need to reparse all referencing nodes to ensure valid ref access
                     if node.group != elem.get("group"):
                         self.schedule_referencing_nodes_for_parsing(node.unique_id)
-                    # If the latest version has changed or a version has been removed we need to
-                    # reparse referencing nodes.
-                    if node.is_versioned:
+                    # If the latest version has changed, a version has been removed, or a version has been added,
+                    #  we need to reparse referencing nodes.
+                    if node.is_versioned or elem.get("versions"):
                         self.schedule_referencing_nodes_for_parsing(node.unique_id)
             # remove from patches
             schema_file.node_patches.remove(elem_unique_id)
@@ -870,6 +883,19 @@ class PartialParsing:
             if test_unique_id in self.saved_manifest.nodes:
                 self.saved_manifest.nodes.pop(test_unique_id)
         schema_file.remove_tests(dict_key, name)
+
+    def delete_yaml_snapshot(self, schema_file, snapshot_dict):
+        snapshot_name = snapshot_dict["name"]
+        snapshots = schema_file.snapshots.copy()
+        for unique_id in snapshots:
+            if unique_id in self.saved_manifest.nodes:
+                snapshot = self.saved_manifest.nodes[unique_id]
+                if snapshot.name == snapshot_name:
+                    self.saved_manifest.nodes.pop(unique_id)
+                    schema_file.snapshots.remove(unique_id)
+            elif unique_id in self.saved_manifest.disabled:
+                self.delete_disabled(unique_id, schema_file.file_id)
+                schema_file.snapshots.remove(unique_id)
 
     def delete_schema_source(self, schema_file, source_dict):
         # both patches, tests, and source nodes
@@ -900,6 +926,23 @@ class PartialParsing:
             if macro_file_id in self.new_files:
                 self.saved_files[macro_file_id] = deepcopy(self.new_files[macro_file_id])
                 self.add_to_pp_files(self.saved_files[macro_file_id])
+
+    def delete_schema_data_test_patch(self, schema_file, data_test):
+        data_test_unique_id = None
+        for unique_id in schema_file.node_patches:
+            if not unique_id.startswith("test"):
+                continue
+            parts = unique_id.split(".")
+            elem_name = parts[2]
+            if elem_name == data_test["name"]:
+                data_test_unique_id = unique_id
+                break
+        if data_test_unique_id and data_test_unique_id in self.saved_manifest.nodes:
+            singular_data_test = self.saved_manifest.nodes.pop(data_test_unique_id)
+            file_id = singular_data_test.file_id
+            if file_id in self.new_files:
+                self.saved_files[file_id] = deepcopy(self.new_files[file_id])
+                self.add_to_pp_files(self.saved_files[file_id])
 
     # exposures are created only from schema files, so just delete
     # the exposure or the disabled exposure.
@@ -972,13 +1015,17 @@ class PartialParsing:
             elif unique_id in self.saved_manifest.disabled:
                 self.delete_disabled(unique_id, schema_file.file_id)
 
-        metrics = schema_file.generated_metrics.copy()
-        for unique_id in metrics:
-            if unique_id in self.saved_manifest.metrics:
-                self.saved_manifest.metrics.pop(unique_id)
-                schema_file.generated_metrics.remove(unique_id)
-            elif unique_id in self.saved_manifest.disabled:
-                self.delete_disabled(unique_id, schema_file.file_id)
+        if schema_file.generated_metrics:
+            # If this partial parse file has an old "generated_metrics" list,
+            # call code to fix it up before processing.
+            schema_file.fix_metrics_from_measures()
+        if semantic_model_name in schema_file.metrics_from_measures:
+            for unique_id in schema_file.metrics_from_measures[semantic_model_name]:
+                if unique_id in self.saved_manifest.metrics:
+                    self.saved_manifest.metrics.pop(unique_id)
+                elif unique_id in self.saved_manifest.disabled:
+                    self.delete_disabled(unique_id, schema_file.file_id)
+            del schema_file.metrics_from_measures[semantic_model_name]
 
     def delete_schema_unit_test(self, schema_file, unit_test_dict):
         unit_test_name = unit_test_dict["name"]

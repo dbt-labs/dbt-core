@@ -1,9 +1,10 @@
 import pytest
+
 from tests.functional.adapter.utils.base_utils import BaseUtils
 from tests.functional.adapter.utils.fixture_date_trunc import (
-    seeds__data_date_trunc_csv,
     models__test_date_trunc_sql,
     models__test_date_trunc_yml,
+    seeds__data_date_trunc_csv,
 )
 
 

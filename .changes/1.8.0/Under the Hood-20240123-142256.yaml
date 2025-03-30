@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Move WritableManifest + Documentation to dbt/artifacts
-time: 2024-01-23T14:22:56.488252-05:00
-custom:
-  Author: michelleark
-  Issue: 9378 9379

@@ -1,0 +1,6 @@
+kind: Features
+body: Add opt-in validation of macro argument names and types
+time: 2025-03-14T14:31:57.463865-04:00
+custom:
+    Author: peterallenwebb
+    Issue: "11274"

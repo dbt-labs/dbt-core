@@ -1,7 +1,7 @@
 from dataclasses import dataclass
-from dbt_common.dataclass_schema import dbtClassMixin
+from typing import Any, Dict, List, Union
 
-from typing import List, Dict, Any, Union
+from dbt_common.dataclass_schema import dbtClassMixin
 
 
 @dataclass

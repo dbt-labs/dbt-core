@@ -2,19 +2,17 @@ import os
 
 import pytest
 
-from dbt.tests.util import run_dbt, write_file, copy_file
 from dbt.exceptions import ParsingError
-
-
+from dbt.tests.util import copy_file, run_dbt, write_file
 from tests.functional.defer_state.fixtures import (
-    seed_csv,
-    model_1_sql,
-    modified_model_1_sql,
-    model_2_sql,
-    modified_model_2_sql,
-    group_schema_yml,
-    group_modified_schema_yml,
     group_modified_fail_schema_yml,
+    group_modified_schema_yml,
+    group_schema_yml,
+    model_1_sql,
+    model_2_sql,
+    modified_model_1_sql,
+    modified_model_2_sql,
+    seed_csv,
 )
 
 

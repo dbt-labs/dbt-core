@@ -1,6 +1,7 @@
 import time
-
 from dataclasses import dataclass, field
+from typing import Any, Dict, List, Literal, Optional, Union
+
 from dbt.artifacts.resources.base import GraphResource
 from dbt.artifacts.resources.types import NodeType
 from dbt.artifacts.resources.v1.components import (
@@ -13,12 +14,12 @@ from dbt.artifacts.resources.v1.config import BaseConfig
 from dbt_common.contracts.config.properties import AdditionalPropertiesAllowed
 from dbt_common.contracts.util import Mergeable
 from dbt_common.exceptions import CompilationError
-from typing import Any, Dict, List, Literal, Optional, Union
 
 
 @dataclass
 class SourceConfig(BaseConfig):
     enabled: bool = True
+    event_time: Any = None
 
 
 @dataclass
@@ -58,6 +59,7 @@ class ParsedSourceMandatory(GraphResource, HasRelationMetadata):
 class SourceDefinition(ParsedSourceMandatory):
     quoting: Quoting = field(default_factory=Quoting)
     loaded_at_field: Optional[str] = None
+    loaded_at_query: Optional[str] = None
     freshness: Optional[FreshnessThreshold] = None
     external: Optional[ExternalTable] = None
     description: str = ""
@@ -70,3 +72,6 @@ class SourceDefinition(ParsedSourceMandatory):
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     relation_name: Optional[str] = None
     created_at: float = field(default_factory=lambda: time.time())
+    unrendered_database: Optional[str] = None
+    unrendered_schema: Optional[str] = None
+    doc_blocks: List[str] = field(default_factory=list)

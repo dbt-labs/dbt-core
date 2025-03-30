@@ -1,6 +1,6 @@
 import pytest
-from dbt.tests.fixtures.project import write_project_files
 
+from dbt.tests.fixtures.project import write_project_files
 
 snapshots__snapshot_sql = """
 {% snapshot my_snapshot %}

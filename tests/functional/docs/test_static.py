@@ -1,9 +1,10 @@
+import os
+
 import pytest
 
-from dbt_common.clients.system import load_file_contents
 from dbt.task.docs import DOCS_INDEX_FILE_PATH
 from dbt.tests.util import run_dbt
-import os
+from dbt_common.clients.system import load_file_contents
 
 
 class TestStaticGenerate:

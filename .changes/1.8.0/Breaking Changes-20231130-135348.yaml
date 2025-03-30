@@ -1,7 +1,0 @@
-kind: Breaking Changes
-body: move event manager setup back to core, remove ref to global EVENT_MANAGER and
-  clean up event manager functions
-time: 2023-11-30T13:53:48.645192-08:00
-custom:
-  Author: colin-rogers-dbt
-  Issue: "9150"
