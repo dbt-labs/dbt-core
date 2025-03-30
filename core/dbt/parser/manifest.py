@@ -1444,14 +1444,14 @@ class ManifestLoader:
                     # Mashumaro default: https://github.com/Fatal1ty/mashumaro/blob/4ac16fd060a6c651053475597b58b48f958e8c5c/README.md?plain=1#L1186
                     if isinstance(begin, str):
                         try:
-                            begin = datetime.datetime.fromisoformat(begin)
+                            begin = datetime.fromisoformat(begin)
                             node.config.begin = begin
                         except Exception:
                             raise dbt.exceptions.ParsingError(
                                 f"Microbatch model '{node.name}' must provide a 'begin' config of valid datetime (ISO format), but got: {begin}."
                             )
 
-                    if not isinstance(begin, datetime.datetime):
+                    if not isinstance(begin, datetime):
                         raise dbt.exceptions.ParsingError(
                             f"Microbatch model '{node.name}' must provide a 'begin' config of type datetime, but got: {type(begin)}."
                         )
