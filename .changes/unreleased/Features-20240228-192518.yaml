@@ -1,5 +1,5 @@
 kind: Features
-body: Validation to detect duplicate column names in the check_cols configuration of a snapshot.
+body: Raise validation error for duplicate column names in the `check_cols` configuration of a snapshot
 time: 2024-02-28T19:25:18.00447-03:00
 custom:
   Author: ariosramirez
