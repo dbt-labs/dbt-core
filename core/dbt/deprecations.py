@@ -1,9 +1,11 @@
 import abc
+from dataclasses import dataclass
 from typing import Callable, ClassVar, Dict, List, Optional, Set
 
 import dbt.tracking
 from dbt.events import types as core_types
-from dbt_common.events.functions import warn_or_error
+from dbt_common.events.base_types import EventLevel
+from dbt_common.events.functions import fire_event, warn_or_error
 
 
 class DBTDeprecation:
@@ -198,3 +200,29 @@ def reset_deprecations():
 def fire_buffered_deprecations():
     [dep_fn() for dep_fn in buffered_deprecations]
     buffered_deprecations.clear()
+
+
+@dataclass
+class ManagedDeprecationWarning:
+    deprecation_warning: DBTDeprecation
+    occurances: int = 0
+    only_show_once: bool = True
+
+    def show(self, fire_as_error: bool = False, *args, **kwargs) -> None:
+        # We don't use the `show` built into the DBTDeprecation class,
+        # because we want to handle gating whether the warning should is
+        # fired or not, and we want to track the number of times the warning
+        # has been shown.
+        if not self.only_show_once or self.occurances == 0:
+            event = self.deprecation_warning.event(*args, **kwargs)
+
+            # This is for maintaining current functionality wherein certain deprecations
+            # allow for force firing as an error outside of warn_or_error.
+            if fire_as_error:
+                fire_event(event, level=EventLevel.ERROR)
+            else:
+                warn_or_error(event)
+
+            self.deprecation_warning.track_deprecation_warn()
+
+        self.occurances += 1
