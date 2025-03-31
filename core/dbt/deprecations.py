@@ -11,6 +11,7 @@ from dbt_common.events.functions import fire_event, warn_or_error
 class DBTDeprecation:
     _name: ClassVar[Optional[str]] = None
     _event: ClassVar[Optional[str]] = None
+    _summary_event: ClassVar[Optional[str]] = None
 
     @property
     def name(self) -> str:
@@ -34,6 +35,21 @@ class DBTDeprecation:
                 msg = f"Event Class `{class_name}` is not defined in `{module_path}`"
                 raise NameError(msg)
         raise NotImplementedError("event not implemented for {}".format(self._event))
+
+    @property
+    def summary_event(self) -> abc.ABCMeta:
+        if self._summary_event is not None:
+            module_path = core_types
+            class_name = self._summary_event
+            try:
+                return getattr(module_path, class_name)
+            except AttributeError:
+                msg = f"Event Class `{class_name}` is not defined in `{module_path}`"
+                raise NameError(msg)
+        else:
+            raise NotImplementedError(
+                "summary_event not implemented for {}".format(self._summary_event)
+            )
 
     def show(self, *args, **kwargs) -> None:
         if self.name not in active_deprecations:
@@ -226,3 +242,15 @@ class ManagedDeprecationWarning:
             self.deprecation_warning.track_deprecation_warn()
 
         self.occurances += 1
+
+    def show_summary(self) -> None:
+        event = self.deprecation_warning.summary_event(
+            occurances=self.occurances,
+            show_debug_hint=(self.only_show_once),
+        )
+        warn_or_error(event)
+
+        if dbt.tracking.active_user is not None:
+            dbt.tracking.track_deprecation_warn_summary(
+                {"deprecation_name": self.deprecation_warning.name, "occurances": self.occurances}
+            )

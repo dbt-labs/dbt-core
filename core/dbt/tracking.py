@@ -38,6 +38,7 @@ DBT_INVOCATION_ENV = "DBT_INVOCATION_ENV"
 
 ADAPTER_INFO_SPEC = "iglu:com.dbt/adapter_info/jsonschema/1-0-1"
 DEPRECATION_WARN_SPEC = "iglu:com.dbt/deprecation_warn/jsonschema/1-0-0"
+DEPRECATION_WARN_SUMMARY_SPEC = "iglu:com.dbt/deprecation_warn_summary/jsonschema/1-0-0"
 BEHAVIOR_CHANGE_WARN_SPEC = "iglu:com.dbt/behavior_change_warn/jsonschema/1-0-0"
 EXPERIMENTAL_PARSER = "iglu:com.dbt/experimental_parser/jsonschema/1-0-0"
 INVOCATION_ENV_SPEC = "iglu:com.dbt/invocation_env/jsonschema/1-0-0"
@@ -362,6 +363,24 @@ def track_deprecation_warn(options):
         active_user,
         category="dbt",
         action="deprecation",
+        label=get_invocation_id(),
+        property_="warn",
+        context=context,
+    )
+
+
+def track_deprecation_warn_summary(options):
+
+    assert (
+        active_user is not None
+    ), "Cannot track deprecation warnings summary when active user is None"
+
+    context = [SelfDescribingJson(DEPRECATION_WARN_SUMMARY_SPEC, options)]
+
+    track(
+        active_user,
+        category="dbt",
+        action="deprecation_summary",
         label=get_invocation_id(),
         property_="warn",
         context=context,
