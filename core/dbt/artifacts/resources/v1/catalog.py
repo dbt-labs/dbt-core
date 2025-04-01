@@ -6,11 +6,11 @@ from dbt_common.dataclass_schema import dbtClassMixin
 
 
 @dataclass
-class CoreCatalogIntegrationConfig(CatalogIntegrationConfig):
+class CatalogWriteIntegrationConfig(CatalogIntegrationConfig):
     name: str
     catalog_type: str
-    external_volume: Optional[str]
-    table_format: Optional[str]
+    external_volume: Optional[str] = None
+    table_format: Optional[str] = None
     catalog_name: Optional[str] = None
     adapter_properties: Dict[str, Any] = field(default_factory=dict)
 
@@ -19,4 +19,4 @@ class CoreCatalogIntegrationConfig(CatalogIntegrationConfig):
 class Catalog(dbtClassMixin):
     name: str
     active_write_integration: Optional[str] = None
-    write_integrations: List[CoreCatalogIntegrationConfig] = field(default_factory=list)
+    write_integrations: List[CatalogWriteIntegrationConfig] = field(default_factory=list)
