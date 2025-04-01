@@ -417,9 +417,10 @@ message SpacesInResourceNameDeprecationMsg {
 
 // D015
 message ResourceNamesWithSpacesDeprecation {
-    int32 count_invalid_names = 1;
+    int32 count_invalid_names = 1; // Field no longer used, but kept for backwards compatibility
     bool show_debug_hint = 2;
     string level = 3;
+    int32 occurances = 4;
 }
 
 message ResourceNamesWithSpacesDeprecationMsg {

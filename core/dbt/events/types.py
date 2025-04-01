@@ -436,7 +436,9 @@ class ResourceNamesWithSpacesDeprecation(WarnLevel):
         return "D015"
 
     def message(self) -> str:
-        description = f"Spaces found in {self.count_invalid_names} resource name(s). This is deprecated, and may lead to errors when using dbt."
+        # set the count_invalid_names field to the occurances field for
+        self.count_invalid_names = self.occurances
+        description = f"Spaces found in {self.occurances} resource name(s). This is deprecated, and may lead to errors when using dbt."
 
         if self.show_debug_hint:
             description += " Run again with `--debug` to see them all."

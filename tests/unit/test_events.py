@@ -149,9 +149,7 @@ sample_values = [
     core_types.TestsConfigDeprecation(deprecated_path="", exp_path=""),
     core_types.ProjectFlagsMovedDeprecation(),
     core_types.SpacesInResourceNameDeprecation(unique_id="", level=""),
-    core_types.ResourceNamesWithSpacesDeprecation(
-        count_invalid_names=1, show_debug_hint=True, level=""
-    ),
+    core_types.ResourceNamesWithSpacesDeprecation(occurances=1, show_debug_hint=True, level=""),
     core_types.PackageMaterializationOverrideDeprecation(
         package_name="my_package", materialization_name="view"
     ),

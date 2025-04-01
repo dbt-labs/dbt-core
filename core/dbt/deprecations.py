@@ -128,7 +128,8 @@ class PackageMaterializationOverrideDeprecation(DBTDeprecation):
 
 class ResourceNamesWithSpacesDeprecation(DBTDeprecation):
     _name = "resource-names-with-spaces"
-    _event = "ResourceNamesWithSpacesDeprecation"
+    _event = "SpacesInResourceNameDeprecation"
+    _summary_event = "ResourceNamesWithSpacesDeprecation"
 
 
 class SourceFreshnessProjectHooksNotRun(DBTDeprecation):

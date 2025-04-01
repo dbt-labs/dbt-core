@@ -64,6 +64,10 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
 )
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
+from dbt.deprecations import (
+    ManagedDeprecationWarning,
+    ResourceNamesWithSpacesDeprecation,
+)
 from dbt.events.types import (
     ArtifactWritten,
     DeprecatedModel,
@@ -78,7 +82,6 @@ from dbt.events.types import (
     PartialParsingErrorProcessingFile,
     PartialParsingNotEnabled,
     PartialParsingSkipParsing,
-    SpacesInResourceNameDeprecation,
     StateCheckVarsHash,
     UnableToPartialParse,
     UpcomingReferenceDeprecation,
@@ -618,7 +621,7 @@ class ManifestLoader:
                         )
                     )
 
-    def check_for_spaces_in_resource_names(self):
+    def check_for_spaces_in_resource_names(self) -> None:
         """Validates that resource names do not contain spaces
 
         If `DEBUG` flag is `False`, logs only first bad model name
@@ -626,7 +629,6 @@ class ManifestLoader:
         If `REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES` is `True`, logs are `ERROR` level and an exception is raised if any names are bad
         If `REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES` is `False`, logs are `WARN` level
         """
-        improper_resource_names = 0
         level = (
             EventLevel.ERROR
             if self.root_project.args.REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES
@@ -634,26 +636,22 @@ class ManifestLoader:
         )
 
         flags = get_flags()
+        deprecation_manager = ManagedDeprecationWarning(
+            deprecation_warning=ResourceNamesWithSpacesDeprecation(),
+            only_show_once=(not flags.DEBUG),
+        )
 
         for node in self.manifest.nodes.values():
             if " " in node.name:
-                if improper_resource_names == 0 or flags.DEBUG:
-                    fire_event(
-                        SpacesInResourceNameDeprecation(
-                            unique_id=node.unique_id,
-                            level=level.value,
-                        ),
-                        level=level,
-                    )
-                improper_resource_names += 1
-
-        if improper_resource_names > 0:
-            if level == EventLevel.WARN:
-                dbt.deprecations.warn(
-                    "resource-names-with-spaces",
-                    count_invalid_names=improper_resource_names,
-                    show_debug_hint=(not flags.DEBUG),
+                deprecation_manager.show(
+                    fire_as_error=(level == EventLevel.ERROR),
+                    unique_id=node.unique_id,
+                    level=level.value,
                 )
+
+        if deprecation_manager.occurances > 0:
+            if level == EventLevel.WARN:
+                deprecation_manager.show_summary()
             else:  # ERROR level
                 raise DbtValidationError("Resource names cannot contain spaces")
 
