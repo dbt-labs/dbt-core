@@ -429,6 +429,20 @@ class MicrobatchBatchRunner(ModelRunner):
         self.print_result_line(result=result)
         return result
 
+    def error_result(self, node, message, start_time, timing_info):
+        """Necessary to return a result with a batch result
+
+        Called by `BaseRunner.safe_run` when an error occurs
+        """
+        return self._build_run_result(
+            node=node,
+            start_time=start_time,
+            status=RunStatus.Error,
+            timing_info=timing_info,
+            message=message,
+            batch_results=BatchResults(failed=[self.batches[self.batch_idx]]),
+        )
+
     def compile(self, manifest: Manifest):
         batch = self.batches[self.batch_idx]
 
