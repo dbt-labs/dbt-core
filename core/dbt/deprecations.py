@@ -1,5 +1,6 @@
 import abc
-from typing import Callable, ClassVar, Dict, List, Optional, Set
+from collections import defaultdict
+from typing import Callable, ClassVar, DefaultDict, Dict, List, Optional
 
 import dbt.tracking
 from dbt.events import types as core_types
@@ -38,7 +39,8 @@ class DBTDeprecation:
             event = self.event(**kwargs)
             warn_or_error(event)
             self.track_deprecation_warn()
-            active_deprecations.add(self.name)
+
+        active_deprecations[self.name] += 1
 
 
 class PackageRedirectDeprecation(DBTDeprecation):
@@ -166,7 +168,7 @@ def buffer(name: str, *args, **kwargs):
 # these are globally available
 # since modules are only imported once, active_deprecations is a singleton
 
-active_deprecations: Set[str] = set()
+active_deprecations: DefaultDict[str, int] = defaultdict(int)
 
 deprecations_list: List[DBTDeprecation] = [
     PackageRedirectDeprecation(),

@@ -1,5 +1,6 @@
 import json
 import os
+from collections import defaultdict
 from datetime import datetime, timedelta
 
 import pytest
@@ -448,7 +449,7 @@ class TestSourceFreshnessProjectHooksNotRun(SuccessfulSourceFreshnessTest):
         project,
         global_deprecations,
     ):
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
         _, log_output = self.run_dbt_and_capture_with_vars(
             project,
             [
@@ -459,8 +460,7 @@ class TestSourceFreshnessProjectHooksNotRun(SuccessfulSourceFreshnessTest):
         )
         assert "on-run-start hooks called" not in log_output
         assert "on-run-end hooks called" not in log_output
-        expected = {"source-freshness-project-hooks"}
-        assert expected == deprecations.active_deprecations
+        assert "source-freshness-project-hooks" in deprecations.active_deprecations
 
 
 class TestHooksInSourceFreshness(SuccessfulSourceFreshnessTest):

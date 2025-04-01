@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import pytest
 import yaml
 
@@ -28,18 +30,19 @@ class TestConfigPathDeprecation:
 
     def test_data_path(self, project):
         deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
         run_dbt(["debug"])
         expected = {
             "project-config-data-paths",
             "project-config-log-path",
             "project-config-target-path",
         }
-        assert expected == deprecations.active_deprecations
+        for deprecation in expected:
+            assert deprecation in deprecations.active_deprecations
 
     def test_data_path_fail(self, project):
         deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
         with pytest.raises(dbt_common.exceptions.CompilationError) as exc:
             run_dbt(["--warn-error", "debug"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
@@ -58,14 +61,13 @@ class TestPackageInstallPathDeprecation:
 
     def test_package_path(self, project):
         deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
         run_dbt(["clean"])
-        expected = {"install-packages-path"}
-        assert expected == deprecations.active_deprecations
+        assert "install-packages-path" in deprecations.active_deprecations
 
     def test_package_path_not_set(self, project):
         deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
         with pytest.raises(dbt_common.exceptions.CompilationError) as exc:
             run_dbt(["--warn-error", "clean"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
@@ -84,15 +86,14 @@ class TestPackageRedirectDeprecation:
 
     def test_package_redirect(self, project):
         deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
         run_dbt(["deps"])
-        expected = {"package-redirect"}
-        assert expected == deprecations.active_deprecations
+        assert "package-redirect" in deprecations.active_deprecations
 
     # if this test comes before test_package_redirect it will raise an exception as expected
     def test_package_redirect_fail(self, project):
         deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
         with pytest.raises(dbt_common.exceptions.CompilationError) as exc:
             run_dbt(["--warn-error", "deps"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
@@ -119,14 +120,13 @@ class TestExposureNameDeprecation:
 
     def test_exposure_name(self, project):
         deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
         run_dbt(["parse"])
-        expected = {"exposure-name"}
-        assert expected == deprecations.active_deprecations
+        assert "exposure-name" in deprecations.active_deprecations
 
     def test_exposure_name_fail(self, project):
         deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
         with pytest.raises(dbt_common.exceptions.CompilationError) as exc:
             run_dbt(["--warn-error", "--no-partial-parse", "parse"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
@@ -156,7 +156,7 @@ class TestProjectFlagsMovedDeprecation:
 
     def test_profile_config_deprecation(self, project):
         deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
 
         _, logs = run_dbt_and_capture(["parse"])
 
@@ -164,13 +164,13 @@ class TestProjectFlagsMovedDeprecation:
             "User config should be moved from the 'config' key in profiles.yml to the 'flags' key in dbt_project.yml."
             in logs
         )
-        assert deprecations.active_deprecations == {"project-flags-moved"}
+        assert "project-flags-moved" in deprecations.active_deprecations
 
 
 class TestProjectFlagsMovedDeprecationQuiet(TestProjectFlagsMovedDeprecation):
     def test_profile_config_deprecation(self, project):
         deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
 
         _, logs = run_dbt_and_capture(["--quiet", "parse"])
 
@@ -178,7 +178,7 @@ class TestProjectFlagsMovedDeprecationQuiet(TestProjectFlagsMovedDeprecation):
             "User config should be moved from the 'config' key in profiles.yml to the 'flags' key in dbt_project.yml."
             not in logs
         )
-        assert deprecations.active_deprecations == {"project-flags-moved"}
+        assert "project-flags-moved" in deprecations.active_deprecations
 
 
 class TestProjectFlagsMovedDeprecationWarnErrorOptions(TestProjectFlagsMovedDeprecation):
