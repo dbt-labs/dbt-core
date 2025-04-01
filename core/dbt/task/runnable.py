@@ -53,6 +53,7 @@ from dbt.parser.manifest import write_manifest
 from dbt.task import group_lookup
 from dbt.task.base import BaseRunner, ConfiguredTask
 from dbt.task.printer import print_run_end_messages, print_run_result_error
+from dbt.utils.artifact_upload import add_artifact_produced
 from dbt_common.context import _INVOCATION_CONTEXT_VAR, get_invocation_context
 from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.contextvars import log_contextvars, task_contextvars
@@ -436,6 +437,7 @@ class GraphRunnableTask(ConfiguredTask):
 
             if self.args.write_json and hasattr(run_result, "write"):
                 run_result.write(self.result_path())
+                add_artifact_produced(self.result_path())
                 fire_event(
                     ArtifactWritten(
                         artifact_type=run_result.__class__.__name__,
@@ -609,6 +611,7 @@ class GraphRunnableTask(ConfiguredTask):
             write_manifest(self.manifest, self.config.project_target_path)
             if hasattr(result, "write"):
                 result.write(self.result_path())
+                add_artifact_produced(self.result_path())
                 fire_event(
                     ArtifactWritten(
                         artifact_type=result.__class__.__name__, artifact_path=self.result_path()

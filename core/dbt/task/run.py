@@ -49,6 +49,7 @@ from dbt.task import group_lookup
 from dbt.task.base import BaseRunner
 from dbt.task.compile import CompileRunner, CompileTask
 from dbt.task.printer import get_counts, print_run_end_messages
+from dbt.utils.artifact_upload import add_artifact_produced
 from dbt_common.clients.jinja import MacroProtocol
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.base_types import EventLevel
@@ -1106,6 +1107,7 @@ class RunTask(CompileTask):
 
             if self.args.write_json and hasattr(run_result, "write"):
                 run_result.write(self.result_path())
+                add_artifact_produced(self.result_path())
 
             print_run_end_messages(self.node_results, keyboard_interrupt=True)
 

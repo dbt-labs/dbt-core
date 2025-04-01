@@ -9,7 +9,6 @@ from click import Context
 
 import dbt.tracking
 from dbt.adapters.factory import adapter_management, get_adapter, register_adapter
-from dbt.cli.artifact_upload import upload_artifacts
 from dbt.cli.exceptions import ExceptionExit, ResultExit
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
@@ -36,6 +35,7 @@ from dbt.plugins import set_up_plugin_manager
 from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
 from dbt.utils import try_get_max_rss_kb
+from dbt.utils.artifact_upload import upload_artifacts
 from dbt.version import installed as installed_version
 from dbt_common.clients.system import get_env
 from dbt_common.context import get_invocation_context, set_invocation_context

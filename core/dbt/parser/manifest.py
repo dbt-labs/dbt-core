@@ -115,6 +115,7 @@ from dbt.parser.singular_test import SingularTestParser
 from dbt.parser.snapshots import SnapshotParser
 from dbt.parser.sources import SourcePatcher
 from dbt.parser.unit_tests import process_models_for_unit_test
+from dbt.utils.artifact_upload import add_artifact_produced
 from dbt.version import __version__
 from dbt_common.clients.jinja import parse
 from dbt_common.clients.system import make_directory, path_exists, read_json, write_file
@@ -2095,6 +2096,7 @@ def write_manifest(manifest: Manifest, target_path: str, which: Optional[str] = 
     file_name = MANIFEST_FILE_NAME
     path = os.path.join(target_path, file_name)
     manifest.write(path)
+    add_artifact_produced(path)
 
     write_semantic_manifest(manifest=manifest, target_path=target_path)
 
