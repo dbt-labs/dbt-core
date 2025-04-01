@@ -1,4 +1,5 @@
 import os
+from copy import deepcopy
 from typing import Any, Dict, List, Optional
 
 from dbt.artifacts.resources import Catalog, CoreCatalogIntegrationConfig
@@ -36,40 +37,42 @@ def load_single_catalog(raw_catalog: Dict[str, Any], renderer: SecretRenderer) -
 
     Catalog.validate(rendered_catalog)
 
-    write_integrations = []
-    write_integration_names = set()
+    integrations = []
+    integration_names = set()
 
-    for raw_write_integration in rendered_catalog.get("write_integrations", []):
-        if raw_write_integration["name"] in write_integration_names:
+    for raw_integration in rendered_catalog.get("write_integrations", []):
+        if raw_integration["name"] in integration_names:
             raise DbtValidationError(
-                f"Catalog '{rendered_catalog['name']}' cannot have multiple 'write_integrations' with the same name: {raw_write_integration['name']}."
+                f"Catalog '{rendered_catalog['name']}' cannot have multiple 'write_integrations' with the same name: '{raw_integration['name']}'."
             )
 
         # We're going to let the adapter validate the integration config
-        write_integrations.append(CoreCatalogIntegrationConfig(**raw_write_integration))
-        write_integration_names.add(raw_write_integration["name"])
+        integrations.append(
+            CoreCatalogIntegrationConfig(**raw_integration, catalog_name=raw_catalog["name"])
+        )
+        integration_names.add(raw_integration["name"])
 
-    # Validate + set default active_write_integration if unset
-    active_write_integration = rendered_catalog.get("active_write_integration")
-    valid_write_integration_names = [integration.name for integration in write_integrations]
+    # Validate + set default active_integration if unset
+    active_integration = rendered_catalog.get("active_write_integration")
+    valid_integration_names = [integration.name for integration in integrations]
 
-    if not active_write_integration:
-        if len(valid_write_integration_names) == 1:
-            active_write_integration = write_integrations[0].name
+    if not active_integration:
+        if len(valid_integration_names) == 1:
+            active_integration = integrations[0].name
         else:
             raise DbtValidationError(
                 f"Catalog '{rendered_catalog['name']}' must specify an 'active_write_integration' when multiple 'write_integrations' are provided."
             )
     else:
-        if active_write_integration not in valid_write_integration_names:
+        if active_integration not in valid_integration_names:
             raise DbtValidationError(
-                f"Catalog '{rendered_catalog['name']}' must specify an 'active_write_integration' from its set of defined 'write_integrations': {valid_write_integration_names}. Got: '{active_write_integration}'."
+                f"Catalog '{rendered_catalog['name']}' must specify an 'active_write_integration' from its set of defined 'write_integrations': {valid_integration_names}. Got: '{active_integration}'."
             )
 
     return Catalog(
         name=raw_catalog["name"],
-        active_write_integration=active_write_integration,
-        write_integrations=write_integrations,
+        active_write_integration=active_integration,
+        write_integrations=integrations,
     )
 
 
@@ -80,9 +83,12 @@ def load_catalogs(project_dir: str, project_name: str, cli_vars: Dict[str, Any])
     return [load_single_catalog(raw_catalog, catalogs_renderer) for raw_catalog in raw_catalogs]
 
 
-def get_active_write_integration(catalog: Catalog) -> Optional[CoreCatalogIntegrationConfig]:
+def get_active_integration(catalog: Catalog) -> Optional[CoreCatalogIntegrationConfig]:
     for integration in catalog.write_integrations:
         if integration.name == catalog.active_write_integration:
-            return integration
+            active_integration = deepcopy(integration)
+            active_integration.catalog_name = active_integration.name
+            active_integration.name = catalog.name
+            return active_integration
 
     return None

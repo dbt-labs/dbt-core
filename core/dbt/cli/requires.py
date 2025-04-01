@@ -13,7 +13,7 @@ from dbt.cli.artifact_upload import upload_artifacts
 from dbt.cli.exceptions import ExceptionExit, ResultExit
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
-from dbt.config.catalogs import get_active_write_integration, load_catalogs
+from dbt.config.catalogs import get_active_integration, load_catalogs
 from dbt.config.runtime import UnsetProfile, load_profile, load_project
 from dbt.context.providers import generate_runtime_macro_context
 from dbt.context.query_header import generate_query_header_context
@@ -382,7 +382,7 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
     runtime_config = ctx.obj["runtime_config"]
 
     catalogs = ctx.obj["catalogs"] if "catalogs" in ctx.obj else []
-    active_write_integrations = [get_active_write_integration(catalog) for catalog in catalogs]
+    active_integrations = [get_active_integration(catalog) for catalog in catalogs]
 
     # if a manifest has already been set on the context, don't overwrite it
     if ctx.obj.get("manifest") is None:
@@ -398,5 +398,5 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
         query_header_context = generate_query_header_context(adapter.config, ctx.obj["manifest"])  # type: ignore[attr-defined]
         adapter.connections.set_query_header(query_header_context)
 
-    for integration in active_write_integrations:
+    for integration in active_integrations:
         adapter.add_catalog_integration(integration)

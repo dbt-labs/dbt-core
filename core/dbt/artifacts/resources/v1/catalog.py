@@ -11,6 +11,7 @@ class CoreCatalogIntegrationConfig(CatalogIntegrationConfig):
     catalog_type: str
     external_volume: Optional[str]
     table_format: Optional[str]
+    catalog_name: Optional[str] = None
     adapter_properties: Dict[str, Any] = field(default_factory=dict)
 
 
