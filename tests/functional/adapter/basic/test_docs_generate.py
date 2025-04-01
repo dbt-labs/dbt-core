@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -354,7 +354,7 @@ def run_and_generate(project, args=None):
     rm_file(project.project_root, "target", "manifest.json")
     rm_file(project.project_root, "target", "run_results.json")
 
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc).replace(tzinfo=None)
     run_args = ["docs", "generate"]
     if args:
         run_args.extend(args)

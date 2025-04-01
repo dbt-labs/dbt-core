@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -62,7 +62,7 @@ class TestSourceOverride:
         }
 
     def _set_updated_at_to(self, insert_id, delta, project):
-        insert_time = datetime.utcnow() + delta
+        insert_time = datetime.now(timezone.utc).replace(tzinfo=None) + delta
         timestr = insert_time.strftime("%Y-%m-%d %H:%M:%S")
         # favorite_color,id,first_name,email,ip_address,updated_at
 

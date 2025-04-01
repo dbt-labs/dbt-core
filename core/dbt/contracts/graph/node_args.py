@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from dbt.artifacts.resources import NodeVersion
@@ -18,7 +18,9 @@ class ModelNodeArgs:
     latest_version: Optional[NodeVersion] = None
     deprecation_date: Optional[datetime] = None
     access: Optional[str] = AccessType.Protected.value
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     depends_on_nodes: List[str] = field(default_factory=list)
     enabled: bool = True
 

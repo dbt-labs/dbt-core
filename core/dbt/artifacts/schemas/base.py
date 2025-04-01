@@ -1,6 +1,6 @@
 import dataclasses
 import functools
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, ClassVar, Dict, Optional, Type, TypeVar
 
 from mashumaro.jsonschema import build_json_schema
@@ -55,7 +55,9 @@ class Readable:
 class BaseArtifactMetadata(dbtClassMixin):
     dbt_schema_version: str
     dbt_version: str = __version__
-    generated_at: datetime = dataclasses.field(default_factory=datetime.utcnow)
+    generated_at: datetime = dataclasses.field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     invocation_id: Optional[str] = dataclasses.field(default_factory=get_invocation_id)
     invocation_started_at: Optional[datetime] = dataclasses.field(
         default_factory=get_invocation_started_at

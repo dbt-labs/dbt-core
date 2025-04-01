@@ -1,7 +1,7 @@
 import os
 import threading
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, List
 
 import dbt_common.exceptions
@@ -114,7 +114,7 @@ class RunOperationTask(ConfiguredTask):
         )
 
         results = RunResultsArtifact.from_execution_results(
-            generated_at=end or datetime.utcnow(),
+            generated_at=end or datetime.now(timezone.utc).replace(tzinfo=None),
             elapsed_time=execution_time,
             args={
                 k: v

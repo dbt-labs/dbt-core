@@ -46,7 +46,11 @@ class BaseCurrentTimestamp:
         """
         Current UTC datetime with the same timezone-awareness (or naiveness) as the input.
         """
-        return datetime.now(timezone.utc) if is_aware(dt) else datetime.utcnow()
+        return (
+            datetime.now(timezone.utc)
+            if is_aware(dt)
+            else datetime.now(timezone.utc).replace(tzinfo=None)
+        )
 
 
 class BaseCurrentTimestampAware(BaseCurrentTimestamp):
