@@ -155,7 +155,6 @@ class TestUploadArtifacts(unittest.TestCase):
         # Create patchers
         self.load_project_patcher = patch("dbt.utils.artifact_upload.load_project")
         self.zipfile_patcher = patch("dbt.utils.artifact_upload.zipfile.ZipFile")
-        self.os_path_join_patcher = patch("dbt.utils.artifact_upload.os.path.join")
         self.requests_post_patcher = patch("dbt.utils.artifact_upload.requests.post")
         self.requests_put_patcher = patch("dbt.utils.artifact_upload.requests.put")
         self.requests_patch_patcher = patch("dbt.utils.artifact_upload.requests.patch")
@@ -167,7 +166,6 @@ class TestUploadArtifacts(unittest.TestCase):
         # Start patchers
         self.mock_load_project = self.load_project_patcher.start()
         self.mock_zipfile = self.zipfile_patcher.start()
-        self.mock_os_path_join = self.os_path_join_patcher.start()
         self.mock_requests_post = self.requests_post_patcher.start()
         self.mock_requests_put = self.requests_put_patcher.start()
         self.mock_requests_patch = self.requests_patch_patcher.start()
@@ -180,8 +178,6 @@ class TestUploadArtifacts(unittest.TestCase):
         self.mock_project = MagicMock()
         self.mock_project.dbt_cloud = {"tenant_hostname": "test-tenant"}
         self.mock_load_project.return_value = self.mock_project
-
-        self.mock_os_path_join.side_effect = lambda path, file: f"{path}/{file}"
 
         # Mock response for POST request (create ingest)
         self.mock_post_response = MagicMock()
@@ -216,7 +212,6 @@ class TestUploadArtifacts(unittest.TestCase):
     def tearDown(self):
         self.load_project_patcher.stop()
         self.zipfile_patcher.stop()
-        self.os_path_join_patcher.stop()
         self.requests_post_patcher.stop()
         self.requests_put_patcher.stop()
         self.requests_patch_patcher.stop()
@@ -308,6 +303,7 @@ class TestUploadArtifacts(unittest.TestCase):
             DbtBaseException("Error uploading artifacts: Mock failure"),
             DbtBaseException("Error completing ingest: Mock failure"),
         ]
+        add_artifact_produced(os.path.join(self.target_path, MANIFEST_FILE_NAME))
 
         # Test each step failing
         # 1. Create ingest failure
