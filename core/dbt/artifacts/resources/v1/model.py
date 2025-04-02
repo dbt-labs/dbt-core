@@ -8,12 +8,11 @@ from dbt.artifacts.resources.v1.components import (
     CompiledResource,
     DeferRelation,
     NodeVersion,
-    Time,
 )
 from dbt.artifacts.resources.v1.config import NodeConfig
 from dbt_common.contracts.config.base import MergeBehavior
 from dbt_common.contracts.constraints import ModelLevelConstraint
-from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.dataclass_schema import ExtensibleDbtClassMixin, dbtClassMixin
 
 
 @dataclass
@@ -42,14 +41,14 @@ class ModelFreshnessDependsOnOptions(enum.Enum):
 
 
 @dataclass
-class ModelBuildAfter(Time):
+class ModelBuildAfter(ExtensibleDbtClassMixin):
     depends_on: ModelFreshnessDependsOnOptions = ModelFreshnessDependsOnOptions.any
     count: int = 0
     period: TimePeriod = TimePeriod.hour
 
 
 @dataclass
-class ModelFreshness(dbtClassMixin):
+class ModelFreshness(ExtensibleDbtClassMixin):
     build_after: ModelBuildAfter = field(default_factory=ModelBuildAfter)
 
 

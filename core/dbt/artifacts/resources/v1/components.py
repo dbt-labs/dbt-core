@@ -15,6 +15,20 @@ from dbt_semantic_interfaces.type_enums import TimeGranularity
 NodeVersion = Union[str, float]
 
 
+def _backcompat_doc_blocks(doc_blocks: Any) -> List[str]:
+    """
+    Make doc_blocks backwards-compatible for scenarios where a user specifies `doc_blocks` on a model or column.
+    Mashumaro will raise a serialization error if the specified `doc_blocks` isn't a list of strings.
+    In such a scenario, this method returns an empty list to avoid a serialization error.
+    Further along, `_get_doc_blocks` in `manifest.py` populates the correct `doc_blocks` for the happy path.
+    """
+
+    if isinstance(doc_blocks, list) and all(isinstance(x, str) for x in doc_blocks):
+        return doc_blocks
+
+    return []
+
+
 @dataclass
 class MacroDependsOn(dbtClassMixin):
     macros: List[str] = field(default_factory=list)
@@ -69,6 +83,11 @@ class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     _extra: Dict[str, Any] = field(default_factory=dict)
     granularity: Optional[TimeGranularity] = None
     doc_blocks: List[str] = field(default_factory=list)
+
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None) -> dict:
+        dct = super().__post_serialize__(dct, context)
+        dct["doc_blocks"] = _backcompat_doc_blocks(dct["doc_blocks"])
+        return dct
 
 
 @dataclass
@@ -202,10 +221,14 @@ class ParsedResource(ParsedResourceMandatory):
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
         dct = super().__post_serialize__(dct, context)
+
         if context and context.get("artifact") and "config_call_dict" in dct:
             del dct["config_call_dict"]
         if context and context.get("artifact") and "unrendered_config_call_dict" in dct:
             del dct["unrendered_config_call_dict"]
+
+        dct["doc_blocks"] = _backcompat_doc_blocks(dct["doc_blocks"])
+
         return dct
 
 

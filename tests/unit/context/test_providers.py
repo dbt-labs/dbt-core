@@ -1,11 +1,13 @@
 from argparse import Namespace
+from datetime import datetime
+from typing import Any, Optional, Type, Union
 from unittest import mock
 
 import pytest
-from pytest_mock import MockerFixture
+import pytz
 
 from dbt.adapters.base import BaseRelation
-from dbt.artifacts.resources import NodeConfig, Quoting
+from dbt.artifacts.resources import NodeConfig, Quoting, SeedConfig, SnapshotConfig
 from dbt.artifacts.resources.types import BatchSize
 from dbt.context.providers import (
     BaseResolver,
@@ -13,7 +15,8 @@ from dbt.context.providers import (
     RuntimeRefResolver,
     RuntimeSourceResolver,
 )
-from dbt.contracts.graph.nodes import ModelNode
+from dbt.contracts.graph.nodes import BatchContext, ModelNode, SnapshotNode
+from dbt.event_time.sample_window import SampleWindow
 from dbt.flags import set_from_args
 
 
@@ -41,35 +44,177 @@ class TestBaseResolver:
         assert resolver.resolve_limit == expected_resolve_limit
 
     @pytest.mark.parametrize(
-        "use_microbatch_batches,materialized,incremental_strategy,resolver_model_node,expect_filter",
+        "use_microbatch_batches,materialized,incremental_strategy,sample,resolver_model_node,target_type,resolver_model_type,expect_filter",
         [
-            (True, "incremental", "microbatch", True, True),
-            (True, "incremental", "microbatch", False, False),
-            (False, "incremental", "microbatch", True, False),
-            (True, "table", "microbatch", True, False),
-            (True, "incremental", "merge", True, False),
+            # Microbatch model without sample
+            (
+                True,
+                "incremental",
+                "microbatch",
+                None,
+                True,
+                NodeConfig,
+                ModelNode,
+                True,
+            ),
+            # Microbatch model with sample
+            (
+                True,
+                "incremental",
+                "microbatch",
+                SampleWindow(
+                    start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
+                    end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
+                ),
+                True,
+                NodeConfig,
+                ModelNode,
+                True,
+            ),
+            # Normal model with sample
+            (
+                False,
+                "table",
+                None,
+                SampleWindow(
+                    start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
+                    end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
+                ),
+                True,
+                NodeConfig,
+                ModelNode,
+                True,
+            ),
+            # Incremental merge model with sample
+            (
+                True,
+                "incremental",
+                "merge",
+                SampleWindow(
+                    start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
+                    end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
+                ),
+                True,
+                NodeConfig,
+                ModelNode,
+                True,
+            ),
+            # Sample, but not model node
+            (
+                False,
+                "table",
+                None,
+                SampleWindow(
+                    start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
+                    end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
+                ),
+                False,
+                NodeConfig,
+                ModelNode,
+                False,
+            ),
+            # Microbatch, but not model node
+            (
+                True,
+                "incremental",
+                "microbatch",
+                None,
+                False,
+                NodeConfig,
+                ModelNode,
+                False,
+            ),
+            # Mircrobatch model, but not using batches
+            (
+                False,
+                "incremental",
+                "microbatch",
+                None,
+                True,
+                NodeConfig,
+                ModelNode,
+                False,
+            ),
+            # Non microbatch model, but supposed to use batches
+            (
+                True,
+                "table",
+                "microbatch",
+                None,
+                True,
+                NodeConfig,
+                ModelNode,
+                False,
+            ),
+            # Incremental merge
+            (True, "incremental", "merge", None, True, NodeConfig, ModelNode, False),
+            # Target seed node, with sample
+            (
+                False,
+                "table",
+                None,
+                SampleWindow.from_relative_string("2 days"),
+                True,
+                SeedConfig,
+                ModelNode,
+                True,
+            ),
+            # Target seed node, without sample
+            (False, "table", None, None, True, SeedConfig, ModelNode, False),
+            # Sample model from snapshot node
+            (
+                False,
+                "table",
+                None,
+                SampleWindow.from_relative_string("2 days"),
+                True,
+                NodeConfig,
+                SnapshotNode,
+                True,
+            ),
+            # Target model from snapshot, without sample
+            (False, "table", None, None, True, NodeConfig, SnapshotNode, False),
+            # Target snapshot from model, with sample
+            (
+                False,
+                "table",
+                None,
+                SampleWindow.from_relative_string("2 days"),
+                True,
+                SnapshotConfig,
+                ModelNode,
+                True,
+            ),
         ],
     )
     def test_resolve_event_time_filter(
         self,
-        mocker: MockerFixture,
         resolver: ResolverSubclass,
         use_microbatch_batches: bool,
         materialized: str,
-        incremental_strategy: str,
+        incremental_strategy: Optional[str],
+        sample: Optional[SampleWindow],
         resolver_model_node: bool,
+        target_type: Any,
+        resolver_model_type: Union[Type[ModelNode], Type[SnapshotNode]],
         expect_filter: bool,
     ) -> None:
         # Target mocking
         target = mock.Mock()
-        target.config = mock.MagicMock(NodeConfig)
+        target.config = mock.MagicMock(target_type)
         target.config.event_time = "created_at"
 
         # Resolver mocking
         resolver.config.args.EVENT_TIME_END = None
         resolver.config.args.EVENT_TIME_START = None
+        resolver.config.args.sample = sample
         if resolver_model_node:
-            resolver.model = mock.MagicMock(spec=ModelNode)
+            resolver.model = mock.MagicMock(spec=resolver_model_type)
+        resolver.model.batch = BatchContext(
+            id="1",
+            event_time_start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
+            event_time_end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
+        )
         resolver.model.config = mock.MagicMock(NodeConfig)
         resolver.model.config.materialized = materialized
         resolver.model.config.incremental_strategy = incremental_strategy

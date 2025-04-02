@@ -1,0 +1,6 @@
+kind: Breaking Changes
+body: Add invocations_started_at field to artifact metadata
+time: 2025-02-10T12:33:06.722803-05:00
+custom:
+  Author: gshank
+  Issue: "11272"

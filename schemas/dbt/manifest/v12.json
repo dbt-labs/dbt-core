@@ -28,6 +28,16 @@
             }
           ]
         },
+        "invocation_started_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "env": {
           "type": "object",
           "additionalProperties": {
@@ -4848,6 +4858,13 @@
                         "type": "object",
                         "title": "ModelBuildAfter",
                         "properties": {
+                          "depends_on": {
+                            "enum": [
+                              "all",
+                              "any"
+                            ],
+                            "default": "any"
+                          },
                           "count": {
                             "type": "integer",
                             "default": 0
@@ -4859,19 +4876,12 @@
                               "day"
                             ],
                             "default": "hour"
-                          },
-                          "depends_on": {
-                            "enum": [
-                              "all",
-                              "any"
-                            ],
-                            "default": "any"
                           }
                         },
-                        "additionalProperties": false
+                        "additionalProperties": true
                       }
                     },
-                    "additionalProperties": false
+                    "additionalProperties": true
                   },
                   {
                     "type": "null"
@@ -14817,6 +14827,13 @@
                               "type": "object",
                               "title": "ModelBuildAfter",
                               "properties": {
+                                "depends_on": {
+                                  "enum": [
+                                    "all",
+                                    "any"
+                                  ],
+                                  "default": "any"
+                                },
                                 "count": {
                                   "type": "integer",
                                   "default": 0
@@ -14828,19 +14845,12 @@
                                     "day"
                                   ],
                                   "default": "hour"
-                                },
-                                "depends_on": {
-                                  "enum": [
-                                    "all",
-                                    "any"
-                                  ],
-                                  "default": "any"
                                 }
                               },
-                              "additionalProperties": false
+                              "additionalProperties": true
                             }
                           },
-                          "additionalProperties": false
+                          "additionalProperties": true
                         },
                         {
                           "type": "null"

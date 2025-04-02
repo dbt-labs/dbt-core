@@ -141,6 +141,7 @@ def global_flags(func):
     @p.warn_error_options
     @p.write_json
     @p.use_fast_test_edges
+    @p.upload_artifacts
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
@@ -179,6 +180,7 @@ def cli(ctx, **kwargs):
 @p.project_dir
 @p.resource_type
 @p.exclude_resource_type
+@p.sample
 @p.select
 @p.selector
 @p.show
@@ -190,6 +192,7 @@ def cli(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def build(ctx, **kwargs):
@@ -555,6 +558,7 @@ def parse(ctx, **kwargs):
 @p.empty
 @p.event_time_start
 @p.event_time_end
+@p.sample
 @p.select
 @p.selector
 @p.target_path
@@ -564,6 +568,7 @@ def parse(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def run(ctx, **kwargs):

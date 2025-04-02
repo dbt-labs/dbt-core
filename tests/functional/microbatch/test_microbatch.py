@@ -1,12 +1,11 @@
 import json
+from typing import Dict
 from unittest import mock
 
 import pytest
 from pytest_mock import MockerFixture
 
 from dbt.events.types import (
-    ArtifactWritten,
-    EndOfRunSummary,
     GenericExceptionOnRun,
     InvalidConcurrentBatchesConfig,
     JinjaLogDebug,
@@ -56,6 +55,21 @@ select 3 as id, TIMESTAMP '2020-01-03 00:00:00-0' as event_time
 
 microbatch_model_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
+select * from {{ ref('input_model') }}
+"""
+
+microbatch_model_hour_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='hour', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
+select * from {{ ref('input_model') }}
+"""
+
+microbatch_model_month_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='month', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
+select * from {{ ref('input_model') }}
+"""
+
+microbatch_model_year_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='year', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
 select * from {{ ref('input_model') }}
 """
 
@@ -843,6 +857,111 @@ class TestMicrobatchCompiledRunPaths(BaseMicrobatchTest):
         )
 
 
+class TestMicrobatchCompiledRunPathsHourly(BaseMicrobatchTest):
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_hour_sql,
+        }
+
+    def test_run_with_event_time(self, project):
+        # run all partitions from start - 2 expected rows in output, one failed
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run"])
+
+        # Compiled paths - batch compilations
+        assert read_file(
+            project.project_root,
+            "target",
+            "compiled",
+            "test",
+            "models",
+            "microbatch_model",
+            "microbatch_model_2020-01-03T13.sql",
+        )
+        assert read_file(
+            project.project_root,
+            "target",
+            "run",
+            "test",
+            "models",
+            "microbatch_model",
+            "microbatch_model_2020-01-03T13.sql",
+        )
+
+
+class TestMicrobatchCompiledRunPathsMonthly(BaseMicrobatchTest):
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_month_sql,
+        }
+
+    def test_run_with_event_time(self, project):
+        # run all partitions from start - 2 expected rows in output, one failed
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run"])
+
+        # Compiled paths - batch compilations
+        assert read_file(
+            project.project_root,
+            "target",
+            "compiled",
+            "test",
+            "models",
+            "microbatch_model",
+            "microbatch_model_2020-01.sql",
+        )
+        assert read_file(
+            project.project_root,
+            "target",
+            "run",
+            "test",
+            "models",
+            "microbatch_model",
+            "microbatch_model_2020-01.sql",
+        )
+
+
+class TestMicrobatchCompiledRunPathsYearly(BaseMicrobatchTest):
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_year_sql,
+        }
+
+    def test_run_with_event_time(self, project):
+        # run all partitions from start - 2 expected rows in output, one failed
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run"])
+
+        # Compiled paths - batch compilations
+        assert read_file(
+            project.project_root,
+            "target",
+            "compiled",
+            "test",
+            "models",
+            "microbatch_model",
+            "microbatch_model_2020.sql",
+        )
+        assert read_file(
+            project.project_root,
+            "target",
+            "run",
+            "test",
+            "models",
+            "microbatch_model",
+            "microbatch_model_2020.sql",
+        )
+
+
 class TestMicrobatchFullRefreshConfigFalse(BaseMicrobatchTest):
     @pytest.fixture(scope="class")
     def models(self):
@@ -909,38 +1028,6 @@ class TestMicrbobatchModelsRunWithSameCurrentTime(BaseMicrobatchTest):
         assert microbatch_model_last_batch == second_microbatch_model_last_batch
 
 
-class TestMicrobatchModelStoppedByKeyboardInterrupt(BaseMicrobatchTest):
-    @pytest.fixture
-    def catch_eors(self) -> EventCatcher:
-        return EventCatcher(EndOfRunSummary)
-
-    @pytest.fixture
-    def catch_aw(self) -> EventCatcher:
-        return EventCatcher(
-            event_to_catch=ArtifactWritten,
-            predicate=lambda event: event.data.artifact_type == "RunExecutionResult",
-        )
-
-    def test_microbatch(
-        self,
-        mocker: MockerFixture,
-        project,
-        catch_eors: EventCatcher,
-        catch_aw: EventCatcher,
-    ) -> None:
-        mocked_fbs = mocker.patch(
-            "dbt.materializations.incremental.microbatch.MicrobatchBuilder.format_batch_start"
-        )
-        mocked_fbs.side_effect = KeyboardInterrupt
-        try:
-            run_dbt(["run"], callbacks=[catch_eors.catch, catch_aw.catch])
-            assert False, "KeyboardInterrupt failed to stop batch execution"
-        except KeyboardInterrupt:
-            assert len(catch_eors.caught_events) == 1
-            assert "Exited because of keyboard interrupt" in catch_eors.caught_events[0].info.msg
-            assert len(catch_aw.caught_events) == 1
-
-
 class TestMicrobatchModelSkipped(BaseMicrobatchTest):
     @pytest.fixture(scope="class")
     def models(self):
@@ -967,7 +1054,7 @@ class TestMicrobatchCanRunParallelOrSequential(BaseMicrobatchTest):
     def test_microbatch(
         self, mocker: MockerFixture, project, batch_exc_catcher: EventCatcher
     ) -> None:
-        mocked_srip = mocker.patch("dbt.task.run.MicrobatchModelRunner.should_run_in_parallel")
+        mocked_srip = mocker.patch("dbt.task.run.MicrobatchBatchRunner.should_run_in_parallel")
 
         # Should be run in parallel
         mocked_srip.return_value = True
@@ -1007,7 +1094,7 @@ class TestFirstAndLastBatchAlwaysSequential(BaseMicrobatchTest):
     def test_microbatch(
         self, mocker: MockerFixture, project, batch_exc_catcher: EventCatcher
     ) -> None:
-        mocked_srip = mocker.patch("dbt.task.run.MicrobatchModelRunner.should_run_in_parallel")
+        mocked_srip = mocker.patch("dbt.task.run.MicrobatchBatchRunner.should_run_in_parallel")
 
         # Should be run in parallel
         mocked_srip.return_value = True
@@ -1145,3 +1232,55 @@ class TestCanSilenceInvalidConcurrentBatchesConfigWarning(BaseMicrobatchTest):
             )
         # Because we silenced the warning, it shouldn't get fired
         assert len(event_catcher.caught_events) == 0
+
+
+single_batch_microbatch_model_sql = """
+{{
+    config(
+        materialized='incremental',
+        incremental_strategy='microbatch',
+        unique_key='tmp',
+        event_time='tmp',
+        begin=modules.datetime.datetime.now(),
+        lookback=0,
+        batch_size='day',
+        meta={'param': 'invalid_param'},
+        pre_hook=[
+            validate_param('param1')
+        ]
+    )
+}}
+
+SELECT current_date as tmp
+"""
+
+validate_param_macro_sql = """
+{% macro validate_param(valid_param) %}
+    {% set current_param = config.get('meta')['param'] %}
+
+    {% if execute %}
+        {% if current_param != valid_param %}
+            {% set exceptions_message = "Invalid param: " ~ current_param ~ ", valid param: " ~ valid_param %}
+            {% do exceptions.raise_compiler_error(exceptions_message) %}
+        {% endif %}
+    {% endif %}
+{% endmacro %}
+"""
+
+
+class TestCompilationErrorOnSingleBatchRun(BaseMicrobatchTest):
+    @pytest.fixture(scope="class")
+    def models(self) -> Dict[str, str]:
+        return {
+            "microbatch_model.sql": single_batch_microbatch_model_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self) -> Dict[str, str]:
+        return {
+            "validate_param.sql": validate_param_macro_sql,
+        }
+
+    def test_microbatch(self, project) -> None:
+        _, console_output = run_dbt_and_capture(["run"], expect_pass=False)
+        assert "Completed with 1 error, 0 partial successes, and 0 warnings" in console_output

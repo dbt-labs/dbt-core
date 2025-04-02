@@ -12,7 +12,7 @@ from dbt_common.clients.system import read_json, write_json
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.functions import get_metadata_vars
 from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
-from dbt_common.invocation import get_invocation_id
+from dbt_common.invocation import get_invocation_id, get_invocation_started_at
 
 BASE_SCHEMAS_URL = "https://schemas.getdbt.com/"
 SCHEMA_PATH = "dbt/{name}/v{version}.json"
@@ -57,6 +57,9 @@ class BaseArtifactMetadata(dbtClassMixin):
     dbt_version: str = __version__
     generated_at: datetime = dataclasses.field(default_factory=datetime.utcnow)
     invocation_id: Optional[str] = dataclasses.field(default_factory=get_invocation_id)
+    invocation_started_at: Optional[datetime] = dataclasses.field(
+        default_factory=get_invocation_started_at
+    )
     env: Dict[str, str] = dataclasses.field(default_factory=get_metadata_vars)
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):

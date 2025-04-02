@@ -12,11 +12,13 @@ from dbt.adapters.factory import adapter_management, get_adapter, register_adapt
 from dbt.cli.exceptions import ExceptionExit, ResultExit
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
+from dbt.config.catalogs import get_active_write_integration, load_catalogs
 from dbt.config.runtime import UnsetProfile, load_profile, load_project
 from dbt.context.providers import generate_runtime_macro_context
 from dbt.context.query_header import generate_query_header_context
 from dbt.events.logging import setup_event_logger
 from dbt.events.types import (
+    ArtifactUploadError,
     CommandCompleted,
     MainEncounteredError,
     MainReportArgs,
@@ -26,13 +28,14 @@ from dbt.events.types import (
     ResourceReport,
 )
 from dbt.exceptions import DbtProjectError, FailFastError
-from dbt.flags import get_flag_dict, set_flags
+from dbt.flags import get_flag_dict, get_flags, set_flags
 from dbt.mp_context import get_mp_context
 from dbt.parser.manifest import parse_manifest
 from dbt.plugins import set_up_plugin_manager
 from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
 from dbt.utils import try_get_max_rss_kb
+from dbt.utils.artifact_upload import upload_artifacts
 from dbt.version import installed as installed_version
 from dbt_common.clients.system import get_env
 from dbt_common.context import get_invocation_context, set_invocation_context
@@ -164,6 +167,15 @@ def postflight(func):
         finally:
             # Fire ResourceReport, but only on systems which support the resource
             # module. (Skip it on Windows).
+            try:
+                if get_flags().upload_to_artifacts_ingest_api:
+                    upload_artifacts(
+                        get_flags().project_dir, get_flags().target_path, ctx.command.name
+                    )
+
+            except Exception as e:
+                fire_event(ArtifactUploadError(msg=str(e)))
+
             if importlib.util.find_spec("resource") is not None:
                 import resource
 
@@ -313,6 +325,29 @@ def runtime_config(func):
     return update_wrapper(wrapper, func)
 
 
+def catalogs(func):
+    """A decorator used by click command functions for loading catalogs"""
+
+    def wrapper(*args, **kwargs):
+        ctx = args[0]
+        assert isinstance(ctx, Context)
+
+        req_strs = ["flags", "profile", "project"]
+        reqs = [ctx.obj.get(req_str) for req_str in req_strs]
+        if None in reqs:
+            raise DbtProjectError("profile and flags required to load catalogs")
+
+        flags = ctx.obj["flags"]
+        ctx_project = ctx.obj["project"]
+
+        _catalogs = load_catalogs(flags.PROJECT_DIR, ctx_project.project_name, flags.VARS)
+        ctx.obj["catalogs"] = _catalogs
+
+        return func(*args, **kwargs)
+
+    return update_wrapper(wrapper, func)
+
+
 def manifest(*args0, write=True, write_perf_info=False):
     """A decorator used by click command functions for generating a manifest
     given a profile, project, and runtime config. This also registers the adapter
@@ -346,11 +381,15 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
 
     runtime_config = ctx.obj["runtime_config"]
 
+    catalogs = ctx.obj["catalogs"] if "catalogs" in ctx.obj else []
+    active_integrations = [get_active_write_integration(catalog) for catalog in catalogs]
+
     # if a manifest has already been set on the context, don't overwrite it
     if ctx.obj.get("manifest") is None:
         ctx.obj["manifest"] = parse_manifest(
             runtime_config, write_perf_info, write, ctx.obj["flags"].write_json
         )
+        adapter = get_adapter(runtime_config)
     else:
         register_adapter(runtime_config, get_mp_context())
         adapter = get_adapter(runtime_config)
@@ -358,3 +397,6 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
         adapter.set_macro_resolver(ctx.obj["manifest"])
         query_header_context = generate_query_header_context(adapter.config, ctx.obj["manifest"])  # type: ignore[attr-defined]
         adapter.connections.set_query_header(query_header_context)
+
+    for integration in active_integrations:
+        adapter.add_catalog_integration(integration)

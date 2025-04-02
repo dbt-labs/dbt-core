@@ -2,7 +2,13 @@ from pathlib import Path
 
 import click
 
-from dbt.cli.option_types import YAML, ChoiceTuple, Package, WarnErrorOptionsType
+from dbt.cli.option_types import (
+    YAML,
+    ChoiceTuple,
+    Package,
+    SampleType,
+    WarnErrorOptionsType,
+)
 from dbt.cli.options import MultiOption
 from dbt.cli.resolvers import default_profiles_dir, default_project_dir
 from dbt.version import get_version_information
@@ -518,6 +524,15 @@ resource_type = click.option(
     default=(),
 )
 
+sample = click.option(
+    "--sample",
+    envvar="DBT_SAMPLE",
+    help="Run in sample mode with given SAMPLE_WINDOW spec, such that ref/source calls are sampled by the sample window.",
+    default=None,
+    type=SampleType(),
+    hidden=True,  # TODO: Unhide
+)
+
 # `--select` and `--models` are analogous for most commands except `dbt list` for legacy reasons.
 # Most CLI arguments should use the combined `select` option that aliases `--models` to `--select`.
 # However, if you need to split out these separators (like `dbt ls`), use the `models` and `raw_select` options instead.
@@ -745,4 +760,11 @@ write_json = click.option(
     envvar="DBT_WRITE_JSON",
     help="Whether or not to write the manifest.json and run_results.json files to the target directory",
     default=True,
+)
+
+upload_artifacts = click.option(
+    "--upload-to-artifacts-ingest-api/--no-upload-to-artifacts-ingest-api",
+    envvar="DBT_UPLOAD_TO_ARTIFACTS_INGEST_API",
+    help="Whether or not to upload the artifacts to the dbt Cloud API",
+    default=False,
 )

@@ -1,0 +1,6 @@
+kind: Features
+body: Enable sample mode for 'build' command
+time: 2025-02-13T18:29:32.238857-06:00
+custom:
+  Author: QMalcolm
+  Issue: "11298"
