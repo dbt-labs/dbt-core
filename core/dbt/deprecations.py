@@ -10,6 +10,7 @@ from dbt_common.events.functions import warn_or_error
 class DBTDeprecation:
     _name: ClassVar[Optional[str]] = None
     _event: ClassVar[Optional[str]] = None
+    _summary_event: ClassVar[Optional[str]] = None
 
     @property
     def name(self) -> str:
@@ -34,6 +35,19 @@ class DBTDeprecation:
                 raise NameError(msg)
         raise NotImplementedError("event not implemented for {}".format(self._event))
 
+    @property
+    def summary_event(self) -> abc.ABCMeta:
+        if self._summary_event is not None:
+            module_path = core_types
+            class_name = self._summary_event
+
+            try:
+                return getattr(module_path, class_name)
+            except AttributeError:
+                msg = f"Event Class `{class_name}` is not defined in `{module_path}`"
+                raise NameError(msg)
+        raise NotImplementedError("event not implemented for {}".format(self._event))
+
     def show(self, *args, **kwargs) -> None:
         if self.name not in active_deprecations:
             event = self.event(**kwargs)
@@ -41,6 +55,11 @@ class DBTDeprecation:
             self.track_deprecation_warn()
 
         active_deprecations[self.name] += 1
+
+    def show_summary(self) -> None:
+        if self.name in active_deprecations:
+            event = self.summary_event(occurences=active_deprecations[self.name])
+            warn_or_error(event)
 
 
 class PackageRedirectDeprecation(DBTDeprecation):
@@ -163,6 +182,10 @@ def buffer(name: str, *args, **kwargs):
         deprecations[name].show(*args, **kwargs)
 
     buffered_deprecations.append(show_callback)
+
+
+def show_summary(name: str) -> None:
+    deprecations[name].show_summary()
 
 
 # these are globally available
