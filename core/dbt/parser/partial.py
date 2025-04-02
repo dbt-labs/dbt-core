@@ -833,7 +833,7 @@ class PartialParsing:
         for unique_id in schema_file.node_patches:
             if not unique_id.startswith(prefix):
                 continue
-            parts = unique_id.split(".")
+            parts = unique_id.split(".", maxsplit=2)
             elem_name = parts[2]
             if elem_name == elem["name"]:
                 elem_unique_ids.append(unique_id)
