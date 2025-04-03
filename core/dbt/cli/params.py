@@ -595,6 +595,14 @@ single_threaded = click.option(
     hidden=True,
 )
 
+show_all_deprecations = click.option(
+    "--show-all-deprecations/--no-show-all-deprecations",
+    envvar=None,
+    help="By default, each type of a deprecation warning is only shown once. Use this flag to show all deprecation warning instances.",
+    is_flag=True,
+    default=False,
+)
+
 skip_profile_setup = click.option(
     "--skip-profile-setup",
     "-s",

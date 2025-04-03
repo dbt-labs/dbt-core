@@ -4,6 +4,7 @@ from typing import Callable, ClassVar, DefaultDict, Dict, List, Optional
 
 import dbt.tracking
 from dbt.events import types as core_types
+from dbt.flags import get_flags
 from dbt_common.events.functions import warn_or_error
 
 
@@ -49,7 +50,8 @@ class DBTDeprecation:
         raise NotImplementedError("event not implemented for {}".format(self._event))
 
     def show(self, *args, **kwargs) -> None:
-        if self.name not in active_deprecations:
+        flags = get_flags()
+        if self.name not in active_deprecations or flags.show_all_deprecations:
             event = self.event(**kwargs)
             warn_or_error(event)
             self.track_deprecation_warn()
