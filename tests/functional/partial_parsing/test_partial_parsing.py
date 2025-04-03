@@ -52,8 +52,8 @@ from tests.functional.partial_parsing.fixtures import (
     model_three_sql,
     model_two_disabled_sql,
     model_two_sql,
-    model_with_dots_sql,
     model_with_dots_edited_yml,
+    model_with_dots_sql,
     model_with_dots_yml,
     models_schema1_yml,
     models_schema2_yml,
@@ -675,9 +675,7 @@ class TestModelsWithDots:
         assert expected_nodes == list(manifest.nodes.keys())
 
         # edit YAML in models-path
-        write_file(
-            model_with_dots_edited_yml, project.project_root, "models", "schema.yml"
-        )
+        write_file(model_with_dots_edited_yml, project.project_root, "models", "schema.yml")
 
         # parse again
         results = run_dbt(["--partial-parse", "parse"])
