@@ -5,6 +5,8 @@ import yaml
 
 import dbt_common
 from dbt import deprecations
+from dbt.clients.registry import _get_cached
+from dbt.events.types import PackageRedirectDeprecation
 from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
 from dbt_common.exceptions import EventCompilationError
 from tests.functional.deprecations.fixtures import (
@@ -12,6 +14,7 @@ from tests.functional.deprecations.fixtures import (
     deprecated_model_exposure_yaml,
     models_trivial__model_sql,
 )
+from tests.utils import EventCatcher
 
 
 class TestConfigPathDeprecation:
@@ -199,3 +202,38 @@ class TestProjectFlagsMovedDeprecationWarnErrorOptions(TestProjectFlagsMovedDepr
             "User config should be moved from the 'config' key in profiles.yml to the 'flags' key in dbt_project.yml."
             not in logs
         )
+
+
+class TestShowAllDeprecationsFlag:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"already_exists.sql": models_trivial__model_sql}
+
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {
+            "packages": [
+                {"package": "fishtown-analytics/dbt_utils", "version": "0.7.0"},
+                {"package": "calogica/dbt_date", "version": "0.10.0"},
+            ]
+        }
+
+    @pytest.fixture(scope="class")
+    def event_catcher(self) -> EventCatcher:
+        return EventCatcher(event_to_catch=PackageRedirectDeprecation)
+
+    def test_package_redirect(self, project, event_catcher: EventCatcher):
+        deprecations.reset_deprecations()
+        assert deprecations.active_deprecations == defaultdict(int)
+        run_dbt(["deps"], callbacks=[event_catcher.catch])
+        assert "package-redirect" in deprecations.active_deprecations
+        assert deprecations.active_deprecations["package-redirect"] == 2
+        assert len(event_catcher.caught_events) == 1
+
+        deprecations.reset_deprecations()
+        _get_cached.cache = {}
+        event_catcher.flush()
+        run_dbt(["deps", "--show-all-deprecations"], callbacks=[event_catcher.catch])
+        assert "package-redirect" in deprecations.active_deprecations
+        assert deprecations.active_deprecations["package-redirect"] == 2
+        assert len(event_catcher.caught_events) == 2
