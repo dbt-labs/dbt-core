@@ -52,6 +52,9 @@ from tests.functional.partial_parsing.fixtures import (
     model_three_sql,
     model_two_disabled_sql,
     model_two_sql,
+    model_with_dots_sql,
+    model_with_dots_edited_yml,
+    model_with_dots_yml,
     models_schema1_yml,
     models_schema2_yml,
     models_schema2b_yml,
@@ -655,6 +658,29 @@ class TestTests:
             "test.test.is_odd_orders_id.82834fdc5b",
         ]
         assert expected_nodes == list(manifest.nodes.keys())
+
+
+class TestModelsWithDots:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "a.b.orders.sql": model_with_dots_sql,
+            "schema.yml": model_with_dots_yml,
+        }
+
+    def test_pp_model_with_dots(self, project):
+        # initial parse
+        manifest = run_dbt(["parse"])
+        expected_nodes = ["model.test.a.b.orders"]
+        assert expected_nodes == list(manifest.nodes.keys())
+
+        # edit YAML in models-path
+        write_file(
+            model_with_dots_edited_yml, project.project_root, "models", "schema.yml"
+        )
+
+        # parse again
+        results = run_dbt(["--partial-parse", "parse"])
 
 
 class TestExternalModels:
