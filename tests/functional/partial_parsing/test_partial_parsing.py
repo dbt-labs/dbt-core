@@ -678,7 +678,7 @@ class TestModelsWithDots:
         write_file(model_with_dots_edited_yml, project.project_root, "models", "schema.yml")
 
         # parse again
-        results = run_dbt(["--partial-parse", "parse"])
+        run_dbt(["--partial-parse", "parse"])
 
 
 class TestExternalModels:
