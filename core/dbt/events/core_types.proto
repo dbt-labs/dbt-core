@@ -470,6 +470,17 @@ message MicrobatchMacroOutsideOfBatchesDeprecationMsg {
     MicrobatchMacroOutsideOfBatchesDeprecation data = 2;
 }
 
+// D021
+message PackageRedirectDeprecationSummary {
+    int32 occurrences = 1;
+    bool show_all_hint = 2;
+}
+
+message PackageRedirectDeprecationSummaryMsg {
+    CoreEventInfo info = 1;
+    PackageRedirectDeprecationSummary data = 2;
+}
+
 // I065
 message DeprecatedModel {
     string model_name = 1;

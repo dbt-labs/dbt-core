@@ -5,6 +5,7 @@ from typing import Callable, ClassVar, DefaultDict, Dict, List, Optional
 import dbt.tracking
 from dbt.events import types as core_types
 from dbt.flags import get_flags
+from dbt_common.events.base_types import BaseEvent
 from dbt_common.events.functions import warn_or_error
 
 
@@ -37,8 +38,10 @@ class DBTDeprecation:
         raise NotImplementedError("event not implemented for {}".format(self._event))
 
     @property
-    def summary_event(self) -> abc.ABCMeta:
-        if self._summary_event is not None:
+    def summary_event(self) -> Optional[abc.ABCMeta]:
+        if self._summary_event is None:
+            return None
+        else:
             module_path = core_types
             class_name = self._summary_event
 
@@ -47,7 +50,6 @@ class DBTDeprecation:
             except AttributeError:
                 msg = f"Event Class `{class_name}` is not defined in `{module_path}`"
                 raise NameError(msg)
-        raise NotImplementedError("event not implemented for {}".format(self._event))
 
     def show(self, *args, **kwargs) -> None:
         flags = get_flags()
@@ -59,14 +61,21 @@ class DBTDeprecation:
         active_deprecations[self.name] += 1
 
     def show_summary(self) -> None:
-        if self.name in active_deprecations:
-            event = self.summary_event(occurences=active_deprecations[self.name])
+        event_class = self.summary_event
+        if self.name in active_deprecations and event_class is not None:
+            show_all_hint = (
+                not get_flags().show_all_deprecations and active_deprecations[self.name] > 1
+            )
+            event: BaseEvent = event_class(
+                occurrences=active_deprecations[self.name], show_all_hint=show_all_hint
+            )
             warn_or_error(event)
 
 
 class PackageRedirectDeprecation(DBTDeprecation):
     _name = "package-redirect"
     _event = "PackageRedirectDeprecation"
+    _summary_event = "PackageRedirectDeprecationSummary"
 
 
 class PackageInstallPathDeprecation(DBTDeprecation):
@@ -186,8 +195,9 @@ def buffer(name: str, *args, **kwargs):
     buffered_deprecations.append(show_callback)
 
 
-def show_summary(name: str) -> None:
-    deprecations[name].show_summary()
+def show_all_deprecation_summaries() -> None:
+    for deprecation in active_deprecations:
+        deprecations[deprecation].show_summary()
 
 
 # these are globally available

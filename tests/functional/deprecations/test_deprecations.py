@@ -6,7 +6,10 @@ import yaml
 import dbt_common
 from dbt import deprecations
 from dbt.clients.registry import _get_cached
-from dbt.events.types import PackageRedirectDeprecation
+from dbt.events.types import (
+    PackageRedirectDeprecation,
+    PackageRedirectDeprecationSummary,
+)
 from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
 from dbt_common.exceptions import EventCompilationError
 from tests.functional.deprecations.fixtures import (
@@ -237,3 +240,31 @@ class TestShowAllDeprecationsFlag:
         assert "package-redirect" in deprecations.active_deprecations
         assert deprecations.active_deprecations["package-redirect"] == 2
         assert len(event_catcher.caught_events) == 2
+
+
+class TestDeprecationSummary:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"already_exists.sql": models_trivial__model_sql}
+
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {
+            "packages": [
+                {"package": "fishtown-analytics/dbt_utils", "version": "0.7.0"},
+                {"package": "calogica/dbt_date", "version": "0.10.0"},
+            ]
+        }
+
+    @pytest.fixture(scope="class")
+    def event_catcher(self) -> EventCatcher:
+        return EventCatcher(event_to_catch=PackageRedirectDeprecationSummary)
+
+    def test_package_redirect(self, project, event_catcher: EventCatcher):
+        deprecations.reset_deprecations()
+        assert deprecations.active_deprecations == defaultdict(int)
+        run_dbt(["deps"], callbacks=[event_catcher.catch])
+        assert "package-redirect" in deprecations.active_deprecations
+        assert deprecations.active_deprecations["package-redirect"] == 2
+        assert len(event_catcher.caught_events) == 1
+        assert event_catcher.caught_events[0].data.occurrences == 2  # type: ignore
