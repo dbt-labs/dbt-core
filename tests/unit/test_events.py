@@ -135,6 +135,7 @@ sample_values = [
     core_types.ProjectCreated(project_name=""),
     # D - Deprecations ======================
     core_types.PackageRedirectDeprecation(old_name="", new_name=""),
+    core_types.PackageRedirectDeprecationSummary(occurrences=2, show_debug_hint=True),
     core_types.PackageInstallPathDeprecation(),
     core_types.ConfigSourcePathDeprecation(deprecated_path="", exp_path=""),
     core_types.ConfigDataPathDeprecation(deprecated_path="", exp_path=""),
