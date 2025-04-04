@@ -40,15 +40,8 @@ def _check_package_redirect(package_name: str, response: Dict[str, Any]) -> None
     # redirectname redirects based on package name
     # Both can be present at the same time, or neither. Fails gracefully to old name
     if ("redirectnamespace" in response) or ("redirectname" in response):
-        if ("redirectnamespace" in response) and response["redirectnamespace"] is not None:
-            use_namespace = response["redirectnamespace"]
-        else:
-            use_namespace = response["namespace"]
-
-        if ("redirectname" in response) and response["redirectname"] is not None:
-            use_name = response["redirectname"]
-        else:
-            use_name = response["name"]
+        use_namespace = response.get("redirectnamespace") or response["namespace"]
+        use_name = response.get("redirectname") or response["name"]
 
         new_nwo = use_namespace + "/" + use_name
         deprecations.warn("package-redirect", old_name=package_name, new_name=new_nwo)
