@@ -1,9 +1,8 @@
-from typing import List
-
 import pytest
 
+from dbt.events.types import InvalidMacroAnnotation
 from dbt.tests.util import run_dbt
-from dbt_common.events.base_types import EventMsg
+from tests.utils import EventCatcher
 
 macros_sql = """
 {% macro my_macro(my_arg_1, my_arg_2, my_arg_3) %}
@@ -83,12 +82,13 @@ class TestMacroNameWarnings:
         return {"flags": {"validate_macro_args": True}}
 
     def test_macro_name_enforcement(self, project) -> None:
-        events: List[EventMsg] = []
-        run_dbt(["parse"], callbacks=[events.append])
+        event_catcher = EventCatcher(event_to_catch=InvalidMacroAnnotation)
+        run_dbt(["parse"], callbacks=[event_catcher.catch])
+        assert len(event_catcher.caught_events) == 2
         msg = "Argument my_misnamed_arg_2 in yaml for macro my_macro does not match the jinja"
-        assert any([e for e in events if e.info.msg.startswith(msg) and e.info.level == "warn"])
+        assert any([e for e in event_catcher.caught_events if e.info.msg.startswith(msg)])
         msg = "Argument my_misnamed_arg_3 in yaml for macro my_macro does not match the jinja"
-        assert any([e for e in events if e.info.msg.startswith(msg) and e.info.level == "warn"])
+        assert any([e for e in event_catcher.caught_events if e.info.msg.startswith(msg)])
 
 
 class TestMacroTypeWarnings:
@@ -101,12 +101,13 @@ class TestMacroTypeWarnings:
         return {"flags": {"validate_macro_args": True}}
 
     def test_macro_type_warnings(self, project) -> None:
-        events: List[EventMsg] = []
-        run_dbt(["parse"], callbacks=[events.append])
+        event_catcher = EventCatcher(event_to_catch=InvalidMacroAnnotation)
+        run_dbt(["parse"], callbacks=[event_catcher.catch])
+        assert len(event_catcher.caught_events) == 2
         msg = "Argument my_arg_2 in the yaml for macro my_macro has an invalid type"
-        assert any([e for e in events if e.info.msg.startswith(msg) and e.info.level == "warn"])
+        assert any([e for e in event_catcher.caught_events if e.info.msg.startswith(msg)])
         msg = "Argument my_arg_3 in the yaml for macro my_macro has an invalid type"
-        assert any([e for e in events if e.info.msg.startswith(msg) and e.info.level == "warn"])
+        assert any([e for e in event_catcher.caught_events if e.info.msg.startswith(msg)])
 
 
 class TestMacroNonEnforcement:
@@ -115,6 +116,6 @@ class TestMacroNonEnforcement:
         return {"macros.yml": bad_everything_types_macros_yml, "macros.sql": macros_sql}
 
     def test_macro_non_enforcement(self, project) -> None:
-        events: List[EventMsg] = []
-        run_dbt(["parse"], callbacks=[events.append])
-        assert not any([e for e in events if e.info.level == "warn"])
+        event_catcher = EventCatcher(event_to_catch=InvalidMacroAnnotation)
+        run_dbt(["parse"], callbacks=[event_catcher.catch])
+        assert len(event_catcher.caught_events) == 0
