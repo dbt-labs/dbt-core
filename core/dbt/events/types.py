@@ -262,7 +262,7 @@ class PackageRedirectDeprecationSummary(WarnLevel):
 
     def message(self) -> str:
         description = (
-            f"Found {self.occurrences} packages that have been deprecated in favor of new packages. Please "
+            f"Found {pluralize(self.occurrences, 'package')} that {'has' if self.occurrences == 1 else 'have'} been deprecated in favor of new packages. Please "
             f"update your `packages.yml` configuration to use the new packages instead."
         )
 
