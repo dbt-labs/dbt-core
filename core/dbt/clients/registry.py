@@ -43,7 +43,7 @@ def _check_package_redirect(package_name: str, response: Dict[str, Any]) -> None
         use_namespace = response.get("redirectnamespace") or response["namespace"]
         use_name = response.get("redirectname") or response["name"]
 
-        new_nwo = use_namespace + "/" + use_name
+        new_nwo = f"{use_namespace}/{use_name}"
         deprecations.warn("package-redirect", old_name=package_name, new_name=new_nwo)
 
 
