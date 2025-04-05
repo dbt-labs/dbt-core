@@ -1,0 +1,6 @@
+kind: Fixes
+body: fix partial parsing behaviour when model name contains dots
+time: 2025-04-02T23:28:06.077059013+03:00
+custom:
+    Author: yakovlevvs
+    Issue: "11363"
