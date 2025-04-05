@@ -7,8 +7,11 @@ version: 2
 models:
   - name: something
     description: This table has basic information about orders, as well as some derived facts based on payments
-exposure:
+exposures:
   - name: something
+    owner: 
+      name: elias
+    type: dashboard
 
 """
 
