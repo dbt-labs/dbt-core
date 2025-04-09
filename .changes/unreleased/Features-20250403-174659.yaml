@@ -1,0 +1,7 @@
+kind: Features
+body: Show summaries for deprecations and add ability to toggle seeing all deprecation
+  violation instances
+time: 2025-04-03T17:46:59.684525-05:00
+custom:
+  Author: QMalcolm
+  Issue: "11429"

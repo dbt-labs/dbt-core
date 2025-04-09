@@ -256,6 +256,22 @@ class PackageRedirectDeprecation(WarnLevel):
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
+class PackageRedirectDeprecationSummary(WarnLevel):
+    def code(self) -> str:
+        return "D021"
+
+    def message(self) -> str:
+        description = (
+            f"Found {pluralize(self.occurrences, 'package')} that {'has' if self.occurrences == 1 else 'have'} been deprecated in favor of new packages. Please "
+            f"update your `packages.yml` configuration to use the new packages instead."
+        )
+
+        if self.show_all_hint:
+            description += " To see all deprecated packages, run command again with the `--show-all-deprecations` flag."
+
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
 class PackageInstallPathDeprecation(WarnLevel):
     def code(self) -> str:
         return "D002"

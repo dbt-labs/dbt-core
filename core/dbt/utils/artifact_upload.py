@@ -1,4 +1,3 @@
-import os
 import time
 import uuid
 import zipfile
@@ -8,12 +7,7 @@ from pydantic import BaseSettings
 
 import dbt.tracking
 from dbt.config.runtime import UnsetProfile, load_project
-from dbt.constants import (
-    CATALOG_FILENAME,
-    MANIFEST_FILE_NAME,
-    RUN_RESULTS_FILE_NAME,
-    SOURCE_RESULT_FILE_NAME,
-)
+from dbt.constants import MANIFEST_FILE_NAME, RUN_RESULTS_FILE_NAME
 from dbt.events.types import ArtifactUploadSkipped, ArtifactUploadSuccess
 from dbt.exceptions import DbtProjectError
 from dbt_common.events.functions import fire_event
@@ -23,18 +17,12 @@ MAX_RETRIES = 3
 
 EXECUTION_ARTIFACTS = [MANIFEST_FILE_NAME, RUN_RESULTS_FILE_NAME]
 
-ARTIFACTS_TO_UPLOAD = {
-    "retry": EXECUTION_ARTIFACTS,
-    "clone": EXECUTION_ARTIFACTS,
-    "build": EXECUTION_ARTIFACTS,
-    "run": EXECUTION_ARTIFACTS,
-    "run-operation": EXECUTION_ARTIFACTS,
-    "seed": EXECUTION_ARTIFACTS,
-    "snapshot": EXECUTION_ARTIFACTS,
-    "test": EXECUTION_ARTIFACTS,
-    "freshness": [MANIFEST_FILE_NAME, SOURCE_RESULT_FILE_NAME],
-    "generate": [MANIFEST_FILE_NAME, CATALOG_FILENAME],
-}
+PRODUCED_ARTIFACTS_PATHS: set[str] = set()
+
+
+# artifact paths calling this will be uploaded to dbt Cloud
+def add_artifact_produced(artifact_path: str):
+    PRODUCED_ARTIFACTS_PATHS.add(artifact_path)
 
 
 class ArtifactUploadConfig(BaseSettings):
@@ -76,7 +64,7 @@ def _retry_with_backoff(operation_name, func, max_retries=MAX_RETRIES, retry_cod
     if retry_codes is None:
         retry_codes = [500, 502, 503, 504]
     retry_delay = 1
-    for attempt in range(max_retries):
+    for attempt in range(max_retries + 1):
         try:
             success, result = func()
             if success:
@@ -84,10 +72,10 @@ def _retry_with_backoff(operation_name, func, max_retries=MAX_RETRIES, retry_cod
 
             if result.status_code not in retry_codes:
                 raise DbtException(f"Error {operation_name}: {result}")
-            if attempt == max_retries - 1:  # Last attempt
+            if attempt == max_retries:  # Last attempt
                 raise DbtException(f"Error {operation_name}: {result}")
         except requests.RequestException as e:
-            if attempt == max_retries - 1:  # Last attempt
+            if attempt == max_retries:  # Last attempt
                 raise DbtException(f"Error {operation_name}: {str(e)}")
 
         time.sleep(retry_delay)
@@ -96,8 +84,8 @@ def _retry_with_backoff(operation_name, func, max_retries=MAX_RETRIES, retry_cod
 
 def upload_artifacts(project_dir, target_path, command):
     # Check if there are artifacts to upload for this command
-    if command not in ARTIFACTS_TO_UPLOAD:
-        fire_event(ArtifactUploadSkipped(msg=f"No artifacts to upload for command {command}"))
+    if not PRODUCED_ARTIFACTS_PATHS:
+        fire_event(ArtifactUploadSkipped(msg="No artifacts to upload for current command"))
         return
 
     # read configurations
@@ -123,8 +111,8 @@ def upload_artifacts(project_dir, target_path, command):
     # Create zip file with artifacts
     zip_file_name = "target.zip"
     with zipfile.ZipFile(zip_file_name, "w") as z:
-        for artifact in ARTIFACTS_TO_UPLOAD[command]:
-            z.write(os.path.join(target_path, artifact), artifact)
+        for artifact_path in PRODUCED_ARTIFACTS_PATHS:
+            z.write(artifact_path, artifact_path.split("/")[-1])
 
     # Step 1: Create ingest request with retry
     def create_ingest():
@@ -160,3 +148,4 @@ def upload_artifacts(project_dir, target_path, command):
     fire_event(ArtifactUploadSuccess(msg=f"command {command} completed successfully"))
     if dbt.tracking.active_user is not None:
         dbt.tracking.track_artifact_upload({"command": command})
+    PRODUCED_ARTIFACTS_PATHS.clear()

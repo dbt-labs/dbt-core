@@ -49,6 +49,7 @@ from dbt.task import group_lookup
 from dbt.task.base import BaseRunner
 from dbt.task.compile import CompileRunner, CompileTask
 from dbt.task.printer import get_counts, print_run_end_messages
+from dbt.utils.artifact_upload import add_artifact_produced
 from dbt_common.clients.jinja import MacroProtocol
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.base_types import EventLevel
@@ -428,6 +429,20 @@ class MicrobatchBatchRunner(ModelRunner):
         )
         self.print_result_line(result=result)
         return result
+
+    def error_result(self, node, message, start_time, timing_info):
+        """Necessary to return a result with a batch result
+
+        Called by `BaseRunner.safe_run` when an error occurs
+        """
+        return self._build_run_result(
+            node=node,
+            start_time=start_time,
+            status=RunStatus.Error,
+            timing_info=timing_info,
+            message=message,
+            batch_results=BatchResults(failed=[self.batches[self.batch_idx]]),
+        )
 
     def compile(self, manifest: Manifest):
         batch = self.batches[self.batch_idx]
@@ -1096,6 +1111,7 @@ class RunTask(CompileTask):
 
             if self.args.write_json and hasattr(run_result, "write"):
                 run_result.write(self.result_path())
+                add_artifact_produced(self.result_path())
 
             print_run_end_messages(self.node_results, keyboard_interrupt=True)
 

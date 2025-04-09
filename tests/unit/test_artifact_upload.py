@@ -4,13 +4,14 @@ import uuid
 from unittest import mock
 from unittest.mock import MagicMock, call, patch
 
-from dbt.cli.artifact_upload import (
-    ArtifactUploadConfig,
-    _retry_with_backoff,
-    upload_artifacts,
-)
 from dbt.constants import MANIFEST_FILE_NAME, RUN_RESULTS_FILE_NAME
 from dbt.exceptions import DbtProjectError
+from dbt.utils.artifact_upload import (
+    ArtifactUploadConfig,
+    _retry_with_backoff,
+    add_artifact_produced,
+    upload_artifacts,
+)
 from dbt_common.exceptions import DbtBaseException
 
 
@@ -61,7 +62,7 @@ class TestArtifactUploadConfig(unittest.TestCase):
 
 class TestRetryWithBackoff(unittest.TestCase):
     def setUp(self):
-        self.time_sleep_patcher = patch("dbt.cli.artifact_upload.time.sleep")
+        self.time_sleep_patcher = patch("dbt.utils.artifact_upload.time.sleep")
         self.mock_sleep = self.time_sleep_patcher.start()
 
     def tearDown(self):
@@ -93,10 +94,12 @@ class TestRetryWithBackoff(unittest.TestCase):
         with self.assertRaises(DbtBaseException) as context:
             _retry_with_backoff("operation", func, max_retries=3)
         self.assertIn("Error operation", str(context.exception))
-        self.assertEqual(func.call_count, 3)
+        self.assertEqual(func.call_count, 4)
         # Sleep should be called twice (after first and second attempts)
-        self.assertEqual(self.mock_sleep.call_count, 2)
-        self.assertEqual(self.mock_sleep.call_args_list, [call(1), call(2)])  # Exponential backoff
+        self.assertEqual(self.mock_sleep.call_count, 3)
+        self.assertEqual(
+            self.mock_sleep.call_args_list, [call(1), call(2), call(4)]
+        )  # Exponential backoff
 
     def test_non_retryable_status_code(self):
         """Test that non-retryable status codes raise immediately."""
@@ -129,8 +132,8 @@ class TestRetryWithBackoff(unittest.TestCase):
         with self.assertRaises(DbtBaseException) as context:
             _retry_with_backoff("operation", func, max_retries=3)
         self.assertIn("Error operation: Network error", str(context.exception))
-        self.assertEqual(func.call_count, 3)
-        self.assertEqual(self.mock_sleep.call_count, 2)
+        self.assertEqual(func.call_count, 4)
+        self.assertEqual(self.mock_sleep.call_count, 3)
 
     def test_custom_retry_codes(self):
         """Test that custom retry codes are respected."""
@@ -150,21 +153,19 @@ class TestUploadArtifacts(unittest.TestCase):
         self.command = "run"
 
         # Create patchers
-        self.load_project_patcher = patch("dbt.cli.artifact_upload.load_project")
-        self.zipfile_patcher = patch("dbt.cli.artifact_upload.zipfile.ZipFile")
-        self.os_path_join_patcher = patch("dbt.cli.artifact_upload.os.path.join")
-        self.requests_post_patcher = patch("dbt.cli.artifact_upload.requests.post")
-        self.requests_put_patcher = patch("dbt.cli.artifact_upload.requests.put")
-        self.requests_patch_patcher = patch("dbt.cli.artifact_upload.requests.patch")
+        self.load_project_patcher = patch("dbt.utils.artifact_upload.load_project")
+        self.zipfile_patcher = patch("dbt.utils.artifact_upload.zipfile.ZipFile")
+        self.requests_post_patcher = patch("dbt.utils.artifact_upload.requests.post")
+        self.requests_put_patcher = patch("dbt.utils.artifact_upload.requests.put")
+        self.requests_patch_patcher = patch("dbt.utils.artifact_upload.requests.patch")
         self.open_patcher = patch("builtins.open", mock.mock_open(read_data=b"test data"))
-        self.fire_event_patcher = patch("dbt.cli.artifact_upload.fire_event")
-        self.retry_patcher = patch("dbt.cli.artifact_upload._retry_with_backoff")
-        self.time_sleep_patcher = patch("dbt.cli.artifact_upload.time.sleep")
+        self.fire_event_patcher = patch("dbt.utils.artifact_upload.fire_event")
+        self.retry_patcher = patch("dbt.utils.artifact_upload._retry_with_backoff")
+        self.time_sleep_patcher = patch("dbt.utils.artifact_upload.time.sleep")
 
         # Start patchers
         self.mock_load_project = self.load_project_patcher.start()
         self.mock_zipfile = self.zipfile_patcher.start()
-        self.mock_os_path_join = self.os_path_join_patcher.start()
         self.mock_requests_post = self.requests_post_patcher.start()
         self.mock_requests_put = self.requests_put_patcher.start()
         self.mock_requests_patch = self.requests_patch_patcher.start()
@@ -177,8 +178,6 @@ class TestUploadArtifacts(unittest.TestCase):
         self.mock_project = MagicMock()
         self.mock_project.dbt_cloud = {"tenant_hostname": "test-tenant"}
         self.mock_load_project.return_value = self.mock_project
-
-        self.mock_os_path_join.side_effect = lambda path, file: f"{path}/{file}"
 
         # Mock response for POST request (create ingest)
         self.mock_post_response = MagicMock()
@@ -213,7 +212,6 @@ class TestUploadArtifacts(unittest.TestCase):
     def tearDown(self):
         self.load_project_patcher.stop()
         self.zipfile_patcher.stop()
-        self.os_path_join_patcher.stop()
         self.requests_post_patcher.stop()
         self.requests_put_patcher.stop()
         self.requests_patch_patcher.stop()
@@ -228,25 +226,12 @@ class TestUploadArtifacts(unittest.TestCase):
         if self.original_environment_id:
             os.environ["DBT_CLOUD_ENVIRONMENT_ID"] = self.original_environment_id
 
-    def test_upload_artifacts_skips_for_invalid_command(self):
-        # Test with an invalid command
-        upload_artifacts(self.project_dir, self.target_path, "invalid_command")
-
-        # Verify that fire_event was called with ArtifactUploadSkipped
-        self.mock_fire_event.assert_called_once()
-        event_arg = self.mock_fire_event.call_args[0][0]
-        self.assertEqual(event_arg.msg, "No artifacts to upload for command invalid_command")
-
-        # Verify that no other methods were called
-        self.mock_load_project.assert_not_called()
-        self.mock_zipfile.assert_not_called()
-        self.mock_requests_post.assert_not_called()
-        self.mock_retry.assert_not_called()
-
     def test_upload_artifacts_successful_upload(self):
         # Set up mock for ZipFile context manager
         mock_zipfile_instance = MagicMock()
         self.mock_zipfile.return_value.__enter__.return_value = mock_zipfile_instance
+        add_artifact_produced(os.path.join(self.target_path, MANIFEST_FILE_NAME))
+        add_artifact_produced(os.path.join(self.target_path, RUN_RESULTS_FILE_NAME))
 
         # Call the function
         upload_artifacts(self.project_dir, self.target_path, self.command)
@@ -259,10 +244,10 @@ class TestUploadArtifacts(unittest.TestCase):
         # Verify zip file was created and artifacts were added
         self.mock_zipfile.assert_called_once_with("target.zip", "w")
         expected_artifact_calls = [
-            call(f"{self.target_path}/{MANIFEST_FILE_NAME}", MANIFEST_FILE_NAME),
             call(f"{self.target_path}/{RUN_RESULTS_FILE_NAME}", RUN_RESULTS_FILE_NAME),
+            call(f"{self.target_path}/{MANIFEST_FILE_NAME}", MANIFEST_FILE_NAME),
         ]
-        mock_zipfile_instance.write.assert_has_calls(expected_artifact_calls)
+        mock_zipfile_instance.write.assert_has_calls(expected_artifact_calls, any_order=True)
 
         # Verify retry was called for each step
         self.assertEqual(self.mock_retry.call_count, 3)
@@ -283,19 +268,22 @@ class TestUploadArtifacts(unittest.TestCase):
         # Call the function with target_path=None
         mock_zipfile_instance = MagicMock()
         self.mock_zipfile.return_value.__enter__.return_value = mock_zipfile_instance
+        add_artifact_produced(os.path.join(self.target_path, MANIFEST_FILE_NAME))
+        add_artifact_produced(os.path.join(self.target_path, RUN_RESULTS_FILE_NAME))
 
         upload_artifacts(self.project_dir, None, self.command)
 
         # Verify the default target path was used
         expected_artifact_calls = [
-            call(f"target/{MANIFEST_FILE_NAME}", MANIFEST_FILE_NAME),
-            call(f"target/{RUN_RESULTS_FILE_NAME}", RUN_RESULTS_FILE_NAME),
+            call(f"{self.target_path}/{RUN_RESULTS_FILE_NAME}", RUN_RESULTS_FILE_NAME),
+            call(f"{self.target_path}/{MANIFEST_FILE_NAME}", MANIFEST_FILE_NAME),
         ]
-        mock_zipfile_instance.write.assert_has_calls(expected_artifact_calls)
+        mock_zipfile_instance.write.assert_has_calls(expected_artifact_calls, any_order=True)
 
     def test_upload_artifacts_missing_tenant_config(self):
         # Set up project without dbt_cloud config
         self.mock_project.dbt_cloud = {}
+        add_artifact_produced(os.path.join(self.target_path, MANIFEST_FILE_NAME))
 
         # Verify that the function raises an exception
         with self.assertRaises(DbtProjectError) as context:
@@ -315,6 +303,7 @@ class TestUploadArtifacts(unittest.TestCase):
             DbtBaseException("Error uploading artifacts: Mock failure"),
             DbtBaseException("Error completing ingest: Mock failure"),
         ]
+        add_artifact_produced(os.path.join(self.target_path, MANIFEST_FILE_NAME))
 
         # Test each step failing
         # 1. Create ingest failure
