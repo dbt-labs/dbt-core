@@ -39,7 +39,10 @@ from tests.functional.partial_parsing.fixtures import (
     local_dependency__models__model_to_import_sql,
     local_dependency__models__schema_yml,
     local_dependency__seeds__seed_csv,
+    macros_schema1_yml,
+    macros_schema2_yml,
     macros_schema_yml,
+    macros_sql,
     macros_yml,
     model_a_sql,
     model_b_sql,
@@ -655,6 +658,25 @@ class TestTests:
             "test.test.is_odd_orders_id.82834fdc5b",
         ]
         assert expected_nodes == list(manifest.nodes.keys())
+
+
+class TestMacroDescriptionUpdate:
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "macros.sql": macros_sql,
+            "schema.yml": macros_schema1_yml,
+        }
+
+    def test_pp_model_with_dots(self, project):
+        # initial parse
+        run_dbt(["parse"])
+
+        # edit YAML in macros-path
+        write_file(macros_schema2_yml, project.project_root, "macros", "schema.yml")
+
+        # parse again
+        run_dbt(["--partial-parse", "parse"])
 
 
 class TestExternalModels:
