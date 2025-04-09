@@ -55,6 +55,7 @@ from tests.functional.partial_parsing.fixtures import (
     model_three_sql,
     model_two_disabled_sql,
     model_two_sql,
+    model_using_bar_macro_sql,
     models_schema1_yml,
     models_schema2_yml,
     models_schema2b_yml,
@@ -662,13 +663,19 @@ class TestTests:
 
 class TestMacroDescriptionUpdate:
     @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": model_using_bar_macro_sql,
+        }
+
+    @pytest.fixture(scope="class")
     def macros(self):
         return {
             "macros.sql": macros_sql,
             "schema.yml": macros_schema1_yml,
         }
 
-    def test_pp_model_with_dots(self, project):
+    def test_pp_macro_description_update(self, project):
         # initial parse
         run_dbt(["parse"])
 
@@ -677,6 +684,9 @@ class TestMacroDescriptionUpdate:
 
         # parse again
         run_dbt(["--partial-parse", "parse"])
+
+        # compile
+        run_dbt(["--partial-parse", "compile"])
 
 
 class TestExternalModels:
