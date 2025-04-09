@@ -1,6 +1,6 @@
 import pytest
-
 from dateutil.tz import tzutc
+
 from dbt.contracts.results import RunExecutionResult
 from dbt.tests.util import run_dbt, write_file
 

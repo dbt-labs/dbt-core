@@ -1,3 +1,4 @@
+from dateutil.tz import tzutc
 from hypothesis import given
 from hypothesis.strategies import (
     builds,
@@ -9,7 +10,6 @@ from hypothesis.strategies import (
     text,
 )
 
-from dateutil.tz import tzutc
 from dbt.contracts.results import RunExecutionResult, RunResult, RunStatus, TimingInfo
 from tests.unit.fixtures import model_node
 
