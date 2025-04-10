@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
 from dbt.contracts.graph.nodes import ResultNode
@@ -21,10 +21,10 @@ class TimingInfo(dbtClassMixin):
     completed_at: Optional[datetime] = None
 
     def begin(self):
-        self.started_at = datetime.utcnow()
+        self.started_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     def end(self):
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     def to_msg_dict(self):
         msg_dict = {"name": str(self.name)}
