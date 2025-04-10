@@ -12,6 +12,8 @@ name: "Enforce Additional Reviews on Artifact and Validations Changes"
 
 on:
   # trigger check on review events
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize, review_requested]
   pull_request_review:
     types: [submitted, edited, dismissed]
 
@@ -55,10 +57,25 @@ jobs:
               break
             fi
           done <<< "${{ steps.changed_files.outputs.CHANGED_FILES }}"
+          if [[ "$artifact_changes" == "false" ]]; then
+            echo "No changes to artifact files.  No additional reviews required."
+            gh api \
+              --method POST \
+              -H "Accept: application/vnd.github+json" \
+              /repos/${{ github.repository }}/check-runs \
+              -f name='Artifact Review Check' \
+              -f head_sha=${{ github.event.pull_request_target.head.sha || github.event.pull_request.head.sha }} \
+              -f status='completed' \
+              -f conclusion='success' \
+              -f force=true \
+              -f details_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi
           echo "artifact_changes=$artifact_changes" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: "Get Core Team Members"
-        if: ${{ steps.artifact_files_changed.outputs.artifact_changes == 'true' }}
+        if: steps.artifact_files_changed.outputs.artifact_changes == 'true'
         id: core_members
         run: |
           gh api -H "Accept: application/vnd.github+json" \
@@ -72,49 +89,98 @@ jobs:
           GH_TOKEN: ${{ secrets.IT_TEAM_MEMBERSHIP }}
 
       - name: "Verify ${{ env.required_approvals }} core team approvals"
+        if: steps.artifact_files_changed.outputs.artifact_changes == 'true'
         id: check_approvals
-        if: ${{ steps.artifact_files_changed.outputs.artifact_changes == 'true' }}
         run: |
 
             # Get all reviews
             REVIEWS=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews)
+            echo "All reviews:"
+            echo "$REVIEWS"
             # Count approved reviews from core team members (only most recent review per user)
             CORE_APPROVALS=0
             while IFS= read -r member; do
-              echo "member: $member"
+              echo "Checking member: $member"
               APPROVED=$(echo "$REVIEWS" | jq --arg user "$member" '
                 group_by(.user.login) |
                 map(select(.[0].user.login == $user) |
                     sort_by(.submitted_at) |
                     last) |
-                map(select(.state == "APPROVED")) |
+                map(select(.state == "APPROVED" and (.state != "DISMISSED"))) |
                 length')
+              echo "Latest review state for $member: $APPROVED"
               CORE_APPROVALS=$((CORE_APPROVALS + APPROVED))
+              echo "Running total: $CORE_APPROVALS"
             done <<< "${{ steps.core_members.outputs.membership }}"
 
             echo "CORE_APPROVALS=$CORE_APPROVALS" >> $GITHUB_OUTPUT
-            echo $CORE_APPROVALS
+            echo "CORE_APPROVALS=$CORE_APPROVALS"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "Notify and fail if not enough approvals"
-        if: ${{ steps.artifact_files_changed.outputs.artifact_changes == 'true' && steps.check_approvals.outputs.CORE_APPROVALS < fromJSON(env.required_approvals) }}
-        run: |
-          title="PR Approval Requirements Not Met"
-          message="Changes to artifact directory files requires at least ${{ env.required_approvals }} approvals from core team members. Current number of core team approvals: ${{ steps.check_approvals.outputs.CORE_APPROVALS }} "
-          echo "::error title=$title::$message"
-          exit 1
+      - name: "Find Comment"
+        if: steps.artifact_files_changed.outputs.artifact_changes == 'true' && steps.check_approvals.outputs.CORE_APPROVALS < env.required_approvals
+        uses: peter-evans/find-comment@v2
+        id: find-comment
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: "### Additional Artifact Review Required"
 
-      - name: "Notify of sufficient approvals"
-        if: ${{ steps.artifact_files_changed.outputs.artifact_changes == 'true' && steps.check_approvals.outputs.CORE_APPROVALS >= fromJSON(env.required_approvals) }}
-        run: |
-          title="Extra requirements met"
-          message="Changes to artifact directory files requires at least ${{ env.required_approvals }} approvals from core team members. Current number of core team approvals: ${{ steps.check_approvals.outputs.CORE_APPROVALS }} "
-          echo "::notice title=$title::$message"
+      - name: "Create Comment"
+        if: steps.artifact_files_changed.outputs.artifact_changes == 'true' && steps.find-comment.outputs.comment-id == '' && steps.check_approvals.outputs.CORE_APPROVALS < env.required_approvals
+        uses: peter-evans/create-or-update-comment@v3
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            ### Additional Artifact Review Required
 
-      - name: "Notify of no extra requirements"
-        if: ${{ steps.artifact_files_changed.outputs.artifact_changes != 'true' }}
+            Changes to artifact directory files requires at least ${{ env.required_approvals }} approvals from core team members.
+
+      - name: "Notify if not enough approvals"
+        if: steps.artifact_files_changed.outputs.artifact_changes == 'true'
         run: |
-          title="No extra requirements"
-          message="No additional reviews required"
-          echo "::notice title=$title::$message"
+          if [[ "${{ steps.check_approvals.outputs.CORE_APPROVALS }}" -ge "${{ env.required_approvals }}" ]]; then
+            title="Extra requirements met"
+            message="Changes to artifact directory files requires at least ${{ env.required_approvals }} approvals from core team members. Current number of core team approvals: ${{ steps.check_approvals.outputs.CORE_APPROVALS }} "
+            echo "::notice title=$title::$message"
+            echo "REVIEW_STATUS=success" >> $GITHUB_OUTPUT
+          else
+            title="PR Approval Requirements Not Met"
+            message="Changes to artifact directory files requires at least ${{ env.required_approvals }} approvals from core team members. Current number of core team approvals: ${{ steps.check_approvals.outputs.CORE_APPROVALS }} "
+            echo "::notice title=$title::$message"
+            echo "REVIEW_STATUS=neutral" >> $GITHUB_OUTPUT
+          fi
+        id: review_check
+
+      - name: "Set check conclusion"
+        if: steps.artifact_files_changed.outputs.artifact_changes == 'true'
+        run: |
+          if [[ "${{ steps.review_check.outputs.REVIEW_STATUS }}" == "success" ]]; then
+            gh api \
+              --method POST \
+              -H "Accept: application/vnd.github+json" \
+              /repos/${{ github.repository }}/check-runs \
+              -f name='Artifact Review Check' \
+              -f head_sha=${{ github.event.pull_request_target.head.sha || github.event.pull_request.head.sha }} \
+              -f status='completed' \
+              -f conclusion='success' \
+              -f force=true \
+              -f details_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          else
+            # neutral exit - neither success nor failure
+            # we can't fail here because we use multiple triggers for this workflow and they won't reset the check
+            # workaround is to use a neutral exit to skip the check run until it's actually successful
+            gh api \
+              --method POST \
+              -H "Accept: application/vnd.github+json" \
+              /repos/${{ github.repository }}/check-runs \
+              -f name='Artifact Review Check' \
+              -f head_sha=${{ github.event.pull_request_target.head.sha || github.event.pull_request.head.sha }} \
+              -f status='completed' \
+              -f conclusion='neutral' \
+              -f force=true \
+              -f details_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
