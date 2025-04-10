@@ -24,6 +24,10 @@ macros:
     description: Lorem ipsum.
 """
 
+model_using_bar_macro_sql = """
+select id as {{ bar() }}
+"""
+
 local_dependency__dbt_project_yml = """
 
 name: 'local_dep'
