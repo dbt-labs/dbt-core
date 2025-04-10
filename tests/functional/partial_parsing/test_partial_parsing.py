@@ -679,11 +679,35 @@ class TestMacroDescriptionUpdate:
         # initial parse
         run_dbt(["parse"])
 
+        manifest = get_manifest(project.project_root)
+        assert "macro.test.foo" in manifest.macros
+        assert "macro.test.bar" in manifest.macros
+        assert manifest.macros["macro.test.foo"].description == "Lorem."
+        assert manifest.macros["macro.test.bar"].description == "Lorem."
+        assert manifest.macros["macro.test.foo"].patch_path == "test://" + normalize(
+            "macros/schema.yml"
+        )
+        assert manifest.macros["macro.test.bar"].patch_path == "test://" + normalize(
+            "macros/schema.yml"
+        )
+
         # edit YAML in macros-path
         write_file(macros_schema2_yml, project.project_root, "macros", "schema.yml")
 
         # parse again
         run_dbt(["--partial-parse", "parse"])
+
+        manifest = get_manifest(project.project_root)
+        assert "macro.test.foo" in manifest.macros
+        assert "macro.test.bar" in manifest.macros
+        assert manifest.macros["macro.test.foo"].description == "Lorem."
+        assert manifest.macros["macro.test.bar"].description == "Lorem ipsum."
+        assert manifest.macros["macro.test.foo"].patch_path == "test://" + normalize(
+            "macros/schema.yml"
+        )
+        assert manifest.macros["macro.test.bar"].patch_path == "test://" + normalize(
+            "macros/schema.yml"
+        )
 
         # compile
         run_dbt(["--partial-parse", "compile"])
