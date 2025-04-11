@@ -39,7 +39,10 @@ from tests.functional.partial_parsing.fixtures import (
     local_dependency__models__model_to_import_sql,
     local_dependency__models__schema_yml,
     local_dependency__seeds__seed_csv,
+    macros_schema1_yml,
+    macros_schema2_yml,
     macros_schema_yml,
+    macros_sql,
     macros_yml,
     model_a_sql,
     model_b_sql,
@@ -52,6 +55,7 @@ from tests.functional.partial_parsing.fixtures import (
     model_three_sql,
     model_two_disabled_sql,
     model_two_sql,
+    model_using_bar_macro_sql,
     models_schema1_yml,
     models_schema2_yml,
     models_schema2b_yml,
@@ -655,6 +659,58 @@ class TestTests:
             "test.test.is_odd_orders_id.82834fdc5b",
         ]
         assert expected_nodes == list(manifest.nodes.keys())
+
+
+class TestMacroDescriptionUpdate:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": model_using_bar_macro_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "macros.sql": macros_sql,
+            "schema.yml": macros_schema1_yml,
+        }
+
+    def test_pp_macro_description_update(self, project):
+        # initial parse
+        run_dbt(["parse"])
+
+        manifest = get_manifest(project.project_root)
+        assert "macro.test.foo" in manifest.macros
+        assert "macro.test.bar" in manifest.macros
+        assert manifest.macros["macro.test.foo"].description == "Lorem."
+        assert manifest.macros["macro.test.bar"].description == "Lorem."
+        assert manifest.macros["macro.test.foo"].patch_path == "test://" + normalize(
+            "macros/schema.yml"
+        )
+        assert manifest.macros["macro.test.bar"].patch_path == "test://" + normalize(
+            "macros/schema.yml"
+        )
+
+        # edit YAML in macros-path
+        write_file(macros_schema2_yml, project.project_root, "macros", "schema.yml")
+
+        # parse again
+        run_dbt(["--partial-parse", "parse"])
+
+        manifest = get_manifest(project.project_root)
+        assert "macro.test.foo" in manifest.macros
+        assert "macro.test.bar" in manifest.macros
+        assert manifest.macros["macro.test.foo"].description == "Lorem."
+        assert manifest.macros["macro.test.bar"].description == "Lorem ipsum."
+        assert manifest.macros["macro.test.foo"].patch_path == "test://" + normalize(
+            "macros/schema.yml"
+        )
+        assert manifest.macros["macro.test.bar"].patch_path == "test://" + normalize(
+            "macros/schema.yml"
+        )
+
+        # compile
+        run_dbt(["--partial-parse", "compile"])
 
 
 class TestExternalModels:
