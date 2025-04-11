@@ -186,7 +186,6 @@ class DepsTask(BaseTask):
         with downloads_directory():
             resolved_deps = resolve_packages(packages, self.project, self.cli_vars)
 
-        package_hash = _create_sha1_hash(self.project.packages.packages)
         # this loop is to create the package-lock.yml in the same format as original packages.yml
         # package-lock.yml includes both the stated packages in packages.yml along with dependent packages
         renderer = PackageRenderer(self.cli_vars)
@@ -195,7 +194,9 @@ class DepsTask(BaseTask):
             package_dict["name"] = package.get_project_name(self.project, renderer)
             packages_installed["packages"].append(package_dict)
 
-        packages_installed[PACKAGE_LOCK_HASH_KEY] = package_hash
+        packages_installed[PACKAGE_LOCK_HASH_KEY] = _create_sha1_hash(
+            self.project.packages.packages
+        )
 
         with open(lock_filepath, "w") as lock_obj:
             yaml.dump(packages_installed, lock_obj, Dumper=dbtPackageDumper)
