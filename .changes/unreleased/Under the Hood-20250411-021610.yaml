@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Add package 'name' to lock file
+time: 2025-04-11T02:16:10.314663+02:00
+custom:
+    Author: jtcohen6
+    Issue: "11487"

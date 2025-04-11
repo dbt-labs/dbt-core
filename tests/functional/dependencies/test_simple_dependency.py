@@ -237,9 +237,11 @@ class TestSimpleDependencyWithSubdirs(object):
         assert os.path.exists("package-lock.yml")
         expected = """packages:
   - git: https://github.com/dbt-labs/dbt-multipe-packages.git
+    name: dbt_utils
     revision: 53782f3ede8fdf307ee1d8e418aa65733a4b72fa
     subdirectory: dbt-utils-main
   - git: https://github.com/dbt-labs/dbt-multipe-packages.git
+    name: dbt_date
     revision: 53782f3ede8fdf307ee1d8e418aa65733a4b72fa
     subdirectory: dbt-date-main
 sha1_hash: b9c8042f29446c55a33f9f211737f445a640c7a1
