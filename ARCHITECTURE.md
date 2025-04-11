@@ -32,7 +32,7 @@ This is the docs website code. It comes from the dbt-docs repository, and is gen
 ## Adapters
 
 dbt uses an adapter-plugin pattern to extend support to different databases, warehouses, query engines, etc. 
-Note: dbt-postgres used to exist in dbt-core but is now in [a separate repo](https://github.com/dbt-labs/dbt-adapters/dbt-postgres) 
+Note: dbt-postgres used to exist in dbt-core but is now in [the dbt-adapters repo](https://github.com/dbt-labs/dbt-adapters/tree/main/dbt-postgres) 
 
 Each adapter is a mix of python, Jinja2, and SQL. The adapter code also makes heavy use of Jinja2 to wrap modular chunks of SQL functionality, define default implementations, and allow plugins to override it.
 
