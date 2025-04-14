@@ -1,4 +1,3 @@
-import datetime
 import json
 import os
 import pprint
@@ -6,6 +5,7 @@ import time
 import traceback
 from copy import deepcopy
 from dataclasses import dataclass, field
+from datetime import date, datetime, timezone
 from itertools import chain
 from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple, Type, Union
 
@@ -137,10 +137,10 @@ def extended_mashumaro_encoder(data):
 
 
 def extended_msgpack_encoder(obj):
-    if type(obj) is datetime.date:
+    if type(obj) is date:
         date_bytes = msgpack.ExtType(1, obj.isoformat().encode())
         return date_bytes
-    elif type(obj) is datetime.datetime:
+    elif type(obj) is datetime:
         datetime_bytes = msgpack.ExtType(2, obj.isoformat().encode())
         return datetime_bytes
 
@@ -153,10 +153,10 @@ def extended_mashumuro_decoder(data):
 
 def extended_msgpack_decoder(code, data):
     if code == 1:
-        d = datetime.date.fromisoformat(data.decode())
+        d = date.fromisoformat(data.decode())
         return d
     elif code == 2:
-        dt = datetime.datetime.fromisoformat(data.decode())
+        dt = datetime.fromisoformat(data.decode())
         return dt
     else:
         return msgpack.ExtType(code, data)
@@ -952,7 +952,9 @@ class ManifestLoader:
                 is_partial_parsable, reparse_reason = self.is_partial_parsable(manifest)
                 if is_partial_parsable:
                     # We don't want to have stale generated_at dates
-                    manifest.metadata.generated_at = datetime.datetime.utcnow()
+                    manifest.metadata.generated_at = datetime.now(timezone.utc).replace(
+                        tzinfo=None
+                    )
                     # or invocation_ids
                     manifest.metadata.invocation_id = get_invocation_id()
                     return manifest
@@ -1443,14 +1445,14 @@ class ManifestLoader:
                     # Mashumaro default: https://github.com/Fatal1ty/mashumaro/blob/4ac16fd060a6c651053475597b58b48f958e8c5c/README.md?plain=1#L1186
                     if isinstance(begin, str):
                         try:
-                            begin = datetime.datetime.fromisoformat(begin)
+                            begin = datetime.fromisoformat(begin)
                             node.config.begin = begin
                         except Exception:
                             raise dbt.exceptions.ParsingError(
                                 f"Microbatch model '{node.name}' must provide a 'begin' config of valid datetime (ISO format), but got: {begin}."
                             )
 
-                    if not isinstance(begin, datetime.datetime):
+                    if not isinstance(begin, datetime):
                         raise dbt.exceptions.ParsingError(
                             f"Microbatch model '{node.name}' must provide a 'begin' config of type datetime, but got: {type(begin)}."
                         )

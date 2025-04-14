@@ -348,6 +348,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     require_yaml_configuration_for_mf_time_spines: bool = False
     require_nested_cumulative_type_params: bool = False
     validate_macro_args: bool = False
+    require_all_warnings_handled_by_warn_error: bool = False
 
     @property
     def project_only_flags(self) -> Dict[str, Any]:
@@ -362,6 +363,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
             "require_yaml_configuration_for_mf_time_spines": self.require_yaml_configuration_for_mf_time_spines,
             "require_nested_cumulative_type_params": self.require_nested_cumulative_type_params,
             "validate_macro_args": self.validate_macro_args,
+            "require_all_warnings_handled_by_warn_error": self.require_all_warnings_handled_by_warn_error,
         }
 
 

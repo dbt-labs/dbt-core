@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 import jsonschema
 import pytest
@@ -620,7 +620,7 @@ class TestVerifyArtifacts(BaseVerifyProject):
     # Test generic "docs generate" command
     def test_run_and_generate(self, project, manifest_schema_path, run_results_schema_path):
         catcher = EventCatcher(ArtifactWritten)
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc).replace(tzinfo=None)
         results = run_dbt(args=["compile"], callbacks=[catcher.catch])
         assert len(results) == 7
         verify_manifest(
@@ -692,7 +692,7 @@ class TestVerifyArtifactsReferences(BaseVerifyProject):
         }
 
     def test_references(self, project, manifest_schema_path, run_results_schema_path):
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc).replace(tzinfo=None)
         results = run_dbt(["compile"])
         assert len(results) == 4
         verify_manifest(
@@ -722,7 +722,7 @@ class TestVerifyArtifactsVersions(BaseVerifyProject):
         return {}
 
     def test_versions(self, project, manifest_schema_path, run_results_schema_path):
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc).replace(tzinfo=None)
         results = run_dbt(["compile"])
         assert len(results) == 6
         verify_manifest(

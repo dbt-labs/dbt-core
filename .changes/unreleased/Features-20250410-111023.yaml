@@ -1,0 +1,6 @@
+kind: Features
+body: Add behavior flag for handling all warnings via warn_error logic
+time: 2025-04-10T11:10:23.344469-05:00
+custom:
+  Author: QMalcolm
+  Issue: "11116"

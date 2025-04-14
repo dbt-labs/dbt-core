@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Optional, Sequence, Tuple
 
 # https://github.com/dbt-labs/dbt-core/issues/10098
@@ -101,7 +101,9 @@ class RunExecutionResult(
 ):
     results: Sequence[RunResult]
     args: Dict[str, Any] = field(default_factory=dict)
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     def write(self, path: str):
         writable = RunResultsArtifact.from_execution_results(

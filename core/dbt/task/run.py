@@ -5,7 +5,7 @@ import threading
 import time
 from copy import deepcopy
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple, Type
 
 from dbt import tracking, utils
@@ -977,7 +977,9 @@ class RunTask(CompileTask):
                             adapter, hook, hook.index, num_hooks, extra_context
                         )
 
-                    started_at = timing[0].started_at or datetime.utcnow()
+                    started_at = timing[0].started_at or datetime.now(timezone.utc).replace(
+                        tzinfo=None
+                    )
                     hook.update_event_status(
                         started_at=started_at.isoformat(), node_status=RunningStatus.Started
                     )
@@ -994,7 +996,9 @@ class RunTask(CompileTask):
                     with collect_timing_info("execute", timing.append):
                         status, message = get_execution_status(sql, adapter)
 
-                    finished_at = timing[1].completed_at or datetime.utcnow()
+                    finished_at = timing[1].completed_at or datetime.now(timezone.utc).replace(
+                        tzinfo=None
+                    )
                     hook.update_event_status(finished_at=finished_at.isoformat())
                     execution_time = (finished_at - started_at).total_seconds()
                     failures = 0 if status == RunStatus.Success else 1
@@ -1102,7 +1106,7 @@ class RunTask(CompileTask):
             run_result = self.get_result(
                 results=self.node_results,
                 elapsed_time=time.time() - self.started_at,
-                generated_at=datetime.utcnow(),
+                generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
             )
 
             if self.args.write_json and hasattr(run_result, "write"):
