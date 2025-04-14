@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from itertools import chain
 from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union
 
+import jsonschema
 from typing_extensions import Protocol, runtime_checkable
 
 from dbt import deprecations
@@ -30,6 +31,7 @@ from dbt.exceptions import (
 from dbt.flags import get_flags
 from dbt.graph import SelectionSpec
 from dbt.node_types import NodeType
+from dbt.resources.input_schemas.schemas import load_project_schema
 from dbt.utils import MultiDict, coerce_dict_str, md5
 from dbt.version import get_installed_version
 from dbt_common.clients.system import load_file_contents, path_exists
@@ -182,7 +184,17 @@ def value_or(value: Optional[T], default: T) -> T:
         return value
 
 
-def load_raw_project(project_root: str) -> Dict[str, Any]:
+def jsonschema_validate(project_dict: Dict[str, Any]):
+    validator = jsonschema.Draft7Validator(load_project_schema())
+    errors = validator.iter_errors(project_dict)  # get all validation errors
+
+    for error in errors:
+        # TODO: Emit these as deprecation warnings
+        print(error)
+        print("------")
+
+
+def load_raw_project(project_root: str, validate: bool = False) -> Dict[str, Any]:
     project_root = os.path.normpath(project_root)
     project_yaml_filepath = os.path.join(project_root, DBT_PROJECT_FILE_NAME)
 
@@ -195,6 +207,9 @@ def load_raw_project(project_root: str) -> Dict[str, Any]:
         )
 
     project_dict = _load_yaml(project_yaml_filepath)
+
+    if validate:
+        jsonschema_validate(project_dict)
 
     if not isinstance(project_dict, dict):
         raise DbtProjectError(f"{DBT_PROJECT_FILE_NAME} does not parse to a dictionary")
@@ -557,10 +572,10 @@ class PartialProject(RenderComponents):
 
     @classmethod
     def from_project_root(
-        cls, project_root: str, *, verify_version: bool = False
+        cls, project_root: str, *, verify_version: bool = False, validate: bool = False
     ) -> "PartialProject":
         project_root = os.path.normpath(project_root)
-        project_dict = load_raw_project(project_root)
+        project_dict = load_raw_project(project_root, validate=validate)
         (
             packages_dict,
             packages_specified_path,
@@ -747,8 +762,11 @@ class Project:
         renderer: DbtProjectYamlRenderer,
         *,
         verify_version: bool = False,
+        validate: bool = False,
     ) -> "Project":
-        partial = PartialProject.from_project_root(project_root, verify_version=verify_version)
+        partial = PartialProject.from_project_root(
+            project_root, verify_version=verify_version, validate=validate
+        )
         return partial.render(renderer)
 
     def hashed_name(self):
