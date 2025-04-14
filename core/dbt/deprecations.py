@@ -165,6 +165,12 @@ class MicrobatchMacroOutsideOfBatchesDeprecation(DBTDeprecation):
     _event = "MicrobatchMacroOutsideOfBatchesDeprecation"
 
 
+class GenericJSONSchemaValidationDeprecation(DBTDeprecation):
+    _name = "generic-json-schema-validation-deprecation"
+    _event = "GenericJSONSchemaValidationDeprecation"
+    _summary_event = "GenericJSONSchemaValidationDeprecationSummary"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -221,6 +227,7 @@ deprecations_list: List[DBTDeprecation] = [
     MFTimespineWithoutYamlConfigurationDeprecation(),
     MFCumulativeTypeParamsDeprecation(),
     MicrobatchMacroOutsideOfBatchesDeprecation(),
+    GenericJSONSchemaValidationDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

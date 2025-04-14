@@ -184,14 +184,17 @@ def value_or(value: Optional[T], default: T) -> T:
         return value
 
 
-def jsonschema_validate(project_dict: Dict[str, Any]):
+def jsonschema_validate(project_dict: Dict[str, Any], file_path: str) -> None:
     validator = jsonschema.Draft7Validator(load_project_schema())
     errors = validator.iter_errors(project_dict)  # get all validation errors
 
     for error in errors:
-        # TODO: Emit these as deprecation warnings
-        print(error)
-        print("------")
+        deprecations.warn(
+            "generic-json-schema-validation-deprecation",
+            violation=error.message,
+            file=file_path,
+            key_path=".".join(error.path),
+        )
 
 
 def load_raw_project(project_root: str, validate: bool = False) -> Dict[str, Any]:
@@ -209,7 +212,7 @@ def load_raw_project(project_root: str, validate: bool = False) -> Dict[str, Any
     project_dict = _load_yaml(project_yaml_filepath)
 
     if validate:
-        jsonschema_validate(project_dict)
+        jsonschema_validate(project_dict, file_path=project_yaml_filepath)
 
     if not isinstance(project_dict, dict):
         raise DbtProjectError(f"{DBT_PROJECT_FILE_NAME} does not parse to a dictionary")
