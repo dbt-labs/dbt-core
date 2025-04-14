@@ -2,7 +2,7 @@ import importlib
 import json
 from typing import Any, Dict
 
-from dbt.cli.exceptions import DbtInternalException
+from dbt_common.exceptions import DbtRuntimeError
 
 
 def load_json_from_package(package_name, filename) -> Dict[str, Any]:
@@ -12,11 +12,9 @@ def load_json_from_package(package_name, filename) -> Dict[str, Any]:
         with importlib.resources.open_text(package_name, filename) as file:  # type: ignore
             return json.load(file)
     except FileNotFoundError:
-        raise DbtInternalException(f"File `{filename}` not found in package `{package_name}`")
+        raise DbtRuntimeError(f"File `{filename}` not found in package `{package_name}`")
     except json.JSONDecodeError:
-        raise DbtInternalException(
-            f"Invalid JSON format in {filename} within package {package_name}"
-        )
+        raise DbtRuntimeError(f"Invalid JSON format in {filename} within package {package_name}")
 
 
 def load_project_schema() -> Dict[str, Any]:
