@@ -35,7 +35,7 @@ dev_req: ## Installs dbt-* packages in develop mode along with only development 
 .PHONY: dev
 dev: dev_req ## Installs dbt-* packages in develop mode along with development dependencies and pre-commit.
 	@\
-	$(DOCKER_CMD) pre-commit install
+	pre-commit install
 
 .PHONY: dev-uninstall
 dev-uninstall: ## Uninstall all packages in venv except for build tools
