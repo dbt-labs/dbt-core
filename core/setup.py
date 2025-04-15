@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import glob
 import os
 import sys
 
@@ -98,10 +97,4 @@ setup(
         "Programming Language :: Python :: 3.13",
     ],
     python_requires=">=3.9",
-    data_files=[
-        (
-            "dbt",
-            glob.glob("dbt/resources/input_schemas/project/*.json"),
-        ),
-    ],
 )
