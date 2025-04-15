@@ -1,0 +1,6 @@
+kind: Fixes
+body: Install `pre-commit` in Docker container for running tests
+time: 2025-04-14T08:29:16.392175-06:00
+custom:
+    Author: dbeatty10
+    Issue: "11498"
