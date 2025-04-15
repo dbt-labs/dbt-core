@@ -534,7 +534,7 @@ class PartialProject(RenderComponents):
         project_root: str,
         project_dict: Dict[str, Any],
         packages_dict: Dict[str, Any],
-        selectors_dict: Dict[str, Any],
+        selectors_dict: Optional[Dict[str, Any]],
         *,
         verify_version: bool = False,
         packages_specified_path: str = PACKAGES_FILE_NAME,
@@ -550,7 +550,7 @@ class PartialProject(RenderComponents):
             project_root=project_root,
             project_dict=project_dict,
             packages_dict=packages_dict,
-            selectors_dict=selectors_dict,
+            selectors_dict=selectors_dict,  # type: ignore
             verify_version=verify_version,
             packages_specified_path=packages_specified_path,
         )
@@ -566,8 +566,6 @@ class PartialProject(RenderComponents):
             packages_specified_path,
         ) = package_and_project_data_from_root(project_root)
         selectors_dict = selector_data_from_root(project_root)
-
-        assert selectors_dict is not None
 
         return cls.from_dicts(
             project_root=project_root,
