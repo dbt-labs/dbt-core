@@ -3,11 +3,7 @@
   "title": "DbtProject",
   "type": "object",
   "required": [
-    "name",
-    "on-run-end",
-    "on-run-start",
-    "query-comment",
-    "vars"
+    "name"
   ],
   "properties": {
     "analysis-paths": {

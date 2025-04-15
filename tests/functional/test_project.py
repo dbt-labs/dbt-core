@@ -24,10 +24,6 @@ class TestGenericJsonSchemaValidationDeprecation:
         # really add anything. However, this test shows that jsonschema validation issues raise
         # deprecation warnings via the catchall `GenericJSONSchemaValidationDeprecation`
         project_missing_name = {
-            "on-run-start": "",
-            "on-run-end": "",
-            "vars": {},
-            "query-comment": "",
             "profile": "test",
             "flags": {"send_anonymous_usage_stats": False},
         }

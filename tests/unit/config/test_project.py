@@ -594,12 +594,7 @@ class TestGetRequiredVersion:
 class TestDeprecations:
 
     def test_jsonschema_validate(self) -> None:
-        project_dict = {
-            "on_run_end": "",
-            "on_run_start": "",
-            "query-comment": "",
-            "vars": {},
-        }
+        project_dict: Dict[str, Any] = {}
 
         event_catcher = EventCatcher(GenericJSONSchemaValidationDeprecation)
         get_event_manager().add_callback(event_catcher.catch)
