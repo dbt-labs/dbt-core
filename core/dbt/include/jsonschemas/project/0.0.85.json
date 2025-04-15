@@ -343,9 +343,6 @@
     },
     "DataTestConfigs": {
       "type": "object",
-      "required": [
-        "__additional_properties__"
-      ],
       "properties": {
         "+alias": {
           "type": [
@@ -622,7 +619,6 @@
       "required": [
         "+post-hook",
         "+pre-hook",
-        "__additional_properties__",
         "post-hook",
         "pre-hook"
       ],
@@ -1577,7 +1573,6 @@
       "required": [
         "+post-hook",
         "+pre-hook",
-        "__additional_properties__",
         "post-hook",
         "pre-hook"
       ],
