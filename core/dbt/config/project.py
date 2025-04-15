@@ -567,6 +567,8 @@ class PartialProject(RenderComponents):
         ) = package_and_project_data_from_root(project_root)
         selectors_dict = selector_data_from_root(project_root)
 
+        assert selectors_dict is not None
+
         return cls.from_dicts(
             project_root=project_root,
             project_dict=project_dict,
