@@ -30,8 +30,8 @@ from dbt.exceptions import (
 )
 from dbt.flags import get_flags
 from dbt.graph import SelectionSpec
+from dbt.jsonschemas import project_schema
 from dbt.node_types import NodeType
-from dbt.resources.input_schemas.schemas import load_project_schema
 from dbt.utils import MultiDict, coerce_dict_str, md5
 from dbt.version import get_installed_version
 from dbt_common.clients.system import load_file_contents, path_exists
@@ -185,7 +185,7 @@ def value_or(value: Optional[T], default: T) -> T:
 
 
 def jsonschema_validate(project_dict: Dict[str, Any], file_path: str) -> None:
-    validator = jsonschema.Draft7Validator(load_project_schema())
+    validator = jsonschema.Draft7Validator(project_schema())
     errors = validator.iter_errors(project_dict)  # get all validation errors
 
     for error in errors:
