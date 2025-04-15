@@ -42,13 +42,21 @@ class Quoting(dbtClassMixin, Mergeable):
 
 @dataclass
 class Package(dbtClassMixin):
-    pass
+
+    # Exclude {'name': None} from to_dict result to avoid changing sha1_hash result
+    # when user has not changed their 'packages' configuration.
+    def __post_serialize__(self, data, context: Optional[Dict]):
+        if "name" in data.keys() and data["name"] is None:
+            data.pop("name")
+            return data
+        return data
 
 
 @dataclass
 class LocalPackage(Package):
     local: str
     unrendered: Dict[str, Any] = field(default_factory=dict)
+    name: Optional[str] = None
 
 
 # `float` also allows `int`, according to PEP484 (and jsonschema!)
@@ -69,6 +77,7 @@ class GitPackage(Package):
     warn_unpinned: Optional[bool] = field(default=None, metadata={"alias": "warn-unpinned"})
     subdirectory: Optional[str] = None
     unrendered: Dict[str, Any] = field(default_factory=dict)
+    name: Optional[str] = None
 
     def get_revisions(self) -> List[str]:
         if self.revision is None:
@@ -85,6 +94,7 @@ class PrivatePackage(Package):
     warn_unpinned: Optional[bool] = field(default=None, metadata={"alias": "warn-unpinned"})
     subdirectory: Optional[str] = None
     unrendered: Dict[str, Any] = field(default_factory=dict)
+    name: Optional[str] = None
 
 
 @dataclass
@@ -93,6 +103,7 @@ class RegistryPackage(Package):
     version: Union[RawVersion, List[RawVersion]]
     install_prerelease: Optional[bool] = False
     unrendered: Dict[str, Any] = field(default_factory=dict)
+    name: Optional[str] = None
 
     def get_versions(self) -> List[str]:
         if isinstance(self.version, list):
