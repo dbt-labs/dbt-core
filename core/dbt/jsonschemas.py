@@ -1,13 +1,14 @@
 import json
-from importlib.resources import files
+from pathlib import Path
 from typing import Any, Dict
+
+from dbt.include.jsonschemas import JSONSCHEMAS_PATH
 
 
 def load_json_from_package(jsonschema_type: str, filename: str) -> Dict[str, Any]:
     """Loads a JSON file from within a package."""
 
-    resources = files("dbt")
-    path = resources.joinpath("include", "jsonschemas", jsonschema_type, filename)  # type: ignore
+    path = Path(JSONSCHEMAS_PATH).joinpath(jsonschema_type, filename)
     data = path.read_bytes()
     return json.loads(data)
 
