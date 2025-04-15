@@ -97,4 +97,7 @@ setup(
         "Programming Language :: Python :: 3.13",
     ],
     python_requires=">=3.9",
+    data_files=[
+        ("dbt/resources/input_schemas/project", ["dbt/resources/input_schemas/project/*.json"]),
+    ],
 )
