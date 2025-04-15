@@ -100,7 +100,7 @@ setup(
     python_requires=">=3.9",
     data_files=[
         (
-            "dbt/resources/input_schemas/project",
+            "dbt",
             glob.glob("dbt/resources/input_schemas/project/*.json"),
         ),
     ],
