@@ -761,20 +761,23 @@ class MacroMethods:
               package, if one exists
         """
 
-        def filter(candidate: MacroCandidate) -> bool:
-            if imported_package:
-                return (
-                    candidate.locality == Locality.Imported
-                    and imported_package == candidate.macro.package_name
-                )
-            else:
-                return candidate.locality != Locality.Imported
+        candidates: CandidateList = CandidateList()
+        macro_name = f"generate_{component}_name"
 
-        candidates: CandidateList = self._find_macros_by_name(
-            name=f"generate_{component}_name",
-            root_project_name=root_project_name,
-            filter=filter,
-        )
+        macros_by_name = self.get_macros_by_name()
+        if macro_name not in macros_by_name:
+            return None
+
+        packages = set(get_adapter_package_names(self.metadata.adapter_type))
+        for macro in macros_by_name[macro_name]:
+            candidate = MacroCandidate(
+                locality=_get_locality(macro, root_project_name, packages),
+                macro=macro,
+            )
+            if imported_package and imported_package == candidate.macro.package_name:
+                candidates.append(candidate)
+            elif candidate.locality != Locality.Imported:
+                candidates.append(candidate)
 
         return candidates.last()
 
