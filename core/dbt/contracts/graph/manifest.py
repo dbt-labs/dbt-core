@@ -774,12 +774,18 @@ class MacroMethods:
                 locality=_get_locality(macro, root_project_name, packages),
                 macro=macro,
             )
-            if imported_package and imported_package == candidate.macro.package_name:
-                candidates.append(candidate)
-            elif candidate.locality != Locality.Imported:
-                candidates.append(candidate)
+            if imported_package:
+                if imported_package == candidate.macro.package_name:
+                    candidates.append(candidate)
+            else:
+                if candidate.locality != Locality.Imported:
+                    candidates.append(candidate)
 
-        return candidates.last()
+        if len(candidates) == 0:
+            return None
+
+        last = candidates.last()
+        return last
 
     def _find_macros_by_name(
         self,

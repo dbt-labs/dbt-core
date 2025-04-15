@@ -1185,48 +1185,46 @@ def test_find_macro_by_name(macros, expectations):
             assert result.package_name == expected
 
 
+# Note: the root_package_name for everything here is "root".
+# It doesn't make sense to have both the root package and the imported_package as "root".
+# Practically, dbt will always have generate_xxx_name macros in the "dbt" package,
+# so examples without that are not realistic.
 generate_name_parameter_sets = [
-    # empty
+    # Just dbt
     FindMacroSpec(
-        macros=[],
-        expected={None: None, "root": None, "dep": None, "dbt": None},
+        macros=[MockGenerateMacro("dbt")],
+        expected={None: "dbt", "other": None, "dep": None},
     ),
     # just root
     FindMacroSpec(
-        macros=[MockGenerateMacro("root")],
+        macros=[MockGenerateMacro("dbt"), MockGenerateMacro("root")],
         # "root" is not imported
-        expected={None: "root", "root": None, "dep": None, "dbt": None},
+        expected={None: "root", "dep": None},
     ),
     # just dep
     FindMacroSpec(
-        macros=[MockGenerateMacro("dep")],
-        expected={None: None, "root": None, "dep": "dep", "dbt": None},
-    ),
-    # just dbt
-    FindMacroSpec(
-        macros=[MockGenerateMacro("dbt")],
-        # "dbt" is not imported
-        expected={None: "dbt", "root": None, "dep": None, "dbt": None},
+        macros=[MockGenerateMacro("dbt"), MockGenerateMacro("dep")],
+        expected={None: "dbt", "dep": "dep"},
     ),
     # root overrides dep
     FindMacroSpec(
         macros=[MockGenerateMacro("root"), MockGenerateMacro("dep")],
-        expected={None: "root", "root": None, "dep": "dep", "dbt": None},
+        expected={None: "root", "dep": "dep"},
     ),
     # root overrides core
     FindMacroSpec(
         macros=[MockGenerateMacro("root"), MockGenerateMacro("dbt")],
-        expected={None: "root", "root": None, "dep": None, "dbt": None},
+        expected={None: "root", "dep": None},
     ),
     # dep overrides core
     FindMacroSpec(
         macros=[MockGenerateMacro("dep"), MockGenerateMacro("dbt")],
-        expected={None: "dbt", "root": None, "dep": "dep", "dbt": None},
+        expected={None: "dbt", "other": None, "dep": "dep"},
     ),
     # root overrides dep overrides core
     FindMacroSpec(
         macros=[MockGenerateMacro("root"), MockGenerateMacro("dep"), MockGenerateMacro("dbt")],
-        expected={None: "root", "root": None, "dep": "dep", "dbt": None},
+        expected={None: "root", "other": None, "dep": "dep"},
     ),
 ]
 
@@ -1234,9 +1232,6 @@ generate_name_parameter_sets = [
 @pytest.mark.parametrize("macros,expectations", generate_name_parameter_sets, ids=id_macro)
 def test_find_generate_macros_by_name(macros, expectations):
     manifest = make_manifest(macros=macros)
-    result = manifest.find_generate_macro_by_name(
-        component="some_component", root_project_name="root"
-    )
     for package, expected in expectations.items():
         result = manifest.find_generate_macro_by_name(
             component="some_component", root_project_name="root", imported_package=package
