@@ -616,12 +616,6 @@
     },
     "ModelConfigs": {
       "type": "object",
-      "required": [
-        "+post-hook",
-        "+pre-hook",
-        "post-hook",
-        "pre-hook"
-      ],
       "properties": {
         "+access": {
           "anyOf": [
@@ -1288,12 +1282,6 @@
     },
     "SeedConfigs": {
       "type": "object",
-      "required": [
-        "+post-hook",
-        "+pre-hook",
-        "post-hook",
-        "pre-hook"
-      ],
       "properties": {
         "+column_types": true,
         "+copy_grants": {
@@ -1570,12 +1558,6 @@
     },
     "SnapshotConfigs": {
       "type": "object",
-      "required": [
-        "+post-hook",
-        "+pre-hook",
-        "post-hook",
-        "pre-hook"
-      ],
       "properties": {
         "+alias": {
           "type": [
