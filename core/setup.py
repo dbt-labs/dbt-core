@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import glob
 import os
 import sys
 
@@ -98,6 +99,9 @@ setup(
     ],
     python_requires=">=3.9",
     data_files=[
-        ("dbt/resources/input_schemas/project", ["dbt/resources/input_schemas/project/*.json"]),
+        (
+            "dbt/resources/input_schemas/project",
+            glob.glob("dbt/resources/input_schemas/project/*.json"),
+        ),
     ],
 )
