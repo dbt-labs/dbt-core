@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Add ability to check YAML files for duplicate keys.
+time: 2025-04-15T13:37:51.878256-04:00
+custom:
+    Author: peterallenwebb
+    Issue: "11296"
