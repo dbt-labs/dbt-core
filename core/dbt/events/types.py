@@ -512,9 +512,37 @@ class MicrobatchMacroOutsideOfBatchesDeprecation(WarnLevel):
         return line_wrap_message(warning_tag(description))
 
 
-class UnexpectedJinjaBlockDeprecation(WarnLevel):
+class GenericJSONSchemaValidationDeprecation(WarnLevel):
     def code(self) -> str:
         return "D022"
+
+    def message(self) -> str:
+        if self.key_path == "":
+            description = (
+                f"Deprecated functionality\n{self.violation} at top level in file `{self.file}`"
+            )
+        else:
+            description = f"Deprecated functionality\n{self.violation} in file `{self.file}` at path `{self.key_path}`"
+
+        return warning_tag(description)
+
+
+class GenericJSONSchemaValidationDeprecationSummary(WarnLevel):
+    def code(self) -> str:
+        return "D023"
+
+    def message(self) -> str:
+        description = f"Found {pluralize(self.occurrences, 'error')} in the project's yaml files."
+
+        if self.show_all_hint:
+            description += " To see all deprecated packages, run command again with the `--show-all-deprecations` flag."
+
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
+class UnexpectedJinjaBlockDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D024"
 
     def message(self) -> str:
         return self.msg

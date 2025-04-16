@@ -165,6 +165,12 @@ class MicrobatchMacroOutsideOfBatchesDeprecation(DBTDeprecation):
     _event = "MicrobatchMacroOutsideOfBatchesDeprecation"
 
 
+class GenericJSONSchemaValidationDeprecation(DBTDeprecation):
+    _name = "generic-json-schema-validation-deprecation"
+    _event = "GenericJSONSchemaValidationDeprecation"
+    _summary_event = "GenericJSONSchemaValidationDeprecationSummary"
+
+
 class UnexpectedJinjaBlockDeprecation(DBTDeprecation):
     _name = "unexpected-jinja-block-deprecation"
     _event = "UnexpectedJinjaBlockDeprecation"
@@ -226,6 +232,7 @@ deprecations_list: List[DBTDeprecation] = [
     MFTimespineWithoutYamlConfigurationDeprecation(),
     MFCumulativeTypeParamsDeprecation(),
     MicrobatchMacroOutsideOfBatchesDeprecation(),
+    GenericJSONSchemaValidationDeprecation(),
     UnexpectedJinjaBlockDeprecation(),
 ]
 
