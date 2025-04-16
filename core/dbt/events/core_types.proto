@@ -481,6 +481,40 @@ message PackageRedirectDeprecationSummaryMsg {
     PackageRedirectDeprecationSummary data = 2;
 }
 
+// D022
+message GenericJSONSchemaValidationDeprecation {
+    string violation = 1;
+    string file = 2;
+    string key_path = 3;
+}
+
+message GenericJSONSchemaValidationDeprecationMsg {
+    CoreEventInfo info = 1;
+    GenericJSONSchemaValidationDeprecation data = 2;
+}
+
+// D023
+message GenericJSONSchemaValidationDeprecationSummary {
+    int32 occurrences = 1;
+    bool show_all_hint = 2;
+}
+
+message GenericJSONSchemaValidationDeprecationSummaryMsg {
+    CoreEventInfo info = 1;
+    GenericJSONSchemaValidationDeprecationSummary data = 2;
+}
+
+// D024
+message UnexpectedJinjaBlockDeprecation {
+    string msg = 1;
+}
+
+message UnexpectedJinjaBlockDeprecationMsg {
+    CoreEventInfo info = 1;
+    UnexpectedJinjaBlockDeprecation data = 2;
+}
+
+
 // I065
 message DeprecatedModel {
     string model_name = 1;

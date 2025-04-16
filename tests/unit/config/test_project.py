@@ -11,12 +11,15 @@ import dbt.config
 import dbt.exceptions
 from dbt.adapters.contracts.connection import DEFAULT_QUERY_COMMENT, QueryComment
 from dbt.adapters.factory import load_plugin
-from dbt.config.project import Project, _get_required_version
+from dbt.config.project import Project, _get_required_version, jsonschema_validate
 from dbt.constants import DEPENDENCIES_FILE_NAME
 from dbt.contracts.project import GitPackage, LocalPackage, PackageConfig
+from dbt.deprecations import GenericJSONSchemaValidationDeprecation
 from dbt.flags import set_from_args
+from dbt.jsonschemas import project_schema
 from dbt.node_types import NodeType
 from dbt.tests.util import safe_set_invocation_context
+from dbt_common.events.event_manager_client import get_event_manager
 from dbt_common.exceptions import DbtRuntimeError
 from dbt_common.semver import VersionSpecifier
 from tests.unit.config import (
@@ -25,6 +28,7 @@ from tests.unit.config import (
     project_from_config_norender,
     project_from_config_rendered,
 )
+from tests.utils import EventCatcher
 
 
 class TestProjectMethods:
@@ -586,3 +590,19 @@ class TestGetRequiredVersion:
             match="The package version requirement can never be satisfied",
         ):
             _get_required_version(project_dict=project_dict, verify_version=True)
+
+
+class TestDeprecations:
+
+    def test_jsonschema_validate(self) -> None:
+        project_dict: Dict[str, Any] = {}
+
+        event_catcher = EventCatcher(GenericJSONSchemaValidationDeprecation)
+        get_event_manager().add_callback(event_catcher.catch)
+
+        jsonschema_validate(
+            schema=project_schema(), json=project_dict, file_path="dbt_project.yml"
+        )
+
+        assert len(event_catcher.caught_events) == 1
+        assert "'name' is a required property at top level" in event_catcher.caught_events[0].info.msg  # type: ignore

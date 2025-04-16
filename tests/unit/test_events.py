@@ -160,6 +160,9 @@ sample_values = [
     core_types.MFTimespineWithoutYamlConfigurationDeprecation(),
     core_types.MFCumulativeTypeParamsDeprecation(),
     core_types.MicrobatchMacroOutsideOfBatchesDeprecation(),
+    core_types.GenericJSONSchemaValidationDeprecation(violation="", key_path="", file=""),
+    core_types.GenericJSONSchemaValidationDeprecationSummary(occurrences=2, show_debug_hint=True),
+    core_types.UnexpectedJinjaBlockDeprecation(msg=""),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),

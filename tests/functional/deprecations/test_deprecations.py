@@ -7,6 +7,7 @@ import dbt_common
 from dbt import deprecations
 from dbt.clients.registry import _get_cached
 from dbt.events.types import (
+    GenericJSONSchemaValidationDeprecation,
     PackageRedirectDeprecation,
     PackageRedirectDeprecationSummary,
 )
@@ -15,6 +16,7 @@ from dbt_common.exceptions import EventCompilationError
 from tests.functional.deprecations.fixtures import (
     bad_name_yaml,
     deprecated_model_exposure_yaml,
+    invalid_deprecation_date_yaml,
     models_trivial__model_sql,
 )
 from tests.utils import EventCatcher
@@ -268,3 +270,27 @@ class TestDeprecationSummary:
         assert deprecations.active_deprecations["package-redirect"] == 2
         assert len(event_catcher.caught_events) == 1
         assert event_catcher.caught_events[0].data.occurrences == 2  # type: ignore
+
+
+class TestDeprecatedInvalidDeprecationDate:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models_trivial.sql": models_trivial__model_sql,
+            "models.yml": invalid_deprecation_date_yaml,
+        }
+
+    def test_deprecated_invalid_deprecation_date(self, project):
+        event_catcher = EventCatcher(GenericJSONSchemaValidationDeprecation)
+        try:
+            run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
+        except:  # noqa
+            assert (
+                True
+            ), "Expected an exception to be raised, because a model object can't be created with a deprecation_date as an int"
+
+        assert len(event_catcher.caught_events) == 1
+        assert (
+            "1 is not of type 'string', 'null' in file `models/models.yml` at path `models[0].deprecation_date`"
+            in event_catcher.caught_events[0].info.msg
+        )

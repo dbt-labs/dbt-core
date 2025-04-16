@@ -71,6 +71,7 @@ from dbt.exceptions import (
     YamlParseListError,
 )
 from dbt.flags import get_flags
+from dbt.jsonschemas import jsonschema_validate, resources_schema
 from dbt.node_types import AccessType, NodeType
 from dbt.parser.base import SimpleParser
 from dbt.parser.common import (
@@ -193,8 +194,13 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
         if dct:
             # contains the FileBlock and the data (dictionary)
             yaml_block = YamlBlock.from_file_block(block, dct)
-
             parser: YamlReader
+
+            # Validate the yaml against the jsonschema to raise deprecation warnings
+            # for invalid fields.
+            jsonschema_validate(
+                schema=resources_schema(), json=dct, file_path=block.path.original_file_path
+            )
 
             # There are 9 different yaml lists which are parsed by different parsers:
             # Model, Seed, Snapshot, Source, Macro, Analysis, Exposure, Metric, Group
