@@ -1302,9 +1302,6 @@
     },
     "_Metrics": {
       "type": "object",
-      "required": [
-        "__additional_properties__"
-      ],
       "properties": {
         "__additional_properties__": {
           "type": "object",
