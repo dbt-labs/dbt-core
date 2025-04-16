@@ -138,3 +138,11 @@ local_dependency__seed_csv = """id,name
 2,Sam
 3,John
 """
+
+
+invalid_deprecation_date_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1
+"""
