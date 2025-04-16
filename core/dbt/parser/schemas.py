@@ -19,6 +19,7 @@ from typing import (
 )
 
 import jsonschema
+import yaml
 
 from dbt import deprecations
 from dbt.artifacts.resources import RefArgs
@@ -75,7 +76,7 @@ from dbt.exceptions import (
     YamlParseListError,
 )
 from dbt.flags import get_flags
-from dbt.jsonschemas import resources_schema
+from dbt.jsonschemas import CustomDraft7Validator, resources_schema
 from dbt.node_types import AccessType, NodeType
 from dbt.parser.base import SimpleParser
 from dbt.parser.common import (
@@ -206,7 +207,7 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
 
     @staticmethod
     def _jsonschema_validate(json: Dict[str, Any], file_path: str) -> None:
-        validator = jsonschema.Draft7Validator(resources_schema())
+        validator = CustomDraft7Validator(resources_schema())
         errors: Iterator[jsonschema.ValidationError] = validator.iter_errors(
             json
         )  # get all validation errors
@@ -228,7 +229,10 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
             # contains the FileBlock and the data (dictionary)
             yaml_block = YamlBlock.from_file_block(block, dct)
 
-            self._jsonschema_validate(dct, block.path.original_file_path)
+            self._jsonschema_validate(
+                yaml.load(block.file.contents or "", Loader=yaml.SafeLoader),
+                block.path.original_file_path,
+            )
 
             parser: YamlReader
 
