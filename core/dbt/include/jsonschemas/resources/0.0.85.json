@@ -2196,10 +2196,6 @@
     },
     "__SnapshotsConfig": {
       "type": "object",
-      "required": [
-        "post-hook",
-        "pre-hook"
-      ],
       "properties": {
         "alias": {
           "type": [
