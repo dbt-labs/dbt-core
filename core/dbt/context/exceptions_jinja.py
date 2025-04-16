@@ -8,7 +8,7 @@ from dbt.adapters.exceptions import (
     RelationWrongTypeError,
 )
 from dbt.adapters.exceptions.cache import CacheInconsistencyError
-from dbt.events.types import JinjaLogWarning
+from dbt.events.types import JinjaLogWarning, SnapshotTimestampWarning
 from dbt.exceptions import (
     AmbiguousAliasError,
     AmbiguousCatalogMatchError,
@@ -116,6 +116,17 @@ def raise_fail_fast_error(msg, node=None) -> NoReturn:
     raise FailFastError(msg, node=node)
 
 
+def warn_snapshot_timestamp_data_types(
+    snapshot_time_data_type: str, updated_at_data_type: str
+) -> None:
+    warn_or_error(
+        SnapshotTimestampWarning(
+            snapshot_time_data_type=snapshot_time_data_type,
+            updated_at_data_type=updated_at_data_type,
+        )
+    )
+
+
 # Update this when a new function should be added to the
 # dbt context's `exceptions` key!
 CONTEXT_EXPORTS = {
@@ -141,6 +152,7 @@ CONTEXT_EXPORTS = {
         raise_contract_error,
         column_type_missing,
         raise_fail_fast_error,
+        warn_snapshot_timestamp_data_types,
     ]
 }
 

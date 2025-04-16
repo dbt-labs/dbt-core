@@ -11,6 +11,7 @@ from dbt.config.renderer import BaseRenderer, Keypath
 # keyword args are rendered to capture refs in render_test_update.
 # Keyword args are finally rendered at compilation time.
 # Descriptions are not rendered until 'process_docs'.
+# Pre- and post-hooks in configs are late-rendered.
 class SchemaYamlRenderer(BaseRenderer):
     def __init__(self, context: Dict[str, Any], key: str) -> None:
         super().__init__(context)
@@ -36,11 +37,29 @@ class SchemaYamlRenderer(BaseRenderer):
         "tests" and "data_tests" are both currently supported but "tests" has been deprecated
         """
         # top level descriptions and data_tests
-        if len(keypath) >= 1 and keypath[0] in ("tests", "data_tests", "description"):
+        if len(keypath) >= 1 and keypath[0] in (
+            "tests",
+            "data_tests",
+            "description",
+            "loaded_at_query",
+        ):
             return True
 
         # columns descriptions and data_tests
-        if len(keypath) == 2 and keypath[1] in ("tests", "data_tests", "description"):
+        if len(keypath) == 2 and keypath[1] in (
+            "tests",
+            "data_tests",
+            "description",
+            "loaded_at_query",
+        ):
+            return True
+
+        # pre- and post-hooks
+        if (
+            len(keypath) >= 2
+            and keypath[0] == "config"
+            and keypath[1] in ("pre_hook", "post_hook")
+        ):
             return True
 
         # versions
@@ -60,9 +79,8 @@ class SchemaYamlRenderer(BaseRenderer):
     def should_render_keypath(self, keypath: Keypath) -> bool:
         if len(keypath) < 1:
             return True
-
         if self.key == "sources":
-            if keypath[0] == "description":
+            if keypath[0] in ("description", "loaded_at_query"):
                 return False
             if keypath[0] == "tables":
                 if self._is_norender_key(keypath[2:]):

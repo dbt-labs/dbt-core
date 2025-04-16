@@ -703,6 +703,7 @@ class TestExternalModels:
             package_name="test",
             identifier="test_identifier",
             schema="test_schema",
+            database="dbt",
         )
 
     @pytest.fixture(scope="class")

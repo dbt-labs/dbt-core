@@ -26,6 +26,11 @@ REFABLE_NODE_TYPES: List["NodeType"] = [
     NodeType.Snapshot,
 ]
 
+TEST_NODE_TYPES: List["NodeType"] = [
+    NodeType.Test,
+    NodeType.Unit,
+]
+
 VERSIONED_NODE_TYPES: List["NodeType"] = [
     NodeType.Model,
 ]

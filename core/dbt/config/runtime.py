@@ -193,6 +193,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             log_cache_events=log_cache_events,
             dependencies=dependencies,
             dbt_cloud=project.dbt_cloud,
+            flags=project.flags,
         )
 
     # Called by 'load_projects' in this class

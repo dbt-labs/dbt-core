@@ -11,6 +11,8 @@ from tests.functional.semantic_models.fixtures import (
     metricflow_time_spine_sql,
     models_people_metrics_yml,
     models_people_sql,
+    semantic_model_dimensions_entities_measures_meta_config,
+    semantic_model_meta_clobbering_yml,
     semantic_model_people_yml,
 )
 
@@ -225,3 +227,89 @@ class TestMetaConfig:
         sm_node = manifest.semantic_models[sm_id]
         meta_expected = {"my_meta": "testing", "my_other_meta": "testing more"}
         assert sm_node.config.meta == meta_expected
+
+
+# test meta configs on semantic model components (dimensions, measures, entities)
+class TestMetaConfigForComponents:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_models.yml": semantic_model_dimensions_entities_measures_meta_config,
+            "people_metrics.yml": models_people_metrics_yml,
+            "groups.yml": groups_yml,
+        }
+
+    def test_component_meta_configs(self, project):
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+        sm_id = "semantic_model.test.semantic_people"
+        assert sm_id in manifest.semantic_models
+        sm_node = manifest.semantic_models[sm_id]
+
+        # Check dimension meta config
+        favorite_color_dim = next(d for d in sm_node.dimensions if d.name == "favorite_color")
+        assert favorite_color_dim.config.meta == {"dimension": "one"}
+
+        # Check measure meta config
+        years_tenure_measure = next(m for m in sm_node.measures if m.name == "years_tenure")
+        assert years_tenure_measure.config.meta == {"measure": "two"}
+
+        # Check entity meta config
+        id_entity = next(e for e in sm_node.entities if e.name == "id")
+        assert id_entity.config.meta == {"entity": "three"}
+
+
+# test meta config clobbering behavior between semantic model and component levels
+class TestMetaConfigClobbering:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_models.yml": semantic_model_meta_clobbering_yml,
+            "people_metrics.yml": models_people_metrics_yml,
+            "groups.yml": groups_yml,
+        }
+
+    def test_meta_config_clobbering(self, project):
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+        sm_id = "semantic_model.test.semantic_people"
+        assert sm_id in manifest.semantic_models
+        sm_node = manifest.semantic_models[sm_id]
+
+        # Check semantic model level meta config
+        assert sm_node.config.meta == {
+            "model_level": "should_be_inherited",
+            "component_level": "should_be_overridden",
+        }
+
+        # Check dimension inherits model-level meta and overrides component-level meta
+        favorite_color_dim = next(d for d in sm_node.dimensions if d.name == "favorite_color")
+        assert favorite_color_dim.config.meta == {
+            "model_level": "should_be_inherited",
+            "component_level": "dimension_override",
+        }
+
+        # Check measure inherits model-level meta and overrides component-level meta
+        years_tenure_measure = next(m for m in sm_node.measures if m.name == "years_tenure")
+        assert years_tenure_measure.config.meta == {
+            "model_level": "should_be_inherited",
+            "component_level": "measure_override",
+        }
+
+        # Check entity inherits model-level meta and overrides component-level meta
+        id_entity = next(e for e in sm_node.entities if e.name == "id")
+        assert id_entity.config.meta == {
+            "model_level": "should_be_inherited",
+            "component_level": "entity_override",
+        }
+
+        # Check component without meta config still inherits model-level meta
+        created_at_dim = next(d for d in sm_node.dimensions if d.name == "created_at")
+        assert created_at_dim.config.meta == {
+            "model_level": "should_be_inherited",
+            "component_level": "should_be_overridden",
+        }

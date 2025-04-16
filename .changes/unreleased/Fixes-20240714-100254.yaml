@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix typing for artifact schemas
-time: 2024-07-14T10:02:54.452099+09:00
-custom:
-    Author: nakamichiworks
-    Issue: "10442"

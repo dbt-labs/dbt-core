@@ -39,6 +39,7 @@ message NodeInfo {
     string node_finished_at = 8;
     google.protobuf.Struct meta = 9;
     NodeRelation node_relation = 10;
+    string node_checksum = 11;
 }
 
 // TimingInfoMsg
@@ -443,6 +444,41 @@ message SourceFreshnessProjectHooksNotRun {}
 message SourceFreshnessProjectHooksNotRunMsg {
     CoreEventInfo info = 1;
     SourceFreshnessProjectHooksNotRun data = 2;
+}
+
+// D018
+message MFTimespineWithoutYamlConfigurationDeprecation {}
+
+message MFTimespineWithoutYamlConfigurationDeprecationMsg {
+    CoreEventInfo info = 1;
+    MFTimespineWithoutYamlConfigurationDeprecation data = 2;
+}
+
+// D019
+message MFCumulativeTypeParamsDeprecation {}
+
+message MFCumulativeTypeParamsDeprecationMsg {
+    CoreEventInfo info = 1;
+    MFCumulativeTypeParamsDeprecation data = 2;
+}
+
+// D020
+message MicrobatchMacroOutsideOfBatchesDeprecation {}
+
+message MicrobatchMacroOutsideOfBatchesDeprecationMsg {
+    CoreEventInfo info = 1;
+    MicrobatchMacroOutsideOfBatchesDeprecation data = 2;
+}
+
+// D021
+message PackageRedirectDeprecationSummary {
+    int32 occurrences = 1;
+    bool show_all_hint = 2;
+}
+
+message PackageRedirectDeprecationSummaryMsg {
+    CoreEventInfo info = 1;
+    PackageRedirectDeprecationSummary data = 2;
 }
 
 // I065
@@ -893,8 +929,39 @@ message FreshnessConfigProblemMsg {
 }
 
 
-// M - Deps generation
+// I074
+message MicrobatchModelNoEventTimeInputs {
+    string model_name = 1;
+}
 
+message MicrobatchModelNoEventTimeInputsMsg {
+    CoreEventInfo info = 1;
+    MicrobatchModelNoEventTimeInputs data = 2;
+}
+
+
+// I075
+message InvalidConcurrentBatchesConfig {
+    int32 num_models = 1;
+    string adapter_type = 2;
+}
+
+message InvalidConcurrentBatchesConfigMsg {
+    CoreEventInfo info = 1;
+    InvalidConcurrentBatchesConfig data = 2;
+}
+
+// I076
+message InvalidMacroAnnotation {
+    string msg = 1;
+    string macro_unique_id = 2;
+    string macro_file_path = 3;
+}
+
+message InvalidMacroAnnotationMsg {
+    CoreEventInfo info = 1;
+    InvalidMacroAnnotation data = 2;
+}
 
 
 // M - Deps generation
@@ -1217,6 +1284,19 @@ message DepsScrubbedPackageNameMsg{
     DepsScrubbedPackageName data = 2;
 }
 
+// P - Artifacts
+
+// P001
+message ArtifactWritten {
+    string artifact_type = 1;
+    string artifact_path = 2;
+}
+
+message ArtifactWrittenMsg {
+    CoreEventInfo info = 1;
+    ArtifactWritten data = 2;
+}
+
 // Q - Node execution
 
 // Q001
@@ -1271,6 +1351,12 @@ message SQLRunnerExceptionMsg {
     SQLRunnerException data = 2;
 }
 
+message Group {
+    string name = 1;
+    string package_name = 3;
+    map<string, string> owner = 7;
+}
+
 // Q007
 message LogTestResult {
     NodeInfo node_info = 1;
@@ -1280,6 +1366,8 @@ message LogTestResult {
     int32 num_models = 5;
     float execution_time = 6;
     int32 num_failures = 7;
+    Group group = 8;
+    string attached_node = 9;
 }
 
 message LogTestResultMsg {
@@ -1287,8 +1375,23 @@ message LogTestResultMsg {
     LogTestResult data = 2;
 }
 
+// Q008
+message LogNodeResult {
+    NodeInfo node_info = 1;
+    string description = 2;
+    string status = 3;
+    int32 index = 4;
+    int32 total = 5;
+    float execution_time = 6;
+    string msg = 7;
+}
 
-// Skipped Q008, Q009, Q010
+message LogNodeResultMsg {
+    CoreEventInfo info = 1;
+    LogNodeResult data = 2;
+}
+
+// Skipped Q009, Q010
 
 
 // Q011
@@ -1312,6 +1415,7 @@ message LogModelResult {
     int32 index = 4;
     int32 total = 5;
     float execution_time = 6;
+    Group group = 7;
 }
 
 message LogModelResultMsg {
@@ -1331,6 +1435,7 @@ message LogSnapshotResult {
     float execution_time = 6;
     map<string, string> cfg = 7;
     string result_message = 8;
+    Group group = 9;
 }
 
 message LogSnapshotResultMsg {
@@ -1348,6 +1453,7 @@ message LogSeedResult {
     float execution_time = 6;
     string schema = 7;
     string relation = 8;
+    Group group = 9;
 }
 
 message LogSeedResultMsg {
@@ -1373,7 +1479,7 @@ message LogFreshnessResultMsg {
     LogFreshnessResult data = 2;
 }
 
-// Q018
+// Q019
 message LogNodeNoOpResult {
     NodeInfo node_info = 1;
     string description = 2;
@@ -1521,6 +1627,7 @@ message SkippingDetails {
     string node_name = 4;
     int32 index = 5;
     int32 total = 6;
+    Group group = 7;
 }
 
 message SkippingDetailsMsg {
@@ -1589,6 +1696,7 @@ message ShowNode {
     bool is_inline = 3;
     string output_format = 4;
     string unique_id = 5;
+    bool quiet = 6;
 }
 
 message ShowNodeMsg {
@@ -1603,11 +1711,62 @@ message CompiledNode {
     bool is_inline = 3;
     string output_format = 4;
     string unique_id = 5;
+    bool quiet = 6;
 }
 
 message CompiledNodeMsg {
     CoreEventInfo info = 1;
     CompiledNode data = 2;
+}
+
+// Q043
+message SnapshotTimestampWarning {
+    string snapshot_time_data_type = 1;
+    string updated_at_data_type = 2;
+}
+
+message SnapshotTimestampWarningMsg {
+    CoreEventInfo info = 1;
+    SnapshotTimestampWarning data = 2;
+}
+
+// Q044
+message MicrobatchExecutionDebug {
+    string msg = 1;
+}
+
+message MicrobatchExecutionDebugMsg {
+    CoreEventInfo info = 1;
+    MicrobatchExecutionDebug data = 2;
+}
+
+// Q045
+message LogStartBatch {
+    NodeInfo node_info = 1;
+    string description = 2;
+    int32 batch_index = 3;
+    int32 total_batches = 4;
+}
+
+message LogStartBatchMsg {
+    CoreEventInfo info = 1;
+    LogStartBatch data = 2;
+}
+
+// Q046
+message LogBatchResult {
+    NodeInfo node_info = 1;
+    string description = 2;
+    string status = 3;
+    int32 batch_index = 4;
+    int32 total_batches = 5;
+    float execution_time = 6;
+    Group group = 7;
+}
+
+message LogBatchResultMsg {
+    CoreEventInfo info = 1;
+    LogBatchResult data = 2;
 }
 
 // W - Node testing
@@ -1809,12 +1968,6 @@ message ServingDocsExitInfoMsg {
     ServingDocsExitInfo data = 2;
 }
 
-message Group {
-    string name = 1;
-    string package_name = 3;
-    map<string, string> owner = 7;
-}
-
 // Z021
 message RunResultWarning {
     string resource_type = 1;
@@ -1905,6 +2058,7 @@ message EndOfRunSummary {
     int32 num_errors = 1;
     int32 num_warnings = 2;
     bool keyboard_interrupt = 3;
+    int32 num_partial_success = 4;
 }
 
 message EndOfRunSummaryMsg {
@@ -1933,6 +2087,7 @@ message LogSkipBecauseError {
     int32 index = 3;
     int32 total = 4;
     string status = 5;
+    Group group = 6;
 }
 
 message LogSkipBecauseErrorMsg {
@@ -2086,4 +2241,35 @@ message ResourceReport {
 message ResourceReportMsg {
     CoreEventInfo info = 1;
     ResourceReport data = 2;
+}
+
+
+// Z061
+message ArtifactUploadError {
+    string msg = 1;
+}
+
+message ArtifactUploadErrorMsg {
+    CoreEventInfo info = 1;
+    ArtifactUploadError data = 2;
+}
+
+// Z062
+message ArtifactUploadSuccess {
+    string msg = 1;
+}
+
+message ArtifactUploadSuccessMsg {
+    CoreEventInfo info = 1;
+    ArtifactUploadSuccess data = 2;
+}
+
+// Z063
+message ArtifactUploadSkipped {
+    string msg = 1;
+}
+
+message ArtifactUploadSkippedMsg {
+    CoreEventInfo info = 1;
+    ArtifactUploadSkipped data = 2;
 }

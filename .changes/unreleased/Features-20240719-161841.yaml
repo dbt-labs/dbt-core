@@ -1,6 +1,0 @@
-kind: Features
-body: Support ref and source in foreign key constraint expressions, bump dbt-common minimum to 1.6
-time: 2024-07-19T16:18:41.434278-04:00
-custom:
-  Author: michelleark
-  Issue: "8062"

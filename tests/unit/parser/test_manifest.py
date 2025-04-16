@@ -1,18 +1,21 @@
 from argparse import Namespace
+from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
 from pytest_mock import MockerFixture
 
+from dbt.adapters.postgres import PostgresAdapter
 from dbt.artifacts.resources.base import FileHash
 from dbt.config import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest, ManifestStateCheck
-from dbt.events.types import UnusedResourceConfigPath
+from dbt.events.types import InvalidConcurrentBatchesConfig, UnusedResourceConfigPath
 from dbt.flags import set_from_args
 from dbt.parser.manifest import ManifestLoader, _warn_for_unused_resource_config_paths
 from dbt.parser.read_files import FileDiff
 from dbt.tracking import User
 from dbt_common.events.event_manager_client import add_callback_to_manager
+from tests.unit.fixtures import model_node
 from tests.utils import EventCatcher
 
 
@@ -238,3 +241,58 @@ class TestWarnUnusedConfigs:
         else:
             assert len(catcher.caught_events) == 1
             assert f"{resource_type}.{path}" in str(catcher.caught_events[0].data)
+
+
+class TestCheckForcingConcurrentBatches:
+    @pytest.fixture
+    @patch("dbt.parser.manifest.ManifestLoader.build_manifest_state_check")
+    @patch("dbt.parser.manifest.os.path.exists")
+    @patch("dbt.parser.manifest.open")
+    def manifest_loader(
+        self, patched_open, patched_os_exist, patched_state_check
+    ) -> ManifestLoader:
+        mock_project = MagicMock(RuntimeConfig)
+        mock_project.project_target_path = "mock_target_path"
+        mock_project.project_name = "mock_project_name"
+        return ManifestLoader(mock_project, {})
+
+    @pytest.fixture
+    def event_catcher(self) -> EventCatcher:
+        return EventCatcher(InvalidConcurrentBatchesConfig)  # type: ignore
+
+    @pytest.mark.parametrize(
+        "adapter_support,concurrent_batches_config,expect_warning",
+        [
+            (False, True, True),
+            (False, False, False),
+            (False, None, False),
+            (True, True, False),
+            (True, False, False),
+            (True, None, False),
+        ],
+    )
+    def test_check_forcing_concurrent_batches(
+        self,
+        mocker: MockerFixture,
+        manifest_loader: ManifestLoader,
+        postgres_adapter: PostgresAdapter,
+        event_catcher: EventCatcher,
+        adapter_support: bool,
+        concurrent_batches_config: Optional[bool],
+        expect_warning: bool,
+    ):
+        add_callback_to_manager(event_catcher.catch)
+        model = model_node()
+        model.config.concurrent_batches = concurrent_batches_config
+        mocker.patch.object(postgres_adapter, "supports").return_value = adapter_support
+        mocker.patch("dbt.parser.manifest.get_adapter").return_value = postgres_adapter
+        mocker.patch.object(manifest_loader.manifest, "use_microbatch_batches").return_value = True
+
+        manifest_loader.manifest.add_node_nofile(model)
+        manifest_loader.check_forcing_batch_concurrency()
+
+        if expect_warning:
+            assert len(event_catcher.caught_events) == 1
+            assert "Batches will be run sequentially" in event_catcher.caught_events[0].info.msg  # type: ignore
+        else:
+            assert len(event_catcher.caught_events) == 0

@@ -1,5 +1,7 @@
 import pytest
 
+from dbt.artifacts.schemas.results import RunStatus
+from dbt.contracts.graph.nodes import SavedQuery
 from dbt.tests.util import run_dbt
 from tests.functional.saved_queries.fixtures import (
     saved_queries_yml,
@@ -12,7 +14,7 @@ from tests.functional.semantic_models.fixtures import (
 )
 
 
-class TestSavedQueryBuildNoOp:
+class TestSavedQueryBuild:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -31,8 +33,15 @@ packages:
     version: 1.1.1
 """
 
-    def test_build_saved_queries(self, project):
+    def test_build_saved_queries_no_op(self, project) -> None:
+        """Test building saved query exports with no flag, so should be no-op."""
         run_dbt(["deps"])
         result = run_dbt(["build"])
         assert len(result.results) == 3
-        assert "NO-OP" in [r.message for r in result.results]
+
+        saved_query_results = (
+            result for result in result.results if isinstance(result.node, SavedQuery)
+        )
+        assert {result.node.name for result in saved_query_results} == {"test_saved_query"}
+        assert all("NO-OP" in result.message for result in saved_query_results)
+        assert all(result.status == RunStatus.NoOp for result in saved_query_results)

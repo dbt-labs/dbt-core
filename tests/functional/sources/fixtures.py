@@ -472,3 +472,26 @@ sources:
       - name: test_table
         identifier: source
 """
+
+freshness_via_custom_sql_schema_yml = """version: 2
+sources:
+  - name: test_source
+    freshness:
+      warn_after: {count: 10, period: hour}
+    schema: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}"
+    quoting:
+      identifier: True
+    tags:
+      - my_test_source_tag
+    tables:
+      - name: source_a
+        identifier: source
+        loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
+      - name: source_b
+        identifier: source
+        loaded_at_query: "select max({{ var('test_loaded_at') | as_text }}) from {{this}}"
+      - name: source_c
+        identifier: source
+        loaded_at_query: "select {{current_timestamp()}}"
+
+"""

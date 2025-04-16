@@ -2,6 +2,7 @@ import hashlib
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import (
     Any,
     Dict,
@@ -18,7 +19,6 @@ from typing import (
 
 from mashumaro.types import SerializableType
 
-from dbt import deprecations
 from dbt.adapters.base import ConstraintSupport
 from dbt.adapters.factory import get_adapter_constraint_support
 from dbt.artifacts.resources import Analysis as AnalysisResource
@@ -60,6 +60,9 @@ from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
 from dbt.artifacts.resources import SqlOperation as SqlOperationResource
 from dbt.artifacts.resources import TimeSpine
 from dbt.artifacts.resources import UnitTestDefinition as UnitTestDefinitionResource
+from dbt.artifacts.resources.v1.model import ModelFreshness
+from dbt.artifacts.schemas.batch_results import BatchResults
+from dbt.clients.jinja_static import statically_extract_has_name_this
 from dbt.contracts.graph.model_config import UnitTestNodeConfig
 from dbt.contracts.graph.node_args import ModelNodeArgs
 from dbt.contracts.graph.unparsed import (
@@ -91,6 +94,7 @@ from dbt_common.contracts.constraints import (
     ConstraintType,
     ModelLevelConstraint,
 )
+from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.contextvars import set_log_contextvars
 from dbt_common.events.functions import warn_or_error
 
@@ -230,6 +234,7 @@ class NodeInfoMixin:
                 "alias": getattr(self, "alias", None),
                 "relation_name": getattr(self, "relation_name", None),
             },
+            "node_checksum": getattr(getattr(self, "checksum", None), "checksum", None),
         }
         return node_info
 
@@ -244,7 +249,9 @@ class NodeInfoMixin:
 
 @dataclass
 class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, SerializableType):
-    def get_target_write_path(self, target_path: str, subdirectory: str):
+    def get_target_write_path(
+        self, target_path: str, subdirectory: str, split_suffix: Optional[str] = None
+    ):
         # This is called for both the "compiled" subdirectory of "target" and the "run" subdirectory
         if os.path.basename(self.path) == os.path.basename(self.original_file_path):
             # One-to-one relationship of nodes to files.
@@ -252,6 +259,15 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
         else:
             #  Many-to-one relationship of nodes to files.
             path = os.path.join(self.original_file_path, self.path)
+
+        if split_suffix:
+            pathlib_path = Path(path)
+            path = str(
+                pathlib_path.parent
+                / pathlib_path.stem
+                / (pathlib_path.stem + f"_{split_suffix}" + pathlib_path.suffix)
+            )
+
         target_write_path = os.path.join(target_path, subdirectory, self.package_name, path)
         return target_write_path
 
@@ -430,7 +446,39 @@ class HookNode(HookNodeResource, CompiledNode):
 
 
 @dataclass
+class BatchContext(dbtClassMixin):
+    id: str
+    event_time_start: datetime
+    event_time_end: datetime
+
+    def __post_serialize__(self, data, context):
+        # This is insane, but necessary, I apologize. Mashumaro handles the
+        # dictification of this class via a compile time generated `to_dict`
+        # method based off of the _typing_ of th class. By default `datetime`
+        # types are converted to strings. We don't want that, we want them to
+        # stay datetimes.
+        # Note: This is safe because the `BatchContext` isn't part of the artifact
+        # and thus doesn't get written out.
+        new_data = super().__post_serialize__(data, context)
+        new_data["event_time_start"] = self.event_time_start
+        new_data["event_time_end"] = self.event_time_end
+        return new_data
+
+
+@dataclass
 class ModelNode(ModelResource, CompiledNode):
+    previous_batch_results: Optional[BatchResults] = None
+    batch: Optional[BatchContext] = None
+    _has_this: Optional[bool] = None
+
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
+        if "_has_this" in dct:
+            del dct["_has_this"]
+        if "previous_batch_results" in dct:
+            del dct["previous_batch_results"]
+        return dct
+
     @classmethod
     def resource_class(cls) -> Type[ModelResource]:
         return ModelResource
@@ -506,6 +554,12 @@ class ModelNode(ModelResource, CompiledNode):
 
         return constraints
 
+    @property
+    def has_this(self) -> bool:
+        if self._has_this is None:
+            self._has_this = statically_extract_has_name_this(self.raw_code)
+        return self._has_this
+
     def infer_primary_key(self, data_tests: List["GenericTestNode"]) -> List[str]:
         """
         Infers the columns that can be used as primary key of a model in the following order:
@@ -527,11 +581,20 @@ class ModelNode(ModelResource, CompiledNode):
         columns_with_disabled_unique_tests = set()
         columns_with_not_null_tests = set()
         for test in data_tests:
-            columns = []
-            if "column_name" in test.test_metadata.kwargs:
+            columns: List[str] = []
+            # extract columns from test kwargs, ensuring columns is a List[str] given tests can have custom (user or pacakge-defined) kwarg types
+            if "column_name" in test.test_metadata.kwargs and isinstance(
+                test.test_metadata.kwargs["column_name"], str
+            ):
                 columns = [test.test_metadata.kwargs["column_name"]]
-            elif "combination_of_columns" in test.test_metadata.kwargs:
-                columns = test.test_metadata.kwargs["combination_of_columns"]
+            elif "combination_of_columns" in test.test_metadata.kwargs and isinstance(
+                test.test_metadata.kwargs["combination_of_columns"], list
+            ):
+                columns = [
+                    column
+                    for column in test.test_metadata.kwargs["combination_of_columns"]
+                    if isinstance(column, str)
+                ]
 
             for column in columns:
                 if test.test_metadata.name in ["unique", "unique_combination_of_columns"]:
@@ -1148,12 +1211,6 @@ class UnpatchedSourceDefinition(BaseNode):
                 "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
             )
         if self.tests:
-            if is_root_project:
-                deprecations.warn(
-                    "project-test-config",
-                    deprecated_path="tests",
-                    exp_path="data_tests",
-                )
             self.data_tests.extend(self.tests)
             self.tests.clear()
 
@@ -1164,12 +1221,6 @@ class UnpatchedSourceDefinition(BaseNode):
                     "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
                 )
             if column.tests:
-                if is_root_project:
-                    deprecations.warn(
-                        "project-test-config",
-                        deprecated_path="tests",
-                        exp_path="data_tests",
-                    )
                 column.data_tests.extend(column.tests)
                 column.tests.clear()
 
@@ -1223,12 +1274,16 @@ class SourceDefinition(
         return SourceDefinitionResource
 
     def same_database_representation(self, other: "SourceDefinition") -> bool:
-        return (
-            self.database == other.database
-            and self.schema == other.schema
-            and self.identifier == other.identifier
-            and True
-        )
+
+        # preserve legacy behaviour -- use potentially rendered database
+        if get_flags().state_modified_compare_more_unrendered_values is False:
+            same_database = self.database == other.database
+            same_schema = self.schema == other.schema
+        else:
+            same_database = self.unrendered_database == other.unrendered_database
+            same_schema = self.unrendered_schema == other.unrendered_schema
+
+        return same_database and same_schema and self.identifier == other.identifier and True
 
     def same_quoting(self, other: "SourceDefinition") -> bool:
         return self.quoting == other.quoting
@@ -1325,7 +1380,7 @@ class SourceDefinition(
 
 
 @dataclass
-class Exposure(GraphNode, ExposureResource):
+class Exposure(NodeInfoMixin, GraphNode, ExposureResource):
     @property
     def depends_on_nodes(self):
         return self.depends_on.nodes
@@ -1387,6 +1442,12 @@ class Exposure(GraphNode, ExposureResource):
     @property
     def group(self):
         return None
+
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
+        if "_event_status" in dct:
+            del dct["_event_status"]
+        return dct
 
 
 # ====================================
@@ -1471,7 +1532,7 @@ class Group(GroupResource, BaseNode):
         return {
             "name": self.name,
             "package_name": self.package_name,
-            "owner": self.owner.to_dict(),
+            "owner": {k: str(v) for k, v in self.owner.to_dict(omit_none=True).items()},
         }
 
 
@@ -1579,15 +1640,17 @@ class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryResource):
 
         # exports should be in the same order, so we zip them for easy iteration
         for old_export, new_export in zip(old.exports, self.exports):
-            if not (
-                old_export.name == new_export.name
-                and old_export.config.export_as == new_export.config.export_as
-                and old_export.config.schema_name == new_export.config.schema_name
-                and old_export.config.alias == new_export.config.alias
-            ):
+            if not (old_export.name == new_export.name):
                 return False
+            keys = ["export_as", "schema", "alias"]
+            for key in keys:
+                if old_export.unrendered_config.get(key) != new_export.unrendered_config.get(key):
+                    return False
 
         return True
+
+    def same_tags(self, old: "SavedQuery") -> bool:
+        return self.tags == old.tags
 
     def same_contents(self, old: Optional["SavedQuery"]) -> bool:
         # existing when it didn't before is a change!
@@ -1604,8 +1667,15 @@ class SavedQuery(NodeInfoMixin, GraphNode, SavedQueryResource):
             and self.same_config(old)
             and self.same_group(old)
             and self.same_exports(old)
+            and self.same_tags(old)
             and True
         )
+
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
+        dct = super().__post_serialize__(dct, context)
+        if "_event_status" in dct:
+            del dct["_event_status"]
+        return dct
 
 
 # ====================================
@@ -1634,11 +1704,17 @@ class ParsedNodePatch(ParsedPatch):
     constraints: List[Dict[str, Any]]
     deprecation_date: Optional[datetime]
     time_spine: Optional[TimeSpine] = None
+    freshness: Optional[ModelFreshness] = None
 
 
 @dataclass
 class ParsedMacroPatch(ParsedPatch):
     arguments: List[MacroArgument] = field(default_factory=list)
+
+
+@dataclass
+class ParsedSingularTestPatch(ParsedPatch):
+    pass
 
 
 # ====================================
@@ -1668,6 +1744,7 @@ ManifestNode = Union[
 ResultNode = Union[
     ManifestNode,
     SourceDefinition,
+    HookNode,
 ]
 
 # All nodes that can be in the DAG
@@ -1690,6 +1767,7 @@ Resource = Union[
 
 TestNode = Union[SingularTestNode, GenericTestNode]
 
+SemanticManifestNode = Union[SavedQuery, SemanticModel, Metric]
 
 RESOURCE_CLASS_TO_NODE_CLASS: Dict[Type[BaseResource], Type[BaseNode]] = {
     node_class.resource_class(): node_class

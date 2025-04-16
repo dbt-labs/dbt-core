@@ -192,6 +192,7 @@ class SchemaSourceFile(BaseSourceFile):
     sources: List[str] = field(default_factory=list)
     exposures: List[str] = field(default_factory=list)
     metrics: List[str] = field(default_factory=list)
+    snapshots: List[str] = field(default_factory=list)
     # The following field will no longer be used. Leaving
     # here to avoid breaking existing projects. To be removed
     # later if possible.
@@ -212,6 +213,9 @@ class SchemaSourceFile(BaseSourceFile):
     # created too, but those are in 'sources'
     sop: List[SourceKey] = field(default_factory=list)
     env_vars: Dict[str, Any] = field(default_factory=dict)
+    unrendered_configs: Dict[str, Any] = field(default_factory=dict)
+    unrendered_databases: Dict[str, Any] = field(default_factory=dict)
+    unrendered_schemas: Dict[str, Any] = field(default_factory=dict)
     pp_dict: Optional[Dict[str, Any]] = None
     pp_test_index: Optional[Dict[str, Any]] = None
 
@@ -317,6 +321,41 @@ class SchemaSourceFile(BaseSourceFile):
                 test_ids.extend(self.data_tests[key][name])
         return test_ids
 
+    def add_unrendered_config(self, unrendered_config, yaml_key, name, version=None):
+        versioned_name = f"{name}_v{version}" if version is not None else name
+
+        if yaml_key not in self.unrendered_configs:
+            self.unrendered_configs[yaml_key] = {}
+
+        if versioned_name not in self.unrendered_configs[yaml_key]:
+            self.unrendered_configs[yaml_key][versioned_name] = unrendered_config
+
+    def get_unrendered_config(self, yaml_key, name, version=None) -> Optional[Dict[str, Any]]:
+        versioned_name = f"{name}_v{version}" if version is not None else name
+
+        if yaml_key not in self.unrendered_configs:
+            return None
+        if versioned_name not in self.unrendered_configs[yaml_key]:
+            return None
+
+        return self.unrendered_configs[yaml_key][versioned_name]
+
+    def delete_from_unrendered_configs(self, yaml_key, name):
+        # We delete all unrendered_configs for this yaml_key/name because the
+        # entry has been scheduled for reparsing.
+        if self.get_unrendered_config(yaml_key, name):
+            del self.unrendered_configs[yaml_key][name]
+            # Delete all versioned keys associated with name
+            version_names_to_delete = []
+            for potential_version_name in self.unrendered_configs[yaml_key]:
+                if potential_version_name.startswith(f"{name}_v"):
+                    version_names_to_delete.append(potential_version_name)
+            for version_name in version_names_to_delete:
+                del self.unrendered_configs[yaml_key][version_name]
+
+            if not self.unrendered_configs[yaml_key]:
+                del self.unrendered_configs[yaml_key]
+
     def add_env_var(self, var, yaml_key, name):
         if yaml_key not in self.env_vars:
             self.env_vars[yaml_key] = {}
@@ -332,6 +371,30 @@ class SchemaSourceFile(BaseSourceFile):
             del self.env_vars[yaml_key][name]
             if not self.env_vars[yaml_key]:
                 del self.env_vars[yaml_key]
+
+    def add_unrendered_database(self, yaml_key: str, name: str, unrendered_database: str) -> None:
+        if yaml_key not in self.unrendered_databases:
+            self.unrendered_databases[yaml_key] = {}
+
+        self.unrendered_databases[yaml_key][name] = unrendered_database
+
+    def get_unrendered_database(self, yaml_key: str, name: str) -> Optional[str]:
+        if yaml_key not in self.unrendered_databases:
+            return None
+
+        return self.unrendered_databases[yaml_key].get(name)
+
+    def add_unrendered_schema(self, yaml_key: str, name: str, unrendered_schema: str) -> None:
+        if yaml_key not in self.unrendered_schemas:
+            self.unrendered_schemas[yaml_key] = {}
+
+        self.unrendered_schemas[yaml_key][name] = unrendered_schema
+
+    def get_unrendered_schema(self, yaml_key: str, name: str) -> Optional[str]:
+        if yaml_key not in self.unrendered_schemas:
+            return None
+
+        return self.unrendered_schemas[yaml_key].get(name)
 
 
 @dataclass

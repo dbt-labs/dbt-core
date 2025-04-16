@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix interpretation of `PartialSuccess` to result in non-zero exit code
+time: 2024-12-09T15:07:11.391313-06:00
+custom:
+  Author: QMalcolm
+  Issue: "11114"

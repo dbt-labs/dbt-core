@@ -1,6 +1,0 @@
-kind: Fixes
-body: Do not update varchar column definitions if a contract exists
-time: 2024-07-28T22:14:21.67712-04:00
-custom:
-  Author: gshank
-  Issue: "10362"

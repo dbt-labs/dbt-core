@@ -1,10 +1,11 @@
 import traceback
 from abc import abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Generic, TypeVar
 
 import dbt.exceptions
 import dbt_common.exceptions.base
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.sql import (
     RemoteCompileResult,
     RemoteCompileResultMixin,
@@ -28,18 +29,19 @@ class GenericSqlRunner(CompileRunner, Generic[SQLResult]):
                 exc=str(e), exc_info=traceback.format_exc(), node_info=self.node.node_info
             )
         )
+        # REVIEW: This code is invalid and will always throw.
         if isinstance(e, dbt.exceptions.Exception):
             if isinstance(e, dbt_common.exceptions.DbtRuntimeError):
                 e.add_node(ctx.node)
             return e
 
-    def before_execute(self):
+    def before_execute(self) -> None:
         pass
 
-    def after_execute(self, result):
+    def after_execute(self, result) -> None:
         pass
 
-    def compile(self, manifest):
+    def compile(self, manifest: Manifest):
         return self.compiler.compile_node(self.node, manifest, {}, write=False)
 
     @abstractmethod
@@ -66,7 +68,7 @@ class SqlCompileRunner(GenericSqlRunner[RemoteCompileResult]):
             compiled_code=compiled_node.compiled_code,
             node=compiled_node,
             timing=[],  # this will get added later
-            generated_at=datetime.utcnow(),
+            generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
 
     def from_run_result(self, result, start_time, timing_info) -> RemoteCompileResult:
@@ -75,7 +77,7 @@ class SqlCompileRunner(GenericSqlRunner[RemoteCompileResult]):
             compiled_code=result.compiled_code,
             node=result.node,
             timing=timing_info,
-            generated_at=datetime.utcnow(),
+            generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
 
 
@@ -94,7 +96,7 @@ class SqlExecuteRunner(GenericSqlRunner[RemoteRunResult]):
             node=compiled_node,
             table=table,
             timing=[],
-            generated_at=datetime.utcnow(),
+            generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
 
     def from_run_result(self, result, start_time, timing_info) -> RemoteRunResult:
@@ -104,5 +106,5 @@ class SqlExecuteRunner(GenericSqlRunner[RemoteRunResult]):
             node=result.node,
             table=result.table,
             timing=timing_info,
-            generated_at=datetime.utcnow(),
+            generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )

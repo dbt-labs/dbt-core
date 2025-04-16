@@ -67,8 +67,14 @@ class Graph:
         while len(selected) > 0 and (max_depth is None or i < max_depth):
             next_layer: Set[UniqueId] = set()
             for node in selected:
-                next_layer.update(self.descendants(node, 1))
-            next_layer = next_layer - children  # Avoid re-searching
+                next_layer.update(
+                    iter(
+                        e[1]
+                        for e in self.graph.out_edges(node)
+                        if e[1] not in children
+                        and self.filter_edges_by_type(e[0], e[1], "parent_test")
+                    )
+                )
             children.update(next_layer)
             selected = next_layer
             i += 1
@@ -86,8 +92,14 @@ class Graph:
         while len(selected) > 0 and (max_depth is None or i < max_depth):
             next_layer: Set[UniqueId] = set()
             for node in selected:
-                next_layer.update(self.ancestors(node, 1))
-            next_layer = next_layer - parents  # Avoid re-searching
+                next_layer.update(
+                    iter(
+                        e[0]
+                        for e in self.graph.in_edges(node)
+                        if e[0] not in parents
+                        and self.filter_edges_by_type(e[0], e[1], "parent_test")
+                    )
+                )
             parents.update(next_layer)
             selected = next_layer
             i += 1

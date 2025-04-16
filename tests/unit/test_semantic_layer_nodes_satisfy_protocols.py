@@ -196,7 +196,7 @@ def where_filter() -> WhereFilter:
 
 @pytest.fixture(scope="session")
 def metric_time_window() -> MetricTimeWindow:
-    return MetricTimeWindow(count=1, granularity=TimeGranularity.DAY)
+    return MetricTimeWindow(count=1, granularity=TimeGranularity.DAY.value)
 
 
 @pytest.fixture(scope="session")
@@ -211,7 +211,7 @@ def complex_metric_input(metric_time_window, where_filter) -> MetricInput:
         filter=where_filter,
         alias="aliased_metric_input",
         offset_window=metric_time_window,
-        offset_to_grain=TimeGranularity.DAY,
+        offset_to_grain=TimeGranularity.DAY.value,
     )
 
 

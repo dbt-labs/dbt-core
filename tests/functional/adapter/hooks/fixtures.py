@@ -27,9 +27,9 @@ select 1 as col
 """
 
 macros__before_and_after = """
-{% macro custom_run_hook(state, target, run_started_at, invocation_id) %}
+{% macro custom_run_hook(state, target, run_started_at, invocation_id, table_name="on_run_hook") %}
 
-   insert into {{ target.schema }}.on_run_hook (
+   insert into {{ target.schema }}.{{ table_name }} (
         test_state,
         target_dbname,
         target_host,
@@ -353,6 +353,26 @@ snapshots:
   - name: new_col
     data_tests:
     - not_null
+"""
+
+properties__model_hooks = """
+version: 2
+models:
+  - name: hooks
+    config:
+      pre_hook: "{{ custom_run_hook('start', target, run_started_at, invocation_id, table_name='on_model_hook') }}"
+      post_hook: "{{ custom_run_hook('end', target, run_started_at, invocation_id, table_name='on_model_hook') }}"
+"""
+
+properties__model_hooks_list = """
+version: 2
+models:
+  - name: hooks
+    config:
+      pre_hook:
+        - "{{ custom_run_hook('start', target, run_started_at, invocation_id, table_name='on_model_hook') }}"
+      post_hook:
+        - "{{ custom_run_hook('end', target, run_started_at, invocation_id, table_name='on_model_hook') }}"
 """
 
 seeds__example_seed_csv = """a,b,c

@@ -68,3 +68,13 @@ class TimePeriod(StrEnum):
 
     def plural(self) -> str:
         return str(self) + "s"
+
+
+class BatchSize(StrEnum):
+    hour = "hour"
+    day = "day"
+    month = "month"
+    year = "year"
+
+    def plural(self) -> str:
+        return str(self) + "s"

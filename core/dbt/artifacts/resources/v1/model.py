@@ -1,8 +1,9 @@
+import enum
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Literal, Optional
 
-from dbt.artifacts.resources.types import AccessType, NodeType
+from dbt.artifacts.resources.types import AccessType, NodeType, TimePeriod
 from dbt.artifacts.resources.v1.components import (
     CompiledResource,
     DeferRelation,
@@ -11,7 +12,7 @@ from dbt.artifacts.resources.v1.components import (
 from dbt.artifacts.resources.v1.config import NodeConfig
 from dbt_common.contracts.config.base import MergeBehavior
 from dbt_common.contracts.constraints import ModelLevelConstraint
-from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.dataclass_schema import ExtensibleDbtClassMixin, dbtClassMixin
 
 
 @dataclass
@@ -23,8 +24,32 @@ class ModelConfig(NodeConfig):
 
 
 @dataclass
+class CustomGranularity(dbtClassMixin):
+    name: str
+    column_name: Optional[str] = None
+
+
+@dataclass
 class TimeSpine(dbtClassMixin):
     standard_granularity_column: str
+    custom_granularities: List[CustomGranularity] = field(default_factory=list)
+
+
+class ModelFreshnessDependsOnOptions(enum.Enum):
+    all = "all"
+    any = "any"
+
+
+@dataclass
+class ModelBuildAfter(ExtensibleDbtClassMixin):
+    depends_on: ModelFreshnessDependsOnOptions = ModelFreshnessDependsOnOptions.any
+    count: int = 0
+    period: TimePeriod = TimePeriod.hour
+
+
+@dataclass
+class ModelFreshness(ExtensibleDbtClassMixin):
+    build_after: ModelBuildAfter = field(default_factory=ModelBuildAfter)
 
 
 @dataclass
@@ -39,6 +64,7 @@ class Model(CompiledResource):
     defer_relation: Optional[DeferRelation] = None
     primary_key: List[str] = field(default_factory=list)
     time_spine: Optional[TimeSpine] = None
+    freshness: Optional[ModelFreshness] = None
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
         dct = super().__post_serialize__(dct, context)

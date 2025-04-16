@@ -101,12 +101,12 @@ def test_invalid_event_value(project, logs_dir):
     with pytest.raises(Exception) as excinfo:
         fire_event(InvalidOptionYAML(option_name=1))
 
-    assert str(excinfo.value) == "[InvalidOptionYAML]: Unable to parse dict {'option_name': 1}"
+    assert "[InvalidOptionYAML]: Unable to parse logging event dictionary." in str(excinfo.value)
 
 
 groups_yml = """
 groups:
-  - name: my_group
+  - name: my_group_with_owner_metadata
     owner:
       name: my_name
       email: my.email@gmail.com
@@ -115,8 +115,29 @@ groups:
 
 models:
   - name: my_model
-    group: my_group
+    group: my_group_with_owner_metadata
     access: public
+"""
+
+groups_yml_with_multiple_emails = """
+groups:
+  - name: my_group_with_multiple_emails
+    owner:
+      name: my_name
+      email:
+        - my.email@gmail.com
+        - my.second.email@gmail.com
+      slack: my_slack
+      other_property: something_else
+
+models:
+  - name: my_model
+    group: my_group_with_multiple_emails
+    access: public
+    columns:
+      - name: my_column
+        tests:
+         - not_null
 """
 
 
@@ -148,7 +169,7 @@ class TestRunResultErrorNodeInfo:
 
 
 def assert_group_data(group_data):
-    assert group_data["name"] == "my_group"
+    assert group_data["name"] == "my_group_with_owner_metadata"
     assert group_data["owner"] == {
         "name": "my_name",
         "email": "my.email@gmail.com",
@@ -277,3 +298,53 @@ class TestRunResultWarningGroup:
                 run_result_warning_count += 1
 
         assert run_result_warning_count == 1
+
+
+class TestRunResultNoGroup:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": "select 1 as id",
+        }
+
+    def test_node_info_on_results(self, project, logs_dir):
+        results = run_dbt(["--no-write-json", "run"])
+        assert len(results) == 1
+
+
+class TestRunResultGroupWithMultipleEmails:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": "select 1 as id, null as my_column",
+            "groups.yml": groups_yml_with_multiple_emails,
+        }
+
+    def test_node_info_on_results(self, project, logs_dir):
+        results = run_dbt(["--log-format=json", "build"], expect_pass=False)
+        assert len(results) == 2
+
+        log_file = read_file(logs_dir, "dbt.log")
+        run_result_error_count = 0
+
+        for log_line in log_file.split("\n"):
+            if not log_line:
+                continue
+
+            log_json = json.loads(log_line)
+            if log_json["info"]["level"] == EventLevel.DEBUG:
+                continue
+
+            if log_json["info"]["name"] == "RunResultError":
+                assert "group" in log_json["data"]
+                group_data = log_json["data"]["group"]
+                assert group_data["name"] == "my_group_with_multiple_emails"
+                assert group_data["owner"] == {
+                    "name": "my_name",
+                    "email": "['my.email@gmail.com', 'my.second.email@gmail.com']",
+                    "slack": "my_slack",
+                    "other_property": "something_else",
+                }
+                run_result_error_count += 1
+
+        assert run_result_error_count == 1

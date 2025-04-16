@@ -22,6 +22,7 @@ from dbt.flags import get_flags
 from dbt.node_types import ModelLanguage, NodeType
 from dbt.parser.base import SimpleSQLParser
 from dbt.parser.search import FileBlock
+from dbt_common.contracts.config.base import merge_config_dicts
 from dbt_common.dataclass_schema import ValidationError
 from dbt_common.exceptions.macros import UndefinedMacroError
 from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
@@ -467,7 +468,7 @@ def _get_config_call_dict(static_parser_result: Dict[str, Any]) -> Dict[str, Any
     config_call_dict: Dict[str, Any] = {}
 
     for c in static_parser_result["configs"]:
-        ContextConfig._add_config_call(config_call_dict, {c[0]: c[1]})
+        merge_config_dicts(config_call_dict, {c[0]: c[1]})
 
     return config_call_dict
 

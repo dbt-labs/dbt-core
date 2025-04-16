@@ -9,15 +9,21 @@
 # occur so we want to proactively alert to it.
 #
 # **when?**
-# On pushes to `develop` and release branches. Manual runs are also enabled.
+# Only can be run manually
 name: Artifact Schema Check
 
 on:
-  pull_request:
-    types: [ opened, reopened, labeled, unlabeled, synchronize ]
-    paths-ignore: [ '.changes/**', '.github/**', 'tests/**', '**.md', '**.yml' ]
+  #  pull_request:
+  #    types: [ opened, reopened, labeled, unlabeled, synchronize ]
+  #    paths-ignore: [ '.changes/**', '.github/**', 'tests/**', '**.md', '**.yml' ]
 
   workflow_dispatch:
+    inputs:
+      target_branch:
+        description: "The branch to check against"
+        type: string
+        default: 'main'
+        required: true
 
 # no special access is needed
 permissions: read-all
@@ -30,19 +36,20 @@ env:
 
 jobs:
   checking-schemas:
-    name: "Checking schemas"
+    name: "Post-merge schema changes required"
     runs-on: ubuntu-latest
 
     steps:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: 3.8
+          python-version: 3.9
 
       - name: Checkout dbt repo
         uses: actions/checkout@v4
         with:
             path: ${{ env.DBT_REPO_DIRECTORY }}
+            ref: ${{ inputs.target_branch }}
 
       - name: Check for changes in core/dbt/artifacts
         # https://github.com/marketplace/actions/paths-changes-filter

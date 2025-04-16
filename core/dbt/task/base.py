@@ -4,7 +4,7 @@ import time
 import traceback
 from abc import ABCMeta, abstractmethod
 from contextlib import nullcontext
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
@@ -41,18 +41,14 @@ from dbt.events.types import (
 )
 from dbt.flags import get_flags
 from dbt.graph import Graph
+from dbt.task import group_lookup
 from dbt.task.printer import print_run_result_error
 from dbt_common.events.contextvars import get_node_info
 from dbt_common.events.functions import fire_event
-from dbt_common.exceptions import (
-    CompilationError,
-    DbtInternalError,
-    DbtRuntimeError,
-    NotImplementedError,
-)
+from dbt_common.exceptions import DbtInternalError, DbtRuntimeError, NotImplementedError
 
 
-def read_profiles(profiles_dir=None):
+def read_profiles(profiles_dir: Optional[str] = None) -> Dict[str, Any]:
     """This is only used for some error handling"""
     if profiles_dir is None:
         profiles_dir = get_flags().PROFILES_DIR
@@ -70,6 +66,13 @@ def read_profiles(profiles_dir=None):
 class BaseTask(metaclass=ABCMeta):
     def __init__(self, args: Flags) -> None:
         self.args = args
+
+    def __enter__(self):
+        self.orig_dir = os.getcwd()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        os.chdir(self.orig_dir)
 
     @abstractmethod
     def run(self):
@@ -123,7 +126,7 @@ class ConfiguredTask(BaseTask):
         self.manifest = manifest
         self.compiler = Compiler(self.config)
 
-    def compile_manifest(self):
+    def compile_manifest(self) -> None:
         if self.manifest is None:
             raise DbtInternalError("compile_manifest called before manifest was loaded")
 
@@ -165,7 +168,7 @@ class ExecutionContext:
 
 
 class BaseRunner(metaclass=ABCMeta):
-    def __init__(self, config, adapter, node, node_index, num_nodes) -> None:
+    def __init__(self, config, adapter, node, node_index: int, num_nodes: int) -> None:
         self.config = config
         self.compiler = Compiler(config)
         self.adapter = adapter
@@ -207,7 +210,8 @@ class BaseRunner(metaclass=ABCMeta):
 
         result = self.safe_run(manifest)
         self.node.update_event_status(
-            node_status=result.status, finished_at=datetime.utcnow().isoformat()
+            node_status=result.status,
+            finished_at=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         )
 
         if not self.node.is_ephemeral_model:
@@ -225,6 +229,7 @@ class BaseRunner(metaclass=ABCMeta):
         agate_table=None,
         adapter_response=None,
         failures=None,
+        batch_results=None,
     ):
         execution_time = time.time() - start_time
         thread_id = threading.current_thread().name
@@ -240,6 +245,7 @@ class BaseRunner(metaclass=ABCMeta):
             agate_table=agate_table,
             adapter_response=adapter_response,
             failures=failures,
+            batch_results=batch_results,
         )
 
     def error_result(self, node, message, start_time, timing_info):
@@ -270,9 +276,10 @@ class BaseRunner(metaclass=ABCMeta):
             agate_table=result.agate_table,
             adapter_response=result.adapter_response,
             failures=result.failures,
+            batch_results=result.batch_results,
         )
 
-    def compile_and_execute(self, manifest, ctx):
+    def compile_and_execute(self, manifest: Manifest, ctx: ExecutionContext):
         result = None
         with (
             self.adapter.connection_named(self.node.unique_id, self.node)
@@ -305,7 +312,7 @@ class BaseRunner(metaclass=ABCMeta):
 
         return result
 
-    def _handle_catchable_exception(self, e, ctx):
+    def _handle_catchable_exception(self, e: DbtRuntimeError, ctx: ExecutionContext) -> str:
         if e.node is None:
             e.add_node(ctx.node)
 
@@ -316,7 +323,7 @@ class BaseRunner(metaclass=ABCMeta):
         )
         return str(e)
 
-    def _handle_internal_exception(self, e, ctx):
+    def _handle_internal_exception(self, e: DbtInternalError, ctx: ExecutionContext) -> str:
         fire_event(
             InternalErrorOnRun(
                 build_path=self._node_build_path(), exc=str(e), node_info=get_node_info()
@@ -324,7 +331,7 @@ class BaseRunner(metaclass=ABCMeta):
         )
         return str(e)
 
-    def _handle_generic_exception(self, e, ctx):
+    def _handle_generic_exception(self, e: Exception, ctx: ExecutionContext) -> str:
         fire_event(
             GenericExceptionOnRun(
                 build_path=self._node_build_path(),
@@ -337,9 +344,8 @@ class BaseRunner(metaclass=ABCMeta):
 
         return str(e)
 
-    def handle_exception(self, e, ctx):
-        catchable_errors = (CompilationError, DbtRuntimeError)
-        if isinstance(e, catchable_errors):
+    def handle_exception(self, e: Exception, ctx: ExecutionContext) -> str:
+        if isinstance(e, DbtRuntimeError):
             error = self._handle_catchable_exception(e, ctx)
         elif isinstance(e, DbtInternalError):
             error = self._handle_internal_exception(e, ctx)
@@ -347,7 +353,7 @@ class BaseRunner(metaclass=ABCMeta):
             error = self._handle_generic_exception(e, ctx)
         return error
 
-    def safe_run(self, manifest):
+    def safe_run(self, manifest: Manifest):
         started = time.time()
         ctx = ExecutionContext(self.node)
         error = None
@@ -394,19 +400,19 @@ class BaseRunner(metaclass=ABCMeta):
 
         return None
 
-    def before_execute(self):
-        raise NotImplementedError()
+    def before_execute(self) -> None:
+        raise NotImplementedError("before_execute is not implemented")
 
     def execute(self, compiled_node, manifest):
-        raise NotImplementedError()
+        raise NotImplementedError("execute is not implemented")
 
     def run(self, compiled_node, manifest):
         return self.execute(compiled_node, manifest)
 
-    def after_execute(self, result):
-        raise NotImplementedError()
+    def after_execute(self, result) -> None:
+        raise NotImplementedError("after_execute is not implemented")
 
-    def _skip_caused_by_ephemeral_failure(self):
+    def _skip_caused_by_ephemeral_failure(self) -> bool:
         if self.skip_cause is None or self.skip_cause.node is None:
             return False
         return self.skip_cause.node.is_ephemeral_model
@@ -420,6 +426,8 @@ class BaseRunner(metaclass=ABCMeta):
             # if this model was skipped due to an upstream ephemeral model
             # failure, print a special 'error skip' message.
             # Include skip_cause NodeStatus
+            group = group_lookup.get(self.node.unique_id)
+
             if self._skip_caused_by_ephemeral_failure():
                 fire_event(
                     LogSkipBecauseError(
@@ -428,6 +436,7 @@ class BaseRunner(metaclass=ABCMeta):
                         index=self.node_index,
                         total=self.num_nodes,
                         status=self.skip_cause.status,
+                        group=group,
                     )
                 )
                 # skip_cause here should be the run_result from the ephemeral model
@@ -455,13 +464,14 @@ class BaseRunner(metaclass=ABCMeta):
                         index=self.node_index,
                         total=self.num_nodes,
                         node_info=self.node.node_info,
+                        group=group,
                     )
                 )
 
         node_result = RunResult.from_node(self.node, RunStatus.Skipped, error_message)
         return node_result
 
-    def do_skip(self, cause=None):
+    def do_skip(self, cause=None) -> None:
         self.skip = True
         self.skip_cause = cause
 

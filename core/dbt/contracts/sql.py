@@ -1,13 +1,15 @@
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence
 
 from dbt.artifacts.schemas.base import VersionedSchema, schema_version
 from dbt.artifacts.schemas.results import ExecutionResult, TimingInfo
 from dbt.artifacts.schemas.run import RunExecutionResult, RunResult, RunResultsArtifact
 from dbt.contracts.graph.nodes import ResultNode
+from dbt.events.types import ArtifactWritten
 from dbt_common.dataclass_schema import dbtClassMixin
+from dbt_common.events.functions import fire_event
 
 TaskTags = Optional[Dict[str, Any]]
 TaskID = uuid.UUID
@@ -26,10 +28,13 @@ class RemoteCompileResultMixin(VersionedSchema):
 @dataclass
 @schema_version("remote-compile-result", 1)
 class RemoteCompileResult(RemoteCompileResultMixin):
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     @property
-    def error(self):
+    def error(self) -> None:
+        # TODO: Can we delete this? It's never set anywhere else and never accessed
         return None
 
 
@@ -38,9 +43,11 @@ class RemoteCompileResult(RemoteCompileResultMixin):
 class RemoteExecutionResult(ExecutionResult):
     results: Sequence[RunResult]
     args: Dict[str, Any] = field(default_factory=dict)
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
-    def write(self, path: str):
+    def write(self, path: str) -> None:
         writable = RunResultsArtifact.from_execution_results(
             generated_at=self.generated_at,
             results=self.results,
@@ -48,6 +55,7 @@ class RemoteExecutionResult(ExecutionResult):
             args=self.args,
         )
         writable.write(path)
+        fire_event(ArtifactWritten(artifact_type=writable.__class__.__name__, artifact_path=path))
 
     @classmethod
     def from_local_result(
@@ -72,4 +80,6 @@ class ResultTable(dbtClassMixin):
 @schema_version("remote-run-result", 1)
 class RemoteRunResult(RemoteCompileResultMixin):
     table: ResultTable
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )

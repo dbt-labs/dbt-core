@@ -5,7 +5,6 @@ from mashumaro.jsonschema.annotations import Pattern
 from mashumaro.types import SerializableType
 from typing_extensions import Annotated
 
-from dbt import deprecations
 from dbt.adapters.contracts.connection import QueryComment
 from dbt.contracts.util import Identifier, list_str
 from dbt_common.contracts.util import Mergeable
@@ -43,7 +42,14 @@ class Quoting(dbtClassMixin, Mergeable):
 
 @dataclass
 class Package(dbtClassMixin):
-    pass
+
+    # Exclude {'name': None} from to_dict result to avoid changing sha1_hash result
+    # when user has not changed their 'packages' configuration.
+    def __post_serialize__(self, data, context: Optional[Dict]):
+        if "name" in data.keys() and data["name"] is None:
+            data.pop("name")
+            return data
+        return data
 
 
 @dataclass
@@ -51,6 +57,7 @@ class LocalPackage(Package):
     local: str
     unrendered: Dict[str, Any] = field(default_factory=dict)
     project_root: Optional[str] = None
+    name: Optional[str] = None
 
 
 # `float` also allows `int`, according to PEP484 (and jsonschema!)
@@ -71,6 +78,7 @@ class GitPackage(Package):
     warn_unpinned: Optional[bool] = field(default=None, metadata={"alias": "warn-unpinned"})
     subdirectory: Optional[str] = None
     unrendered: Dict[str, Any] = field(default_factory=dict)
+    name: Optional[str] = None
 
     def get_revisions(self) -> List[str]:
         if self.revision is None:
@@ -87,6 +95,7 @@ class PrivatePackage(Package):
     warn_unpinned: Optional[bool] = field(default=None, metadata={"alias": "warn-unpinned"})
     subdirectory: Optional[str] = None
     unrendered: Dict[str, Any] = field(default_factory=dict)
+    name: Optional[str] = None
 
 
 @dataclass
@@ -95,6 +104,7 @@ class RegistryPackage(Package):
     version: Union[RawVersion, List[RawVersion]]
     install_prerelease: Optional[bool] = False
     unrendered: Dict[str, Any] = field(default_factory=dict)
+    name: Optional[str] = None
 
     def get_versions(self) -> List[str]:
         if isinstance(self.version, list):
@@ -260,6 +270,7 @@ class Project(dbtClassMixin):
     query_comment: Optional[Union[QueryComment, NoValue, str]] = field(default_factory=NoValue)
     restrict_access: bool = False
     dbt_cloud: Optional[Dict[str, Any]] = None
+    flags: Dict[str, Any] = field(default_factory=dict)
 
     class Config(dbtMashConfig):
         # These tell mashumaro to use aliases for jsonschema and for "from_dict"
@@ -313,10 +324,6 @@ class Project(dbtClassMixin):
             raise ValidationError(
                 "Invalid project config: cannot have both 'tests' and 'data_tests' defined"
             )
-        if "tests" in data:
-            deprecations.warn(
-                "project-test-config", deprecated_path="tests", exp_path="data_tests"
-            )
 
 
 @dataclass
@@ -342,17 +349,33 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     warn_error_options: Optional[Dict[str, Union[str, List[str]]]] = None
     write_json: Optional[bool] = None
 
-    # legacy behaviors
+    # legacy behaviors - https://github.com/dbt-labs/dbt-core/blob/main/docs/guides/behavior-change-flags.md
+    require_batched_execution_for_custom_microbatch_strategy: bool = False
     require_explicit_package_overrides_for_builtin_materializations: bool = True
     require_resource_names_without_spaces: bool = False
     source_freshness_run_project_hooks: bool = False
+    skip_nodes_if_on_run_start_fails: bool = False
+    state_modified_compare_more_unrendered_values: bool = False
+    state_modified_compare_vars: bool = False
+    require_yaml_configuration_for_mf_time_spines: bool = False
+    require_nested_cumulative_type_params: bool = False
+    validate_macro_args: bool = False
+    require_all_warnings_handled_by_warn_error: bool = False
 
     @property
     def project_only_flags(self) -> Dict[str, Any]:
         return {
+            "require_batched_execution_for_custom_microbatch_strategy": self.require_batched_execution_for_custom_microbatch_strategy,
             "require_explicit_package_overrides_for_builtin_materializations": self.require_explicit_package_overrides_for_builtin_materializations,
             "require_resource_names_without_spaces": self.require_resource_names_without_spaces,
             "source_freshness_run_project_hooks": self.source_freshness_run_project_hooks,
+            "skip_nodes_if_on_run_start_fails": self.skip_nodes_if_on_run_start_fails,
+            "state_modified_compare_more_unrendered_values": self.state_modified_compare_more_unrendered_values,
+            "state_modified_compare_vars": self.state_modified_compare_vars,
+            "require_yaml_configuration_for_mf_time_spines": self.require_yaml_configuration_for_mf_time_spines,
+            "require_nested_cumulative_type_params": self.require_nested_cumulative_type_params,
+            "validate_macro_args": self.validate_macro_args,
+            "require_all_warnings_handled_by_warn_error": self.require_all_warnings_handled_by_warn_error,
         }
 
 

@@ -8,7 +8,7 @@ from typing import Iterator, List, Optional, Tuple
 import requests
 
 import dbt_common.semver as semver
-from dbt_common.ui import green, red, yellow
+from dbt_common.ui import green, yellow
 
 PYPI_VERSION_URL = "https://pypi.org/pypi/dbt-core/json"
 
@@ -19,7 +19,7 @@ def get_version_information() -> str:
 
     core_msg_lines, core_info_msg = _get_core_msg_lines(installed, latest)
     core_msg = _format_core_msg(core_msg_lines)
-    plugin_version_msg = _get_plugins_msg(installed)
+    plugin_version_msg = _get_plugins_msg()
 
     msg_lines = [core_msg]
 
@@ -49,7 +49,10 @@ def get_latest_version(
     return semver.VersionSpecifier.from_version_string(version_string)
 
 
-def _get_core_msg_lines(installed, latest) -> Tuple[List[List[str]], str]:
+def _get_core_msg_lines(
+    installed: semver.VersionSpecifier,
+    latest: Optional[semver.VersionSpecifier],
+) -> Tuple[List[List[str]], str]:
     installed_s = installed.to_version_string(skip_matcher=True)
     installed_line = ["installed", installed_s, ""]
     update_info = ""
@@ -94,7 +97,7 @@ def _format_core_msg(lines: List[List[str]]) -> str:
     return msg + "\n".join(msg_lines)
 
 
-def _get_plugins_msg(installed: semver.VersionSpecifier) -> str:
+def _get_plugins_msg() -> str:
     msg_lines = ["Plugins:"]
 
     plugins = []
@@ -110,7 +113,7 @@ def _get_plugins_msg(installed: semver.VersionSpecifier) -> str:
 
     if display_update_msg:
         update_msg = (
-            "  At least one plugin is out of date or incompatible with dbt-core.\n"
+            "  At least one plugin is out of date with dbt-core.\n"
             "  You can find instructions for upgrading here:\n"
             "  https://docs.getdbt.com/docs/installation"
         )
@@ -126,11 +129,6 @@ def _get_plugin_msg_info(
     latest_plugin = get_latest_version(version_url=get_package_pypi_url(name))
 
     needs_update = False
-
-    if plugin.major != core.major or plugin.minor != core.minor:
-        compatibility_msg = red("Not compatible!")
-        needs_update = True
-        return (compatibility_msg, needs_update)
 
     if not latest_plugin:
         compatibility_msg = yellow("Could not determine latest version")
@@ -208,7 +206,7 @@ def _get_dbt_plugins_info() -> Iterator[Tuple[str, str]]:
         except ImportError:
             # not an adapter
             continue
-        yield plugin_name, mod.version  # type: ignore
+        yield plugin_name, mod.version
 
 
 def _get_adapter_plugin_names() -> Iterator[str]:
@@ -228,5 +226,5 @@ def _get_adapter_plugin_names() -> Iterator[str]:
             yield plugin_name
 
 
-__version__ = "1.9.0a1"
+__version__ = "1.10.0b2"
 installed = get_installed_version()

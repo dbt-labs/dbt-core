@@ -3,7 +3,11 @@ from typing import Dict, Union
 import pytest
 
 from dbt.cli.main import dbtRunner, dbtRunnerResult
-from dbt.events.types import DeprecatedModel
+from dbt.events.types import (
+    DeprecatedModel,
+    MainEncounteredError,
+    MicrobatchModelNoEventTimeInputs,
+)
 from dbt.flags import get_flags
 from dbt.tests.util import run_dbt, update_config_file
 from dbt_common.events.base_types import EventLevel
@@ -229,3 +233,66 @@ class TestEmptyWarnError:
         # Note: WarnErrorOptions is not a dataclass, so you won't get "silence"
         # from to_dict or stringifying.
         assert flags.warn_error_options.silence == ["TestsConfigDeprecation"]
+
+
+input_model_without_event_time_sql = """
+{{ config(materialized='table') }}
+
+select 1 as id, TIMESTAMP '2020-01-01 00:00:00-0' as event_time
+union all
+select 2 as id, TIMESTAMP '2020-01-02 00:00:00-0' as event_time
+union all
+select 3 as id, TIMESTAMP '2020-01-03 00:00:00-0' as event_time
+"""
+
+microbatch_model_sql = """
+{{config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime.now())}}
+SELECT id, event_time FROM {{ ref('input_model') }}
+"""
+
+
+class TestRequireAllWarningsHandledByWarnErrorBehaviorFlag:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_without_event_time_sql,
+            "microbatch_model.sql": microbatch_model_sql,
+        }
+
+    def test_require_all_warnings_handed_by_warn_error_behavior_flag(self, project):
+        # Setup the event catchers
+        microbatch_warning_catcher = EventCatcher(event_to_catch=MicrobatchModelNoEventTimeInputs)
+        microbatch_error_catcher = EventCatcher(event_to_catch=MainEncounteredError)
+        dbt_runner = dbtRunner(
+            callbacks=[microbatch_warning_catcher.catch, microbatch_error_catcher.catch]
+        )
+
+        # Run the command without the behavior flag off
+        project_flags = {
+            "flags": {
+                "send_anonymous_usage_stats": False,
+                "require_all_warnings_handled_by_warn_error": False,
+            }
+        }
+        update_config_file(project_flags, project.project_root, "dbt_project.yml")
+        dbt_runner.invoke(["run", "--warn-error"])
+
+        assert len(microbatch_warning_catcher.caught_events) == 1
+        assert len(microbatch_error_catcher.caught_events) == 0
+
+        # Reset the event catchers
+        microbatch_warning_catcher.flush()
+        microbatch_error_catcher.flush()
+
+        # Run the command with the behavior flag on
+        project_flags = {
+            "flags": {
+                "send_anonymous_usage_stats": False,
+                "require_all_warnings_handled_by_warn_error": True,
+            }
+        }
+        update_config_file(project_flags, project.project_root, "dbt_project.yml")
+        dbt_runner.invoke(["run", "--warn-error", "--log-format", "json"])
+
+        assert len(microbatch_warning_catcher.caught_events) == 0
+        assert len(microbatch_error_catcher.caught_events) == 1

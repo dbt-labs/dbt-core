@@ -27,7 +27,6 @@ on:
         description: 'Version of Python to Test Against'
         type: choice
         options:
-          - '3.8'
           - '3.9'
           - '3.10'
           - '3.11'
@@ -36,7 +35,7 @@ on:
         type: choice
         options:
           - 'ubuntu-latest'
-          - 'macos-12'
+          - 'macos-14'
           - 'windows-latest'
       num_runs_per_batch:
         description: 'Max number of times to run the test per batch.  We always run 10 batches.'
@@ -100,9 +99,13 @@ jobs:
         run: make setup-db
 
         # mac and windows don't use make due to limitations with docker with those runners in GitHub
-      - name: "Set up postgres (macos)"
-        if: inputs.os == 'macos-12'
-        uses: ./.github/actions/setup-postgres-macos
+      - name: Set up postgres (macos)
+        if: runner.os == 'macOS'
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: ./test/setup_db.sh
 
       - name: "Set up postgres (windows)"
         if: inputs.os == 'windows-latest'
