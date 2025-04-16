@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from itertools import chain
 from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union
 
-import jsonschema
 from typing_extensions import Protocol, runtime_checkable
 
 from dbt import deprecations
@@ -30,7 +29,7 @@ from dbt.exceptions import (
 )
 from dbt.flags import get_flags
 from dbt.graph import SelectionSpec
-from dbt.jsonschemas import project_schema
+from dbt.jsonschemas import jsonschema_validate, project_schema
 from dbt.node_types import NodeType
 from dbt.utils import MultiDict, coerce_dict_str, md5
 from dbt.version import get_installed_version
@@ -184,19 +183,6 @@ def value_or(value: Optional[T], default: T) -> T:
         return value
 
 
-def jsonschema_validate(project_dict: Dict[str, Any], file_path: str) -> None:
-    validator = jsonschema.Draft7Validator(project_schema())
-    errors = validator.iter_errors(project_dict)  # get all validation errors
-
-    for error in errors:
-        deprecations.warn(
-            "generic-json-schema-validation-deprecation",
-            violation=error.message,
-            file=file_path,
-            key_path=".".join(error.path),
-        )
-
-
 def load_raw_project(project_root: str, validate: bool = False) -> Dict[str, Any]:
     project_root = os.path.normpath(project_root)
     project_yaml_filepath = os.path.join(project_root, DBT_PROJECT_FILE_NAME)
@@ -212,7 +198,9 @@ def load_raw_project(project_root: str, validate: bool = False) -> Dict[str, Any
     project_dict = _load_yaml(project_yaml_filepath)
 
     if validate:
-        jsonschema_validate(project_dict, file_path=project_yaml_filepath)
+        jsonschema_validate(
+            schema=project_schema(), json=project_dict, file_path=project_yaml_filepath
+        )
 
     if not isinstance(project_dict, dict):
         raise DbtProjectError(f"{DBT_PROJECT_FILE_NAME} does not parse to a dictionary")
