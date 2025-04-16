@@ -170,9 +170,7 @@
     "ColumnProperties": {
       "type": "object",
       "required": [
-        "data_tests",
-        "name",
-        "tests"
+        "name"
       ],
       "properties": {
         "constraints": {
@@ -1344,9 +1342,7 @@
     "_Models": {
       "type": "object",
       "required": [
-        "data_tests",
-        "name",
-        "tests"
+        "name"
       ],
       "properties": {
         "access": {
