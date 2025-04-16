@@ -514,6 +514,17 @@ message UnexpectedJinjaBlockDeprecationMsg {
     UnexpectedJinjaBlockDeprecation data = 2;
 }
 
+// D025
+message UnexpectedJinjaBlockDeprecationSummary {
+    int32 occurrences = 1;
+    bool show_all_hint = 2;
+}
+
+message UnexpectedJinjaBlockDeprecationSummaryMsg {
+    CoreEventInfo info = 1;
+    UnexpectedJinjaBlockDeprecationSummary data = 2;
+}
+
 
 // I065
 message DeprecatedModel {

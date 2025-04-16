@@ -548,6 +548,19 @@ class UnexpectedJinjaBlockDeprecation(WarnLevel):
         return self.msg
 
 
+class UnexpectedJinjaBlockDeprecationSummary(WarnLevel):
+    def code(self) -> str:
+        return "D025"
+
+    def message(self) -> str:
+        description = f"Found {pluralize(self.occurrences, 'unexpected jinja block')} in the project's jinja files."
+
+        if self.show_all_hint:
+            description += " To see all deprecated packages, run command again with the `--show-all-deprecations` flag."
+
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
