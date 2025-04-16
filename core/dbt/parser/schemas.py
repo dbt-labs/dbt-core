@@ -10,6 +10,7 @@ from typing import (
     Dict,
     Generic,
     Iterable,
+    Iterator,
     List,
     Optional,
     Tuple,
@@ -17,6 +18,9 @@ from typing import (
     TypeVar,
 )
 
+import jsonschema
+
+from dbt import deprecations
 from dbt.artifacts.resources import RefArgs
 from dbt.artifacts.resources.v1.model import (
     CustomGranularity,
@@ -71,6 +75,7 @@ from dbt.exceptions import (
     YamlParseListError,
 )
 from dbt.flags import get_flags
+from dbt.jsonschemas import resources_schema
 from dbt.node_types import AccessType, NodeType
 from dbt.parser.base import SimpleParser
 from dbt.parser.common import (
@@ -185,6 +190,32 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
     def resource_type(self) -> NodeType:
         return NodeType.Test
 
+    @staticmethod
+    def _error_path_to_string(error: jsonschema.ValidationError) -> str:
+        path = str(error.path.popleft())
+        for part in error.path:
+            if isinstance(part, int):
+                path += f"[{part}]"
+            else:
+                path += f".{part}"
+
+        return path
+
+    @staticmethod
+    def _jsonschema_validate(json: Dict[str, Any], file_path: str) -> None:
+        validator = jsonschema.Draft7Validator(resources_schema())
+        errors: Iterator[jsonschema.ValidationError] = validator.iter_errors(
+            json
+        )  # get all validation errors
+
+        for error in errors:
+            deprecations.warn(
+                "generic-json-schema-validation-deprecation",
+                violation=error.message,
+                file=file_path,
+                key_path=SchemaParser._error_path_to_string(error),
+            )
+
     def parse_file(self, block: FileBlock, dct: Optional[Dict] = None) -> None:
         assert isinstance(block.file, SchemaSourceFile)
 
@@ -193,6 +224,8 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
         if dct:
             # contains the FileBlock and the data (dictionary)
             yaml_block = YamlBlock.from_file_block(block, dct)
+
+            self._jsonschema_validate(dct, block.path.original_file_path)
 
             parser: YamlReader
 
