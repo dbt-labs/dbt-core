@@ -545,7 +545,8 @@ class UnexpectedJinjaBlockDeprecation(WarnLevel):
         return "D024"
 
     def message(self) -> str:
-        return self.msg
+        description = f"{self.msg} in file `{self.file}`"
+        return warning_tag(f"Deprecated functionality\n\n{description}")
 
 
 class UnexpectedJinjaBlockDeprecationSummary(WarnLevel):

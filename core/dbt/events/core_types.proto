@@ -507,6 +507,7 @@ message GenericJSONSchemaValidationDeprecationSummaryMsg {
 // D024
 message UnexpectedJinjaBlockDeprecation {
     string msg = 1;
+    string file = 2;
 }
 
 message UnexpectedJinjaBlockDeprecationMsg {
