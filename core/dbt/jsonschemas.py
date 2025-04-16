@@ -15,3 +15,7 @@ def load_json_from_package(jsonschema_type: str, filename: str) -> Dict[str, Any
 
 def project_schema() -> Dict[str, Any]:
     return load_json_from_package(jsonschema_type="project", filename="0.0.85.json")
+
+
+def resources_schema() -> Dict[str, Any]:
+    return load_json_from_package(jsonschema_type="resources", filename="0.0.85.json")
