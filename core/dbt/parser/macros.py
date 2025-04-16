@@ -54,6 +54,7 @@ class MacroParser(BaseParser[Macro]):
                     base_node.raw_code,
                     allowed_blocks={"macro", "materialization", "test", "data_test"},
                     collect_raw_data=False,
+                    warning_callback=self._handle_extract_warning,
                 )
                 if isinstance(t, jinja.BlockTag)
             ]

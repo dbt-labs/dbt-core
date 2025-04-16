@@ -540,6 +540,14 @@ class GenericJSONSchemaValidationDeprecationSummary(WarnLevel):
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
+class UnexpectedJinjaBlockDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D024"
+
+    def message(self) -> str:
+        return self.msg
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
