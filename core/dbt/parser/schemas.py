@@ -192,14 +192,17 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
 
     @staticmethod
     def _error_path_to_string(error: jsonschema.ValidationError) -> str:
-        path = str(error.path.popleft())
-        for part in error.path:
-            if isinstance(part, int):
-                path += f"[{part}]"
-            else:
-                path += f".{part}"
+        if len(error.path) == 0:
+            return ""
+        else:
+            path = str(error.path.popleft())
+            for part in error.path:
+                if isinstance(part, int):
+                    path += f"[{part}]"
+                else:
+                    path += f".{part}"
 
-        return path
+            return path
 
     @staticmethod
     def _jsonschema_validate(json: Dict[str, Any], file_path: str) -> None:
