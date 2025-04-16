@@ -481,6 +481,16 @@ message PackageRedirectDeprecationSummaryMsg {
     PackageRedirectDeprecationSummary data = 2;
 }
 
+// D022
+message UnexpectedJinjaBlockDeprecation {
+    string msg = 1;
+}
+
+message UnexpectedJinjaBlockDeprecationMsg {
+    CoreEventInfo info = 1;
+    UnexpectedJinjaBlockDeprecation data = 2;
+}
+
 // I065
 message DeprecatedModel {
     string model_name = 1;

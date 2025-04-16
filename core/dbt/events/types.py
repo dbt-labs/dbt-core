@@ -512,6 +512,14 @@ class MicrobatchMacroOutsideOfBatchesDeprecation(WarnLevel):
         return line_wrap_message(warning_tag(description))
 
 
+class UnexpectedJinjaBlockDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D022"
+
+    def message(self) -> str:
+        return self.msg
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
