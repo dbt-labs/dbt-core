@@ -16,6 +16,7 @@ from dbt.constants import DEPENDENCIES_FILE_NAME
 from dbt.contracts.project import GitPackage, LocalPackage, PackageConfig
 from dbt.deprecations import GenericJSONSchemaValidationDeprecation
 from dbt.flags import set_from_args
+from dbt.jsonschemas import project_schema
 from dbt.node_types import NodeType
 from dbt.tests.util import safe_set_invocation_context
 from dbt_common.events.event_manager_client import get_event_manager
@@ -599,7 +600,9 @@ class TestDeprecations:
         event_catcher = EventCatcher(GenericJSONSchemaValidationDeprecation)
         get_event_manager().add_callback(event_catcher.catch)
 
-        jsonschema_validate(project_dict=project_dict, file_path="dbt_project.yml")
+        jsonschema_validate(
+            schema=project_schema(), json=project_dict, file_path="dbt_project.yml"
+        )
 
         assert len(event_catcher.caught_events) == 1
         assert "'name' is a required property at top level" in event_catcher.caught_events[0].info.msg  # type: ignore
