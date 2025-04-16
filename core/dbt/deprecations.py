@@ -171,6 +171,11 @@ class GenericJSONSchemaValidationDeprecation(DBTDeprecation):
     _summary_event = "GenericJSONSchemaValidationDeprecationSummary"
 
 
+class UnexpectedJinjaBlockDeprecation(DBTDeprecation):
+    _name = "unexpected-jinja-block-deprecation"
+    _event = "UnexpectedJinjaBlockDeprecation"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -228,6 +233,7 @@ deprecations_list: List[DBTDeprecation] = [
     MFCumulativeTypeParamsDeprecation(),
     MicrobatchMacroOutsideOfBatchesDeprecation(),
     GenericJSONSchemaValidationDeprecation(),
+    UnexpectedJinjaBlockDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}
