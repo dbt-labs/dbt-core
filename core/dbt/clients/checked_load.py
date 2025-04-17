@@ -33,6 +33,7 @@ def checked_load(contents) -> Tuple[Optional[Dict[str, Any]], List[YamlCheckFail
                 raise yaml.constructor.ConstructorError(
                     None, None, "expected a mapping node, but found %s" % node.id, node.start_mark
                 )
+            self.flatten_mapping(node)
             mapping = {}
             for key_node, value_node in node.value:
                 key = self.construct_object(key_node, deep=deep)
