@@ -24,6 +24,10 @@ from dbt.artifacts.resources.v1.model import (
     ModelFreshness,
     TimeSpine,
 )
+from dbt.clients.checked_load import (
+    checked_load,
+    issue_deprecation_warnings_for_failures,
+)
 from dbt.clients.jinja_static import statically_parse_ref_or_source
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config import RuntimeConfig
@@ -125,11 +129,21 @@ from dbt_common.utils import deep_merge
 # ===============================================================================
 
 
-def yaml_from_file(source_file: SchemaSourceFile) -> Optional[Dict[str, Any]]:
+def yaml_from_file(
+    source_file: SchemaSourceFile, validate: bool = False
+) -> Optional[Dict[str, Any]]:
     """If loading the yaml fails, raise an exception."""
     try:
         # source_file.contents can sometimes be None
-        contents = load_yaml_text(source_file.contents or "", source_file.path)
+        to_load = source_file.contents or ""
+
+        if validate:
+            contents, failures = checked_load(to_load)
+            issue_deprecation_warnings_for_failures(
+                failures=failures, file=source_file.path.original_file_path
+            )
+        else:
+            contents = load_yaml_text(to_load, source_file.path)
 
         if contents is None:
             return contents

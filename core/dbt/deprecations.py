@@ -177,6 +177,12 @@ class UnexpectedJinjaBlockDeprecation(DBTDeprecation):
     _summary_event = "UnexpectedJinjaBlockDeprecationSummary"
 
 
+class DuplicateYAMLKeysDeprecation(DBTDeprecation):
+    _name = "duplicate-yaml-keys-deprecation"
+    _event = "DuplicateYAMLKeysDeprecation"
+    _summary_event = "DuplicateYAMLKeysDeprecationSummary"
+
+
 class CustomTopLevelKeyDeprecation(DBTDeprecation):
     _name = "custom-top-level-key-deprecation"
     _event = "CustomTopLevelKeyDeprecation"
@@ -241,6 +247,7 @@ deprecations_list: List[DBTDeprecation] = [
     MicrobatchMacroOutsideOfBatchesDeprecation(),
     GenericJSONSchemaValidationDeprecation(),
     UnexpectedJinjaBlockDeprecation(),
+    DuplicateYAMLKeysDeprecation(),
     CustomTopLevelKeyDeprecation(),
 ]
 
