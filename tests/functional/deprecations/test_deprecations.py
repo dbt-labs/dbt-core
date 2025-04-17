@@ -311,6 +311,6 @@ class TestDuplicateYAMLKeysInSchemaFiles:
         run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
         assert len(event_catcher.caught_events) == 1
         assert (
-            "Duplicate key 'models' at   in \"<unicode string>\", line 6, column 1 in file `models/models.yml`"
+            "Duplicate key 'models' in \"<unicode string>\", line 6, column 1 in file `models/models.yml`"
             in event_catcher.caught_events[0].info.msg
         )
