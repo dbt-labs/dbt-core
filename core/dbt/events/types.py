@@ -562,6 +562,28 @@ class UnexpectedJinjaBlockDeprecationSummary(WarnLevel):
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
+class CustomTopLevelKeyDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D028"
+
+    def message(self) -> str:
+        description = f"{self.msg} in file `{self.file}`"
+        return warning_tag(f"Deprecated functionality\n\n{description}")
+
+
+class CustomTopLevelKeyDeprecationSummary(WarnLevel):
+    def code(self) -> str:
+        return "D029"
+
+    def message(self) -> str:
+        description = f"Found {pluralize(self.occurrences, 'unexpected top level key')} in the project's yml files."
+
+        if self.show_all_hint:
+            description += " To see all deprecated keys, run command again with the `--show-all-deprecations` flag."
+
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
