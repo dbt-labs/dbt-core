@@ -166,6 +166,8 @@ sample_values = [
     core_types.UnexpectedJinjaBlockDeprecationSummary(occurrences=2, show_debug_hint=True),
     core_types.DuplicateYAMLKeysDeprecation(duplicate_description="", file=""),
     core_types.DuplicateYAMLKeysDeprecationSummary(occurrences=2, show_debug_hint=True),
+    core_types.CustomTopLevelKeyDeprecation(msg="", file=""),
+    core_types.CustomTopLevelKeyDeprecationSummary(occurrences=2, show_debug_hint=True),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),

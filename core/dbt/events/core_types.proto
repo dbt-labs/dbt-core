@@ -548,6 +548,29 @@ message DuplicateYAMLKeysDeprecationSummaryMsg {
     DuplicateYAMLKeysDeprecationSummary data = 2;
 }
 
+// D028
+message CustomTopLevelKeyDeprecation {
+    string msg = 1;
+    string file = 2;
+}
+
+message CustomTopLevelKeyDeprecationMsg {
+    CoreEventInfo info = 1;
+    CustomTopLevelKeyDeprecation data = 2;
+}
+
+// D029
+message CustomTopLevelKeyDeprecationSummary {
+    int32 occurrences = 1;
+    bool show_all_hint = 2;
+}
+
+message CustomTopLevelKeyDeprecationSummaryMsg {
+    CoreEventInfo info = 1;
+    CustomTopLevelKeyDeprecationSummary data = 2;
+}
+
+
 // I065
 message DeprecatedModel {
     string model_name = 1;
