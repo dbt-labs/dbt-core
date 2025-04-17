@@ -12,10 +12,10 @@ top_level_dupe__yml = """
 a:
   b: 1
 
-c:
-  d: 1
-  e: 2
-  d: 3
+a:
+  c: 1
+  d: 2
+  e: 3
 """
 
 nested_dupe__yml = """
