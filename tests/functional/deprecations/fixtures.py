@@ -146,3 +146,15 @@ models:
     description: "This is a test model"
     deprecation_date: 1
 """
+
+duplicate_keys_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+"""
