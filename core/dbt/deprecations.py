@@ -177,6 +177,12 @@ class UnexpectedJinjaBlockDeprecation(DBTDeprecation):
     _summary_event = "UnexpectedJinjaBlockDeprecationSummary"
 
 
+class DuplicateYAMLKeysDeprecation(DBTDeprecation):
+    _name = "duplicate-yaml-keys-deprecation"
+    _event = "DuplicateYAMLKeysDeprecation"
+    _summary_event = "DuplicateYAMLKeysDeprecationSummary"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -235,6 +241,7 @@ deprecations_list: List[DBTDeprecation] = [
     MicrobatchMacroOutsideOfBatchesDeprecation(),
     GenericJSONSchemaValidationDeprecation(),
     UnexpectedJinjaBlockDeprecation(),
+    DuplicateYAMLKeysDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}
