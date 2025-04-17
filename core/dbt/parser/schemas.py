@@ -17,7 +17,6 @@ from typing import (
     TypeVar,
 )
 
-from dbt import deprecations
 from dbt.artifacts.resources import RefArgs
 from dbt.artifacts.resources.v1.model import (
     CustomGranularity,
@@ -26,7 +25,11 @@ from dbt.artifacts.resources.v1.model import (
     TimeSpine,
 )
 from dbt.clients.jinja_static import statically_parse_ref_or_source
-from dbt.clients.yaml_helper import checked_load, load_yaml_text
+from dbt.clients.yaml_helper import (
+    checked_load,
+    issue_deprecation_warnings_for_failures,
+    load_yaml_text,
+)
 from dbt.config import RuntimeConfig
 from dbt.context.configured import SchemaYamlVars, generate_schema_yml_context
 from dbt.context.context_config import ContextConfig
@@ -136,17 +139,9 @@ def yaml_from_file(
 
         if validate:
             contents, failures = checked_load(to_load)
-
-            # Fire deprecation warnings for each failure
-            if failures:
-                for failure in failures:
-                    if failure.failure_type == "duplicate_key":
-                        deprecations.warn(
-                            "duplicate-yaml-keys-deprecation",
-                            duplicate_description=failure.message,
-                            file=source_file.path.original_file_path,
-                        )
-
+            issue_deprecation_warnings_for_failures(
+                failures=failures, file=source_file.path.original_file_path
+            )
         else:
             contents = load_yaml_text(to_load, source_file.path)
 

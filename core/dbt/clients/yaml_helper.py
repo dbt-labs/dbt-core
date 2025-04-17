@@ -6,6 +6,7 @@ import yaml
 
 import dbt_common.exceptions
 import dbt_common.exceptions.base
+from dbt import deprecations
 
 # the C version is faster, but it doesn't always exist
 try:
@@ -119,3 +120,13 @@ def checked_load(contents) -> Tuple[Optional[Dict[str, Any]], List[YamlCheckFail
     check_failures = CheckedLoader.check_failures
 
     return (dct, check_failures)
+
+
+def issue_deprecation_warnings_for_failures(failures: List[YamlCheckFailure], file: str):
+    for failure in failures:
+        if failure.failure_type == "duplicate_key":
+            deprecations.warn(
+                "duplicate-yaml-keys-deprecation",
+                duplicate_description=failure.message,
+                file=file,
+            )

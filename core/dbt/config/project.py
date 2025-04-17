@@ -8,7 +8,11 @@ from typing_extensions import Protocol, runtime_checkable
 
 from dbt import deprecations
 from dbt.adapters.contracts.connection import QueryComment
-from dbt.clients.yaml_helper import checked_load, load_yaml_text
+from dbt.clients.yaml_helper import (
+    checked_load,
+    issue_deprecation_warnings_for_failures,
+    load_yaml_text,
+)
 from dbt.config.selectors import SelectorDict
 from dbt.config.utils import normalize_warn_error_options
 from dbt.constants import (
@@ -91,19 +95,8 @@ def _load_yaml(path, validate: bool = False):
     contents = load_file_contents(path)
     if validate:
         result, failures = checked_load(contents)
-
-        # Fire deprecation warnings for each failure
-        if failures:
-            for failure in failures:
-                if failure.failure_type == "duplicate_key":
-                    deprecations.warn(
-                        "duplicate-yaml-keys-deprecation",
-                        duplicate_description=failure.message,
-                        file=path,
-                    )
-
+        issue_deprecation_warnings_for_failures(failures=failures, file=path)
         return result
-
     else:
         return load_yaml_text(contents)
 
