@@ -46,11 +46,13 @@ def checked_load(contents) -> Tuple[Optional[Dict[str, Any]], List[YamlCheckFail
                 value = self.construct_object(value_node, deep=deep)
 
                 if key in mapping:
-                    self.check_failures.append(
-                        YamlCheckFailure(
-                            "duplicate_key", f"Duplicate key '{key}' at {key_node.start_mark}"
-                        )
-                    )
+                    start_mark = str(key_node.start_mark)
+                    if start_mark.startswith("  in"):  # this means it was at the top level
+                        message = f"Duplicate key '{key}' {start_mark.lstrip()}"
+                    else:
+                        message = f"Duplicate key '{key}' at {key_node.start_mark}"
+
+                    self.check_failures.append(YamlCheckFailure("duplicate_key", message))
 
                 mapping[key] = value
             return mapping
