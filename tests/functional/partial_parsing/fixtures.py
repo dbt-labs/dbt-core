@@ -1,3 +1,33 @@
+macros_sql = """
+{% macro foo() %}
+    foo
+{% endmacro %}
+
+{% macro bar() %}
+    bar
+{% endmacro %}
+"""
+
+macros_schema1_yml = """
+macros:
+  - name: foo
+    description: Lorem.
+  - name: bar
+    description: Lorem.
+"""
+
+macros_schema2_yml = """
+macros:
+  - name: foo
+    description: Lorem.
+  - name: bar
+    description: Lorem ipsum.
+"""
+
+model_using_bar_macro_sql = """
+select id as {{ bar() }}
+"""
+
 local_dependency__dbt_project_yml = """
 
 name: 'local_dep'
