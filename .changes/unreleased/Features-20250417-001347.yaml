@@ -1,0 +1,6 @@
+kind: Features
+body: Add deprecation warning for custom top level keys in YAML files.
+time: 2025-04-17T00:13:47.744191-04:00
+custom:
+    Author: peterallenwebb
+    Issue: "11338"
