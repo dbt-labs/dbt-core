@@ -1,0 +1,6 @@
+kind: Features
+body: Add deprecation warnings for unexpected blocks in jinja.
+time: 2025-04-16T14:44:27.136199-04:00
+custom:
+    Author: peterallenwebb
+    Issue: "11393"

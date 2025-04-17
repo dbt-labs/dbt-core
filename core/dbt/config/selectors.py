@@ -1,6 +1,6 @@
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Dict, Optional, Union
 
 from dbt.clients.yaml_helper import Dumper, Loader, load_yaml_text, yaml  # noqa: F401
 from dbt.contracts.selection import SelectorFile
@@ -78,6 +78,8 @@ class SelectorConfig(Dict[str, Dict[str, Union[SelectionSpec, bool]]]):
     ) -> "SelectorConfig":
         try:
             data = load_yaml_text(load_file_contents(str(path)))
+            if data is None:
+                raise ValidationError("No data found in selector file at path: {path}")
         except (ValidationError, DbtRuntimeError) as exc:
             raise DbtSelectorsError(
                 f"Could not read selector file: {exc}",
@@ -92,7 +94,7 @@ class SelectorConfig(Dict[str, Dict[str, Union[SelectionSpec, bool]]]):
             raise
 
 
-def selector_data_from_root(project_root: str) -> Dict[str, Any]:
+def selector_data_from_root(project_root: str) -> Optional[Dict[str, Any]]:
     selector_filepath = resolve_path_from_base("selectors.yml", project_root)
 
     if path_exists(selector_filepath):

@@ -267,8 +267,10 @@ def project(func):
             raise DbtProjectError("profile required for project")
 
         flags = ctx.obj["flags"]
+        # TODO deprecations warnings fired from loading the project will lack
+        # the project_id in the snowplow event.
         project = load_project(
-            flags.PROJECT_DIR, flags.VERSION_CHECK, ctx.obj["profile"], flags.VARS
+            flags.PROJECT_DIR, flags.VERSION_CHECK, ctx.obj["profile"], flags.VARS, validate=True
         )
         ctx.obj["project"] = project
 

@@ -13,6 +13,7 @@ from dbt.node_types import NodeType
 from dbt.parser.base import BaseParser
 from dbt.parser.search import FileBlock, filesystem_search
 from dbt_common.clients import jinja
+from dbt_common.clients._jinja_blocks import ExtractWarning
 from dbt_common.utils import MACRO_PREFIX
 
 
@@ -47,6 +48,10 @@ class MacroParser(BaseParser[Macro]):
         )
 
     def parse_unparsed_macros(self, base_node: UnparsedMacro) -> Iterable[Macro]:
+        # This is a bit of a hack to get the file path to the deprecation
+        def wrap_handle_extract_warning(warning: ExtractWarning) -> None:
+            self._handle_extract_warning(warning=warning, file=base_node.original_file_path)
+
         try:
             blocks: List[jinja.BlockTag] = [
                 t
@@ -54,6 +59,7 @@ class MacroParser(BaseParser[Macro]):
                     base_node.raw_code,
                     allowed_blocks={"macro", "materialization", "test", "data_test"},
                     collect_raw_data=False,
+                    warning_callback=wrap_handle_extract_warning,
                 )
                 if isinstance(t, jinja.BlockTag)
             ]

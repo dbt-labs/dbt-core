@@ -32,6 +32,7 @@ tox>=3.13
 types-docutils
 types-PyYAML
 types-Jinja2
+types-jsonschema
 types-mock
 types-protobuf>=5.0,<6.0
 types-python-dateutil

@@ -52,7 +52,7 @@ class TestCustomTargetRetry:
         write_file(models__sample_model, "models", "sample_model.sql")
 
 
-class TestRetry:
+class BaseTestRetry:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -66,6 +66,8 @@ class TestRetry:
     def macros(self):
         return {"alter_timezone.sql": macros__alter_timezone_sql}
 
+
+class TestRetryNoPreviousRun(BaseTestRetry):
     def test_no_previous_run(self, project):
         with pytest.raises(
             DbtRuntimeError, match="Could not find previous run in 'target' target directory"
@@ -77,6 +79,8 @@ class TestRetry:
         ):
             run_dbt(["retry", "--state", "walmart"])
 
+
+class TestRetryPreviousRun(BaseTestRetry):
     def test_previous_run(self, project):
         # Regular build
         results = run_dbt(["build"], expect_pass=False)
@@ -126,6 +130,8 @@ class TestRetry:
 
         write_file(models__sample_model, "models", "sample_model.sql")
 
+
+class TestRetryWarnError(BaseTestRetry):
     def test_warn_error(self, project):
         # Our test command should succeed when run normally...
         results = run_dbt(["build", "--select", "second_model"])
@@ -146,6 +152,8 @@ class TestRetry:
         # Retry with --warn-error, should fail
         run_dbt(["--warn-error", "retry"], expect_pass=False)
 
+
+class TestRetryRunOperation(BaseTestRetry):
     def test_run_operation(self, project):
         results = run_dbt(
             ["run-operation", "alter_timezone", "--args", "{timezone: abc}"], expect_pass=False
@@ -160,6 +168,8 @@ class TestRetry:
         results = run_dbt(["retry"], expect_pass=False)
         assert {n.unique_id: n.status for n in results.results} == expected_statuses
 
+
+class TestRetryRemovedFile(BaseTestRetry):
     def test_removed_file(self, project):
         run_dbt(["build"], expect_pass=False)
 
@@ -172,6 +182,8 @@ class TestRetry:
 
         write_file(models__sample_model, "models", "sample_model.sql")
 
+
+class TestRetryRemovedFileLeafNode(BaseTestRetry):
     def test_removed_file_leaf_node(self, project):
         write_file(models__sample_model, "models", "third_model.sql")
         run_dbt(["build"], expect_pass=False)
