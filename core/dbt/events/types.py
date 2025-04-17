@@ -608,6 +608,24 @@ class CustomTopLevelKeyDeprecationSummary(WarnLevel):
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
+class CustomKeyInConfigDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D030"
+
+    def message(self) -> str:
+        description = f"Custom key `{self.key}` found in `config` at path `{self.key_path}` in file `{self.file}`. Custom config keys should move into the `config.meta`."
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
+class CustomKeyInConfigDeprecationSummary(WarnLevel):
+    def code(self) -> str:
+        return "D031"
+
+    def message(self) -> str:
+        description = f"Found {pluralize(self.occurrences, 'unexpected top level key')} in the project's yml files."
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================

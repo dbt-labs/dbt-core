@@ -189,6 +189,12 @@ class CustomTopLevelKeyDeprecation(DBTDeprecation):
     _summary_event = "CustomTopLevelKeyDeprecationSummary"
 
 
+class CustomKeyInConfigDeprecation(DBTDeprecation):
+    _name = "custom-key-in-config-deprecation"
+    _event = "CustomKeyInConfigDeprecation"
+    _summary_event = "CustomKeyInConfigDeprecationSummary"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -249,6 +255,7 @@ deprecations_list: List[DBTDeprecation] = [
     UnexpectedJinjaBlockDeprecation(),
     DuplicateYAMLKeysDeprecation(),
     CustomTopLevelKeyDeprecation(),
+    CustomKeyInConfigDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

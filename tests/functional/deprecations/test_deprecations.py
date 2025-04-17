@@ -7,6 +7,7 @@ import dbt_common
 from dbt import deprecations
 from dbt.clients.registry import _get_cached
 from dbt.events.types import (
+    CustomKeyInConfigDeprecation,
     DuplicateYAMLKeysDeprecation,
     GenericJSONSchemaValidationDeprecation,
     PackageRedirectDeprecation,
@@ -16,6 +17,7 @@ from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
 from dbt_common.exceptions import EventCompilationError
 from tests.functional.deprecations.fixtures import (
     bad_name_yaml,
+    custom_key_in_config_yaml,
     deprecated_model_exposure_yaml,
     duplicate_keys_yaml,
     invalid_deprecation_date_yaml,
@@ -312,5 +314,23 @@ class TestDuplicateYAMLKeysInSchemaFiles:
         assert len(event_catcher.caught_events) == 1
         assert (
             "Duplicate key 'models' in \"<unicode string>\", line 6, column 1 in file `models/models.yml`"
+            in event_catcher.caught_events[0].info.msg
+        )
+
+
+class TestCustomKeyInConfigDeprecation:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models_trivial.sql": models_trivial__model_sql,
+            "models.yml": custom_key_in_config_yaml,
+        }
+
+    def test_duplicate_yaml_keys_in_schema_files(self, project):
+        event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
+        run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
+        assert len(event_catcher.caught_events) == 1
+        assert (
+            "Custom key `my_custom_key` found in `config` at path `models[0].config`"
             in event_catcher.caught_events[0].info.msg
         )
