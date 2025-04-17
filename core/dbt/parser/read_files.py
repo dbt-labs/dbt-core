@@ -86,7 +86,7 @@ def load_source_file(
         source_file.checksum = FileHash.from_contents(file_contents)
 
     if parse_file_type == ParseFileType.Schema and source_file.contents:
-        dfy = yaml_from_file(source_file)
+        dfy = yaml_from_file(source_file=source_file, validate=True)
         if dfy:
             validate_yaml(source_file.path.original_file_path, dfy)
             source_file.dfy = dfy

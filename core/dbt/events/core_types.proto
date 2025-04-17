@@ -526,6 +526,28 @@ message UnexpectedJinjaBlockDeprecationSummaryMsg {
     UnexpectedJinjaBlockDeprecationSummary data = 2;
 }
 
+// D026
+message DuplicateYAMLKeysDeprecation {
+    string duplicate_description = 1;
+    string file = 2;
+}
+
+message DuplicateYAMLKeysDeprecationMsg {
+    CoreEventInfo info = 1;
+    DuplicateYAMLKeysDeprecation data = 2;
+}
+
+// D027
+message DuplicateYAMLKeysDeprecationSummary {
+    int32 occurrences = 1;
+    bool show_all_hint = 2;
+}
+
+message DuplicateYAMLKeysDeprecationSummaryMsg {
+    CoreEventInfo info = 1;
+    DuplicateYAMLKeysDeprecationSummary data = 2;
+}
+
 // D028
 message CustomTopLevelKeyDeprecation {
     string msg = 1;

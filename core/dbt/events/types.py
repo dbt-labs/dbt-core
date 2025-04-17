@@ -562,6 +562,30 @@ class UnexpectedJinjaBlockDeprecationSummary(WarnLevel):
         return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
+class DuplicateYAMLKeysDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D026"
+
+    def message(self) -> str:
+        description = f"{self.duplicate_description} in file `{self.file}`"
+        return warning_tag(f"Deprecated functionality\n\n{description}")
+
+
+class DuplicateYAMLKeysDeprecationSummary(WarnLevel):
+    def code(self) -> str:
+        return "D027"
+
+    def message(self) -> str:
+        description = (
+            f"Found {pluralize(self.occurrences, 'duplicate key')} in the project's yaml files."
+        )
+
+        if self.show_all_hint:
+            description += " To see all deprecated packages, run command again with the `--show-all-deprecations` flag."
+
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+
 class CustomTopLevelKeyDeprecation(WarnLevel):
     def code(self) -> str:
         return "D028"
