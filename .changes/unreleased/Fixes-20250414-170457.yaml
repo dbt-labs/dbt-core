@@ -1,0 +1,6 @@
+kind: Fixes
+body: Add pre-commit installation to Docker container for testing compatibility
+time: 2025-04-14T17:04:57.692586656+09:00
+custom:
+    Author: kato1208
+    Issue: "11498"
