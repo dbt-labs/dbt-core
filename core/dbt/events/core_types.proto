@@ -507,11 +507,23 @@ message GenericJSONSchemaValidationDeprecationSummaryMsg {
 // D024
 message UnexpectedJinjaBlockDeprecation {
     string msg = 1;
+    string file = 2;
 }
 
 message UnexpectedJinjaBlockDeprecationMsg {
     CoreEventInfo info = 1;
     UnexpectedJinjaBlockDeprecation data = 2;
+}
+
+// D025
+message UnexpectedJinjaBlockDeprecationSummary {
+    int32 occurrences = 1;
+    bool show_all_hint = 2;
+}
+
+message UnexpectedJinjaBlockDeprecationSummaryMsg {
+    CoreEventInfo info = 1;
+    UnexpectedJinjaBlockDeprecationSummary data = 2;
 }
 
 
