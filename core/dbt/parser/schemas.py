@@ -24,12 +24,12 @@ from dbt.artifacts.resources.v1.model import (
     ModelFreshness,
     TimeSpine,
 )
-from dbt.clients.jinja_static import statically_parse_ref_or_source
-from dbt.clients.yaml_helper import (
+from dbt.clients.checked_load import (
     checked_load,
     issue_deprecation_warnings_for_failures,
-    load_yaml_text,
 )
+from dbt.clients.jinja_static import statically_parse_ref_or_source
+from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config import RuntimeConfig
 from dbt.context.configured import SchemaYamlVars, generate_schema_yml_context
 from dbt.context.context_config import ContextConfig

@@ -8,11 +8,11 @@ from typing_extensions import Protocol, runtime_checkable
 
 from dbt import deprecations
 from dbt.adapters.contracts.connection import QueryComment
-from dbt.clients.yaml_helper import (
+from dbt.clients.checked_load import (
     checked_load,
     issue_deprecation_warnings_for_failures,
-    load_yaml_text,
 )
+from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config.selectors import SelectorDict
 from dbt.config.utils import normalize_warn_error_options
 from dbt.constants import (

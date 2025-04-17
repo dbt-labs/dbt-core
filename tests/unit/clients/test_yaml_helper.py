@@ -1,4 +1,4 @@
-from dbt.clients.yaml_helper import checked_load
+from dbt.clients.checked_load import checked_load
 
 no_dupe__yml = """
 a:
