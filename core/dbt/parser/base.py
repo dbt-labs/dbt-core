@@ -64,8 +64,8 @@ class BaseParser(Generic[FinalValue]):
             filter(None, [self.resource_type, self.project.project_name, resource_name, hash])
         )
 
-    def _handle_extract_warning(self, warning: ExtractWarning) -> None:
-        deprecations.warn("unexpected-jinja-block-deprecation", msg=warning.msg)
+    def _handle_extract_warning(self, warning: ExtractWarning, file: str) -> None:
+        deprecations.warn("unexpected-jinja-block-deprecation", msg=warning.msg, file=file)
 
 
 class Parser(BaseParser[FinalValue], Generic[FinalValue]):
