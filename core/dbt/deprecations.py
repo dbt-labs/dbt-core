@@ -174,6 +174,7 @@ class GenericJSONSchemaValidationDeprecation(DBTDeprecation):
 class UnexpectedJinjaBlockDeprecation(DBTDeprecation):
     _name = "unexpected-jinja-block-deprecation"
     _event = "UnexpectedJinjaBlockDeprecation"
+    _summary_event = "UnexpectedJinjaBlockDeprecationSummary"
 
 
 def renamed_env_var(old_name: str, new_name: str):

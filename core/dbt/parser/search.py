@@ -117,12 +117,16 @@ class BlockSearcher(Generic[BlockSearchResult], Iterable[BlockSearchResult]):
         self.source_tag_factory: BlockSearchResultFactory = source_tag_factory
 
     def extract_blocks(self, source_file: FileBlock) -> Iterable[BlockTag]:
+        # This is a bit of a hack to get the file path to the deprecation
+        def wrap_handle_extract_warning(warning: ExtractWarning) -> None:
+            self._handle_extract_warning(warning=warning, file=source_file.path.relative_path)
+
         try:
             blocks = extract_toplevel_blocks(
                 source_file.contents,
                 allowed_blocks=self.allowed_blocks,
                 collect_raw_data=False,
-                warning_callback=self._handle_extract_warning,
+                warning_callback=wrap_handle_extract_warning,
             )
             # this makes mypy happy, and this is an invariant we really need
             for block in blocks:
@@ -134,8 +138,8 @@ class BlockSearcher(Generic[BlockSearchResult], Iterable[BlockSearchResult]):
                 exc.add_node(source_file)
             raise
 
-    def _handle_extract_warning(self, warning: ExtractWarning) -> None:
-        deprecations.warn("unexpected-jinja-block-deprecation", msg=warning.msg)
+    def _handle_extract_warning(self, warning: ExtractWarning, file: str) -> None:
+        deprecations.warn("unexpected-jinja-block-deprecation", msg=warning.msg, file=file)
 
     def __iter__(self) -> Iterator[BlockSearchResult]:
         for entry in self.source:

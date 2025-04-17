@@ -545,7 +545,21 @@ class UnexpectedJinjaBlockDeprecation(WarnLevel):
         return "D024"
 
     def message(self) -> str:
-        return self.msg
+        description = f"{self.msg} in file `{self.file}`"
+        return warning_tag(f"Deprecated functionality\n\n{description}")
+
+
+class UnexpectedJinjaBlockDeprecationSummary(WarnLevel):
+    def code(self) -> str:
+        return "D025"
+
+    def message(self) -> str:
+        description = f"Found {pluralize(self.occurrences, 'unexpected jinja block')} in the project's jinja files."
+
+        if self.show_all_hint:
+            description += " To see all deprecated packages, run command again with the `--show-all-deprecations` flag."
+
+        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
 
 
 # =======================================================
