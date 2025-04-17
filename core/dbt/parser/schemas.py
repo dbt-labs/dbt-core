@@ -17,6 +17,7 @@ from typing import (
     TypeVar,
 )
 
+from dbt import deprecations
 from dbt.artifacts.resources import RefArgs
 from dbt.artifacts.resources.v1.model import (
     CustomGranularity,
@@ -25,7 +26,7 @@ from dbt.artifacts.resources.v1.model import (
     TimeSpine,
 )
 from dbt.clients.jinja_static import statically_parse_ref_or_source
-from dbt.clients.yaml_helper import load_yaml_text
+from dbt.clients.yaml_helper import checked_load, load_yaml_text
 from dbt.config import RuntimeConfig
 from dbt.context.configured import SchemaYamlVars, generate_schema_yml_context
 from dbt.context.context_config import ContextConfig
@@ -125,11 +126,29 @@ from dbt_common.utils import deep_merge
 # ===============================================================================
 
 
-def yaml_from_file(source_file: SchemaSourceFile) -> Optional[Dict[str, Any]]:
+def yaml_from_file(
+    source_file: SchemaSourceFile, validate: bool = False
+) -> Optional[Dict[str, Any]]:
     """If loading the yaml fails, raise an exception."""
     try:
         # source_file.contents can sometimes be None
-        contents = load_yaml_text(source_file.contents or "", source_file.path)
+        to_load = source_file.contents or ""
+
+        if validate:
+            contents, failures = checked_load(to_load)
+
+            # Fire deprecation warnings for each failure
+            if failures:
+                for failure in failures:
+                    if failure.failure_type == "duplicate_key":
+                        deprecations.warn(
+                            "duplicate-yaml-keys-deprecation",
+                            duplicate_description=failure.message,
+                            file=source_file.path.original_file_path,
+                        )
+
+        else:
+            contents = load_yaml_text(to_load, source_file.path)
 
         if contents is None:
             return contents
