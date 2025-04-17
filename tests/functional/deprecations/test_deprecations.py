@@ -295,7 +295,7 @@ class TestDeprecatedInvalidDeprecationDate:
 
         assert len(event_catcher.caught_events) == 1
         assert (
-            "1 is not of type 'string', 'null' in file `models/models.yml` at path `models[0].deprecation_date`"
+            "1 is not of type 'string', 'null' in file `models/models.yml` at path\n`models[0].deprecation_date`"
             in event_catcher.caught_events[0].info.msg
         )
 
@@ -313,7 +313,7 @@ class TestDuplicateYAMLKeysInSchemaFiles:
         run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
         assert len(event_catcher.caught_events) == 1
         assert (
-            "Duplicate key 'models' in \"<unicode string>\", line 6, column 1 in file `models/models.yml`"
+            "Duplicate key 'models' in \"<unicode string>\", line 6, column 1 in file\n`models/models.yml`"
             in event_catcher.caught_events[0].info.msg
         )
 

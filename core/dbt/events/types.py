@@ -14,7 +14,15 @@ from dbt_common.events.format import (
     pluralize,
     timestamp_to_datetime_string,
 )
-from dbt_common.ui import error_tag, green, line_wrap_message, red, warning_tag, yellow
+from dbt_common.ui import (
+    deprecation_tag,
+    error_tag,
+    green,
+    line_wrap_message,
+    red,
+    warning_tag,
+    yellow,
+)
 
 # Event codes have prefixes which follow this table
 #
@@ -253,7 +261,7 @@ class PackageRedirectDeprecation(WarnLevel):
             f"The `{self.old_name}` package is deprecated in favor of `{self.new_name}`. Please "
             f"update your `packages.yml` configuration to use `{self.new_name}` instead."
         )
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+        return line_wrap_message(deprecation_tag(description))
 
 
 class PackageRedirectDeprecationSummary(WarnLevel):
@@ -269,7 +277,7 @@ class PackageRedirectDeprecationSummary(WarnLevel):
         if self.show_all_hint:
             description += " To see all deprecated packages, run command again with the `--show-all-deprecations` flag."
 
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+        return line_wrap_message(deprecation_tag(description))
 
 
 class PackageInstallPathDeprecation(WarnLevel):
@@ -282,7 +290,7 @@ class PackageInstallPathDeprecation(WarnLevel):
         Please update `clean-targets` in `dbt_project.yml` and check `.gitignore` as well.
         Or, set `packages-install-path: dbt_modules` if you'd like to keep the current value.
         """
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+        return line_wrap_message(deprecation_tag(description))
 
 
 class ConfigSourcePathDeprecation(WarnLevel):
@@ -294,7 +302,7 @@ class ConfigSourcePathDeprecation(WarnLevel):
             f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`. "
             "Please update your `dbt_project.yml` configuration to reflect this change."
         )
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+        return line_wrap_message(deprecation_tag(description))
 
 
 class ConfigDataPathDeprecation(WarnLevel):
@@ -306,7 +314,7 @@ class ConfigDataPathDeprecation(WarnLevel):
             f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`. "
             "Please update your `dbt_project.yml` configuration to reflect this change."
         )
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+        return line_wrap_message(deprecation_tag(description))
 
 
 class MetricAttributesRenamed(WarnLevel):
@@ -323,7 +331,7 @@ class MetricAttributesRenamed(WarnLevel):
             "\nRelevant issue here: https://github.com/dbt-labs/dbt-core/issues/5849"
         )
 
-        return warning_tag(f"Deprecated functionality\n\n{description}")
+        return deprecation_tag(description)
 
 
 class ExposureNameDeprecation(WarnLevel):
@@ -338,7 +346,7 @@ class ExposureNameDeprecation(WarnLevel):
             "follow this pattern. Please update the 'name', and use the 'label' property for a "
             "human-friendly title. This will raise an error in a future version of dbt-core."
         )
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+        return line_wrap_message(deprecation_tag(description))
 
 
 class InternalDeprecation(WarnLevel):
@@ -367,7 +375,7 @@ class EnvironmentVariableRenamed(WarnLevel):
             f"Set `{self.new_name}` and unset `{self.old_name}` to avoid this deprecation warning and "
             "ensure it works properly in a future release."
         )
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+        return line_wrap_message(deprecation_tag(description))
 
 
 class ConfigLogPathDeprecation(WarnLevel):
@@ -384,7 +392,7 @@ class ConfigLogPathDeprecation(WarnLevel):
             f"If you wish to write dbt {output} to a custom directory, please use "
             f"the {cli_flag} CLI flag or {env_var} env var instead."
         )
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+        return line_wrap_message(deprecation_tag(description))
 
 
 class ConfigTargetPathDeprecation(WarnLevel):
@@ -401,7 +409,7 @@ class ConfigTargetPathDeprecation(WarnLevel):
             f"If you wish to write dbt {output} to a custom directory, please use "
             f"the {cli_flag} CLI flag or {env_var} env var instead."
         )
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+        return line_wrap_message(deprecation_tag(description))
 
 
 # Note: this deprecation has been removed, but we are leaving
@@ -416,7 +424,7 @@ class TestsConfigDeprecation(WarnLevel):
             f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`. "
             "Please see https://docs.getdbt.com/docs/build/data-tests#new-data_tests-syntax for more information."
         )
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+        return line_wrap_message(deprecation_tag(description))
 
 
 class ProjectFlagsMovedDeprecation(WarnLevel):
@@ -429,7 +437,7 @@ class ProjectFlagsMovedDeprecation(WarnLevel):
             "key in dbt_project.yml."
         )
         # Can't use line_wrap_message here because flags.printer_width isn't available yet
-        return warning_tag(f"Deprecated functionality\n\n{description}")
+        return deprecation_tag(description)
 
 
 class SpacesInResourceNameDeprecation(DynamicLevel):
@@ -518,13 +526,11 @@ class GenericJSONSchemaValidationDeprecation(WarnLevel):
 
     def message(self) -> str:
         if self.key_path == "":
-            description = (
-                f"Deprecated functionality\n{self.violation} at top level in file `{self.file}`"
-            )
+            description = f"{self.violation} at top level in file `{self.file}`"
         else:
-            description = f"Deprecated functionality\n{self.violation} in file `{self.file}` at path `{self.key_path}`"
+            description = f"{self.violation} in file `{self.file}` at path `{self.key_path}`"
 
-        return warning_tag(description)
+        return line_wrap_message(deprecation_tag(description))
 
 
 class GenericJSONSchemaValidationDeprecationSummary(WarnLevel):
@@ -537,7 +543,7 @@ class GenericJSONSchemaValidationDeprecationSummary(WarnLevel):
         if self.show_all_hint:
             description += " To see all deprecated packages, run command again with the `--show-all-deprecations` flag."
 
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+        return line_wrap_message(deprecation_tag(description))
 
 
 class UnexpectedJinjaBlockDeprecation(WarnLevel):
@@ -546,7 +552,7 @@ class UnexpectedJinjaBlockDeprecation(WarnLevel):
 
     def message(self) -> str:
         description = f"{self.msg} in file `{self.file}`"
-        return warning_tag(f"Deprecated functionality\n\n{description}")
+        return line_wrap_message(deprecation_tag(description))
 
 
 class UnexpectedJinjaBlockDeprecationSummary(WarnLevel):
@@ -559,7 +565,7 @@ class UnexpectedJinjaBlockDeprecationSummary(WarnLevel):
         if self.show_all_hint:
             description += " To see all deprecated packages, run command again with the `--show-all-deprecations` flag."
 
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+        return line_wrap_message(deprecation_tag(description))
 
 
 class DuplicateYAMLKeysDeprecation(WarnLevel):
@@ -568,7 +574,7 @@ class DuplicateYAMLKeysDeprecation(WarnLevel):
 
     def message(self) -> str:
         description = f"{self.duplicate_description} in file `{self.file}`"
-        return warning_tag(f"Deprecated functionality\n\n{description}")
+        return line_wrap_message(deprecation_tag(description))
 
 
 class DuplicateYAMLKeysDeprecationSummary(WarnLevel):
@@ -583,7 +589,7 @@ class DuplicateYAMLKeysDeprecationSummary(WarnLevel):
         if self.show_all_hint:
             description += " To see all deprecated packages, run command again with the `--show-all-deprecations` flag."
 
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+        return line_wrap_message(deprecation_tag(description))
 
 
 class CustomTopLevelKeyDeprecation(WarnLevel):
@@ -592,7 +598,7 @@ class CustomTopLevelKeyDeprecation(WarnLevel):
 
     def message(self) -> str:
         description = f"{self.msg} in file `{self.file}`"
-        return warning_tag(f"Deprecated functionality\n\n{description}")
+        return line_wrap_message(deprecation_tag(description))
 
 
 class CustomTopLevelKeyDeprecationSummary(WarnLevel):
@@ -605,7 +611,7 @@ class CustomTopLevelKeyDeprecationSummary(WarnLevel):
         if self.show_all_hint:
             description += " To see all deprecated keys, run command again with the `--show-all-deprecations` flag."
 
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+        return line_wrap_message(deprecation_tag(description))
 
 
 class CustomKeyInConfigDeprecation(WarnLevel):
@@ -614,7 +620,7 @@ class CustomKeyInConfigDeprecation(WarnLevel):
 
     def message(self) -> str:
         description = f"Custom key `{self.key}` found in `config` at path `{self.key_path}` in file `{self.file}`. Custom config keys should move into the `config.meta`."
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+        return line_wrap_message(deprecation_tag(description))
 
 
 class CustomKeyInConfigDeprecationSummary(WarnLevel):
@@ -623,7 +629,7 @@ class CustomKeyInConfigDeprecationSummary(WarnLevel):
 
     def message(self) -> str:
         description = f"Found {pluralize(self.occurrences, 'unexpected top level key')} in the project's yml files."
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+        return line_wrap_message(deprecation_tag(description))
 
 
 # =======================================================
