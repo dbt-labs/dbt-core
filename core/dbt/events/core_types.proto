@@ -570,6 +570,28 @@ message CustomTopLevelKeyDeprecationSummaryMsg {
     CustomTopLevelKeyDeprecationSummary data = 2;
 }
 
+// D030
+message CustomKeyInConfigDeprecation {
+    string key = 1;
+    string file = 2;
+    string key_path = 3;
+}
+
+message CustomKeyInConfigDeprecationMsg {
+    CoreEventInfo info = 1;
+    CustomKeyInConfigDeprecation data = 2;
+}
+
+// D031
+message CustomKeyInConfigDeprecationSummary {
+    int32 occurrences = 1;
+    bool show_all_hint = 2;
+}
+
+message CustomKeyInConfigDeprecationSummaryMsg {
+    CoreEventInfo info = 1;
+    CustomKeyInConfigDeprecationSummary data = 2;
+}
 
 // I065
 message DeprecatedModel {
