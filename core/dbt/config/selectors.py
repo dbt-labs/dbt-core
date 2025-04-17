@@ -79,7 +79,7 @@ class SelectorConfig(Dict[str, Dict[str, Union[SelectionSpec, bool]]]):
         try:
             data = load_yaml_text(load_file_contents(str(path)))
             if data is None:
-                raise ValidationError()
+                raise ValidationError("No data found in selector file at path: {path}")
         except (ValidationError, DbtRuntimeError) as exc:
             raise DbtSelectorsError(
                 f"Could not read selector file: {exc}",
