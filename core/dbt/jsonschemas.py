@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, Iterator
@@ -60,9 +61,17 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
     errors: Iterator[ValidationError] = validator.iter_errors(json)  # get all validation errors
 
     for error in errors:
-        deprecations.warn(
-            "generic-json-schema-validation-deprecation",
-            violation=error.message,
-            file=file_path,
-            key_path=error_path_to_string(error),
-        )
+        if error.validator == "additionalProperties" and len(error.path) == 0:
+            key = re.search(r"'\S+'", error.message)
+            deprecations.warn(
+                "custom-top-level-key-deprecation",
+                msg="Unexpected top-level key" + (" " + key.group() if key else ""),
+                file=file_path,
+            )
+        else:
+            deprecations.warn(
+                "generic-json-schema-validation-deprecation",
+                violation=error.message,
+                file=file_path,
+                key_path=error_path_to_string(error),
+            )

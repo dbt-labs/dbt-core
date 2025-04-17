@@ -2,6 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "DbtSchemaFiles",
   "type": "object",
+  "additionalProperties": false,
   "properties": {
     "analyses": {
       "type": [
