@@ -452,6 +452,7 @@
     },
     "ExposurePropertiesConfigs": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "enabled": {
           "anyOf": [
@@ -597,6 +598,7 @@
     },
     "ModelPropertiesConfigs": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "auto_refresh": {
           "anyOf": [
@@ -2133,7 +2135,7 @@
         },
         "meta": true
       },
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "__SeedsConfig": {
       "type": "object",
@@ -2197,6 +2199,7 @@
     },
     "__SnapshotsConfig": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "alias": {
           "type": [
@@ -2412,6 +2415,7 @@
     },
     "__UnitTestsConfig": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "enabled": {
           "anyOf": [
