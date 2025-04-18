@@ -126,6 +126,7 @@ class NodeConfig(NodeAndTestConfig):
         metadata=MergeBehavior.Update.meta(),
     )
     event_time: Any = None
+    event_time_filter_format: Any = None
     concurrent_batches: Any = None
 
     def __post_init__(self):
