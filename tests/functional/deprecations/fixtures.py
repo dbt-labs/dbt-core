@@ -167,3 +167,11 @@ models:
     config:
       my_custom_key: "my_custom_value"
 """
+
+custom_key_in_object_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+    my_custom_property: "It's over, I have the high ground"
+"""

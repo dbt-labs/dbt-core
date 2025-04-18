@@ -8,6 +8,7 @@ from dbt import deprecations
 from dbt.clients.registry import _get_cached
 from dbt.events.types import (
     CustomKeyInConfigDeprecation,
+    CustomKeyInObjectDeprecation,
     DuplicateYAMLKeysDeprecation,
     GenericJSONSchemaValidationDeprecation,
     PackageRedirectDeprecation,
@@ -18,6 +19,7 @@ from dbt_common.exceptions import EventCompilationError
 from tests.functional.deprecations.fixtures import (
     bad_name_yaml,
     custom_key_in_config_yaml,
+    custom_key_in_object_yaml,
     deprecated_model_exposure_yaml,
     duplicate_keys_yaml,
     invalid_deprecation_date_yaml,
@@ -332,5 +334,23 @@ class TestCustomKeyInConfigDeprecation:
         assert len(event_catcher.caught_events) == 1
         assert (
             "Custom key `my_custom_key` found in `config` at path `models[0].config`"
+            in event_catcher.caught_events[0].info.msg
+        )
+
+
+class TestCustomKeyInObjectDeprecation:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models_trivial.sql": models_trivial__model_sql,
+            "models.yml": custom_key_in_object_yaml,
+        }
+
+    def test_custom_key_in_object_deprecation(self, project):
+        event_catcher = EventCatcher(CustomKeyInObjectDeprecation)
+        run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
+        assert len(event_catcher.caught_events) == 1
+        assert (
+            "Custom key `'my_custom_property'` found at `models[0]` in file\n`models/models.yml`."
             in event_catcher.caught_events[0].info.msg
         )
