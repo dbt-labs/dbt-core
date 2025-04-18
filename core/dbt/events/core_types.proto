@@ -593,6 +593,29 @@ message CustomKeyInConfigDeprecationSummaryMsg {
     CustomKeyInConfigDeprecationSummary data = 2;
 }
 
+// D032
+message CustomKeyInObjectDeprecation {
+    string key = 1;
+    string file = 2;
+    string key_path = 3;
+}
+
+message CustomKeyInObjectDeprecationMsg {
+    CoreEventInfo info = 1;
+    CustomKeyInObjectDeprecation data = 2;
+}
+
+// D033
+message CustomKeyInObjectDeprecationSummary {
+    int32 occurrences = 1;
+    bool show_all_hint = 2;
+}
+
+message CustomKeyInObjectDeprecationSummaryMsg {
+    CoreEventInfo info = 1;
+    CustomKeyInObjectDeprecationSummary data = 2;
+}
+
 // I065
 message DeprecatedModel {
     string model_name = 1;
