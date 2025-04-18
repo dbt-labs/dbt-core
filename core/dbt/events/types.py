@@ -628,7 +628,11 @@ class CustomKeyInConfigDeprecationSummary(WarnLevel):
         return "D031"
 
     def message(self) -> str:
-        description = f"Found {pluralize(self.occurrences, 'unexpected top level key')} in the project's yml files."
+        description = f"Found {pluralize(self.occurrences, 'custom key')} in config objects in the project's yml files."
+
+        if self.show_all_hint:
+            description += " To see all deprecated keys, run command again with the `--show-all-deprecations` flag."
+
         return line_wrap_message(deprecation_tag(description))
 
 
