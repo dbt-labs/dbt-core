@@ -471,7 +471,7 @@ class UnitTestParser(YamlReader):
                     f"Unable to find seed '{package_name}.{seed_name}' for unit tests in directories: {self.project.seed_paths}"
                 )
 
-        seed_path = Path(seed_node.root_path) / seed_node.original_file_path
+        seed_path = Path(self.project.project_root) / seed_node.original_file_path
         with open(seed_path, "r") as f:
             for row in DictReader(f):
                 rows.append(row)
