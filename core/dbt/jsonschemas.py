@@ -63,14 +63,21 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
     for error in errors:
         # Listify the error path to make it easier to work with (it's a deque in the ValidationError object)
         error_path = list(error.path)
-
-        if error.validator == "additionalProperties" and len(error_path) == 0:
+        if error.validator == "additionalProperties":
             key = re.search(r"'\S+'", error.message)
-            deprecations.warn(
-                "custom-top-level-key-deprecation",
-                msg="Unexpected top-level key" + (" " + key.group() if key else ""),
-                file=file_path,
-            )
+            if len(error.path) == 0:
+                deprecations.warn(
+                    "custom-top-level-key-deprecation",
+                    msg="Unexpected top-level key" + (" " + key.group() if key else ""),
+                    file=file_path,
+                )
+            else:
+                deprecations.warn(
+                    "custom-key-in-object-deprecation",
+                    key=key.group() if key else "",
+                    file=file_path,
+                    key_path=error_path_to_string(error),
+                )
         elif (
             error.validator == "anyOf"
             and len(error_path) > 0
