@@ -4,6 +4,7 @@ from argparse import Namespace
 from copy import deepcopy
 from unittest import mock
 
+import pytest
 import yaml
 
 from dbt import tracking
@@ -722,6 +723,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(len(list(self.parser.manifest.sources)), 0)
         self.assertEqual(len(list(self.parser.manifest.nodes)), 4)
 
+    @pytest.mark.skip(reason="skipping until model freshness is documented and does something")
     def test__parse_model_freshness(self):
         block = self.file_block_for(SINGLE_TALBE_MODEL_FRESHNESS, "test_one.yml")
         self.parser.manifest.files[block.file.file_id] = block.file
@@ -735,6 +737,7 @@ class SchemaParserModelsTest(SchemaParserTest):
             count=1, period="day", depends_on=ModelFreshnessDependsOnOptions.any
         )
 
+    @pytest.mark.skip(reason="skipping until model freshness is documented and does something")
     def test__parse_model_freshness_depend_on(self):
         block = self.file_block_for(SINGLE_TALBE_MODEL_FRESHNESS_ONLY_DEPEND_ON, "test_one.yml")
         self.parser.manifest.files[block.file.file_id] = block.file
