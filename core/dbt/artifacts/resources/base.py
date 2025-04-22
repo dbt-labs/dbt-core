@@ -5,6 +5,7 @@ from typing import List, Optional
 from dbt.artifacts.resources.types import NodeType
 from dbt_common.dataclass_schema import dbtClassMixin
 
+# some comment
 
 @dataclass
 class BaseResource(dbtClassMixin):
