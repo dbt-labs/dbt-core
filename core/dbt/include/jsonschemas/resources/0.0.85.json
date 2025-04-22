@@ -1103,6 +1103,7 @@
     },
     "_Exposures": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "name",
         "owner",
@@ -1232,6 +1233,7 @@
     },
     "_Macros": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "name"
       ],
@@ -1341,6 +1343,7 @@
     },
     "_Models": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "name"
       ],
@@ -1472,6 +1475,7 @@
     },
     "_SavedQueries": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "name",
         "query_params"
@@ -1556,6 +1560,7 @@
     },
     "_Seeds": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "name"
       ],
@@ -1626,6 +1631,7 @@
     },
     "_SemanticModels": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "model",
         "name"
@@ -1706,6 +1712,7 @@
     },
     "_Snapshots": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "name"
       ],
@@ -1783,6 +1790,7 @@
     },
     "_Sources": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "name"
       ],
@@ -1811,6 +1819,12 @@
           ]
         },
         "loaded_at_field": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loaded_at_query": {
           "type": [
             "string",
             "null"
@@ -1871,6 +1885,7 @@
     },
     "_Tables": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "name"
       ],
@@ -1932,6 +1947,12 @@
             "null"
           ]
         },
+        "loaded_at_query": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "loader": {
           "type": [
             "string",
@@ -1975,6 +1996,7 @@
     },
     "_UnitTests": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "expect",
         "model",
