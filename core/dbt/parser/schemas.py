@@ -142,6 +142,14 @@ def yaml_from_file(
             issue_deprecation_warnings_for_failures(
                 failures=failures, file=source_file.path.original_file_path
             )
+            if contents is not None:
+                # Validate the yaml against the jsonschema to raise deprecation warnings
+                # for invalid fields.
+                jsonschema_validate(
+                    schema=resources_schema(),
+                    json=contents,
+                    file_path=source_file.path.original_file_path,
+                )
         else:
             contents = load_yaml_text(to_load, source_file.path)
 
@@ -209,12 +217,6 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
             # contains the FileBlock and the data (dictionary)
             yaml_block = YamlBlock.from_file_block(block, dct)
             parser: YamlReader
-
-            # Validate the yaml against the jsonschema to raise deprecation warnings
-            # for invalid fields.
-            jsonschema_validate(
-                schema=resources_schema(), json=dct, file_path=block.path.original_file_path
-            )
 
             # There are 9 different yaml lists which are parsed by different parsers:
             # Model, Seed, Snapshot, Source, Macro, Analysis, Exposure, Metric, Group
