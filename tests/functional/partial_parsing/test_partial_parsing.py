@@ -39,7 +39,10 @@ from tests.functional.partial_parsing.fixtures import (
     local_dependency__models__model_to_import_sql,
     local_dependency__models__schema_yml,
     local_dependency__seeds__seed_csv,
+    macros_schema1_yml,
+    macros_schema2_yml,
     macros_schema_yml,
+    macros_sql,
     macros_yml,
     model_a_sql,
     model_b_sql,
@@ -255,12 +258,23 @@ class TestModels:
         with pytest.raises(CompilationError):
             results = run_dbt(["--partial-parse", "--warn-error", "run"])
 
-        # put back macro file, got back to schema file with no macro
+        # put back macro file, go back to schema file with no macro
         # add separate macro patch schema file
         write_file(models_schema2_yml, project.project_root, "models", "schema.yml")
         write_file(my_macro_sql, project.project_root, "macros", "my_macro.sql")
         write_file(macros_yml, project.project_root, "macros", "macros.yml")
         results = run_dbt(["--partial-parse", "run"])
+
+        # add macro file with two macros and schema file with patches for both
+        write_file(macros_schema1_yml, project.project_root, "macros", "macros_x.yml")
+        write_file(macros_sql, project.project_root, "macros", "macros_x.sql")
+        results = run_dbt(["--partial-parse", "parse"])
+
+        # modify one of the patches
+        write_file(macros_schema2_yml, project.project_root, "macros", "macros_x.yml")
+        results = run_dbt(["--partial-parse", "parse"])
+        rm_file(project.project_root, "macros", "macros_x.sql")
+        rm_file(project.project_root, "macros", "macros_x.yml")
 
         # delete macro and schema file
         rm_file(project.project_root, "macros", "my_macro.sql")
