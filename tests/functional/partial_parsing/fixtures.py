@@ -1304,7 +1304,7 @@ macros:
   - name: foo
     description: Lorem.
   - name: bar
-    description: Lorem ipsum.
+    description: Lorem.
 """
 
 macros_schema2_yml = """
