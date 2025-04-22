@@ -1288,3 +1288,26 @@ sources_tests1_sql = """
 
 
 """
+
+model_with_dots_sql = """
+select 1 as col1
+
+"""
+
+
+model_with_dots_yml = """
+models:
+  - name: a.b.orders
+    columns:
+      - name: col1
+
+"""
+
+model_with_dots_edited_yml = """
+models:
+  - name: a.b.orders
+    columns:
+      - name: col1
+      - name: col2
+
+"""
