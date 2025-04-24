@@ -493,17 +493,6 @@ message GenericJSONSchemaValidationDeprecationMsg {
     GenericJSONSchemaValidationDeprecation data = 2;
 }
 
-// D023
-message GenericJSONSchemaValidationDeprecationSummary {
-    int32 occurrences = 1;
-    bool show_all_hint = 2;
-}
-
-message GenericJSONSchemaValidationDeprecationSummaryMsg {
-    CoreEventInfo info = 1;
-    GenericJSONSchemaValidationDeprecationSummary data = 2;
-}
-
 // D024
 message UnexpectedJinjaBlockDeprecation {
     string msg = 1;
@@ -513,17 +502,6 @@ message UnexpectedJinjaBlockDeprecation {
 message UnexpectedJinjaBlockDeprecationMsg {
     CoreEventInfo info = 1;
     UnexpectedJinjaBlockDeprecation data = 2;
-}
-
-// D025
-message UnexpectedJinjaBlockDeprecationSummary {
-    int32 occurrences = 1;
-    bool show_all_hint = 2;
-}
-
-message UnexpectedJinjaBlockDeprecationSummaryMsg {
-    CoreEventInfo info = 1;
-    UnexpectedJinjaBlockDeprecationSummary data = 2;
 }
 
 // D026
@@ -537,17 +515,6 @@ message DuplicateYAMLKeysDeprecationMsg {
     DuplicateYAMLKeysDeprecation data = 2;
 }
 
-// D027
-message DuplicateYAMLKeysDeprecationSummary {
-    int32 occurrences = 1;
-    bool show_all_hint = 2;
-}
-
-message DuplicateYAMLKeysDeprecationSummaryMsg {
-    CoreEventInfo info = 1;
-    DuplicateYAMLKeysDeprecationSummary data = 2;
-}
-
 // D028
 message CustomTopLevelKeyDeprecation {
     string msg = 1;
@@ -557,17 +524,6 @@ message CustomTopLevelKeyDeprecation {
 message CustomTopLevelKeyDeprecationMsg {
     CoreEventInfo info = 1;
     CustomTopLevelKeyDeprecation data = 2;
-}
-
-// D029
-message CustomTopLevelKeyDeprecationSummary {
-    int32 occurrences = 1;
-    bool show_all_hint = 2;
-}
-
-message CustomTopLevelKeyDeprecationSummaryMsg {
-    CoreEventInfo info = 1;
-    CustomTopLevelKeyDeprecationSummary data = 2;
 }
 
 // D030
@@ -582,17 +538,6 @@ message CustomKeyInConfigDeprecationMsg {
     CustomKeyInConfigDeprecation data = 2;
 }
 
-// D031
-message CustomKeyInConfigDeprecationSummary {
-    int32 occurrences = 1;
-    bool show_all_hint = 2;
-}
-
-message CustomKeyInConfigDeprecationSummaryMsg {
-    CoreEventInfo info = 1;
-    CustomKeyInConfigDeprecationSummary data = 2;
-}
-
 // D032
 message CustomKeyInObjectDeprecation {
     string key = 1;
@@ -603,17 +548,6 @@ message CustomKeyInObjectDeprecation {
 message CustomKeyInObjectDeprecationMsg {
     CoreEventInfo info = 1;
     CustomKeyInObjectDeprecation data = 2;
-}
-
-// D033
-message CustomKeyInObjectDeprecationSummary {
-    int32 occurrences = 1;
-    bool show_all_hint = 2;
-}
-
-message CustomKeyInObjectDeprecationSummaryMsg {
-    CoreEventInfo info = 1;
-    CustomKeyInObjectDeprecationSummary data = 2;
 }
 
 // D034
