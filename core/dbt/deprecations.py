@@ -7,14 +7,12 @@ import dbt.tracking
 from dbt.events import types as core_types
 from dbt.flags import get_flags
 from dbt_common.dataclass_schema import dbtClassMixin
-from dbt_common.events.base_types import BaseEvent
 from dbt_common.events.functions import warn_or_error
 
 
 class DBTDeprecation:
     _name: ClassVar[Optional[str]] = None
     _event: ClassVar[Optional[str]] = None
-    _summary_event: ClassVar[Optional[str]] = None
 
     @property
     def name(self) -> str:
@@ -39,20 +37,6 @@ class DBTDeprecation:
                 raise NameError(msg)
         raise NotImplementedError("event not implemented for {}".format(self._event))
 
-    @property
-    def summary_event(self) -> Optional[abc.ABCMeta]:
-        if self._summary_event is None:
-            return None
-        else:
-            module_path = core_types
-            class_name = self._summary_event
-
-            try:
-                return getattr(module_path, class_name)
-            except AttributeError:
-                msg = f"Event Class `{class_name}` is not defined in `{module_path}`"
-                raise NameError(msg)
-
     def show(self, *args, **kwargs) -> None:
         flags = get_flags()
         if self.name not in active_deprecations or flags.show_all_deprecations:
@@ -62,22 +46,10 @@ class DBTDeprecation:
 
         active_deprecations[self.name] += 1
 
-    def show_summary(self) -> None:
-        event_class = self.summary_event
-        if self.name in active_deprecations and event_class is not None:
-            show_all_hint = (
-                not get_flags().show_all_deprecations and active_deprecations[self.name] > 1
-            )
-            event: BaseEvent = event_class(
-                occurrences=active_deprecations[self.name], show_all_hint=show_all_hint
-            )
-            warn_or_error(event)
-
 
 class PackageRedirectDeprecation(DBTDeprecation):
     _name = "package-redirect"
     _event = "PackageRedirectDeprecation"
-    _summary_event = "PackageRedirectDeprecationSummary"
 
 
 class PackageInstallPathDeprecation(DBTDeprecation):
@@ -170,37 +142,31 @@ class MicrobatchMacroOutsideOfBatchesDeprecation(DBTDeprecation):
 class GenericJSONSchemaValidationDeprecation(DBTDeprecation):
     _name = "generic-json-schema-validation-deprecation"
     _event = "GenericJSONSchemaValidationDeprecation"
-    _summary_event = "GenericJSONSchemaValidationDeprecationSummary"
 
 
 class UnexpectedJinjaBlockDeprecation(DBTDeprecation):
     _name = "unexpected-jinja-block-deprecation"
     _event = "UnexpectedJinjaBlockDeprecation"
-    _summary_event = "UnexpectedJinjaBlockDeprecationSummary"
 
 
 class DuplicateYAMLKeysDeprecation(DBTDeprecation):
     _name = "duplicate-yaml-keys-deprecation"
     _event = "DuplicateYAMLKeysDeprecation"
-    _summary_event = "DuplicateYAMLKeysDeprecationSummary"
 
 
 class CustomTopLevelKeyDeprecation(DBTDeprecation):
     _name = "custom-top-level-key-deprecation"
     _event = "CustomTopLevelKeyDeprecation"
-    _summary_event = "CustomTopLevelKeyDeprecationSummary"
 
 
 class CustomKeyInConfigDeprecation(DBTDeprecation):
     _name = "custom-key-in-config-deprecation"
     _event = "CustomKeyInConfigDeprecation"
-    _summary_event = "CustomKeyInConfigDeprecationSummary"
 
 
 class CustomKeyInObjectDeprecation(DBTDeprecation):
     _name = "custom-key-in-object-deprecation"
     _event = "CustomKeyInObjectDeprecation"
-    _summary_event = "CustomKeyInObjectDeprecationSummary"
 
 
 def renamed_env_var(old_name: str, new_name: str):
