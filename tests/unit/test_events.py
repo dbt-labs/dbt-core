@@ -172,6 +172,7 @@ sample_values = [
     core_types.CustomKeyInConfigDeprecationSummary(occurrences=2, show_debug_hint=True),
     core_types.CustomKeyInObjectDeprecation(key="", key_path="", file=""),
     core_types.CustomKeyInObjectDeprecationSummary(occurrences=2, show_debug_hint=True),
+    core_types.DeprecationsSummary(summaries=[], show_all_hint=True),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),

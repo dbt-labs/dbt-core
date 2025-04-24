@@ -1,10 +1,12 @@
 import abc
 from collections import defaultdict
-from typing import Callable, ClassVar, DefaultDict, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any, Callable, ClassVar, DefaultDict, Dict, List, Optional
 
 import dbt.tracking
 from dbt.events import types as core_types
 from dbt.flags import get_flags
+from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.base_types import BaseEvent
 from dbt_common.events.functions import warn_or_error
 
@@ -231,9 +233,23 @@ def buffer(name: str, *args, **kwargs):
     buffered_deprecations.append(show_callback)
 
 
-def show_all_deprecation_summaries() -> None:
-    for deprecation in active_deprecations:
-        deprecations[deprecation].show_summary()
+def show_deprecations_summary() -> None:
+    summaries: List[Dict[str, Any]] = []
+    for deprecation, occurrences in active_deprecations.items():
+        deprecation_event = deprecations[deprecation].event()
+        summaries.append(
+            DeprecationSummary(
+                event_name=deprecation_event.__name__,
+                event_code=deprecation_event.code(),
+                occurrences=occurrences,
+            ).to_msg_dict()
+        )
+
+    if len(summaries) > 0:
+        show_all_hint = not get_flags().show_all_deprecations
+        warn_or_error(
+            core_types.DeprecationsSummary(summaries=summaries, show_all_hint=show_all_hint)
+        )
 
 
 # these are globally available
@@ -277,3 +293,17 @@ def reset_deprecations():
 def fire_buffered_deprecations():
     [dep_fn() for dep_fn in buffered_deprecations]
     buffered_deprecations.clear()
+
+
+@dataclass
+class DeprecationSummary(dbtClassMixin):
+    event_name: str
+    event_code: str
+    occurrences: int
+
+    def to_msg_dict(self) -> Dict[str, Any]:
+        return {
+            "event_name": self.event_name,
+            "event_code": self.event_code,
+            "occurrences": self.occurrences,
+        }

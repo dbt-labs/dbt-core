@@ -660,6 +660,23 @@ class CustomKeyInObjectDeprecationSummary(WarnLevel):
         return line_wrap_message(deprecation_tag(description))
 
 
+class DeprecationsSummary(WarnLevel):
+    def code(self) -> str:
+        return "D034"
+
+    def message(self) -> str:
+        description = "Summary of encountered deprecations:"
+        for summary in self.summaries:
+            description += (
+                f"\n\n- {summary.event_name}: {pluralize(summary.occurrences, 'occurrence')}"
+            )
+
+        if self.show_all_hint:
+            description += "\n\nTo see all deprecation instances instead of just the first occurrence of each, run command again with the `--show-all-deprecations` flag. You may also need to run with `--no-partial-parse` as some deprecations are only encountered during parsing."
+
+        return line_wrap_message(deprecation_tag(description))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
