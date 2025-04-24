@@ -451,6 +451,7 @@
     },
     "ExposurePropertiesConfigs": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "enabled": {
           "anyOf": [
@@ -649,6 +650,7 @@
     },
     "ModelPropertiesConfigs": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "auto_refresh": {
           "anyOf": [
@@ -2145,6 +2147,7 @@
     },
     "__SavedQueriesConfig": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "cache": {
           "anyOf": [
@@ -2167,8 +2170,7 @@
           ]
         },
         "meta": true
-      },
-      "additionalProperties": true
+      }
     },
     "__SavedQueriesQueryParams": {
       "type": "object",
@@ -2213,6 +2215,7 @@
     },
     "__SeedsConfig": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "column_types": true,
         "copy_grants": {
@@ -2273,6 +2276,7 @@
     },
     "__SnapshotsConfig": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "alias": {
           "type": [
@@ -2406,6 +2410,7 @@
     },
     "__SourcesConfig": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "enabled": {
           "anyOf": [
@@ -2509,6 +2514,7 @@
     },
     "__UnitTestsConfig": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {
         "enabled": {
           "anyOf": [
