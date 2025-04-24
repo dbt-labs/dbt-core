@@ -1853,6 +1853,12 @@
             "null"
           ]
         },
+        "loaded_at_query": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "loader": {
           "type": [
             "string",
@@ -1965,6 +1971,12 @@
           ]
         },
         "loaded_at_field": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loaded_at_query": {
           "type": [
             "string",
             "null"
