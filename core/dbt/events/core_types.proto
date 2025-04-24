@@ -493,7 +493,7 @@ message GenericJSONSchemaValidationDeprecationMsg {
     GenericJSONSchemaValidationDeprecation data = 2;
 }
 
-// D024
+// D023
 message UnexpectedJinjaBlockDeprecation {
     string msg = 1;
     string file = 2;
@@ -504,7 +504,7 @@ message UnexpectedJinjaBlockDeprecationMsg {
     UnexpectedJinjaBlockDeprecation data = 2;
 }
 
-// D026
+// D024
 message DuplicateYAMLKeysDeprecation {
     string duplicate_description = 1;
     string file = 2;
@@ -515,7 +515,7 @@ message DuplicateYAMLKeysDeprecationMsg {
     DuplicateYAMLKeysDeprecation data = 2;
 }
 
-// D028
+// D025
 message CustomTopLevelKeyDeprecation {
     string msg = 1;
     string file = 2;
@@ -526,7 +526,7 @@ message CustomTopLevelKeyDeprecationMsg {
     CustomTopLevelKeyDeprecation data = 2;
 }
 
-// D030
+// D026
 message CustomKeyInConfigDeprecation {
     string key = 1;
     string file = 2;
@@ -538,7 +538,7 @@ message CustomKeyInConfigDeprecationMsg {
     CustomKeyInConfigDeprecation data = 2;
 }
 
-// D032
+// D027
 message CustomKeyInObjectDeprecation {
     string key = 1;
     string file = 2;
@@ -550,7 +550,7 @@ message CustomKeyInObjectDeprecationMsg {
     CustomKeyInObjectDeprecation data = 2;
 }
 
-// D034
+// D028
 message DeprecationSummary {
     string event_name = 1;
     string event_code = 2;

@@ -535,7 +535,7 @@ class GenericJSONSchemaValidationDeprecation(WarnLevel):
 
 class UnexpectedJinjaBlockDeprecation(WarnLevel):
     def code(self) -> str:
-        return "D024"
+        return "D023"
 
     def message(self) -> str:
         description = f"{self.msg} in file `{self.file}`"
@@ -544,7 +544,7 @@ class UnexpectedJinjaBlockDeprecation(WarnLevel):
 
 class DuplicateYAMLKeysDeprecation(WarnLevel):
     def code(self) -> str:
-        return "D026"
+        return "D024"
 
     def message(self) -> str:
         description = f"{self.duplicate_description} in file `{self.file}`"
@@ -553,7 +553,7 @@ class DuplicateYAMLKeysDeprecation(WarnLevel):
 
 class CustomTopLevelKeyDeprecation(WarnLevel):
     def code(self) -> str:
-        return "D028"
+        return "D025"
 
     def message(self) -> str:
         description = f"{self.msg} in file `{self.file}`"
@@ -562,7 +562,7 @@ class CustomTopLevelKeyDeprecation(WarnLevel):
 
 class CustomKeyInConfigDeprecation(WarnLevel):
     def code(self) -> str:
-        return "D030"
+        return "D026"
 
     def message(self) -> str:
         description = f"Custom key `{self.key}` found in `config` at path `{self.key_path}` in file `{self.file}`. Custom config keys should move into the `config.meta`."
@@ -571,7 +571,7 @@ class CustomKeyInConfigDeprecation(WarnLevel):
 
 class CustomKeyInObjectDeprecation(WarnLevel):
     def code(self) -> str:
-        return "D032"
+        return "D027"
 
     def message(self) -> str:
         description = f"Custom key `{self.key}` found at `{self.key_path}` in file `{self.file}`. This may mean the key is a typo, or is simply not a key supported by the object."
@@ -580,7 +580,7 @@ class CustomKeyInObjectDeprecation(WarnLevel):
 
 class DeprecationsSummary(WarnLevel):
     def code(self) -> str:
-        return "D034"
+        return "D028"
 
     def message(self) -> str:
         description = "Summary of encountered deprecations:"
