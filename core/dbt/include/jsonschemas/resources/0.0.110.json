@@ -1171,6 +1171,7 @@
         "owner",
         "type"
       ],
+      "additionalProperties": false,
       "properties": {
         "config": {
           "anyOf": [
@@ -1298,6 +1299,7 @@
       "required": [
         "name"
       ],
+      "additionalProperties": false,
       "properties": {
         "arguments": {
           "type": [
@@ -1399,6 +1401,7 @@
       "required": [
         "name"
       ],
+      "additionalProperties": false,
       "properties": {
         "access": {
           "type": [
@@ -1534,6 +1537,7 @@
         "name",
         "query_params"
       ],
+      "additionalProperties": false,
       "properties": {
         "config": {
           "anyOf": [
@@ -1579,6 +1583,7 @@
       "required": [
         "name"
       ],
+      "additionalProperties": false,
       "properties": {
         "columns": {
           "type": [
@@ -1650,6 +1655,7 @@
         "model",
         "name"
       ],
+      "additionalProperties": false,
       "properties": {
         "config": {
           "anyOf": [
@@ -1729,6 +1735,7 @@
       "required": [
         "name"
       ],
+      "additionalProperties": false,
       "properties": {
         "columns": {
           "type": [
@@ -1806,6 +1813,7 @@
       "required": [
         "name"
       ],
+      "additionalProperties": false,
       "properties": {
         "config": {
           "anyOf": [
@@ -1903,6 +1911,7 @@
       "required": [
         "name"
       ],
+      "additionalProperties": false,
       "properties": {
         "columns": {
           "type": [
@@ -2009,6 +2018,7 @@
         "model",
         "name"
       ],
+      "additionalProperties": false,
       "properties": {
         "config": {
           "anyOf": [
