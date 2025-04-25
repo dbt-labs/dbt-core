@@ -264,22 +264,6 @@ class PackageRedirectDeprecation(WarnLevel):
         return line_wrap_message(deprecation_tag(description))
 
 
-class PackageRedirectDeprecationSummary(WarnLevel):
-    def code(self) -> str:
-        return "D021"
-
-    def message(self) -> str:
-        description = (
-            f"Found {pluralize(self.occurrences, 'package')} that {'has' if self.occurrences == 1 else 'have'} been deprecated in favor of new packages. Please "
-            f"update your `packages.yml` configuration to use the new packages instead."
-        )
-
-        if self.show_all_hint:
-            description += " To see all deprecated packages, run command again with the `--show-all-deprecations` flag."
-
-        return line_wrap_message(deprecation_tag(description))
-
-
 class PackageInstallPathDeprecation(WarnLevel):
     def code(self) -> str:
         return "D002"
@@ -520,6 +504,9 @@ class MicrobatchMacroOutsideOfBatchesDeprecation(WarnLevel):
         return line_wrap_message(warning_tag(description))
 
 
+# Skipping D021. It belonged to the now deleted PackageRedirectDeprecationSummary event.
+
+
 class GenericJSONSchemaValidationDeprecation(WarnLevel):
     def code(self) -> str:
         return "D022"
@@ -533,129 +520,64 @@ class GenericJSONSchemaValidationDeprecation(WarnLevel):
         return line_wrap_message(deprecation_tag(description))
 
 
-class GenericJSONSchemaValidationDeprecationSummary(WarnLevel):
-    def code(self) -> str:
-        return "D023"
-
-    def message(self) -> str:
-        description = f"Found {pluralize(self.occurrences, 'error')} in the project's yaml files."
-
-        if self.show_all_hint:
-            description += " To see all deprecated packages, run command again with the `--show-all-deprecations` flag."
-
-        return line_wrap_message(deprecation_tag(description))
-
-
 class UnexpectedJinjaBlockDeprecation(WarnLevel):
     def code(self) -> str:
-        return "D024"
+        return "D023"
 
     def message(self) -> str:
         description = f"{self.msg} in file `{self.file}`"
         return line_wrap_message(deprecation_tag(description))
 
 
-class UnexpectedJinjaBlockDeprecationSummary(WarnLevel):
-    def code(self) -> str:
-        return "D025"
-
-    def message(self) -> str:
-        description = f"Found {pluralize(self.occurrences, 'unexpected jinja block')} in the project's jinja files."
-
-        if self.show_all_hint:
-            description += " To see all deprecated packages, run command again with the `--show-all-deprecations` flag."
-
-        return line_wrap_message(deprecation_tag(description))
-
-
 class DuplicateYAMLKeysDeprecation(WarnLevel):
     def code(self) -> str:
-        return "D026"
+        return "D024"
 
     def message(self) -> str:
         description = f"{self.duplicate_description} in file `{self.file}`"
         return line_wrap_message(deprecation_tag(description))
 
 
-class DuplicateYAMLKeysDeprecationSummary(WarnLevel):
-    def code(self) -> str:
-        return "D027"
-
-    def message(self) -> str:
-        description = (
-            f"Found {pluralize(self.occurrences, 'duplicate key')} in the project's yaml files."
-        )
-
-        if self.show_all_hint:
-            description += " To see all deprecated packages, run command again with the `--show-all-deprecations` flag."
-
-        return line_wrap_message(deprecation_tag(description))
-
-
 class CustomTopLevelKeyDeprecation(WarnLevel):
     def code(self) -> str:
-        return "D028"
+        return "D025"
 
     def message(self) -> str:
         description = f"{self.msg} in file `{self.file}`"
         return line_wrap_message(deprecation_tag(description))
 
 
-class CustomTopLevelKeyDeprecationSummary(WarnLevel):
-    def code(self) -> str:
-        return "D029"
-
-    def message(self) -> str:
-        description = f"Found {pluralize(self.occurrences, 'unexpected top level key')} in the project's yml files."
-
-        if self.show_all_hint:
-            description += " To see all deprecated keys, run command again with the `--show-all-deprecations` flag."
-
-        return line_wrap_message(deprecation_tag(description))
-
-
 class CustomKeyInConfigDeprecation(WarnLevel):
     def code(self) -> str:
-        return "D030"
+        return "D026"
 
     def message(self) -> str:
         description = f"Custom key `{self.key}` found in `config` at path `{self.key_path}` in file `{self.file}`. Custom config keys should move into the `config.meta`."
         return line_wrap_message(deprecation_tag(description))
 
 
-class CustomKeyInConfigDeprecationSummary(WarnLevel):
-    def code(self) -> str:
-        return "D031"
-
-    def message(self) -> str:
-        description = f"Found {pluralize(self.occurrences, 'custom key')} in config objects in the project's yml files."
-
-        if self.show_all_hint:
-            description += " To see all deprecated keys, run command again with the `--show-all-deprecations` flag."
-
-        return line_wrap_message(deprecation_tag(description))
-
-
 class CustomKeyInObjectDeprecation(WarnLevel):
     def code(self) -> str:
-        return "D032"
+        return "D027"
 
     def message(self) -> str:
         description = f"Custom key `{self.key}` found at `{self.key_path}` in file `{self.file}`. This may mean the key is a typo, or is simply not a key supported by the object."
         return line_wrap_message(deprecation_tag(description))
 
 
-class CustomKeyInObjectDeprecationSummary(WarnLevel):
+class DeprecationsSummary(WarnLevel):
     def code(self) -> str:
-        return "D033"
+        return "D028"
 
     def message(self) -> str:
-        description = (
-            f"Found {pluralize(self.occurrences, 'key')} on object in the project's yml files."
-        )
+        description = "Summary of encountered deprecations:"
+        for summary in self.summaries:
+            description += (
+                f"\n\n- {summary.event_name}: {pluralize(summary.occurrences, 'occurrence')}"
+            )
 
         if self.show_all_hint:
-            description += " To see all deprecated keys, run command again with the `--show-all-deprecations` flag."
+            description += "\n\nTo see all deprecation instances instead of just the first occurrence of each, run command again with the `--show-all-deprecations` flag. You may also need to run with `--no-partial-parse` as some deprecations are only encountered during parsing."
 
         return line_wrap_message(deprecation_tag(description))
 
