@@ -9,10 +9,10 @@ from dbt.clients.registry import _get_cached
 from dbt.events.types import (
     CustomKeyInConfigDeprecation,
     CustomKeyInObjectDeprecation,
+    DeprecationsSummary,
     DuplicateYAMLKeysDeprecation,
     GenericJSONSchemaValidationDeprecation,
     PackageRedirectDeprecation,
-    PackageRedirectDeprecationSummary,
 )
 from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
 from dbt_common.exceptions import EventCompilationError
@@ -266,7 +266,7 @@ class TestDeprecationSummary:
 
     @pytest.fixture(scope="class")
     def event_catcher(self) -> EventCatcher:
-        return EventCatcher(event_to_catch=PackageRedirectDeprecationSummary)
+        return EventCatcher(event_to_catch=DeprecationsSummary)
 
     def test_package_redirect(self, project, event_catcher: EventCatcher):
         deprecations.reset_deprecations()
@@ -275,7 +275,15 @@ class TestDeprecationSummary:
         assert "package-redirect" in deprecations.active_deprecations
         assert deprecations.active_deprecations["package-redirect"] == 2
         assert len(event_catcher.caught_events) == 1
-        assert event_catcher.caught_events[0].data.occurrences == 2  # type: ignore
+        for summary in event_catcher.caught_events[0].data.summaries:  # type: ignore
+            found_summary = False
+            if summary.event_name == "PackageRedirectDeprecation":
+                assert (
+                    summary.occurrences == 2
+                ), f"Expected 2 occurrences of PackageRedirectDeprecation, got {summary.occurrences}"
+                found_summary = True
+
+        assert found_summary, "Expected to find PackageRedirectDeprecation in deprecations summary"
 
 
 class TestDeprecatedInvalidDeprecationDate:
