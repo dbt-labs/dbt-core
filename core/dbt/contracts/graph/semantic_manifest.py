@@ -1,4 +1,4 @@
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Tuple, Union
 
 from dbt import deprecations
 from dbt.constants import (
@@ -47,7 +47,7 @@ class SemanticManifest:
     def __init__(self, manifest: Manifest) -> None:
         self.manifest = manifest
 
-    def validate(self) -> bool:
+    def validate(self) -> Union[List[ValidationError], None]:
 
         # TODO: Enforce this check.
         # if self.manifest.metrics and not self.manifest.semantic_models:
@@ -60,7 +60,7 @@ class SemanticManifest:
         #    return False
 
         if not self.manifest.metrics or not self.manifest.semantic_models:
-            return True
+            return None
 
         semantic_manifest = self._get_pydantic_semantic_manifest()
         validator = SemanticManifestValidator[PydanticSemanticManifest]()
@@ -116,7 +116,7 @@ class SemanticManifest:
         for error in validation_result_errors:
             fire_event(SemanticValidationFailure(msg=error.message), EventLevel.ERROR)
 
-        return not validation_result_errors
+        return validation_result_errors if validation_result_errors else None
 
     def write_json_to_file(self, file_path: str):
         semantic_manifest = self._get_pydantic_semantic_manifest()
