@@ -24,6 +24,10 @@ from dbt.artifacts.resources.v1.model import (
     ModelFreshness,
     TimeSpine,
 )
+from dbt.clients.checked_load import (
+    checked_load,
+    issue_deprecation_warnings_for_failures,
+)
 from dbt.clients.jinja_static import statically_parse_ref_or_source
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config import RuntimeConfig
@@ -71,6 +75,7 @@ from dbt.exceptions import (
     YamlParseListError,
 )
 from dbt.flags import get_flags
+from dbt.jsonschemas import jsonschema_validate, resources_schema
 from dbt.node_types import AccessType, NodeType
 from dbt.parser.base import SimpleParser
 from dbt.parser.common import (
@@ -124,11 +129,29 @@ from dbt_common.utils import deep_merge
 # ===============================================================================
 
 
-def yaml_from_file(source_file: SchemaSourceFile) -> Optional[Dict[str, Any]]:
+def yaml_from_file(
+    source_file: SchemaSourceFile, validate: bool = False
+) -> Optional[Dict[str, Any]]:
     """If loading the yaml fails, raise an exception."""
     try:
         # source_file.contents can sometimes be None
-        contents = load_yaml_text(source_file.contents or "", source_file.path)
+        to_load = source_file.contents or ""
+
+        if validate:
+            contents, failures = checked_load(to_load)
+            issue_deprecation_warnings_for_failures(
+                failures=failures, file=source_file.path.original_file_path
+            )
+            if contents is not None:
+                # Validate the yaml against the jsonschema to raise deprecation warnings
+                # for invalid fields.
+                jsonschema_validate(
+                    schema=resources_schema(),
+                    json=contents,
+                    file_path=source_file.path.original_file_path,
+                )
+        else:
+            contents = load_yaml_text(to_load, source_file.path)
 
         if contents is None:
             return contents
@@ -193,7 +216,6 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
         if dct:
             # contains the FileBlock and the data (dictionary)
             yaml_block = YamlBlock.from_file_block(block, dct)
-
             parser: YamlReader
 
             # There are 9 different yaml lists which are parsed by different parsers:

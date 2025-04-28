@@ -17,6 +17,7 @@ from dbt.adapters.factory import (
 )
 from dbt.config.runtime import RuntimeConfig
 from dbt.context.providers import generate_runtime_macro_context
+from dbt.deprecations import reset_deprecations
 from dbt.events.logging import setup_event_logger
 from dbt.mp_context import get_mp_context
 from dbt.parser.manifest import ManifestLoader
@@ -596,6 +597,7 @@ def project_setup(
         pass
     os.chdir(orig_cwd)
     cleanup_event_logger()
+    reset_deprecations()
 
 
 # This is the main fixture that is used in all functional tests. It pulls in the other

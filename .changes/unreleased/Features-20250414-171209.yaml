@@ -1,0 +1,6 @@
+kind: Features
+body: Basic jsonschema validation of `dbt_project.yml`
+time: 2025-04-14T17:12:09.351572-07:00
+custom:
+  Author: QMalcolm
+  Issue: "11503"

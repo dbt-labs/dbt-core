@@ -135,7 +135,6 @@ sample_values = [
     core_types.ProjectCreated(project_name=""),
     # D - Deprecations ======================
     core_types.PackageRedirectDeprecation(old_name="", new_name=""),
-    core_types.PackageRedirectDeprecationSummary(occurrences=2, show_debug_hint=True),
     core_types.PackageInstallPathDeprecation(),
     core_types.ConfigSourcePathDeprecation(deprecated_path="", exp_path=""),
     core_types.ConfigDataPathDeprecation(deprecated_path="", exp_path=""),
@@ -160,6 +159,13 @@ sample_values = [
     core_types.MFTimespineWithoutYamlConfigurationDeprecation(),
     core_types.MFCumulativeTypeParamsDeprecation(),
     core_types.MicrobatchMacroOutsideOfBatchesDeprecation(),
+    core_types.GenericJSONSchemaValidationDeprecation(violation="", key_path="", file=""),
+    core_types.UnexpectedJinjaBlockDeprecation(msg="", file=""),
+    core_types.DuplicateYAMLKeysDeprecation(duplicate_description="", file=""),
+    core_types.CustomTopLevelKeyDeprecation(msg="", file=""),
+    core_types.CustomKeyInConfigDeprecation(key="", key_path="", file=""),
+    core_types.CustomKeyInObjectDeprecation(key="", key_path="", file=""),
+    core_types.DeprecationsSummary(summaries=[], show_all_hint=True),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),

@@ -138,3 +138,40 @@ local_dependency__seed_csv = """id,name
 2,Sam
 3,John
 """
+
+
+invalid_deprecation_date_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1
+"""
+
+duplicate_keys_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+"""
+
+custom_key_in_config_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+    config:
+      my_custom_key: "my_custom_value"
+"""
+
+custom_key_in_object_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+    my_custom_property: "It's over, I have the high ground"
+"""

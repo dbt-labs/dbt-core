@@ -15,7 +15,7 @@ def parse_cli_yaml_string(var_string: str, cli_option_name: str) -> Dict[str, An
     try:
         cli_vars = yaml_helper.load_yaml_text(var_string)
         var_type = type(cli_vars)
-        if var_type is dict:
+        if cli_vars is not None and var_type is dict:
             return cli_vars
         else:
             raise OptionNotYamlDictError(var_type, cli_option_name)

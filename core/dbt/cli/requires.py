@@ -16,7 +16,7 @@ from dbt.config.catalogs import get_active_write_integration, load_catalogs
 from dbt.config.runtime import UnsetProfile, load_profile, load_project
 from dbt.context.providers import generate_runtime_macro_context
 from dbt.context.query_header import generate_query_header_context
-from dbt.deprecations import show_all_deprecation_summaries
+from dbt.deprecations import show_deprecations_summary
 from dbt.events.logging import setup_event_logger
 from dbt.events.types import (
     ArtifactUploadError,
@@ -181,7 +181,7 @@ def postflight(func):
             except Exception as e:
                 fire_event(ArtifactUploadError(msg=str(e)))
 
-            show_all_deprecation_summaries()
+            show_deprecations_summary()
 
             if importlib.util.find_spec("resource") is not None:
                 import resource
@@ -267,8 +267,10 @@ def project(func):
             raise DbtProjectError("profile required for project")
 
         flags = ctx.obj["flags"]
+        # TODO deprecations warnings fired from loading the project will lack
+        # the project_id in the snowplow event.
         project = load_project(
-            flags.PROJECT_DIR, flags.VERSION_CHECK, ctx.obj["profile"], flags.VARS
+            flags.PROJECT_DIR, flags.VERSION_CHECK, ctx.obj["profile"], flags.VARS, validate=True
         )
         ctx.obj["project"] = project
 

@@ -3,7 +3,7 @@ import itertools
 import os
 from typing import Any, Dict, Generic, List, Optional, TypeVar
 
-from dbt import hooks, utils
+from dbt import deprecations, hooks, utils
 from dbt.adapters.factory import get_adapter  # noqa: F401
 from dbt.artifacts.resources import Contract
 from dbt.clients.jinja import MacroGenerator, get_rendered
@@ -27,6 +27,7 @@ from dbt.flags import get_flags
 from dbt.node_types import AccessType, ModelLanguage, NodeType
 from dbt.parser.common import resource_types_to_schema_file_keys
 from dbt.parser.search import FileBlock
+from dbt_common.clients._jinja_blocks import ExtractWarning
 from dbt_common.dataclass_schema import ValidationError
 from dbt_common.utils import deep_merge
 
@@ -62,6 +63,9 @@ class BaseParser(Generic[FinalValue]):
         return ".".join(
             filter(None, [self.resource_type, self.project.project_name, resource_name, hash])
         )
+
+    def _handle_extract_warning(self, warning: ExtractWarning, file: str) -> None:
+        deprecations.warn("unexpected-jinja-block-deprecation", msg=warning.msg, file=file)
 
 
 class Parser(BaseParser[FinalValue], Generic[FinalValue]):

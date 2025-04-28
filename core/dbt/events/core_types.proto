@@ -470,15 +470,92 @@ message MicrobatchMacroOutsideOfBatchesDeprecationMsg {
     MicrobatchMacroOutsideOfBatchesDeprecation data = 2;
 }
 
-// D021
-message PackageRedirectDeprecationSummary {
-    int32 occurrences = 1;
+// Skipping D021. It belonged to the now deleted PackageRedirectDeprecationSummaryMsg.
+
+// D022
+message GenericJSONSchemaValidationDeprecation {
+    string violation = 1;
+    string file = 2;
+    string key_path = 3;
+}
+
+message GenericJSONSchemaValidationDeprecationMsg {
+    CoreEventInfo info = 1;
+    GenericJSONSchemaValidationDeprecation data = 2;
+}
+
+// D023
+message UnexpectedJinjaBlockDeprecation {
+    string msg = 1;
+    string file = 2;
+}
+
+message UnexpectedJinjaBlockDeprecationMsg {
+    CoreEventInfo info = 1;
+    UnexpectedJinjaBlockDeprecation data = 2;
+}
+
+// D024
+message DuplicateYAMLKeysDeprecation {
+    string duplicate_description = 1;
+    string file = 2;
+}
+
+message DuplicateYAMLKeysDeprecationMsg {
+    CoreEventInfo info = 1;
+    DuplicateYAMLKeysDeprecation data = 2;
+}
+
+// D025
+message CustomTopLevelKeyDeprecation {
+    string msg = 1;
+    string file = 2;
+}
+
+message CustomTopLevelKeyDeprecationMsg {
+    CoreEventInfo info = 1;
+    CustomTopLevelKeyDeprecation data = 2;
+}
+
+// D026
+message CustomKeyInConfigDeprecation {
+    string key = 1;
+    string file = 2;
+    string key_path = 3;
+}
+
+message CustomKeyInConfigDeprecationMsg {
+    CoreEventInfo info = 1;
+    CustomKeyInConfigDeprecation data = 2;
+}
+
+// D027
+message CustomKeyInObjectDeprecation {
+    string key = 1;
+    string file = 2;
+    string key_path = 3;
+}
+
+message CustomKeyInObjectDeprecationMsg {
+    CoreEventInfo info = 1;
+    CustomKeyInObjectDeprecation data = 2;
+}
+
+// D028
+message DeprecationSummary {
+    string event_name = 1;
+    string event_code = 2;
+    int32 occurrences = 3;
+}
+
+message DeprecationsSummary {
+    repeated DeprecationSummary summaries = 1;
     bool show_all_hint = 2;
 }
 
-message PackageRedirectDeprecationSummaryMsg {
+message DeprecationsSummaryMsg {
     CoreEventInfo info = 1;
-    PackageRedirectDeprecationSummary data = 2;
+    DeprecationsSummary data = 2;
 }
 
 // I065

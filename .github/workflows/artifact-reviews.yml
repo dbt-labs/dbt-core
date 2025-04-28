@@ -10,9 +10,14 @@
 
 name: "Enforce Additional Reviews on Artifact and Validations Changes"
 
+permissions:
+  checks: write
+  pull-requests: write
+  contents: read
+
 on:
-  # trigger check on review events
-  pull_request:
+  # trigger check on review events.  use pull_request_target for forks.
+  pull_request_target:
     types: [opened, reopened, ready_for_review, synchronize, review_requested]
   pull_request_review:
     types: [submitted, edited, dismissed]
@@ -33,6 +38,9 @@ jobs:
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request_target.head.sha || github.event.pull_request.head.sha }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
 
       - name: "Get list of changed files"
         id: changed_files
@@ -57,19 +65,7 @@ jobs:
               break
             fi
           done <<< "${{ steps.changed_files.outputs.CHANGED_FILES }}"
-          if [[ "$artifact_changes" == "false" ]]; then
-            echo "No changes to artifact files.  No additional reviews required."
-            gh api \
-              --method POST \
-              -H "Accept: application/vnd.github+json" \
-              /repos/${{ github.repository }}/check-runs \
-              -f name='Artifact Review Check' \
-              -f head_sha=${{ github.event.pull_request_target.head.sha || github.event.pull_request.head.sha }} \
-              -f status='completed' \
-              -f conclusion='success' \
-              -f force=true \
-              -f details_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          fi
+          echo "Debug: artifact_changes=$artifact_changes"
           echo "artifact_changes=$artifact_changes" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -153,34 +149,33 @@ jobs:
           fi
         id: review_check
 
-      - name: "Set check conclusion"
-        if: steps.artifact_files_changed.outputs.artifact_changes == 'true'
+      - name: "Set check status"
+        id: status_check
         run: |
-          if [[ "${{ steps.review_check.outputs.REVIEW_STATUS }}" == "success" ]]; then
-            gh api \
-              --method POST \
-              -H "Accept: application/vnd.github+json" \
-              /repos/${{ github.repository }}/check-runs \
-              -f name='Artifact Review Check' \
-              -f head_sha=${{ github.event.pull_request_target.head.sha || github.event.pull_request.head.sha }} \
-              -f status='completed' \
-              -f conclusion='success' \
-              -f force=true \
-              -f details_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if [[ "${{ steps.artifact_files_changed.outputs.artifact_changes }}" == 'false' ]]; then
+            # no extra review required
+            echo "current_status=success" >> $GITHUB_OUTPUT
+          elif [[ "${{ steps.review_check.outputs.REVIEW_STATUS }}" == "success" ]]; then
+            3 we have all the required reviews
+            echo "current_status=success" >> $GITHUB_OUTPUT
           else
             # neutral exit - neither success nor failure
             # we can't fail here because we use multiple triggers for this workflow and they won't reset the check
             # workaround is to use a neutral exit to skip the check run until it's actually successful
-            gh api \
-              --method POST \
-              -H "Accept: application/vnd.github+json" \
-              /repos/${{ github.repository }}/check-runs \
-              -f name='Artifact Review Check' \
-              -f head_sha=${{ github.event.pull_request_target.head.sha || github.event.pull_request.head.sha }} \
-              -f status='completed' \
-              -f conclusion='neutral' \
-              -f force=true \
-              -f details_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "current_status=neutral" >> $GITHUB_OUTPUT
           fi
+
+      - name: "Post Event"
+        run: |
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/check-runs \
+            -f name='Artifact Review Check' \
+            -f head_sha=${{ github.event.pull_request_target.head.sha || github.event.pull_request.head.sha }} \
+            -f status='completed' \
+            -f conclusion='${{ steps.status_check.outputs.current_status }}' \
+            -f force=true \
+            -f details_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

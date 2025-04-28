@@ -8,6 +8,10 @@ from typing_extensions import Protocol, runtime_checkable
 
 from dbt import deprecations
 from dbt.adapters.contracts.connection import QueryComment
+from dbt.clients.checked_load import (
+    checked_load,
+    issue_deprecation_warnings_for_failures,
+)
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config.selectors import SelectorDict
 from dbt.config.utils import normalize_warn_error_options
@@ -29,6 +33,7 @@ from dbt.exceptions import (
 )
 from dbt.flags import get_flags
 from dbt.graph import SelectionSpec
+from dbt.jsonschemas import jsonschema_validate, project_schema
 from dbt.node_types import NodeType
 from dbt.utils import MultiDict, coerce_dict_str, md5
 from dbt.version import get_installed_version
@@ -86,9 +91,14 @@ class IsFQNResource(Protocol):
     package_name: str
 
 
-def _load_yaml(path):
+def _load_yaml(path, validate: bool = False):
     contents = load_file_contents(path)
-    return load_yaml_text(contents)
+    if validate:
+        result, failures = checked_load(contents)
+        issue_deprecation_warnings_for_failures(failures=failures, file=path)
+        return result
+    else:
+        return load_yaml_text(contents)
 
 
 def load_yml_dict(file_path):
@@ -182,7 +192,7 @@ def value_or(value: Optional[T], default: T) -> T:
         return value
 
 
-def load_raw_project(project_root: str) -> Dict[str, Any]:
+def load_raw_project(project_root: str, validate: bool = False) -> Dict[str, Any]:
     project_root = os.path.normpath(project_root)
     project_yaml_filepath = os.path.join(project_root, DBT_PROJECT_FILE_NAME)
 
@@ -194,7 +204,12 @@ def load_raw_project(project_root: str) -> Dict[str, Any]:
             )
         )
 
-    project_dict = _load_yaml(project_yaml_filepath)
+    project_dict = _load_yaml(project_yaml_filepath, validate=validate)
+
+    if validate:
+        jsonschema_validate(
+            schema=project_schema(), json=project_dict, file_path=project_yaml_filepath
+        )
 
     if not isinstance(project_dict, dict):
         raise DbtProjectError(f"{DBT_PROJECT_FILE_NAME} does not parse to a dictionary")
@@ -534,7 +549,7 @@ class PartialProject(RenderComponents):
         project_root: str,
         project_dict: Dict[str, Any],
         packages_dict: Dict[str, Any],
-        selectors_dict: Dict[str, Any],
+        selectors_dict: Optional[Dict[str, Any]],
         *,
         verify_version: bool = False,
         packages_specified_path: str = PACKAGES_FILE_NAME,
@@ -550,17 +565,17 @@ class PartialProject(RenderComponents):
             project_root=project_root,
             project_dict=project_dict,
             packages_dict=packages_dict,
-            selectors_dict=selectors_dict,
+            selectors_dict=selectors_dict,  # type: ignore
             verify_version=verify_version,
             packages_specified_path=packages_specified_path,
         )
 
     @classmethod
     def from_project_root(
-        cls, project_root: str, *, verify_version: bool = False
+        cls, project_root: str, *, verify_version: bool = False, validate: bool = False
     ) -> "PartialProject":
         project_root = os.path.normpath(project_root)
-        project_dict = load_raw_project(project_root)
+        project_dict = load_raw_project(project_root, validate=validate)
         (
             packages_dict,
             packages_specified_path,
@@ -747,8 +762,11 @@ class Project:
         renderer: DbtProjectYamlRenderer,
         *,
         verify_version: bool = False,
+        validate: bool = False,
     ) -> "Project":
-        partial = PartialProject.from_project_root(project_root, verify_version=verify_version)
+        partial = PartialProject.from_project_root(
+            project_root, verify_version=verify_version, validate=validate
+        )
         return partial.render(renderer)
 
     def hashed_name(self):
