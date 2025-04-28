@@ -18,7 +18,7 @@ pytest-logbook
 pytest-mock
 pytest-split
 pytest-xdist
-setuptools==70.0.1
+setuptools==70.0.0
 sphinx
 tox>=3.13
 types-colorama
