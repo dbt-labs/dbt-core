@@ -364,7 +364,8 @@ jobs:
       - name: Install python dependencies
         run: |
           python -m pip install --user --upgrade pip
-          python -m pip install --upgrade setuptools wheel twine check-wheel-contents
+          python -m pip install setuptools=70.0.1
+          python -m pip install --upgrade wheel twine check-wheel-contents
           python -m pip --version
 
       - name: Build distributions
