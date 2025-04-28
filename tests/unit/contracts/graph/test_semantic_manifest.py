@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -13,6 +13,7 @@ from dbt.artifacts.resources.v1.metric import (
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
 from dbt_semantic_interfaces.type_enums import TimeGranularity
 from dbt_semantic_interfaces.type_enums.metric_type import MetricType
+from dbt_semantic_interfaces.validations.validator_helpers import ValidationError, ValidationIssueContext, FileContext
 
 
 # Overwrite the default nods to construct the manifest
@@ -41,7 +42,37 @@ class TestSemanticManifest:
         with patch("dbt.contracts.graph.semantic_manifest.get_flags") as patched_get_flags:
             patched_get_flags.return_value.require_yaml_configuration_for_mf_time_spines = True
             sm_manifest = SemanticManifest(manifest)
-            assert sm_manifest.validate()
+            assert sm_manifest.validate() is None
+
+    def test_validate_with_errors(self, manifest):
+        with patch("dbt.contracts.graph.semantic_manifest.get_flags") as patched_get_flags, \
+             patch("dbt_semantic_interfaces.validations.semantic_manifest_validator.SemanticManifestValidator") as patched_validator:
+            patched_get_flags.return_value.require_yaml_configuration_for_mf_time_spines = True
+            
+            # Create a mock validation result with errors
+            mock_validator_instance = MagicMock()
+            mock_validation_results = MagicMock()
+            mock_validation_results.errors = [
+                ValidationError(
+                    context=ValidationIssueContext(
+                        file_context=FileContext(),
+                        object_name="test_metric",
+                        object_type="metric",
+                    ),
+                    message="Test validation error message"
+                )
+            ]
+            mock_validation_results.warnings = []
+            mock_validator_instance.validate_semantic_manifest.return_value = mock_validation_results
+            patched_validator.return_value = mock_validator_instance
+            
+            sm_manifest = SemanticManifest(manifest)
+            validation_errors = sm_manifest.validate()
+            
+            # Verify validation errors are returned
+            assert validation_errors is not None
+            assert len(validation_errors) == 1
+            assert validation_errors[0].message == "Test validation error message"
 
     def test_require_yaml_configuration_for_mf_time_spines(
         self, manifest: Manifest, metricflow_time_spine_model: ModelNode
