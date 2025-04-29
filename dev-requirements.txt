@@ -18,6 +18,7 @@ pytest-dotenv
 pytest-logbook
 pytest-mock
 pytest-xdist
+setuptools==79.0.1
 sphinx
 tox>=3.13
 types-colorama
