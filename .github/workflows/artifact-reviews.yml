@@ -45,30 +45,34 @@ jobs:
       - name: "Get list of changed files"
         id: changed_files
         run: |
-          CHANGED_FILES=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files | jq -r '.[].filename')
-          echo "Changed files:"
-          echo "$CHANGED_FILES"
+          # Fetch files as JSON and process with jq to sanitize output
+          gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files \
+            | jq -r '.[].filename' \
+            | while IFS= read -r file; do
+              # Sanitize the filename by removing any special characters and command injection attempts
+              clean_file=$(echo "$file" | sed 's/[^a-zA-Z0-9\.\/\-_]//g')
+              echo "$clean_file"
+            done > changed_files.txt
           echo "CHANGED_FILES<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
+          cat changed_files.txt >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "Check if any artifact files were changed"
+      - name: "Check if any artifact files changed"
         id: artifact_files_changed
         run: |
           artifact_changes=false
           while IFS= read -r file; do
-            echo "Debug: Checking file: '$file'"
-            if [[ "$file" == "core/dbt/artifacts/"* ]] ; then
-              artifact_changes=true
-              break
+            # Only process if file path looks legitimate
+            if [[ "$file" =~ ^[a-zA-Z0-9\.\/\-_]+$ ]]; then
+              if [[ "$file" == "core/dbt/artifacts/"* ]] ; then
+                artifact_changes=true
+                break
+              fi
             fi
-          done <<< "${{ steps.changed_files.outputs.CHANGED_FILES }}"
-          echo "Debug: artifact_changes=$artifact_changes"
+          done < changed_files.txt
           echo "artifact_changes=$artifact_changes" >> $GITHUB_OUTPUT
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: "Get Core Team Members"
         if: steps.artifact_files_changed.outputs.artifact_changes == 'true'
