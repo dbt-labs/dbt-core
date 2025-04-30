@@ -11,7 +11,7 @@ import dbt.config
 import dbt.exceptions
 from dbt.adapters.contracts.connection import DEFAULT_QUERY_COMMENT, QueryComment
 from dbt.adapters.factory import load_plugin
-from dbt.config.project import Project, _get_required_version, jsonschema_validate
+from dbt.config.project import Project, _get_required_version
 from dbt.constants import DEPENDENCIES_FILE_NAME
 from dbt.contracts.project import GitPackage, LocalPackage, PackageConfig
 from dbt.deprecations import GenericJSONSchemaValidationDeprecation
@@ -595,6 +595,8 @@ class TestGetRequiredVersion:
 class TestDeprecations:
 
     def test_jsonschema_validate(self) -> None:
+        from dbt.jsonschemas import jsonschema_validate
+
         project_dict: Dict[str, Any] = {}
 
         event_catcher = EventCatcher(GenericJSONSchemaValidationDeprecation)
