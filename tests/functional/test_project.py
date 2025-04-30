@@ -10,7 +10,7 @@ class TestProjectJsonschemaValidatedOnlyOnce:
     """Ensure that the dbt_project.yml file is validated only once, even if it is 'loaded' multiple times"""
 
     def test_project(self, project, mocker: MockerFixture) -> None:
-        mocked_jsonschema_validate = mocker.patch("dbt.config.project.jsonschema_validate")
+        mocked_jsonschema_validate = mocker.patch("dbt.jsonschemas.jsonschema_validate")
         run_dbt(["parse"])
         assert mocked_jsonschema_validate.call_count == 1
 
