@@ -160,7 +160,7 @@ jobs:
             # no extra review required
             echo "current_status=success" >> $GITHUB_OUTPUT
           elif [[ "${{ steps.review_check.outputs.REVIEW_STATUS }}" == "success" ]]; then
-            3 we have all the required reviews
+            # we have all the required reviews
             echo "current_status=success" >> $GITHUB_OUTPUT
           else
             # neutral exit - neither success nor failure
