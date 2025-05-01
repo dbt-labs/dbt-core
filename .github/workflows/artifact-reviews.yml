@@ -36,12 +36,6 @@ jobs:
     name: "Validate Additional Reviews"
     runs-on: ubuntu-latest
     steps:
-      - name: "Checkout code"
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request_target.head.sha || github.event.pull_request.head.sha }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-
       - name: "Get list of changed files"
         id: changed_files
         run: |
