@@ -7,6 +7,9 @@ on:
 
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   check-artifact-changes:
     runs-on: ubuntu-latest
