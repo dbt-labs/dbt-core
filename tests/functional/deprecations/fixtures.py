@@ -168,6 +168,16 @@ models:
       my_custom_key: "my_custom_value"
 """
 
+multiple_custom_keys_in_config_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+    config:
+      my_custom_key: "my_custom_value"
+      my_custom_key2: "my_custom_value2"
+"""
+
 custom_key_in_object_yaml = """
 models:
   - name: models_trivial

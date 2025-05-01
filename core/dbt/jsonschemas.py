@@ -3,7 +3,7 @@ import os
 import re
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, Iterator
+from typing import Any, Dict, Iterator, List
 
 import jsonschema
 from jsonschema import ValidationError
@@ -57,10 +57,9 @@ def error_path_to_string(error: jsonschema.ValidationError) -> str:
         return path
 
 
-def _additional_properties_violation_key(error: ValidationError) -> str:
-    key_search = re.search(r"'\S+'", error.message)
-    key = key_search.group() if key_search else ""
-    return key.strip("'")
+def _additional_properties_violation_keys(error: ValidationError) -> List[str]:
+    found_keys = re.findall(r"'\S+'", error.message)
+    return [key.strip("'") for key in found_keys]
 
 
 def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path: str) -> None:
@@ -75,20 +74,23 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
         # Listify the error path to make it easier to work with (it's a deque in the ValidationError object)
         error_path = list(error.path)
         if error.validator == "additionalProperties":
-            key = _additional_properties_violation_key(error)
+            keys = _additional_properties_violation_keys(error)
             if len(error.path) == 0:
-                deprecations.warn(
-                    "custom-top-level-key-deprecation",
-                    msg="Unexpected top-level key" + (" " + key if key else ""),
-                    file=file_path,
-                )
+                for key in keys:
+                    deprecations.warn(
+                        "custom-top-level-key-deprecation",
+                        msg="Unexpected top-level key" + (" " + key if key else ""),
+                        file=file_path,
+                    )
             else:
-                deprecations.warn(
-                    "custom-key-in-object-deprecation",
-                    key=key,
-                    file=file_path,
-                    key_path=error_path_to_string(error),
-                )
+                key_path = error_path_to_string(error)
+                for key in keys:
+                    deprecations.warn(
+                        "custom-key-in-object-deprecation",
+                        key=key,
+                        file=file_path,
+                        key_path=key_path,
+                    )
         elif (
             error.validator == "anyOf"
             and len(error_path) > 0
@@ -101,13 +103,15 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                     isinstance(sub_error, ValidationError)
                     and sub_error.validator == "additionalProperties"
                 ):
-                    key = _additional_properties_violation_key(sub_error)
-                    deprecations.warn(
-                        "custom-key-in-config-deprecation",
-                        key=key,
-                        file=file_path,
-                        key_path=error_path_to_string(error),
-                    )
+                    keys = _additional_properties_violation_keys(sub_error)
+                    key_path = error_path_to_string(error)
+                    for key in keys:
+                        deprecations.warn(
+                            "custom-key-in-config-deprecation",
+                            key=key,
+                            file=file_path,
+                            key_path=key_path,
+                        )
         else:
             deprecations.warn(
                 "generic-json-schema-validation-deprecation",
