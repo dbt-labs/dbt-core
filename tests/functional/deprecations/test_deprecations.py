@@ -410,3 +410,19 @@ class TestJsonschemaValidationDeprecationsArentRunWithoutEnvVar:
         event_catcher = EventCatcher(CustomKeyInObjectDeprecation)
         run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
         assert len(event_catcher.caught_events) == 0
+
+
+class TestHappyPathProjectHasNoDeprecations:
+    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
+    def test_happy_path_project_has_no_deprecations(self, happy_path_project):
+        event_cathcer = EventCatcher(DeprecationsSummary)
+        run_dbt(["parse", "--no-partial-parse"], callbacks=[event_cathcer.catch])
+        assert len(event_cathcer.caught_events) == 0
+
+
+class TestBaseProjectHasNoDeprecations:
+    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
+    def test_base_project_has_no_deprecations(self, project):
+        event_cathcer = EventCatcher(DeprecationsSummary)
+        run_dbt(["parse", "--no-partial-parse"], callbacks=[event_cathcer.catch])
+        assert len(event_cathcer.caught_events) == 0
