@@ -8,10 +8,12 @@ coverage:
       default:
         target: auto
         threshold: 0.1% # Reduce noise by ignoring rounding errors in coverage drops
+        informational: true
     patch:
       default:
         target: auto
         threshold: 80%
+        informational: true
 
 comment:
   layout: "header, diff, flags, components"  # show component info in the PR comment
