@@ -363,7 +363,7 @@ class TestCustomKeyInObjectDeprecation:
         run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
         assert len(event_catcher.caught_events) == 1
         assert (
-            "Custom key `'my_custom_property'` found at `models[0]` in file"
+            "Custom key `my_custom_property` found at `models[0]` in file"
             in event_catcher.caught_events[0].info.msg
         )
 

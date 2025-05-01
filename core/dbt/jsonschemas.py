@@ -57,6 +57,12 @@ def error_path_to_string(error: jsonschema.ValidationError) -> str:
         return path
 
 
+def _additional_properties_violation_key(error: ValidationError) -> str:
+    key_search = re.search(r"'\S+'", error.message)
+    key = key_search.group() if key_search else ""
+    return key.strip("'")
+
+
 def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path: str) -> None:
 
     if not os.environ.get("DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS"):
@@ -69,17 +75,17 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
         # Listify the error path to make it easier to work with (it's a deque in the ValidationError object)
         error_path = list(error.path)
         if error.validator == "additionalProperties":
-            key = re.search(r"'\S+'", error.message)
+            key = _additional_properties_violation_key(error)
             if len(error.path) == 0:
                 deprecations.warn(
                     "custom-top-level-key-deprecation",
-                    msg="Unexpected top-level key" + (" " + key.group() if key else ""),
+                    msg="Unexpected top-level key" + (" " + key if key else ""),
                     file=file_path,
                 )
             else:
                 deprecations.warn(
                     "custom-key-in-object-deprecation",
-                    key=key.group() if key else "",
+                    key=key,
                     file=file_path,
                     key_path=error_path_to_string(error),
                 )
@@ -95,10 +101,10 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                     isinstance(sub_error, ValidationError)
                     and sub_error.validator == "additionalProperties"
                 ):
-                    key = re.search(r"'\S+'", sub_error.message)
+                    key = _additional_properties_violation_key(sub_error)
                     deprecations.warn(
                         "custom-key-in-config-deprecation",
-                        key=key.group().strip("'") if key else "",
+                        key=key,
                         file=file_path,
                         key_path=error_path_to_string(error),
                     )
