@@ -8,6 +8,15 @@ models:
         data_tests:
           - unique
           - not_null
+    config:
+      materialized: table
+      sql_header: "SELECT 1 as header;"
+      on_configuration_change: apply
+      unique_key: id
+      batch_size: day
+      begin: "2020-01-01"
+      lookback: 5
+      concurrent_batches: false
   - name: metricflow_time_spine
     description: Day time spine
     time_spine:
