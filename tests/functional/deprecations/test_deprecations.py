@@ -24,6 +24,7 @@ from tests.functional.deprecations.fixtures import (
     duplicate_keys_yaml,
     invalid_deprecation_date_yaml,
     models_trivial__model_sql,
+    multiple_custom_keys_in_config_yaml,
 )
 from tests.utils import EventCatcher
 
@@ -337,11 +338,39 @@ class TestCustomKeyInConfigDeprecation:
 
     def test_duplicate_yaml_keys_in_schema_files(self, project):
         event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
-        run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[event_catcher.catch],
+        )
         assert len(event_catcher.caught_events) == 1
         assert (
             "Custom key `my_custom_key` found in `config` at path `models[0].config`"
             in event_catcher.caught_events[0].info.msg
+        )
+
+
+class TestMultipleCustomKeysInConfigDeprecation:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models_trivial.sql": models_trivial__model_sql,
+            "models.yml": multiple_custom_keys_in_config_yaml,
+        }
+
+    def test_duplicate_yaml_keys_in_schema_files(self, project):
+        event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 2
+        assert (
+            "Custom key `my_custom_key` found in `config` at path `models[0].config`"
+            in event_catcher.caught_events[0].info.msg
+        )
+        assert (
+            "Custom key `my_custom_key2` found in `config` at path `models[0].config`"
+            in event_catcher.caught_events[1].info.msg
         )
 
 
