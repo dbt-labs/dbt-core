@@ -85,12 +85,18 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
             and isinstance(error.instance, dict)
             and len(error.instance.keys()) > 0
         ):
-            deprecations.warn(
-                "custom-key-in-config-deprecation",
-                key=(list(error.instance.keys()))[0],
-                file=file_path,
-                key_path=error_path_to_string(error),
-            )
+            for sub_error in error.context or []:
+                if (
+                    isinstance(sub_error, ValidationError)
+                    and sub_error.validator == "additionalProperties"
+                ):
+                    key = re.search(r"'\S+'", sub_error.message)
+                    deprecations.warn(
+                        "custom-key-in-config-deprecation",
+                        key=key.group().strip("'") if key else "",
+                        file=file_path,
+                        key_path=error_path_to_string(error),
+                    )
         else:
             deprecations.warn(
                 "generic-json-schema-validation-deprecation",
