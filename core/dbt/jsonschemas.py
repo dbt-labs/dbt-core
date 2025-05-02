@@ -91,13 +91,7 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                         file=file_path,
                         key_path=key_path,
                     )
-        elif (
-            error.validator == "anyOf"
-            and len(error_path) > 0
-            and error_path[-1] == "config"
-            and isinstance(error.instance, dict)
-            and len(error.instance.keys()) > 0
-        ):
+        elif error.validator == "anyOf" and len(error_path) > 0 and error_path[-1] == "config":
             for sub_error in error.context or []:
                 if (
                     isinstance(sub_error, ValidationError)
