@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from datetime import date, datetime
 from pathlib import Path
@@ -57,6 +58,10 @@ def error_path_to_string(error: jsonschema.ValidationError) -> str:
 
 
 def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path: str) -> None:
+
+    if not os.environ.get("DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS"):
+        return
+
     validator = CustomDraft7Validator(schema)
     errors: Iterator[ValidationError] = validator.iter_errors(json)  # get all validation errors
 
