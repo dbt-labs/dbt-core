@@ -17,6 +17,25 @@ models:
       begin: "2020-01-01"
       lookback: 5
       concurrent_batches: false
+      enabled: true
+      tags: "string_tag"
+      pre_hook: "SELECT 'string_pre_hook' as my_pre_hook;"
+      post_hook: "SELECT 'string_post_hook' as my_post_hook;"
+      database: "test_database"
+      schema: "test"
+      alias: "outer_alias"
+      persist_docs:
+        relation: true
+        columns: true
+      full_refresh: false
+      meta:
+        my_custom_property: "string_meta"
+      grants:
+        select: ["a_grant"]
+      contract:
+        enforce: true
+        alias_types: true
+
   - name: metricflow_time_spine
     description: Day time spine
     time_spine:
@@ -24,6 +43,16 @@ models:
     columns:
       - name: date_day
         granularity: day
+    config:
+      event_time: ts_second
+      tags:
+        - "list"
+        - "of"
+        - "tags"
+      pre_hook:
+        - "SELECT 'string_pre_hook' as my_pre_hook;"
+      post_hook:
+        - "SELECT 'string_post_hook' as my_post_hook;"
   - name: metricflow_time_spine_second
     description: Second time spine
     columns:
