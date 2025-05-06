@@ -1,3 +1,6 @@
+import os
+from unittest import mock
+
 import yaml
 from pytest_mock import MockerFixture
 
@@ -18,6 +21,7 @@ class TestProjectJsonschemaValidatedOnlyOnce:
 class TestGenericJsonSchemaValidationDeprecation:
     """Ensure that the generic jsonschema validation deprecation can be fired"""
 
+    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_project(self, project, project_root: str) -> None:
 
         # `name` was already required prior to this deprecation, so this deprecation doesn't
