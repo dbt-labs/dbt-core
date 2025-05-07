@@ -2,6 +2,11 @@ version: 2
 models:
   - name: outer
     description: The outer table
+    docs:
+      show: true
+      node_color: purple
+    deprecation_date: "2052-05-01"
+    access: public
     columns:
       - name: id
         description: The id value
@@ -35,7 +40,18 @@ models:
       contract:
         enforce: true
         alias_types: true
-
+    constraints:
+      - type: primary_key
+        columns: ["id"]
+        warn_unsupported: false
+      - type: foreign_key
+        columns: ["id"]
+        to: source('my_source', 'my_table')
+        to_columns: ["id"]
+      - type: check
+        columns: ["id"]
+        expression: "id > 0"
+        name: "Check that id is greater than 0"
   - name: metricflow_time_spine
     description: Day time spine
     time_spine:
