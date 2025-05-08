@@ -2,6 +2,7 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "DbtPropertiesFile",
     "type": "object",
+    "additionalProperties": false,
     "properties": {
       "analyses": {
         "type": [
@@ -134,6 +135,7 @@
       },
       "AggregationTypeParams": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "percentile": {
             "type": [
@@ -158,6 +160,7 @@
       },
       "AnalysesColumns": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "name"
         ],
@@ -181,6 +184,7 @@
       },
       "AnalysesConfig": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "tags": {
             "anyOf": [
@@ -199,6 +203,7 @@
         "required": [
           "name"
         ],
+        "additionalProperties": false,
         "properties": {
           "columns": {
             "type": [
@@ -259,6 +264,7 @@
       },
       "ColumnProperties": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "name"
         ],
@@ -364,6 +370,7 @@
       "Constraint": {
         "description": "Constraints (model level or column level)",
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "type"
         ],
@@ -424,6 +431,7 @@
       },
       "CustomGranularity": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "name"
         ],
@@ -461,6 +469,7 @@
       },
       "DbtContract": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "alias_types": {
             "type": [
@@ -502,6 +511,7 @@
       },
       "Dimension": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "is_partition",
           "name",
@@ -566,12 +576,13 @@
         "properties": {
           "meta": {
             "type": "object",
-            "additionalProperties": true
+            "additionalProperties": false
           }
         }
       },
       "DimensionTypeParams": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "time_granularity": {
             "type": [
@@ -584,6 +595,7 @@
       },
       "DocsConfig": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "node_color": {
             "type": [
@@ -599,6 +611,7 @@
       },
       "Entity": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "name",
           "type"
@@ -666,6 +679,7 @@
       },
       "Expect": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "fixture": {
             "type": [
@@ -695,6 +709,7 @@
       },
       "Export": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "name"
         ],
@@ -716,6 +731,7 @@
       },
       "ExportConfig": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "alias": {
             "type": [
@@ -739,8 +755,7 @@
               "null"
             ]
           }
-        },
-        "additionalProperties": true
+        }
       },
       "ExportConfigExportAs": {
         "type": "string",
@@ -752,6 +767,7 @@
       },
       "ExposurePropertiesConfigs": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "enabled": {
             "type": [
@@ -781,6 +797,7 @@
       },
       "ExposuresProperties": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "name",
           "owner",
@@ -873,6 +890,7 @@
       },
       "FreshnessDefinition": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "error_after": {
             "anyOf": [
@@ -912,6 +930,7 @@
       },
       "FreshnessRules": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "count": {
             "anyOf": [
@@ -940,6 +959,7 @@
         "required": [
           "input"
         ],
+        "additionalProperties": false,
         "properties": {
           "fixture": {
             "type": [
@@ -972,6 +992,7 @@
       },
       "GrantAccessToTarget": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "dataset": {
             "type": [
@@ -1007,6 +1028,7 @@
       },
       "GroupsProperties": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "name",
           "owner"
@@ -1022,6 +1044,7 @@
       },
       "HookConfig": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "sql": {
             "type": [
@@ -1061,6 +1084,7 @@
       },
       "MacrosArguments": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "name"
         ],
@@ -1084,6 +1108,7 @@
       },
       "MacrosProperties": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "name"
         ],
@@ -1120,6 +1145,7 @@
       },
       "Measure": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "agg",
           "name"
@@ -1222,6 +1248,7 @@
       },
       "ModelFreshness": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "build_after": {
             "anyOf": [
@@ -1237,6 +1264,7 @@
       },
       "ModelProperties": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "name"
         ],
@@ -1374,6 +1402,7 @@
       },
       "ModelPropertiesConfigs": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "alias": {
             "type": [
@@ -1626,6 +1655,7 @@
       },
       "ModelsTimeSpine": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "standard_granularity_column"
         ],
@@ -1646,6 +1676,7 @@
       },
       "NonAdditiveDimension": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "name"
         ],
@@ -1705,6 +1736,7 @@
       },
       "PersistDocsConfig": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "columns": {
             "type": [
@@ -1745,6 +1777,7 @@
       },
       "SavedQueriesConfig": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "cache": {
             "anyOf": [
@@ -1763,11 +1796,11 @@
             ]
           },
           "meta": true
-        },
-        "additionalProperties": true
+        }
       },
       "SavedQueriesConfigCache": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "enabled": {
             "type": [
@@ -1779,6 +1812,7 @@
       },
       "SavedQueriesProperties": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "name",
           "query_params"
@@ -1825,6 +1859,7 @@
       },
       "SavedQueriesQueryParams": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "dimensions": {
             "type": [
@@ -1866,6 +1901,7 @@
       },
       "SeedProperties": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "name"
         ],
@@ -1936,6 +1972,7 @@
       },
       "SeedsConfig": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "alias": {
             "type": [
@@ -1999,6 +2036,7 @@
       },
       "SemanticModelsDefaults": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "agg_time_dimension": {
             "type": [
@@ -2010,6 +2048,7 @@
       },
       "SemanticModelsProperties": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "model",
           "name"
@@ -2090,6 +2129,7 @@
       },
       "SnapshotProperties": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "name"
         ],
@@ -2167,6 +2207,7 @@
       },
       "SnapshotsConfig": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "alias": {
             "type": [
@@ -2292,6 +2333,7 @@
       },
       "SnapshotsConfigSnapshotMetaColumnNames": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "dbt_scd_id": {
             "default": "DBT_SCD_ID",
@@ -2313,6 +2355,7 @@
       },
       "SourceProperties": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "name"
         ],
@@ -2422,6 +2465,7 @@
       },
       "SourcePropertiesConfig": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "enabled": {
             "type": [
@@ -2452,6 +2496,7 @@
       },
       "Tables": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "name"
         ],
@@ -2568,6 +2613,7 @@
       },
       "TablesConfig": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "event_time": {
             "type": [
@@ -2575,8 +2621,7 @@
               "null"
             ]
           }
-        },
-        "additionalProperties": true
+        }
       },
       "UniqueTest": {
         "type": "object",
@@ -2589,6 +2634,7 @@
       },
       "UnitTestOverrides": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "env_vars": true,
           "macros": true,
@@ -2597,6 +2643,7 @@
       },
       "UnitTestProperties": {
         "type": "object",
+        "additionalProperties": false,
         "required": [
           "expect",
           "model",
@@ -2652,6 +2699,7 @@
       },
       "UnitTestPropertiesConfig": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "enabled": {
             "type": [
