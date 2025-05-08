@@ -68,6 +68,7 @@ jobs:
         run: |
           pip install --user --upgrade pip
           pip --version
+          pip install 'virtualenv==20.30.0'
           pip install tox
           tox --version
 

@@ -181,6 +181,7 @@ jobs:
         run: |
           python -m pip install --user --upgrade pip
           python -m pip --version
+          python -m pip install 'virtualenv==20.30.0'
           python -m pip install tox
           tox --version
 
@@ -262,6 +263,7 @@ jobs:
         run: |
           python -m pip install --user --upgrade pip
           python -m pip --version
+          python -m pip install 'virtualenv==20.30.0'
           python -m pip install tox
           tox --version
 
