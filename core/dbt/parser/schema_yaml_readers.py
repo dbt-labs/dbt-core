@@ -117,6 +117,12 @@ class ExposureParser(YamlReader):
                 f"Calculated a {type(config)} for an exposure, but expected an ExposureConfig"
             )
 
+        tags = sorted(set(self.project.exposures.get("tags", []) + config.tags))
+        meta = {**self.project.exposures.get("meta", {}), **config.meta}
+
+        config.tags = tags
+        config.meta = meta
+
         parsed = Exposure(
             resource_type=NodeType.Exposure,
             package_name=package_name,
@@ -127,8 +133,8 @@ class ExposureParser(YamlReader):
             name=unparsed.name,
             type=unparsed.type,
             url=unparsed.url,
-            meta=unparsed.meta,
-            tags=unparsed.tags,
+            meta=meta,
+            tags=tags,
             description=unparsed.description,
             label=unparsed.label,
             owner=unparsed.owner,
