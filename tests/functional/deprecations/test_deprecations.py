@@ -341,7 +341,7 @@ class TestCustomKeyInConfigDeprecation:
         }
 
     @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
-    def test_duplicate_yaml_keys_in_schema_files(self, project):
+    def test_custom_key_in_config_deprecation(self, project):
         event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
         run_dbt(
             ["parse", "--no-partial-parse", "--show-all-deprecations"],
@@ -363,7 +363,7 @@ class TestMultipleCustomKeysInConfigDeprecation:
         }
 
     @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
-    def test_duplicate_yaml_keys_in_schema_files(self, project):
+    def test_multiple_custom_keys_in_config_deprecation(self, project):
         event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
         run_dbt(
             ["parse", "--no-partial-parse", "--show-all-deprecations"],
