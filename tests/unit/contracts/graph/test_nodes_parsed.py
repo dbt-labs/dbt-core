@@ -2106,6 +2106,8 @@ def basic_parsed_exposure_dict():
         "created_at": 1.0,
         "config": {
             "enabled": True,
+            "tags": [],
+            "meta": {},
         },
         "unrendered_config": {},
     }
@@ -2161,6 +2163,8 @@ def complex_parsed_exposure_dict():
         "original_file_path": "models/something.yml",
         "config": {
             "enabled": True,
+            "tags": [],
+            "meta": {},
         },
         "unrendered_config": {},
     }
