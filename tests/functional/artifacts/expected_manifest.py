@@ -854,6 +854,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "label": None,
                 "config": {
                     "enabled": True,
+                    "meta": {"tool": "my_tool", "languages": ["python"]},
+                    "tags": ["my_department"],
                 },
                 "fqn": ["test", "notebook_exposure"],
                 "maturity": "medium",
@@ -886,6 +888,8 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "label": None,
                 "config": {
                     "enabled": True,
+                    "meta": {},
+                    "tags": [],
                 },
                 "fqn": ["test", "simple_exposure"],
                 "metrics": [],
@@ -1378,6 +1382,8 @@ def expected_references_manifest(project):
                 "label": None,
                 "config": {
                     "enabled": True,
+                    "meta": {"tool": "my_tool", "languages": ["python"]},
+                    "tags": ["my_department"],
                 },
                 "fqn": ["test", "notebook_exposure"],
                 "maturity": "medium",
@@ -1968,6 +1974,8 @@ def expected_versions_manifest(project):
                 "label": None,
                 "config": {
                     "enabled": True,
+                    "meta": {},
+                    "tags": [],
                 },
                 "fqn": ["test", "notebook_exposure"],
                 "maturity": None,
