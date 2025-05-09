@@ -340,7 +340,7 @@ class TestCustomKeyInConfigDeprecation:
         }
 
     @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
-    def test_duplicate_yaml_keys_in_schema_files(self, project):
+    def test_custom_key_in_config_deprecation(self, project):
         event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
         run_dbt(
             ["parse", "--no-partial-parse", "--show-all-deprecations"],
@@ -362,7 +362,7 @@ class TestMultipleCustomKeysInConfigDeprecation:
         }
 
     @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
-    def test_duplicate_yaml_keys_in_schema_files(self, project):
+    def test_multiple_custom_keys_in_config_deprecation(self, project):
         event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
         run_dbt(
             ["parse", "--no-partial-parse", "--show-all-deprecations"],
@@ -410,3 +410,25 @@ class TestJsonschemaValidationDeprecationsArentRunWithoutEnvVar:
         event_catcher = EventCatcher(CustomKeyInObjectDeprecation)
         run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
         assert len(event_catcher.caught_events) == 0
+
+
+class TestHappyPathProjectHasNoDeprecations:
+    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
+    def test_happy_path_project_has_no_deprecations(self, happy_path_project):
+        event_cathcer = EventCatcher(DeprecationsSummary)
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[event_cathcer.catch],
+        )
+        assert len(event_cathcer.caught_events) == 0
+
+
+class TestBaseProjectHasNoDeprecations:
+    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
+    def test_base_project_has_no_deprecations(self, project):
+        event_cathcer = EventCatcher(DeprecationsSummary)
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[event_cathcer.catch],
+        )
+        assert len(event_cathcer.caught_events) == 0
