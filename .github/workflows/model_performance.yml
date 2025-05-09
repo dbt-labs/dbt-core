@@ -38,7 +38,7 @@ permissions:
 jobs:
   set-variables:
     name: Setting Variables
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_LATEST }}
     outputs:
       cache_key: ${{ steps.variables.outputs.cache_key }}
       release_id: ${{ steps.semver.outputs.base-version }}
@@ -72,7 +72,7 @@ jobs:
 
   latest-runner:
     name: Build or Fetch Runner
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_LATEST }}
     needs: [set-variables]
     env:
       RUSTFLAGS: "-D warnings"
@@ -137,7 +137,7 @@ jobs:
     # a successfully tested and built binary from being cached.
     needs: [set-variables, latest-runner]
     name: Model a release
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_LATEST }}
     steps:
 
       - name: '[DEBUG] print variables'
@@ -206,7 +206,7 @@ jobs:
     # depends on `model` as a separate job so that the baseline can be committed to more than one branch
     # i.e. release branch and main
     needs: [set-variables, latest-runner, model]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_LATEST }}
 
     strategy:
       matrix:

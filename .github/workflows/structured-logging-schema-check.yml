@@ -26,7 +26,7 @@ env:
 jobs:
   integration-metadata:
     name: integration test metadata generation
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_LATEST }}
     outputs:
       split-groups: ${{ steps.generate-split-groups.outputs.split-groups }}
 
@@ -45,7 +45,7 @@ jobs:
   # run the performance measurements on the current or default branch
   test-schema:
     name: Test Log Schema
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_LATEST }}
     timeout-minutes: 30
     needs:
       - integration-metadata
@@ -127,7 +127,7 @@ jobs:
 
   test-schema-report:
     name: Log Schema Test Suite
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_LATEST }}
     needs: test-schema
     steps:
       - name: "[Notification] Log test suite passes"

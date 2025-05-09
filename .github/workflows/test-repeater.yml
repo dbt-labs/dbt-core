@@ -51,7 +51,7 @@ defaults:
 
 jobs:
   debug:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_LATEST }}
     steps:
       - name: "[DEBUG] Output Inputs"
         run: |
@@ -95,7 +95,7 @@ jobs:
         run: make dev
 
       - name: "Set up postgres (linux)"
-        if: inputs.os == 'ubuntu-latest'
+        if: inputs.os == '${{ vars.UBUNTU_LATEST }}'
         run: make setup-db
 
         # mac and windows don't use make due to limitations with docker with those runners in GitHub

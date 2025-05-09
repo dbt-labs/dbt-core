@@ -41,7 +41,7 @@ jobs:
         include:
           - label: "dependencies"
             changie_kind: "Dependencies"
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_LATEST }}
 
     steps:
 

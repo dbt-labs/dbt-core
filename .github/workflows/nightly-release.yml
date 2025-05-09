@@ -31,7 +31,7 @@ env:
 
 jobs:
   aggregate-release-data:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_LATEST }}
 
     outputs:
       version_number: ${{ steps.nightly-release-version.outputs.number }}
@@ -76,7 +76,7 @@ jobs:
           echo "name=${{ env.RELEASE_BRANCH }}" >> $GITHUB_OUTPUT
 
   log-outputs-aggregate-release-data:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_LATEST }}
     needs: [aggregate-release-data]
 
     steps:
