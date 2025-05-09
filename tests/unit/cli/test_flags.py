@@ -11,7 +11,7 @@ from dbt.cli.types import Command
 from dbt.contracts.project import ProjectFlags
 from dbt.tests.util import rm_file, write_file
 from dbt_common.exceptions import DbtInternalError
-from dbt_common.helper_types import WarnErrorOptions
+from dbt_common.helper_types import WarnErrorOptionsV2
 
 
 class TestFlags:
@@ -161,7 +161,7 @@ class TestFlags:
             "run", ["--warn-error-options", '{"include": "all"}', "run"]
         )
         flags = Flags(warn_error_options_context)
-        assert flags.WARN_ERROR_OPTIONS == WarnErrorOptions(include="all")
+        assert flags.WARN_ERROR_OPTIONS == WarnErrorOptionsV2(error="all")
 
     def test_mutually_exclusive_options_from_cli(self):
         context = self.make_dbt_context(

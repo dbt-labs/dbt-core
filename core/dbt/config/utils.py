@@ -56,11 +56,11 @@ def exclusive_primary_alt_value_setting(
 
 def normalize_warn_error_options(warn_error_options: Dict[str, Any]) -> None:
     exclusive_primary_alt_value_setting(
-        warn_error_options, "include", "error", "warn_error_options"
+        warn_error_options, "error", "include", "warn_error_options"
     )
     exclusive_primary_alt_value_setting(
-        warn_error_options, "exclude", "warn", "warn_error_options"
+        warn_error_options, "warn", "exclude", "warn_error_options"
     )
-    for key in ("include", "exclude", "silence"):
+    for key in ("error", "warn", "silence"):
         if key in warn_error_options and warn_error_options[key] is None:
             warn_error_options[key] = []
