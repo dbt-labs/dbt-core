@@ -32,9 +32,9 @@ class TestDbtRunner:
         assert type(res.exception) == DbtUsageException
 
     def test_command_mutually_exclusive_option(self, dbt: dbtRunner) -> None:
-        res = dbt.invoke(["--warn-error", "--warn-error-options", '{"include": "all"}', "deps"])
+        res = dbt.invoke(["--warn-error", "--warn-error-options", '{"error": "all"}', "deps"])
         assert type(res.exception) == DbtUsageException
-        res = dbt.invoke(["deps", "--warn-error", "--warn-error-options", '{"include": "all"}'])
+        res = dbt.invoke(["deps", "--warn-error", "--warn-error-options", '{"error": "all"}'])
         assert type(res.exception) == DbtUsageException
 
         res = dbt.invoke(["compile", "--select", "models", "--inline", "select 1 as id"])
