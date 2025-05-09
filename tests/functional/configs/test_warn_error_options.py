@@ -108,7 +108,7 @@ class TestWarnErrorOptionsFromCLI:
         )
         assert not result.success
         assert result.exception is not None
-        assert "Only `error` or `include` can be specified" in str(result.exception)
+        assert "Only `include` or `error` can be specified" in str(result.exception)
 
     def test_cant_set_both_exclude_and_warn(self, project, runner: dbtRunner) -> None:
         result = runner.invoke(
@@ -120,7 +120,7 @@ class TestWarnErrorOptionsFromCLI:
         )
         assert not result.success
         assert result.exception is not None
-        assert "Only `warn` or `exclude` can be specified" in str(result.exception)
+        assert "Only `exclude` or `warn` can be specified" in str(result.exception)
 
 
 class TestWarnErrorOptionsFromProject:
@@ -188,7 +188,7 @@ class TestWarnErrorOptionsFromProject:
         result = runner.invoke(["run"])
         assert not result.success
         assert result.exception is not None
-        assert "Only `error` or `include` can be specified" in str(result.exception)
+        assert "Only `include` or `error` can be specified" in str(result.exception)
 
     def test_cant_set_both_exclude_and_warn(
         self, project, clear_project_flags, project_root, runner: dbtRunner
@@ -206,7 +206,7 @@ class TestWarnErrorOptionsFromProject:
         result = runner.invoke(["run"])
         assert not result.success
         assert result.exception is not None
-        assert "Only `warn` or `exclude` can be specified" in str(result.exception)
+        assert "Only `exclude` or `warn` can be specified" in str(result.exception)
 
 
 class TestEmptyWarnError:
