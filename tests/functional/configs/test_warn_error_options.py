@@ -1,4 +1,4 @@
-from typing import Dict, Union
+from typing import Any, Dict, Union
 
 import pytest
 
@@ -149,15 +149,17 @@ class TestWarnErrorOptionsFromProject:
         result = runner.invoke(["run"])
         assert_deprecation_warning(result, catcher)
 
-        include_options = {"flags": {"warn_error_options": {"include": ["DeprecatedModel"]}}}
-        update_config_file(include_options, project_root, "dbt_project.yml")
+        warn_error_options: Dict[str, Any] = {
+            "flags": {"warn_error_options": {"error": ["DeprecatedModel"]}}
+        }
+        update_config_file(warn_error_options, project_root, "dbt_project.yml")
 
         catcher.flush()
         result = runner.invoke(["run"])
         assert_deprecation_error(result)
 
-        include_options = {"flags": {"warn_error_options": {"include": "all"}}}
-        update_config_file(include_options, project_root, "dbt_project.yml")
+        warn_error_options = {"flags": {"warn_error_options": {"error": "all"}}}
+        update_config_file(warn_error_options, project_root, "dbt_project.yml")
 
         catcher.flush()
         result = runner.invoke(["run"])
@@ -166,15 +168,15 @@ class TestWarnErrorOptionsFromProject:
     def test_can_exclude_specific_event(
         self, project, clear_project_flags, project_root, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
-        include_options = {"flags": {"warn_error_options": {"include": "all"}}}
-        update_config_file(include_options, project_root, "dbt_project.yml")
+        warn_error_options: Dict[str, Any] = {"flags": {"warn_error_options": {"error": "all"}}}
+        update_config_file(warn_error_options, project_root, "dbt_project.yml")
         result = runner.invoke(["run"])
         assert_deprecation_error(result)
 
-        exclude_options = {
-            "flags": {"warn_error_options": {"include": "all", "exclude": ["DeprecatedModel"]}}
+        warn_error_options = {
+            "flags": {"warn_error_options": {"error": "all", "warn": ["DeprecatedModel"]}}
         }
-        update_config_file(exclude_options, project_root, "dbt_project.yml")
+        update_config_file(warn_error_options, project_root, "dbt_project.yml")
 
         catcher.flush()
         result = runner.invoke(["run"])
@@ -183,8 +185,8 @@ class TestWarnErrorOptionsFromProject:
     def test_cant_set_both_include_and_error(
         self, project, clear_project_flags, project_root, runner: dbtRunner
     ) -> None:
-        exclude_options = {"flags": {"warn_error_options": {"include": "all", "error": "all"}}}
-        update_config_file(exclude_options, project_root, "dbt_project.yml")
+        warn_error_options = {"flags": {"warn_error_options": {"include": "all", "error": "all"}}}
+        update_config_file(warn_error_options, project_root, "dbt_project.yml")
         result = runner.invoke(["run"])
         assert not result.success
         assert result.exception is not None
@@ -193,16 +195,16 @@ class TestWarnErrorOptionsFromProject:
     def test_cant_set_both_exclude_and_warn(
         self, project, clear_project_flags, project_root, runner: dbtRunner
     ) -> None:
-        exclude_options = {
+        warn_error_options = {
             "flags": {
                 "warn_error_options": {
-                    "include": "all",
+                    "error": "all",
                     "exclude": ["DeprecatedModel"],
                     "warn": ["DeprecatedModel"],
                 }
             }
         }
-        update_config_file(exclude_options, project_root, "dbt_project.yml")
+        update_config_file(warn_error_options, project_root, "dbt_project.yml")
         result = runner.invoke(["run"])
         assert not result.success
         assert result.exception is not None
@@ -230,8 +232,6 @@ class TestEmptyWarnError:
         update_config_file(project_flags, project.project_root, "dbt_project.yml")
         run_dbt(["run"])
         flags = get_flags()
-        # Note: WarnErrorOptions is not a dataclass, so you won't get "silence"
-        # from to_dict or stringifying.
         assert flags.warn_error_options.silence == ["TestsConfigDeprecation"]
 
 
