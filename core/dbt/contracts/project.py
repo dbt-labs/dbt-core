@@ -352,7 +352,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     require_batched_execution_for_custom_microbatch_strategy: bool = False
     require_explicit_package_overrides_for_builtin_materializations: bool = True
     require_resource_names_without_spaces: bool = False
-    source_freshness_run_project_hooks: bool = False
+    source_freshness_run_project_hooks: bool = True
     skip_nodes_if_on_run_start_fails: bool = False
     state_modified_compare_more_unrendered_values: bool = False
     state_modified_compare_vars: bool = False
