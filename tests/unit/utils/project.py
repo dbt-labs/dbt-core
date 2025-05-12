@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from dbt.adapters.contracts.connection import QueryComment, DEFAULT_QUERY_COMMENT
+from dbt.adapters.contracts.connection import DEFAULT_QUERY_COMMENT, QueryComment
 from dbt.config import RuntimeConfig
 from dbt.config.project import Project, RenderComponents, VarProvider
 from dbt.config.selectors import SelectorConfig

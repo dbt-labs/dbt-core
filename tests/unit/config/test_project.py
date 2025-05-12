@@ -402,7 +402,7 @@ class TestProjectInitialization(BaseConfigTest):
         )
         self.assertEqual(project.query_comment.comment, "run by user test")
         self.assertEqual(project.query_comment.append, True)
-    
+
     def test_default_query_comment_append_False(self):
         self.default_project_data.update(
             {
