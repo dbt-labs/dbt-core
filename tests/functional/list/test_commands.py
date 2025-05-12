@@ -50,13 +50,12 @@ class TestRunCommands:
 
         shutil.rmtree(f"{project_root}/snapshots")
 
-    @pytest.mark.parametrize("dbt_command", commands)
     def test_run_commmand(
         self,
         happy_path_project,
-        dbt_command,
     ):
-        run_dbt(dbt_command)
+        for command in commands:
+            run_dbt(command)
 
 
 """
