@@ -1,6 +1,6 @@
 kind: Fixes
-body: Provide required missing context to resolve sql_header in unit tests
+body: Provide required missing context to resolve sql_header in unit tests and generic tests.
 time: 2025-03-27T00:27:11.364727+01:00
 custom:
-    Author: Kayrnt
+    Author: Kayrnt versusfacit
     Issue: "9775"
