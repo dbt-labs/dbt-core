@@ -1,5 +1,4 @@
-from dbtlabs.proto.public.v1.fields import core_types_pb2
-
+from dbt.events import core_types_pb2
 from dbt_common.events.base_types import BaseEvent
 from dbt_common.events.base_types import DebugLevel as CommonDebugLevel
 from dbt_common.events.base_types import DynamicLevel as CommonDyanicLevel
