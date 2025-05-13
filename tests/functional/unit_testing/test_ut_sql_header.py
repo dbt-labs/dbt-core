@@ -6,6 +6,9 @@ from dbt.tests.util import run_dbt
 
 PROJECT_NAME = "sql_header_test"
 UNITTEST_MODEL_NAME = "unittest_model"
+# Why this and not some other database functionality?
+# To keep it database agnostic since we support SQL on the
+# the most generic create table macro"
 HEADER_MARKER = "-- SQL_HEADER_INJECTION_TEST_MARKER"
 
 UNITTEST_MODEL_SQL = f"""

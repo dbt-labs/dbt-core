@@ -103,7 +103,9 @@ class UnitTestManifestLoader:
             tested_node_unique_id=tested_node.unique_id,
             overrides=test_case.overrides,
         )
-        # setting up the execution environment for a dbt unit test by creating a context with all the necessary functions and objects
+
+        # Needed to support macro-based set_sql_header overrides of the sql_header node config
+        # option.
         ctx = generate_runtime_unit_test_context(unit_test_node, self.root_project, self.manifest)
         ctx.update(
             generate_parse_exposure(

@@ -237,12 +237,6 @@ class TestRunner(CompileRunner):
                 "Invalid materialization context generated, missing config: {}".format(context)
             )
 
-        # allows test code to access the configuration settings of the component it's testing
-        if unit_test_node.tested_node_unique_id:
-            context["tested_node_config"] = manifest.nodes[
-                unit_test_node.tested_node_unique_id
-            ].config
-
         # generate materialization macro
         macro_func = MacroGenerator(materialization_macro, context)
         try:
