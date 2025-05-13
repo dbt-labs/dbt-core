@@ -4,6 +4,7 @@ import pytest
 
 from dbt.tests.util import run_dbt
 
+PROJECT_NAME = "sql_header_test"
 UNITTEST_MODEL_NAME = "unittest_model"
 HEADER_MARKER = "-- SQL_HEADER_INJECTION_TEST_MARKER"
 
@@ -39,23 +40,29 @@ unit_tests:
 
 
 class SQLHeaderInjectionBase:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "name": PROJECT_NAME,
+        }
+
     def test_sql_header_is_injected(self, project):
         results = run_dbt(["build"])
         assert any(r.node.name == UNITTEST_MODEL_NAME for r in results)
 
-        # Compute path to compiled SQL
         compiled_model_path = (
             project.project_root
             / Path("target")
             / Path("run")
-            / Path(project.project_name)
+            / Path(PROJECT_NAME)
             / Path("models")
             / Path(f"{UNITTEST_MODEL_NAME}.sql")
         )
 
-        assert compiled_model_path.exists(), f"Compiled SQL not found: {compiled_model_path}"
-        compiled_sql = compiled_model_path.read_text()
-        assert HEADER_MARKER in compiled_sql, "SQL header marker not found in compiled SQL."
+        with open(compiled_model_path) as f:
+            assert any(
+                HEADER_MARKER in line for line in f
+            ), "SQL header marker not found in compiled SQL."
 
 
 class TestSQLHeaderConfigInjection(SQLHeaderInjectionBase):
