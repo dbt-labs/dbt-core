@@ -29,10 +29,11 @@ commands_to_skip = {
     "show",
     "snapshot",
     "freshness",
+    "serve",  # this was actually serving up docs and caused issues locally
 }
 
 # Commands to happy path test
-commands = [command.value for command in Command if command.value not in commands_to_skip]
+commands = [command.to_list() for command in Command if command.value not in commands_to_skip]
 
 
 class TestRunCommands:
@@ -49,13 +50,12 @@ class TestRunCommands:
 
         shutil.rmtree(f"{project_root}/snapshots")
 
-    @pytest.mark.parametrize("dbt_command", [(command,) for command in commands])
     def test_run_commmand(
         self,
         happy_path_project,
-        dbt_command,
     ):
-        run_dbt([dbt_command])
+        for command in commands:
+            run_dbt(command)
 
 
 """
