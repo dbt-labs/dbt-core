@@ -410,7 +410,7 @@ class TestList:
                         "alias": "outer_alias",
                         "schema": "test",
                         "sql_header": "SELECT 1 as header;",
-                        "database": "test_database",
+                        "database": "dbt",
                         "docs": {"node_color": "purple", "show": True},
                         "event_time": None,
                         "tags": ["string_tag"],
@@ -444,7 +444,7 @@ class TestList:
                         "unique_key": "id",
                         "on_schema_change": "ignore",
                         "on_configuration_change": "apply",
-                        "grants": {"select": ["a_grant"]},
+                        "grants": {"select": ["root"]},
                         "packages": [],
                     },
                     "depends_on": {
