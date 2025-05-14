@@ -51,7 +51,7 @@ models:
       enabled: true
       full_refresh: false
       grants:
-        select: ["a_grant"]
+        select: ["root"]
       lookback: 5
       materialized: table
       meta:
