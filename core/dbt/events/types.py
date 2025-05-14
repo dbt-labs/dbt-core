@@ -584,7 +584,7 @@ class DeprecationsSummary(WarnLevel):
 
 class CustomOutputPathInSourceFreshnessDeprecation(WarnLevel):
     def code(self) -> str:
-        return "D027"
+        return "D029"
 
     def message(self) -> str:
         description = f"Custom output path usage `--output {self.path}` usage detected in `dbt source freshness` command."
