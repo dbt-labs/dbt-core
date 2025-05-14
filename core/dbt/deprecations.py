@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, ClassVar, DefaultDict, Dict, List, Optional
 
 import dbt.tracking
+from dbt import deprecations
 from dbt.events import types as core_types
 from dbt.flags import get_flags
 from dbt_common.dataclass_schema import dbtClassMixin
@@ -169,6 +170,11 @@ class CustomKeyInObjectDeprecation(DBTDeprecation):
     _event = "CustomKeyInObjectDeprecation"
 
 
+class CustomOutputPathInSourceFreshnessDeprecation(DBTDeprecation):
+    _name = "custom-output-path-in-source-freshness-deprecation"
+    _event = "CustomOutputPathInSourceFreshnessDeprecation"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -245,6 +251,7 @@ deprecations_list: List[DBTDeprecation] = [
     CustomTopLevelKeyDeprecation(),
     CustomKeyInConfigDeprecation(),
     CustomKeyInObjectDeprecation(),
+    CustomOutputPathInSourceFreshnessDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

@@ -11,6 +11,7 @@ from dbt.clients.registry import _get_cached
 from dbt.events.types import (
     CustomKeyInConfigDeprecation,
     CustomKeyInObjectDeprecation,
+    CustomOutputPathInSourceFreshnessDeprecation,
     DeprecationsSummary,
     DuplicateYAMLKeysDeprecation,
     GenericJSONSchemaValidationDeprecation,
@@ -410,3 +411,21 @@ class TestJsonschemaValidationDeprecationsArentRunWithoutEnvVar:
         event_catcher = EventCatcher(CustomKeyInObjectDeprecation)
         run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
         assert len(event_catcher.caught_events) == 0
+
+
+class TestCustomOutputPathInSourceFreshnessDeprecation:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {}
+
+    def test_jsonschema_validation_deprecations_arent_run_without_env_var(
+        self, project, project_root
+    ):
+        event_catcher = EventCatcher(CustomOutputPathInSourceFreshnessDeprecation)
+
+        write_file(yaml.safe_dump({}), project_root, "custom_output.json")
+        run_dbt(
+            ["source", "freshness", "--output", "custom_output.json"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 1
