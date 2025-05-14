@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Any, Callable, ClassVar, DefaultDict, Dict, List, Optional
 
 import dbt.tracking
-from dbt import deprecations
 from dbt.events import types as core_types
 from dbt.flags import get_flags
 from dbt_common.dataclass_schema import dbtClassMixin
