@@ -15,6 +15,7 @@ from dbt.events.types import (
     DeprecationsSummary,
     DuplicateYAMLKeysDeprecation,
     GenericJSONSchemaValidationDeprecation,
+    ModelParamUsageDeprecation,
     PackageRedirectDeprecation,
 )
 from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
@@ -429,3 +430,51 @@ class TestCustomOutputPathInSourceFreshnessDeprecation:
             callbacks=[event_catcher.catch],
         )
         assert len(event_catcher.caught_events) == 1
+
+
+class TestModelsParamUsageDeprecation:
+    def test_models_usage(self, project):
+        event_catcher = EventCatcher(ModelParamUsageDeprecation)
+
+        assert len(event_catcher.caught_events) == 0
+        run_dbt(
+            ["ls", "--models", "some_model"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 1
+
+
+class TestModelParamUsageDeprecation:
+    def test_model_usage(self, project):
+        event_catcher = EventCatcher(ModelParamUsageDeprecation)
+
+        assert len(event_catcher.caught_events) == 0
+        run_dbt(
+            ["ls", "--model", "some_model"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 1
+
+
+class TestMParamUsageDeprecation:
+    def test_m_usage(self, project):
+        event_catcher = EventCatcher(ModelParamUsageDeprecation)
+
+        assert len(event_catcher.caught_events) == 0
+        run_dbt(
+            ["ls", "-m", "some_model"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 1
+
+
+class TestSelectParamNoModelUsageDeprecation:
+    def test_select_usage(self, project):
+        event_catcher = EventCatcher(ModelParamUsageDeprecation)
+
+        assert len(event_catcher.caught_events) == 0
+        run_dbt(
+            ["ls", "--select", "some_model"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 0

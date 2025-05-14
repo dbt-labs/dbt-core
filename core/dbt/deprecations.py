@@ -174,6 +174,11 @@ class CustomOutputPathInSourceFreshnessDeprecation(DBTDeprecation):
     _event = "CustomOutputPathInSourceFreshnessDeprecation"
 
 
+class ModelParamUsageDeprecation(DBTDeprecation):
+    _name = "model-param-usage-deprecation"
+    _event = "ModelParamUsageDeprecation"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -251,6 +256,7 @@ deprecations_list: List[DBTDeprecation] = [
     CustomKeyInConfigDeprecation(),
     CustomKeyInObjectDeprecation(),
     CustomOutputPathInSourceFreshnessDeprecation(),
+    ModelParamUsageDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}
