@@ -111,10 +111,12 @@ class BlockSearcher(Generic[BlockSearchResult], Iterable[BlockSearchResult]):
         source: List[FileBlock],
         allowed_blocks: Set[str],
         source_tag_factory: BlockSearchResultFactory,
+        check_jinja: bool = True,
     ) -> None:
         self.source = source
         self.allowed_blocks = allowed_blocks
         self.source_tag_factory: BlockSearchResultFactory = source_tag_factory
+        self.check_jinja = check_jinja
 
     def extract_blocks(self, source_file: FileBlock) -> Iterable[BlockTag]:
         # This is a bit of a hack to get the file path to the deprecation
@@ -126,7 +128,7 @@ class BlockSearcher(Generic[BlockSearchResult], Iterable[BlockSearchResult]):
                 source_file.contents,
                 allowed_blocks=self.allowed_blocks,
                 collect_raw_data=False,
-                warning_callback=wrap_handle_extract_warning,
+                warning_callback=wrap_handle_extract_warning if self.check_jinja else None,
             )
             # this makes mypy happy, and this is an invariant we really need
             for block in blocks:
