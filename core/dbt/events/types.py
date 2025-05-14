@@ -591,6 +591,15 @@ class CustomOutputPathInSourceFreshnessDeprecation(WarnLevel):
         return line_wrap_message(deprecation_tag(description))
 
 
+class ModelParamUsageDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D030"
+
+    def message(self) -> str:
+        description = "Usage of `--models`, `--model`, and `-m` is deprecated in favor of `--resource-type model --select`"
+        return line_wrap_message(deprecation_tag(description))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================

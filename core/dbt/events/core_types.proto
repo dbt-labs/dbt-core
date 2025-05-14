@@ -568,6 +568,16 @@ message CustomOutputPathInSourceFreshnessDeprecationMsg {
     CustomOutputPathInSourceFreshnessDeprecation data = 2;
 }
 
+// D030
+message ModelParamUsageDeprecation {
+    string path = 1;
+}
+
+message ModelParamUsageDeprecationMsg {
+    CoreEventInfo info = 1;
+    ModelParamUsageDeprecation data = 2;
+}
+
 // I065
 message DeprecatedModel {
     string model_name = 1;
