@@ -1,7 +1,7 @@
+from dbtlabs.proto.public.v1.fields import core_types_pb2
 from google.protobuf.json_format import MessageToDict
 
 from dbt.adapters.events.types import PluginLoadError, RollbackFailed
-from dbt.events import core_types_pb2
 from dbt.events.types import (
     LogNodeResult,
     LogStartLine,
