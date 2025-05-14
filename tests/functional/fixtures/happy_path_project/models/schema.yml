@@ -47,7 +47,7 @@ models:
       contract:
         alias_types: true
         enforce: true
-      database: "test_database"
+      database: "dbt"
       enabled: true
       full_refresh: false
       grants:
