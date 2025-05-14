@@ -401,7 +401,9 @@ class TestList:
                     "name": "model_with_lots_of_schema_configs",
                     "resource_type": "model",
                     "package_name": "test",
-                    "original_file_path": "models/model_with_lots_of_schema_configs.sql",
+                    "original_file_path": normalize(
+                        "models/model_with_lots_of_schema_configs.sql"
+                    ),
                     "unique_id": "model.test.model_with_lots_of_schema_configs",
                     "alias": "outer_alias",
                     "config": {
