@@ -1,0 +1,19 @@
+seeds:
+  - name: seed
+    config:
+      quote_columns: false
+      column_types:
+        a: BIGINT
+      delimiter: ","
+      enabled: true
+      tags: "tag"
+      pre_hook: "select 1"
+      post_hook: "select 1"
+      database: test_database
+      schema: test_schema
+      alias: test_alias
+      persist_docs: {}
+      full_refresh: true
+      meta: {'meta_key': 'meta_value'}
+      grants: {}
+      event_time: my_time_field
