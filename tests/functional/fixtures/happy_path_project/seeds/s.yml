@@ -5,11 +5,8 @@ seeds:
       show: true
       node_color: purple
     data_tests:
-      - accepted_values:
-          name: unexpected_a_column
-          values: [1]
-          config:
-            where: "b = 2"
+      - expression_is_true:
+          expression: "b = 2"
     columns:
       - name: a
         description: a description
@@ -34,8 +31,8 @@ seeds:
       tags: "tag"
       pre_hook: "select 1"
       post_hook: "select 1"
-      database: test_database
-      schema: test_schema
+      database: "dbt"
+      schema: "test"
       alias: test_alias
       persist_docs: {}
       full_refresh: true
