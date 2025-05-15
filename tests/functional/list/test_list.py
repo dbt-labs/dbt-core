@@ -157,6 +157,7 @@ class TestList:
                 "inner",
                 "metricflow_time_spine",
                 "metricflow_time_spine_second",
+                "model_with_lots_of_schema_configs",
                 "outer",
             ),
             "selector": (
@@ -165,6 +166,7 @@ class TestList:
                 "test.sub.inner",
                 "test.metricflow_time_spine",
                 "test.metricflow_time_spine_second",
+                "test.model_with_lots_of_schema_configs",
                 "test.outer",
             ),
             "json": (
@@ -304,14 +306,25 @@ class TestList:
                         "nodes": [],
                         "macros": ["macro.dbt.current_timestamp", "macro.dbt.date_trunc"],
                     },
-                    "tags": [],
                     "config": {
                         "enabled": True,
                         "group": None,
                         "materialized": "view",
-                        "post-hook": [],
-                        "tags": [],
-                        "pre-hook": [],
+                        "post-hook": [
+                            {
+                                "sql": "SELECT 'string_post_hook' as my_post_hook;",
+                                "transaction": True,
+                                "index": None,
+                            }
+                        ],
+                        "tags": ["list", "of", "tags"],
+                        "pre-hook": [
+                            {
+                                "sql": "SELECT 'string_pre_hook' as my_pre_hook;",
+                                "transaction": True,
+                                "index": None,
+                            }
+                        ],
                         "quoting": {},
                         "column_types": {},
                         "persist_docs": {},
@@ -339,6 +352,7 @@ class TestList:
                     "unique_id": "model.test.metricflow_time_spine",
                     "alias": "metricflow_time_spine",
                     "resource_type": "model",
+                    "tags": ["list", "of", "tags"],
                 },
                 {
                     "name": "metricflow_time_spine_second",
@@ -372,7 +386,7 @@ class TestList:
                         "docs": {"node_color": None, "show": True},
                         "contract": {"enforced": False, "alias_types": True},
                         "access": "protected",
-                        "event_time": None,
+                        "event_time": "ts_second",
                         "lookback": 1,
                         "batch_size": None,
                         "begin": None,
@@ -382,6 +396,64 @@ class TestList:
                     "unique_id": "model.test.metricflow_time_spine_second",
                     "alias": "metricflow_time_spine_second",
                     "resource_type": "model",
+                },
+                {
+                    "name": "model_with_lots_of_schema_configs",
+                    "resource_type": "model",
+                    "package_name": "test",
+                    "original_file_path": normalize(
+                        "models/model_with_lots_of_schema_configs.sql"
+                    ),
+                    "unique_id": "model.test.model_with_lots_of_schema_configs",
+                    "alias": "outer_alias",
+                    "config": {
+                        "enabled": True,
+                        "access": "public",
+                        "alias": "outer_alias",
+                        "schema": "test",
+                        "sql_header": "SELECT 1 as header;",
+                        "database": "dbt",
+                        "docs": {"node_color": "purple", "show": True},
+                        "event_time": None,
+                        "tags": ["string_tag"],
+                        "meta": {"my_custom_property": "string_meta"},
+                        "group": None,
+                        "materialized": "table",
+                        "incremental_strategy": None,
+                        "batch_size": "day",
+                        "lookback": 5,
+                        "begin": "2020-01-01",
+                        "persist_docs": {"columns": True, "relation": True},
+                        "post-hook": [
+                            {
+                                "sql": "SELECT 'string_post_hook' as my_post_hook;",
+                                "transaction": True,
+                                "index": None,
+                            }
+                        ],
+                        "pre-hook": [
+                            {
+                                "sql": "SELECT 'string_pre_hook' as my_pre_hook;",
+                                "transaction": True,
+                                "index": None,
+                            }
+                        ],
+                        "quoting": {},
+                        "column_types": {},
+                        "concurrent_batches": False,
+                        "contract": {"alias_types": True, "enforced": False},
+                        "full_refresh": False,
+                        "unique_key": "id",
+                        "on_schema_change": "ignore",
+                        "on_configuration_change": "apply",
+                        "grants": {"select": ["root"]},
+                        "packages": [],
+                    },
+                    "depends_on": {
+                        "macros": [],
+                        "nodes": ["source.test.my_source.my_table", "model.test.ephemeral"],
+                    },
+                    "tags": ["string_tag"],
                 },
                 {
                     "name": "outer",
@@ -433,9 +505,11 @@ class TestList:
                 self.dir("models/sub/inner.sql"),
                 self.dir("models/metricflow_time_spine.sql"),
                 self.dir("models/metricflow_time_spine_second.sql"),
+                self.dir("models/model_with_lots_of_schema_configs.sql"),
                 self.dir("models/outer.sql"),
             ),
         }
+
         self.expect_given_output(["--resource-type", "model"], expectations)
 
     # Do not include ephemeral model - it was not selected
@@ -557,9 +631,52 @@ class TestList:
 
     def expect_test_output(self):
         expectations = {
-            "name": ("not_null_outer_id", "t", "unique_outer_id"),
-            "selector": ("test.not_null_outer_id", "test.t", "test.unique_outer_id"),
+            "name": (
+                "not_null_model_with_lots_of_schema_configs_id",
+                "not_null_outer_id",
+                "t",
+                "unique_model_with_lots_of_schema_configs_id",
+                "unique_outer_id",
+            ),
+            "selector": (
+                "test.not_null_model_with_lots_of_schema_configs_id",
+                "test.not_null_outer_id",
+                "test.t",
+                "test.unique_model_with_lots_of_schema_configs_id",
+                "test.unique_outer_id",
+            ),
             "json": (
+                {
+                    "alias": "not_null_model_with_lots_of_schema_configs_id",
+                    "config": {
+                        "alias": None,
+                        "database": None,
+                        "enabled": True,
+                        "error_if": "!= 0",
+                        "fail_calc": "count(*)",
+                        "group": None,
+                        "limit": None,
+                        "materialized": "test",
+                        "meta": {},
+                        "schema": "dbt_test__audit",
+                        "severity": "ERROR",
+                        "store_failures": None,
+                        "store_failures_as": None,
+                        "tags": [],
+                        "warn_if": "!= 0",
+                        "where": None,
+                    },
+                    "depends_on": {
+                        "macros": ["macro.dbt.test_not_null"],
+                        "nodes": ["model.test.model_with_lots_of_schema_configs"],
+                    },
+                    "name": "not_null_model_with_lots_of_schema_configs_id",
+                    "original_file_path": normalize("models/schema.yml"),
+                    "package_name": "test",
+                    "resource_type": "test",
+                    "tags": [],
+                    "unique_id": "test.test.not_null_model_with_lots_of_schema_configs_id.4921004a2a",
+                },
                 {
                     "name": "not_null_outer_id",
                     "package_name": "test",
@@ -620,6 +737,37 @@ class TestList:
                     "resource_type": "test",
                 },
                 {
+                    "alias": "unique_model_with_lots_of_schema_configs_id",
+                    "config": {
+                        "alias": None,
+                        "database": None,
+                        "enabled": True,
+                        "error_if": "!= 0",
+                        "fail_calc": "count(*)",
+                        "group": None,
+                        "limit": None,
+                        "materialized": "test",
+                        "meta": {},
+                        "schema": "dbt_test__audit",
+                        "severity": "ERROR",
+                        "store_failures": None,
+                        "store_failures_as": None,
+                        "tags": [],
+                        "warn_if": "!= 0",
+                        "where": None,
+                    },
+                    "depends_on": {
+                        "macros": ["macro.dbt.test_unique"],
+                        "nodes": ["model.test.model_with_lots_of_schema_configs"],
+                    },
+                    "name": "unique_model_with_lots_of_schema_configs_id",
+                    "original_file_path": normalize("models/schema.yml"),
+                    "package_name": "test",
+                    "resource_type": "test",
+                    "tags": [],
+                    "unique_id": "test.test.unique_model_with_lots_of_schema_configs_id.8328d84982",
+                },
+                {
                     "name": "unique_outer_id",
                     "package_name": "test",
                     "depends_on": {
@@ -653,7 +801,9 @@ class TestList:
             ),
             "path": (
                 self.dir("models/schema.yml"),
+                self.dir("models/schema.yml"),
                 self.dir("tests/t.sql"),
+                self.dir("models/schema.yml"),
                 self.dir("models/schema.yml"),
             ),
         }
@@ -675,6 +825,9 @@ class TestList:
             "test.unique_outer_id",
             "test.metricflow_time_spine",
             "test.metricflow_time_spine_second",
+            "test.model_with_lots_of_schema_configs",
+            "test.not_null_model_with_lots_of_schema_configs_id",
+            "test.unique_model_with_lots_of_schema_configs_id",
             "test.t",
             "semantic_model:test.my_sm",
             "metric:test.total_outer",
@@ -721,6 +874,7 @@ class TestList:
             "test.outer",
             "test.metricflow_time_spine",
             "test.metricflow_time_spine_second",
+            "test.model_with_lots_of_schema_configs",
             "test.incremental",
         }
 
@@ -742,8 +896,11 @@ class TestList:
             "test.sub.inner",
             "test.metricflow_time_spine",
             "test.metricflow_time_spine_second",
+            "test.model_with_lots_of_schema_configs",
+            "test.not_null_model_with_lots_of_schema_configs_id",
             "test.t",
             "test.unique_outer_id",
+            "test.unique_model_with_lots_of_schema_configs_id",
         }
 
         results = self.run_dbt_ls(
@@ -763,8 +920,11 @@ class TestList:
             "test.outer",
             "test.metricflow_time_spine",
             "test.metricflow_time_spine_second",
+            "test.model_with_lots_of_schema_configs",
+            "test.not_null_model_with_lots_of_schema_configs_id",
             "test.sub.inner",
             "test.t",
+            "test.unique_model_with_lots_of_schema_configs_id",
         }
 
         results = self.run_dbt_ls(
@@ -799,8 +959,11 @@ class TestList:
             "test.sub.inner",
             "test.metricflow_time_spine",
             "test.metricflow_time_spine_second",
+            "test.model_with_lots_of_schema_configs",
+            "test.not_null_model_with_lots_of_schema_configs_id",
             "test.t",
             "test.unique_outer_id",
+            "test.unique_model_with_lots_of_schema_configs_id",
         }
         del os.environ["DBT_RESOURCE_TYPES"]
         os.environ["DBT_EXCLUDE_RESOURCE_TYPES"] = (
@@ -814,6 +977,7 @@ class TestList:
             "test.sub.inner",
             "test.metricflow_time_spine",
             "test.metricflow_time_spine_second",
+            "test.model_with_lots_of_schema_configs",
         }
         del os.environ["DBT_EXCLUDE_RESOURCE_TYPES"]
 
@@ -868,8 +1032,10 @@ class TestList:
         """Expect selected fields of the test resource types
         """
         expectations = [
+            {"name": "not_null_model_with_lots_of_schema_configs_id", "column_name": "id"},
             {"name": "not_null_outer_id", "column_name": "id"},
             {"name": "t"},
+            {"name": "unique_model_with_lots_of_schema_configs_id", "column_name": "id"},
             {"name": "unique_outer_id", "column_name": "id"},
         ]
         results = self.run_dbt_ls(

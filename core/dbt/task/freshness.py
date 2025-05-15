@@ -199,6 +199,12 @@ class FreshnessSelector(ResourceTypeSelector):
 class FreshnessTask(RunTask):
     def __init__(self, args, config, manifest) -> None:
         super().__init__(args, config, manifest)
+
+        if self.args.output:
+            deprecations.warn(
+                "custom-output-path-in-source-freshness-deprecation", path=str(self.args.output)
+            )
+
         self._metadata_freshness_cache: Dict[BaseRelation, FreshnessResult] = {}
 
     def result_path(self) -> str:

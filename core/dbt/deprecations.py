@@ -7,12 +7,14 @@ import dbt.tracking
 from dbt.events import types as core_types
 from dbt.flags import get_flags
 from dbt_common.dataclass_schema import dbtClassMixin
-from dbt_common.events.functions import warn_or_error
+from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.types import Note
 
 
 class DBTDeprecation:
     _name: ClassVar[Optional[str]] = None
     _event: ClassVar[Optional[str]] = None
+    _is_preview: ClassVar[bool] = False
 
     @property
     def name(self) -> str:
@@ -37,14 +39,23 @@ class DBTDeprecation:
                 raise NameError(msg)
         raise NotImplementedError("event not implemented for {}".format(self._event))
 
-    def show(self, *args, **kwargs) -> None:
-        flags = get_flags()
-        if self.name not in active_deprecations or flags.show_all_deprecations:
-            event = self.event(**kwargs)
-            warn_or_error(event)
-            self.track_deprecation_warn()
+    def preview(self, base_event: abc.ABCMeta) -> None:
+        # breakpoint()
+        note_event = Note(msg=base_event.message())  # type: ignore
+        fire_event(note_event)
 
-        active_deprecations[self.name] += 1
+    def show(self, *args, **kwargs) -> None:
+        if self._is_preview:
+            base_event = self.event(**kwargs)
+            self.preview(base_event)
+        else:
+            flags = get_flags()
+            if self.name not in active_deprecations or flags.show_all_deprecations:
+                event = self.event(**kwargs)
+                warn_or_error(event)
+                self.track_deprecation_warn()
+
+            active_deprecations[self.name] += 1
 
 
 class PackageRedirectDeprecation(DBTDeprecation):
@@ -169,6 +180,11 @@ class CustomKeyInObjectDeprecation(DBTDeprecation):
     _event = "CustomKeyInObjectDeprecation"
 
 
+class CustomOutputPathInSourceFreshnessDeprecation(DBTDeprecation):
+    _name = "custom-output-path-in-source-freshness-deprecation"
+    _event = "CustomOutputPathInSourceFreshnessDeprecation"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -245,6 +261,7 @@ deprecations_list: List[DBTDeprecation] = [
     CustomTopLevelKeyDeprecation(),
     CustomKeyInConfigDeprecation(),
     CustomKeyInObjectDeprecation(),
+    CustomOutputPathInSourceFreshnessDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

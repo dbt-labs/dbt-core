@@ -75,7 +75,7 @@ defaults:
 jobs:
   job-setup:
     name: Log Inputs
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_LATEST }}
     outputs:
       starting_sha: ${{ steps.set_sha.outputs.starting_sha }}
     steps:
@@ -125,7 +125,7 @@ jobs:
 
     needs: [bump-version-generate-changelog]
 
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_LATEST }}
 
     steps:
       - name: Print variables
@@ -188,7 +188,7 @@ jobs:
     # determine if we need to release dbt-core or both dbt-core and dbt-postgres
     name: Determine Docker Package
     if: ${{ !failure() && !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_LATEST }}
     needs: [pypi-release]
     outputs:
       matrix: ${{ steps.determine-docker-package.outputs.matrix }}

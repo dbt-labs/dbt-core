@@ -581,8 +581,8 @@ class TestHooksInSourceFreshnessDefault(SuccessfulSourceFreshnessTest):
             ],
             expect_pass=False,
         )
-        # default behaviour - no hooks run in source freshness
-        self._assert_project_hooks_not_called(log_output)
+        # default behaviour - hooks are run in source freshness
+        self._assert_project_hooks_called(log_output)
 
 
 class TestSourceFreshnessCustomSQL(SuccessfulSourceFreshnessTest):

@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from dbt.adapters.contracts.connection import QueryComment
+from dbt.adapters.contracts.connection import DEFAULT_QUERY_COMMENT, QueryComment
 from dbt.config import RuntimeConfig
 from dbt.config.project import Project, RenderComponents, VarProvider
 from dbt.config.selectors import SelectorConfig
@@ -64,7 +64,8 @@ def project(selector_config: SelectorConfig) -> Project:
         packages=PackageConfig([]),
         manifest_selectors={},
         selectors=selector_config,
-        query_comment=QueryComment(),
+        # QueryComment contract defaults are defined by dbt-adapters, so not hard-coding this fixture to rely on particular settings of their defaults.
+        query_comment=QueryComment(comment=DEFAULT_QUERY_COMMENT, append=None, job_label=False),
         config_version=1,
         unrendered=RenderComponents({}, {}, {}),
         project_env_vars={},

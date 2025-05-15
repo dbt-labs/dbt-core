@@ -10,14 +10,79 @@ models:
           - not_null
   - name: metricflow_time_spine
     description: Day time spine
+    time_spine:
+      standard_granularity_column: date_day
     columns:
       - name: date_day
         granularity: day
+    config:
+      tags:
+        - "list"
+        - "of"
+        - "tags"
+      pre_hook:
+        - "SELECT 'string_pre_hook' as my_pre_hook;"
+      post_hook:
+        - "SELECT 'string_post_hook' as my_post_hook;"
   - name: metricflow_time_spine_second
     description: Second time spine
+    config:
+      event_time: ts_second
     columns:
       - name: ts_second
         granularity: second
+  - name: model_with_lots_of_schema_configs
+    access: public
+    columns:
+      - name: id
+        data_tests:
+          - unique
+          - not_null
+        description: The id value
+    config:
+      alias: "outer_alias"
+      batch_size: day
+      begin: "2020-01-01"
+      concurrent_batches: false
+      contract:
+        alias_types: true
+        enforce: true
+      database: "dbt"
+      enabled: true
+      full_refresh: false
+      grants:
+        select: ["root"]
+      lookback: 5
+      materialized: table
+      meta:
+        my_custom_property: "string_meta"
+      on_configuration_change: apply
+      persist_docs:
+        columns: true
+        relation: true
+      post_hook: "SELECT 'string_post_hook' as my_post_hook;"
+      pre_hook: "SELECT 'string_pre_hook' as my_pre_hook;"
+      schema: "test"
+      sql_header: "SELECT 1 as header;"
+      tags: "string_tag"
+      unique_key: id
+    constraints:
+      - type: primary_key
+        columns: ["id"]
+        warn_unsupported: false
+      - type: foreign_key
+        columns: ["id"]
+        to: source('my_source', 'my_table')
+        to_columns: ["id"]
+      - type: check
+        columns: ["id"]
+        expression: "id > 0"
+        name: "Check that id is greater than 0"
+    deprecation_date: "2052-05-01"
+    description: A model with lots of configs
+    docs:
+      node_color: purple
+      show: true
 
 sources:
   - name: my_source

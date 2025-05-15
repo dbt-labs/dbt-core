@@ -33,6 +33,11 @@ def checked_load(contents) -> Tuple[Optional[Dict[str, Any]], List[YamlCheckFail
                 raise yaml.constructor.ConstructorError(
                     None, None, "expected a mapping node, but found %s" % node.id, node.start_mark
                 )
+            is_override = (
+                len(node.value) > 0
+                and len(node.value[0]) > 0
+                and getattr(node.value[0][0], "value") == "<<"
+            )
             self.flatten_mapping(node)
             mapping = {}
             for key_node, value_node in node.value:
@@ -46,7 +51,7 @@ def checked_load(contents) -> Tuple[Optional[Dict[str, Any]], List[YamlCheckFail
                     )
                 value = self.construct_object(value_node, deep=deep)
 
-                if key in mapping:
+                if not is_override and key in mapping:
                     start_mark = str(key_node.start_mark)
                     if start_mark.startswith("  in"):  # this means it was at the top level
                         message = f"Duplicate key '{key}' {start_mark.lstrip()}"

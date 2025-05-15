@@ -582,6 +582,15 @@ class DeprecationsSummary(WarnLevel):
         return line_wrap_message(deprecation_tag(description))
 
 
+class CustomOutputPathInSourceFreshnessDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D029"
+
+    def message(self) -> str:
+        description = f"Custom output path usage `--output {self.path}` usage detected in `dbt source freshness` command."
+        return line_wrap_message(deprecation_tag(description))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
