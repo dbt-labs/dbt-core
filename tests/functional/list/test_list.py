@@ -814,6 +814,7 @@ class TestList:
         # models are just package, subdirectory path, name
         # sources are like models, ending in source_name.table_name
         expected_default = {
+            "exposure:test.weekly_jaffle_metrics",
             "test.ephemeral",
             "test.incremental",
             "test.snapshot.my_snapshot",
@@ -971,6 +972,7 @@ class TestList:
         )
         results = self.run_dbt_ls()
         assert set(results) == {
+            "exposure:test.weekly_jaffle_metrics",
             "test.ephemeral",
             "test.incremental",
             "test.outer",
