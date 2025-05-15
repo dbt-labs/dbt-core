@@ -801,6 +801,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "config": {
                     "enabled": True,
                     "event_time": None,
+                    "freshness": None,
                 },
                 "quoting": {
                     "database": None,
@@ -1330,6 +1331,7 @@ def expected_references_manifest(project):
                 "config": {
                     "enabled": True,
                     "event_time": None,
+                    "freshness": None,
                 },
                 "quoting": {
                     "database": False,
