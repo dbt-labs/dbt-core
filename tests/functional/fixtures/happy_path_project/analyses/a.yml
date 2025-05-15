@@ -1,0 +1,11 @@
+analyses:
+  - name: a
+    description: description
+    docs:
+      show: true
+      node_color: purple
+    config:
+      tags: ["tag"]
+    columns:
+      - name: id
+        description: id description
