@@ -1076,17 +1076,17 @@ class TestList:
             self.assert_json_equal(got, expected)
 
     def test_ls(self, happy_path_project):  # noqa: F811
-        # self.expect_snapshot_output(happy_path_project)
-        # self.expect_analyses_output()
-        # self.expect_model_output()
-        # self.expect_source_output()
+        self.expect_snapshot_output(happy_path_project)
+        self.expect_analyses_output()
+        self.expect_model_output()
+        self.expect_source_output()
         self.expect_seed_output()
-        # self.expect_test_output()
-        # self.expect_select()
-        # self.expect_resource_type_multiple()
-        # self.expect_resource_type_env_var()
-        # self.expect_all_output()
-        # self.expect_selected_keys(happy_path_project)
+        self.expect_test_output()
+        self.expect_select()
+        self.expect_resource_type_multiple()
+        self.expect_resource_type_env_var()
+        self.expect_all_output()
+        self.expect_selected_keys(happy_path_project)
 
 
 def normalize(path):
