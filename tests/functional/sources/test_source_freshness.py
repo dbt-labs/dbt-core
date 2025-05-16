@@ -312,6 +312,10 @@ class TestOverrideSourceFreshness(SuccessfulSourceFreshnessTest):
     def models(self):
         return {"schema.yml": override_freshness_models_schema_yml}
 
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"sources": {"freshness": {"error_after": {"count": 24, "period": "hour"}}}}
+
     @staticmethod
     def get_result_from_unique_id(data, unique_id):
         try:
