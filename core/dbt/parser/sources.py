@@ -3,7 +3,6 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set
 
-from dbt import deprecations
 from dbt.adapters.capability import Capability
 from dbt.adapters.factory import get_adapter
 from dbt.artifacts.resources import FreshnessThreshold, SourceConfig, Time
@@ -91,7 +90,6 @@ class SourcePatcher:
                 self.manifest.add_disabled_nofile(parsed)
 
         self.warn_unused()
-        self.warn_deprecated()
 
     def patch_source(
         self,
@@ -357,13 +355,6 @@ class SourcePatcher:
             warn_or_error(UnusedTables(unused_tables=unused_tables_formatted))
 
         self.manifest.source_patches = {}
-
-    def warn_deprecated(self) -> None:
-        for patch in self.manifest.source_patches.values():
-            if patch.overrides is not None:
-                deprecations.warn(
-                    "source-override-deprecation", source_name=patch.name, file=patch.path
-                )
 
     def get_unused_msg(
         self,
