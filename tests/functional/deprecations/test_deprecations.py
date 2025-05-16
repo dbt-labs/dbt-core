@@ -203,11 +203,11 @@ class TestProjectFlagsMovedDeprecationWarnErrorOptions(TestProjectFlagsMovedDepr
     def test_profile_config_deprecation(self, project):
         deprecations.reset_deprecations()
         with pytest.raises(EventCompilationError):
-            run_dbt(["--warn-error-options", "{'include': 'all'}", "parse"])
+            run_dbt(["--warn-error-options", "{'error': 'all'}", "parse"])
 
         with pytest.raises(EventCompilationError):
             run_dbt(
-                ["--warn-error-options", "{'include': ['ProjectFlagsMovedDeprecation']}", "parse"]
+                ["--warn-error-options", "{'error': ['ProjectFlagsMovedDeprecation']}", "parse"]
             )
 
         _, logs = run_dbt_and_capture(

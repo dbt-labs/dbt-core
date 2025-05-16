@@ -93,7 +93,7 @@ class RetryTask(ConfiguredTask):
         args_to_remove = {
             "show": lambda x: True,
             "resource_types": lambda x: x == [],
-            "warn_error_options": lambda x: x == {"exclude": [], "include": []},
+            "warn_error_options": lambda x: x == {"warn": [], "error": [], "silence": []},
         }
         for k, v in args_to_remove.items():
             if k in self.previous_args and v(self.previous_args[k]):

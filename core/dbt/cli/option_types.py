@@ -8,7 +8,7 @@ from dbt.event_time.sample_window import SampleWindow
 from dbt.events import ALL_EVENT_NAMES
 from dbt.exceptions import OptionNotYamlDictError, ValidationError
 from dbt_common.exceptions import DbtValidationError
-from dbt_common.helper_types import WarnErrorOptions
+from dbt_common.helper_types import WarnErrorOptionsV2
 
 
 class YAML(ParamType):
@@ -54,13 +54,13 @@ class WarnErrorOptionsType(YAML):
 
     def convert(self, value, param, ctx):
         # this function is being used by param in click
-        include_exclude = super().convert(value, param, ctx)
-        normalize_warn_error_options(include_exclude)
+        warn_error_options = super().convert(value, param, ctx)
+        normalize_warn_error_options(warn_error_options)
 
-        return WarnErrorOptions(
-            include=include_exclude.get("include", []),
-            exclude=include_exclude.get("exclude", []),
-            silence=include_exclude.get("silence", []),
+        return WarnErrorOptionsV2(
+            error=warn_error_options.get("error", []),
+            warn=warn_error_options.get("warn", []),
+            silence=warn_error_options.get("silence", []),
             valid_error_names=ALL_EVENT_NAMES,
         )
 

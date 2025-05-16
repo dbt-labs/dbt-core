@@ -11,7 +11,7 @@ from dbt.cli.types import Command
 from dbt.contracts.project import ProjectFlags
 from dbt.tests.util import rm_file, write_file
 from dbt_common.exceptions import DbtInternalError
-from dbt_common.helper_types import WarnErrorOptions
+from dbt_common.helper_types import WarnErrorOptionsV2
 
 
 class TestFlags:
@@ -158,14 +158,14 @@ class TestFlags:
         assert flags.WARN_ERROR
 
         warn_error_options_context = self.make_dbt_context(
-            "run", ["--warn-error-options", '{"include": "all"}', "run"]
+            "run", ["--warn-error-options", '{"error": "all"}', "run"]
         )
         flags = Flags(warn_error_options_context)
-        assert flags.WARN_ERROR_OPTIONS == WarnErrorOptions(include="all")
+        assert flags.WARN_ERROR_OPTIONS == WarnErrorOptionsV2(error="all")
 
     def test_mutually_exclusive_options_from_cli(self):
         context = self.make_dbt_context(
-            "run", ["--warn-error", "--warn-error-options", '{"include": "all"}', "run"]
+            "run", ["--warn-error", "--warn-error-options", '{"error": "all"}', "run"]
         )
 
         with pytest.raises(DbtUsageException):
@@ -174,9 +174,7 @@ class TestFlags:
     @pytest.mark.parametrize("warn_error", [True, False])
     def test_mutually_exclusive_options_from_project_flags(self, warn_error, project_flags):
         project_flags.warn_error = warn_error
-        context = self.make_dbt_context(
-            "run", ["--warn-error-options", '{"include": "all"}', "run"]
-        )
+        context = self.make_dbt_context("run", ["--warn-error-options", '{"error": "all"}', "run"])
 
         with pytest.raises(DbtUsageException):
             Flags(context, project_flags)
@@ -184,7 +182,7 @@ class TestFlags:
     @pytest.mark.parametrize("warn_error", ["True", "False"])
     def test_mutually_exclusive_options_from_envvar(self, warn_error, monkeypatch):
         monkeypatch.setenv("DBT_WARN_ERROR", warn_error)
-        monkeypatch.setenv("DBT_WARN_ERROR_OPTIONS", '{"include":"all"}')
+        monkeypatch.setenv("DBT_WARN_ERROR_OPTIONS", '{"error":"all"}')
         context = self.make_dbt_context("run", ["run"])
 
         with pytest.raises(DbtUsageException):
@@ -195,9 +193,7 @@ class TestFlags:
         self, warn_error, project_flags
     ):
         project_flags.warn_error = warn_error
-        context = self.make_dbt_context(
-            "run", ["--warn-error-options", '{"include": "all"}', "run"]
-        )
+        context = self.make_dbt_context("run", ["--warn-error-options", '{"error": "all"}', "run"])
 
         with pytest.raises(DbtUsageException):
             Flags(context, project_flags)
@@ -205,9 +201,7 @@ class TestFlags:
     @pytest.mark.parametrize("warn_error", ["True", "False"])
     def test_mutually_exclusive_options_from_cli_and_envvar(self, warn_error, monkeypatch):
         monkeypatch.setenv("DBT_WARN_ERROR", warn_error)
-        context = self.make_dbt_context(
-            "run", ["--warn-error-options", '{"include": "all"}', "run"]
-        )
+        context = self.make_dbt_context("run", ["--warn-error-options", '{"error": "all"}', "run"])
 
         with pytest.raises(DbtUsageException):
             Flags(context)
@@ -217,7 +211,7 @@ class TestFlags:
         self, project_flags, warn_error, monkeypatch
     ):
         project_flags.warn_error = warn_error
-        monkeypatch.setenv("DBT_WARN_ERROR_OPTIONS", '{"include": "all"}')
+        monkeypatch.setenv("DBT_WARN_ERROR_OPTIONS", '{"error": "all"}')
         context = self.make_dbt_context("run", ["run"])
 
         with pytest.raises(DbtUsageException):

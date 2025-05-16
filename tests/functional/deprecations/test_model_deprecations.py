@@ -49,7 +49,7 @@ class TestModelDeprecationWarning:
 
     def test_deprecation_warning_error_options(self, project):
         with pytest.raises(EventCompilationError):
-            run_dbt(["--warn-error-options", '{"include": ["DeprecatedModel"]}', "parse"])
+            run_dbt(["--warn-error-options", '{"error": ["DeprecatedModel"]}', "parse"])
 
 
 class TestUpcomingReferenceDeprecationWarning:
@@ -76,7 +76,7 @@ class TestUpcomingReferenceDeprecationWarning:
     def test_deprecation_warning_error_options(self, project):
         with pytest.raises(EventCompilationError):
             run_dbt(
-                ["--warn-error-options", '{"include": ["UpcomingReferenceDeprecation"]}', "parse"]
+                ["--warn-error-options", '{"error": ["UpcomingReferenceDeprecation"]}', "parse"]
             )
 
 
@@ -103,4 +103,4 @@ class TestDeprecatedReferenceWarning:
 
     def test_deprecation_warning_error_options(self, project):
         with pytest.raises(EventCompilationError):
-            run_dbt(["--warn-error-options", '{"include": ["DeprecatedReference"]}', "parse"])
+            run_dbt(["--warn-error-options", '{"error": ["DeprecatedReference"]}', "parse"])

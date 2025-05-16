@@ -758,8 +758,8 @@ warn_error_options = click.option(
     "--warn-error-options",
     envvar="DBT_WARN_ERROR_OPTIONS",
     default="{}",
-    help="""If dbt would normally warn, instead raise an exception based on include/exclude configuration. Examples include --select that selects nothing, deprecations, configurations with no associated models, invalid test configurations,
-    and missing sources/refs in tests. This argument should be a YAML string, with keys 'include' or 'exclude'. eg. '{"include": "all", "exclude": ["NoNodesForSelectionCriteria"]}'""",
+    help="""If dbt would normally warn, instead raise an exception based on error/warn configuration. Examples include --select that selects nothing, deprecations, configurations with no associated models, invalid test configurations,
+    and missing sources/refs in tests. This argument should be a YAML string, with keys 'error' or 'warn'. eg. '{"error": "all", "warn": ["NoNodesForSelectionCriteria"]}'""",
     type=WarnErrorOptionsType(),
 )
 
