@@ -267,6 +267,7 @@ deprecations_list: List[DBTDeprecation] = [
     CustomKeyInConfigDeprecation(),
     CustomKeyInObjectDeprecation(),
     CustomOutputPathInSourceFreshnessDeprecation(),
+    SourceOverrideDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

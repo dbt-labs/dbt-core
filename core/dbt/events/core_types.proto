@@ -569,14 +569,14 @@ message CustomOutputPathInSourceFreshnessDeprecationMsg {
 }
 
 // D030
-message SorceOverrideDeprecation {
+message SourceOverrideDeprecation {
     string source_name = 1;
     string file = 2;
 }
 
-message SorceOverrideDeprecationMsg {
+message SourceOverrideDeprecationMsg {
     CoreEventInfo info = 1;
-    SorceOverrideDeprecation data = 2;
+    SourceOverrideDeprecation data = 2;
 }
 
 
