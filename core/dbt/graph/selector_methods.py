@@ -205,11 +205,6 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             self.saved_query_nodes(included_nodes),
         )
 
-    def configurable_nodes(
-        self, included_nodes: Set[UniqueId]
-    ) -> Iterator[Tuple[UniqueId, ResultNode]]:
-        yield from chain(self.parsed_nodes(included_nodes), self.source_nodes(included_nodes))
-
     def non_source_nodes(
         self,
         included_nodes: Set[UniqueId],
@@ -536,7 +531,7 @@ class ConfigSelectorMethod(SelectorMethod):
         # search sources is kind of useless now source configs only have
         # 'enabled', which you can't really filter on anyway, but maybe we'll
         # add more someday, so search them anyway.
-        for unique_id, node in self.configurable_nodes(included_nodes):
+        for unique_id, node in self.all_nodes(included_nodes):
             try:
                 value = _getattr_descend(node.config, parts)
             except AttributeError:
