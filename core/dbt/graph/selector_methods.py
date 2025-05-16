@@ -536,7 +536,7 @@ class ConfigSelectorMethod(SelectorMethod):
         # search sources is kind of useless now source configs only have
         # 'enabled', which you can't really filter on anyway, but maybe we'll
         # add more someday, so search them anyway.
-        for unique_id, node in self.configurable_nodes(included_nodes):
+        for unique_id, node in self.all_nodes(included_nodes):
             try:
                 value = _getattr_descend(node.config, parts)
             except AttributeError:
