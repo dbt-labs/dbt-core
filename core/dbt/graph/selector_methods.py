@@ -205,11 +205,6 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             self.saved_query_nodes(included_nodes),
         )
 
-    def configurable_nodes(
-        self, included_nodes: Set[UniqueId]
-    ) -> Iterator[Tuple[UniqueId, ResultNode]]:
-        yield from chain(self.parsed_nodes(included_nodes), self.source_nodes(included_nodes))
-
     def non_source_nodes(
         self,
         included_nodes: Set[UniqueId],
