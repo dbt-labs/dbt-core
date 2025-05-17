@@ -56,6 +56,7 @@ class Package(dbtClassMixin):
 class LocalPackage(Package):
     local: str
     unrendered: Dict[str, Any] = field(default_factory=dict)
+    project_root: Optional[str] = None
     name: Optional[str] = None
 
 
