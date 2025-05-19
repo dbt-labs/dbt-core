@@ -327,10 +327,11 @@ class TestOverrideSourceFreshness(SuccessfulSourceFreshnessTest):
         self._set_updated_at_to(project, timedelta(hours=-30))
 
         path = "target/pass_source.json"
-        results = self.run_dbt_with_vars(
+        results, log_output = self.run_dbt_and_capture_with_vars(
             project, ["source", "freshness", "-o", path], expect_pass=False
         )
         assert len(results) == 4  # freshness disabled for source_e
+        assert "Found `freshness` as a top-level property of `test_source` in file"
 
         assert os.path.exists(path)
         with open(path) as fp:
