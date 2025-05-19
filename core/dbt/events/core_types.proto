@@ -568,6 +568,18 @@ message CustomOutputPathInSourceFreshnessDeprecationMsg {
     CustomOutputPathInSourceFreshnessDeprecation data = 2;
 }
 
+// D030
+message PropertyMovedToConfigDeprecation {
+    string key = 1;
+    string file = 2;
+    string key_path = 3;
+}
+
+message PropertyMovedToConfigDeprecationMsg {
+    CoreEventInfo info = 1;
+    CustomOutputPathInSourceFreshnessDeprecation data = 2;
+}
+
 // I065
 message DeprecatedModel {
     string model_name = 1;

@@ -591,6 +591,15 @@ class CustomOutputPathInSourceFreshnessDeprecation(WarnLevel):
         return line_wrap_message(deprecation_tag(description))
 
 
+class PropertyMovedToConfigDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D030"
+
+    def message(self) -> str:
+        description = f"Found `{self.key}` as a top-level property of `{self.key_path}` in file `{self.file}`. The `{self.key}` top-level property should be moved into the `config` of `{self.key_path}`."
+        return line_wrap_message(deprecation_tag(description))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================

@@ -163,7 +163,7 @@ class SourcePatcher:
         except ValueError:
             fire_event(
                 FreshnessConfigProblem(
-                    msg="Could not parse default freshness config in 'dbt_project.yml', ignoring.",
+                    msg="Could not validate `freshness` for `sources` in 'dbt_project.yml', ignoring. Please see https://docs.getdbt.com/docs/build/sources#source-data-freshness for more information.",
                 )
             )
             project_freshness = None
@@ -171,7 +171,7 @@ class SourcePatcher:
         source_freshness = source.freshness
         if source_freshness:
             deprecations.warn(
-                "custom-key-in-object-deprecation",
+                "property-moved-to-config-deprecation",
                 key="freshness",
                 file=target.path,
                 key_path=source.name,
@@ -182,7 +182,7 @@ class SourcePatcher:
         table_freshness = table.freshness
         if table_freshness:
             deprecations.warn(
-                "custom-key-in-object-deprecation",
+                "property-moved-to-config-deprecation",
                 key="freshness",
                 file=target.path,
                 key_path=table.name,
