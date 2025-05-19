@@ -577,7 +577,7 @@ message PropertyMovedToConfigDeprecation {
 
 message PropertyMovedToConfigDeprecationMsg {
     CoreEventInfo info = 1;
-    CustomOutputPathInSourceFreshnessDeprecation data = 2;
+    PropertyMovedToConfigDeprecation data = 2;
 }
 
 // I065
