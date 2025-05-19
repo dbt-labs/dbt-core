@@ -158,7 +158,7 @@ class SourcePatcher:
 
         try:
             project_freshness = FreshnessThreshold.from_dict(
-                self.root_project.sources.get("freshness", {})
+                self.root_project.sources.get("+freshness", {})
             )
         except ValueError:
             fire_event(
