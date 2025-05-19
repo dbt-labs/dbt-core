@@ -1,7 +1,17 @@
 unit_tests:
-  - name: test_outer
+  - name: test_model_to_unit_test
     description: "A simple test of the outer model"
-    model: outer
+    model: model_to_unit_test
+    given:
+      - input: ref('seed')
+        format: csv
+        fixture: test_incremental_fixture
+    expect:
+      format: csv
+      fixture: test_incremental_fixture
+  - name: test_model_to_unit_test_2
+    description: "A simple test of the outer model"
+    model: model_to_unit_test
     versions:
       include:
       exclude:
@@ -12,26 +22,16 @@ unit_tests:
       tags:
         - "test_tag"
     given:
-      - input: ref('ephemeral')
+      - input: ref('seed')
         format: sql
         rows: |
-          "SELECT 1 as id, '2021-01-01' as created_at
+          SELECT 2 as a, 3 as b
     expect:
       format: dict
       rows:
-        - {id: 1, created_at: "2021-01-01"}
+        - {a: 2, b: 3}
     overrides:
       macros:
-        is_incremental: true
+        is_incremental: false
       vars: {}
       env_vars: {}
-  - name: test_outer_2
-    description: "A simple test of the outer model"
-    model: outer
-    given:
-      - input: ref('ephemeral')
-        format: csv
-        fixture: test_outer_fixture
-    expect:
-      format: csv
-      fixture: test_outer_fixture
