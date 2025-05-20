@@ -17,6 +17,7 @@ from typing import (
     TypeVar,
 )
 
+from dbt import deprecations
 from dbt.artifacts.resources import RefArgs
 from dbt.artifacts.resources.v1.model import (
     CustomGranularity,
@@ -785,8 +786,29 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                 else None
             )
 
-            project_freshness = ModelFreshness.from_dict(self.project.models.get("+freshness", {}))
+            try:
+                project_freshness = ModelFreshness.from_dict(
+                    self.project.models.get("+freshness", {})
+                )
+            except ValueError:
+                fire_event(
+                    Note(
+                        msg="Could not validate `freshness` for `models` in 'dbt_project.yml', ignoring.",
+                    ),
+                    EventLevel.WARN,
+                )
+                project_freshness = None
+
             model_freshness = block.target.freshness or None
+
+            if model_freshness:
+                deprecations.warn(
+                    "property-moved-to-config-deprecation",
+                    key="freshness",
+                    file=block.target.original_file_path,
+                    key_path=block.name,
+                )
+
             config_freshness = ModelFreshness.from_dict(block.target.config.get("freshness", {}))
             freshness = merge_model_freshness(project_freshness, model_freshness, config_freshness)
 
