@@ -6,6 +6,8 @@ analyses:
       node_color: purple
     config:
       tags: ["tag"]
+      enabled: true
+      meta: {}
     columns:
       - name: id
         description: id description
