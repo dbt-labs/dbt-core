@@ -1,0 +1,41 @@
+seeds:
+  - name: seed
+    description: 'test_description'
+    docs:
+      show: true
+      node_color: purple
+    data_tests:
+      - expression_is_true:
+          expression: "b = 2"
+    columns:
+      - name: a
+        description: a description
+        meta: {}
+        quote: true
+        tags: ["tag"]
+        tests:
+          - not_null
+      - name: b
+        description: b description
+        meta: {}
+        quote: true
+        tags: ["tag"]
+        tests:
+          - not_null
+    config:
+      quote_columns: false
+      column_types:
+        a: BIGINT
+      delimiter: ","
+      enabled: true
+      tags: "tag"
+      pre_hook: "select 1"
+      post_hook: "select 1"
+      database: "dbt"
+      schema: "test"
+      alias: test_alias
+      persist_docs: {}
+      full_refresh: true
+      meta: {'meta_key': 'meta_value'}
+      grants: {}
+      event_time: my_time_field
