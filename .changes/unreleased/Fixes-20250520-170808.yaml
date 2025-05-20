@@ -1,0 +1,6 @@
+kind: Fixes
+body: Add freshness config to models
+time: 2025-05-20T17:08:08.281566+01:00
+custom:
+    Author: aranke
+    Issue: "11506"

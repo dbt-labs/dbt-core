@@ -12,27 +12,8 @@ from dbt.artifacts.resources.v1.components import (
 from dbt.artifacts.resources.v1.config import NodeConfig
 from dbt_common.contracts.config.base import MergeBehavior
 from dbt_common.contracts.constraints import ModelLevelConstraint
+from dbt_common.contracts.util import Mergeable
 from dbt_common.dataclass_schema import ExtensibleDbtClassMixin, dbtClassMixin
-
-
-@dataclass
-class ModelConfig(NodeConfig):
-    access: AccessType = field(
-        default=AccessType.Protected,
-        metadata=MergeBehavior.Clobber.meta(),
-    )
-
-
-@dataclass
-class CustomGranularity(dbtClassMixin):
-    name: str
-    column_name: Optional[str] = None
-
-
-@dataclass
-class TimeSpine(dbtClassMixin):
-    standard_granularity_column: str
-    custom_granularities: List[CustomGranularity] = field(default_factory=list)
 
 
 class ModelFreshnessDependsOnOptions(enum.Enum):
@@ -48,8 +29,63 @@ class ModelBuildAfter(ExtensibleDbtClassMixin):
 
 
 @dataclass
-class ModelFreshness(ExtensibleDbtClassMixin):
+class ModelFreshness(ExtensibleDbtClassMixin, Mergeable):
     build_after: ModelBuildAfter = field(default_factory=ModelBuildAfter)
+
+
+def merge_model_freshness(*thresholds: Optional[ModelFreshness]) -> Optional[ModelFreshness]:
+    if not thresholds:
+        return None
+
+    current_merged_value: Optional[ModelFreshness] = thresholds[0]
+
+    for i in range(1, len(thresholds)):
+        base = current_merged_value
+        update = thresholds[i]
+
+        if base is not None and update is not None:
+            # When both base and update freshness are defined,
+            # create a new ModelFreshness instance using the build_after from the 'update'.
+            # This effectively means 'update's build_after configuration takes precedence.
+            merged_freshness_obj = base.merged(update)
+            if (
+                base.build_after.depends_on == ModelFreshnessDependsOnOptions.all
+                or update.build_after.depends_on == ModelFreshnessDependsOnOptions.all
+            ):
+                merged_freshness_obj.build_after.depends_on = ModelFreshnessDependsOnOptions.all
+            current_merged_value = merged_freshness_obj
+        elif base is None and update is not None:
+            # If the current merged value is None but the new update is defined,
+            # take the update.
+            current_merged_value = update
+        else:
+            # This covers cases where 'update' is None (regardless of 'base'),
+            # or both 'base' and 'update' are None.
+            # The result of the pair-merge is None.
+            current_merged_value = base
+
+    return current_merged_value
+
+
+@dataclass
+class ModelConfig(NodeConfig):
+    access: AccessType = field(
+        default=AccessType.Protected,
+        metadata=MergeBehavior.Clobber.meta(),
+    )
+    freshness: Optional[ModelFreshness] = None
+
+
+@dataclass
+class CustomGranularity(dbtClassMixin):
+    name: str
+    column_name: Optional[str] = None
+
+
+@dataclass
+class TimeSpine(dbtClassMixin):
+    standard_granularity_column: str
+    custom_granularities: List[CustomGranularity] = field(default_factory=list)
 
 
 @dataclass
