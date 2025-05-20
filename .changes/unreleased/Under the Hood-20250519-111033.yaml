@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: bump dbt-common dependency to >=2.0,<3.0
-time: 2025-05-19T11:10:33.863941-07:00
-custom:
-  Author: colin-rogers-dbt
-  Issue: "11640"
