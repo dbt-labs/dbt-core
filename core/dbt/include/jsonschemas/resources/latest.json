@@ -2006,17 +2006,56 @@
             "null"
           ]
         },
+        "delimiter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "enabled": {
           "type": [
             "boolean",
             "null"
           ]
         },
+        "event_time": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "full_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "grants": true,
+        "meta": true,
         "persist_docs": {
           "anyOf": [
             {
               "$ref": "#/definitions/PersistDocsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "post_hook": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Hooks"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pre_hook": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Hooks"
             },
             {
               "type": "null"

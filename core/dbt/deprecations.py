@@ -40,7 +40,6 @@ class DBTDeprecation:
         raise NotImplementedError("event not implemented for {}".format(self._event))
 
     def preview(self, base_event: abc.ABCMeta) -> None:
-        # breakpoint()
         note_event = Note(msg=base_event.message())  # type: ignore
         fire_event(note_event)
 
@@ -185,6 +184,11 @@ class CustomOutputPathInSourceFreshnessDeprecation(DBTDeprecation):
     _event = "CustomOutputPathInSourceFreshnessDeprecation"
 
 
+class PropertyMovedToConfigDeprecation(DBTDeprecation):
+    _name = "property-moved-to-config-deprecation"
+    _event = "PropertyMovedToConfigDeprecation"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -262,6 +266,7 @@ deprecations_list: List[DBTDeprecation] = [
     CustomKeyInConfigDeprecation(),
     CustomKeyInObjectDeprecation(),
     CustomOutputPathInSourceFreshnessDeprecation(),
+    PropertyMovedToConfigDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

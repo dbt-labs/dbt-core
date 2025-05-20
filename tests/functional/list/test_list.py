@@ -563,6 +563,7 @@ class TestList:
                 "config": {
                     "enabled": True,
                     "event_time": None,
+                    "freshness": None,
                 },
                 "unique_id": "source.test.my_source.my_table",
                 "original_file_path": normalize("models/schema.yml"),
@@ -587,33 +588,33 @@ class TestList:
             "json": {
                 "name": "seed",
                 "package_name": "test",
-                "tags": [],
+                "tags": ["tag"],
                 "config": {
                     "enabled": True,
                     "group": None,
                     "materialized": "seed",
-                    "post-hook": [],
-                    "tags": [],
-                    "pre-hook": [],
+                    "post-hook": [{"sql": "select 1", "transaction": True, "index": None}],
+                    "tags": ["tag"],
+                    "pre-hook": [{"sql": "select 1", "transaction": True, "index": None}],
                     "quoting": {},
-                    "column_types": {},
+                    "column_types": {"a": "BIGINT"},
                     "delimiter": ",",
                     "persist_docs": {},
                     "quote_columns": False,
-                    "full_refresh": None,
+                    "full_refresh": True,
                     "unique_key": None,
                     "on_schema_change": "ignore",
                     "on_configuration_change": "apply",
-                    "database": None,
-                    "schema": None,
-                    "alias": None,
-                    "meta": {},
+                    "database": "dbt",
+                    "schema": "test",
+                    "alias": "test_alias",
+                    "meta": {"meta_key": "meta_value"},
                     "grants": {},
                     "packages": [],
                     "incremental_strategy": None,
-                    "docs": {"node_color": None, "show": True},
+                    "docs": {"node_color": "purple", "show": True},
                     "contract": {"enforced": False, "alias_types": True},
-                    "event_time": None,
+                    "event_time": "my_time_field",
                     "lookback": 1,
                     "batch_size": None,
                     "begin": None,
@@ -622,7 +623,7 @@ class TestList:
                 "depends_on": {"macros": []},
                 "unique_id": "seed.test.seed",
                 "original_file_path": normalize("seeds/seed.csv"),
-                "alias": "seed",
+                "alias": "test_alias",
                 "resource_type": "seed",
             },
             "path": self.dir("seeds/seed.csv"),
@@ -630,22 +631,63 @@ class TestList:
         self.expect_given_output(["--resource-type", "seed"], expectations)
 
     def expect_test_output(self):
+        # This is order sensitive :grimace:
         expectations = {
             "name": (
+                "expression_is_true_seed_b_2",
                 "not_null_model_with_lots_of_schema_configs_id",
                 "not_null_outer_id",
+                "not_null_seed__a_",
+                "not_null_seed__b_",
                 "t",
                 "unique_model_with_lots_of_schema_configs_id",
                 "unique_outer_id",
             ),
             "selector": (
+                "test.expression_is_true_seed_b_2",
                 "test.not_null_model_with_lots_of_schema_configs_id",
                 "test.not_null_outer_id",
+                "test.not_null_seed__a_",
+                "test.not_null_seed__b_",
                 "test.t",
                 "test.unique_model_with_lots_of_schema_configs_id",
                 "test.unique_outer_id",
             ),
             "json": (
+                {
+                    "alias": "expression_is_true_seed_b_2",
+                    "config": {
+                        "alias": None,
+                        "database": None,
+                        "enabled": True,
+                        "error_if": "!= 0",
+                        "fail_calc": "count(*)",
+                        "group": None,
+                        "limit": None,
+                        "materialized": "test",
+                        "meta": {},
+                        "schema": "dbt_test__audit",
+                        "severity": "ERROR",
+                        "store_failures": None,
+                        "store_failures_as": None,
+                        "tags": [],
+                        "warn_if": "!= 0",
+                        "where": None,
+                    },
+                    "depends_on": {
+                        "macros": [
+                            "macro.test.test_expression_is_true",
+                            "macro.dbt.get_where_subquery",
+                        ],
+                        "nodes": ["seed.test.seed"],
+                    },
+                    "name": "expression_is_true_seed_b_2",
+                    "original_file_path": normalize("seeds/s.yml"),
+                    "package_name": "test",
+                    "resource_type": "test",
+                    "tags": [],
+                    "unique_id": "test.test.expression_is_true_seed_b_2.4e0babbea4",
+                },
                 {
                     "alias": "not_null_model_with_lots_of_schema_configs_id",
                     "config": {
@@ -707,6 +749,68 @@ class TestList:
                     "original_file_path": normalize("models/schema.yml"),
                     "alias": "not_null_outer_id",
                     "resource_type": "test",
+                },
+                {
+                    "alias": "not_null_seed__a_",
+                    "config": {
+                        "alias": None,
+                        "database": None,
+                        "enabled": True,
+                        "error_if": "!= 0",
+                        "fail_calc": "count(*)",
+                        "group": None,
+                        "limit": None,
+                        "materialized": "test",
+                        "meta": {},
+                        "schema": "dbt_test__audit",
+                        "severity": "ERROR",
+                        "store_failures": None,
+                        "store_failures_as": None,
+                        "tags": [],
+                        "warn_if": "!= 0",
+                        "where": None,
+                    },
+                    "depends_on": {
+                        "macros": ["macro.dbt.test_not_null"],
+                        "nodes": ["seed.test.seed"],
+                    },
+                    "name": "not_null_seed__a_",
+                    "original_file_path": normalize("seeds/s.yml"),
+                    "package_name": "test",
+                    "resource_type": "test",
+                    "tags": ["tag"],
+                    "unique_id": "test.test.not_null_seed__a_.6b59640cde",
+                },
+                {
+                    "alias": "not_null_seed__b_",
+                    "config": {
+                        "alias": None,
+                        "database": None,
+                        "enabled": True,
+                        "error_if": "!= 0",
+                        "fail_calc": "count(*)",
+                        "group": None,
+                        "limit": None,
+                        "materialized": "test",
+                        "meta": {},
+                        "schema": "dbt_test__audit",
+                        "severity": "ERROR",
+                        "store_failures": None,
+                        "store_failures_as": None,
+                        "tags": [],
+                        "warn_if": "!= 0",
+                        "where": None,
+                    },
+                    "depends_on": {
+                        "macros": ["macro.dbt.test_not_null"],
+                        "nodes": ["seed.test.seed"],
+                    },
+                    "name": "not_null_seed__b_",
+                    "original_file_path": normalize("seeds/s.yml"),
+                    "package_name": "test",
+                    "resource_type": "test",
+                    "tags": ["tag"],
+                    "unique_id": "test.test.not_null_seed__b_.a088b263cb",
                 },
                 {
                     "name": "t",
@@ -800,8 +904,11 @@ class TestList:
                 },
             ),
             "path": (
+                self.dir("seeds/s.yml"),
                 self.dir("models/schema.yml"),
                 self.dir("models/schema.yml"),
+                self.dir("seeds/s.yml"),
+                self.dir("seeds/s.yml"),
                 self.dir("tests/t.sql"),
                 self.dir("models/schema.yml"),
                 self.dir("models/schema.yml"),
@@ -814,6 +921,7 @@ class TestList:
         # models are just package, subdirectory path, name
         # sources are like models, ending in source_name.table_name
         expected_default = {
+            "exposure:test.weekly_jaffle_metrics",
             "test.ephemeral",
             "test.incremental",
             "test.snapshot.my_snapshot",
@@ -832,6 +940,9 @@ class TestList:
             "semantic_model:test.my_sm",
             "metric:test.total_outer",
             "saved_query:test.my_saved_query",
+            "test.expression_is_true_seed_b_2",
+            "test.not_null_seed__a_",
+            "test.not_null_seed__b_",
         }
         # analyses have their type inserted into their fqn like tests
         expected_all = expected_default | {"test.analysis.a"}
@@ -901,6 +1012,9 @@ class TestList:
             "test.t",
             "test.unique_outer_id",
             "test.unique_model_with_lots_of_schema_configs_id",
+            "test.expression_is_true_seed_b_2",
+            "test.not_null_seed__a_",
+            "test.not_null_seed__b_",
         }
 
         results = self.run_dbt_ls(
@@ -925,6 +1039,9 @@ class TestList:
             "test.sub.inner",
             "test.t",
             "test.unique_model_with_lots_of_schema_configs_id",
+            "test.expression_is_true_seed_b_2",
+            "test.not_null_seed__a_",
+            "test.not_null_seed__b_",
         }
 
         results = self.run_dbt_ls(
@@ -964,6 +1081,9 @@ class TestList:
             "test.t",
             "test.unique_outer_id",
             "test.unique_model_with_lots_of_schema_configs_id",
+            "test.expression_is_true_seed_b_2",
+            "test.not_null_seed__a_",
+            "test.not_null_seed__b_",
         }
         del os.environ["DBT_RESOURCE_TYPES"]
         os.environ["DBT_EXCLUDE_RESOURCE_TYPES"] = (
@@ -971,6 +1091,7 @@ class TestList:
         )
         results = self.run_dbt_ls()
         assert set(results) == {
+            "exposure:test.weekly_jaffle_metrics",
             "test.ephemeral",
             "test.incremental",
             "test.outer",
@@ -1032,8 +1153,11 @@ class TestList:
         """Expect selected fields of the test resource types
         """
         expectations = [
+            {"name": "expression_is_true_seed_b_2", "column_name": None},
             {"name": "not_null_model_with_lots_of_schema_configs_id", "column_name": "id"},
             {"name": "not_null_outer_id", "column_name": "id"},
+            {"name": "not_null_seed__a_", "column_name": '"a"'},
+            {"name": "not_null_seed__b_", "column_name": '"b"'},
             {"name": "t"},
             {"name": "unique_model_with_lots_of_schema_configs_id", "column_name": "id"},
             {"name": "unique_outer_id", "column_name": "id"},
