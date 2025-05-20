@@ -45,11 +45,7 @@ class TestList:
                     if expected != ANY:
                         self.assert_json_equal(got, expected)
                 else:
-                    try:
-                        assert got == expected
-                    except Exception as e:
-                        breakpoint()
-                        raise
+                    assert got == expected
 
     def expect_snapshot_output(self, happy_path_project):  # noqa: F811
         expectations = {
@@ -960,8 +956,6 @@ class TestList:
                 {
                     "name": "t",
                     "package_name": "test",
-                    "depends_on": {"nodes": [], "macros": []},
-                    "tags": [],
                     "alias": "test_alias",
                     "config": {
                         "alias": "test_alias",
