@@ -2437,16 +2437,6 @@
             "null"
           ]
         },
-        "freshness": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/FreshnessDefinition"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "loaded_at_field": {
           "type": [
             "string",
@@ -2464,13 +2454,6 @@
             "string",
             "null"
           ]
-        },
-        "meta": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": true
         },
         "name": {
           "type": "string"
@@ -2505,16 +2488,6 @@
           "items": {
             "$ref": "#/definitions/Tables"
           }
-        },
-        "tags": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
-            },
-            {
-              "type": "null"
-            }
-          ]
         }
       },
       "additionalProperties": false
@@ -2532,6 +2505,33 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "freshness": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessDefinition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         }
       },
@@ -2591,16 +2591,6 @@
           ]
         },
         "external": true,
-        "freshness": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/FreshnessDefinition"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "identifier": {
           "type": [
             "string",
@@ -2625,13 +2615,6 @@
             "null"
           ]
         },
-        "meta": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": true
-        },
         "name": {
           "type": "string"
         },
@@ -2639,16 +2622,6 @@
           "anyOf": [
             {
               "$ref": "#/definitions/DbtQuoting"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "tags": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
             },
             {
               "type": "null"
@@ -2670,10 +2643,43 @@
     "TablesConfig": {
       "type": "object",
       "properties": {
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "event_time": {
           "type": [
             "string",
             "null"
+          ]
+        },
+        "freshness": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessDefinition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         }
       },

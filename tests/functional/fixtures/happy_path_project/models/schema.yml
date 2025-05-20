@@ -83,8 +83,3 @@ models:
     docs:
       node_color: purple
       show: true
-
-sources:
-  - name: my_source
-    tables:
-      - name: my_table
