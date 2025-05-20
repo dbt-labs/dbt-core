@@ -44,6 +44,7 @@ def get_rendered_model_config(**updates):
         "batch_size": None,
         "begin": None,
         "concurrent_batches": None,
+        "freshness": None,
     }
     result.update(updates)
     return result

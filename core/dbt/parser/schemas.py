@@ -787,8 +787,11 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             )
 
             try:
-                project_freshness = ModelFreshness.from_dict(
-                    self.project.models.get("+freshness", {})
+                project_freshness_dict = self.project.models.get("+freshness", None)
+                project_freshness = (
+                    ModelFreshness.from_dict(project_freshness_dict)
+                    if project_freshness_dict
+                    else None
                 )
             except ValueError:
                 fire_event(
@@ -809,7 +812,10 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                     key_path=block.name,
                 )
 
-            config_freshness = ModelFreshness.from_dict(block.target.config.get("freshness", {}))
+            config_freshness_dict = block.target.config.get("freshness", None)
+            config_freshness = (
+                ModelFreshness.from_dict(config_freshness_dict) if config_freshness_dict else None
+            )
             freshness = merge_model_freshness(project_freshness, model_freshness, config_freshness)
 
         patch = ParsedNodePatch(
