@@ -72,8 +72,8 @@ setup(
         "dbt-semantic-interfaces>=0.8.3,<0.9",
         # Minor versions for these are expected to be backwards-compatible
         "dbt-common>=2.0,<3.0",
-        "dbt-adapters>=1.13.0,<2.0",
-        "dbt-protos>=1.0.291,<2.0",
+        "dbt-adapters>=1.15.2,<2.0",
+        "dbt-protos>=1.0.302,<2.0",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
         "packaging>20.9",
