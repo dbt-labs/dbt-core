@@ -562,18 +562,30 @@ class TestList:
             "json": {
                 "config": {
                     "enabled": True,
-                    "event_time": None,
-                    "freshness": None,
+                    "event_time": "column_name",
+                    "freshness": {
+                        "error_after": {
+                            "count": 2,
+                            "period": "hour",
+                        },
+                        "warn_after": {
+                            "count": 1,
+                            "period": "minute",
+                        },
+                        "filter": "column_name = 1",
+                    },
+                    "meta": {"test": 1},
+                    "tags": ["tag"],
                 },
                 "unique_id": "source.test.my_source.my_table",
-                "original_file_path": normalize("models/schema.yml"),
+                "original_file_path": normalize("models/sources.yml"),
                 "package_name": "test",
                 "name": "my_table",
                 "source_name": "my_source",
                 "resource_type": "source",
                 "tags": [],
             },
-            "path": self.dir("models/schema.yml"),
+            "path": self.dir("models/sources.yml"),
         }
         # should we do this --select automatically for a user if if 'source' is
         # in the resource types and there is no '--select' or '--exclude'?
