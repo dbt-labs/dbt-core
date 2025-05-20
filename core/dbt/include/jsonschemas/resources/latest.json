@@ -192,7 +192,13 @@
             "null"
           ]
         },
-        "meta": true,
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
         "tags": {
           "anyOf": [
             {
@@ -2031,7 +2037,13 @@
           ]
         },
         "grants": true,
-        "meta": true,
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
         "persist_docs": {
           "anyOf": [
             {
