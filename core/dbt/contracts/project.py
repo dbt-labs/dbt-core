@@ -351,7 +351,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     # legacy behaviors - https://github.com/dbt-labs/dbt-core/blob/main/docs/guides/behavior-change-flags.md
     require_batched_execution_for_custom_microbatch_strategy: bool = False
     require_explicit_package_overrides_for_builtin_materializations: bool = True
-    require_resource_names_without_spaces: bool = False
+    require_resource_names_without_spaces: bool = True
     source_freshness_run_project_hooks: bool = True
     skip_nodes_if_on_run_start_fails: bool = False
     state_modified_compare_more_unrendered_values: bool = False
