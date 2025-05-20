@@ -127,7 +127,7 @@ class TestList:
                     "database": None,
                     "schema": None,
                     "alias": None,
-                    "meta": {},
+                    "meta": {"test": 1},
                     "unique_key": None,
                     "grants": {},
                     "packages": [],
