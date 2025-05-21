@@ -1,9 +1,6 @@
 seeds:
   - name: seed
     description: 'test_description'
-    docs:
-      show: true
-      node_color: purple
     data_tests:
       - expression_is_true:
           expression: "b = 2"
@@ -39,3 +36,6 @@ seeds:
       meta: {'meta_key': 'meta_value'}
       grants: {}
       event_time: my_time_field
+      docs:
+        show: true
+        node_color: purple
