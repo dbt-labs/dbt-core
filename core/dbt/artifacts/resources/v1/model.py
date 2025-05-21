@@ -16,14 +16,14 @@ from dbt_common.contracts.util import Mergeable
 from dbt_common.dataclass_schema import ExtensibleDbtClassMixin, dbtClassMixin
 
 
-class ModelFreshnessDependsOnOptions(enum.Enum):
+class ModelFreshnessUpdatesOnOptions(enum.Enum):
     all = "all"
     any = "any"
 
 
 @dataclass
 class ModelBuildAfter(ExtensibleDbtClassMixin):
-    depends_on: ModelFreshnessDependsOnOptions = ModelFreshnessDependsOnOptions.any
+    updates_on: ModelFreshnessUpdatesOnOptions = ModelFreshnessUpdatesOnOptions.any
     count: int = 0
     period: TimePeriod = TimePeriod.hour
 
@@ -49,10 +49,10 @@ def merge_model_freshness(*thresholds: Optional[ModelFreshness]) -> Optional[Mod
             # This effectively means 'update's build_after configuration takes precedence.
             merged_freshness_obj = base.merged(update)
             if (
-                base.build_after.depends_on == ModelFreshnessDependsOnOptions.all
-                or update.build_after.depends_on == ModelFreshnessDependsOnOptions.all
+                base.build_after.updates_on == ModelFreshnessUpdatesOnOptions.all
+                or update.build_after.updates_on == ModelFreshnessUpdatesOnOptions.all
             ):
-                merged_freshness_obj.build_after.depends_on = ModelFreshnessDependsOnOptions.all
+                merged_freshness_obj.build_after.updates_on = ModelFreshnessUpdatesOnOptions.all
             current_merged_value = merged_freshness_obj
         elif base is None and update is not None:
             # If the current merged value is None but the new update is defined,

@@ -17,7 +17,6 @@ from typing import (
     TypeVar,
 )
 
-from dbt import deprecations
 from dbt.artifacts.resources import RefArgs
 from dbt.artifacts.resources.v1.model import (
     CustomGranularity,
@@ -803,14 +802,6 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                 project_freshness = None
 
             model_freshness = block.target.freshness or None
-
-            if model_freshness:
-                deprecations.warn(
-                    "property-moved-to-config-deprecation",
-                    key="freshness",
-                    file=block.target.original_file_path,
-                    key_path=block.name,
-                )
 
             config_freshness_dict = block.target.config.get("freshness", None)
             config_freshness = (

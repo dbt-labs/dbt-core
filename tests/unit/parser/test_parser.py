@@ -10,7 +10,7 @@ from dbt import tracking
 from dbt.artifacts.resources import ModelConfig, RefArgs
 from dbt.artifacts.resources.v1.model import (
     ModelBuildAfter,
-    ModelFreshnessDependsOnOptions,
+    ModelFreshnessUpdatesOnOptions,
 )
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import FileHash, FilePath, SchemaSourceFile, SourceFile
@@ -142,7 +142,6 @@ class BaseParserTest(unittest.TestCase):
             "profile": "test",
             "project-root": get_abs_os_path("./dbt_packages/snowplow"),
             "config-version": 2,
-            "models": {"+freshness": {"build_after": {"count": 12, "period": "hour"}}},
         }
 
         self.snowplow_project_config = config_from_parts_or_dicts(
@@ -311,10 +310,10 @@ models:
     - name: my_model
       description: A description of my model
       freshness:
-        build_after: {count: 4, period: day, depends_on: all}
+        build_after: {count: 4, period: day, updates_on: all}
       config:
         freshness:
-          build_after: {count: 1, period: day, depends_on: any}
+          build_after: {count: 1, period: day, updates_on: any}
 """
 
 SINGLE_TABLE_MODEL_FRESHNESS_ONLY_DEPEND_ON = """
@@ -323,7 +322,7 @@ models:
       description: A description of my model
       freshness:
         build_after:
-            depends_on: all
+            updates_on: all
 """
 
 
@@ -736,7 +735,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         assert self.parser.manifest.nodes[
             "model.root.my_model"
         ].freshness.build_after == ModelBuildAfter(
-            count=1, period="day", depends_on=ModelFreshnessDependsOnOptions.all
+            count=1, period="day", updates_on=ModelFreshnessUpdatesOnOptions.all
         )
 
     def test__parse_model_freshness_depend_on(self):
@@ -748,7 +747,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         assert self.parser.manifest.nodes[
             "model.root.my_model"
         ].freshness.build_after == ModelBuildAfter(
-            count=0, period="hour", depends_on=ModelFreshnessDependsOnOptions.all
+            count=0, period="hour", updates_on=ModelFreshnessUpdatesOnOptions.all
         )
 
     def test__read_basic_model_tests_wrong_severity(self):
