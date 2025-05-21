@@ -771,7 +771,7 @@
           ]
         }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "ExportConfigExportAs": {
       "type": "string",
@@ -1041,7 +1041,7 @@
           ]
         }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "GroupsProperties": {
       "type": "object",
@@ -1816,7 +1816,7 @@
         },
         "meta": true
       },
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "SavedQueriesConfigCache": {
       "type": "object",
@@ -2289,6 +2289,12 @@
             }
           ]
         },
+        "database": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "dbt_valid_to_current": {
           "type": [
             "string",
@@ -2345,6 +2351,12 @@
             "null"
           ]
         },
+        "schema": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "snapshot_meta_column_names": {
           "anyOf": [
             {
@@ -2369,18 +2381,6 @@
             {
               "type": "null"
             }
-          ]
-        },
-        "target_database": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "target_schema": {
-          "type": [
-            "string",
-            "null"
           ]
         },
         "unique_key": {
@@ -2696,7 +2696,7 @@
           ]
         }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "UniqueTest": {
       "type": "object",
@@ -2814,7 +2814,7 @@
         },
         "v": true
       },
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "_MeasureExpr": {
       "anyOf": [
