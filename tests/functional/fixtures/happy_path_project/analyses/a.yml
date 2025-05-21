@@ -1,15 +1,15 @@
 analyses:
   - name: a
     description: description
-    docs:
-      show: true
-      node_color: purple
     config:
       tags: ["tag"]
       enabled: true
       meta: {
         "test": 1
       }
+      docs:
+        show: true
+        node_color: purple
     columns:
       - name: id
         description: id description
