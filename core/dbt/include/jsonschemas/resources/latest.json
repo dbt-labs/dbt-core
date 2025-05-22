@@ -186,6 +186,35 @@
     "AnalysesConfig": {
       "type": "object",
       "properties": {
+        "docs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DocsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
         "tags": {
           "anyOf": [
             {
@@ -225,22 +254,6 @@
           ]
         },
         "description": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "docs": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/DocsConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "group": {
           "type": [
             "string",
             "null"
@@ -2024,7 +2037,13 @@
           ]
         },
         "grants": true,
-        "meta": true,
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
         "persist_docs": {
           "anyOf": [
             {
