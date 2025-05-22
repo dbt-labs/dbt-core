@@ -1,7 +1,9 @@
 groups:
   - name: finance
+    description: description
+    config:
+      meta:
+        custom_field: value
     owner:
-      # 'name' or 'email' is required; additional properties allowed
+      # one of 'name' or 'email' is required;
       email: finance@jaffleshop.com
-      slack: finance-data
-      github: finance-data-team

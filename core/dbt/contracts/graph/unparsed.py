@@ -649,6 +649,8 @@ class UnparsedMetric(dbtClassMixin):
 class UnparsedGroup(dbtClassMixin):
     name: str
     owner: Owner
+    description: Optional[str] = None
+    config: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def validate(cls, data):
