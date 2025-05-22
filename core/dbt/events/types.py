@@ -1,4 +1,5 @@
 import json
+from typing import List
 
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
 from dbt.events.base_types import (
@@ -598,6 +599,26 @@ class PropertyMovedToConfigDeprecation(WarnLevel):
     def message(self) -> str:
         description = f"Found `{self.key}` as a top-level property of `{self.key_path}` in file `{self.file}`. The `{self.key}` top-level property should be moved into the `config` of `{self.key_path}`."
         return line_wrap_message(deprecation_tag(description))
+
+
+class WEOIncludeExcludeDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D031"
+
+    def message(self) -> str:
+        found_keys: List[str] = []
+        if self.found_include:
+            found_keys.append("`include`")
+        if self.found_exclude:
+            found_keys.append("`exclude`")
+
+        description = f"Found {' and '.join(found_keys)} in `warn_error_options` specification."
+        if self.found_include:
+            description += " Please use `error` instead of `include`."
+        if self.found_exclude:
+            description += " Please use `warn` instead of `exclude`."
+
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
 # =======================================================

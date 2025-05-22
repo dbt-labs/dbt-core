@@ -1,5 +1,6 @@
 from typing import Any, Dict, Optional
 
+from dbt import deprecations
 from dbt.clients import yaml_helper
 from dbt.events.types import InvalidOptionYAML
 from dbt.exceptions import DbtExclusivePropertyUseError, OptionNotYamlDictError
@@ -55,6 +56,16 @@ def exclusive_primary_alt_value_setting(
 
 
 def normalize_warn_error_options(warn_error_options: Dict[str, Any]) -> None:
+    has_include = "include" in warn_error_options
+    has_exclude = "exclude" in warn_error_options
+
+    if has_include or has_exclude:
+        deprecations.buffer(
+            "weo-include-exclude-deprecation",
+            found_include=has_include,
+            found_exclude=has_exclude,
+        )
+
     exclusive_primary_alt_value_setting(
         warn_error_options, "error", "include", "warn_error_options"
     )
