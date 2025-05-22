@@ -10,18 +10,20 @@ seeds:
     columns:
       - name: a
         description: a description
-        meta: {}
         quote: true
-        tags: ["tag"]
         tests:
           - not_null
+        config:
+          tags: ["tag"]
+          meta: {}
       - name: b
         description: b description
-        meta: {}
         quote: true
-        tags: ["tag"]
         tests:
           - not_null
+        config:
+          meta: {}
+          tags: ["tag"]
     config:
       quote_columns: false
       column_types:

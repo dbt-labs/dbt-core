@@ -276,12 +276,45 @@
         }
       ]
     },
+    "ColumnConfig": {
+      "type": "object",
+      "properties": {
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "ColumnProperties": {
       "type": "object",
       "required": [
         "name"
       ],
       "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ColumnConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "constraints": {
           "type": [
             "array",
@@ -320,7 +353,6 @@
             }
           ]
         },
-        "meta": true,
         "name": {
           "type": "string"
         },
@@ -337,16 +369,6 @@
           "anyOf": [
             {
               "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "tags": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
             },
             {
               "type": "null"
@@ -2289,6 +2311,12 @@
             }
           ]
         },
+        "database": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "dbt_valid_to_current": {
           "type": [
             "string",
@@ -2345,6 +2373,12 @@
             "null"
           ]
         },
+        "schema": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "snapshot_meta_column_names": {
           "anyOf": [
             {
@@ -2369,18 +2403,6 @@
             {
               "type": "null"
             }
-          ]
-        },
-        "target_database": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "target_schema": {
-          "type": [
-            "string",
-            "null"
           ]
         },
         "unique_key": {
@@ -2456,16 +2478,6 @@
             "null"
           ]
         },
-        "freshness": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/FreshnessDefinition"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "loaded_at_field": {
           "type": [
             "string",
@@ -2483,13 +2495,6 @@
             "string",
             "null"
           ]
-        },
-        "meta": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": true
         },
         "name": {
           "type": "string"
@@ -2524,16 +2529,6 @@
           "items": {
             "$ref": "#/definitions/Tables"
           }
-        },
-        "tags": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
-            },
-            {
-              "type": "null"
-            }
-          ]
         }
       },
       "additionalProperties": false
@@ -2551,6 +2546,33 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "freshness": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessDefinition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         }
       },
@@ -2610,16 +2632,6 @@
           ]
         },
         "external": true,
-        "freshness": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/FreshnessDefinition"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "identifier": {
           "type": [
             "string",
@@ -2644,13 +2656,6 @@
             "null"
           ]
         },
-        "meta": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": true
-        },
         "name": {
           "type": "string"
         },
@@ -2658,16 +2663,6 @@
           "anyOf": [
             {
               "$ref": "#/definitions/DbtQuoting"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "tags": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
             },
             {
               "type": "null"
@@ -2689,10 +2684,43 @@
     "TablesConfig": {
       "type": "object",
       "properties": {
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "event_time": {
           "type": [
             "string",
             "null"
+          ]
+        },
+        "freshness": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessDefinition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         }
       },
