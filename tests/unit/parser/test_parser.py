@@ -4,14 +4,13 @@ from argparse import Namespace
 from copy import deepcopy
 from unittest import mock
 
-import pytest
 import yaml
 
 from dbt import tracking
 from dbt.artifacts.resources import ModelConfig, RefArgs
 from dbt.artifacts.resources.v1.model import (
     ModelBuildAfter,
-    ModelFreshnessDependsOnOptions,
+    ModelFreshnessUpdatesOnOptions,
 )
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import FileHash, FilePath, SchemaSourceFile, SourceFile
@@ -306,21 +305,24 @@ models:
                 arg: 100
 """
 
-SINGLE_TALBE_MODEL_FRESHNESS = """
+SINGLE_TABLE_MODEL_FRESHNESS = """
 models:
     - name: my_model
       description: A description of my model
       freshness:
-        build_after: {count: 1, period: day}
+        build_after: {count: 4, period: day, updates_on: all}
+      config:
+        freshness:
+          build_after: {count: 1, period: day, updates_on: any}
 """
 
-SINGLE_TALBE_MODEL_FRESHNESS_ONLY_DEPEND_ON = """
+SINGLE_TABLE_MODEL_FRESHNESS_ONLY_DEPEND_ON = """
 models:
     - name: my_model
       description: A description of my model
       freshness:
         build_after:
-            depends_on: all
+            updates_on: all
 """
 
 
@@ -723,9 +725,8 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(len(list(self.parser.manifest.sources)), 0)
         self.assertEqual(len(list(self.parser.manifest.nodes)), 4)
 
-    @pytest.mark.skip(reason="skipping until model freshness is documented and does something")
     def test__parse_model_freshness(self):
-        block = self.file_block_for(SINGLE_TALBE_MODEL_FRESHNESS, "test_one.yml")
+        block = self.file_block_for(SINGLE_TABLE_MODEL_FRESHNESS, "test_one.yml")
         self.parser.manifest.files[block.file.file_id] = block.file
         dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
@@ -734,12 +735,11 @@ class SchemaParserModelsTest(SchemaParserTest):
         assert self.parser.manifest.nodes[
             "model.root.my_model"
         ].freshness.build_after == ModelBuildAfter(
-            count=1, period="day", depends_on=ModelFreshnessDependsOnOptions.any
+            count=1, period="day", updates_on=ModelFreshnessUpdatesOnOptions.all
         )
 
-    @pytest.mark.skip(reason="skipping until model freshness is documented and does something")
     def test__parse_model_freshness_depend_on(self):
-        block = self.file_block_for(SINGLE_TALBE_MODEL_FRESHNESS_ONLY_DEPEND_ON, "test_one.yml")
+        block = self.file_block_for(SINGLE_TABLE_MODEL_FRESHNESS_ONLY_DEPEND_ON, "test_one.yml")
         self.parser.manifest.files[block.file.file_id] = block.file
         dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
@@ -747,7 +747,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         assert self.parser.manifest.nodes[
             "model.root.my_model"
         ].freshness.build_after == ModelBuildAfter(
-            count=0, period="hour", depends_on=ModelFreshnessDependsOnOptions.all
+            count=0, period="hour", updates_on=ModelFreshnessUpdatesOnOptions.all
         )
 
     def test__read_basic_model_tests_wrong_severity(self):

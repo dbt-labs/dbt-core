@@ -20,9 +20,9 @@ from typing import (
 from dbt.artifacts.resources import RefArgs
 from dbt.artifacts.resources.v1.model import (
     CustomGranularity,
-    ModelBuildAfter,
     ModelFreshness,
     TimeSpine,
+    merge_model_freshness,
 )
 from dbt.clients.checked_load import (
     checked_load,
@@ -765,7 +765,9 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         # code consistency.
         deprecation_date: Optional[datetime.datetime] = None
         time_spine: Optional[TimeSpine] = None
+
         freshness: Optional[ModelFreshness] = None
+
         if isinstance(block.target, UnparsedModelUpdate):
             deprecation_date = block.target.deprecation_date
             time_spine = (
@@ -782,17 +784,31 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                 if block.target.time_spine
                 else None
             )
-            freshness = (
-                ModelFreshness(
-                    build_after=ModelBuildAfter(
-                        count=block.target.freshness.build_after.count,
-                        period=block.target.freshness.build_after.period,
-                        depends_on=block.target.freshness.build_after.depends_on,
-                    ),
+
+            try:
+                project_freshness_dict = self.project.models.get("+freshness", None)
+                project_freshness = (
+                    ModelFreshness.from_dict(project_freshness_dict)
+                    if project_freshness_dict
+                    else None
                 )
-                if block.target.freshness
-                else None
+            except ValueError:
+                fire_event(
+                    Note(
+                        msg="Could not validate `freshness` for `models` in 'dbt_project.yml', ignoring.",
+                    ),
+                    EventLevel.WARN,
+                )
+                project_freshness = None
+
+            model_freshness = block.target.freshness or None
+
+            config_freshness_dict = block.target.config.get("freshness", None)
+            config_freshness = (
+                ModelFreshness.from_dict(config_freshness_dict) if config_freshness_dict else None
             )
+            freshness = merge_model_freshness(project_freshness, model_freshness, config_freshness)
+
         patch = ParsedNodePatch(
             name=block.target.name,
             original_file_path=block.target.original_file_path,
