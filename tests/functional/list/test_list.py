@@ -7,6 +7,10 @@ from tests.functional.fixtures.happy_path_fixture import (  # noqa: F401
     happy_path_project_files,
 )
 
+# Marker to allow some objects to skip full comparison when a full comparison is
+# unlikely to improve practical test effectiveness.
+ANY = object()
+
 
 class TestList:
     def dir(self, value):
@@ -38,67 +42,76 @@ class TestList:
             assert len(ls_result) == len(values)
             for got, expected in zip(ls_result, values):
                 if key == "json":
-                    self.assert_json_equal(got, expected)
+                    if expected != ANY:
+                        self.assert_json_equal(got, expected)
                 else:
                     assert got == expected
 
     def expect_snapshot_output(self, happy_path_project):  # noqa: F811
         expectations = {
-            "name": "my_snapshot",
-            "selector": "test.snapshot.my_snapshot",
-            "json": {
-                "name": "my_snapshot",
-                "package_name": "test",
-                "depends_on": {"nodes": [], "macros": []},
-                "tags": [],
-                "config": {
-                    "enabled": True,
-                    "group": None,
-                    "materialized": "snapshot",
-                    "post-hook": [],
+            "name": ["my_snapshot", "snapshot_2", "snapshot_3"],
+            "selector": ["test.snapshot.my_snapshot", "test.snapshot_2", "test.snapshot_3"],
+            "json": [
+                {
+                    "name": "my_snapshot",
+                    "package_name": "test",
+                    "depends_on": {"nodes": [], "macros": []},
                     "tags": [],
-                    "pre-hook": [],
-                    "quoting": {},
-                    "column_types": {},
-                    "persist_docs": {},
-                    "target_database": happy_path_project.database,
-                    "target_schema": happy_path_project.test_schema,
-                    "dbt_valid_to_current": None,
-                    "snapshot_meta_column_names": {
-                        "dbt_scd_id": None,
-                        "dbt_updated_at": None,
-                        "dbt_valid_from": None,
-                        "dbt_valid_to": None,
-                        "dbt_is_deleted": None,
+                    "config": {
+                        "enabled": True,
+                        "group": None,
+                        "materialized": "snapshot",
+                        "post-hook": [],
+                        "tags": [],
+                        "pre-hook": [],
+                        "quoting": {},
+                        "column_types": {},
+                        "persist_docs": {},
+                        "database": happy_path_project.database,
+                        "schema": happy_path_project.test_schema,
+                        "dbt_valid_to_current": None,
+                        "snapshot_meta_column_names": {
+                            "dbt_scd_id": None,
+                            "dbt_updated_at": None,
+                            "dbt_valid_from": None,
+                            "dbt_valid_to": None,
+                            "dbt_is_deleted": None,
+                        },
+                        "unique_key": "id",
+                        "strategy": "timestamp",
+                        "updated_at": "updated_at",
+                        "full_refresh": None,
+                        "target_database": None,
+                        "target_schema": None,
+                        "alias": None,
+                        "check_cols": None,
+                        "on_schema_change": "ignore",
+                        "on_configuration_change": "apply",
+                        "meta": {},
+                        "grants": {},
+                        "packages": [],
+                        "incremental_strategy": None,
+                        "docs": {"node_color": None, "show": True},
+                        "contract": {"enforced": False, "alias_types": True},
+                        "event_time": None,
+                        "lookback": 1,
+                        "batch_size": None,
+                        "begin": None,
+                        "concurrent_batches": None,
                     },
-                    "unique_key": "id",
-                    "strategy": "timestamp",
-                    "updated_at": "updated_at",
-                    "full_refresh": None,
-                    "database": None,
-                    "schema": None,
-                    "alias": None,
-                    "check_cols": None,
-                    "on_schema_change": "ignore",
-                    "on_configuration_change": "apply",
-                    "meta": {},
-                    "grants": {},
-                    "packages": [],
-                    "incremental_strategy": None,
-                    "docs": {"node_color": None, "show": True},
-                    "contract": {"enforced": False, "alias_types": True},
-                    "event_time": None,
-                    "lookback": 1,
-                    "batch_size": None,
-                    "begin": None,
-                    "concurrent_batches": None,
+                    "unique_id": "snapshot.test.my_snapshot",
+                    "original_file_path": normalize("snapshots/snapshot.sql"),
+                    "alias": "my_snapshot",
+                    "resource_type": "snapshot",
                 },
-                "unique_id": "snapshot.test.my_snapshot",
-                "original_file_path": normalize("snapshots/snapshot.sql"),
-                "alias": "my_snapshot",
-                "resource_type": "snapshot",
-            },
-            "path": self.dir("snapshots/snapshot.sql"),
+                ANY,
+                ANY,
+            ],
+            "path": [
+                self.dir("snapshots/snapshot.sql"),
+                self.dir("snapshots/snapshot_2.yml"),
+                self.dir("snapshots/snapshot_3.yml"),
+            ],
         }
         self.expect_given_output(["--resource-type", "snapshot"], expectations)
 
@@ -159,6 +172,7 @@ class TestList:
                 "metricflow_time_spine_second",
                 "model_with_lots_of_schema_configs",
                 "outer",
+                "snapshot_source",
             ),
             "selector": (
                 "test.ephemeral",
@@ -168,6 +182,7 @@ class TestList:
                 "test.metricflow_time_spine_second",
                 "test.model_with_lots_of_schema_configs",
                 "test.outer",
+                "test.snapshot_source",
             ),
             "json": (
                 {
@@ -505,6 +520,7 @@ class TestList:
                     "alias": "outer",
                     "resource_type": "model",
                 },
+                ANY,
             ),
             "path": (
                 self.dir("models/ephemeral.sql"),
@@ -514,6 +530,7 @@ class TestList:
                 self.dir("models/metricflow_time_spine_second.sql"),
                 self.dir("models/model_with_lots_of_schema_configs.sql"),
                 self.dir("models/outer.sql"),
+                self.dir("models/snapshot_source.sql"),
             ),
         }
 
@@ -932,8 +949,11 @@ class TestList:
             "test.ephemeral",
             "test.incremental",
             "test.snapshot.my_snapshot",
+            "test.snapshot_2",
+            "test.snapshot_3",
             "test.sub.inner",
             "test.outer",
+            "test.snapshot_source",
             "test.seed",
             "source:test.my_source.my_table",
             "test.not_null_outer_id",
@@ -990,6 +1010,7 @@ class TestList:
         assert set(results) == {
             "test.ephemeral",
             "test.outer",
+            "test.snapshot_source",
             "test.metricflow_time_spine",
             "test.metricflow_time_spine_second",
             "test.model_with_lots_of_schema_configs",
@@ -1011,6 +1032,7 @@ class TestList:
             "test.incremental",
             "test.not_null_outer_id",
             "test.outer",
+            "test.snapshot_source",
             "test.sub.inner",
             "test.metricflow_time_spine",
             "test.metricflow_time_spine_second",
@@ -1039,6 +1061,7 @@ class TestList:
             "test.incremental",
             "test.not_null_outer_id",
             "test.outer",
+            "test.snapshot_source",
             "test.metricflow_time_spine",
             "test.metricflow_time_spine_second",
             "test.model_with_lots_of_schema_configs",
@@ -1080,6 +1103,7 @@ class TestList:
             "test.incremental",
             "test.not_null_outer_id",
             "test.outer",
+            "test.snapshot_source",
             "test.sub.inner",
             "test.metricflow_time_spine",
             "test.metricflow_time_spine_second",
@@ -1102,6 +1126,7 @@ class TestList:
             "test.ephemeral",
             "test.incremental",
             "test.outer",
+            "test.snapshot_source",
             "test.sub.inner",
             "test.metricflow_time_spine",
             "test.metricflow_time_spine_second",
