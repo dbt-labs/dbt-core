@@ -24,6 +24,7 @@ models:
         - "SELECT 'string_pre_hook' as my_pre_hook;"
       post_hook:
         - "SELECT 'string_post_hook' as my_post_hook;"
+      group: "finance"
   - name: metricflow_time_spine_second
     description: Second time spine
     config:

@@ -41,3 +41,4 @@ seeds:
       meta: {'meta_key': 'meta_value'}
       grants: {}
       event_time: my_time_field
+      group: finance
