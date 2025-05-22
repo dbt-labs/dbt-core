@@ -13,7 +13,7 @@
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.10.0a1"
+          "default": "1.10.0b3"
         },
         "generated_at": {
           "type": "string"
@@ -8329,6 +8329,112 @@
               },
               "event_time": {
                 "default": null
+              },
+              "freshness": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "title": "FreshnessThreshold",
+                    "properties": {
+                      "warn_after": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "title": "Time",
+                            "properties": {
+                              "count": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              },
+                              "period": {
+                                "anyOf": [
+                                  {
+                                    "enum": [
+                                      "minute",
+                                      "hour",
+                                      "day"
+                                    ]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "error_after": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "title": "Time",
+                            "properties": {
+                              "count": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              },
+                              "period": {
+                                "anyOf": [
+                                  {
+                                    "enum": [
+                                      "minute",
+                                      "hour",
+                                      "day"
+                                    ]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "filter": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
               }
             },
             "additionalProperties": true
@@ -8745,6 +8851,18 @@
               "enabled": {
                 "type": "boolean",
                 "default": true
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "meta": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
               }
             },
             "additionalProperties": true
@@ -10049,6 +10167,36 @@
                   }
                 ],
                 "default": null
+              }
+            },
+            "additionalProperties": true
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "config": {
+            "type": "object",
+            "title": "GroupConfig",
+            "properties": {
+              "_extra": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "meta": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
               }
             },
             "additionalProperties": true
@@ -18289,6 +18437,112 @@
                         },
                         "event_time": {
                           "default": null
+                        },
+                        "freshness": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "title": "FreshnessThreshold",
+                              "properties": {
+                                "warn_after": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "title": "Time",
+                                      "properties": {
+                                        "count": {
+                                          "anyOf": [
+                                            {
+                                              "type": "integer"
+                                            },
+                                            {
+                                              "type": "null"
+                                            }
+                                          ],
+                                          "default": null
+                                        },
+                                        "period": {
+                                          "anyOf": [
+                                            {
+                                              "enum": [
+                                                "minute",
+                                                "hour",
+                                                "day"
+                                              ]
+                                            },
+                                            {
+                                              "type": "null"
+                                            }
+                                          ],
+                                          "default": null
+                                        }
+                                      },
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "error_after": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "title": "Time",
+                                      "properties": {
+                                        "count": {
+                                          "anyOf": [
+                                            {
+                                              "type": "integer"
+                                            },
+                                            {
+                                              "type": "null"
+                                            }
+                                          ],
+                                          "default": null
+                                        },
+                                        "period": {
+                                          "anyOf": [
+                                            {
+                                              "enum": [
+                                                "minute",
+                                                "hour",
+                                                "day"
+                                              ]
+                                            },
+                                            {
+                                              "type": "null"
+                                            }
+                                          ],
+                                          "default": null
+                                        }
+                                      },
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "filter": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                }
+                              },
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
                         }
                       },
                       "additionalProperties": true
@@ -18503,6 +18757,18 @@
                         "enabled": {
                           "type": "boolean",
                           "default": true
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
                         }
                       },
                       "additionalProperties": true

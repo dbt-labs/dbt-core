@@ -1416,6 +1416,8 @@ def expected_references_manifest(project):
                 "package_name": "test",
                 "path": "schema.yml",
                 "unique_id": "group.test.test_group",
+                "description": None,
+                "config": {"meta": {}},
             }
         },
         "selectors": {},
@@ -2008,6 +2010,8 @@ def expected_versions_manifest(project):
                 "package_name": "test",
                 "path": "schema.yml",
                 "unique_id": "group.test.test_group",
+                "description": None,
+                "config": {"meta": {}},
             }
         },
         "sources": {},
