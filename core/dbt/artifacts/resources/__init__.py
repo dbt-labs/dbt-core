@@ -6,6 +6,7 @@ from dbt.artifacts.resources.v1.catalog import Catalog, CatalogWriteIntegrationC
 from dbt.artifacts.resources.v1.components import (
     ColumnInfo,
     CompiledResource,
+    ConceptArgs,
     Contract,
     DeferRelation,
     DependsOn,
@@ -18,6 +19,12 @@ from dbt.artifacts.resources.v1.components import (
     Quoting,
     RefArgs,
     Time,
+)
+from dbt.artifacts.resources.v1.concept import (
+    Concept,
+    ConceptColumn,
+    ConceptConfig,
+    ConceptJoin,
 )
 from dbt.artifacts.resources.v1.config import (
     Hook,

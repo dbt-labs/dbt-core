@@ -70,6 +70,22 @@ class RefArgs(dbtClassMixin):
 
 
 @dataclass
+class ConceptArgs(dbtClassMixin):
+    """Arguments for referencing a concept"""
+
+    name: str
+    package: Optional[str] = None
+    columns: List[str] = field(default_factory=list)
+
+    @property
+    def positional_args(self) -> List[str]:
+        if self.package:
+            return [self.package, self.name]
+        else:
+            return [self.name]
+
+
+@dataclass
 class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     """Used in all ManifestNodes and SourceDefinition"""
 
@@ -241,6 +257,7 @@ class CompiledResource(ParsedResource):
     refs: List[RefArgs] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
+    concepts: List[ConceptArgs] = field(default_factory=list)  # For tracking concept dependencies
     depends_on: DependsOn = field(default_factory=DependsOn)
     compiled_path: Optional[str] = None
     compiled: bool = False

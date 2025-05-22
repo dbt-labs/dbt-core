@@ -22,13 +22,9 @@ from mashumaro.types import SerializableType
 from dbt.adapters.base import ConstraintSupport
 from dbt.adapters.factory import get_adapter_constraint_support
 from dbt.artifacts.resources import Analysis as AnalysisResource
-from dbt.artifacts.resources import (
-    BaseResource,
-    ColumnInfo,
-    CompiledResource,
-    DependsOn,
-    Docs,
-)
+from dbt.artifacts.resources import BaseResource, ColumnInfo, CompiledResource
+from dbt.artifacts.resources import Concept as ConceptResource
+from dbt.artifacts.resources import DependsOn, Docs
 from dbt.artifacts.resources import Documentation as DocumentationResource
 from dbt.artifacts.resources import Exposure as ExposureResource
 from dbt.artifacts.resources import FileHash
@@ -1537,6 +1533,58 @@ class Group(GroupResource, BaseNode):
 
 
 # ====================================
+# Concept node
+# ====================================
+
+
+@dataclass
+class ParsedConcept(GraphNode, ConceptResource):
+    """A parsed concept that defines a base model and its joinable features."""
+
+    @property
+    def depends_on_nodes(self):
+        return self.depends_on.nodes
+
+    @property
+    def search_name(self):
+        return self.name
+
+    @classmethod
+    def resource_class(cls) -> Type[ConceptResource]:
+        return ConceptResource
+
+    def same_description(self, old: "ParsedConcept") -> bool:
+        return self.description == old.description
+
+    def same_base_model(self, old: "ParsedConcept") -> bool:
+        return self.base_model == old.base_model
+
+    def same_primary_key(self, old: "ParsedConcept") -> bool:
+        return self.primary_key == old.primary_key
+
+    def same_joins(self, old: "ParsedConcept") -> bool:
+        return self.joins == old.joins
+
+    def same_columns(self, old: "ParsedConcept") -> bool:
+        return self.columns == old.columns
+
+    def same_config(self, old: "ParsedConcept") -> bool:
+        return self.config == old.config
+
+    def same_contents(self, other: Optional["ParsedConcept"]) -> bool:
+        if other is None:
+            return False
+        return (
+            self.same_description(other)
+            and self.same_base_model(other)
+            and self.same_primary_key(other)
+            and self.same_joins(other)
+            and self.same_columns(other)
+            and self.same_config(other)
+        )
+
+
+# ====================================
 # SemanticModel node
 # ====================================
 
@@ -1752,6 +1800,7 @@ GraphMemberNode = Union[
     ResultNode,
     Exposure,
     Metric,
+    ParsedConcept,
     SavedQuery,
     SemanticModel,
     UnitTestDefinition,

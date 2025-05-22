@@ -293,6 +293,13 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
                 group_parser = GroupParser(self, yaml_block)
                 group_parser.parse()
 
+            # ConceptParser.parse()
+            if "concepts" in dct:
+                from dbt.parser.schema_yaml_readers import ConceptParser
+
+                concept_parser = ConceptParser(self, yaml_block)
+                concept_parser.parse()
+
             if "semantic_models" in dct:
                 from dbt.parser.schema_yaml_readers import SemanticModelParser
 

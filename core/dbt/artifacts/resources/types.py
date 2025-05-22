@@ -30,6 +30,7 @@ class NodeType(StrEnum):
     Macro = "macro"
     Exposure = "exposure"
     Metric = "metric"
+    Concept = "concept"
     Group = "group"
     SavedQuery = "saved_query"
     SemanticModel = "semantic_model"

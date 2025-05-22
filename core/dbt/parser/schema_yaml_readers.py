@@ -2,6 +2,9 @@ from collections.abc import Sequence
 from typing import Any, Dict, List, Optional, Union
 
 from dbt.artifacts.resources import (
+    ConceptColumn,
+    ConceptConfig,
+    ConceptJoin,
     ConversionTypeParams,
     CumulativeTypeParams,
     Dimension,
@@ -34,8 +37,16 @@ from dbt.context.providers import (
     generate_parse_semantic_models,
 )
 from dbt.contracts.files import SchemaSourceFile
-from dbt.contracts.graph.nodes import Exposure, Group, Metric, SavedQuery, SemanticModel
+from dbt.contracts.graph.nodes import (
+    Exposure,
+    Group,
+    Metric,
+    ParsedConcept,
+    SavedQuery,
+    SemanticModel,
+)
 from dbt.contracts.graph.unparsed import (
+    UnparsedConcept,
     UnparsedConversionTypeParams,
     UnparsedCumulativeTypeParams,
     UnparsedDimension,
@@ -190,6 +201,84 @@ class ExposureParser(YamlReader):
                 raise YamlParseDictError(self.yaml.path, self.key, data, exc)
 
             self.parse_exposure(unparsed)
+
+
+class ConceptParser(YamlReader):
+    def __init__(self, schema_parser: SchemaParser, yaml: YamlBlock) -> None:
+        super().__init__(schema_parser, yaml, NodeType.Concept.pluralize())
+        self.schema_parser = schema_parser
+        self.yaml = yaml
+
+    def parse_concept(self, unparsed: UnparsedConcept) -> None:
+        package_name = self.project.project_name
+        unique_id = f"{NodeType.Concept}.{package_name}.{unparsed.name}"
+        path = self.yaml.path.relative_path
+
+        fqn = self.schema_parser.get_fqn_prefix(path)
+        fqn.append(unparsed.name)
+
+        # Convert unparsed columns to ConceptColumn objects
+        columns = []
+        for col in unparsed.columns:
+            if isinstance(col, str):
+                columns.append(ConceptColumn(name=col))
+            else:
+                columns.append(
+                    ConceptColumn(name=col.name, description=col.description, alias=col.alias)
+                )
+
+        # Convert unparsed joins to ConceptJoin objects
+        joins = []
+        for join in unparsed.joins:
+            joins.append(
+                ConceptJoin(
+                    name=join.name,
+                    base_key=join.base_key,
+                    foreign_key=join.foreign_key,
+                    alias=join.alias,
+                    columns=join.columns,
+                    join_type=join.join_type,
+                )
+            )
+
+        config = ConceptConfig(
+            enabled=unparsed.config.get("enabled", True), meta=unparsed.config.get("meta", {})
+        )
+
+        # Create the parsed concept
+        concept = ParsedConcept(
+            package_name=package_name,
+            path=path,
+            original_file_path=self.yaml.path.original_file_path,
+            unique_id=unique_id,
+            fqn=fqn,
+            resource_type=NodeType.Concept,
+            name=unparsed.name,
+            description=unparsed.description,
+            base_model=unparsed.base_model,
+            primary_key=unparsed.primary_key,
+            columns=columns,
+            joins=joins,
+            config=config,
+            meta=unparsed.meta,
+            tags=unparsed.tags,
+        )
+
+        # Add to manifest
+        from dbt.contracts.files import SchemaSourceFile
+
+        if isinstance(self.yaml.file, SchemaSourceFile):
+            self.manifest.add_concept(self.yaml.file, concept)
+
+    def parse(self) -> None:
+        for data in self.get_key_dicts():
+            try:
+                UnparsedConcept.validate(data)
+                unparsed = UnparsedConcept.from_dict(data)
+            except (ValidationError, JSONValidationError) as exc:
+                raise YamlParseDictError(self.yaml.path, self.key, data, exc)
+
+            self.parse_concept(unparsed)
 
 
 class MetricParser(YamlReader):

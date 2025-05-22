@@ -792,3 +792,49 @@ class UnparsedUnitTest(dbtClassMixin):
         if data.get("versions", None):
             if data["versions"].get("include") and data["versions"].get("exclude"):
                 raise ValidationError("Unit tests can not both include and exclude versions.")
+
+
+@dataclass
+class UnparsedConceptJoin(dbtClassMixin):
+    """Represents an unparsed join relationship in a concept definition."""
+
+    name: str  # name of the model or concept to join
+    base_key: str  # column in base model for join
+    foreign_key: Optional[str] = None  # column in joined model (defaults to primary_key)
+    alias: Optional[str] = None  # alias for the joined table
+    columns: List[str] = field(default_factory=list)  # columns to expose from join
+    join_type: str = "left"  # type of join (left, inner, etc.)
+
+
+@dataclass
+class UnparsedConceptColumn(dbtClassMixin):
+    """Represents an unparsed column definition in a concept."""
+
+    name: str
+    description: Optional[str] = None
+    alias: Optional[str] = None  # optional alias for the column
+
+
+@dataclass
+class UnparsedConcept(dbtClassMixin):
+    """Represents an unparsed concept definition."""
+
+    name: str
+    base_model: str  # reference to the base model
+    description: str = ""
+    primary_key: Union[str, List[str]] = "id"  # primary key column(s)
+    columns: List[Union[str, UnparsedConceptColumn]] = field(default_factory=list)
+    joins: List[UnparsedConceptJoin] = field(default_factory=list)
+    config: Dict[str, Any] = field(default_factory=dict)
+    meta: Dict[str, Any] = field(default_factory=dict)
+    tags: List[str] = field(default_factory=list)
+
+    @classmethod
+    def validate(cls, data):
+        super(UnparsedConcept, cls).validate(data)
+        if "name" in data:
+            # name can only contain alphanumeric chars and underscores
+            if not (re.match(r"[\w-]+$", data["name"])):
+                raise ParsingError(
+                    f"Invalid concept name '{data['name']}'. Names must contain only letters, numbers, and underscores."
+                )
