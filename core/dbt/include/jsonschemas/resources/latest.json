@@ -276,12 +276,45 @@
         }
       ]
     },
+    "ColumnConfig": {
+      "type": "object",
+      "properties": {
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "ColumnProperties": {
       "type": "object",
       "required": [
         "name"
       ],
       "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ColumnConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "constraints": {
           "type": [
             "array",
@@ -320,7 +353,6 @@
             }
           ]
         },
-        "meta": true,
         "name": {
           "type": "string"
         },
@@ -337,16 +369,6 @@
           "anyOf": [
             {
               "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "tags": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
             },
             {
               "type": "null"
@@ -771,7 +793,7 @@
           ]
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "ExportConfigExportAs": {
       "type": "string",
@@ -1025,6 +1047,13 @@
       },
       "additionalProperties": false
     },
+    "GroupsConfig": {
+      "type": "object",
+      "properties": {
+        "meta": true
+      },
+      "additionalProperties": false
+    },
     "GroupsOwner": {
       "type": "object",
       "properties": {
@@ -1041,7 +1070,7 @@
           ]
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "GroupsProperties": {
       "type": "object",
@@ -1050,6 +1079,22 @@
         "owner"
       ],
       "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/GroupsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "name": {
           "type": "string"
         },
@@ -1359,12 +1404,6 @@
             {
               "type": "null"
             }
-          ]
-        },
-        "group": {
-          "type": [
-            "string",
-            "null"
           ]
         },
         "identifier": {
@@ -1816,7 +1855,7 @@
         },
         "meta": true
       },
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "SavedQueriesConfigCache": {
       "type": "object",
@@ -1969,12 +2008,6 @@
             }
           ]
         },
-        "group": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "name": {
           "type": "string"
         },
@@ -2037,6 +2070,12 @@
           ]
         },
         "grants": true,
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "meta": {
           "type": [
             "object",
@@ -2242,12 +2281,6 @@
             }
           ]
         },
-        "group": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "meta": true,
         "name": {
           "type": "string"
@@ -2308,6 +2341,12 @@
           ]
         },
         "grants": true,
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "hard_deletes": {
           "type": [
             "string",
@@ -2456,16 +2495,6 @@
             "null"
           ]
         },
-        "freshness": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/FreshnessDefinition"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "loaded_at_field": {
           "type": [
             "string",
@@ -2483,13 +2512,6 @@
             "string",
             "null"
           ]
-        },
-        "meta": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": true
         },
         "name": {
           "type": "string"
@@ -2524,16 +2546,6 @@
           "items": {
             "$ref": "#/definitions/Tables"
           }
-        },
-        "tags": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
-            },
-            {
-              "type": "null"
-            }
-          ]
         }
       },
       "additionalProperties": false
@@ -2551,6 +2563,33 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "freshness": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessDefinition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         }
       },
@@ -2610,16 +2649,6 @@
           ]
         },
         "external": true,
-        "freshness": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/FreshnessDefinition"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "identifier": {
           "type": [
             "string",
@@ -2644,13 +2673,6 @@
             "null"
           ]
         },
-        "meta": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": true
-        },
         "name": {
           "type": "string"
         },
@@ -2658,16 +2680,6 @@
           "anyOf": [
             {
               "$ref": "#/definitions/DbtQuoting"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "tags": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
             },
             {
               "type": "null"
@@ -2689,14 +2701,47 @@
     "TablesConfig": {
       "type": "object",
       "properties": {
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "event_time": {
           "type": [
             "string",
             "null"
           ]
+        },
+        "freshness": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessDefinition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "UniqueTest": {
       "type": "object",
@@ -2814,7 +2859,7 @@
         },
         "v": true
       },
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "_MeasureExpr": {
       "anyOf": [
