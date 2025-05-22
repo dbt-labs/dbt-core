@@ -73,7 +73,13 @@ class TestWarnErrorOptionsFromCLI:
         assert_deprecation_error(result)
 
         catcher.flush()
-        result = runner.invoke(["run", "--warn-error-options", "{'include': 'all'}"])
+        result = runner.invoke(
+            [
+                "run",
+                "--warn-error-options",
+                "{'include': 'all', 'warn': ['DeprecationsSummary', 'WEOIncludeExcludeDeprecation']}",
+            ]
+        )
         assert_deprecation_error(result)
 
         catcher.flush()
@@ -81,24 +87,36 @@ class TestWarnErrorOptionsFromCLI:
         assert_deprecation_error(result)
 
         catcher.flush()
-        result = runner.invoke(["run", "--warn-error-options", "{'error': 'all'}"])
+        result = runner.invoke(
+            ["run", "--warn-error-options", "{'error': 'all', 'warn': ['DeprecationsSummary']}"]
+        )
         assert_deprecation_error(result)
 
     def test_can_exclude_specific_event(
         self, project, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
-        result = runner.invoke(["run", "--warn-error-options", "{'include': 'all'}"])
+        result = runner.invoke(
+            ["run", "--warn-error-options", "{'error': 'all', 'warn': ['DeprecationsSummary']}"]
+        )
         assert_deprecation_error(result)
 
         catcher.flush()
         result = runner.invoke(
-            ["run", "--warn-error-options", "{'include': 'all', 'exclude': ['DeprecatedModel']}"]
+            [
+                "run",
+                "--warn-error-options",
+                "{'error': 'all', 'exclude': ['DeprecatedModel', 'WEOIncludeExcludeDeprecation', 'DeprecationsSummary']}",
+            ]
         )
         assert_deprecation_warning(result, catcher)
 
         catcher.flush()
         result = runner.invoke(
-            ["run", "--warn-error-options", "{'include': 'all', 'warn': ['DeprecatedModel']}"]
+            [
+                "run",
+                "--warn-error-options",
+                "{'error': 'all', 'warn': ['DeprecatedModel', 'DeprecationsSummary']}",
+            ]
         )
         assert_deprecation_warning(result, catcher)
 
@@ -158,7 +176,9 @@ class TestWarnErrorOptionsFromProject:
         result = runner.invoke(["run"])
         assert_deprecation_error(result)
 
-        warn_error_options = {"flags": {"warn_error_options": {"error": "all"}}}
+        warn_error_options = {
+            "flags": {"warn_error_options": {"error": "all", "warn": ["DeprecationsSummary"]}}
+        }
         update_config_file(warn_error_options, project_root, "dbt_project.yml")
 
         catcher.flush()
@@ -168,13 +188,20 @@ class TestWarnErrorOptionsFromProject:
     def test_can_exclude_specific_event(
         self, project, clear_project_flags, project_root, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
-        warn_error_options: Dict[str, Any] = {"flags": {"warn_error_options": {"error": "all"}}}
+        warn_error_options: Dict[str, Any] = {
+            "flags": {"warn_error_options": {"error": "all", "warn": ["DeprecationsSummary"]}}
+        }
         update_config_file(warn_error_options, project_root, "dbt_project.yml")
         result = runner.invoke(["run"])
         assert_deprecation_error(result)
 
         warn_error_options = {
-            "flags": {"warn_error_options": {"error": "all", "warn": ["DeprecatedModel"]}}
+            "flags": {
+                "warn_error_options": {
+                    "error": "all",
+                    "warn": ["DeprecatedModel", "DeprecationsSummary"],
+                }
+            }
         }
         update_config_file(warn_error_options, project_root, "dbt_project.yml")
 
