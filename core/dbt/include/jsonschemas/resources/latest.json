@@ -186,9 +186,25 @@
     "AnalysesConfig": {
       "type": "object",
       "properties": {
+        "docs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DocsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "enabled": {
           "type": [
             "boolean",
+            "null"
+          ]
+        },
+        "group": {
+          "type": [
+            "string",
             "null"
           ]
         },
@@ -238,22 +254,6 @@
           ]
         },
         "description": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "docs": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/DocsConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "group": {
           "type": [
             "string",
             "null"
