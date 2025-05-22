@@ -28,9 +28,13 @@ class TestConceptParser:
     @pytest.fixture
     def mock_yaml_block(self):
         """Mock YAML block for testing."""
+        from dbt.contracts.files import SchemaSourceFile
+        
         yaml_block = Mock()
         yaml_block.path = Mock()
         yaml_block.path.relative_path = "models/schema.yml"
+        # Mock the file to be a SchemaSourceFile instance  
+        yaml_block.file = Mock(spec=SchemaSourceFile)
         return yaml_block
 
     @pytest.fixture
