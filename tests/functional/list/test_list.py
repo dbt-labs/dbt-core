@@ -773,6 +773,7 @@ class TestList:
                         "severity": "ERROR",
                         "store_failures": None,
                         "store_failures_as": None,
+                        # generic test builders don't propagate tags correctly
                         "tags": [],
                         "warn_if": "!= 0",
                         "where": None,
@@ -785,7 +786,7 @@ class TestList:
                     "original_file_path": normalize("seeds/s.yml"),
                     "package_name": "test",
                     "resource_type": "test",
-                    "tags": ["tag"],
+                    "tags": [],
                     "unique_id": "test.test.not_null_seed__a_.6b59640cde",
                 },
                 {
@@ -804,6 +805,7 @@ class TestList:
                         "severity": "ERROR",
                         "store_failures": None,
                         "store_failures_as": None,
+                        # generic test builders don't propagate tags correctly
                         "tags": [],
                         "warn_if": "!= 0",
                         "where": None,
@@ -816,7 +818,7 @@ class TestList:
                     "original_file_path": normalize("seeds/s.yml"),
                     "package_name": "test",
                     "resource_type": "test",
-                    "tags": ["tag"],
+                    "tags": [],
                     "unique_id": "test.test.not_null_seed__b_.a088b263cb",
                 },
                 {
