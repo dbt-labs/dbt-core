@@ -191,7 +191,8 @@ class DepsTask(BaseTask):
         renderer = PackageRenderer(self.cli_vars)
         for package in resolved_deps:
             package_dict = package.to_dict()
-            package_dict["name"] = package.get_project_name(self.project, renderer)
+            # Do not add 'name' yet, this will be added in the next version (v1.10)
+            # package_dict["name"] = package.get_project_name(self.project, renderer)
             packages_installed["packages"].append(package_dict)
 
         packages_installed[PACKAGE_LOCK_HASH_KEY] = _create_sha1_hash(
