@@ -518,7 +518,7 @@ class GenericJSONSchemaValidationDeprecation(WarnLevel):
         else:
             description = f"{self.violation} in file `{self.file}` at path `{self.key_path}`"
 
-        return line_wrap_message(deprecation_tag(description))
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
 class UnexpectedJinjaBlockDeprecation(WarnLevel):
@@ -527,7 +527,7 @@ class UnexpectedJinjaBlockDeprecation(WarnLevel):
 
     def message(self) -> str:
         description = f"{self.msg} in file `{self.file}`"
-        return line_wrap_message(deprecation_tag(description))
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
 class DuplicateYAMLKeysDeprecation(WarnLevel):
@@ -536,7 +536,7 @@ class DuplicateYAMLKeysDeprecation(WarnLevel):
 
     def message(self) -> str:
         description = f"{self.duplicate_description} in file `{self.file}`"
-        return line_wrap_message(deprecation_tag(description))
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
 class CustomTopLevelKeyDeprecation(WarnLevel):
@@ -545,7 +545,7 @@ class CustomTopLevelKeyDeprecation(WarnLevel):
 
     def message(self) -> str:
         description = f"{self.msg} in file `{self.file}`"
-        return line_wrap_message(deprecation_tag(description))
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
 class CustomKeyInConfigDeprecation(WarnLevel):
@@ -554,7 +554,7 @@ class CustomKeyInConfigDeprecation(WarnLevel):
 
     def message(self) -> str:
         description = f"Custom key `{self.key}` found in `config` at path `{self.key_path}` in file `{self.file}`. Custom config keys should move into the `config.meta`."
-        return line_wrap_message(deprecation_tag(description))
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
 class CustomKeyInObjectDeprecation(WarnLevel):
@@ -563,7 +563,7 @@ class CustomKeyInObjectDeprecation(WarnLevel):
 
     def message(self) -> str:
         description = f"Custom key `{self.key}` found at `{self.key_path}` in file `{self.file}`. This may mean the key is a typo, or is simply not a key supported by the object."
-        return line_wrap_message(deprecation_tag(description))
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
 class DeprecationsSummary(WarnLevel):
@@ -580,7 +580,7 @@ class DeprecationsSummary(WarnLevel):
         if self.show_all_hint:
             description += "\n\nTo see all deprecation instances instead of just the first occurrence of each, run command again with the `--show-all-deprecations` flag. You may also need to run with `--no-partial-parse` as some deprecations are only encountered during parsing."
 
-        return line_wrap_message(deprecation_tag(description))
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
 class CustomOutputPathInSourceFreshnessDeprecation(WarnLevel):
@@ -589,7 +589,7 @@ class CustomOutputPathInSourceFreshnessDeprecation(WarnLevel):
 
     def message(self) -> str:
         description = f"Custom output path usage `--output {self.path}` usage detected in `dbt source freshness` command."
-        return line_wrap_message(deprecation_tag(description))
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
 class PropertyMovedToConfigDeprecation(WarnLevel):
@@ -598,7 +598,7 @@ class PropertyMovedToConfigDeprecation(WarnLevel):
 
     def message(self) -> str:
         description = f"Found `{self.key}` as a top-level property of `{self.key_path}` in file `{self.file}`. The `{self.key}` top-level property should be moved into the `config` of `{self.key_path}`."
-        return line_wrap_message(deprecation_tag(description))
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
 class WEOIncludeExcludeDeprecation(WarnLevel):
