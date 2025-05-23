@@ -107,6 +107,65 @@
             }
           ],
           "default": null
+        },
+        "quoting": {
+          "description": "The quoting configuration for the project",
+          "anyOf": [
+            {
+              "type": "object",
+              "title": "Quoting",
+              "properties": {
+                "database": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "identifier": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "column": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -3827,6 +3886,47 @@
                       "public"
                     ],
                     "default": "protected"
+                  },
+                  "freshness": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "title": "ModelFreshness",
+                        "properties": {
+                          "build_after": {
+                            "type": "object",
+                            "title": "ModelBuildAfter",
+                            "properties": {
+                              "updates_on": {
+                                "enum": [
+                                  "all",
+                                  "any"
+                                ],
+                                "default": "any"
+                              },
+                              "count": {
+                                "type": "integer",
+                                "default": 0
+                              },
+                              "period": {
+                                "enum": [
+                                  "minute",
+                                  "hour",
+                                  "day"
+                                ],
+                                "default": "hour"
+                              }
+                            },
+                            "additionalProperties": true
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
                   }
                 },
                 "additionalProperties": true
@@ -4858,7 +4958,7 @@
                         "type": "object",
                         "title": "ModelBuildAfter",
                         "properties": {
-                          "depends_on": {
+                          "updates_on": {
                             "enum": [
                               "all",
                               "any"
@@ -13944,6 +14044,47 @@
                             "public"
                           ],
                           "default": "protected"
+                        },
+                        "freshness": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "title": "ModelFreshness",
+                              "properties": {
+                                "build_after": {
+                                  "type": "object",
+                                  "title": "ModelBuildAfter",
+                                  "properties": {
+                                    "updates_on": {
+                                      "enum": [
+                                        "all",
+                                        "any"
+                                      ],
+                                      "default": "any"
+                                    },
+                                    "count": {
+                                      "type": "integer",
+                                      "default": 0
+                                    },
+                                    "period": {
+                                      "enum": [
+                                        "minute",
+                                        "hour",
+                                        "day"
+                                      ],
+                                      "default": "hour"
+                                    }
+                                  },
+                                  "additionalProperties": true
+                                }
+                              },
+                              "additionalProperties": true
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
                         }
                       },
                       "additionalProperties": true
@@ -14975,7 +15116,7 @@
                               "type": "object",
                               "title": "ModelBuildAfter",
                               "properties": {
-                                "depends_on": {
+                                "updates_on": {
                                   "enum": [
                                     "all",
                                     "any"

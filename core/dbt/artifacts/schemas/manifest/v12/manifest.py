@@ -21,6 +21,7 @@ from dbt.artifacts.resources import (
     SqlOperation,
     UnitTestDefinition,
 )
+from dbt.artifacts.resources.v1.components import Quoting
 from dbt.artifacts.schemas.base import (
     ArtifactMixin,
     BaseArtifactMetadata,
@@ -87,6 +88,10 @@ class ManifestMetadata(BaseArtifactMetadata):
     adapter_type: Optional[str] = field(
         default=None,
         metadata=dict(description="The type name of the adapter"),
+    )
+    quoting: Optional[Quoting] = field(
+        default_factory=Quoting,
+        metadata=dict(description="The quoting configuration for the project"),
     )
 
     @classmethod

@@ -23,6 +23,7 @@ from dbt.adapters.contracts.connection import (
 )
 from dbt.adapters.contracts.relation import ComponentName
 from dbt.adapters.factory import get_include_paths, get_relation_class_by_name
+from dbt.artifacts.resources.v1.components import Quoting
 from dbt.config.project import load_raw_project
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.project import Configuration
@@ -296,6 +297,12 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                 get_flags().SEND_ANONYMOUS_USAGE_STATS if tracking.active_user else None
             ),
             adapter_type=self.credentials.type,
+            quoting=Quoting(
+                database=self.quoting.get("database", None),
+                schema=self.quoting.get("schema", None),
+                identifier=self.quoting.get("identifier", None),
+                column=self.quoting.get("column", None),
+            ),
         )
 
     def _get_v2_config_paths(
