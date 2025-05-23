@@ -16,7 +16,7 @@ from dbt.cli.resolvers import default_log_path, default_project_dir
 from dbt.cli.types import Command as CliCommand
 from dbt.config.project import read_project_flags
 from dbt.contracts.project import ProjectFlags
-from dbt.deprecations import fire_buffered_deprecations, renamed_env_var
+from dbt.deprecations import fire_buffered_deprecations, renamed_env_var, warn
 from dbt.events import ALL_EVENT_NAMES
 from dbt_common import ui
 from dbt_common.clients import jinja
@@ -47,6 +47,8 @@ DEPRECATED_PARAMS = {
     "deprecated_print": "print",
     "deprecated_state": "state",
 }
+
+DEPRECATED_PARAM_WARNINGS = {"models": "model-param-usage-deprecation"}
 
 
 WHICH_KEY = "which"
@@ -123,6 +125,7 @@ class Flags:
             params_assigned_from_default: set,
             params_assigned_from_user: set,
             deprecated_env_vars: Dict[str, Callable],
+            deprecated_params: Dict[str, Callable],
         ):
             """Recursively adds all click params to flag object"""
             for param_name, param_value in ctx.params.items():
@@ -179,6 +182,12 @@ class Flags:
                     )
                 # end deprecated_params
 
+                # Warning-only deprecations
+                if param_name in DEPRECATED_PARAM_WARNINGS:
+                    if ctx.get_parameter_source(param_name) != ParameterSource.DEFAULT:
+                        deprecation_name = DEPRECATED_PARAM_WARNINGS[param_name]
+                        deprecated_params[param_name] = lambda: warn(deprecation_name)
+
                 # Set the flag value.
                 is_duplicate = (
                     hasattr(self, param_name.upper())
@@ -219,18 +228,27 @@ class Flags:
                     params_assigned_from_default,
                     params_assigned_from_user,
                     deprecated_env_vars,
+                    deprecated_params,
                 )
 
         params_assigned_from_user = set()  # type: Set[str]
         params_assigned_from_default = set()  # type: Set[str]
         deprecated_env_vars: Dict[str, Callable] = {}
+        deprecated_params: Dict[str, Callable] = {}
         _assign_params(
-            ctx, params_assigned_from_default, params_assigned_from_user, deprecated_env_vars
+            ctx,
+            params_assigned_from_default,
+            params_assigned_from_user,
+            deprecated_env_vars,
+            deprecated_params,
         )
 
         # Set deprecated_env_var_warnings to be fired later after events have been init.
         object.__setattr__(
             self, "deprecated_env_var_warnings", [x for x in deprecated_env_vars.values()]
+        )
+        object.__setattr__(
+            self, "deprecated_param_warnings", [x for x in deprecated_params.values()]
         )
 
         # Get the invoked command flags.
@@ -247,6 +265,7 @@ class Flags:
                 params_assigned_from_default,
                 params_assigned_from_user,
                 deprecated_env_vars,
+                deprecated_params,
             )
 
         if not project_flags:
@@ -386,9 +405,11 @@ class Flags:
     def fire_deprecations(self):
         """Fires events for deprecated env_var usage."""
         [dep_fn() for dep_fn in self.deprecated_env_var_warnings]
+        [dep_fn() for dep_fn in self.deprecated_param_warnings]
         # It is necessary to remove this attr from the class so it does
         # not get pickled when written to disk as json.
         object.__delattr__(self, "deprecated_env_var_warnings")
+        object.__delattr__(self, "deprecated_param_warnings")
 
         fire_buffered_deprecations()
 

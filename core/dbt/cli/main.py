@@ -182,7 +182,8 @@ def cli(ctx, **kwargs):
 @p.resource_type
 @p.exclude_resource_type
 @p.sample
-@p.select
+@p.raw_select
+@p.models
 @p.selector
 @p.show
 @p.store_failures
@@ -250,7 +251,8 @@ def docs(ctx, **kwargs):
 @p.exclude
 @p.profiles_dir
 @p.project_dir
-@p.select
+@p.raw_select
+@p.models
 @p.selector
 @p.empty_catalog
 @p.static
@@ -319,7 +321,8 @@ def docs_serve(ctx, **kwargs):
 @p.profiles_dir
 @p.project_dir
 @p.empty
-@p.select
+@p.raw_select
+@p.models
 @p.selector
 @p.inline
 @p.compile_inject_ephemeral_ctes
@@ -359,7 +362,8 @@ def compile(ctx, **kwargs):
 @p.introspect
 @p.profiles_dir
 @p.project_dir
-@p.select
+@p.raw_select
+@p.models
 @p.selector
 @p.inline
 @p.inline_direct
@@ -497,6 +501,7 @@ def init(ctx, **kwargs):
 @p.resource_type
 @p.exclude_resource_type
 @p.raw_select
+@p.models
 @p.selector
 @p.target_path
 @p.vars
@@ -560,7 +565,8 @@ def parse(ctx, **kwargs):
 @p.event_time_start
 @p.event_time_end
 @p.sample
-@p.select
+@p.raw_select
+@p.models
 @p.selector
 @p.target_path
 @p.threads
@@ -627,7 +633,8 @@ def retry(ctx, **kwargs):
 @p.project_dir
 @p.resource_type
 @p.exclude_resource_type
-@p.select
+@p.raw_select
+@p.models
 @p.selector
 @p.target_path
 @p.threads
@@ -693,7 +700,8 @@ def run_operation(ctx, **kwargs):
 @p.full_refresh
 @p.profiles_dir
 @p.project_dir
-@p.select
+@p.raw_select
+@p.models
 @p.selector
 @p.show
 @p.target_path
@@ -727,7 +735,8 @@ def seed(ctx, **kwargs):
 @p.exclude
 @p.profiles_dir
 @p.project_dir
-@p.select
+@p.raw_select
+@p.models
 @p.selector
 @p.target_path
 @p.threads
@@ -769,7 +778,8 @@ def source(ctx, **kwargs):
 @p.output_path  # TODO: Is this ok to re-use?  We have three different output params, how much can we consolidate?
 @p.profiles_dir
 @p.project_dir
-@p.select
+@p.raw_select
+@p.models
 @p.selector
 @p.target_path
 @p.threads
@@ -810,7 +820,8 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @p.exclude_resource_type
 @p.profiles_dir
 @p.project_dir
-@p.select
+@p.raw_select
+@p.models
 @p.selector
 @p.store_failures
 @p.target_path

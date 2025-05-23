@@ -184,6 +184,11 @@ class CustomOutputPathInSourceFreshnessDeprecation(DBTDeprecation):
     _event = "CustomOutputPathInSourceFreshnessDeprecation"
 
 
+class ModelParamUsageDeprecation(DBTDeprecation):
+    _name = "model-param-usage-deprecation"
+    _event = "ModelParamUsageDeprecation"
+
+
 class PropertyMovedToConfigDeprecation(DBTDeprecation):
     _name = "property-moved-to-config-deprecation"
     _event = "PropertyMovedToConfigDeprecation"
@@ -266,6 +271,7 @@ deprecations_list: List[DBTDeprecation] = [
     CustomKeyInConfigDeprecation(),
     CustomKeyInObjectDeprecation(),
     CustomOutputPathInSourceFreshnessDeprecation(),
+    ModelParamUsageDeprecation(),
     PropertyMovedToConfigDeprecation(),
 ]
 
