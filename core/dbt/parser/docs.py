@@ -45,6 +45,7 @@ class DocumentationParser(Parser[Documentation]):
             source=[file_block],
             allowed_blocks={"docs"},
             source_tag_factory=BlockContents,
+            check_jinja=False,
         )
         for block in searcher:
             for parsed in self.parse_block(block):

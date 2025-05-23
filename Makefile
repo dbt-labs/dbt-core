@@ -43,10 +43,6 @@ dev-uninstall: ## Uninstall all packages in venv except for build tools
     pip freeze | grep -v "^-e" | cut -d "@" -f1 | xargs pip uninstall -y; \
     pip uninstall -y dbt-core
 
-.PHONY: core_proto_types
-core_proto_types:  ## generates google protobuf python file from core_types.proto
-	protoc -I=./core/dbt/events --python_out=./core/dbt/events ./core/dbt/events/core_types.proto
-
 .PHONY: mypy
 mypy: .env ## Runs mypy against staged changes for static type checking.
 	@\

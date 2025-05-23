@@ -591,9 +591,18 @@ class CustomOutputPathInSourceFreshnessDeprecation(WarnLevel):
         return line_wrap_message(deprecation_tag(description))
 
 
-class ModelParamUsageDeprecation(WarnLevel):
+class PropertyMovedToConfigDeprecation(WarnLevel):
     def code(self) -> str:
         return "D030"
+
+    def message(self) -> str:
+        description = f"Found `{self.key}` as a top-level property of `{self.key_path}` in file `{self.file}`. The `{self.key}` top-level property should be moved into the `config` of `{self.key_path}`."
+        return line_wrap_message(deprecation_tag(description))
+
+
+class ModelParamUsageDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D032"
 
     def message(self) -> str:
         description = "Usage of `--models`, `--model`, and `-m` is deprecated in favor of `--resource-type model --select`"

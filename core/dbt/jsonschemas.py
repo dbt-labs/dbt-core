@@ -27,7 +27,7 @@ def project_schema() -> Dict[str, Any]:
 
 
 def resources_schema() -> Dict[str, Any]:
-    return load_json_from_package(jsonschema_type="resources", filename="0.0.110.json")
+    return load_json_from_package(jsonschema_type="resources", filename="latest.json")
 
 
 def custom_type_rule(validator, types, instance, schema):

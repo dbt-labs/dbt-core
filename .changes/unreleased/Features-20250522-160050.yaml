@@ -1,0 +1,6 @@
+kind: Features
+body: Support description and config.meta on groups
+time: 2025-05-22T16:00:50.440826-04:00
+custom:
+  Author: michelleark
+  Issue: "11319"

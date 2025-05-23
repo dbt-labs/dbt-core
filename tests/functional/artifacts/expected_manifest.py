@@ -44,6 +44,7 @@ def get_rendered_model_config(**updates):
         "batch_size": None,
         "begin": None,
         "concurrent_batches": None,
+        "freshness": None,
     }
     result.update(updates)
     return result
@@ -801,6 +802,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "config": {
                     "enabled": True,
                     "event_time": None,
+                    "freshness": None,
                 },
                 "quoting": {
                     "database": None,
@@ -1330,6 +1332,7 @@ def expected_references_manifest(project):
                 "config": {
                     "enabled": True,
                     "event_time": None,
+                    "freshness": None,
                 },
                 "quoting": {
                     "database": False,
@@ -1414,6 +1417,8 @@ def expected_references_manifest(project):
                 "package_name": "test",
                 "path": "schema.yml",
                 "unique_id": "group.test.test_group",
+                "description": None,
+                "config": {"meta": {}},
             }
         },
         "selectors": {},
@@ -2006,6 +2011,8 @@ def expected_versions_manifest(project):
                 "package_name": "test",
                 "path": "schema.yml",
                 "unique_id": "group.test.test_group",
+                "description": None,
+                "config": {"meta": {}},
             }
         },
         "sources": {},
