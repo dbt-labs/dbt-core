@@ -702,7 +702,6 @@ class TestList:
         expectations = {
             "name": (
                 "expression_is_true_seed_b_2",
-                "my_favorite_test",
                 "my_second_favorite_test",
                 "not_null_model_with_lots_of_schema_configs_id",
                 "not_null_outer_id",
@@ -714,7 +713,6 @@ class TestList:
             ),
             "selector": (
                 "test.expression_is_true_seed_b_2",
-                "test.my_favorite_test",
                 "test.my_second_favorite_test",
                 "test.not_null_model_with_lots_of_schema_configs_id",
                 "test.not_null_outer_id",
@@ -758,40 +756,6 @@ class TestList:
                     "resource_type": "test",
                     "tags": [],
                     "unique_id": "test.test.expression_is_true_seed_b_2.4e0babbea4",
-                },
-                {
-                    "alias": "my_generic_test__id__alias",
-                    "config": {
-                        "alias": "my_generic_test__id__alias",
-                        "database": "dbt",
-                        "enabled": True,
-                        "error_if": "!= 0",
-                        "fail_calc": "count(*)",
-                        "group": "important_tests",
-                        "limit": 10,
-                        "materialized": "test",
-                        "meta": {"my_custom_meta_key": "my_custom_meta_value"},
-                        "schema": "dbt_test__audit",
-                        "severity": "warn",
-                        "store_failures": True,
-                        "store_failures_as": "table",
-                        "tags": ["test_tag", "test_tag"],
-                        "warn_if": "!= 0",
-                        "where": "1 = 1",
-                    },
-                    "depends_on": {
-                        "macros": [
-                            "macro.test.test_my_generic_test",
-                            "macro.dbt.get_where_subquery",
-                        ],
-                        "nodes": ["model.test.model_with_lots_of_schema_configs"],
-                    },
-                    "name": "my_favorite_test",
-                    "original_file_path": normalize("models/schema.yml"),
-                    "package_name": "test",
-                    "resource_type": "test",
-                    "tags": ["test_tag"],
-                    "unique_id": "test.test.my_favorite_test.71eeb949fc",
                 },
                 {
                     "alias": "my_generic_test__created_at__alias",
@@ -1052,7 +1016,6 @@ class TestList:
                 self.dir("models/schema.yml"),
                 self.dir("models/schema.yml"),
                 self.dir("models/schema.yml"),
-                self.dir("models/schema.yml"),
                 self.dir("seeds/s.yml"),
                 self.dir("seeds/s.yml"),
                 self.dir("tests/t.sql"),
@@ -1087,7 +1050,6 @@ class TestList:
             "test.not_null_model_with_lots_of_schema_configs_id",
             "test.unique_model_with_lots_of_schema_configs_id",
             "test.t",
-            "test.my_favorite_test",
             "test.my_second_favorite_test",
             "semantic_model:test.my_sm",
             "metric:test.total_outer",
@@ -1173,7 +1135,6 @@ class TestList:
             "test.expression_is_true_seed_b_2",
             "test.not_null_seed__a_",
             "test.not_null_seed__b_",
-            "test.my_favorite_test",
             "test.my_second_favorite_test",
         }
 
@@ -1204,7 +1165,6 @@ class TestList:
             "test.expression_is_true_seed_b_2",
             "test.not_null_seed__a_",
             "test.not_null_seed__b_",
-            "test.my_favorite_test",
             "test.my_second_favorite_test",
         }
 
@@ -1249,7 +1209,6 @@ class TestList:
             "test.expression_is_true_seed_b_2",
             "test.not_null_seed__a_",
             "test.not_null_seed__b_",
-            "test.my_favorite_test",
             "test.my_second_favorite_test",
         }
         del os.environ["DBT_RESOURCE_TYPES"]
@@ -1325,7 +1284,6 @@ class TestList:
         """
         expectations = [
             {"name": "expression_is_true_seed_b_2", "column_name": None},
-            {"name": "my_favorite_test", "column_name": "id"},
             {"name": "my_second_favorite_test", "column_name": "created_at"},
             {"name": "not_null_model_with_lots_of_schema_configs_id", "column_name": "id"},
             {"name": "not_null_outer_id", "column_name": "id"},
