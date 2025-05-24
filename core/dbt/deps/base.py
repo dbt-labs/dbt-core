@@ -1,13 +1,18 @@
 import abc
 import functools
 import os
+import tarfile
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Dict, Generic, List, Optional, TypeVar
 
 from dbt.contracts.project import ProjectPackageMetadata
-from dbt.events.types import DepsSetDownloadDirectory
+from dbt.events.types import (
+    DepsSetDownloadDirectory,
+    DepsTarFileEmpty,
+    DepsTarFileInvalid,
+)
 from dbt_common.clients import system
 from dbt_common.events.functions import fire_event
 from dbt_common.utils.connection import connection_exception_retry
@@ -130,10 +135,27 @@ class PinnedPackage(BasePackage):
         """
 
         system.download(download_url, tar_path)
+        # we get some vague errors when there are github connection issues.  This will help us debug.
+        if not os.path.exists(tar_path) or os.path.getsize(tar_path) == 0:
+            fire_event(DepsTarFileEmpty(download_url=download_url))
+            # TODO: this needs to be an error we catch in connection_exception_retry
+            raise Exception(f"Download failed: {tar_path} does not exist or is empty")
+        if not tarfile.is_tarfile(tar_path):
+            with open(tar_path, "rb") as f:
+                first_bytes = f.read(100)
+            fire_event(
+                DepsTarFileInvalid(
+                    download_url=download_url, path=tar_path, first_bytes=first_bytes
+                )
+            )
+            # TODO: this needs to be an error we catch in connection_exception_retry
+            raise Exception(f"Error: {tar_path} is not a valid tar file!")
+
         system.untar_package(tar_path, deps_path, package_name)
 
 
 SomePinned = TypeVar("SomePinned", bound=PinnedPackage)
+
 SomeUnpinned = TypeVar("SomeUnpinned", bound="UnpinnedPackage")
 
 
