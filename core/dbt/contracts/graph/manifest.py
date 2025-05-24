@@ -55,6 +55,7 @@ from dbt.contracts.graph.nodes import (
     ManifestNode,
     Metric,
     ModelNode,
+    ParsedConcept,
     SavedQuery,
     SeedNode,
     SemanticModel,
@@ -686,6 +687,7 @@ MaybeMetricNode = Optional[Union[Metric, Disabled[Metric]]]
 
 MaybeSavedQueryNode = Optional[Union[SavedQuery, Disabled[SavedQuery]]]
 
+MaybeConceptNode = Optional[Union[ParsedConcept, Disabled[ParsedConcept]]]
 
 MaybeDocumentation = Optional[Documentation]
 
@@ -878,6 +880,7 @@ class Manifest(MacroMethods, dbtClassMixin):
     docs: MutableMapping[str, Documentation] = field(default_factory=dict)
     exposures: MutableMapping[str, Exposure] = field(default_factory=dict)
     metrics: MutableMapping[str, Metric] = field(default_factory=dict)
+    concepts: MutableMapping[str, ParsedConcept] = field(default_factory=dict)
     groups: MutableMapping[str, Group] = field(default_factory=dict)
     selectors: MutableMapping[str, Any] = field(default_factory=dict)
     files: MutableMapping[str, AnySourceFile] = field(default_factory=dict)
@@ -1416,6 +1419,34 @@ class Manifest(MacroMethods, dbtClassMixin):
             return Disabled(disabled[0])
         return None
 
+    def resolve_concept(
+        self,
+        target_concept_name: str,
+        target_concept_package: Optional[str],
+        current_project: str,
+        node_package: str,
+    ) -> MaybeConceptNode:
+        disabled = None
+
+        candidates = _packages_to_search(current_project, node_package, target_concept_package)
+        for pkg in candidates:
+            # Look for concept in the concepts dictionary
+            for concept_unique_id, concept_obj in self.concepts.items():
+                if (
+                    concept_obj.name == target_concept_name
+                    and concept_obj.package_name == pkg
+                    and concept_obj.config.enabled
+                ):
+                    return concept_obj
+
+            # Check if it's disabled
+            if disabled is None:
+                disabled = self.disabled_lookup.find(f"{target_concept_name}", pkg)
+
+        if disabled:
+            return Disabled(disabled[0])
+        return None
+
     def resolve_saved_query(
         self,
         target_saved_query_name: str,
@@ -1645,6 +1676,11 @@ class Manifest(MacroMethods, dbtClassMixin):
         _check_duplicates(group, self.groups)
         self.groups[group.unique_id] = group
         source_file.groups.append(group.unique_id)
+
+    def add_concept(self, source_file: SchemaSourceFile, concept: ParsedConcept):
+        _check_duplicates(concept, self.concepts)
+        self.concepts[concept.unique_id] = concept
+        source_file.concepts.append(concept.unique_id)
 
     def add_disabled_nofile(self, node: GraphMemberNode):
         # There can be multiple disabled nodes for the same unique_id

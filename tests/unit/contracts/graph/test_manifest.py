@@ -99,6 +99,7 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "time_spine",
         "batch",
         "freshness",
+        "concepts",
     }
 )
 
