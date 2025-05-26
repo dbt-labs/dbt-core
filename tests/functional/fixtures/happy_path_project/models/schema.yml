@@ -87,5 +87,74 @@ models:
 
 sources:
   - name: my_source
+    description: description
+    database: raw
+    schema: jaffle_shop
+    loader: test
+    loaded_at_field: column_name
+    config:
+      enabled: true
+      event_time: column_name
+      meta:
+        test: 1
+      freshness:
+        warn_after:
+          count: 1
+          period: minute
+        error_after:
+          count: 2
+          period: hour
+        filter: "column_name = 1"
+
+    # # overrides: test
+
+    quoting:
+      database: true
+      schema: true
+      identifier: true
+
     tables:
       - name: my_table
+        description: description
+        identifier: table_identifier
+        loaded_at_field: column_name
+        tests: []
+        quoting:
+          database: true
+          schema: true
+          identifier: true
+        external:
+          location: location
+          file_format: file_format
+          row_format: row_format
+          tbl_properties: tbl_properties
+          partitions:
+            - name: column_name
+              data_type: data_type
+              description: description
+              meta:
+                test: 1
+          additional_property: additional_value
+        columns:
+          - name: column_name
+            description: description
+            quote: true
+            tests: []
+            config:
+              meta:
+                test: 1
+                tags: ["tags"]
+        config:
+          enabled: true
+          event_time: column_name
+          meta:
+            test: 1
+          tags: ["tag"]
+          freshness:
+            warn_after:
+              count: 1
+              period: minute
+            error_after:
+              count: 2
+              period: hour
+            filter: "column_name = 1"

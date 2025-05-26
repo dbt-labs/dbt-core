@@ -586,8 +586,20 @@ class TestList:
             "json": {
                 "config": {
                     "enabled": True,
-                    "event_time": None,
-                    "freshness": None,
+                    "event_time": "column_name",
+                    "freshness": {
+                        "error_after": {
+                            "count": 2,
+                            "period": "hour",
+                        },
+                        "warn_after": {
+                            "count": 1,
+                            "period": "minute",
+                        },
+                        "filter": "column_name = 1",
+                    },
+                    "meta": {"test": 1},
+                    "tags": ["tag"],
                 },
                 "unique_id": "source.test.my_source.my_table",
                 "original_file_path": normalize("models/schema.yml"),
