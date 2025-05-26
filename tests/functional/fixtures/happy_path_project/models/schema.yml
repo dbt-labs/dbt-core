@@ -33,7 +33,6 @@ models:
       - name: ts_second
         granularity: second
   - name: model_with_lots_of_schema_configs
-    access: public
     columns:
       - name: id
         data_tests:
@@ -41,6 +40,7 @@ models:
           - not_null
         description: The id value
     config:
+      access: public
       alias: "outer_alias"
       batch_size: day
       begin: "2020-01-01"
@@ -48,6 +48,9 @@ models:
       contract:
         alias_types: true
         enforce: true
+      docs:
+        node_color: purple
+        show: true
       database: "dbt"
       enabled: true
       full_refresh: false
@@ -81,9 +84,6 @@ models:
         name: "Check that id is greater than 0"
     deprecation_date: "2052-05-01"
     description: A model with lots of configs
-    docs:
-      node_color: purple
-      show: true
 
 sources:
   - name: my_source

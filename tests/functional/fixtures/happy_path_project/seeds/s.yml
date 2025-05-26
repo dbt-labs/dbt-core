@@ -1,9 +1,6 @@
 seeds:
   - name: seed
     description: 'test_description'
-    docs:
-      show: true
-      node_color: purple
     data_tests:
       - expression_is_true:
           expression: "b = 2"
@@ -25,6 +22,9 @@ seeds:
           meta: {}
           tags: ["tag"]
     config:
+      docs:
+        show: true
+        node_color: purple
       quote_columns: false
       column_types:
         a: BIGINT

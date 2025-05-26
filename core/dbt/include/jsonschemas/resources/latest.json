@@ -152,6 +152,14 @@
       },
       "additionalProperties": false
     },
+    "Access": {
+      "type": "string",
+      "enum": [
+        "private",
+        "protected",
+        "public"
+      ]
+    },
     "AggregationTypeParams": {
       "type": "object",
       "properties": {
@@ -1735,12 +1743,6 @@
         "name"
       ],
       "properties": {
-        "access": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "columns": {
           "type": [
             "array",
@@ -1788,16 +1790,6 @@
           "type": [
             "string",
             "null"
-          ]
-        },
-        "docs": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/DocsConfig"
-            },
-            {
-              "type": "null"
-            }
           ]
         },
         "freshness": {
@@ -1864,6 +1856,16 @@
     "ModelPropertiesConfigs": {
       "type": "object",
       "properties": {
+        "access": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Access"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "alias": {
           "type": [
             "string",
@@ -1942,6 +1944,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "freshness": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ModelFreshness"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "full_refresh": {
@@ -2410,16 +2422,6 @@
             "null"
           ]
         },
-        "docs": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/DocsConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "name": {
           "type": "string"
         },
@@ -2444,7 +2446,13 @@
             "null"
           ]
         },
-        "column_types": true,
+        "column_types": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
         "copy_grants": {
           "type": [
             "boolean",
@@ -2461,6 +2469,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "docs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DocsConfig"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "enabled": {
