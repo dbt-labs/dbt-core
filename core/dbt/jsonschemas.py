@@ -91,6 +91,9 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                         file=file_path,
                         key_path=key_path,
                     )
+        elif error.validator == "type":
+            # Not deprecating invalid types yet
+            pass
         elif error.validator == "anyOf" and len(error_path) > 0 and error_path[-1] == "config":
             for sub_error in error.context or []:
                 if (

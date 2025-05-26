@@ -2451,7 +2451,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "copy_grants": {
           "type": [
