@@ -492,6 +492,12 @@
         },
         "type": {
           "$ref": "#/definitions/ConstraintType"
+        },
+        "warn_unsupported": {
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
