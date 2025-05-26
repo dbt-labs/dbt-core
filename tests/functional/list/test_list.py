@@ -783,7 +783,7 @@ class TestList:
                         "nodes": ["model.test.model_with_lots_of_schema_configs"],
                     },
                     "name": "my_favorite_test",
-                    "original_file_path": "models/schema.yml",
+                    "original_file_path": normalize("models/schema.yml"),
                     "package_name": "test",
                     "resource_type": "test",
                     "tags": ["test_tag"],
