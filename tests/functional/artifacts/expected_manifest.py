@@ -318,6 +318,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                     "first_name": {
                         "name": "first_name",
@@ -329,6 +330,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                     "email": {
                         "name": "email",
@@ -340,6 +342,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                     "ip_address": {
                         "name": "ip_address",
@@ -351,6 +354,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                     "updated_at": {
                         "name": "updated_at",
@@ -362,6 +366,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                 },
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
@@ -424,6 +429,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                     "first_name": {
                         "name": "first_name",
@@ -435,6 +441,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                     "email": {
                         "name": "email",
@@ -446,6 +453,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                     "ip_address": {
                         "name": "ip_address",
@@ -457,6 +465,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                     "updated_at": {
                         "name": "updated_at",
@@ -468,6 +477,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                 },
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
@@ -520,6 +530,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                     "first_name": {
                         "name": "first_name",
@@ -531,6 +542,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                     "email": {
                         "name": "email",
@@ -542,6 +554,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                     "ip_address": {
                         "name": "ip_address",
@@ -553,6 +566,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                     "updated_at": {
                         "name": "updated_at",
@@ -564,6 +578,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                 },
                 "docs": {"node_color": None, "show": True},
@@ -797,6 +812,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     }
                 },
                 "config": {
@@ -1054,6 +1070,7 @@ def expected_references_manifest(project):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": ["doc.test.summary_first_name"],
+                        "config": {"meta": {}, "tags": []},
                     },
                     "ct": {
                         "description": "The number of instances of the first name",
@@ -1065,6 +1082,7 @@ def expected_references_manifest(project):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": ["doc.test.summary_count"],
+                        "config": {"meta": {}, "tags": []},
                     },
                 },
                 "config": get_rendered_model_config(materialized="table", group="test_group"),
@@ -1130,6 +1148,7 @@ def expected_references_manifest(project):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": ["doc.test.summary_first_name"],
+                        "config": {"meta": {}, "tags": []},
                     },
                     "ct": {
                         "description": "The number of instances of the first name",
@@ -1141,6 +1160,7 @@ def expected_references_manifest(project):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": ["doc.test.summary_count"],
+                        "config": {"meta": {}, "tags": []},
                     },
                 },
                 "config": get_rendered_model_config(),
@@ -1201,6 +1221,7 @@ def expected_references_manifest(project):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                     "first_name": {
                         "name": "first_name",
@@ -1212,6 +1233,7 @@ def expected_references_manifest(project):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                     "email": {
                         "name": "email",
@@ -1223,6 +1245,7 @@ def expected_references_manifest(project):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                     "ip_address": {
                         "name": "ip_address",
@@ -1234,6 +1257,7 @@ def expected_references_manifest(project):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                     "updated_at": {
                         "name": "updated_at",
@@ -1245,6 +1269,7 @@ def expected_references_manifest(project):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {"meta": {}, "tags": []},
                     },
                 },
                 "config": get_rendered_seed_config(),
@@ -1327,6 +1352,7 @@ def expected_references_manifest(project):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": ["doc.test.column_info"],
+                        "config": {"meta": {}, "tags": []},
                     }
                 },
                 "config": {
@@ -1607,6 +1633,10 @@ def expected_versions_manifest(project):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {
+                            "meta": {},
+                            "tags": [],
+                        },
                     },
                     "ct": {
                         "description": "The number of instances of the first name",
@@ -1618,6 +1648,10 @@ def expected_versions_manifest(project):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {
+                            "meta": {},
+                            "tags": [],
+                        },
                     },
                 },
                 "config": get_rendered_model_config(
@@ -1686,6 +1720,10 @@ def expected_versions_manifest(project):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {
+                            "meta": {},
+                            "tags": [],
+                        },
                     },
                     "extra": {
                         "description": "",
@@ -1697,6 +1735,10 @@ def expected_versions_manifest(project):
                         "constraints": [],
                         "granularity": None,
                         "doc_blocks": [],
+                        "config": {
+                            "meta": {},
+                            "tags": [],
+                        },
                     },
                 },
                 "config": get_rendered_model_config(
