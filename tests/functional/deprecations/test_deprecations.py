@@ -16,6 +16,7 @@ from dbt.events.types import (
     DuplicateYAMLKeysDeprecation,
     GenericJSONSchemaValidationDeprecation,
     PackageRedirectDeprecation,
+    WEOIncludeExcludeDeprecation,
 )
 from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
 from dbt_common.exceptions import EventCompilationError
@@ -203,11 +204,11 @@ class TestProjectFlagsMovedDeprecationWarnErrorOptions(TestProjectFlagsMovedDepr
     def test_profile_config_deprecation(self, project):
         deprecations.reset_deprecations()
         with pytest.raises(EventCompilationError):
-            run_dbt(["--warn-error-options", "{'include': 'all'}", "parse"])
+            run_dbt(["--warn-error-options", "{'error': 'all'}", "parse"])
 
         with pytest.raises(EventCompilationError):
             run_dbt(
-                ["--warn-error-options", "{'include': ['ProjectFlagsMovedDeprecation']}", "parse"]
+                ["--warn-error-options", "{'error': ['ProjectFlagsMovedDeprecation']}", "parse"]
             )
 
         _, logs = run_dbt_and_capture(
@@ -454,3 +455,39 @@ class TestBaseProjectHasNoDeprecations:
             callbacks=[event_cathcer.catch],
         )
         assert len(event_cathcer.caught_events) == 0
+
+
+class TestWEOIncludeExcludeDeprecation:
+    @pytest.mark.parametrize(
+        "include_error,exclude_warn,expect_deprecation",
+        [
+            ("include", "exclude", 1),
+            ("include", "warn", 1),
+            ("error", "exclude", 1),
+            ("error", "warn", 0),
+        ],
+    )
+    def test_weo_include_exclude_deprecation(
+        self,
+        project,
+        include_error: str,
+        exclude_warn: str,
+        expect_deprecation: int,
+    ):
+        event_catcher = EventCatcher(WEOIncludeExcludeDeprecation)
+        warn_error_options = f"{{'{include_error}': 'all', '{exclude_warn}': ['Deprecations']}}"
+        run_dbt(
+            ["parse", "--show-all-deprecations", "--warn-error-options", warn_error_options],
+            callbacks=[event_catcher.catch],
+        )
+
+        assert len(event_catcher.caught_events) == expect_deprecation
+        if expect_deprecation > 0:
+            if include_error == "include":
+                assert "include" in event_catcher.caught_events[0].info.msg
+            else:
+                assert "include" not in event_catcher.caught_events[0].info.msg
+            if exclude_warn == "exclude":
+                assert "exclude" in event_catcher.caught_events[0].info.msg
+            else:
+                assert "exclude" not in event_catcher.caught_events[0].info.msg

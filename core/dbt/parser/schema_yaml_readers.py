@@ -490,6 +490,10 @@ class GroupParser(YamlReader):
         unique_id = f"{NodeType.Group}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
 
+        fqn = self.schema_parser.get_fqn_prefix(path)
+        fqn.append(unparsed.name)
+        config = self._generate_group_config(unparsed, fqn, package_name, True)
+
         parsed = Group(
             resource_type=NodeType.Group,
             package_name=package_name,
@@ -498,6 +502,8 @@ class GroupParser(YamlReader):
             unique_id=unique_id,
             name=unparsed.name,
             owner=unparsed.owner,
+            description=unparsed.description,
+            config=config,
         )
 
         assert isinstance(self.yaml.file, SchemaSourceFile)
@@ -512,6 +518,30 @@ class GroupParser(YamlReader):
                 raise YamlParseDictError(self.yaml.path, self.key, data, exc)
 
             self.parse_group(unparsed)
+
+    def _generate_group_config(
+        self, target: UnparsedGroup, fqn: List[str], package_name: str, rendered: bool
+    ):
+        generator: BaseContextConfigGenerator
+        if rendered:
+            generator = ContextConfigGenerator(self.root_project)
+        else:
+            generator = UnrenderedConfigGenerator(self.root_project)
+
+        # configs with precendence set
+        precedence_configs = dict()
+        # first apply metric configs
+        precedence_configs.update(target.config)
+
+        config = generator.calculate_node_config(
+            config_call_dict={},
+            fqn=fqn,
+            resource_type=NodeType.Group,
+            project_name=package_name,
+            base=False,
+            patch_config_dict=precedence_configs,
+        )
+        return config
 
 
 class SemanticModelParser(YamlReader):

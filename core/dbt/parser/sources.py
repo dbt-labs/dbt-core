@@ -189,7 +189,7 @@ class SourcePatcher:
             )
 
         table_config_freshness = FreshnessThreshold.from_dict(table.config.get("freshness", {}))
-        freshness = merge_freshness(
+        freshness = merge_source_freshness(
             project_freshness,
             source_freshness,
             source_config_freshness,
@@ -427,7 +427,9 @@ def merge_freshness_time_thresholds(
         return update or base
 
 
-def merge_freshness(*thresholds: Optional[FreshnessThreshold]) -> Optional[FreshnessThreshold]:
+def merge_source_freshness(
+    *thresholds: Optional[FreshnessThreshold],
+) -> Optional[FreshnessThreshold]:
     if not thresholds:
         return None
 

@@ -65,7 +65,7 @@ def project(selector_config: SelectorConfig) -> Project:
         manifest_selectors={},
         selectors=selector_config,
         # QueryComment contract defaults are defined by dbt-adapters, so not hard-coding this fixture to rely on particular settings of their defaults.
-        query_comment=QueryComment(comment=DEFAULT_QUERY_COMMENT, append=None, job_label=False),
+        query_comment=QueryComment(comment=DEFAULT_QUERY_COMMENT, append=False, job_label=False),
         config_version=1,
         unrendered=RenderComponents({}, {}, {}),
         project_env_vars={},

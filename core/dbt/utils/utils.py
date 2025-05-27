@@ -28,7 +28,7 @@ import jinja2
 from dbt import flags
 from dbt.exceptions import DuplicateAliasError
 from dbt_common.exceptions import RecursionError
-from dbt_common.helper_types import WarnErrorOptions
+from dbt_common.helper_types import WarnErrorOptionsV2
 from dbt_common.utils import md5
 
 DECIMALS: Tuple[Type[Any], ...]
@@ -364,7 +364,7 @@ def args_to_dict(args):
         # this was required for a test case
         if isinstance(var_args[key], PosixPath) or isinstance(var_args[key], WindowsPath):
             var_args[key] = str(var_args[key])
-        if isinstance(var_args[key], WarnErrorOptions):
+        if isinstance(var_args[key], WarnErrorOptionsV2):
             var_args[key] = var_args[key].to_dict()
 
         dict_args[key] = var_args[key]

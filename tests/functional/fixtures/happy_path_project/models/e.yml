@@ -1,7 +1,5 @@
 exposures:
   - name: weekly_jaffle_metrics
-    meta: {}
-    tags: ["tag"]
     label: Jaffles by the Week
     type: dashboard
     maturity: high
@@ -16,3 +14,4 @@ exposures:
     config:
       enabled: true
       meta: {}
+      tags: ["tag"]
