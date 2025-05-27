@@ -292,6 +292,70 @@
       "additionalProperties": false
     },
     "AnyValue": true,
+    "BigqueryClusterConfig": {
+      "description": "dbt-core allows either of the variants for the `cluster_by` to allow cluster on a single column or on multiple columns",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "BigqueryPartitionConfig": {
+      "description": "reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/relation_configs/_partition.py#L12-L13",
+      "type": "object",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RangeConfig"
+        },
+        {
+          "$ref": "#/definitions/TimeConfig"
+        }
+      ],
+      "required": [
+        "field"
+      ],
+      "properties": {
+        "copy_partitions": {
+          "default": false,
+          "type": "boolean"
+        },
+        "data_type": {
+          "default": "date",
+          "type": "string"
+        },
+        "field": {
+          "type": "string"
+        },
+        "time_ingestion_partitioning": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "BigqueryPartitionConfigLegacy": {
+      "description": "dbt-core allows either of the variants for the `partition_by` in the model config but the bigquery-adapter throws RunTime error the behaviors are tested from the latest dbt-core + bigquery-adapter as this is written we're conformant to this behavior via here and via the `validate` method",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "$ref": "#/definitions/BigqueryPartitionConfig"
+        }
+      ]
+    },
     "BooleanOrJinjaString": {
       "anyOf": [
         {
@@ -675,7 +739,6 @@
     "Dimension": {
       "type": "object",
       "required": [
-        "is_partition",
         "name",
         "type"
       ],
@@ -703,6 +766,7 @@
           ]
         },
         "is_partition": {
+          "default": false,
           "type": "boolean"
         },
         "label": {
@@ -716,7 +780,7 @@
           "type": "string"
         },
         "type": {
-          "type": "string"
+          "$ref": "#/definitions/DimensionType"
         },
         "type_params": {
           "anyOf": [
@@ -744,16 +808,50 @@
       },
       "additionalProperties": false
     },
+    "DimensionType": {
+      "type": "string",
+      "enum": [
+        "categorical",
+        "time"
+      ]
+    },
     "DimensionTypeParams": {
       "type": "object",
       "properties": {
         "time_granularity": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TimeGranularity"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
-        "validity_params": true
+        "validity_params": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DimensionValidityParams"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DimensionValidityParams": {
+      "type": "object",
+      "properties": {
+        "is_end": {
+          "default": false,
+          "type": "boolean"
+        },
+        "is_start": {
+          "default": false,
+          "type": "boolean"
+        }
       },
       "additionalProperties": false
     },
@@ -776,18 +874,15 @@
     "Entity": {
       "type": "object",
       "required": [
+        "config",
         "name",
         "type"
       ],
       "properties": {
-        "config": true,
-        "description": {
-          "type": [
-            "string",
-            "null"
-          ]
+        "config": {
+          "$ref": "#/definitions/EntityConfig"
         },
-        "entity": {
+        "description": {
           "type": [
             "string",
             "null"
@@ -814,6 +909,19 @@
         },
         "type": {
           "$ref": "#/definitions/EntityType"
+        }
+      },
+      "additionalProperties": false
+    },
+    "EntityConfig": {
+      "type": "object",
+      "properties": {
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
         }
       },
       "additionalProperties": false
@@ -1102,14 +1210,11 @@
       "type": "object",
       "properties": {
         "count": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/NumberOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
         },
         "period": {
           "anyOf": [
@@ -1798,16 +1903,6 @@
             "null"
           ]
         },
-        "freshness": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ModelFreshness"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "identifier": {
           "type": [
             "string",
@@ -1824,7 +1919,6 @@
             }
           ]
         },
-        "meta": true,
         "name": {
           "type": "string"
         },
@@ -1884,9 +1978,27 @@
             "null"
           ]
         },
+        "automatic_clustering": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "backup": {
           "type": [
             "boolean",
+            "null"
+          ]
+        },
+        "base_location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "base_location_subpath": {
+          "type": [
+            "string",
             "null"
           ]
         },
@@ -1900,6 +2012,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "cluster_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryClusterConfig"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "concurrent_batches": {
@@ -1916,6 +2038,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "copy_grants": {
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "database": {
@@ -1941,6 +2069,12 @@
           ]
         },
         "event_time": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "external_volume": {
           "type": [
             "string",
             "null"
@@ -2003,6 +2137,12 @@
             "null"
           ]
         },
+        "initialize": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "kms_key_name": {
           "type": [
             "string",
@@ -2048,6 +2188,16 @@
             "null"
           ]
         },
+        "partition_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryPartitionConfigLegacy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "persist_docs": {
           "anyOf": [
             {
@@ -2078,9 +2228,27 @@
             }
           ]
         },
+        "query_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "refresh_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "schema": {
           "type": [
             "string",
+            "null"
+          ]
+        },
+        "secure": {
+          "type": [
+            "boolean",
             "null"
           ]
         },
@@ -2119,6 +2287,12 @@
           ]
         },
         "tblproperties": true,
+        "tmp_relation_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "unique_key": {
           "anyOf": [
             {
@@ -2203,17 +2377,6 @@
       },
       "additionalProperties": false
     },
-    "NumberOrJinjaString": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "integer",
-          "format": "int32"
-        }
-      ]
-    },
     "PeriodAggregationType": {
       "type": "string",
       "enum": [
@@ -2236,6 +2399,44 @@
             "boolean",
             "null"
           ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Range": {
+      "type": "object",
+      "required": [
+        "end",
+        "interval",
+        "start"
+      ],
+      "properties": {
+        "end": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "interval": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "start": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "RangeConfig": {
+      "type": "object",
+      "required": [
+        "range"
+      ],
+      "properties": {
+        "range": {
+          "$ref": "#/definitions/Range"
         }
       },
       "additionalProperties": false
@@ -2576,6 +2777,31 @@
       },
       "additionalProperties": false
     },
+    "SemanticModelConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
     "SemanticModelsDefaults": {
       "type": "object",
       "properties": {
@@ -2598,7 +2824,7 @@
         "config": {
           "anyOf": [
             {
-              "$ref": "#/definitions/DimensionConfig"
+              "$ref": "#/definitions/SemanticModelConfig"
             },
             {
               "type": "null"
@@ -3326,6 +3552,16 @@
             "string",
             "null"
           ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "TimeConfig": {
+      "type": "object",
+      "properties": {
+        "granularity": {
+          "default": "day",
+          "type": "string"
         }
       },
       "additionalProperties": false
