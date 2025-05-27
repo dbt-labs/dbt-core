@@ -92,6 +92,7 @@ class TestGoodDocsBlocks:
             "quote": None,
             "tags": [],
             "granularity": None,
+            "config": {"meta": {}, "tags": []},
         } == model_data["columns"]["id"]
 
         assert {
@@ -103,6 +104,7 @@ class TestGoodDocsBlocks:
             "quote": None,
             "tags": [],
             "granularity": None,
+            "config": {"meta": {}, "tags": []},
         } == model_data["columns"]["first_name"]
 
         assert {
@@ -114,6 +116,7 @@ class TestGoodDocsBlocks:
             "quote": None,
             "tags": [],
             "granularity": None,
+            "config": {"meta": {}, "tags": []},
         } == model_data["columns"]["last_name"]
 
         assert len(model_data["columns"]) == 3
@@ -156,6 +159,7 @@ class TestGoodDocsBlocksAltPath:
             "quote": None,
             "tags": [],
             "granularity": None,
+            "config": {"meta": {}, "tags": []},
         } == model_data["columns"]["id"]
 
         assert {
@@ -167,6 +171,7 @@ class TestGoodDocsBlocksAltPath:
             "quote": None,
             "tags": [],
             "granularity": None,
+            "config": {"meta": {}, "tags": []},
         } == model_data["columns"]["first_name"]
 
         assert {
@@ -178,6 +183,7 @@ class TestGoodDocsBlocksAltPath:
             "quote": None,
             "tags": [],
             "granularity": None,
+            "config": {"meta": {}, "tags": []},
         } == model_data["columns"]["last_name"]
 
         assert len(model_data["columns"]) == 3

@@ -466,6 +466,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                     "meta": {"key2": "value3"},
                     "tags": [],
                     "constraints": [],
+                    "config": {},
                 },
                 {
                     "name": "y",
@@ -476,6 +477,7 @@ class TestUnparsedNodeUpdate(ContractTestCase):
                     "meta": {},
                     "tags": ["a", "b"],
                     "constraints": [],
+                    "config": {},
                 },
             ],
             "docs": {"show": False},
@@ -675,6 +677,7 @@ class TestUnparsedModelUpdate(ContractTestCase):
                     "meta": {"key2": "value3"},
                     "tags": [],
                     "constraints": [],
+                    "config": {},
                 },
                 {
                     "name": "y",
@@ -685,6 +688,7 @@ class TestUnparsedModelUpdate(ContractTestCase):
                     "meta": {},
                     "tags": ["a", "b"],
                     "constraints": [],
+                    "config": {},
                 },
             ],
             "docs": {"show": False},

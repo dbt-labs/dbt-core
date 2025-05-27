@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Union
 from dbt.artifacts.resources.base import Docs, FileHash, GraphResource
 from dbt.artifacts.resources.types import NodeType, TimePeriod
 from dbt.artifacts.resources.v1.config import NodeConfig
+from dbt_common.contracts.config.base import BaseConfig, MergeBehavior
 from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
 from dbt_common.contracts.constraints import ColumnLevelConstraint
 from dbt_common.contracts.util import Mergeable
@@ -56,6 +57,12 @@ class RefArgs(dbtClassMixin):
 
 
 @dataclass
+class ColumnConfig(BaseConfig):
+    meta: Dict[str, Any] = field(default_factory=dict, metadata=MergeBehavior.Update.meta())
+    tags: List[str] = field(default_factory=list)
+
+
+@dataclass
 class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     """Used in all ManifestNodes and SourceDefinition"""
 
@@ -65,6 +72,7 @@ class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     data_type: Optional[str] = None
     constraints: List[ColumnLevelConstraint] = field(default_factory=list)
     quote: Optional[bool] = None
+    config: ColumnConfig = field(default_factory=ColumnConfig)
     tags: List[str] = field(default_factory=list)
     _extra: Dict[str, Any] = field(default_factory=dict)
     granularity: Optional[TimeGranularity] = None

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
 
-from dbt.artifacts.resources import ColumnInfo, NodeVersion
+from dbt.artifacts.resources import ColumnConfig, ColumnInfo, NodeVersion
 from dbt.contracts.graph.nodes import UnpatchedSourceDefinition
 from dbt.contracts.graph.unparsed import (
     HasColumnDocs,
@@ -232,6 +232,9 @@ class ParserRef:
             quote=quote,
             _extra=column.extra,
             granularity=granularity,
+            config=ColumnConfig(
+                meta=column.config.get("meta", {}), tags=column.config.get("tags", [])
+            ),
         )
 
     @classmethod
