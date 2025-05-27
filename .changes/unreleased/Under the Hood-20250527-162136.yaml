@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Prevent overcounting PropertyMovedToConfigDeprecation for source freshness
+time: 2025-05-27T16:21:36.551426+01:00
+custom:
+    Author: aranke
+    Issue: "11660"
