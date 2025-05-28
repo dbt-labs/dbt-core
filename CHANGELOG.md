@@ -46,7 +46,6 @@
 - [@kato1208](https://github.com/kato1208) ([#11498](https://github.com/dbt-labs/dbt-core/issues/11498), [#11498](https://github.com/dbt-labs/dbt-core/issues/11498))
 - [@slothkong](https://github.com/slothkong) ([#9791](https://github.com/dbt-labs/dbt-core/issues/9791))
 
-
 ## dbt-core 1.10.0-b2 - April 02, 2025
 
 ### Features
@@ -146,6 +145,8 @@
 For information on prior major and minor releases, see their changelogs:
 
 
+* [1.9](https://github.com/dbt-labs/dbt-core/blob/1.9.latest/CHANGELOG.md)
+* [1.8](https://github.com/dbt-labs/dbt-core/blob/1.8.latest/CHANGELOG.md)
 * [1.7](https://github.com/dbt-labs/dbt-core/blob/1.7.latest/CHANGELOG.md)
 * [1.6](https://github.com/dbt-labs/dbt-core/blob/1.6.latest/CHANGELOG.md)
 * [1.5](https://github.com/dbt-labs/dbt-core/blob/1.5.latest/CHANGELOG.md)
