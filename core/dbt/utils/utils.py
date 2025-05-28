@@ -1,11 +1,11 @@
 import collections
-import datetime
 import decimal
 import functools
 import itertools
 import json
 import os
 import sys
+from datetime import date, datetime, time, timezone
 from enum import Enum
 from pathlib import PosixPath, WindowsPath
 from typing import (
@@ -28,7 +28,7 @@ import jinja2
 from dbt import flags
 from dbt.exceptions import DuplicateAliasError
 from dbt_common.exceptions import RecursionError
-from dbt_common.helper_types import WarnErrorOptions
+from dbt_common.helper_types import WarnErrorOptionsV2
 from dbt_common.utils import md5
 
 DECIMALS: Tuple[Type[Any], ...]
@@ -144,7 +144,7 @@ def add_ephemeral_model_prefix(s: str) -> str:
 def timestring() -> str:
     """Get the current datetime as an RFC 3339-compliant string"""
     # isoformat doesn't include the mandatory trailing 'Z' for UTC.
-    return datetime.datetime.utcnow().isoformat() + "Z"
+    return datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
 
 
 def humanize_execution_time(execution_time: int) -> str:
@@ -163,7 +163,7 @@ class JSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, DECIMALS):
             return float(obj)
-        elif isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
+        elif isinstance(obj, (datetime, date, time)):
             return obj.isoformat()
         elif isinstance(obj, jinja2.Undefined):
             return ""
@@ -364,7 +364,7 @@ def args_to_dict(args):
         # this was required for a test case
         if isinstance(var_args[key], PosixPath) or isinstance(var_args[key], WindowsPath):
             var_args[key] = str(var_args[key])
-        if isinstance(var_args[key], WarnErrorOptions):
+        if isinstance(var_args[key], WarnErrorOptionsV2):
             var_args[key] = var_args[key].to_dict()
 
         dict_args[key] = var_args[key]

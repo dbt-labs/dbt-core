@@ -1,7 +1,7 @@
+from dbtlabs.proto.public.v1.fields import core_types_pb2
 from google.protobuf.json_format import MessageToDict
 
 from dbt.adapters.events.types import PluginLoadError, RollbackFailed
-from dbt.events import core_types_pb2
 from dbt.events.types import (
     LogNodeResult,
     LogStartLine,
@@ -129,6 +129,7 @@ def test_node_info_events():
             "alias": "some_alias",
             "relation_name": "some.relation.name",
         },
+        "node_checksum": "some_checksum",
     }
     event = LogStartLine(
         description="some description",
@@ -150,6 +151,8 @@ def test_node_info_events():
     )
     assert event.node_info.node_relation.database == ""
     assert event.node_info.node_relation.relation_name == "some_schema.some_alias"
+
+    assert event.node_info.node_checksum == "some_checksum"
 
 
 def test_extra_dict_on_event(monkeypatch):

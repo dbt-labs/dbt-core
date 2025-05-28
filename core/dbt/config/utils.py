@@ -1,5 +1,6 @@
 from typing import Any, Dict, Optional
 
+from dbt import deprecations
 from dbt.clients import yaml_helper
 from dbt.events.types import InvalidOptionYAML
 from dbt.exceptions import DbtExclusivePropertyUseError, OptionNotYamlDictError
@@ -15,7 +16,7 @@ def parse_cli_yaml_string(var_string: str, cli_option_name: str) -> Dict[str, An
     try:
         cli_vars = yaml_helper.load_yaml_text(var_string)
         var_type = type(cli_vars)
-        if var_type is dict:
+        if cli_vars is not None and var_type is dict:
             return cli_vars
         else:
             raise OptionNotYamlDictError(var_type, cli_option_name)
@@ -55,12 +56,22 @@ def exclusive_primary_alt_value_setting(
 
 
 def normalize_warn_error_options(warn_error_options: Dict[str, Any]) -> None:
+    has_include = "include" in warn_error_options
+    has_exclude = "exclude" in warn_error_options
+
+    if has_include or has_exclude:
+        deprecations.buffer(
+            "weo-include-exclude-deprecation",
+            found_include=has_include,
+            found_exclude=has_exclude,
+        )
+
     exclusive_primary_alt_value_setting(
-        warn_error_options, "include", "error", "warn_error_options"
+        warn_error_options, "error", "include", "warn_error_options"
     )
     exclusive_primary_alt_value_setting(
-        warn_error_options, "exclude", "warn", "warn_error_options"
+        warn_error_options, "warn", "exclude", "warn_error_options"
     )
-    for key in ("include", "exclude", "silence"):
+    for key in ("error", "warn", "silence"):
         if key in warn_error_options and warn_error_options[key] is None:
             warn_error_options[key] = []

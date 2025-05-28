@@ -1,16 +1,32 @@
 import datetime
 import pathlib
+import re
 import time
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, Type, TypeVar
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generic,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+)
 
 from dbt.artifacts.resources import RefArgs
 from dbt.artifacts.resources.v1.model import (
     CustomGranularity,
-    ModelBuildAfter,
     ModelFreshness,
     TimeSpine,
+    merge_model_freshness,
+)
+from dbt.clients.checked_load import (
+    checked_load,
+    issue_deprecation_warnings_for_failures,
 )
 from dbt.clients.jinja_static import statically_parse_ref_or_source
 from dbt.clients.yaml_helper import load_yaml_text
@@ -20,6 +36,7 @@ from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import SchemaSourceFile, SourceFile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import (
+    Macro,
     ModelNode,
     ParsedMacroPatch,
     ParsedNodePatch,
@@ -38,6 +55,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceDefinition,
 )
 from dbt.events.types import (
+    InvalidMacroAnnotation,
     MacroNotFoundForPatch,
     NoNodeForYamlKey,
     UnsupportedConstraintMaterialization,
@@ -56,6 +74,7 @@ from dbt.exceptions import (
     YamlParseDictError,
     YamlParseListError,
 )
+from dbt.flags import get_flags
 from dbt.node_types import AccessType, NodeType
 from dbt.parser.base import SimpleParser
 from dbt.parser.common import (
@@ -109,11 +128,31 @@ from dbt_common.utils import deep_merge
 # ===============================================================================
 
 
-def yaml_from_file(source_file: SchemaSourceFile) -> Optional[Dict[str, Any]]:
+def yaml_from_file(
+    source_file: SchemaSourceFile, validate: bool = False
+) -> Optional[Dict[str, Any]]:
     """If loading the yaml fails, raise an exception."""
     try:
         # source_file.contents can sometimes be None
-        contents = load_yaml_text(source_file.contents or "", source_file.path)
+        to_load = source_file.contents or ""
+
+        if validate:
+            contents, failures = checked_load(to_load)
+            issue_deprecation_warnings_for_failures(
+                failures=failures, file=source_file.path.original_file_path
+            )
+            if contents is not None:
+                from dbt.jsonschemas import jsonschema_validate, resources_schema
+
+                # Validate the yaml against the jsonschema to raise deprecation warnings
+                # for invalid fields.
+                jsonschema_validate(
+                    schema=resources_schema(),
+                    json=contents,
+                    file_path=source_file.path.original_file_path,
+                )
+        else:
+            contents = load_yaml_text(to_load, source_file.path)
 
         if contents is None:
             return contents
@@ -178,7 +217,6 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
         if dct:
             # contains the FileBlock and the data (dictionary)
             yaml_block = YamlBlock.from_file_block(block, dct)
-
             parser: YamlReader
 
             # There are 9 different yaml lists which are parsed by different parsers:
@@ -727,7 +765,9 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         # code consistency.
         deprecation_date: Optional[datetime.datetime] = None
         time_spine: Optional[TimeSpine] = None
+
         freshness: Optional[ModelFreshness] = None
+
         if isinstance(block.target, UnparsedModelUpdate):
             deprecation_date = block.target.deprecation_date
             time_spine = (
@@ -744,17 +784,31 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                 if block.target.time_spine
                 else None
             )
-            freshness = (
-                ModelFreshness(
-                    build_after=ModelBuildAfter(
-                        count=block.target.freshness.build_after.count,
-                        period=block.target.freshness.build_after.period,
-                        depends_on=block.target.freshness.build_after.depends_on,
-                    ),
+
+            try:
+                project_freshness_dict = self.project.models.get("+freshness", None)
+                project_freshness = (
+                    ModelFreshness.from_dict(project_freshness_dict)
+                    if project_freshness_dict
+                    else None
                 )
-                if block.target.freshness
-                else None
+            except ValueError:
+                fire_event(
+                    Note(
+                        msg="Could not validate `freshness` for `models` in 'dbt_project.yml', ignoring.",
+                    ),
+                    EventLevel.WARN,
+                )
+                project_freshness = None
+
+            model_freshness = block.target.freshness or None
+
+            config_freshness_dict = block.target.config.get("freshness", None)
+            config_freshness = (
+                ModelFreshness.from_dict(config_freshness_dict) if config_freshness_dict else None
             )
+            freshness = merge_model_freshness(project_freshness, model_freshness, config_freshness)
+
         patch = ParsedNodePatch(
             name=block.target.name,
             original_file_path=block.target.original_file_path,
@@ -1265,4 +1319,108 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
         macro.created_at = time.time()
         macro.meta = patch.meta
         macro.docs = patch.docs
-        macro.arguments = patch.arguments
+
+        if getattr(get_flags(), "validate_macro_args", False):
+            self._check_patch_arguments(macro, patch)
+            macro.arguments = patch.arguments if patch.arguments else macro.arguments
+        else:
+            macro.arguments = patch.arguments
+
+    def _check_patch_arguments(self, macro: Macro, patch: ParsedMacroPatch) -> None:
+        if not patch.arguments:
+            return
+
+        for macro_arg, patch_arg in zip(macro.arguments, patch.arguments):
+            if patch_arg.name != macro_arg.name:
+                msg = f"Argument {patch_arg.name} in yaml for macro {macro.name} does not match the jinja definition."
+                self._fire_macro_arg_warning(msg, macro)
+
+        if len(patch.arguments) != len(macro.arguments):
+            msg = f"The number of arguments in the yaml for macro {macro.name} does not match the jinja definition."
+            self._fire_macro_arg_warning(msg, macro)
+
+        for patch_arg in patch.arguments:
+            arg_type = patch_arg.type
+            if arg_type is not None and arg_type.strip() != "" and not is_valid_type(arg_type):
+                msg = f"Argument {patch_arg.name} in the yaml for macro {macro.name} has an invalid type."
+                self._fire_macro_arg_warning(msg, macro)
+
+    def _fire_macro_arg_warning(self, msg: str, macro: Macro) -> None:
+        warn_or_error(
+            InvalidMacroAnnotation(
+                msg=msg, macro_unique_id=macro.unique_id, macro_file_path=macro.original_file_path
+            )
+        )
+
+
+# valid type names, along with the number of parameters they require
+macro_types: Dict[str, int] = {
+    "str": 0,
+    "string": 0,
+    "bool": 0,
+    "int": 0,
+    "integer": 0,
+    "float": 0,
+    "any": 0,
+    "list": 1,
+    "dict": 2,
+    "optional": 1,
+    "relation": 0,
+    "column": 0,
+}
+
+
+def is_valid_type(buffer: str) -> bool:
+    buffer = buffer.replace(" ", "").replace("\t", "")
+    type_desc, remainder = match_type_desc(buffer)
+    return type_desc is not None and remainder == ""
+
+
+def match_type_desc(buffer: str) -> Tuple[Optional[str], str]:
+    """A matching buffer is a type name followed by an argument list with
+    the correct number of arguments."""
+    type_name, remainder = match_type_name(buffer)
+    if type_name is None:
+        return None, buffer
+    attr_list, remainder = match_arg_list(remainder, macro_types[type_name])
+    if attr_list is None:
+        return None, buffer
+    return type_name + attr_list, remainder
+
+
+alpha_pattern = re.compile(r"[a-z]+")
+
+
+def match_type_name(buffer: str) -> Tuple[Optional[str], str]:
+    """A matching buffer starts with one of the valid type names from macro_types"""
+    match = alpha_pattern.match(buffer)
+    if match is not None and buffer[: match.end(0)] in macro_types:
+        return buffer[: match.end(0)], buffer[match.end(0) :]
+    else:
+        return None, buffer
+
+
+def match_arg_list(buffer: str, arg_count: int) -> Tuple[Optional[str], str]:
+    """A matching buffer must begin with '[', followed by exactly arg_count type
+    specs, followed by ']'"""
+
+    if arg_count == 0:
+        return "", buffer
+
+    if not buffer.startswith("["):
+        return None, buffer
+
+    remainder = buffer[1:]
+    for i in range(arg_count):
+        type_desc, remainder = match_type_desc(remainder)
+        if type_desc is None:
+            return None, buffer
+        if i != arg_count - 1:
+            if not remainder.startswith(","):
+                return None, buffer
+            remainder = remainder[1:]
+
+    if not remainder.startswith("]"):
+        return None, buffer
+    else:
+        return "", remainder[1:]

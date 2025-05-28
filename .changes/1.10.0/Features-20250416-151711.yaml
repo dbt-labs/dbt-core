@@ -1,0 +1,6 @@
+kind: Features
+body: Begin validating the jsonschema of resource YAML files
+time: 2025-04-16T15:17:11.760509-07:00
+custom:
+  Author: QMalcolm
+  Issue: "11504"

@@ -14,9 +14,12 @@ from dbt.adapters.factory import load_plugin
 from dbt.config.project import Project, _get_required_version
 from dbt.constants import DEPENDENCIES_FILE_NAME
 from dbt.contracts.project import GitPackage, LocalPackage, PackageConfig
+from dbt.deprecations import GenericJSONSchemaValidationDeprecation
 from dbt.flags import set_from_args
+from dbt.jsonschemas import project_schema
 from dbt.node_types import NodeType
 from dbt.tests.util import safe_set_invocation_context
+from dbt_common.events.event_manager_client import get_event_manager
 from dbt_common.exceptions import DbtRuntimeError
 from dbt_common.semver import VersionSpecifier
 from tests.unit.config import (
@@ -25,6 +28,7 @@ from tests.unit.config import (
     project_from_config_norender,
     project_from_config_rendered,
 )
+from tests.utils import EventCatcher
 
 
 class TestProjectMethods:
@@ -346,7 +350,7 @@ class TestProjectInitialization(BaseConfigTest):
 
         assert "Cycle detected" in str(exc.exception)
 
-    def test_query_comment_disabled(self):
+    def test_query_comment_empty(self):
         self.default_project_data.update(
             {
                 "query-comment": None,
@@ -356,7 +360,7 @@ class TestProjectInitialization(BaseConfigTest):
             self.default_project_data, project_root=self.project_dir
         )
         self.assertEqual(project.query_comment.comment, "")
-        self.assertEqual(project.query_comment.append, False)
+        self.assertEqual(project.query_comment.append, QueryComment().append)
 
         self.default_project_data.update(
             {
@@ -367,7 +371,7 @@ class TestProjectInitialization(BaseConfigTest):
             self.default_project_data, project_root=self.project_dir
         )
         self.assertEqual(project.query_comment.comment, "")
-        self.assertEqual(project.query_comment.append, False)
+        self.assertEqual(project.query_comment.append, QueryComment().append)
 
     def test_default_query_comment(self):
         project = project_from_config_norender(
@@ -398,6 +402,30 @@ class TestProjectInitialization(BaseConfigTest):
         )
         self.assertEqual(project.query_comment.comment, "run by user test")
         self.assertEqual(project.query_comment.append, True)
+
+    def test_default_query_comment_append_False(self):
+        self.default_project_data.update(
+            {
+                "query-comment": {"append": False},
+            }
+        )
+        project = project_from_config_norender(
+            self.default_project_data, project_root=self.project_dir
+        )
+        self.assertEqual(project.query_comment.comment, DEFAULT_QUERY_COMMENT)
+        self.assertEqual(project.query_comment.append, False)
+
+    def test_custom_query_comment_append_false(self):
+        self.default_project_data.update(
+            {
+                "query-comment": {"comment": "run by user test", "append": False},
+            }
+        )
+        project = project_from_config_norender(
+            self.default_project_data, project_root=self.project_dir
+        )
+        self.assertEqual(project.query_comment.comment, "run by user test")
+        self.assertEqual(project.query_comment.append, False)
 
     def test_packages_from_dependencies(self):
         packages = {
@@ -586,3 +614,22 @@ class TestGetRequiredVersion:
             match="The package version requirement can never be satisfied",
         ):
             _get_required_version(project_dict=project_dict, verify_version=True)
+
+
+class TestDeprecations:
+
+    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
+    def test_jsonschema_validate(self) -> None:
+        from dbt.jsonschemas import jsonschema_validate
+
+        project_dict: Dict[str, Any] = {}
+
+        event_catcher = EventCatcher(GenericJSONSchemaValidationDeprecation)
+        get_event_manager().add_callback(event_catcher.catch)
+
+        jsonschema_validate(
+            schema=project_schema(), json=project_dict, file_path="dbt_project.yml"
+        )
+
+        assert len(event_catcher.caught_events) == 1
+        assert "'name' is a required property at top level" in event_catcher.caught_events[0].info.msg  # type: ignore

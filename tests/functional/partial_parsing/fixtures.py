@@ -1288,3 +1288,29 @@ sources_tests1_sql = """
 
 
 """
+
+macros_sql = """
+{% macro foo() %}
+    foo
+{% endmacro %}
+
+{% macro bar() %}
+    bar
+{% endmacro %}
+"""
+
+macros_schema1_yml = """
+macros:
+  - name: foo
+    description: Lorem.
+  - name: bar
+    description: Lorem.
+"""
+
+macros_schema2_yml = """
+macros:
+  - name: foo
+    description: Lorem.
+  - name: bar
+    description: Lorem ipsum.
+"""

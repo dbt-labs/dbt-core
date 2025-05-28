@@ -595,6 +595,14 @@ single_threaded = click.option(
     hidden=True,
 )
 
+show_all_deprecations = click.option(
+    "--show-all-deprecations/--no-show-all-deprecations",
+    envvar=None,
+    help="By default, each type of a deprecation warning is only shown once. Use this flag to show all deprecation warning instances.",
+    is_flag=True,
+    default=False,
+)
+
 skip_profile_setup = click.option(
     "--skip-profile-setup",
     "-s",
@@ -750,8 +758,8 @@ warn_error_options = click.option(
     "--warn-error-options",
     envvar="DBT_WARN_ERROR_OPTIONS",
     default="{}",
-    help="""If dbt would normally warn, instead raise an exception based on include/exclude configuration. Examples include --select that selects nothing, deprecations, configurations with no associated models, invalid test configurations,
-    and missing sources/refs in tests. This argument should be a YAML string, with keys 'include' or 'exclude'. eg. '{"include": "all", "exclude": ["NoNodesForSelectionCriteria"]}'""",
+    help="""If dbt would normally warn, instead raise an exception based on error/warn configuration. Examples include --select that selects nothing, deprecations, configurations with no associated models, invalid test configurations,
+    and missing sources/refs in tests. This argument should be a YAML string, with keys 'error' or 'warn'. eg. '{"error": "all", "warn": ["NoNodesForSelectionCriteria"]}'""",
     type=WarnErrorOptionsType(),
 )
 
@@ -760,4 +768,11 @@ write_json = click.option(
     envvar="DBT_WRITE_JSON",
     help="Whether or not to write the manifest.json and run_results.json files to the target directory",
     default=True,
+)
+
+upload_artifacts = click.option(
+    "--upload-to-artifacts-ingest-api/--no-upload-to-artifacts-ingest-api",
+    envvar="DBT_UPLOAD_TO_ARTIFACTS_INGEST_API",
+    help="Whether or not to upload the artifacts to the dbt Cloud API",
+    default=False,
 )

@@ -50,7 +50,7 @@ RUN curl -LO https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_V
     && tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
     && rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
 
-RUN pip3 install -U tox wheel six setuptools
+RUN pip3 install -U tox wheel six setuptools pre-commit
 
 # These args are passed in via docker-compose, which reads then from the .env file.
 # On Linux, run `make .env` to create the .env file for the current user.

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix seed path for partial parsing if project directory name changes
+time: 2025-04-28T14:15:28.720582-06:00
+custom:
+    Author: aranke
+    Issue: "11550"

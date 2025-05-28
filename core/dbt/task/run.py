@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import functools
-import os
 import threading
 import time
 from copy import deepcopy
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple, Type
 
 from dbt import tracking, utils
@@ -50,6 +49,7 @@ from dbt.task import group_lookup
 from dbt.task.base import BaseRunner
 from dbt.task.compile import CompileRunner, CompileTask
 from dbt.task.printer import get_counts, print_run_end_messages
+from dbt.utils.artifact_upload import add_artifact_produced
 from dbt_common.clients.jinja import MacroProtocol
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.base_types import EventLevel
@@ -430,6 +430,20 @@ class MicrobatchBatchRunner(ModelRunner):
         self.print_result_line(result=result)
         return result
 
+    def error_result(self, node, message, start_time, timing_info):
+        """Necessary to return a result with a batch result
+
+        Called by `BaseRunner.safe_run` when an error occurs
+        """
+        return self._build_run_result(
+            node=node,
+            start_time=start_time,
+            status=RunStatus.Error,
+            timing_info=timing_info,
+            message=message,
+            batch_results=BatchResults(failed=[self.batches[self.batch_idx]]),
+        )
+
     def compile(self, manifest: Manifest):
         batch = self.batches[self.batch_idx]
 
@@ -698,9 +712,7 @@ class MicrobatchModelRunner(ModelRunner):
         event_time_end = getattr(self.config.args, "EVENT_TIME_END", None)
 
         # If we're in sample mode, alter start/end to sample values
-        if os.environ.get("DBT_EXPERIMENTAL_SAMPLE_MODE") and getattr(
-            self.config.args, "SAMPLE", None
-        ):
+        if getattr(self.config.args, "SAMPLE", None) is not None:
             event_time_start = self.config.args.sample.start
             event_time_end = self.config.args.sample.end
 
@@ -965,7 +977,9 @@ class RunTask(CompileTask):
                             adapter, hook, hook.index, num_hooks, extra_context
                         )
 
-                    started_at = timing[0].started_at or datetime.utcnow()
+                    started_at = timing[0].started_at or datetime.now(timezone.utc).replace(
+                        tzinfo=None
+                    )
                     hook.update_event_status(
                         started_at=started_at.isoformat(), node_status=RunningStatus.Started
                     )
@@ -982,7 +996,9 @@ class RunTask(CompileTask):
                     with collect_timing_info("execute", timing.append):
                         status, message = get_execution_status(sql, adapter)
 
-                    finished_at = timing[1].completed_at or datetime.utcnow()
+                    finished_at = timing[1].completed_at or datetime.now(timezone.utc).replace(
+                        tzinfo=None
+                    )
                     hook.update_event_status(finished_at=finished_at.isoformat())
                     execution_time = (finished_at - started_at).total_seconds()
                     failures = 0 if status == RunStatus.Success else 1
@@ -1090,11 +1106,12 @@ class RunTask(CompileTask):
             run_result = self.get_result(
                 results=self.node_results,
                 elapsed_time=time.time() - self.started_at,
-                generated_at=datetime.utcnow(),
+                generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
             )
 
             if self.args.write_json and hasattr(run_result, "write"):
                 run_result.write(self.result_path())
+                add_artifact_produced(self.result_path())
 
             print_run_end_messages(self.node_results, keyboard_interrupt=True)
 

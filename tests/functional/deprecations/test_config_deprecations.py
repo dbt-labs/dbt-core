@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import pytest
 
 from dbt import deprecations
@@ -30,14 +32,13 @@ class TestTestsConfigDeprecation:
 
     def test_project_tests_config(self, project):
         deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
         run_dbt(["parse"])
-        expected = set()
-        assert expected == deprecations.active_deprecations
+        assert deprecations.active_deprecations == defaultdict(int)
 
     def test_project_tests_config_fail(self, project):
         deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
         with pytest.raises(CompilationError) as exc:
             run_dbt(["--warn-error", "--no-partial-parse", "parse"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
@@ -60,14 +61,13 @@ class TestSchemaTestDeprecation:
 
     def test_generic_tests_config(self, project):
         deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
         run_dbt(["parse"])
-        expected = set()
-        assert expected == deprecations.active_deprecations
+        assert deprecations.active_deprecations == defaultdict(int)
 
     def test_generic_tests_fail(self, project):
         deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
         run_dbt(["--warn-error", "--no-partial-parse", "parse"])
 
     def test_generic_data_test_parsing(self, project):
@@ -92,10 +92,9 @@ class TestSourceSchemaTestDeprecation:
 
     def test_source_tests_config(self, project):
         deprecations.reset_deprecations()
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
         run_dbt(["parse"])
-        expected = set()
-        assert expected == deprecations.active_deprecations
+        assert deprecations.active_deprecations == defaultdict(int)
 
     def test_generic_data_tests(self, project):
         run_dbt(["seed"])

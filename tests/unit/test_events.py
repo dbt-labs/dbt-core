@@ -159,6 +159,16 @@ sample_values = [
     core_types.MFTimespineWithoutYamlConfigurationDeprecation(),
     core_types.MFCumulativeTypeParamsDeprecation(),
     core_types.MicrobatchMacroOutsideOfBatchesDeprecation(),
+    core_types.GenericJSONSchemaValidationDeprecation(violation="", key_path="", file=""),
+    core_types.UnexpectedJinjaBlockDeprecation(msg="", file=""),
+    core_types.DuplicateYAMLKeysDeprecation(duplicate_description="", file=""),
+    core_types.CustomTopLevelKeyDeprecation(msg="", file=""),
+    core_types.CustomKeyInConfigDeprecation(key="", key_path="", file=""),
+    core_types.CustomKeyInObjectDeprecation(key="", key_path="", file=""),
+    core_types.DeprecationsSummary(summaries=[], show_all_hint=True),
+    core_types.CustomOutputPathInSourceFreshnessDeprecation(path=""),
+    core_types.PropertyMovedToConfigDeprecation(key="", key_path="", file=""),
+    core_types.WEOIncludeExcludeDeprecation(found_include=True, found_exclude=True),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),
@@ -290,6 +300,7 @@ sample_values = [
     core_types.SemanticValidationFailure(msg=""),
     core_types.MicrobatchModelNoEventTimeInputs(model_name=""),
     core_types.InvalidConcurrentBatchesConfig(num_models=1, adapter_type=""),
+    core_types.InvalidMacroAnnotation(msg="", macro_file_path="", macro_unique_id=""),
     # M - Deps generation ======================
     core_types.GitSparseCheckoutSubdirectory(subdir=""),
     core_types.GitProgressCheckoutRevision(revision=""),
@@ -488,6 +499,9 @@ sample_values = [
     core_types.ListCmdOut(),
     types.Note(msg="This is a note."),
     core_types.ResourceReport(),
+    core_types.ArtifactUploadSuccess(),
+    core_types.ArtifactUploadError(),
+    core_types.ArtifactUploadSkipped(),
 ]
 
 

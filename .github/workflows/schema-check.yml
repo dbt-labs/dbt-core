@@ -37,7 +37,7 @@ env:
 jobs:
   checking-schemas:
     name: "Post-merge schema changes required"
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_LATEST }}
 
     steps:
       - name: Set up Python

@@ -17,16 +17,8 @@ from tests.functional.exposures.fixtures import (
 )
 
 
-class ExposureConfigTests:
-    @pytest.fixture(scope="class", autouse=True)
-    def setUp(self):
-        pytest.expected_config = ExposureConfig(
-            enabled=True,
-        )
-
-
 # Test enabled config for exposure in dbt_project.yml
-class TestExposureEnabledConfigProjectLevel(ExposureConfigTests):
+class TestExposureEnabledConfigProjectLevel:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -71,7 +63,7 @@ class TestExposureEnabledConfigProjectLevel(ExposureConfigTests):
 
 
 # Test disabled config at exposure level in yml file
-class TestConfigYamlLevel(ExposureConfigTests):
+class TestConfigYamlLevel:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -88,7 +80,7 @@ class TestConfigYamlLevel(ExposureConfigTests):
 
 
 # Test inheritence - set configs at project and exposure level - expect exposure level to win
-class TestExposureConfigsInheritence(ExposureConfigTests):
+class TestExposureConfigsInheritence:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -99,9 +91,27 @@ class TestExposureConfigsInheritence(ExposureConfigTests):
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
-        return {"exposures": {"enabled": False}}
+        return {
+            "exposures": {
+                "enabled": False,
+                "tags": ["global_tag", "common_tag"],
+                "meta": {
+                    "some_key": "should_be_overridden",
+                    "another_key": "should_stay",
+                    "type_change": ["foo", "bar"],
+                },
+            }
+        }
 
-    def test_exposure_all_configs(self, project):
+    @pytest.fixture(scope="class")
+    def expected_config(self):
+        return ExposureConfig(
+            enabled=True,
+            tags=["common_tag", "global_tag", "local_tag"],
+            meta={"some_key": "some_value", "another_key": "should_stay", "type_change": 123},
+        )
+
+    def test_exposure_all_configs(self, project, expected_config):
         run_dbt(["parse"])
         manifest = get_manifest(project.project_root)
         # This should be overridden
@@ -109,14 +119,18 @@ class TestExposureConfigsInheritence(ExposureConfigTests):
         # This should stay disabled
         assert "exposure.test.notebook_exposure" not in manifest.exposures
 
-        config_test_table = manifest.exposures.get("exposure.test.simple_exposure").config
+        exposure = manifest.exposures.get("exposure.test.simple_exposure")
+        assert exposure.tags == expected_config.tags
+        assert exposure.meta == expected_config.meta
 
-        assert isinstance(config_test_table, ExposureConfig)
-        assert config_test_table == pytest.expected_config
+        assert isinstance(exposure.config, ExposureConfig)
+        assert exposure.config.enabled == expected_config.enabled
+        assert exposure.config.tags == expected_config.tags
+        assert exposure.config.meta == expected_config.meta
 
 
 # Test invalid config triggers error
-class TestInvalidConfig(ExposureConfigTests):
+class TestInvalidConfig:
     @pytest.fixture(scope="class")
     def models(self):
         return {

@@ -8,14 +8,7 @@ The event module provides types that represent what is happening in dbt in `even
 When events are processed via `fire_event`, nearly everything is logged. Whether or not the user has enabled the debug flag, all debug messages are still logged to the file. However, some events are particularly time consuming to construct because they return a huge amount of data. Today, the only messages in this category are cache events and are only logged if the `--log-cache-events` flag is on. This is important because these messages should not be created unless they are going to be logged, because they cause a noticable performance degredation. These events use a "fire_event_if" functions.
 
 # Adding a New Event
-* Add a new message in `core_types.proto`, and a second message with the same name + "Msg". The "Msg" message should have two fields, an "info" field of EventInfo, and a "data" field referring to the message name without "Msg"
-* run the protoc compiler to update core_types_pb2.py:   make core_proto_types
-* Add a wrapping class in core/dbt/event/core_types.py with a Level superclass  plus code and message methods
-* Add the class to tests/unit/test_events.py
-
-We have switched from using betterproto to using google protobuf, because of a lack of support for Struct fields in betterproto.
-
-The google protobuf interface is janky and very much non-Pythonic. The "generated" classes in types_pb2.py do not resemble regular Python classes. They do not have normal constructors; they can only be constructed empty. They can be "filled" by setting fields individually or using a json_format method like ParseDict.  We have wrapped the logging events with a class (in types.py) which allows using a constructor -- keywords only, no positional parameters.
+All protos have been moved into the central protos repository. To edit an event proto, edit https://github.com/dbt-labs/proto-python-public or open an issue on that repository.
 
 ## Required for Every Event
 

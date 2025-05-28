@@ -1,0 +1,6 @@
+kind: Features
+body: Create a singular deprecations summary event
+time: 2025-04-24T15:33:27.252763-05:00
+custom:
+  Author: QMalcolm
+  Issue: "11536"

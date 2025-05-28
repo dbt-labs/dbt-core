@@ -2,7 +2,7 @@ import os
 import time
 from abc import abstractmethod
 from concurrent.futures import as_completed
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import AbstractSet, Dict, Iterable, List, Optional, Set, Tuple, Type, Union
 
@@ -21,6 +21,7 @@ from dbt.artifacts.schemas.results import (
 from dbt.artifacts.schemas.run import RunExecutionResult, RunResult
 from dbt.cli.flags import Flags
 from dbt.config.runtime import RuntimeConfig
+from dbt.constants import RUN_RESULTS_FILE_NAME
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import Exposure, ResultNode
 from dbt.contracts.state import PreviousState
@@ -52,14 +53,13 @@ from dbt.parser.manifest import write_manifest
 from dbt.task import group_lookup
 from dbt.task.base import BaseRunner, ConfiguredTask
 from dbt.task.printer import print_run_end_messages, print_run_result_error
+from dbt.utils.artifact_upload import add_artifact_produced
 from dbt_common.context import _INVOCATION_CONTEXT_VAR, get_invocation_context
 from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.contextvars import log_contextvars, task_contextvars
 from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.events.types import Formatting
 from dbt_common.exceptions import NotImplementedError
-
-RESULT_FILE_NAME = "run_results.json"
 
 
 class GraphRunnableMode(StrEnum):
@@ -200,7 +200,7 @@ class GraphRunnableTask(ConfiguredTask):
         raise NotImplementedError("Not Implemented")
 
     def result_path(self) -> str:
-        return os.path.join(self.config.project_target_path, RESULT_FILE_NAME)
+        return os.path.join(self.config.project_target_path, RUN_RESULTS_FILE_NAME)
 
     def get_runner(self, node) -> BaseRunner:
         adapter = get_adapter(self.config)
@@ -225,7 +225,8 @@ class GraphRunnableTask(ConfiguredTask):
     def call_runner(self, runner: BaseRunner) -> RunResult:
         with log_contextvars(node_info=runner.node.node_info):
             runner.node.update_event_status(
-                started_at=datetime.utcnow().isoformat(), node_status=RunningStatus.Started
+                started_at=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+                node_status=RunningStatus.Started,
             )
             fire_event(
                 NodeStart(
@@ -432,11 +433,12 @@ class GraphRunnableTask(ConfiguredTask):
             run_result = self.get_result(
                 results=self.node_results,
                 elapsed_time=time.time() - self.started_at,
-                generated_at=datetime.utcnow(),
+                generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
             )
 
             if self.args.write_json and hasattr(run_result, "write"):
                 run_result.write(self.result_path())
+                add_artifact_produced(self.result_path())
                 fire_event(
                     ArtifactWritten(
                         artifact_type=run_result.__class__.__name__,
@@ -564,7 +566,9 @@ class GraphRunnableTask(ConfiguredTask):
             elapsed = time.time() - self.started_at
             self.print_results_line(self.node_results, elapsed)
             result = self.get_result(
-                results=self.node_results, elapsed_time=elapsed, generated_at=datetime.utcnow()
+                results=self.node_results,
+                elapsed_time=elapsed,
+                generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
             )
 
         return result
@@ -587,7 +591,7 @@ class GraphRunnableTask(ConfiguredTask):
                 warn_or_error(NothingToDo())
                 result = self.get_result(
                     results=[],
-                    generated_at=datetime.utcnow(),
+                    generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
                     elapsed_time=0.0,
                 )
             else:
@@ -610,6 +614,7 @@ class GraphRunnableTask(ConfiguredTask):
             write_manifest(self.manifest, self.config.project_target_path)
             if hasattr(result, "write"):
                 result.write(self.result_path())
+                add_artifact_produced(self.result_path())
                 fire_event(
                     ArtifactWritten(
                         artifact_type=result.__class__.__name__, artifact_path=self.result_path()

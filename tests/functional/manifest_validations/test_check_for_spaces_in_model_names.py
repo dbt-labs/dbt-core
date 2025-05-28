@@ -29,6 +29,8 @@ class TestSpacesInModelNamesSadPath:
         }
 
     def tests_warning_when_spaces_in_name(self, project) -> None:
+        config_patch = {"flags": {"require_resource_names_without_spaces": False}}
+        update_config_file(config_patch, project.project_root, "dbt_project.yml")
         event_catcher = EventCatcher(SpacesInResourceNameDeprecation)
         total_catcher = EventCatcher(ResourceNamesWithSpacesDeprecation)
         runner = dbtRunner(callbacks=[event_catcher.catch, total_catcher.catch])
@@ -50,6 +52,8 @@ class TestSpaceInModelNamesWithDebug:
         }
 
     def tests_debug_when_spaces_in_name(self, project) -> None:
+        config_patch = {"flags": {"require_resource_names_without_spaces": False}}
+        update_config_file(config_patch, project.project_root, "dbt_project.yml")
         deprecations.reset_deprecations()
         spaces_check_catcher = EventCatcher(SpacesInResourceNameDeprecation)
         total_catcher = EventCatcher(ResourceNamesWithSpacesDeprecation)
@@ -83,6 +87,8 @@ class TestAllowSpacesInModelNamesFalse:
         }
 
     def test_require_resource_names_without_spaces(self, project):
+        config_patch = {"flags": {"require_resource_names_without_spaces": False}}
+        update_config_file(config_patch, project.project_root, "dbt_project.yml")
         spaces_check_catcher = EventCatcher(SpacesInResourceNameDeprecation)
         runner = dbtRunner(callbacks=[spaces_check_catcher.catch])
         runner.invoke(["parse"])

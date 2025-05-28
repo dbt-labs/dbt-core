@@ -1,0 +1,3745 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DbtPropertiesFile",
+  "type": "object",
+  "properties": {
+    "analyses": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/AnalysesProperties"
+      }
+    },
+    "data_tests": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/TestProperties"
+      }
+    },
+    "exposures": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/ExposuresProperties"
+      }
+    },
+    "groups": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/GroupsProperties"
+      }
+    },
+    "macros": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/MacrosProperties"
+      }
+    },
+    "metrics": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/MetricsProperties"
+      }
+    },
+    "models": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/ModelProperties"
+      }
+    },
+    "saved_queries": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/SavedQueriesProperties"
+      }
+    },
+    "seeds": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/SeedProperties"
+      }
+    },
+    "semantic_models": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/SemanticModelsProperties"
+      }
+    },
+    "snapshots": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/SnapshotProperties"
+      }
+    },
+    "sources": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/SourceProperties"
+      }
+    },
+    "tests": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/TestProperties"
+      }
+    },
+    "unit_tests": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/UnitTestProperties"
+      }
+    },
+    "version": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/FloatOrString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "AcceptedValuesTest": {
+      "type": "object",
+      "required": [
+        "accepted_values"
+      ],
+      "properties": {
+        "accepted_values": true
+      },
+      "additionalProperties": false
+    },
+    "Access": {
+      "type": "string",
+      "enum": [
+        "private",
+        "protected",
+        "public"
+      ]
+    },
+    "AggregationTypeParams": {
+      "type": "object",
+      "properties": {
+        "percentile": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "use_approximate_percentile": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "use_discrete_percentile": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "AnalysesColumns": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "data_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "AnalysesConfig": {
+      "type": "object",
+      "properties": {
+        "docs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DocsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "AnalysesProperties": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "columns": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/AnalysesColumns"
+          }
+        },
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AnalysesConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "AnyValue": true,
+    "BigqueryClusterConfig": {
+      "description": "dbt-core allows either of the variants for the `cluster_by` to allow cluster on a single column or on multiple columns",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "BigqueryPartitionConfig": {
+      "description": "reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/relation_configs/_partition.py#L12-L13",
+      "type": "object",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RangeConfig"
+        },
+        {
+          "$ref": "#/definitions/TimeConfig"
+        }
+      ],
+      "required": [
+        "field"
+      ],
+      "properties": {
+        "copy_partitions": {
+          "default": false,
+          "type": "boolean"
+        },
+        "data_type": {
+          "default": "date",
+          "type": "string"
+        },
+        "field": {
+          "type": "string"
+        },
+        "time_ingestion_partitioning": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "BigqueryPartitionConfigLegacy": {
+      "description": "dbt-core allows either of the variants for the `partition_by` in the model config but the bigquery-adapter throws RunTime error the behaviors are tested from the latest dbt-core + bigquery-adapter as this is written we're conformant to this behavior via here and via the `validate` method",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "$ref": "#/definitions/BigqueryPartitionConfig"
+        }
+      ]
+    },
+    "BooleanOrJinjaString": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "boolean"
+        }
+      ]
+    },
+    "ColumnConfig": {
+      "type": "object",
+      "properties": {
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ColumnProperties": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ColumnConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "constraints": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": true
+        },
+        "data_tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
+        },
+        "data_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "granularity": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ColumnPropertiesGranularity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "policy_tags": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "quote": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BooleanOrJinjaString"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ColumnPropertiesGranularity": {
+      "type": "string",
+      "enum": [
+        "nanosecond",
+        "microsecond",
+        "millisecond",
+        "second",
+        "minute",
+        "hour",
+        "day",
+        "week",
+        "month",
+        "quarter",
+        "year"
+      ]
+    },
+    "ConstantPropertyInput": {
+      "type": "object",
+      "required": [
+        "base_property",
+        "conversion_property"
+      ],
+      "properties": {
+        "base_property": {
+          "type": "string"
+        },
+        "conversion_property": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Constraint": {
+      "description": "Constraints (model level or column level)",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "columns": {
+          "description": "model-level only",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "expression": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "to": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "to_columns": {
+          "description": "Only ForeignKey constraints accept: a list columns in that table containing the corresponding primary or unique key.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "type": {
+          "$ref": "#/definitions/ConstraintType"
+        },
+        "warn_unsupported": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ConstraintType": {
+      "type": "string",
+      "enum": [
+        "not_null",
+        "unique",
+        "primary_key",
+        "foreign_key",
+        "check",
+        "custom"
+      ]
+    },
+    "ConversionCalculationType": {
+      "type": "string",
+      "enum": [
+        "conversions",
+        "conversion_rate"
+      ]
+    },
+    "ConversionTypeParams": {
+      "type": "object",
+      "required": [
+        "base_measure",
+        "calculation",
+        "conversion_measure",
+        "entity"
+      ],
+      "properties": {
+        "base_measure": {
+          "$ref": "#/definitions/MetricInputMeasure"
+        },
+        "calculation": {
+          "$ref": "#/definitions/ConversionCalculationType"
+        },
+        "constant_properties": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/ConstantPropertyInput"
+          }
+        },
+        "conversion_measure": {
+          "$ref": "#/definitions/MetricInputMeasure"
+        },
+        "entity": {
+          "type": "string"
+        },
+        "window": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/MetricTimeWindow"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "CumulativeTypeParams": {
+      "type": "object",
+      "required": [
+        "period_agg"
+      ],
+      "properties": {
+        "grain_to_date": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "period_agg": {
+          "$ref": "#/definitions/PeriodAggregationType"
+        },
+        "window": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/MetricTimeWindow"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "CustomGranularity": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "column_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DataTests": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/definitions/UniqueTest"
+        },
+        {
+          "$ref": "#/definitions/NotNullTest"
+        },
+        {
+          "$ref": "#/definitions/RelationshipsTest"
+        },
+        {
+          "$ref": "#/definitions/AcceptedValuesTest"
+        },
+        true
+      ]
+    },
+    "DbtContract": {
+      "type": "object",
+      "properties": {
+        "alias_types": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "checksum": true,
+        "enforced": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DbtQuoting": {
+      "type": "object",
+      "properties": {
+        "database": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "identifier": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "schema": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Dimension": {
+      "type": "object",
+      "required": [
+        "name",
+        "type"
+      ],
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DimensionConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expr": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "is_partition": {
+          "default": false,
+          "type": "boolean"
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "metadata": true,
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/DimensionType"
+        },
+        "type_params": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DimensionTypeParams"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DimensionConfig": {
+      "type": "object",
+      "required": [
+        "meta"
+      ],
+      "properties": {
+        "meta": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "DimensionType": {
+      "type": "string",
+      "enum": [
+        "categorical",
+        "time"
+      ]
+    },
+    "DimensionTypeParams": {
+      "type": "object",
+      "properties": {
+        "time_granularity": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TimeGranularity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "validity_params": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DimensionValidityParams"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DimensionValidityParams": {
+      "type": "object",
+      "properties": {
+        "is_end": {
+          "default": false,
+          "type": "boolean"
+        },
+        "is_start": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DocsConfig": {
+      "type": "object",
+      "properties": {
+        "node_color": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "show": {
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Entity": {
+      "type": "object",
+      "required": [
+        "config",
+        "name",
+        "type"
+      ],
+      "properties": {
+        "config": {
+          "$ref": "#/definitions/EntityConfig"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expr": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/EntityExpr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/EntityType"
+        }
+      },
+      "additionalProperties": false
+    },
+    "EntityConfig": {
+      "type": "object",
+      "properties": {
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "EntityExpr": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "boolean"
+        }
+      ]
+    },
+    "EntityType": {
+      "type": "string",
+      "enum": [
+        "PRIMARY",
+        "UNIQUE",
+        "FOREIGN",
+        "NATURAL",
+        "primary",
+        "unique",
+        "foreign",
+        "natural"
+      ]
+    },
+    "Expect": {
+      "type": "object",
+      "properties": {
+        "fixture": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "format": {
+          "default": "dict",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Formats"
+            }
+          ]
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Rows"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Export": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ExportConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ExportConfig": {
+      "type": "object",
+      "properties": {
+        "alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "export_as": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ExportConfigExportAs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ExportConfigExportAs": {
+      "type": "string",
+      "enum": [
+        "table",
+        "view",
+        "cache"
+      ]
+    },
+    "ExposurePropertiesConfigs": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ExposuresOwner": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ExposuresProperties": {
+      "type": "object",
+      "required": [
+        "name",
+        "owner",
+        "type"
+      ],
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ExposurePropertiesConfigs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "depends_on": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "maturity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "$ref": "#/definitions/ExposuresOwner"
+        },
+        "type": {
+          "type": "string"
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "FloatOrString": {
+      "anyOf": [
+        {
+          "type": "number",
+          "format": "float"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "Formats": {
+      "type": "string",
+      "enum": [
+        "dict",
+        "csv",
+        "sql"
+      ]
+    },
+    "FreshnessDefinition": {
+      "type": "object",
+      "properties": {
+        "error_after": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessRules"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "filter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "warn_after": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessRules"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "FreshnessPeriod": {
+      "type": "string",
+      "enum": [
+        "minute",
+        "hour",
+        "day"
+      ]
+    },
+    "FreshnessRules": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "period": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessPeriod"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Given": {
+      "type": "object",
+      "required": [
+        "input"
+      ],
+      "properties": {
+        "fixture": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "format": {
+          "default": "dict",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Formats"
+            }
+          ]
+        },
+        "input": {
+          "type": "string"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Rows"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "GrantAccessToTarget": {
+      "type": "object",
+      "properties": {
+        "dataset": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "project": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "GroupsConfig": {
+      "type": "object",
+      "properties": {
+        "meta": true
+      },
+      "additionalProperties": false
+    },
+    "GroupsOwner": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "GroupsProperties": {
+      "type": "object",
+      "required": [
+        "name",
+        "owner"
+      ],
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/GroupsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "$ref": "#/definitions/GroupsOwner"
+        }
+      },
+      "additionalProperties": false
+    },
+    "HookConfig": {
+      "type": "object",
+      "properties": {
+        "sql": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "transaction": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Hooks": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "$ref": "#/definitions/HookConfig"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HookConfig"
+          }
+        }
+      ]
+    },
+    "MacrosArguments": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "MacrosProperties": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "arguments": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/MacrosArguments"
+          }
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "docs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DocsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Measure": {
+      "type": "object",
+      "required": [
+        "agg",
+        "name"
+      ],
+      "properties": {
+        "agg": {
+          "$ref": "#/definitions/MeasureAgg"
+        },
+        "agg_params": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AggregationTypeParams"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "agg_time_dimension": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "config": true,
+        "create_metric": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "create_metric_display_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expr": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/_MeasureExpr"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "non_additive_dimension": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/NonAdditiveDimension"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "MeasureAgg": {
+      "type": "string",
+      "enum": [
+        "SUM",
+        "MIN",
+        "MAX",
+        "AVERAGE",
+        "COUNT_DISTINCT",
+        "SUM_BOOLEAN",
+        "COUNT",
+        "PERCENTILE",
+        "MEDIAN",
+        "sum",
+        "min",
+        "max",
+        "average",
+        "count_distinct",
+        "sum_boolean",
+        "count",
+        "percentile",
+        "median"
+      ]
+    },
+    "MetricInput": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "filter": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WhereFilterIntersection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "offset_to_grain": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "offset_window": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/MetricTimeWindow"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "MetricInputMeasure": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fill_nulls_with": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "filter": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WhereFilterIntersection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "join_to_timepine": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "MetricTimeWindow": {
+      "type": "object",
+      "required": [
+        "count",
+        "granularity"
+      ],
+      "properties": {
+        "count": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "granularity": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "MetricType": {
+      "type": "string",
+      "enum": [
+        "simple",
+        "ratio",
+        "cumulative",
+        "derived",
+        "conversion"
+      ]
+    },
+    "MetricTypeParams": {
+      "type": "object",
+      "properties": {
+        "conversion_type_params": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ConversionTypeParams"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cumulative_type_params": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CumulativeTypeParams"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "denominator": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/MetricInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expr": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "input_measures": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MetricInputMeasure"
+          }
+        },
+        "measure": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrMetricInputMeasure"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metrics": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/MetricInput"
+          }
+        },
+        "numerator": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/MetricInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "window": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/MetricTimeWindow"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "MetricsProperties": {
+      "type": "object",
+      "required": [
+        "label",
+        "name",
+        "type",
+        "type_params"
+      ],
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/MetricsPropertiesConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "filter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "time_granularity": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TimeGranularity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "$ref": "#/definitions/MetricType"
+        },
+        "type_params": {
+          "$ref": "#/definitions/MetricTypeParams"
+        }
+      },
+      "additionalProperties": false
+    },
+    "MetricsPropertiesConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ModelFreshness": {
+      "type": "object",
+      "properties": {
+        "build_after": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessRules"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ModelProperties": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "columns": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/ColumnProperties"
+          }
+        },
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ModelPropertiesConfigs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "constraints": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Constraint"
+          }
+        },
+        "data_tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
+        },
+        "deprecation_date": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "identifier": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "latest_version": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FloatOrString"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
+        },
+        "time_spine": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ModelsTimeSpine"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "versions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Versions"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ModelPropertiesConfigs": {
+      "type": "object",
+      "properties": {
+        "access": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Access"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "auto_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "automatic_clustering": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "backup": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "base_location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "base_location_subpath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "batch_size": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "begin": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cluster_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryClusterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "concurrent_batches": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "contract": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtContract"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "copy_grants": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "database": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "docs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DocsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "event_time": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "external_volume": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "freshness": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ModelFreshness"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "full_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "grant_access_to": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/GrantAccessToTarget"
+          }
+        },
+        "grants": true,
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hours_to_expiration": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "include_full_name_in_path": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "incremental_strategy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "initialize": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kms_key_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "labels": true,
+        "location": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lookback": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "materialized": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "meta": true,
+        "on_configuration_change": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "on_schema_change": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "partition_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryPartitionConfigLegacy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "persist_docs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PersistDocsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "post_hook": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Hooks"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pre_hook": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Hooks"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "query_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "refresh_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "schema": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "secure": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "snowflake_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sql_header": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "table_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target_lag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tblproperties": true,
+        "tmp_relation_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unique_key": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ModelsTimeSpine": {
+      "type": "object",
+      "required": [
+        "standard_granularity_column"
+      ],
+      "properties": {
+        "custom_granularities": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/CustomGranularity"
+          }
+        },
+        "standard_granularity_column": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "NonAdditiveDimension": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "window_choice": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/NonAdditiveDimensionWindowChoice"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "window_groupings": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "NonAdditiveDimensionWindowChoice": {
+      "type": "string",
+      "enum": [
+        "MIN",
+        "MAX",
+        "min",
+        "max"
+      ]
+    },
+    "NotNullTest": {
+      "type": "object",
+      "required": [
+        "not_null"
+      ],
+      "properties": {
+        "not_null": true
+      },
+      "additionalProperties": false
+    },
+    "PeriodAggregationType": {
+      "type": "string",
+      "enum": [
+        "first",
+        "last",
+        "average"
+      ]
+    },
+    "PersistDocsConfig": {
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "relation": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Range": {
+      "type": "object",
+      "required": [
+        "end",
+        "interval",
+        "start"
+      ],
+      "properties": {
+        "end": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "interval": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "start": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "RangeConfig": {
+      "type": "object",
+      "required": [
+        "range"
+      ],
+      "properties": {
+        "range": {
+          "$ref": "#/definitions/Range"
+        }
+      },
+      "additionalProperties": false
+    },
+    "RelationshipsTest": {
+      "type": "object",
+      "required": [
+        "relationships"
+      ],
+      "properties": {
+        "relationships": true
+      },
+      "additionalProperties": false
+    },
+    "Rows": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      ]
+    },
+    "SavedQueriesConfig": {
+      "type": "object",
+      "properties": {
+        "cache": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SavedQueriesConfigCache"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "meta": true
+      },
+      "additionalProperties": false
+    },
+    "SavedQueriesConfigCache": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "SavedQueriesProperties": {
+      "type": "object",
+      "required": [
+        "name",
+        "query_params"
+      ],
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SavedQueriesConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exports": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Export"
+          }
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "query_params": {
+          "$ref": "#/definitions/SavedQueriesQueryParams"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SavedQueriesQueryParams": {
+      "type": "object",
+      "properties": {
+        "dimensions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "group_by": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "metrics": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "where": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "SeedProperties": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "columns": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/ColumnProperties"
+          }
+        },
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SeedsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "data_tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "SeedsConfig": {
+      "type": "object",
+      "properties": {
+        "alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "column_types": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "copy_grants": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "database": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "delimiter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "docs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DocsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "event_time": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "full_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "grants": true,
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "persist_docs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PersistDocsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "post_hook": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Hooks"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pre_hook": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Hooks"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quote_columns": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "schema": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "SemanticModelConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "SemanticModelsDefaults": {
+      "type": "object",
+      "properties": {
+        "agg_time_dimension": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "SemanticModelsProperties": {
+      "type": "object",
+      "required": [
+        "model",
+        "name"
+      ],
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SemanticModelConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defaults": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SemanticModelsDefaults"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dimensions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Dimension"
+          }
+        },
+        "entities": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Entity"
+          }
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "measures": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Measure"
+          }
+        },
+        "model": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "primary_entity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "SnapshotProperties": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "columns": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/ColumnProperties"
+          }
+        },
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SnapshotsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "data_tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "relation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "SnapshotsConfig": {
+      "type": "object",
+      "properties": {
+        "alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "check_cols": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "database": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dbt_valid_to_current": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "docs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DocsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "event_time": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "grants": true,
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hard_deletes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "invalidate_hard_deletes": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "persist_docs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PersistDocsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "post-hook": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Hooks"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pre-hook": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Hooks"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quote_columns": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "schema": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "snapshot_meta_column_names": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SnapshotsConfigSnapshotMetaColumnNames"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "strategy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unique_key": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updated_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "SnapshotsConfigSnapshotMetaColumnNames": {
+      "type": "object",
+      "properties": {
+        "dbt_is_deleted": {
+          "default": "DBT_IS_DELETED",
+          "type": "string"
+        },
+        "dbt_scd_id": {
+          "default": "DBT_SCD_ID",
+          "type": "string"
+        },
+        "dbt_updated_at": {
+          "default": "DBT_UPDATED_AT",
+          "type": "string"
+        },
+        "dbt_valid_from": {
+          "default": "DBT_VALID_FROM",
+          "type": "string"
+        },
+        "dbt_valid_to": {
+          "default": "DBT_VALID_TO",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SourceProperties": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SourcePropertiesConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "database": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loaded_at_field": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loaded_at_query": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loader": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "overrides": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "quoting": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtQuoting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tables": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Tables"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "SourcePropertiesConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "event_time": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "freshness": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessDefinition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "StringOrArrayOfStrings": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "StringOrMetricInputMeasure": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/definitions/MetricInputMeasure"
+        }
+      ]
+    },
+    "Tables": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "columns": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/ColumnProperties"
+          }
+        },
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TablesConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "data_tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "external": true,
+        "identifier": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loaded_at_field": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loaded_at_query": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loader": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "quoting": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtQuoting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "TablesConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "event_time": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "freshness": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessDefinition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "TestProperties": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TestPropertiesConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "TestPropertiesConfig": {
+      "type": "object",
+      "properties": {
+        "alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "database": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "error_if": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fail_calc": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limit": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "meta": true,
+        "quoting": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtQuoting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "severity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "store_failures": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "warn_if": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "TimeConfig": {
+      "type": "object",
+      "properties": {
+        "granularity": {
+          "default": "day",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "TimeGranularity": {
+      "type": "string",
+      "enum": [
+        "nanosecond",
+        "microsecond",
+        "millisecond",
+        "second",
+        "minute",
+        "hour",
+        "day",
+        "week",
+        "month",
+        "quarter",
+        "year"
+      ]
+    },
+    "UniqueTest": {
+      "type": "object",
+      "required": [
+        "unique"
+      ],
+      "properties": {
+        "unique": true
+      },
+      "additionalProperties": false
+    },
+    "UnitTestOverrides": {
+      "type": "object",
+      "properties": {
+        "env_vars": true,
+        "macros": true,
+        "vars": true
+      },
+      "additionalProperties": false
+    },
+    "UnitTestProperties": {
+      "type": "object",
+      "required": [
+        "expect",
+        "model",
+        "name"
+      ],
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/UnitTestPropertiesConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expect": {
+          "$ref": "#/definitions/Expect"
+        },
+        "given": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Given"
+          }
+        },
+        "model": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "overrides": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/UnitTestOverrides"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "versions": true
+      },
+      "additionalProperties": false
+    },
+    "UnitTestPropertiesConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "meta": true,
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Versions": {
+      "type": "object",
+      "required": [
+        "v"
+      ],
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AnyValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "v": true
+      },
+      "additionalProperties": false
+    },
+    "WhereFilter": {
+      "type": "object",
+      "required": [
+        "where_sql_template"
+      ],
+      "properties": {
+        "where_sql_template": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "WhereFilterIntersection": {
+      "type": "object",
+      "required": [
+        "where_filters"
+      ],
+      "properties": {
+        "where_filters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WhereFilter"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "_MeasureExpr": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer",
+          "format": "int32"
+        },
+        {
+          "type": "boolean"
+        }
+      ]
+    }
+  }
+}

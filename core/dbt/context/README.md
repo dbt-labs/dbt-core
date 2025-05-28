@@ -1,6 +1,6 @@
 # Contexts and Jinja rendering
 
-Contexts are used for Jinja rendering. They include context methods, executable macros, and various settings that are available in Jinja.
+Contexts are used for Jinja rendering. They include context methods, executable macros, and various settings that are available in Jinja. Refer to [YAML tips and tricks}(https://docs.getdbt.com/docs/build/dbt-tips#yaml-tips) for more information.
 
 The most common entrypoint to Jinja rendering in dbt is a method named `get_rendered`, which takes two arguments: templated code (string), and a context used to render it (dictionary).
 

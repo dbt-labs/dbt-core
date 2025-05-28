@@ -129,6 +129,7 @@ def global_flags(func):
     @p.record_timing_info
     @p.send_anonymous_usage_stats
     @p.single_threaded
+    @p.show_all_deprecations
     @p.state
     @p.static_parser
     @p.target
@@ -141,6 +142,7 @@ def global_flags(func):
     @p.warn_error_options
     @p.write_json
     @p.use_fast_test_edges
+    @p.upload_artifacts
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
@@ -191,6 +193,7 @@ def cli(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def build(ctx, **kwargs):
@@ -566,6 +569,7 @@ def parse(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def run(ctx, **kwargs):

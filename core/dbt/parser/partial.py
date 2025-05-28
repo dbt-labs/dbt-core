@@ -920,10 +920,14 @@ class PartialParsing:
         if macro["name"] in schema_file.macro_patches:
             macro_unique_id = schema_file.macro_patches[macro["name"]]
             del schema_file.macro_patches[macro["name"]]
+        # Need to delete all macros in the same file
+        # and then reapply all schema file updates for those macros
         if macro_unique_id and macro_unique_id in self.saved_manifest.macros:
             macro = self.saved_manifest.macros.pop(macro_unique_id)
             macro_file_id = macro.file_id
             if macro_file_id in self.new_files:
+                source_file = self.saved_files[macro_file_id]
+                self.delete_macro_file(source_file)
                 self.saved_files[macro_file_id] = deepcopy(self.new_files[macro_file_id])
                 self.add_to_pp_files(self.saved_files[macro_file_id])
 
