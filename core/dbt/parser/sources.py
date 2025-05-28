@@ -136,7 +136,30 @@ class SourcePatcher:
         else:
             loaded_at_field = source.loaded_at_field  # may be None, that's okay
 
-        freshness = merge_freshness(source.freshness, table.freshness)
+        try:
+            project_freshness = FreshnessThreshold.from_dict(
+                self.root_project.sources.get("+freshness", {})
+            )
+        except ValueError:
+            fire_event(
+                FreshnessConfigProblem(
+                    msg="Could not validate `freshness` for `sources` in 'dbt_project.yml', ignoring. Please see https://docs.getdbt.com/docs/build/sources#source-data-freshness for more information.",
+                )
+            )
+            project_freshness = None
+
+        source_freshness = source.freshness
+        source_config_freshness = FreshnessThreshold.from_dict(source.config.get("freshness", {}))
+        table_freshness = table.freshness
+        table_config_freshness = FreshnessThreshold.from_dict(table.config.get("freshness", {}))
+        freshness = merge_freshness(
+            project_freshness,
+            source_freshness,
+            source_config_freshness,
+            table_freshness,
+            table_config_freshness,
+        )
+
         quoting = source.quoting.merged(table.quoting)
         # path = block.path.original_file_path
         table_meta = table.meta or {}
@@ -366,19 +389,36 @@ def merge_freshness_time_thresholds(
         return update or base
 
 
-def merge_freshness(
-    base: Optional[FreshnessThreshold], update: Optional[FreshnessThreshold]
-) -> Optional[FreshnessThreshold]:
-    if base is not None and update is not None:
-        merged_freshness = base.merged(update)
-        # merge one level deeper the error_after and warn_after thresholds
-        merged_error_after = merge_freshness_time_thresholds(base.error_after, update.error_after)
-        merged_warn_after = merge_freshness_time_thresholds(base.warn_after, update.warn_after)
-
-        merged_freshness.error_after = merged_error_after
-        merged_freshness.warn_after = merged_warn_after
-        return merged_freshness
-    elif base is None and update is not None:
-        return update
-    else:
+def merge_freshness(*thresholds: Optional[FreshnessThreshold]) -> Optional[FreshnessThreshold]:
+    if not thresholds:
         return None
+
+    # Initialize with the first threshold.
+    # If the first threshold is None, current_merged_value will be None,
+    # and subsequent merges will correctly follow the original logic.
+    current_merged_value: Optional[FreshnessThreshold] = thresholds[0]
+
+    # Iterate through the rest of the thresholds, applying the original pairwise logic
+    for i in range(1, len(thresholds)):
+        base = current_merged_value
+        update = thresholds[i]
+
+        if base is not None and update is not None:
+            merged_freshness_obj = base.merged(update)
+            # merge one level deeper the error_after and warn_after thresholds
+            merged_error_after = merge_freshness_time_thresholds(
+                base.error_after, update.error_after
+            )
+            merged_warn_after = merge_freshness_time_thresholds(base.warn_after, update.warn_after)
+
+            merged_freshness_obj.error_after = merged_error_after
+            merged_freshness_obj.warn_after = merged_warn_after
+            current_merged_value = merged_freshness_obj
+        elif base is None and update is not None:
+            # If current_merged_value (base) is None, the update becomes the new value
+            current_merged_value = update
+        else:  # This covers cases where 'update' is None, or both 'base' and 'update' are None.
+            # Following original logic, if 'update' is None, the result of the pair-merge is None.
+            current_merged_value = None
+
+    return current_merged_value

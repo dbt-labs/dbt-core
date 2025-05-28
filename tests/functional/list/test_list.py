@@ -489,6 +489,7 @@ class TestList:
                 "config": {
                     "enabled": True,
                     "event_time": None,
+                    "freshness": None,
                 },
                 "unique_id": "source.test.my_source.my_table",
                 "original_file_path": normalize("models/schema.yml"),
