@@ -158,8 +158,14 @@ class SourcePatcher:
                 loaded_at_query = source.loaded_at_query
 
         try:
-            project_freshness = FreshnessThreshold.from_dict(
-                self.root_project.sources.get("+freshness", {})
+            # TODO: I think this only handles a top level `+freshness` key in a project config, not if it's nested under a path?
+            raw_project_freshness = self.root_project.sources.get(
+                "+freshness", {}
+            )  # Will only be None if the user explicitly set it to null
+            project_freshness = (
+                FreshnessThreshold.from_dict(raw_project_freshness)
+                if raw_project_freshness is not None
+                else None
             )
         except ValueError:
             fire_event(
@@ -179,7 +185,14 @@ class SourcePatcher:
             )
             self._deprecations.add((target.path, source.name))
 
-        source_config_freshness = FreshnessThreshold.from_dict(source.config.get("freshness", {}))
+        source_config_freshness_raw: Optional[Dict] = source.config.get(
+            "freshness", {}
+        )  # Will only be None if the user explicitly set it to null
+        source_config_freshness: Optional[FreshnessThreshold] = (
+            FreshnessThreshold.from_dict(source_config_freshness_raw)
+            if source_config_freshness_raw is not None
+            else None
+        )
 
         table_freshness = table.freshness
         if table_freshness and (target.path, table.name) not in self._deprecations:
@@ -191,7 +204,15 @@ class SourcePatcher:
             )
             self._deprecations.add((target.path, table.name))
 
-        table_config_freshness = FreshnessThreshold.from_dict(table.config.get("freshness", {}))
+        table_config_freshness_raw: Optional[Dict] = table.config.get(
+            "freshness", {}
+        )  # Will only be None if the user explicitly set it to null
+        table_config_freshness: Optional[FreshnessThreshold] = (
+            FreshnessThreshold.from_dict(table_config_freshness_raw)
+            if table_config_freshness_raw is not None
+            else None
+        )
+
         freshness = merge_source_freshness(
             project_freshness,
             source_freshness,
