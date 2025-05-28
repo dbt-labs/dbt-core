@@ -1,6 +1,0 @@
-kind: Features
-body: Begin emitting deprecation events for custom properties found in objects
-time: 2025-04-18T10:42:10.048839-07:00
-custom:
-  Author: QMalcolm
-  Issue: "11336"

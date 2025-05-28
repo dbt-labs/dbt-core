@@ -1,6 +1,0 @@
-kind: Features
-body: Add doc_blocks to manifest for nodes and columns
-time: 2025-01-22T17:03:28.866522Z
-custom:
-    Author: aranke
-    Issue: 11000 11001

@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Add node_checksum to node_info on structured logs
-time: 2025-03-07T10:17:58.375007-05:00
-custom:
-  Author: michelleark
-  Issue: "11372"
