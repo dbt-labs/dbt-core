@@ -1,6 +1,0 @@
-kind: Fixes
-body: require count and period on model freshness.build_after
-time: 2025-05-26T21:19:29.542858-04:00
-custom:
-  Author: michelleark
-  Issue: "11669"
