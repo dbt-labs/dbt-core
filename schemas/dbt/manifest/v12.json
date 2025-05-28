@@ -588,6 +588,31 @@
                       ],
                       "default": null
                     },
+                    "config": {
+                      "type": "object",
+                      "title": "ColumnConfig",
+                      "properties": {
+                        "_extra": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": true
+                    },
                     "tags": {
                       "type": "array",
                       "items": {
@@ -1633,6 +1658,31 @@
                       ],
                       "default": null
                     },
+                    "config": {
+                      "type": "object",
+                      "title": "ColumnConfig",
+                      "properties": {
+                        "_extra": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": true
+                    },
                     "tags": {
                       "type": "array",
                       "items": {
@@ -2286,6 +2336,31 @@
                         }
                       ],
                       "default": null
+                    },
+                    "config": {
+                      "type": "object",
+                      "title": "ColumnConfig",
+                      "properties": {
+                        "_extra": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": true
                     },
                     "tags": {
                       "type": "array",
@@ -3080,6 +3155,31 @@
                         }
                       ],
                       "default": null
+                    },
+                    "config": {
+                      "type": "object",
+                      "title": "ColumnConfig",
+                      "properties": {
+                        "_extra": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": true
                     },
                     "tags": {
                       "type": "array",
@@ -3893,6 +3993,31 @@
                         }
                       ],
                       "default": null
+                    },
+                    "config": {
+                      "type": "object",
+                      "title": "ColumnConfig",
+                      "properties": {
+                        "_extra": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": true
                     },
                     "tags": {
                       "type": "array",
@@ -5261,6 +5386,31 @@
                       ],
                       "default": null
                     },
+                    "config": {
+                      "type": "object",
+                      "title": "ColumnConfig",
+                      "properties": {
+                        "_extra": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": true
+                    },
                     "tags": {
                       "type": "array",
                       "items": {
@@ -5914,6 +6064,31 @@
                         }
                       ],
                       "default": null
+                    },
+                    "config": {
+                      "type": "object",
+                      "title": "ColumnConfig",
+                      "properties": {
+                        "_extra": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": true
                     },
                     "tags": {
                       "type": "array",
@@ -6903,6 +7078,31 @@
                         }
                       ],
                       "default": null
+                    },
+                    "config": {
+                      "type": "object",
+                      "title": "ColumnConfig",
+                      "properties": {
+                        "_extra": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": true
                     },
                     "tags": {
                       "type": "array",
@@ -8085,6 +8285,31 @@
                     }
                   ],
                   "default": null
+                },
+                "config": {
+                  "type": "object",
+                  "title": "ColumnConfig",
+                  "properties": {
+                    "_extra": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "additionalProperties": true
                 },
                 "tags": {
                   "type": "array",
@@ -10623,6 +10848,31 @@
                             ],
                             "default": null
                           },
+                          "config": {
+                            "type": "object",
+                            "title": "ColumnConfig",
+                            "properties": {
+                              "_extra": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": true
+                          },
                           "tags": {
                             "type": "array",
                             "items": {
@@ -11668,6 +11918,31 @@
                             ],
                             "default": null
                           },
+                          "config": {
+                            "type": "object",
+                            "title": "ColumnConfig",
+                            "properties": {
+                              "_extra": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": true
+                          },
                           "tags": {
                             "type": "array",
                             "items": {
@@ -12321,6 +12596,31 @@
                               }
                             ],
                             "default": null
+                          },
+                          "config": {
+                            "type": "object",
+                            "title": "ColumnConfig",
+                            "properties": {
+                              "_extra": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": true
                           },
                           "tags": {
                             "type": "array",
@@ -13115,6 +13415,31 @@
                               }
                             ],
                             "default": null
+                          },
+                          "config": {
+                            "type": "object",
+                            "title": "ColumnConfig",
+                            "properties": {
+                              "_extra": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": true
                           },
                           "tags": {
                             "type": "array",
@@ -13928,6 +14253,31 @@
                               }
                             ],
                             "default": null
+                          },
+                          "config": {
+                            "type": "object",
+                            "title": "ColumnConfig",
+                            "properties": {
+                              "_extra": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": true
                           },
                           "tags": {
                             "type": "array",
@@ -15296,6 +15646,31 @@
                             ],
                             "default": null
                           },
+                          "config": {
+                            "type": "object",
+                            "title": "ColumnConfig",
+                            "properties": {
+                              "_extra": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": true
+                          },
                           "tags": {
                             "type": "array",
                             "items": {
@@ -15949,6 +16324,31 @@
                               }
                             ],
                             "default": null
+                          },
+                          "config": {
+                            "type": "object",
+                            "title": "ColumnConfig",
+                            "properties": {
+                              "_extra": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": true
                           },
                           "tags": {
                             "type": "array",
@@ -16938,6 +17338,31 @@
                               }
                             ],
                             "default": null
+                          },
+                          "config": {
+                            "type": "object",
+                            "title": "ColumnConfig",
+                            "properties": {
+                              "_extra": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": true
                           },
                           "tags": {
                             "type": "array",
@@ -18111,6 +18536,31 @@
                               }
                             ],
                             "default": null
+                          },
+                          "config": {
+                            "type": "object",
+                            "title": "ColumnConfig",
+                            "properties": {
+                              "_extra": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": true
                           },
                           "tags": {
                             "type": "array",
