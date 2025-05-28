@@ -137,7 +137,7 @@ models:
   - name: stg_orders
     config:
       freshness:
-	      # Fusion-powered state-aware orchestration: build this model after 4 hours, as long as it has new data
+        # Fusion-powered state-aware orchestration: build this model after 4 hours, as long as it has new data
         build_after: {count: 4, period: hour}
         
         # Future: check that model has successfully updated within expected SLA, warn/error owner otherwise
