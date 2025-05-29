@@ -1,6 +1,0 @@
-kind: Fixes
-body: Add tags and meta config to exposures
-time: 2025-05-08T14:25:42.489888+01:00
-custom:
-    Author: aranke
-    Issue: "11428"

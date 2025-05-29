@@ -1,6 +1,0 @@
-kind: Features
-body: Calculate source freshness via a SQL query
-time: 2024-12-17T17:16:31.841076-08:00
-custom:
-  Author: ChenyuLInx
-  Issue: "8797"
