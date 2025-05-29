@@ -323,6 +323,8 @@ models:
       freshness:
         build_after:
             updates_on: all
+            period: hour
+            count: 0
 """
 
 

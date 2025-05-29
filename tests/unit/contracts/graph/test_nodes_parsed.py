@@ -317,6 +317,7 @@ def complex_parsed_model_dict():
                 "tags": [],
                 "constraints": [],
                 "doc_blocks": [],
+                "config": {"meta": {}, "tags": []},
             },
         },
         "checksum": {
@@ -637,6 +638,7 @@ def complex_parsed_seed_dict():
                 "tags": [],
                 "constraints": [],
                 "doc_blocks": [],
+                "config": {"meta": {}, "tags": []},
             }
         },
         "meta": {"foo": 1000},
@@ -933,6 +935,10 @@ def complex_parsed_hook_dict():
                 "tags": [],
                 "constraints": [],
                 "doc_blocks": [],
+                "config": {
+                    "meta": {},
+                    "tags": [],
+                },
             },
         },
         "index": 13,
@@ -1169,6 +1175,7 @@ def complex_parsed_schema_test_dict():
                 "tags": [],
                 "constraints": [],
                 "doc_blocks": [],
+                "config": {"meta": {}, "tags": []},
             },
         },
         "column_name": "id",

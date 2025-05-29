@@ -23,14 +23,14 @@ class ModelFreshnessUpdatesOnOptions(enum.Enum):
 
 @dataclass
 class ModelBuildAfter(ExtensibleDbtClassMixin):
+    count: int
+    period: TimePeriod
     updates_on: ModelFreshnessUpdatesOnOptions = ModelFreshnessUpdatesOnOptions.any
-    count: int = 0
-    period: TimePeriod = TimePeriod.hour
 
 
 @dataclass
 class ModelFreshness(ExtensibleDbtClassMixin, Mergeable):
-    build_after: ModelBuildAfter = field(default_factory=ModelBuildAfter)
+    build_after: ModelBuildAfter
 
 
 def merge_model_freshness(*thresholds: Optional[ModelFreshness]) -> Optional[ModelFreshness]:
