@@ -54,6 +54,7 @@ class SourcePatcher:
         self.generic_test_parsers: Dict[str, SchemaGenericTestParser] = {}
         self.patches_used: Dict[SourceKey, Set[str]] = {}
         self.sources: Dict[str, SourceDefinition] = {}
+        self._deprecations: Set[Any] = set()
 
     # This method calls the 'parse_source' method which takes
     # the UnpatchedSourceDefinitions in the manifest and combines them
@@ -169,24 +170,26 @@ class SourcePatcher:
             project_freshness = None
 
         source_freshness = source.freshness
-        if source_freshness:
+        if source_freshness and (target.path, source.name) not in self._deprecations:
             deprecations.warn(
                 "property-moved-to-config-deprecation",
                 key="freshness",
                 file=target.path,
                 key_path=source.name,
             )
+            self._deprecations.add((target.path, source.name))
 
         source_config_freshness = FreshnessThreshold.from_dict(source.config.get("freshness", {}))
 
         table_freshness = table.freshness
-        if table_freshness:
+        if table_freshness and (target.path, table.name) not in self._deprecations:
             deprecations.warn(
                 "property-moved-to-config-deprecation",
                 key="freshness",
                 file=target.path,
                 key_path=table.name,
             )
+            self._deprecations.add((target.path, table.name))
 
         table_config_freshness = FreshnessThreshold.from_dict(table.config.get("freshness", {}))
         freshness = merge_source_freshness(
