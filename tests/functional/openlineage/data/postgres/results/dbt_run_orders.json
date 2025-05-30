@@ -1,0 +1,1010 @@
+[
+  {
+    "eventTime":"{{ .* }}",
+    "producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL":"https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run":{
+      "runId":"{{ .* }}",
+      "facets":{
+        "dbt_version":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job":{
+      "namespace":"dbt",
+      "name":"dbt-run--project=jaffle_shop--profile=test--select=orders",
+      "facets":{
+        "jobType":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "processingType":"BATCH",
+          "integration":"DBT",
+          "jobType":"JOB"
+        }
+      }
+    },
+    "eventType":"START",
+    "inputs":[ ],
+    "outputs":[ ]
+  },
+  {
+    "eventTime":"{{ .* }}",
+    "producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL":"https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run":{
+      "runId":"{{ .* }}",
+      "facets":{
+        "parent":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run":{
+            "runId":"{{ .* }}"
+          },
+          "job":{
+            "namespace":"dbt",
+            "name":"dbt-run--project=jaffle_shop--profile=test--select=orders"
+          }
+        },
+        "dbt_version":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job":{
+      "namespace":"dbt",
+      "name":"model.jaffle_shop.orders",
+      "facets":{
+        "jobType":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "processingType":"BATCH",
+          "integration":"DBT",
+          "jobType":"MODEL"
+        }
+      }
+    },
+    "eventType":"START",
+    "inputs":[
+      {
+        "namespace":"postgres://localhost:5432",
+        "name":"jaffle_shop.staging.stg_orders",
+        "facets":{
+          "dataSource":{
+            "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/DatasourceDatasetFacet.json#/$defs/DatasourceDatasetFacet",
+            "name":"postgres://localhost:5432",
+            "uri":"postgres://localhost:5432"
+          },
+          "schema":{
+            "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/SchemaDatasetFacet.json#/$defs/SchemaDatasetFacet",
+            "fields":[
+              {
+                "name":"order_id",
+                "type":"integer",
+                "description":"",
+                "fields":[ ]
+              },
+              {
+                "name":"status",
+                "type":"string",
+                "description":"",
+                "fields":[ ]
+              }
+            ]
+          },
+          "documentation":{
+            "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/DocumentationDatasetFacet.json#/$defs/DocumentationDatasetFacet",
+            "description":""
+          }
+        }
+      },
+      {
+        "namespace":"postgres://localhost:5432",
+        "name":"jaffle_shop.staging.stg_payments",
+        "facets":{
+          "dataSource":{
+            "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/DatasourceDatasetFacet.json#/$defs/DatasourceDatasetFacet",
+            "name":"postgres://localhost:5432",
+            "uri":"postgres://localhost:5432"
+          },
+          "schema":{
+            "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/SchemaDatasetFacet.json#/$defs/SchemaDatasetFacet",
+            "fields":[
+              {
+                "name":"payment_id",
+                "type":"integer",
+                "description":"",
+                "fields":[ ]
+              },
+              {
+                "name":"payment_method",
+                "type":"string",
+                "description":"",
+                "fields":[ ]
+              }
+            ]
+          },
+          "documentation":{
+            "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/DocumentationDatasetFacet.json#/$defs/DocumentationDatasetFacet",
+            "description":""
+          }
+        }
+      }
+    ],
+    "outputs":[
+      {
+        "namespace":"postgres://localhost:5432",
+        "name":"jaffle_shop.orders",
+        "facets":{
+          "dataSource":{
+            "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/DatasourceDatasetFacet.json#/$defs/DatasourceDatasetFacet",
+            "name":"postgres://localhost:5432",
+            "uri":"postgres://localhost:5432"
+          },
+          "schema":{
+            "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL":"https://openlineage.io/spec/facets/1-1-1/SchemaDatasetFacet.json#/$defs/SchemaDatasetFacet",
+            "fields":[
+              {
+                "name":"order_id",
+                "type":"integer",
+                "description":"This is a unique identifier for an order",
+                "fields":[ ]
+              },
+              {
+                "name":"customer_id",
+                "type":"integer",
+                "description":"Foreign key to the customers table",
+                "fields":[ ]
+              },
+              {
+                "name":"order_date",
+                "type":"date",
+                "description":"Date (UTC) that the order was placed",
+                "fields":[ ]
+              },
+              {
+                "name":"status",
+                "type":"string",
+                "description":"Orders can be one of the following statuses:\n\n| status         | description                                                                                                            |\n|----------------|------------------------------------------------------------------------------------------------------------------------|\n| placed         | The order has been placed but has not yet left the warehouse                                                           |\n| shipped        | The order has ben shipped to the customer and is currently in transit                                                  |\n| completed      | The order has been received by the customer                                                                            |\n| return_pending | The customer has indicated that they would like to return the order, but it has not yet been received at the warehouse |\n| returned       | The order has been returned by the customer and received at the warehouse                                              |",
+                "fields":[ ]
+              },
+              {
+                "name":"amount",
+                "type":"float",
+                "description":"Total amount (AUD) of the order",
+                "fields":[ ]
+              },
+              {
+                "name":"credit_card_amount",
+                "type":"float",
+                "description":"Amount of the order (AUD) paid for by credit card",
+                "fields":[ ]
+              },
+              {
+                "name":"coupon_amount",
+                "type":"float",
+                "description":"Amount of the order (AUD) paid for by coupon",
+                "fields":[ ]
+              },
+              {
+                "name":"bank_transfer_amount",
+                "type":"float",
+                "description":"Amount of the order (AUD) paid for by bank transfer",
+                "fields":[ ]
+              },
+              {
+                "name":"gift_card_amount",
+                "type":"float",
+                "description":"Amount of the order (AUD) paid for by gift card",
+                "fields":[ ]
+              }
+            ]
+          },
+          "documentation":{
+            "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/DocumentationDatasetFacet.json#/$defs/DocumentationDatasetFacet",
+            "description":"This table has basic information about orders, as well as some derived facts based on payments"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "eventTime":"{{ .* }}",
+    "producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL":"https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run":{
+      "runId":"{{ .* }}",
+      "facets":{
+        "parent":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run":{
+            "runId":"{{ .* }}"
+          },
+          "job":{
+            "namespace":"dbt",
+            "name":"model.jaffle_shop.orders"
+          }
+        },
+        "dbt_version":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job":{
+      "namespace":"dbt",
+      "name":"model.jaffle_shop.orders.sql#1",
+      "facets":{
+        "jobType":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "processingType":"BATCH",
+          "integration":"DBT",
+          "jobType":"SQL"
+        },
+        "sql":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/SQLJobFacet.json#/$defs/SQLJobFacet",
+          "query":"BEGIN"
+        }
+      }
+    },
+    "eventType":"START",
+    "inputs":[ ],
+    "outputs":[ ]
+  },
+  {
+    "eventTime":"{{ .* }}",
+    "producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL":"https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run":{
+      "runId":"{{ .* }}",
+      "facets":{
+        "parent":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run":{
+            "runId":"{{ .* }}"
+          },
+          "job":{
+            "namespace":"dbt",
+            "name":"model.jaffle_shop.orders"
+          }
+        },
+        "dbt_version":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job":{
+      "namespace":"dbt",
+      "name":"model.jaffle_shop.orders.sql#1",
+      "facets":{
+        "jobType":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "processingType":"BATCH",
+          "integration":"DBT",
+          "jobType":"SQL"
+        },
+        "sql":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/SQLJobFacet.json#/$defs/SQLJobFacet",
+          "query":"BEGIN"
+        }
+      }
+    },
+    "eventType":"COMPLETE",
+    "inputs":[ ],
+    "outputs":[ ]
+  },
+  {
+    "eventTime":"{{ .* }}",
+    "producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL":"https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run":{
+      "runId":"{{ .* }}",
+      "facets":{
+        "parent":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run":{
+            "runId":"{{ .* }}"
+          },
+          "job":{
+            "namespace":"dbt",
+            "name":"model.jaffle_shop.orders"
+          }
+        },
+        "dbt_version":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job":{
+      "namespace":"dbt",
+      "name":"model.jaffle_shop.orders.sql#2",
+      "facets":{
+        "jobType":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "processingType":"BATCH",
+          "integration":"DBT",
+          "jobType":"SQL"
+        },
+        "sql":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/SQLJobFacet.json#/$defs/SQLJobFacet",
+          "query":"/* {\"app\": \"dbt\", \"dbt_version\": \"{{ .* }}\", \"profile_name\": \"test\", \"target_name\": \"default\", \"node_id\": \"model.jaffle_shop.orders\"} */\n\n  \n    \n\n  create  table \"dbt\".\"{{ .* }}_openlineage_project\".\"orders__dbt_tmp\"\n  \n  \n    as\n  \n  (\n    \n\nwith orders as (\n\n    select * from \"dbt\".\"{{ .* }}_openlineage_project\".\"stg_orders\"\n\n),\n\npayments as (\n\n    select * from \"dbt\".\"{{ .* }}_openlineage_project\".\"stg_payments\"\n\n),\n\norder_payments as (\n\n    select\n        order_id,\n\n        sum(case when payment_method = 'credit_card' then amount else 0 end) as credit_card_amount,\n        sum(case when payment_method = 'coupon' then amount else 0 end) as coupon_amount,\n        sum(case when payment_method = 'bank_transfer' then amount else 0 end) as bank_transfer_amount,\n        sum(case when payment_method = 'gift_card' then amount else 0 end) as gift_card_amount,\n        sum(amount) as total_amount\n\n    from payments\n\n    group by order_id\n\n),\n\nfinal as (\n\n    select\n        orders.order_id,\n        orders.customer_id,\n        orders.order_date,\n        orders.status,\n\n        order_payments.credit_card_amount,\n\n        order_payments.coupon_amount,\n\n        order_payments.bank_transfer_amount,\n\n        order_payments.gift_card_amount,\n\n        order_payments.total_amount as amount\n\n    from orders\n\n\n    left join order_payments\n        on orders.order_id = order_payments.order_id\n\n)\n\nselect * from final\n  );\n  "
+        }
+      }
+    },
+    "eventType":"START",
+    "inputs":[ ],
+    "outputs":[ ]
+  },
+  {
+    "eventTime":"{{ .* }}",
+    "producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL":"https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run":{
+      "runId":"{{ .* }}",
+      "facets":{
+        "parent":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run":{
+            "runId":"{{ .* }}"
+          },
+          "job":{
+            "namespace":"dbt",
+            "name":"model.jaffle_shop.orders"
+          }
+        },
+        "dbt_version":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job":{
+      "namespace":"dbt",
+      "name":"model.jaffle_shop.orders.sql#2",
+      "facets":{
+        "jobType":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "processingType":"BATCH",
+          "integration":"DBT",
+          "jobType":"SQL"
+        },
+        "sql":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/SQLJobFacet.json#/$defs/SQLJobFacet",
+          "query":"/* {\"app\": \"dbt\", \"dbt_version\": \"{{ .* }}\", \"profile_name\": \"test\", \"target_name\": \"default\", \"node_id\": \"model.jaffle_shop.orders\"} */\n\n  \n    \n\n  create  table \"dbt\".\"{{ .* }}_openlineage_project\".\"orders__dbt_tmp\"\n  \n  \n    as\n  \n  (\n    \n\nwith orders as (\n\n    select * from \"dbt\".\"{{ .* }}_openlineage_project\".\"stg_orders\"\n\n),\n\npayments as (\n\n    select * from \"dbt\".\"{{ .* }}_openlineage_project\".\"stg_payments\"\n\n),\n\norder_payments as (\n\n    select\n        order_id,\n\n        sum(case when payment_method = 'credit_card' then amount else 0 end) as credit_card_amount,\n        sum(case when payment_method = 'coupon' then amount else 0 end) as coupon_amount,\n        sum(case when payment_method = 'bank_transfer' then amount else 0 end) as bank_transfer_amount,\n        sum(case when payment_method = 'gift_card' then amount else 0 end) as gift_card_amount,\n        sum(amount) as total_amount\n\n    from payments\n\n    group by order_id\n\n),\n\nfinal as (\n\n    select\n        orders.order_id,\n        orders.customer_id,\n        orders.order_date,\n        orders.status,\n\n        order_payments.credit_card_amount,\n\n        order_payments.coupon_amount,\n\n        order_payments.bank_transfer_amount,\n\n        order_payments.gift_card_amount,\n\n        order_payments.total_amount as amount\n\n    from orders\n\n\n    left join order_payments\n        on orders.order_id = order_payments.order_id\n\n)\n\nselect * from final\n  );\n  "
+        }
+      }
+    },
+    "eventType":"COMPLETE",
+    "inputs":[ ],
+    "outputs":[ ]
+  },
+  {
+    "eventTime":"{{ .* }}",
+    "producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL":"https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run":{
+      "runId":"{{ .* }}",
+      "facets":{
+        "parent":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run":{
+            "runId":"{{ .* }}"
+          },
+          "job":{
+            "namespace":"dbt",
+            "name":"model.jaffle_shop.orders"
+          }
+        },
+        "dbt_version":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job":{
+      "namespace":"dbt",
+      "name":"model.jaffle_shop.orders.sql#3",
+      "facets":{
+        "jobType":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "processingType":"BATCH",
+          "integration":"DBT",
+          "jobType":"SQL"
+        },
+        "sql":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/SQLJobFacet.json#/$defs/SQLJobFacet",
+          "query":"/* {\"app\": \"dbt\", \"dbt_version\": \"{{ .* }}\", \"profile_name\": \"test\", \"target_name\": \"default\", \"node_id\": \"model.jaffle_shop.orders\"} */\nalter table \"dbt\".\"{{ .* }}_openlineage_project\".\"orders\" rename to \"orders__dbt_backup\""
+        }
+      }
+    },
+    "eventType":"START",
+    "inputs":[ ],
+    "outputs":[ ]
+  },
+  {
+    "eventTime":"{{ .* }}",
+    "producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL":"https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run":{
+      "runId":"{{ .* }}",
+      "facets":{
+        "parent":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run":{
+            "runId":"{{ .* }}"
+          },
+          "job":{
+            "namespace":"dbt",
+            "name":"model.jaffle_shop.orders"
+          }
+        },
+        "dbt_version":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job":{
+      "namespace":"dbt",
+      "name":"model.jaffle_shop.orders.sql#3",
+      "facets":{
+        "jobType":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "processingType":"BATCH",
+          "integration":"DBT",
+          "jobType":"SQL"
+        },
+        "sql":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/SQLJobFacet.json#/$defs/SQLJobFacet",
+          "query":"/* {\"app\": \"dbt\", \"dbt_version\": \"{{ .* }}\", \"profile_name\": \"test\", \"target_name\": \"default\", \"node_id\": \"model.jaffle_shop.orders\"} */\nalter table \"dbt\".\"{{ .* }}_openlineage_project\".\"orders\" rename to \"orders__dbt_backup\""
+        }
+      }
+    },
+    "eventType":"COMPLETE",
+    "inputs":[ ],
+    "outputs":[ ]
+  },
+  {
+    "eventTime":"{{ .* }}",
+    "producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL":"https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run":{
+      "runId":"{{ .* }}",
+      "facets":{
+        "parent":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run":{
+            "runId":"{{ .* }}"
+          },
+          "job":{
+            "namespace":"dbt",
+            "name":"model.jaffle_shop.orders"
+          }
+        },
+        "dbt_version":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job":{
+      "namespace":"dbt",
+      "name":"model.jaffle_shop.orders.sql#4",
+      "facets":{
+        "jobType":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "processingType":"BATCH",
+          "integration":"DBT",
+          "jobType":"SQL"
+        },
+        "sql":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/SQLJobFacet.json#/$defs/SQLJobFacet",
+          "query":"/* {\"app\": \"dbt\", \"dbt_version\": \"{{ .* }}\", \"profile_name\": \"test\", \"target_name\": \"default\", \"node_id\": \"model.jaffle_shop.orders\"} */\nalter table \"dbt\".\"{{ .* }}_openlineage_project\".\"orders__dbt_tmp\" rename to \"orders\""
+        }
+      }
+    },
+    "eventType":"START",
+    "inputs":[ ],
+    "outputs":[ ]
+  },
+  {
+    "eventTime":"{{ .* }}",
+    "producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL":"https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run":{
+      "runId":"{{ .* }}",
+      "facets":{
+        "parent":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run":{
+            "runId":"{{ .* }}"
+          },
+          "job":{
+            "namespace":"dbt",
+            "name":"model.jaffle_shop.orders"
+          }
+        },
+        "dbt_version":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job":{
+      "namespace":"dbt",
+      "name":"model.jaffle_shop.orders.sql#4",
+      "facets":{
+        "jobType":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "processingType":"BATCH",
+          "integration":"DBT",
+          "jobType":"SQL"
+        },
+        "sql":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/SQLJobFacet.json#/$defs/SQLJobFacet",
+          "query":"/* {\"app\": \"dbt\", \"dbt_version\": \"{{ .* }}\", \"profile_name\": \"test\", \"target_name\": \"default\", \"node_id\": \"model.jaffle_shop.orders\"} */\nalter table \"dbt\".\"{{ .* }}_openlineage_project\".\"orders__dbt_tmp\" rename to \"orders\""
+        }
+      }
+    },
+    "eventType":"COMPLETE",
+    "inputs":[ ],
+    "outputs":[ ]
+  },
+  {
+    "eventTime":"{{ .* }}",
+    "producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL":"https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run":{
+      "runId":"{{ .* }}",
+      "facets":{
+        "parent":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run":{
+            "runId":"{{ .* }}"
+          },
+          "job":{
+            "namespace":"dbt",
+            "name":"model.jaffle_shop.orders"
+          }
+        },
+        "dbt_version":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job":{
+      "namespace":"dbt",
+      "name":"model.jaffle_shop.orders.sql#5",
+      "facets":{
+        "jobType":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "processingType":"BATCH",
+          "integration":"DBT",
+          "jobType":"SQL"
+        },
+        "sql":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/SQLJobFacet.json#/$defs/SQLJobFacet",
+          "query":"COMMIT"
+        }
+      }
+    },
+    "eventType":"START",
+    "inputs":[ ],
+    "outputs":[ ]
+  },
+  {
+    "eventTime":"{{ .* }}",
+    "producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL":"https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run":{
+      "runId":"{{ .* }}",
+      "facets":{
+        "parent":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run":{
+            "runId":"{{ .* }}"
+          },
+          "job":{
+            "namespace":"dbt",
+            "name":"model.jaffle_shop.orders"
+          }
+        },
+        "dbt_version":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job":{
+      "namespace":"dbt",
+      "name":"model.jaffle_shop.orders.sql#5",
+      "facets":{
+        "jobType":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "processingType":"BATCH",
+          "integration":"DBT",
+          "jobType":"SQL"
+        },
+        "sql":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/SQLJobFacet.json#/$defs/SQLJobFacet",
+          "query":"COMMIT"
+        }
+      }
+    },
+    "eventType":"COMPLETE",
+    "inputs":[ ],
+    "outputs":[ ]
+  },
+  {
+    "eventTime":"{{ .* }}",
+    "producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL":"https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run":{
+      "runId":"{{ .* }}",
+      "facets":{
+        "parent":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run":{
+            "runId":"{{ .* }}"
+          },
+          "job":{
+            "namespace":"dbt",
+            "name":"model.jaffle_shop.orders"
+          }
+        },
+        "dbt_version":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job":{
+      "namespace":"dbt",
+      "name":"model.jaffle_shop.orders.sql#6",
+      "facets":{
+        "jobType":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "processingType":"BATCH",
+          "integration":"DBT",
+          "jobType":"SQL"
+        },
+        "sql":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/SQLJobFacet.json#/$defs/SQLJobFacet",
+          "query":"/* {\"app\": \"dbt\", \"dbt_version\": \"{{ .* }}\", \"profile_name\": \"test\", \"target_name\": \"default\", \"node_id\": \"model.jaffle_shop.orders\"} */\ndrop table if exists \"dbt\".\"{{ .* }}_openlineage_project\".\"orders__dbt_backup\" cascade"
+        }
+      }
+    },
+    "eventType":"START",
+    "inputs":[ ],
+    "outputs":[ ]
+  },
+  {
+    "eventTime":"{{ .* }}",
+    "producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL":"https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run":{
+      "runId":"{{ .* }}",
+      "facets":{
+        "parent":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run":{
+            "runId":"{{ .* }}"
+          },
+          "job":{
+            "namespace":"dbt",
+            "name":"model.jaffle_shop.orders"
+          }
+        },
+        "dbt_version":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job":{
+      "namespace":"dbt",
+      "name":"model.jaffle_shop.orders.sql#6",
+      "facets":{
+        "jobType":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "processingType":"BATCH",
+          "integration":"DBT",
+          "jobType":"SQL"
+        },
+        "sql":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/SQLJobFacet.json#/$defs/SQLJobFacet",
+          "query":"/* {\"app\": \"dbt\", \"dbt_version\": \"{{ .* }}\", \"profile_name\": \"test\", \"target_name\": \"default\", \"node_id\": \"model.jaffle_shop.orders\"} */\ndrop table if exists \"dbt\".\"{{ .* }}_openlineage_project\".\"orders__dbt_backup\" cascade"
+        }
+      }
+    },
+    "eventType":"COMPLETE",
+    "inputs":[ ],
+    "outputs":[ ]
+  },
+  {
+    "eventTime":"{{ .* }}",
+    "producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL":"https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run":{
+      "runId":"{{ .* }}",
+      "facets":{
+        "parent":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run":{
+            "runId":"{{ .* }}"
+          },
+          "job":{
+            "namespace":"dbt",
+            "name":"dbt-run--project=jaffle_shop--profile=test--select=orders"
+          }
+        },
+        "dbt_version":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job":{
+      "namespace":"dbt",
+      "name":"model.jaffle_shop.orders",
+      "facets":{
+        "jobType":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "processingType":"BATCH",
+          "integration":"DBT",
+          "jobType":"MODEL"
+        }
+      }
+    },
+    "eventType":"COMPLETE",
+    "inputs":[
+      {
+        "namespace":"postgres://localhost:5432",
+        "name":"jaffle_shop.staging.stg_orders",
+        "facets":{
+          "dataSource":{
+            "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/DatasourceDatasetFacet.json#/$defs/DatasourceDatasetFacet",
+            "name":"postgres://localhost:5432",
+            "uri":"postgres://localhost:5432"
+          },
+          "schema":{
+            "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/SchemaDatasetFacet.json#/$defs/SchemaDatasetFacet",
+            "fields":[
+              {
+                "name":"order_id",
+                "type":"integer",
+                "description":"",
+                "fields":[ ]
+              },
+              {
+                "name":"status",
+                "type":"string",
+                "description":"",
+                "fields":[ ]
+              }
+            ]
+          },
+          "documentation":{
+            "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/DocumentationDatasetFacet.json#/$defs/DocumentationDatasetFacet",
+            "description":""
+          }
+        }
+      },
+      {
+        "namespace":"postgres://localhost:5432",
+        "name":"jaffle_shop.staging.stg_payments",
+        "facets":{
+          "dataSource":{
+            "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/DatasourceDatasetFacet.json#/$defs/DatasourceDatasetFacet",
+            "name":"postgres://localhost:5432",
+            "uri":"postgres://localhost:5432"
+          },
+          "schema":{
+            "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/SchemaDatasetFacet.json#/$defs/SchemaDatasetFacet",
+            "fields":[
+              {
+                "name":"payment_id",
+                "type":"integer",
+                "description":"",
+                "fields":[ ]
+              },
+              {
+                "name":"payment_method",
+                "type":"string",
+                "description":"",
+                "fields":[ ]
+              }
+            ]
+          },
+          "documentation":{
+            "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/DocumentationDatasetFacet.json#/$defs/DocumentationDatasetFacet",
+            "description":""
+          }
+        }
+      }
+    ],
+    "outputs":[
+      {
+        "namespace":"postgres://localhost:5432",
+        "name":"jaffle_shop.orders",
+        "facets":{
+          "dataSource":{
+            "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/DatasourceDatasetFacet.json#/$defs/DatasourceDatasetFacet",
+            "name":"postgres://localhost:5432",
+            "uri":"postgres://localhost:5432"
+          },
+          "schema":{
+            "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL":"https://openlineage.io/spec/facets/1-1-1/SchemaDatasetFacet.json#/$defs/SchemaDatasetFacet",
+            "fields":[
+              {
+                "name":"order_id",
+                "type":"integer",
+                "description":"This is a unique identifier for an order",
+                "fields":[ ]
+              },
+              {
+                "name":"customer_id",
+                "type":"integer",
+                "description":"Foreign key to the customers table",
+                "fields":[ ]
+              },
+              {
+                "name":"order_date",
+                "type":"date",
+                "description":"Date (UTC) that the order was placed",
+                "fields":[ ]
+              },
+              {
+                "name":"status",
+                "type":"string",
+                "description":"Orders can be one of the following statuses:\n\n| status         | description                                                                                                            |\n|----------------|------------------------------------------------------------------------------------------------------------------------|\n| placed         | The order has been placed but has not yet left the warehouse                                                           |\n| shipped        | The order has ben shipped to the customer and is currently in transit                                                  |\n| completed      | The order has been received by the customer                                                                            |\n| return_pending | The customer has indicated that they would like to return the order, but it has not yet been received at the warehouse |\n| returned       | The order has been returned by the customer and received at the warehouse                                              |",
+                "fields":[ ]
+              },
+              {
+                "name":"amount",
+                "type":"float",
+                "description":"Total amount (AUD) of the order",
+                "fields":[ ]
+              },
+              {
+                "name":"credit_card_amount",
+                "type":"float",
+                "description":"Amount of the order (AUD) paid for by credit card",
+                "fields":[ ]
+              },
+              {
+                "name":"coupon_amount",
+                "type":"float",
+                "description":"Amount of the order (AUD) paid for by coupon",
+                "fields":[ ]
+              },
+              {
+                "name":"bank_transfer_amount",
+                "type":"float",
+                "description":"Amount of the order (AUD) paid for by bank transfer",
+                "fields":[ ]
+              },
+              {
+                "name":"gift_card_amount",
+                "type":"float",
+                "description":"Amount of the order (AUD) paid for by gift card",
+                "fields":[ ]
+              }
+            ]
+          },
+          "documentation":{
+            "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/DocumentationDatasetFacet.json#/$defs/DocumentationDatasetFacet",
+            "description":"This table has basic information about orders, as well as some derived facts based on payments"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "eventTime":"{{ .* }}",
+    "producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL":"https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run":{
+      "runId":"{{ .* }}",
+      "facets":{
+        "dbt_version":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL":"https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job":{
+      "namespace":"dbt",
+      "name":"dbt-run--project=jaffle_shop--profile=test--select=orders",
+      "facets":{
+        "jobType":{
+          "_producer":"https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL":"https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "processingType":"BATCH",
+          "integration":"DBT",
+          "jobType":"JOB"
+        }
+      }
+    },
+    "eventType":"COMPLETE",
+    "inputs":[ ],
+    "outputs":[ ]
+  }
+]

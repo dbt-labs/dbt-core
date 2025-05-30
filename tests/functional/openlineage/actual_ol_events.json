@@ -1,0 +1,622 @@
+[
+    {
+        "eventTime": "2025-05-30T18:25:18",
+        "producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+        "schemaURL": "https://openlineage.io/spec/2-0-2/OpenLineage.json#/$defs/RunEvent",
+        "run": {
+            "runId": "01972203-1bf6-719d-9e37-eab92e757012",
+            "facets": {
+                "dbt_version": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+                    "version": "1.11.0a1"
+                }
+            }
+        },
+        "job": {
+            "namespace": "dbt",
+            "name": "dbt-run--project=jaffle_shop--profile=test--select=raw_countries",
+            "facets": {
+                "jobType": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+                    "_schemaURL": "https://openlineage.io/spec/facets/2-0-3/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+                    "_deleted": null,
+                    "processingType": "BATCH",
+                    "integration": "DBT",
+                    "jobType": "JOB"
+                }
+            }
+        },
+        "eventType": "START",
+        "inputs": [],
+        "outputs": []
+    },
+    {
+        "eventTime": "2025-05-30T16:25:18.696566",
+        "producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+        "schemaURL": "https://openlineage.io/spec/2-0-2/OpenLineage.json#/$defs/RunEvent",
+        "run": {
+            "runId": "01972203-1c68-70c4-b058-f2738886b55f",
+            "facets": {
+                "parent": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/ParentRunFacet.json#/$defs/ParentRunFacet",
+                    "run": {
+                        "runId": "01972203-1bf6-719d-9e37-eab92e757012"
+                    },
+                    "job": {
+                        "namespace": "dbt",
+                        "name": "dbt-run--project=jaffle_shop--profile=test--select=raw_countries"
+                    }
+                },
+                "dbt_version": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+                    "version": "1.11.0a1"
+                }
+            }
+        },
+        "job": {
+            "namespace": "dbt",
+            "name": "seed.jaffle_shop.raw_countries",
+            "facets": {
+                "jobType": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+                    "_schemaURL": "https://openlineage.io/spec/facets/2-0-3/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+                    "_deleted": null,
+                    "processingType": "BATCH",
+                    "integration": "DBT",
+                    "jobType": "SEED"
+                }
+            }
+        },
+        "eventType": "START",
+        "inputs": [],
+        "outputs": [
+            {
+                "namespace": "postgres://localhost:5432",
+                "name": "jaffle_shop.raw_countries",
+                "facets": {
+                    "dataSource": {
+                        "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                        "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/DatasourceDatasetFacet.json#/$defs/DatasourceDatasetFacet",
+                        "_deleted": null,
+                        "name": "postgres://localhost:5432",
+                        "uri": "postgres://localhost:5432"
+                    },
+                    "schema": {
+                        "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                        "_schemaURL": "https://openlineage.io/spec/facets/1-1-1/SchemaDatasetFacet.json#/$defs/SchemaDatasetFacet",
+                        "_deleted": null,
+                        "fields": [
+                            {
+                                "name": "country_code",
+                                "type": "text",
+                                "description": null,
+                                "fields": []
+                            },
+                            {
+                                "name": "country_name",
+                                "type": "text",
+                                "description": null,
+                                "fields": []
+                            }
+                        ]
+                    },
+                    "documentation": {
+                        "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                        "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/DocumentationDatasetFacet.json#/$defs/DocumentationDatasetFacet",
+                        "_deleted": null,
+                        "description": ""
+                    }
+                }
+            }
+        ]
+    },
+    {
+        "eventTime": "2025-05-30T18:25:18",
+        "producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+        "schemaURL": "https://openlineage.io/spec/2-0-2/OpenLineage.json#/$defs/RunEvent",
+        "run": {
+            "runId": "01972203-1c6d-7f0b-87c1-80077cb57496",
+            "facets": {
+                "parent": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/ParentRunFacet.json#/$defs/ParentRunFacet",
+                    "run": {
+                        "runId": "01972203-1c68-70c4-b058-f2738886b55f"
+                    },
+                    "job": {
+                        "namespace": "dbt",
+                        "name": "seed.jaffle_shop.raw_countries"
+                    }
+                },
+                "dbt_version": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+                    "version": "1.11.0a1"
+                }
+            }
+        },
+        "job": {
+            "namespace": "dbt",
+            "name": "seed.jaffle_shop.raw_countries.sql#1",
+            "facets": {
+                "jobType": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+                    "_schemaURL": "https://openlineage.io/spec/facets/2-0-3/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+                    "_deleted": null,
+                    "processingType": "BATCH",
+                    "integration": "DBT",
+                    "jobType": "SQL"
+                },
+                "sql": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/SQLJobFacet.json#/$defs/SQLJobFacet",
+                    "_deleted": null,
+                    "query": "BEGIN"
+                }
+            }
+        },
+        "eventType": "START",
+        "inputs": [],
+        "outputs": []
+    },
+    {
+        "eventTime": "2025-05-30T18:25:18",
+        "producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+        "schemaURL": "https://openlineage.io/spec/2-0-2/OpenLineage.json#/$defs/RunEvent",
+        "run": {
+            "runId": "01972203-1c6d-7f0b-87c1-80077cb57496",
+            "facets": {
+                "parent": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/ParentRunFacet.json#/$defs/ParentRunFacet",
+                    "run": {
+                        "runId": "01972203-1c68-70c4-b058-f2738886b55f"
+                    },
+                    "job": {
+                        "namespace": "dbt",
+                        "name": "seed.jaffle_shop.raw_countries"
+                    }
+                },
+                "dbt_version": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+                    "version": "1.11.0a1"
+                }
+            }
+        },
+        "job": {
+            "namespace": "dbt",
+            "name": "seed.jaffle_shop.raw_countries.sql#1",
+            "facets": {
+                "jobType": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+                    "_schemaURL": "https://openlineage.io/spec/facets/2-0-3/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+                    "_deleted": null,
+                    "processingType": "BATCH",
+                    "integration": "DBT",
+                    "jobType": "SQL"
+                },
+                "sql": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/SQLJobFacet.json#/$defs/SQLJobFacet",
+                    "_deleted": null,
+                    "query": "BEGIN"
+                }
+            }
+        },
+        "eventType": "COMPLETE",
+        "inputs": [],
+        "outputs": []
+    },
+    {
+        "eventTime": "2025-05-30T18:25:18",
+        "producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+        "schemaURL": "https://openlineage.io/spec/2-0-2/OpenLineage.json#/$defs/RunEvent",
+        "run": {
+            "runId": "01972203-1c7e-7b30-a17f-ff3675b9be39",
+            "facets": {
+                "parent": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/ParentRunFacet.json#/$defs/ParentRunFacet",
+                    "run": {
+                        "runId": "01972203-1c68-70c4-b058-f2738886b55f"
+                    },
+                    "job": {
+                        "namespace": "dbt",
+                        "name": "seed.jaffle_shop.raw_countries"
+                    }
+                },
+                "dbt_version": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+                    "version": "1.11.0a1"
+                }
+            }
+        },
+        "job": {
+            "namespace": "dbt",
+            "name": "seed.jaffle_shop.raw_countries.sql#2",
+            "facets": {
+                "jobType": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+                    "_schemaURL": "https://openlineage.io/spec/facets/2-0-3/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+                    "_deleted": null,
+                    "processingType": "BATCH",
+                    "integration": "DBT",
+                    "jobType": "SQL"
+                },
+                "sql": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/SQLJobFacet.json#/$defs/SQLJobFacet",
+                    "_deleted": null,
+                    "query": "/* {\"app\": \"dbt\", \"dbt_version\": \"1.11.0a1\", \"profile_name\": \"test\", \"target_name\": \"default\", \"node_id\": \"seed.jaffle_shop.raw_countries\"} */\n\n    create table \"dbt\".\"test17486223125294882962_openlineage_project\".\"raw_countries\" (\"country_name\" text,\"country_code\" text)\n  "
+                }
+            }
+        },
+        "eventType": "START",
+        "inputs": [],
+        "outputs": []
+    },
+    {
+        "eventTime": "2025-05-30T18:25:18",
+        "producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+        "schemaURL": "https://openlineage.io/spec/2-0-2/OpenLineage.json#/$defs/RunEvent",
+        "run": {
+            "runId": "01972203-1c7e-7b30-a17f-ff3675b9be39",
+            "facets": {
+                "parent": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/ParentRunFacet.json#/$defs/ParentRunFacet",
+                    "run": {
+                        "runId": "01972203-1c68-70c4-b058-f2738886b55f"
+                    },
+                    "job": {
+                        "namespace": "dbt",
+                        "name": "seed.jaffle_shop.raw_countries"
+                    }
+                },
+                "dbt_version": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+                    "version": "1.11.0a1"
+                }
+            }
+        },
+        "job": {
+            "namespace": "dbt",
+            "name": "seed.jaffle_shop.raw_countries.sql#2",
+            "facets": {
+                "jobType": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+                    "_schemaURL": "https://openlineage.io/spec/facets/2-0-3/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+                    "_deleted": null,
+                    "processingType": "BATCH",
+                    "integration": "DBT",
+                    "jobType": "SQL"
+                },
+                "sql": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/SQLJobFacet.json#/$defs/SQLJobFacet",
+                    "_deleted": null,
+                    "query": "/* {\"app\": \"dbt\", \"dbt_version\": \"1.11.0a1\", \"profile_name\": \"test\", \"target_name\": \"default\", \"node_id\": \"seed.jaffle_shop.raw_countries\"} */\n\n    create table \"dbt\".\"test17486223125294882962_openlineage_project\".\"raw_countries\" (\"country_name\" text,\"country_code\" text)\n  "
+                }
+            }
+        },
+        "eventType": "COMPLETE",
+        "inputs": [],
+        "outputs": []
+    },
+    {
+        "eventTime": "2025-05-30T18:25:18",
+        "producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+        "schemaURL": "https://openlineage.io/spec/2-0-2/OpenLineage.json#/$defs/RunEvent",
+        "run": {
+            "runId": "01972203-1c85-717a-9dfd-fd366b2196c4",
+            "facets": {
+                "parent": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/ParentRunFacet.json#/$defs/ParentRunFacet",
+                    "run": {
+                        "runId": "01972203-1c68-70c4-b058-f2738886b55f"
+                    },
+                    "job": {
+                        "namespace": "dbt",
+                        "name": "seed.jaffle_shop.raw_countries"
+                    }
+                },
+                "dbt_version": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+                    "version": "1.11.0a1"
+                }
+            }
+        },
+        "job": {
+            "namespace": "dbt",
+            "name": "seed.jaffle_shop.raw_countries.sql#3",
+            "facets": {
+                "jobType": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+                    "_schemaURL": "https://openlineage.io/spec/facets/2-0-3/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+                    "_deleted": null,
+                    "processingType": "BATCH",
+                    "integration": "DBT",
+                    "jobType": "SQL"
+                },
+                "sql": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/SQLJobFacet.json#/$defs/SQLJobFacet",
+                    "_deleted": null,
+                    "query": "\n          insert into \"dbt\".\"test17486223125294882962_openlineage_project\".\"raw_countries\" (\"country_name\", \"country_code\") values\n          (%s,%s),(%s,%s),(%s,%s),(%s,%s),(%s,%s),(%s,%s)\n      ..."
+                }
+            }
+        },
+        "eventType": "START",
+        "inputs": [],
+        "outputs": []
+    },
+    {
+        "eventTime": "2025-05-30T18:25:18",
+        "producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+        "schemaURL": "https://openlineage.io/spec/2-0-2/OpenLineage.json#/$defs/RunEvent",
+        "run": {
+            "runId": "01972203-1c85-717a-9dfd-fd366b2196c4",
+            "facets": {
+                "parent": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/ParentRunFacet.json#/$defs/ParentRunFacet",
+                    "run": {
+                        "runId": "01972203-1c68-70c4-b058-f2738886b55f"
+                    },
+                    "job": {
+                        "namespace": "dbt",
+                        "name": "seed.jaffle_shop.raw_countries"
+                    }
+                },
+                "dbt_version": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+                    "version": "1.11.0a1"
+                }
+            }
+        },
+        "job": {
+            "namespace": "dbt",
+            "name": "seed.jaffle_shop.raw_countries.sql#3",
+            "facets": {
+                "jobType": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+                    "_schemaURL": "https://openlineage.io/spec/facets/2-0-3/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+                    "_deleted": null,
+                    "processingType": "BATCH",
+                    "integration": "DBT",
+                    "jobType": "SQL"
+                },
+                "sql": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/SQLJobFacet.json#/$defs/SQLJobFacet",
+                    "_deleted": null,
+                    "query": "\n          insert into \"dbt\".\"test17486223125294882962_openlineage_project\".\"raw_countries\" (\"country_name\", \"country_code\") values\n          (%s,%s),(%s,%s),(%s,%s),(%s,%s),(%s,%s),(%s,%s)\n      ..."
+                }
+            }
+        },
+        "eventType": "COMPLETE",
+        "inputs": [],
+        "outputs": []
+    },
+    {
+        "eventTime": "2025-05-30T18:25:18",
+        "producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+        "schemaURL": "https://openlineage.io/spec/2-0-2/OpenLineage.json#/$defs/RunEvent",
+        "run": {
+            "runId": "01972203-1c8b-7471-98e2-cae9426d66e0",
+            "facets": {
+                "parent": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/ParentRunFacet.json#/$defs/ParentRunFacet",
+                    "run": {
+                        "runId": "01972203-1c68-70c4-b058-f2738886b55f"
+                    },
+                    "job": {
+                        "namespace": "dbt",
+                        "name": "seed.jaffle_shop.raw_countries"
+                    }
+                },
+                "dbt_version": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+                    "version": "1.11.0a1"
+                }
+            }
+        },
+        "job": {
+            "namespace": "dbt",
+            "name": "seed.jaffle_shop.raw_countries.sql#4",
+            "facets": {
+                "jobType": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+                    "_schemaURL": "https://openlineage.io/spec/facets/2-0-3/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+                    "_deleted": null,
+                    "processingType": "BATCH",
+                    "integration": "DBT",
+                    "jobType": "SQL"
+                },
+                "sql": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/SQLJobFacet.json#/$defs/SQLJobFacet",
+                    "_deleted": null,
+                    "query": "COMMIT"
+                }
+            }
+        },
+        "eventType": "START",
+        "inputs": [],
+        "outputs": []
+    },
+    {
+        "eventTime": "2025-05-30T18:25:18",
+        "producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+        "schemaURL": "https://openlineage.io/spec/2-0-2/OpenLineage.json#/$defs/RunEvent",
+        "run": {
+            "runId": "01972203-1c8b-7471-98e2-cae9426d66e0",
+            "facets": {
+                "parent": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/ParentRunFacet.json#/$defs/ParentRunFacet",
+                    "run": {
+                        "runId": "01972203-1c68-70c4-b058-f2738886b55f"
+                    },
+                    "job": {
+                        "namespace": "dbt",
+                        "name": "seed.jaffle_shop.raw_countries"
+                    }
+                },
+                "dbt_version": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+                    "version": "1.11.0a1"
+                }
+            }
+        },
+        "job": {
+            "namespace": "dbt",
+            "name": "seed.jaffle_shop.raw_countries.sql#4",
+            "facets": {
+                "jobType": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+                    "_schemaURL": "https://openlineage.io/spec/facets/2-0-3/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+                    "_deleted": null,
+                    "processingType": "BATCH",
+                    "integration": "DBT",
+                    "jobType": "SQL"
+                },
+                "sql": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/SQLJobFacet.json#/$defs/SQLJobFacet",
+                    "_deleted": null,
+                    "query": "COMMIT"
+                }
+            }
+        },
+        "eventType": "COMPLETE",
+        "inputs": [],
+        "outputs": []
+    },
+    {
+        "eventTime": "2025-05-30T16:25:18.735254",
+        "producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+        "schemaURL": "https://openlineage.io/spec/2-0-2/OpenLineage.json#/$defs/RunEvent",
+        "run": {
+            "runId": "01972203-1c68-70c4-b058-f2738886b55f",
+            "facets": {
+                "parent": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/ParentRunFacet.json#/$defs/ParentRunFacet",
+                    "run": {
+                        "runId": "01972203-1bf6-719d-9e37-eab92e757012"
+                    },
+                    "job": {
+                        "namespace": "dbt",
+                        "name": "dbt-run--project=jaffle_shop--profile=test--select=raw_countries"
+                    }
+                },
+                "dbt_version": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+                    "version": "1.11.0a1"
+                }
+            }
+        },
+        "job": {
+            "namespace": "dbt",
+            "name": "seed.jaffle_shop.raw_countries",
+            "facets": {
+                "jobType": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+                    "_schemaURL": "https://openlineage.io/spec/facets/2-0-3/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+                    "_deleted": null,
+                    "processingType": "BATCH",
+                    "integration": "DBT",
+                    "jobType": "SEED"
+                }
+            }
+        },
+        "eventType": "COMPLETE",
+        "inputs": [],
+        "outputs": [
+            {
+                "namespace": "postgres://localhost:5432",
+                "name": "jaffle_shop.raw_countries",
+                "facets": {
+                    "dataSource": {
+                        "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                        "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/DatasourceDatasetFacet.json#/$defs/DatasourceDatasetFacet",
+                        "_deleted": null,
+                        "name": "postgres://localhost:5432",
+                        "uri": "postgres://localhost:5432"
+                    },
+                    "schema": {
+                        "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                        "_schemaURL": "https://openlineage.io/spec/facets/1-1-1/SchemaDatasetFacet.json#/$defs/SchemaDatasetFacet",
+                        "_deleted": null,
+                        "fields": [
+                            {
+                                "name": "country_code",
+                                "type": "text",
+                                "description": null,
+                                "fields": []
+                            },
+                            {
+                                "name": "country_name",
+                                "type": "text",
+                                "description": null,
+                                "fields": []
+                            }
+                        ]
+                    },
+                    "documentation": {
+                        "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                        "_schemaURL": "https://openlineage.io/spec/facets/1-0-1/DocumentationDatasetFacet.json#/$defs/DocumentationDatasetFacet",
+                        "_deleted": null,
+                        "description": ""
+                    }
+                }
+            }
+        ]
+    },
+    {
+        "eventTime": "2025-05-30T18:25:18",
+        "producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+        "schemaURL": "https://openlineage.io/spec/2-0-2/OpenLineage.json#/$defs/RunEvent",
+        "run": {
+            "runId": "01972203-1bf6-719d-9e37-eab92e757012",
+            "facets": {
+                "dbt_version": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/client/python",
+                    "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+                    "version": "1.11.0a1"
+                }
+            }
+        },
+        "job": {
+            "namespace": "dbt",
+            "name": "dbt-run--project=jaffle_shop--profile=test--select=raw_countries",
+            "facets": {
+                "jobType": {
+                    "_producer": "https://github.com/OpenLineage/OpenLineage/tree/1.30.1/integration/dbt",
+                    "_schemaURL": "https://openlineage.io/spec/facets/2-0-3/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+                    "_deleted": null,
+                    "processingType": "BATCH",
+                    "integration": "DBT",
+                    "jobType": "JOB"
+                }
+            }
+        },
+        "eventType": "COMPLETE",
+        "inputs": [],
+        "outputs": []
+    }
+]
