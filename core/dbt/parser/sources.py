@@ -157,27 +157,6 @@ class SourcePatcher:
             else:
                 loaded_at_query = source.loaded_at_query
 
-        try:
-            # TODO: I think this only handles a top level `+freshness` key in a project config, not if it's nested under a path?
-            raw_project_freshness = self.root_project.sources.get(
-                "+freshness", {}
-            )  # Will only be None if the user explicitly set it to null
-            project_freshness = (
-                FreshnessThreshold.from_dict(raw_project_freshness)
-                if raw_project_freshness is not None
-                else None
-            )
-        except ValueError:
-            fire_event(
-                FreshnessConfigProblem(
-                    msg="Could not validate `freshness` for `sources` in 'dbt_project.yml', ignoring. Please see https://docs.getdbt.com/docs/build/sources#source-data-freshness for more information.",
-                )
-            )
-            project_freshness = None
-
-        target_freshness = self.calculate_freshness_from_raw_target(target)
-        freshness = merge_source_freshness(project_freshness, target_freshness)
-
         quoting = source.quoting.merged(table.quoting)
         # path = block.path.original_file_path
         table_meta = table.meta or {}
@@ -227,7 +206,7 @@ class SourcePatcher:
             loader=source.loader,
             loaded_at_field=loaded_at_field,
             loaded_at_query=loaded_at_query,
-            freshness=freshness,
+            freshness=config.freshness,
             quoting=quoting,
             resource_type=NodeType.Source,
             fqn=target.fqn,
@@ -344,6 +323,19 @@ class SourcePatcher:
         # it works while source configs can only include `enabled`.
         precedence_configs.update(target.table.config)
 
+        precedence_freshness = self.calculate_freshness_from_raw_target(target)
+        if precedence_freshness:
+            precedence_configs["freshness"] = precedence_freshness.to_dict()
+        elif precedence_freshness is None:
+            precedence_configs["freshness"] = None
+        else:
+            # this means that the user did not set a freshness threshold in the source schema file, as such
+            # there should be no freshness precedence
+            precedence_configs.pop("freshness", None)
+
+        # Because freshness is a "object" config, the freshness from the dbt_project.yml and the freshness
+        # from the schema file _won't_ get merged by this process. The result will be that the freshness will
+        # come from the schema file if provided, and if not, it'll fall back to the dbt_project.yml freshness.
         return generator.calculate_node_config(
             config_call_dict={},
             fqn=target.fqn,

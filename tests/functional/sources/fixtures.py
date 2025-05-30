@@ -21,6 +21,7 @@ sources:
     loader: custom
     freshness:
       warn_after: {count: 18, period: hour}
+      error_after: {count: 24, period: hour}
     config:
       freshness: # default freshness, takes precedence over top-level key above
         warn_after: {count: 12, period: hour}
