@@ -1,0 +1,143 @@
+use super::{
+    manifest::{DbtManifest, InternalDbtNode, Nodes},
+    RunResultsArtifact,
+};
+use crate::dbt_utils::resolve_package_quoting;
+use dbt_common::{constants::DBT_MANIFEST_JSON, fs_err, stdfs, ErrorCode, FsResult};
+use std::fmt;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+#[derive(Debug, Clone)]
+pub struct PreviousState {
+    pub nodes: Nodes,
+    pub run_results: Option<RunResultsArtifact>,
+    pub state_path: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModificationType {
+    Body,
+    Configs,
+    Relation,
+    PersistedDescriptions,
+    Macros,
+    Contract,
+    Any,
+}
+
+impl fmt::Display for PreviousState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "PreviousState from {}", self.state_path.display())
+    }
+}
+impl PreviousState {
+    pub fn try_new(state_path: &Path) -> FsResult<Self> {
+        let file = stdfs::File::open(state_path.join(DBT_MANIFEST_JSON)).map_err(|_| {
+            fs_err!(
+                ErrorCode::FileNotFound,
+                "Failed to open previous state file at {}",
+                state_path.join(DBT_MANIFEST_JSON).display()
+            )
+        })?;
+        let manifest: DbtManifest = serde_json::from_reader(file).map_err(|_| {
+            fs_err!(
+                ErrorCode::FileNotFound,
+                "Failed to parse manifest file at {}",
+                state_path.join(DBT_MANIFEST_JSON).display()
+            )
+        })?;
+
+        let maybe_mantle_quoting = manifest.metadata.quoting;
+        let adapter_type = manifest.metadata.adapter_type.as_str();
+        let maybe_resolved_quoting = maybe_mantle_quoting
+            .map(|quoting| resolve_package_quoting(Some(quoting), adapter_type));
+
+        let mut nodes: Nodes = manifest.into();
+        // if there is a mantle_quoting, update the models with the resolved quoting
+        if let Some(resolved) = &maybe_resolved_quoting {
+            for node in nodes.models.values_mut() {
+                let node = Arc::make_mut(node);
+                node.config.quoting = Some(*resolved);
+            }
+        }
+
+        let run_results = RunResultsArtifact::from_file(&state_path.join("run_results.json")).ok();
+        Ok(Self {
+            nodes,
+            run_results,
+            state_path: state_path.to_path_buf(),
+        })
+    }
+
+    // Check if a node exists in the previous state
+    pub fn exists(&self, node: &dyn InternalDbtNode) -> bool {
+        self.nodes
+            .get_node(node.common().unique_id.as_str())
+            .is_some()
+    }
+
+    // Check if a node is new (doesn't exist in previous state)
+    pub fn is_new(&self, node: &dyn InternalDbtNode) -> bool {
+        !self.exists(node)
+    }
+
+    // Check if a node has been modified, optionally checking for a specific type of modification
+    pub fn is_modified(
+        &self,
+        node: &dyn InternalDbtNode,
+        modification_type: Option<ModificationType>,
+    ) -> bool {
+        // If it's new, it's also considered modified
+        if self.is_new(node) {
+            return true;
+        }
+
+        match modification_type {
+            // TODO chenyu: confirm with product if it is okay to merge the body check with content check
+            Some(ModificationType::Body) => self.check_modified_content(node),
+            Some(ModificationType::Configs) => self.check_configs_modified(node),
+            // Some(ModificationType::Relation) => self.check_relation_modified(node, unique_id),
+            // Some(ModificationType::PersistedDescriptions) => {
+            //     self.check_persisted_descriptions_modified(node, unique_id)
+            // }
+            // Some(ModificationType::Macros) => self.check_macros_modified(node, unique_id),
+            // Some(ModificationType::Contract) => self.check_contract_modified(node, unique_id),
+            // Some(ModificationType::Any) | None => {
+            //     self.check_body_modified(node, unique_id)
+            //         || self.check_configs_modified(node, unique_id)
+            //         || self.check_relation_modified(node, unique_id)
+            //         || self.check_persisted_descriptions_modified(node, unique_id)
+            //         || self.check_macros_modified(node, unique_id)
+            //         || self.check_contract_modified(node, unique_id)
+            // }
+            _ => self.check_modified_content(node),
+        }
+    }
+
+    // Private helper methods to check specific types of modifications
+    fn check_modified_content(&self, current_node: &dyn InternalDbtNode) -> bool {
+        // Get the previous node from the manifest
+        let previous_node = match self
+            .nodes
+            .get_node(current_node.common().unique_id.as_str())
+        {
+            Some(node) => node,
+            None => return true, // If previous node doesn't exist, consider it modified
+        };
+
+        !current_node.has_same_content(previous_node)
+    }
+
+    fn check_configs_modified(&self, current_node: &dyn InternalDbtNode) -> bool {
+        // Get the previous node from the manifest
+        let previous_node = match self
+            .nodes
+            .get_node(current_node.common().unique_id.as_str())
+        {
+            Some(node) => node,
+            None => return true, // If previous node doesn't exist, consider it modified
+        };
+        current_node.has_same_config(previous_node)
+    }
+}

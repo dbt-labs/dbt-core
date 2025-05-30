@@ -1,0 +1,25 @@
+---
+source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+description: "{% macro two_args(a, b) %}\n  {% block foo %}{% endblock %}\n{% endmacro %}"
+info: {}
+input_file: crates/dbt-jinja/minijinja/tests/inputs/err_block_in_macro.txt
+---
+!!!SYNTAX ERROR!!!
+
+Error {
+    kind: SyntaxError,
+    detail: "block tags in macros are not allowed",
+    name: "err_block_in_macro.txt",
+    line: 2,
+}
+
+syntax error: block tags in macros are not allowed
+(in err_block_in_macro.txt:2)
+--------------------------- err_block_in_macro.txt ----------------------------
+   1 | {% macro two_args(a, b) %}
+   2 >   {% block foo %}{% endblock %}
+     i      ^^^^^ syntax error
+   3 | {% endmacro %}
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+No referenced variables
+-------------------------------------------------------------------------------

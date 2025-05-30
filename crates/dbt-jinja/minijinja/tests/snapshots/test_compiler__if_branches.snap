@@ -1,0 +1,18 @@
+---
+source: minijinja/tests/test_compiler.rs
+expression: "&c.finish()"
+---
+(
+    [
+        00000 | Lookup("false")  [line 0],
+        00001 | JumpIfFalse(4),
+        00002 | EmitRaw("nope1"),
+        00003 | Jump(9),
+        00004 | Lookup("nil"),
+        00005 | JumpIfFalse(8),
+        00006 | EmitRaw("nope1"),
+        00007 | Jump(9),
+        00008 | EmitRaw("yes"),
+    ],
+    {},
+)

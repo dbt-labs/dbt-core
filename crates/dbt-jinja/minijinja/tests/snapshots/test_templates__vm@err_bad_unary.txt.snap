@@ -1,0 +1,22 @@
+---
+source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+description: "{{ foo(-[1, 2]) }}"
+info: {}
+input_file: crates/dbt-jinja/minijinja/tests/inputs/err_bad_unary.txt
+---
+!!!ERROR!!!
+
+Error {
+    kind: InvalidOperation,
+    name: "err_bad_unary.txt",
+    line: 1,
+}
+
+invalid operation
+(in err_bad_unary.txt:1)
+------------------------------ err_bad_unary.txt ------------------------------
+   1 > {{ foo(-[1, 2]) }}
+     i        ^^^^^^^ invalid operation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+No referenced variables
+-------------------------------------------------------------------------------

@@ -1,0 +1,130 @@
+---
+source: crates/jinja/minijinja/tests/test_parser.rs
+description: "{% test foo() %}...{% endtest %}\n{% test foo(a, b) %}...{% endtest %}\n{% test foo(a, b=42) %}...{% endtest %}\n{% test foo(a, b,) %}...{% endtest %}\n{% test foo(a, b=42,) %}...{% endtest %}"
+input_file: crates/jinja/minijinja/tests/parser-inputs/tests.txt
+snapshot_kind: text
+---
+Ok(
+    Template {
+        children: [
+            (
+                Macro {
+                    name: "test_foo",
+                    args: [],
+                    defaults: [],
+                    body: [
+                        EmitRaw {
+                            raw: "...",
+                        } @ 1:17-1:20,
+                    ],
+                } @ 1:1-1:33,
+                Test,
+                {},
+            ),
+            EmitRaw {
+                raw: "\n",
+            } @ 1:33-2:1,
+            (
+                Macro {
+                    name: "test_foo",
+                    args: [
+                        Var {
+                            id: "a",
+                        } @ 2:13-2:14,
+                        Var {
+                            id: "b",
+                        } @ 2:16-2:17,
+                    ],
+                    defaults: [],
+                    body: [
+                        EmitRaw {
+                            raw: "...",
+                        } @ 2:21-2:24,
+                    ],
+                } @ 2:1-2:37,
+                Test,
+                {},
+            ),
+            EmitRaw {
+                raw: "\n",
+            } @ 2:37-3:1,
+            (
+                Macro {
+                    name: "test_foo",
+                    args: [
+                        Var {
+                            id: "a",
+                        } @ 3:13-3:14,
+                        Var {
+                            id: "b",
+                        } @ 3:16-3:17,
+                    ],
+                    defaults: [
+                        Const {
+                            value: 42,
+                        } @ 3:18-3:20,
+                    ],
+                    body: [
+                        EmitRaw {
+                            raw: "...",
+                        } @ 3:24-3:27,
+                    ],
+                } @ 3:1-3:40,
+                Test,
+                {},
+            ),
+            EmitRaw {
+                raw: "\n",
+            } @ 3:40-4:1,
+            (
+                Macro {
+                    name: "test_foo",
+                    args: [
+                        Var {
+                            id: "a",
+                        } @ 4:13-4:14,
+                        Var {
+                            id: "b",
+                        } @ 4:16-4:17,
+                    ],
+                    defaults: [],
+                    body: [
+                        EmitRaw {
+                            raw: "...",
+                        } @ 4:22-4:25,
+                    ],
+                } @ 4:1-4:38,
+                Test,
+                {},
+            ),
+            EmitRaw {
+                raw: "\n",
+            } @ 4:38-5:1,
+            (
+                Macro {
+                    name: "test_foo",
+                    args: [
+                        Var {
+                            id: "a",
+                        } @ 5:13-5:14,
+                        Var {
+                            id: "b",
+                        } @ 5:16-5:17,
+                    ],
+                    defaults: [
+                        Const {
+                            value: 42,
+                        } @ 5:18-5:20,
+                    ],
+                    body: [
+                        EmitRaw {
+                            raw: "...",
+                        } @ 5:25-5:28,
+                    ],
+                } @ 5:1-5:41,
+                Test,
+                {},
+            ),
+        ],
+    } @ 0:0-5:41,
+)

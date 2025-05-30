@@ -1,0 +1,27 @@
+---
+source: minijinja/tests/test_templates.rs
+description: "{{ hello[0] }}\n{{ hello[3] }}\n{{ hello[-1] }}\n{{ hello[999] is undefined }}\n{{ intrange[0] }}\n{{ intrange[3] }}\n{{ intrange[-1] }}\n{{ intrange[999] is undefined }}"
+info:
+  hello: Hello World
+  intrange:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+input_file: minijinja/tests/inputs/indexing.txt
+---
+H
+l
+d
+true
+0
+3
+9
+true
+

@@ -1,0 +1,33 @@
+---
+source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+description: "{{ seq.whatever }}\n{{ seq.whatever.else }}"
+info:
+  seq:
+    - 1
+    - 2
+    - 3
+input_file: crates/dbt-jinja/minijinja/tests/inputs/err_undefined_nested_attr.txt
+---
+!!!ERROR!!!
+
+Error {
+    kind: UndefinedError,
+    name: "err_undefined_nested_attr.txt",
+    line: 2,
+}
+
+undefined value
+(in err_undefined_nested_attr.txt:2)
+------------------------ err_undefined_nested_attr.txt ------------------------
+   1 | {{ seq.whatever }}
+   2 > {{ seq.whatever.else }}
+     i ^^^^^^^^^^^^^^^^^^^^^^^ undefined value
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Referenced variables: {
+    seq: (
+        1,
+        2,
+        3,
+    ),
+}
+-------------------------------------------------------------------------------

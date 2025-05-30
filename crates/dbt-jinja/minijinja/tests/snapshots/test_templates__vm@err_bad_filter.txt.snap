@@ -1,0 +1,25 @@
+---
+source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+description: "{% for item in 42|slice(4) %}\n  - {{ item }}\n{% endfor %}"
+info: {}
+input_file: crates/dbt-jinja/minijinja/tests/inputs/err_bad_filter.txt
+---
+!!!ERROR!!!
+
+Error {
+    kind: InvalidOperation,
+    detail: "number is not iterable",
+    name: "err_bad_filter.txt",
+    line: 1,
+}
+
+invalid operation: number is not iterable
+(in err_bad_filter.txt:1)
+----------------------------- err_bad_filter.txt ------------------------------
+   1 > {% for item in 42|slice(4) %}
+     i                   ^^^^^^^^ invalid operation
+   2 |   - {{ item }}
+   3 | {% endfor %}
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+No referenced variables
+-------------------------------------------------------------------------------

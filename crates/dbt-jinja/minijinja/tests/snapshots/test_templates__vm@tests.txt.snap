@@ -1,0 +1,62 @@
+---
+source: minijinja/tests/test_templates.rs
+description: "even: {{ two is even }}\nodd: {{ two is odd }}\nundefined: {{ two is undefined }}\ndefined: {{ two is defined }}\nundefined2: {{ ohwell is undefined }}\ndefined2: {{ ohwell is defined }}\nnone: {{ none is none }}\nnot-none: {{ 42 is not none }}\nnumber-int: {{ two is number }}\nnumber-float: {{ two_dot_two is number }}\ninteger-int: {{ 42 is integer }}\ninteger-float: {{ 42.0 is integer }}\nfloat-int: {{ 42 is float }}\nfloat-float: {{ 42.0 is float }}\nnot-seq: {{ two is sequence }}\nseq: {{ seq is sequence }}\nreverse-not-seq: {{ seq|reverse is sequence }}\niterable: {{ seq is iterable }}\niterable-reverse: {{ seq|reverse is iterable }}\nstring-iterable: {{ string is iterable }}\nnot-iterable: {{ two is iterable }}\nnot-map: {{ two is mapping }}\nmap: {{ map is mapping }}\nstring: {{ string is string }}\nnot-string: {{ mapping is string }}\nstarts-with-a: {{ string is startingwith('a') }}\nstarts-with-a-noparen: {{ string is startingwith 'a' }}\nends-with-ha: {{ string is endingwith('ha') }}\nends-with-ha-noparen: {{ string is endingwith 'ha' }}\nnot-safe: {{ \"foo\" is safe }}\nsafe: {{ \"foo\"|escape is safe }}\nis-true: {{ true is true }} | {{ 42 is true }}\nis-false: {{ false is false }} | {{ 0 is false }}\nis-filter: {{ 'escape' is filter }} | {{ 'unknown-filter' is filter }}\nis-test: {{ 'safe' is test }} | {{ 'unknown-test' is test }}\nis-boolean: {{ true is boolean }} | {{ 42 is boolean }}\nis-divisibleby: {{ 42 is divisibleby(2) }} | {{ 41 is divisibleby(2) }}\nis-divisibleby-noparen: {{ 42 is divisibleby(2) }} | {{ 41 is divisibleby 2 }}\nis-lower: {{ \"foo\" is lower }} | {{ \"FOO\" is lower }}\nis-upper: {{ \"foo\" is upper }} | {{ \"FOO\" is upper }}\nseq-same-as: {{ [1, 2, 3] is sameas([1, 2, 3]) }}\nseq-same-as-noparen: {{ [1, 2, 3] is sameas [1, 2, 3] }}\nconst-same-as: {{ true is sameas(true) }}\nconst-same-as-noparen: {{ true is sameas true }}\nint-same-as: {{ 1 is sameas(1.0) }}\nint-same-as-noparen: {{ 1 is sameas 1.0 }}\nneg-int-same-as-noparen: {{ -1 is sameas -1 }}"
+info:
+  two: 2
+  two_dot_two: 2.2
+  seq:
+    - 1
+    - 2
+    - 3
+  map:
+    foo: bar
+  string: aha
+input_file: minijinja/tests/inputs/tests.txt
+---
+even: true
+odd: false
+undefined: false
+defined: true
+undefined2: true
+defined2: false
+none: true
+not-none: true
+number-int: true
+number-float: true
+integer-int: true
+integer-float: false
+float-int: false
+float-float: true
+not-seq: false
+seq: true
+reverse-not-seq: false
+iterable: true
+iterable-reverse: true
+string-iterable: true
+not-iterable: false
+not-map: false
+map: true
+string: true
+not-string: false
+starts-with-a: true
+starts-with-a-noparen: true
+ends-with-ha: true
+ends-with-ha-noparen: true
+not-safe: false
+safe: true
+is-true: true | false
+is-false: true | false
+is-filter: true | false
+is-test: true | false
+is-boolean: true | false
+is-divisibleby: true | false
+is-divisibleby-noparen: true | false
+is-lower: true | false
+is-upper: false | true
+seq-same-as: false
+seq-same-as-noparen: false
+const-same-as: true
+const-same-as-noparen: true
+int-same-as: false
+int-same-as-noparen: false
+neg-int-same-as-noparen: true

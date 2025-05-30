@@ -1,0 +1,14 @@
+---
+source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+description: "{% macro add(a, b) %}{{ a }}|{{ b }}{% endmacro -%}\n{{ add(1, 2) }}\n{{ add(a=1, b=2) }}\n{{ add(b=2, a=1) }}\n{{ add(1, b=2) }}\n{{ add.name }}\n{{ add.arguments }}\n{{ add.caller }}\n{{ add }}"
+info: {}
+input_file: crates/dbt-jinja/minijinja/tests/inputs/macro_basic.txt
+---
+1|2
+1|2
+1|2
+1|2
+add
+('a', 'b')
+false
+<macro add>

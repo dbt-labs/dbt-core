@@ -1,0 +1,9 @@
+---
+source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+description: "short-range: {{ range(10) }}\nrange-is-iterable: {{ range(10) is iterable }}\nrange-is-not-a-sequence: {{ range(10) is not sequence }}"
+info: {}
+input_file: crates/dbt-jinja/minijinja/tests/inputs/functions.txt
+---
+short-range: (0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+range-is-iterable: true
+range-is-not-a-sequence: true

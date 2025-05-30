@@ -1,0 +1,26 @@
+---
+source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+description: "{% extends \"bad_basic_block.txt\" %}\n{% block title %}My Title{% endblock %}"
+info: {}
+input_file: crates/dbt-jinja/minijinja/tests/inputs/err_bad_basic_block.txt
+---
+!!!ERROR!!!
+
+Error {
+    kind: UnknownFunction,
+    detail: "Jinja macro or function `missing_function` is unknown",
+    name: "bad_basic_block.txt",
+    line: 3,
+}
+
+unknown function: Jinja macro or function `missing_function` is unknown
+(in bad_basic_block.txt:3)
+----------------------------- bad_basic_block.txt -----------------------------
+   1 | <title>{% block title %}default title{% endblock %}</title>
+   2 | {% block body %}
+   3 >   {{ missing_function() }}
+     i   ^^^^^^^^^^^^^^^^^^^^^^^^ unknown function
+   4 | {% endblock %}
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+No referenced variables
+-------------------------------------------------------------------------------

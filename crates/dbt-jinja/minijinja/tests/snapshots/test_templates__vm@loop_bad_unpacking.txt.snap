@@ -1,0 +1,38 @@
+---
+source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+description: "<ul>\n{% for a, b in seq %}\n  <li>{{ a }}: {{ b }}\n{% endfor %}\n</ul>"
+info:
+  seq:
+    - 1
+    - 2
+    - 3
+input_file: crates/dbt-jinja/minijinja/tests/inputs/loop_bad_unpacking.txt
+---
+!!!ERROR!!!
+
+Error {
+    kind: CannotUnpack,
+    detail: "value is not iterable",
+    name: "loop_bad_unpacking.txt",
+    line: 2,
+}
+
+cannot unpack: value is not iterable
+(in loop_bad_unpacking.txt:2)
+--------------------------- loop_bad_unpacking.txt ----------------------------
+   1 | <ul>
+   2 > {% for a, b in seq %}
+     i        ^^^^ cannot unpack
+   3 |   <li>{{ a }}: {{ b }}
+   4 | {% endfor %}
+   5 | </ul>
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Referenced variables: {
+    loop: <loop 0/3>,
+    seq: (
+        1,
+        2,
+        3,
+    ),
+}
+-------------------------------------------------------------------------------

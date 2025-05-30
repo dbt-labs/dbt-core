@@ -1,0 +1,39 @@
+---
+source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+description: "{% for item in seq %}\n  {% if item is reallyEven %}\n    {{ item }}\n  {% endif %}\n{% endfor %}"
+info:
+  seq:
+    - 1
+    - 2
+    - 3
+input_file: crates/dbt-jinja/minijinja/tests/inputs/err_bad_test.txt
+---
+!!!ERROR!!!
+
+Error {
+    kind: UnknownTest,
+    detail: "test reallyEven is unknown",
+    name: "err_bad_test.txt",
+    line: 2,
+}
+
+unknown test: test reallyEven is unknown
+(in err_bad_test.txt:2)
+------------------------------ err_bad_test.txt -------------------------------
+   1 | {% for item in seq %}
+   2 >   {% if item is reallyEven %}
+     i                 ^^^^^^^^^^ unknown test
+   3 |     {{ item }}
+   4 |   {% endif %}
+   5 | {% endfor %}
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Referenced variables: {
+    item: 1,
+    loop: <loop 0/3>,
+    seq: (
+        1,
+        2,
+        3,
+    ),
+}
+-------------------------------------------------------------------------------

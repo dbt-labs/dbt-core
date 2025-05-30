@@ -1,0 +1,25 @@
+---
+source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+description: "{{ range(100001) }}"
+info: {}
+input_file: crates/dbt-jinja/minijinja/tests/inputs/err_bad_range.txt
+---
+!!!ERROR!!!
+
+Error {
+    kind: InvalidOperation,
+    detail: "range has too many elements",
+    name: "err_bad_range.txt",
+    line: 1,
+}
+
+invalid operation: range has too many elements
+(in err_bad_range.txt:1)
+------------------------------ err_bad_range.txt ------------------------------
+   1 > {{ range(100001) }}
+     i ^^^^^^^^^^^^^^^^^^^ invalid operation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Referenced variables: {
+    range: minijinja::functions::builtins::range,
+}
+-------------------------------------------------------------------------------

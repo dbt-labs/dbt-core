@@ -1,0 +1,20 @@
+[package]
+name = "dbt-env"
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "dbt_env"
+path = "src/mod.rs"
+doctest = false
+
+[dependencies]

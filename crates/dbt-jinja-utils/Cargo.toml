@@ -1,0 +1,44 @@
+[package]
+name = "dbt-jinja-utils"
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+dbt-agate = { workspace = true }
+dbt-common = { workspace = true }
+dbt-frontend-common = { workspace = true }
+dbt-fusion-adapter = { workspace = true }
+dbt-schemas = { workspace = true }
+
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+dashmap = { workspace = true }
+dbt-serde_yaml = { workspace = true }
+itertools = { workspace = true }
+log = { workspace = true }
+md5 = { workspace = true }
+minijinja = { workspace = true }
+minijinja-contrib = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracy-client = { workspace = true }
+uuid = { workspace = true }
+
+
+[lib]
+name = "dbt_jinja_utils"
+path = "src/lib.rs"
+doctest = false
+
+[dev-dependencies]
+insta = { version = "1.38.0", features = ["glob", "serde"] }

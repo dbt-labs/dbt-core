@@ -1,0 +1,20 @@
+[package]
+name = "dbt-adapter-proc-macros"
+version = "2.10.2"
+edition = "2021"
+license = "Apache-2.0"
+description = "Extra utilities for dbt-adapter"
+keywords = ["jinja", "jinja2", "templates"]
+readme = "README.md"
+rust-version = "1.70"
+
+[lib]
+name = "dbt_adapter_proc_macros"
+path = "src/lib.rs"
+proc-macro = true
+doctest = false
+
+[dependencies]
+quote = "1.0"
+syn = "2.0"
+

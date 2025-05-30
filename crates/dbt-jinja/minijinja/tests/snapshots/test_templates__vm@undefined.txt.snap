@@ -1,0 +1,9 @@
+---
+source: minijinja/tests/test_templates.rs
+description: "{{ none }}\n{{ undefined }}"
+info: {}
+input_file: minijinja/tests/inputs/undefined.txt
+---
+none
+
+

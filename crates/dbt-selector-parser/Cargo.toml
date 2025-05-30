@@ -1,0 +1,15 @@
+[package]
+name = "dbt-selector-parser"
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+[dependencies]
+dbt-common = { workspace = true }
+dbt-schemas = { workspace = true }
+

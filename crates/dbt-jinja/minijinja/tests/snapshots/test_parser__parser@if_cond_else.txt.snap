@@ -1,0 +1,27 @@
+---
+source: crates/jinja/minijinja/tests/test_parser.rs
+description: "{% if expr1 %}\n    branch 1\n{% else %}\n    else\n{% endif %}"
+input_file: crates/jinja/minijinja/tests/parser-inputs/if_cond_else.txt
+snapshot_kind: text
+---
+Ok(
+    Template {
+        children: [
+            IfCond {
+                expr: Var {
+                    id: "expr1",
+                } @ 1:7-1:12,
+                true_body: [
+                    EmitRaw {
+                        raw: "\n    branch 1\n",
+                    } @ 1:15-3:1,
+                ],
+                false_body: [
+                    EmitRaw {
+                        raw: "\n    else\n",
+                    } @ 3:11-5:1,
+                ],
+            } @ 1:1-5:12,
+        ],
+    } @ 0:0-5:12,
+)

@@ -1,0 +1,38 @@
+[package]
+name = "dbt-loader"
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+dbt-common = { workspace = true }
+dbt-deps = { workspace = true }
+dbt-jinja-utils = { workspace = true }
+dbt-schemas = { workspace = true }
+dbt-selector-parser = { workspace = true }
+dbt-serde_yaml = { workspace = true }
+dirs = { workspace = true }
+log = { workspace = true }
+minijinja = { workspace = true }
+pathdiff = { workspace = true }
+reqwest = { workspace = true }
+rust-embed = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+vortex-client = { workspace = true }
+walkdir = { workspace = true }
+
+[lib]
+name = "dbt_loader"
+path = "src/mod.rs"
+doctest = false

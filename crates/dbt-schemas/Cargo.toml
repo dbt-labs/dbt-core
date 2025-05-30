@@ -1,0 +1,41 @@
+[package]
+name = "dbt-schemas"
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+arrow = { workspace = true }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+csv = { workspace = true }
+dbt-adapter-proc-macros = { workspace = true }
+dbt-common = { workspace = true }
+dbt-frontend-common = { workspace = true }
+dbt-serde_yaml = { workspace = true }
+hex = { workspace = true }
+md5 = { workspace = true }
+minijinja = { workspace = true }
+regex = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+serde_with = { workspace = true }
+sha2 = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+strum_macros = { workspace = true }
+
+
+[lib]
+name = "dbt_schemas"
+path = "src/lib.rs"
+doctest = false

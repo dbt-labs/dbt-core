@@ -1,0 +1,70 @@
+[package]
+name = "dbt-common"
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+dbt-frontend-common = { workspace = true }
+
+dbt-proc-macros = { workspace = true }
+
+datafusion = { workspace = true }
+
+clap = { workspace = true, features = ["derive", "env"] }
+dialoguer = { workspace = true }
+int-enum = { workspace = true }
+itertools = { workspace = true }
+regex = { workspace = true }
+uuid = { workspace = true }
+
+antlr-rust = { workspace = true }
+arrow = { workspace = true }
+arrow-schema = { workspace = true }
+chrono = { workspace = true }
+comfy-table = { workspace = true }
+console = { workspace = true }
+dashmap = { workspace = true }
+dbt-serde_yaml = { workspace = true }
+humantime = { workspace = true }
+minijinja = { workspace = true }
+once_cell = { workspace = true }
+
+schemars = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+stringmetrics = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+term_size = { workspace = true }
+
+
+tokio = { workspace = true, features = ["fs"] }
+
+pathdiff = { workspace = true }
+
+log = { workspace = true }
+rust-embed = { workspace = true }
+
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+dunce = "1.0.5"
+powershell_script = "1.1.0"
+
+[dev-dependencies]
+indoc = { workspace = true }
+
+[lib]
+name = "dbt_common"
+path = "src/mod.rs"
+doctest = false

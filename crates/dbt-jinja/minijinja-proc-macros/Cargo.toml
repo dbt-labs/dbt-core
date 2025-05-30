@@ -1,0 +1,23 @@
+[package]
+name = "minijinja-proc-macros"
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "minijinja_proc_macros"
+path = "src/lib.rs"
+proc-macro = true
+doctest = false
+
+[dependencies]
+quote = "1.0"
+syn = "2.0"

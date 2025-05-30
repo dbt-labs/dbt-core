@@ -1,0 +1,51 @@
+---
+source: crates/jinja/minijinja/tests/test_parser.rs
+description: "{% if expr1 %}\n    branch 1\n{% elif expr2 %}\n    branch 2\n{% elif expr3 %}\n    branch 3\n{% else %}\n    else\n{% endif %}"
+input_file: crates/jinja/minijinja/tests/parser-inputs/if_cond.txt
+snapshot_kind: text
+---
+Ok(
+    Template {
+        children: [
+            IfCond {
+                expr: Var {
+                    id: "expr1",
+                } @ 1:7-1:12,
+                true_body: [
+                    EmitRaw {
+                        raw: "\n    branch 1\n",
+                    } @ 1:15-3:1,
+                ],
+                false_body: [
+                    IfCond {
+                        expr: Var {
+                            id: "expr2",
+                        } @ 3:9-3:14,
+                        true_body: [
+                            EmitRaw {
+                                raw: "\n    branch 2\n",
+                            } @ 3:17-5:1,
+                        ],
+                        false_body: [
+                            IfCond {
+                                expr: Var {
+                                    id: "expr3",
+                                } @ 5:9-5:14,
+                                true_body: [
+                                    EmitRaw {
+                                        raw: "\n    branch 3\n",
+                                    } @ 5:17-7:1,
+                                ],
+                                false_body: [
+                                    EmitRaw {
+                                        raw: "\n    else\n",
+                                    } @ 7:11-9:1,
+                                ],
+                            } @ 5:4-9:9,
+                        ],
+                    } @ 3:4-9:9,
+                ],
+            } @ 1:1-9:12,
+        ],
+    } @ 0:0-9:12,
+)

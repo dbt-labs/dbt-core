@@ -1,0 +1,49 @@
+---
+source: minijinja/tests/test_templates.rs
+description: "{% for item in seq %}\n  {{ item }} ({{ loop.index }} of {{ loop.length }})\n    first={{ loop.first }}\n    last={{ loop.last }}\n    revindex={{ loop.revindex }}\n    revindex0={{ loop.revindex0 }}\n    cycle={{ loop.cycle(\"odd\", \"even\") }}\n    previtem={{ loop.previtem }}\n    nextitem={{ loop.nextitem }}\n{% endfor %}"
+info:
+  seq:
+    - a
+    - b
+    - c
+    - d
+input_file: minijinja/tests/inputs/loop_var.txt
+---
+
+  a (1 of 4)
+    first=true
+    last=false
+    revindex=4
+    revindex0=3
+    cycle=odd
+    previtem=
+    nextitem=b
+
+  b (2 of 4)
+    first=false
+    last=false
+    revindex=3
+    revindex0=2
+    cycle=even
+    previtem=a
+    nextitem=c
+
+  c (3 of 4)
+    first=false
+    last=false
+    revindex=2
+    revindex0=1
+    cycle=odd
+    previtem=b
+    nextitem=d
+
+  d (4 of 4)
+    first=false
+    last=true
+    revindex=1
+    revindex0=0
+    cycle=even
+    previtem=c
+    nextitem=
+
+

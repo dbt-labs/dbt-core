@@ -1,0 +1,16 @@
+---
+source: minijinja/tests/test_compiler.rs
+expression: "&c.finish()"
+---
+(
+    [
+        00000 | Lookup("items")  [line 0],
+        00001 | PushLoop(1),
+        00002 | Iterate(5),
+        00003 | Emit,
+        00004 | Jump(2),
+        00005 | PopFrame,
+        00006 | EmitRaw("!"),
+    ],
+    {},
+)

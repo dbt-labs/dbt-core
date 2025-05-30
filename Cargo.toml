@@ -1,0 +1,361 @@
+
+[workspace]
+members = [
+
+  # Source Available
+  "crates/dbt-agate",
+  "crates/dbt-common",
+  "crates/dbt-frontend-common",
+  "crates/dbt-frontend-schemas",
+  "crates/dbt-jinja/minijinja",
+  "crates/dbt-jinja/minijinja-contrib",
+  "crates/dbt-dag",
+  "crates/dbt-loader",
+  "crates/dbt-parser",
+  "crates/dbt-schemas",
+  "crates/dbt-selector-parser",
+  "crates/dbt-proc-macros",
+  "crates/dbt-adapter-proc-macros",
+  "crates/dbt-fusion-adapter",
+  "crates/dbt-jinja-utils",
+  "crates/dbt-sa-cli",
+  "crates/dbt-xdbc",
+  "crates/dbt-deps",
+  "crates/vortex-client",
+  "crates/proto-rust",
+  "crates/dbt-env",
+]
+
+resolver = "2"
+
+[workspace.package]
+authors = ["dbt Labs <info@getdbt.com>"]
+description = "Fusion: A fast dbt engine, SQL compiler, local development framework, and in-memory analytical database"
+edition = "2021"
+homepage = "https://getdbt.com"
+keywords = ["sql", "parquet", "json", "csv", "dbt"]
+license = "<>"
+repository = "https://github.com/dbt-labs/dbt-core"
+version = "2.0.0-beta.12"
+
+# We currently need a fork of apache/arrow-datafusion with a few patches.
+# However, note that we declare dependencies in our crates with the same version
+# numbers as crates.io / the upstream repository.
+# See https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html#the-patch-section
+[patch.crates-io]
+datafusion = { git = "https://github.com/sdf-labs/arrow-datafusion", rev = "fba71744de5a40aed493afb3ef9b810a89cbe6fc" } # @ sdf/45 branch
+# OR, when working locally
+#datafusion = { path = "../arrow-datafusion/datafusion/core" }
+
+# All arrow dependencies (run `cargo tree --prefix none | grep ^arrow | cut -d ' ' -f1 | sort -u` to get this list)
+arrow = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
+arrow-arith = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
+arrow-array = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
+arrow-buffer = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
+arrow-cast = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
+arrow-csv = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
+arrow-data = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
+arrow-ipc = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
+arrow-json = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
+arrow-ord = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
+arrow-row = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
+arrow-schema = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
+arrow-select = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
+arrow-string = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
+# OR, when working locally
+#arrow = { path = "../arrow-rs/arrow" }
+#arrow-arith = { path = "../arrow-rs/arrow-arith" }
+#arrow-array = { path = "../arrow-rs/arrow-array" }
+#arrow-buffer = { path = "../arrow-rs/arrow-buffer" }
+#arrow-cast = { path = "../arrow-rs/arrow-cast" }
+#arrow-csv = { path = "../arrow-rs/arrow-csv" }
+#arrow-data = { path = "../arrow-rs/arrow-data" }
+#arrow-ipc = { path = "../arrow-rs/arrow-ipc" }
+#arrow-json = { path = "../arrow-rs/arrow-json" }
+#arrow-ord = { path = "../arrow-rs/arrow-ord" }
+#arrow-row = { path = "../arrow-rs/arrow-row" }
+#arrow-schema = { path = "../arrow-rs/arrow-schema" }
+#arrow-select = { path = "../arrow-rs/arrow-select" }
+#arrow-string = { path = "../arrow-rs/arrow-string" }
+
+[profile.dev.package."*"]
+# Enable basic optimizations for all non-member dependencies. This greatly
+# speeds up test times, with no loss of debuggability.
+opt-level = 1
+
+[profile.dev.build-override]
+# Some libraries (e.g. syn, proc-macro2 and all their dependencies) are compiled
+# *for* the build, and also dependend by tests (because we have proc-macro crates).
+# Tests compile with debug symbols enabled, otherwise debug symbols are disabled by default.
+# Force debug symbols to be always enabled to increase cache reuse between `cargo xtask`
+# and `cargo build/run --bin` invocations.
+debug = true
+
+# Release Profiles https://doc.rust-lang.org/book/ch14-01-release-profiles.html
+# To run: cargo build --release
+[profile.release]
+opt-level = 3
+# Link-time optimization: whole-program analysis (across crate boundaries etc.)
+# during the link step. ThinLTO is drastically more efficient (in terms of
+# build time and parallelism) than what one gets with "yes". See
+# http://blog.llvm.org/2016/06/thinlto-scalable-and-incremental-lto.html
+lto = "thin"
+# Parallel compilation within a crate. See:
+# https://doc.rust-lang.org/cargo/reference/profiles.html#codegen-units
+codegen-units = 16
+
+# Used for Linux builds. Symbols are extracted by the CI build script.
+[profile.relwithdebinfo]
+inherits = "release"
+strip = false
+debug = true
+
+# Profile for CI runs
+[profile.ci]
+inherits = "dev"
+opt-level = 3
+
+[workspace.dependencies]
+# These crates should be used by workspace members using `workspace = true`.
+# We only want to specify the versions once.
+# https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#inheriting-a-dependency-from-a-workspace
+
+
+# fs source available dependencies
+dbt-adapter-proc-macros = { path = "crates/dbt-adapter-proc-macros" }
+dbt-agate = { path = "crates/dbt-agate" }
+dbt-common = { path = "crates/dbt-common" }
+dbt-dag = { path = "crates/dbt-dag" }
+dbt-deps = { path = "crates/dbt-deps" }
+dbt-env = { path = "crates/dbt-env" }
+dbt-frontend-common = { path = "crates/dbt-frontend-common" }
+dbt-frontend-schemas = { path = "crates/dbt-frontend-schemas" }
+dbt-fusion-adapter = { path = "crates/dbt-fusion-adapter" }
+dbt-jinja-utils = { path = "crates/dbt-jinja-utils" }
+dbt-loader = { path = "crates/dbt-loader" }
+dbt-parser = { path = "crates/dbt-parser" }
+dbt-proc-macros = { path = "crates/dbt-proc-macros" }
+dbt-schemas = { path = "crates/dbt-schemas" }
+dbt-selector-parser = { path = "crates/dbt-selector-parser" }
+proto-rust = { path = "crates/proto-rust" }
+vortex-client = { path = "crates/vortex-client" }
+
+# jinja dependencies
+minijinja = { path = "crates/dbt-jinja/minijinja", features = [
+  "loader",
+  "custom_syntax",
+] }
+minijinja-contrib = { path = "crates/dbt-jinja/minijinja-contrib", features = [
+  "pycompat",
+  "datetime",
+  "timezone",
+  "rand",
+  "unicode_wordwrap",
+  "wordcount",
+] }
+
+# serde
+dbt-serde_yaml = { git = "https://github.com/sdf-labs/dbt-serde-yaml", rev = "8ebed11a25e62487ffa69a266b888d57501efef8", features = [
+  "filename",
+  "schemars",
+  "flatten_dunder",
+] }
+serde = { version = "1.0.147", default-features = false, features = ["derive"] }
+serde_derive = "1.0.215"
+serde_json = "1.0.133"
+serde_with = "3.12.0"
+# dbt-serde_yaml = { path = "../dbt-serde-yaml/dbt-serde_yaml/", features = [
+#   "filename",
+#   "schemars",
+#   "flatten_dunder",
+# ] }
+
+# cloud providers
+aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
+aws-sdk-s3 = "1.78.0"
+
+# arrow + parquet
+arrow = { version = "=54.2.1", features = ["prettyprint"] }
+arrow-array = { version = "=54.2.1" }
+arrow-buffer = { version = "=54.2.1" }
+arrow-data = { version = "=54.2.1" }
+arrow-json = { version = "=54.2.1" }
+arrow-schema = { version = "=54.2.1", features = ["serde"] }
+parquet = { version = "=54.2.1" }
+
+# xdbc
+adbc-core = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_core", version = "0.18.0", features = [
+  "driver_manager",
+], rev = "3fdf3790bd0e0d0c2ed9f5a65266ce3d2c429811" } # @ apache-arrow-adbc-18-rust
+dbt-xdbc = { path = "crates/dbt-xdbc" }
+
+# antlr for frontend
+antlr-rust = { git = "https://github.com/sdf-labs/antlr4", rev = "b8179d265532a5f2c901d702adcb4975e32b949c" }
+
+# datafusion
+datafusion = { version = "45.0.0", default-features = false, features = [
+  "compression",
+  "crypto_expressions",
+  "datetime_expressions",
+  "encoding_expressions",
+  "math_expressions",
+  "nested_expressions",
+  "parquet",
+  "regex_expressions",
+  "string_expressions",
+  "unicode_expressions",
+] }
+datafusion-common = { version = "45.0.0", default-features = false, features = [
+  "object_store",
+  "parquet",
+] }
+
+# uuid
+uuid = { version = "1.16.0", features = ["v4"] }
+
+# networking & cache
+redis = { version = "0.31.0", features = [
+  "cluster",
+  "cluster-async",
+  "tls-rustls",
+  "tls-rustls-insecure",
+  "tokio-comp",
+  "tokio-rustls-comp",
+] }
+rustls = { version = "0.23.27" }
+# replace default-tls in default features with rustls-tls
+reqwest = { version = "0.12.9", default-features = false, features = [
+  "charset",
+  "http2",
+  "rustls-tls",
+  "macos-system-configuration",
+] }
+# latest version depended on by the version of reqwest-retry in use
+reqwest-middleware = { version = "0.3.3" }
+reqwest-retry = { version = "0.7.0" }
+http = { version = "1.2.0", default-features = false }
+ureq = { version = "3.0.11", default-features = false, features = [
+  "gzip",
+  "json",
+  "rustls",
+] }
+
+# lazy static
+lazy_static = "1.4"
+
+# type derived macros
+enum-map = "2.7.3"
+int-enum = "1.1"
+strum = "0.26.3"
+strum_macros = "0.26.4"
+
+# macros
+paste = "1.0.15"
+scopeguard = { version = "1.2.0" }
+
+# io stuff
+console = "0.15.5"
+csv = { version = "1.1", default-features = false }
+dialoguer = "0.11.0"
+dirs = "5.0.1"
+flate2 = "1.0.28"
+gix = { version = "0.72.1", default-features = false, features = ["revision"] }
+gix-discover = "0.40.1"
+glob = "0.3.2"
+num_cpus = "1.16.0"
+pathdiff = "0.2.3"
+run_script = "0.11.0"
+rust-embed = { version = "8.5.0" }
+schemars = "0.8.22"
+shellexpand = "3.1.1"
+stringmetrics = "2.2.2"
+tar = "0.4.40"
+tempfile = "3.2.0"
+term_size = "0.3.1"
+walkdir = "2.4.0"
+xshell = "0.2.7"
+
+# async + threading
+async-trait = "0.1.83"
+crossbeam-queue = "0.3.12"
+futures = "0.3.31"
+futures-core = "0.3"
+futures-util = "0.3"
+once_cell = "1.18"
+parking_lot = { version = "0.12.3" }
+tokio = { version = "1.41.1" }
+
+# pretty
+comfy-table = { version = "7.1.1" }
+
+# repl
+rustyline = { version = "15.0.0", default-features = false, features = [
+  "derive",
+] }
+
+# datatypes and algos
+base64 = "0.22.1"
+bigdecimal = "0.4.7"
+blake3 = "1.5.0"
+chrono = { version = "0.4.31", features = ["std", "clock", "serde"] }
+chrono-tz = { version = "0.10.1" }
+clap = { version = "4.4.4", features = ["derive"] }
+dashmap = "6.1.0"
+fancy-regex = "0.14.0"
+hex = { version = "0.4.3" }
+humantime = "2.1.0"
+iana-time-zone = { version = "0.1.10" }
+im = "15.1.0"
+indexmap = "2.2.3"
+ini = "1.3.0"
+itertools = "0.13.0"
+linked-hash-map = "0.5.6"
+linked_hash_set = "0.1.4"
+md5 = "0.7.0"
+petgraph = "0.8.1"
+rand = "0.9.0"
+regex = "1.11.1"
+rust-lapper = "1.1.0"
+sha2 = "0.10.8"
+url = "2.5.4"
+ustr = "1.0.0"
+zstd-safe = "7"
+
+# testing
+difference = "2.0.0"
+goldie = "0.5.0"
+indoc = "2.0.6"
+mock_instant = "0.5.3"
+pretty_assertions = { version = "1.4.1" }
+sqllogictest = "0.26.0"
+
+# protobuf
+bytes = "1.10.1"
+pbjson = "0.7.0"
+pbjson-types = "0.7.0"
+prost = "0.13"
+prost-types = "0.13"
+tonic-build = "0.11.0"
+
+
+# error handling
+anyhow = { version = "1.0.74" }
+
+# logging
+log = { version = "0.4.27", features = ["kv_serde"] }
+
+# tracing (observability)
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "json"] }
+
+# tracing (local profiling)
+# Compile with --features "tracy-client/enable" to enable integration with the
+# Tracy profiler: https://github.com/wolfpld/tracy
+tracy-client = { version = "0.18.0", default-features = false }
+
+[workspace.lints.rust]
+# When updating these lints mind that some crates may not inherit form workspace
+# Use only "warn" in this section. CI run will turn these into deny,
+# and we don't want to disallow local compilation of "dirty" code.
+unused_qualifications = "warn"
+#unused_crate_dependencies = "warn"

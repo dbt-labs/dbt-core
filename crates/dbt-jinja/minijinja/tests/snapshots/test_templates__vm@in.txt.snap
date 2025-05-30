@@ -1,0 +1,20 @@
+---
+source: minijinja/tests/test_templates.rs
+description: "{{ word in the_sentence }}\n{{ word in the_words }}\n{{ word in the_map }}\n{{ word not in the_sentence }}\n{{ word not in the_words }}\n{{ word not in the_map }}"
+info:
+  the_map:
+    bird: the word
+  the_sentence: bird is the word
+  the_words:
+    - bird
+    - not bird
+  word: bird
+input_file: minijinja/tests/inputs/in.txt
+---
+true
+true
+true
+false
+false
+false
+

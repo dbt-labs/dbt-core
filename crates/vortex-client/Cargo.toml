@@ -1,0 +1,40 @@
+[package]
+name = "vortex-client"
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+authors.workspace = true
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+[dependencies]
+proto-rust = { path = "../proto-rust" }
+
+# client dependencies
+anyhow = { workspace = true }
+chrono = { workspace = true }
+dashmap = { workspace = true }
+dbt-common = { workspace = true }
+dbt-env = { workspace = true }
+dbt-jinja-utils = { workspace = true }
+dbt-schemas = { workspace = true }
+dbt-serde_yaml = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+md5 = { workspace = true }
+pbjson-types = { workspace = true }
+prost = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+mock_instant = { workspace = true }
+
+[lib]
+name = "vortex_client"
+path = "src/lib.rs"
+doctest = false

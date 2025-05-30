@@ -1,0 +1,23 @@
+---
+source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+description: "{{ 10_ }}"
+info: {}
+input_file: crates/dbt-jinja/minijinja/tests/inputs/err_bad_trailing_underscore.txt
+---
+!!!SYNTAX ERROR!!!
+
+Error {
+    kind: SyntaxError,
+    detail: "'_' may not occur at end of number",
+    name: "err_bad_trailing_underscore.txt",
+    line: 1,
+}
+
+syntax error: '_' may not occur at end of number
+(in err_bad_trailing_underscore.txt:1)
+----------------------- err_bad_trailing_underscore.txt -----------------------
+   1 > {{ 10_ }}
+     i       ^ syntax error
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+No referenced variables
+-------------------------------------------------------------------------------

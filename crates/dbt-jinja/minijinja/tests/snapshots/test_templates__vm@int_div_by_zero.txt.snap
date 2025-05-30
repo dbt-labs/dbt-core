@@ -1,0 +1,23 @@
+---
+source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+description: "{{ 10 // 0 }}"
+info: {}
+input_file: crates/dbt-jinja/minijinja/tests/inputs/int_div_by_zero.txt
+---
+!!!ERROR!!!
+
+Error {
+    kind: InvalidOperation,
+    detail: "unable to calculate 10 // 0",
+    name: "int_div_by_zero.txt",
+    line: 1,
+}
+
+invalid operation: unable to calculate 10 // 0
+(in int_div_by_zero.txt:1)
+----------------------------- int_div_by_zero.txt -----------------------------
+   1 > {{ 10 // 0 }}
+     i ^^^^^^^^^^^^^ invalid operation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+No referenced variables
+-------------------------------------------------------------------------------

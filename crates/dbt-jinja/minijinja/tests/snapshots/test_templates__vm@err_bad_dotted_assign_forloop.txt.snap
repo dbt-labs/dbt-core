@@ -1,0 +1,25 @@
+---
+source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+description: "{% for foo.baz in [] %}\n  ...\n{% endfor %}"
+info: {}
+input_file: crates/dbt-jinja/minijinja/tests/inputs/err_bad_dotted_assign_forloop.txt
+---
+!!!SYNTAX ERROR!!!
+
+Error {
+    kind: SyntaxError,
+    detail: "unexpected `.`, expected in",
+    name: "err_bad_dotted_assign_forloop.txt",
+    line: 1,
+}
+
+syntax error: unexpected `.`, expected in
+(in err_bad_dotted_assign_forloop.txt:1)
+---------------------- err_bad_dotted_assign_forloop.txt ----------------------
+   1 > {% for foo.baz in [] %}
+     i           ^ syntax error
+   2 |   ...
+   3 | {% endfor %}
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+No referenced variables
+-------------------------------------------------------------------------------

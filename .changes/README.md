@@ -6,7 +6,6 @@ We use [changie](https://changie.dev/) to automate `CHANGELOG` generation.  For 
 
 - All new change entries get generated under `/.changes/unreleased` as a yaml file
 - `header.tpl.md` contains the contents of the entire CHANGELOG file
-- `0.0.0.md` contains the contents of the footer for the entire CHANGELOG file.  changie looks to be in the process of supporting a footer file the same as it supports a header file.  Switch to that when available.  For now, the 0.0.0 in the file name forces it to the bottom of the changelog no matter what version we are releasing.
 - `.changie.yaml` contains the fields in a change, the format of a single change, as well as the format of the Contributors section for each version.
 
 ### Workflow
@@ -16,7 +15,7 @@ Almost every code change we make associated with an issue will require a `CHANGE
 
 The `changie new` command will ensure correct file format and file name.  There is a one to one mapping of issues to changes.  Multiple issues cannot be lumped into a single entry. If you make a mistake, the yaml file may be directly modified and saved as long as the format is preserved.
 
-Note: If your PR has been cleared by the Core Team as not needing a changelog entry, the `Skip Changelog` label may be put on the PR to bypass the GitHub action that blacks PRs from being merged when they are missing a `CHANGELOG` entry.
+Note: If your PR has been cleared by the team as not needing a changelog entry, the `Skip Changelog - dbt-fusion` label may be put on the PR to bypass the GitHub action that blacks PRs from being merged when they are missing a `CHANGELOG` entry.
 
 #### Prerelease Workflow
 These commands batch up changes in `/.changes/unreleased` to be included in this prerelease and move those files to a directory named for the release version.  The `--move-dir` will be created if it does not exist and is created in `/.changes`.

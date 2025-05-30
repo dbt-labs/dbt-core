@@ -1,0 +1,20 @@
+[package]
+name = "dbt-frontend-schemas"
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+itertools = { workspace = true }
+linked-hash-map = { workspace = true, features = ["serde_impl"] }
+serde = { workspace = true }
+strum_macros = { workspace = true }
+ustr = { workspace = true }

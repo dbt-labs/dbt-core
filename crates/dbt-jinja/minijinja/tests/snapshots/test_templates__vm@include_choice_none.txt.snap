@@ -1,0 +1,25 @@
+---
+source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+description: "Before\n{% include [\"missing_template1.txt\", \"missing_template2.txt\"] %}\nAfter"
+info: {}
+input_file: crates/dbt-jinja/minijinja/tests/inputs/include_choice_none.txt
+---
+!!!ERROR!!!
+
+Error {
+    kind: TemplateNotFound,
+    detail: "tried to include one of multiple templates, none of which existed ('missing_template1.txt', 'missing_template2.txt')",
+    name: "include_choice_none.txt",
+    line: 2,
+}
+
+template not found: tried to include one of multiple templates, none of which existed ('missing_template1.txt', 'missing_template2.txt')
+(in include_choice_none.txt:2)
+--------------------------- include_choice_none.txt ---------------------------
+   1 | Before
+   2 > {% include ["missing_template1.txt", "missing_template2.txt"] %}
+     i ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ template not found
+   3 | After
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+No referenced variables
+-------------------------------------------------------------------------------

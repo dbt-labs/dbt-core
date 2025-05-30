@@ -1,0 +1,116 @@
+//! This module contains the scope guard for resolving models.
+
+use std::{collections::BTreeMap, sync::Arc};
+
+use dashmap::DashMap;
+use dbt_common::serde_utils::convert_json_to_dash_map;
+use dbt_fusion_adapter::adapters::{load_store::ResultStore, utils::create_relation};
+use dbt_schemas::schemas::{
+    common::ResolvedQuoting, manifest::CommonAttributes, relations::base::BaseRelation,
+};
+use minijinja::{
+    constants::{TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID},
+    Value as MinijinjaValue,
+};
+use serde::Serialize;
+
+use super::compile_config::CompileConfig;
+
+/// Build a compile model context
+/// Returns a context and the current relation
+#[allow(clippy::type_complexity)]
+pub fn build_compile_node_context<S: Serialize>(
+    model: &MinijinjaValue,
+    common_attr: &CommonAttributes,
+    alias: &str,
+    config: &S,
+    quoting: ResolvedQuoting,
+    adapter_type: &str,
+    base_context: &BTreeMap<String, MinijinjaValue>,
+) -> (
+    BTreeMap<String, MinijinjaValue>,
+    Arc<dyn BaseRelation>,
+    Arc<DashMap<String, MinijinjaValue>>,
+) {
+    let mut base_builtins = if let Some(builtins) = base_context.get("builtins") {
+        builtins
+            .as_object()
+            .unwrap()
+            .downcast_ref::<BTreeMap<String, MinijinjaValue>>()
+            .unwrap()
+            .clone()
+    } else {
+        BTreeMap::new()
+    };
+    let mut ctx = base_context.clone();
+
+    // Create a relation for 'this' using config values
+    let this_relation = create_relation(
+        adapter_type.to_string(),
+        common_attr.database.clone(),
+        common_attr.schema.clone(),
+        Some(alias.to_string()),
+        None,
+        quoting,
+    )
+    .unwrap();
+
+    ctx.insert("this".to_owned(), this_relation.as_value());
+    ctx.insert(
+        "database".to_owned(),
+        MinijinjaValue::from(common_attr.database.to_string()),
+    );
+    ctx.insert(
+        "schema".to_owned(),
+        MinijinjaValue::from(common_attr.schema.to_string()),
+    );
+    ctx.insert("identifier".to_owned(), MinijinjaValue::from(alias));
+
+    let config_map = Arc::new(convert_json_to_dash_map(
+        serde_json::to_value(config).unwrap(),
+    ));
+    let compile_config = CompileConfig {
+        config: config_map.clone(),
+    };
+
+    ctx.insert(
+        "config".to_owned(),
+        MinijinjaValue::from_object(compile_config.clone()),
+    );
+    base_builtins.insert(
+        "config".to_string(),
+        MinijinjaValue::from_object(compile_config),
+    );
+
+    // Register builtins as a global
+    ctx.insert(
+        "builtins".to_owned(),
+        MinijinjaValue::from_object(base_builtins),
+    );
+
+    ctx.insert("model".to_owned(), MinijinjaValue::from_serialize(model));
+
+    let result_store = ResultStore::default();
+    ctx.insert(
+        "store_result".to_owned(),
+        MinijinjaValue::from_function(result_store.store_result()),
+    );
+    ctx.insert(
+        "load_result".to_owned(),
+        MinijinjaValue::from_function(result_store.load_result()),
+    );
+    ctx.insert(
+        "store_raw_result".to_owned(),
+        MinijinjaValue::from_function(result_store.store_raw_result()),
+    );
+    ctx.insert(
+        TARGET_PACKAGE_NAME.to_owned(),
+        MinijinjaValue::from(&common_attr.package_name),
+    );
+    ctx.insert(
+        TARGET_UNIQUE_ID.to_owned(),
+        MinijinjaValue::from(&common_attr.unique_id),
+    );
+
+    (ctx, this_relation, config_map)
+}

@@ -1,0 +1,27 @@
+---
+source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+description: "{% extends template %}\n{% extends template %}"
+info:
+  template: simple_layout.txt
+input_file: crates/dbt-jinja/minijinja/tests/inputs/err_extends_twice.txt
+---
+!!!ERROR!!!
+
+Error {
+    kind: InvalidOperation,
+    detail: "tried to extend a second time in a template",
+    name: "err_extends_twice.txt",
+    line: 2,
+}
+
+invalid operation: tried to extend a second time in a template
+(in err_extends_twice.txt:2)
+---------------------------- err_extends_twice.txt ----------------------------
+   1 | {% extends template %}
+   2 > {% extends template %}
+     i ^^^^^^^^^^^^^^^^^^^^^^ invalid operation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Referenced variables: {
+    template: 'simple_layout.txt',
+}
+-------------------------------------------------------------------------------

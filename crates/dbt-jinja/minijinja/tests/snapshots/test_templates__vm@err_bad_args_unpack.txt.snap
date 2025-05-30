@@ -1,0 +1,23 @@
+---
+source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+description: "{{ get_args(*true) }}"
+info: {}
+input_file: crates/dbt-jinja/minijinja/tests/inputs/err_bad_args_unpack.txt
+---
+!!!ERROR!!!
+
+Error {
+    kind: InvalidOperation,
+    detail: "bool is not iterable",
+    name: "err_bad_args_unpack.txt",
+    line: 1,
+}
+
+invalid operation: bool is not iterable
+(in err_bad_args_unpack.txt:1)
+--------------------------- err_bad_args_unpack.txt ---------------------------
+   1 > {{ get_args(*true) }}
+     i ^^^^^^^^^^^^^^^^^^^^^ invalid operation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+No referenced variables
+-------------------------------------------------------------------------------
