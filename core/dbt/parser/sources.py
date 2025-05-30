@@ -175,51 +175,8 @@ class SourcePatcher:
             )
             project_freshness = None
 
-        source_freshness = source.freshness
-        if source_freshness and (target.path, source.name) not in self._deprecations:
-            deprecations.warn(
-                "property-moved-to-config-deprecation",
-                key="freshness",
-                file=target.path,
-                key_path=source.name,
-            )
-            self._deprecations.add((target.path, source.name))
-
-        source_config_freshness_raw: Optional[Dict] = source.config.get(
-            "freshness", {}
-        )  # Will only be None if the user explicitly set it to null
-        source_config_freshness: Optional[FreshnessThreshold] = (
-            FreshnessThreshold.from_dict(source_config_freshness_raw)
-            if source_config_freshness_raw is not None
-            else None
-        )
-
-        table_freshness = table.freshness
-        if table_freshness and (target.path, table.name) not in self._deprecations:
-            deprecations.warn(
-                "property-moved-to-config-deprecation",
-                key="freshness",
-                file=target.path,
-                key_path=table.name,
-            )
-            self._deprecations.add((target.path, table.name))
-
-        table_config_freshness_raw: Optional[Dict] = table.config.get(
-            "freshness", {}
-        )  # Will only be None if the user explicitly set it to null
-        table_config_freshness: Optional[FreshnessThreshold] = (
-            FreshnessThreshold.from_dict(table_config_freshness_raw)
-            if table_config_freshness_raw is not None
-            else None
-        )
-
-        freshness = merge_source_freshness(
-            project_freshness,
-            source_freshness,
-            source_config_freshness,
-            table_freshness,
-            table_config_freshness,
-        )
+        target_freshness = self.calculate_freshness_from_raw_target(target)
+        freshness = merge_source_freshness(project_freshness, target_freshness)
 
         quoting = source.quoting.merged(table.quoting)
         # path = block.path.original_file_path
@@ -438,6 +395,58 @@ class SourcePatcher:
                         f"  - Source table {patch_name}.{table_name} " f"(in {patch.path})"
                     )
         return unused_tables_formatted
+    
+    def calculate_freshness_from_raw_target(
+        self,
+        target: UnpatchedSourceDefinition,
+    ) -> Optional[FreshnessThreshold]:
+        source: UnparsedSourceDefinition = target.source
+
+        source_freshness = source.freshness
+        if source_freshness and (target.path, source.name) not in self._deprecations:
+            deprecations.warn(
+                "property-moved-to-config-deprecation",
+                key="freshness",
+                file=target.path,
+                key_path=source.name,
+            )
+            self._deprecations.add((target.path, source.name))
+
+        source_config_freshness_raw: Optional[Dict] = source.config.get(
+            "freshness", {}
+        )  # Will only be None if the user explicitly set it to null
+        source_config_freshness: Optional[FreshnessThreshold] = (
+            FreshnessThreshold.from_dict(source_config_freshness_raw)
+            if source_config_freshness_raw is not None
+            else None
+        )
+
+        table: UnparsedSourceTableDefinition = target.table
+        table_freshness = table.freshness
+        if table_freshness and (target.path, table.name) not in self._deprecations:
+            deprecations.warn(
+                "property-moved-to-config-deprecation",
+                key="freshness",
+                file=target.path,
+                key_path=table.name,
+            )
+            self._deprecations.add((target.path, table.name))
+
+        table_config_freshness_raw: Optional[Dict] = table.config.get(
+            "freshness", {}
+        )  # Will only be None if the user explicitly set it to null
+        table_config_freshness: Optional[FreshnessThreshold] = (
+            FreshnessThreshold.from_dict(table_config_freshness_raw)
+            if table_config_freshness_raw is not None
+            else None
+        )
+
+        return merge_source_freshness(
+            source_freshness,
+            source_config_freshness,
+            table_freshness,
+            table_config_freshness,
+        )
 
 
 def merge_freshness_time_thresholds(
