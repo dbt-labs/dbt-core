@@ -100,3 +100,18 @@ class TestDepsOptions(object):
         patched_lock = mocker.patch("dbt.task.deps.DepsTask.lock")
         run_dbt(["deps", "--upgrade"])
         assert patched_lock.call_count == 1
+
+
+    def test_deps_read_fwd_compatible(self, clean_start, mocker):
+        package_lock_content = """packages:
+  - name: fivetran_utils
+    package: fivetran/fivetran_utils
+    version: 0.4.7
+  - name: dbt_utils
+    package: dbt-labs/dbt_utils
+    version: 1.3.0
+sha1_hash: 71304bca2138cf8004070b3573a1e17183c0c1a8\n
+"""
+        with open("package-lock.yml", "w") as fp:
+            fp.write(package_lock_content)
+        run_dbt(["deps"])

@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Support reading 'name' in package-lock.yml for forward-compatibility
+time: 2025-05-28T12:14:00.774495+02:00
+custom:
+    Author: jtcohen6
+    Issue: "11661"
