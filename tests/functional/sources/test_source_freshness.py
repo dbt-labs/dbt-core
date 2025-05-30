@@ -20,6 +20,8 @@ from tests.functional.sources.fixtures import (
     filtered_models_schema_yml,
     freshness_via_custom_sql_schema_yml,
     freshness_via_metadata_schema_yml,
+    freshness_with_explicit_null_in_source_schema_yml,
+    freshness_with_explicit_null_in_table_schema_yml,
     override_freshness_models_schema_yml,
 )
 
@@ -599,3 +601,23 @@ class TestSourceFreshnessCustomSQL(SuccessfulSourceFreshnessTest):
             "source_b": "warn",
             "source_c": "pass",
         }
+
+
+class TestSourceFreshnessExplicitNullInTable(SuccessfulSourceFreshnessTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"schema.yml": freshness_with_explicit_null_in_table_schema_yml}
+
+    def test_source_freshness_explicit_null_in_table(self, project):
+        result = self.run_dbt_with_vars(project, ["source", "freshness"], expect_pass=True)
+        assert {r.node.name: r.status for r in result} == {}
+
+
+class TestSourceFreshnessExplicitNullInSource(SuccessfulSourceFreshnessTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"schema.yml": freshness_with_explicit_null_in_source_schema_yml}
+
+    def test_source_freshness_explicit_null_in_source(self, project):
+        result = self.run_dbt_with_vars(project, ["source", "freshness"], expect_pass=True)
+        assert {r.node.name: r.status for r in result} == {}
