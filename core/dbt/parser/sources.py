@@ -206,7 +206,8 @@ class SourcePatcher:
             loader=source.loader,
             loaded_at_field=loaded_at_field,
             loaded_at_query=loaded_at_query,
-            freshness=config.freshness,
+            # The setting to an empty freshness object is to maintain what we were previously doing if no freshenss was specified
+            freshness=config.freshness or FreshnessThreshold(),
             quoting=quoting,
             resource_type=NodeType.Source,
             fqn=target.fqn,
