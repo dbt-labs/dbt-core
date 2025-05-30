@@ -373,7 +373,6 @@ renamed as (
 select * from renamed
 """
 
-
 class JaffleShopProject:
     @pytest.fixture(scope="class")
     def models(self):
@@ -399,13 +398,7 @@ class JaffleShopProject:
 
     @pytest.fixture(scope="class")
     def seeds(self):
-        # Read seed file and return
-        seeds = {}
-        dir_path = os.path.dirname(os.path.realpath(__file__))
-        for file_name in ("raw_customers.csv", "raw_orders.csv", "raw_payments.csv"):
-            contents = read_file(dir_path, "jaffle_shop_data", file_name)
-            seeds[file_name] = contents
-        return seeds
+        return get_jaffle_shop_seeds()
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
@@ -420,3 +413,13 @@ class JaffleShopProject:
                 }
             },
         }
+
+
+def get_jaffle_shop_seeds():
+    # Read seed file and return
+    seeds = {}
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    for file_name in ("raw_customers.csv", "raw_orders.csv", "raw_payments.csv"):
+        contents = read_file(dir_path, "jaffle_shop_data", file_name)
+        seeds[file_name] = contents
+    return seeds
