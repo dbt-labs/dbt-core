@@ -25,6 +25,7 @@ class ParseFileType(StrEnum):
     Fixture = "fixture"
 
 
+# my change
 parse_file_type_to_parser = {
     ParseFileType.Macro: "MacroParser",
     ParseFileType.Model: "ModelParser",
