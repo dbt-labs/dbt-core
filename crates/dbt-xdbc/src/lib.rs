@@ -69,7 +69,7 @@ pub fn str_from_sqlstate(sqlstate: &[c_char; 5]) -> &str {
 pub const SNOWFLAKE_DRIVER_VERSION: &str = "0.18.0+dbt0.0.7";
 pub const BIGQUERY_DRIVER_VERSION: &str = "0.18.0+dbt0.0.3";
 pub const POSTGRES_DRIVER_VERSION: &str = "0.18.0+dbt0.0.2";
-pub const DATABRICKS_DRIVER_VERSION: &str = "0.18.0+dbt0.0.4";
+pub const DATABRICKS_DRIVER_VERSION: &str = "0.18.0+dbt0.0.5";
 
 pub use install::pre_install_driver;
 
