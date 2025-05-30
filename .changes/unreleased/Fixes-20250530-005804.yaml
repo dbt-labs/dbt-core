@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix source freshness set via config to handle explicit nulls
-time: 2025-05-30T00:58:04.94133-05:00
-custom:
-  Author: QMalcolm
-  Issue: "11685"
