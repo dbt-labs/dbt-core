@@ -387,7 +387,7 @@ class SourcePatcher:
                         f"  - Source table {patch_name}.{table_name} " f"(in {patch.path})"
                     )
         return unused_tables_formatted
-    
+
     def calculate_freshness_from_raw_target(
         self,
         target: UnpatchedSourceDefinition,
