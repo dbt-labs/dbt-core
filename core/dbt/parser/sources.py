@@ -487,7 +487,7 @@ def merge_source_freshness(
             merged_freshness_obj.error_after = merged_error_after
             merged_freshness_obj.warn_after = merged_warn_after
             current_merged_value = merged_freshness_obj
-        elif base is None and update is not None:
+        elif base is None and bool(update):
             # If current_merged_value (base) is None, the update becomes the new value
             current_merged_value = update
         else:  # This covers cases where 'update' is None, or both 'base' and 'update' are None.
