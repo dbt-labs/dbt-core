@@ -170,12 +170,11 @@ pub fn resolve_seeds(
             base_attr: NodeBaseAttributes {
                 alias: "".to_owned(), // will be updated below
                 checksum: DbtChecksum::hash(
-                    &String::from_utf8(std::fs::read(seed_file.base_path.join(&path)).map_err(
-                        |e| fs_err!(ErrorCode::IoError, "Failed to read seed file: {}", e),
-                    )?)
-                    .map_err(|e| {
-                        fs_err!(ErrorCode::IoError, "Invalid UTF-8 in seed file: {}", e)
-                    })?,
+                    std::fs::read(seed_file.base_path.join(&path))
+                        .map_err(|e| {
+                            fs_err!(ErrorCode::IoError, "Failed to read seed file: {}", e)
+                        })?
+                        .as_slice(),
                 ),
                 relation_name: None, // will be updated below
                 columns,

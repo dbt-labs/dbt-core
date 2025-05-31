@@ -68,7 +68,7 @@ fn new_operation(
                 },
                 base_attr: NodeBaseAttributes {
                     alias: name,
-                    checksum: DbtChecksum::hash(operation_sql),
+                    checksum: DbtChecksum::hash(operation_sql.as_bytes()),
                     raw_code: Some(operation_sql.to_string()),
                     language: Some("sql".to_string()),
                     ..Default::default()

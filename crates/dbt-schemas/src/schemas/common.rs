@@ -507,9 +507,9 @@ impl PartialEq for DbtChecksum {
 }
 
 impl DbtChecksum {
-    pub fn hash(s: &str) -> Self {
+    pub fn hash(s: &[u8]) -> Self {
         let mut hasher = Sha256::new();
-        hasher.update(s.as_bytes());
+        hasher.update(s);
         let checksum = hasher.finalize();
         Self::Object {
             name: "SHA256".to_string(),

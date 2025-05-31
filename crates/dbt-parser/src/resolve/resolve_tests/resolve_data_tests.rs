@@ -184,7 +184,7 @@ pub async fn resolve_data_tests(
             },
             base_attr: NodeBaseAttributes {
                 alias: "will_be_updated_below".to_owned(),
-                checksum: DbtChecksum::hash(rendered_sql),
+                checksum: DbtChecksum::hash(rendered_sql.as_bytes()),
                 relation_name: None,
                 compiled_path: None,
                 columns: columns_map,

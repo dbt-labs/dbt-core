@@ -244,7 +244,7 @@ pub async fn render_unresolved_sql_files_sequentially<
                 let sql_resources_locked = sql_resources_cloned.lock().unwrap().clone();
                 let sql_file_info = SqlFileInfo::from_sql_resources(
                     sql_resources_locked.clone(),
-                    DbtChecksum::hash(&sql),
+                    DbtChecksum::hash(sql.as_bytes()),
                     execute_exists.load(atomic::Ordering::Relaxed),
                 );
                 let model_config = ManifestModelConfig::from(*sql_file_info.config.clone());
@@ -275,7 +275,7 @@ pub async fn render_unresolved_sql_files_sequentially<
                 let sql_resources_locked = sql_resources_cloned.lock().unwrap().clone();
                 let sql_file_info = SqlFileInfo::from_sql_resources(
                     sql_resources_locked.clone(),
-                    DbtChecksum::hash(&sql),
+                    DbtChecksum::hash(sql.as_bytes()),
                     execute_exists.load(atomic::Ordering::Relaxed),
                 );
                 match err.kind() {
@@ -522,7 +522,7 @@ pub async fn render_unresolved_sql_files<
                         let sql_resources_locked = sql_resources_cloned.lock().unwrap().clone();
                         let sql_file_info = SqlFileInfo::from_sql_resources(
                             sql_resources_locked.clone(),
-                            DbtChecksum::hash(&sql),
+                            DbtChecksum::hash(sql.as_bytes()),
                             execute_exists.load(atomic::Ordering::Relaxed),
                         );
                         // check the model config to see if it is enabled
@@ -554,7 +554,7 @@ pub async fn render_unresolved_sql_files<
                         let sql_resources_locked = sql_resources_cloned.lock().unwrap().clone();
                         let sql_file_info = SqlFileInfo::from_sql_resources(
                             sql_resources_locked.clone(),
-                            DbtChecksum::hash(&sql),
+                            DbtChecksum::hash(sql.as_bytes()),
                             execute_exists.load(atomic::Ordering::Relaxed),
                         );
                         match err.kind() {
