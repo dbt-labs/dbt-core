@@ -103,6 +103,8 @@ pub enum ErrorCode {
     InvalidCoalesceArgument = 253,
     WindowFunctionInWrongPlace = 254,
     UnsupportedFeature = 255,
+    ArgumentShouldBeStringLiteral = 256,
+    InvalidDatabricksNumberFormat = 257,
 
     // ----------------- Coarse grained errors -----------------
     BadQueryLimitTarget = 401,
