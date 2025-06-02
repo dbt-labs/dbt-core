@@ -1,17 +1,25 @@
 use crate::constants::EXECUTING;
 use crate::io_args::IoArgs;
 use crate::pretty_string::remove_ansi_codes;
+use crate::FsResult;
 use clap::ValueEnum;
-use log::{LevelFilter, Metadata, Record, SetLoggerError};
+use log::{LevelFilter, Metadata, Record};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 const QUERY_LOG_SQL: &str = "query_log.sql";
+
+/// Predicate to check if a key in a log [Record] is an internal logging key.
+/// These keys are used internally by the logger for e.g. progress bar control
+/// and stat tracking, and should not be propagated to the log output.
+pub fn is_fusion_internal_key(key: &str) -> bool {
+    key.starts_with("_") && key.ends_with("_")
+}
 
 // Logger configuration for individual loggers
 #[derive(Clone)]
@@ -31,7 +39,9 @@ struct LoggerConfig {
 pub enum LogFormat {
     Text,
     Json,
+    Fancy,
 }
+
 impl Default for LogFormat {
     fn default() -> Self {
         Self::Text
@@ -42,6 +52,7 @@ impl Display for LogFormat {
         match self {
             LogFormat::Text => write!(f, "text"),
             LogFormat::Json => write!(f, "json"),
+            LogFormat::Fancy => write!(f, "fancy"),
         }
     }
 }
@@ -70,14 +81,25 @@ impl<'kvs> log::kv::VisitSource<'kvs> for KvVisitor<'_> {
         key: log::kv::Key<'kvs>,
         value: log::kv::Value<'kvs>,
     ) -> Result<(), log::kv::Error> {
+        if is_fusion_internal_key(key.as_str()) {
+            // Skip special keys that are handled by the logger itself
+            return Ok(());
+        }
+
         self.kvs.insert(key.to_string(), value.to_string());
         Ok(())
     }
 }
 
+enum LogTarget {
+    Stdout,
+    Stderr,
+    Writer(Arc<Mutex<Box<dyn Write + Send>>>),
+}
+
 // Individual logger that can be customized
 struct Logger {
-    writer: Arc<Mutex<Box<dyn Write + Send>>>,
+    target: LogTarget,
     config: LoggerConfig,
     name: String,
     invocation_id: uuid::Uuid,
@@ -93,15 +115,35 @@ impl Display for Logger {
     }
 }
 
+macro_rules! locked_writeln {
+    ($self:expr, $($arg:tt)*) => {
+        match $self.target {
+            LogTarget::Stdout => {
+                let mut writer = std::io::stdout().lock();
+                writeln!(writer, $($arg)*).ok();
+            }
+            LogTarget::Stderr => {
+                let mut writer = std::io::stderr().lock();
+                writeln!(writer, $($arg)*).ok();
+            }
+            LogTarget::Writer(ref path) => {
+                if let Ok(mut writer) = path.lock() {
+                    writeln!(writer, $($arg)*).ok();
+                }
+            }
+        }
+    };
+}
+
 impl Logger {
     fn new(
         name: impl Into<String>,
-        writer: Arc<Mutex<Box<dyn Write + Send>>>,
+        writer: LogTarget,
         config: LoggerConfig,
         invocation_id: uuid::Uuid,
     ) -> Self {
         Self {
-            writer,
+            target: writer,
             config,
             name: name.into(),
             invocation_id,
@@ -199,41 +241,83 @@ impl Logger {
         }
         json!({ "info": info_json, "data": data}).to_string()
     }
+}
+
+impl log::Log for Logger {
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        let current_level = metadata.level();
+        // Check if the level is within the configured level filter
+        if current_level > self.config.level_filter {
+            return false;
+        }
+        // Counter intuitively, the lower the level, the more verbose the logging
+        if let Some(min_level) = self.config.min_level {
+            if current_level < min_level {
+                return false;
+            }
+        }
+        if let Some(max_level) = self.config.max_level {
+            if current_level > max_level {
+                return false;
+            }
+        }
+        // Reject if not in includes (when set)
+        if let Some(ref includes) = self.config.includes {
+            if !includes.contains(&metadata.target().to_string()) {
+                return false;
+            }
+        }
+        // Reject if in excludes (when set)
+        if let Some(ref excludes) = self.config.excludes {
+            if excludes.contains(&metadata.target().to_string()) {
+                return false;
+            }
+        }
+        true
+    }
 
     fn log(&self, record: &Record) {
-        if self.enabled(record.metadata()) {
-            if let Ok(mut writer) = self.writer.lock() {
-                match self.config.format {
-                    LogFormat::Text => {
-                        let mut text = record.args().to_string();
-                        if self.config.remove_ansi_codes {
-                            text = remove_ansi_codes(&text);
-                        }
-                        writeln!(writer, "{}", text).ok();
+        if self.enabled(record.metadata()) && !super::term::is_term_control_only(record) {
+            match self.config.format {
+                LogFormat::Text | LogFormat::Fancy => {
+                    let mut text = record.args().to_string();
+                    if self.config.remove_ansi_codes {
+                        text = remove_ansi_codes(&text);
                     }
-                    LogFormat::Json => {
-                        let json = Self::format_json(
-                            record,
-                            &self.invocation_id.to_string(),
-                            self.config.remove_ansi_codes,
-                        );
-                        writeln!(writer, "{}", json).ok();
-                    }
+                    locked_writeln!(self, "{}", text);
+                }
+                LogFormat::Json => {
+                    let json = Self::format_json(
+                        record,
+                        &self.invocation_id.to_string(),
+                        self.config.remove_ansi_codes,
+                    );
+                    locked_writeln!(self, "{}", json);
                 }
             }
         }
     }
 
     fn flush(&self) {
-        if let Ok(mut writer) = self.writer.lock() {
-            writer.flush().ok();
+        match self.target {
+            LogTarget::Stdout => {
+                let _ = std::io::stdout().flush();
+            }
+            LogTarget::Stderr => {
+                let _ = std::io::stderr().flush();
+            }
+            LogTarget::Writer(ref path) => {
+                if let Ok(mut writer) = path.lock() {
+                    let _ = writer.flush();
+                }
+            }
         }
     }
 }
 
 // Main logger that manages multiple loggers
 struct MultiLogger {
-    loggers: Vec<Logger>,
+    loggers: Vec<Box<dyn log::Log>>,
 }
 
 impl log::Log for MultiLogger {
@@ -257,16 +341,83 @@ impl log::Log for MultiLogger {
 // Builder pattern for configuring loggers
 #[derive(Default)]
 struct MultiLoggerBuilder {
-    loggers: Vec<Logger>,
+    loggers: Vec<Box<dyn log::Log>>,
     invocation_id: uuid::Uuid,
 }
 
 impl MultiLoggerBuilder {
-    fn new(invocation_id: uuid::Uuid) -> Self {
+    pub fn new(invocation_id: uuid::Uuid) -> Self {
         Self {
             loggers: Vec::new(),
             invocation_id,
         }
+    }
+
+    fn make_stdout_logger(&self, log_config: &FsLogConfig) -> Box<dyn log::Log> {
+        let config = LoggerConfig {
+            level_filter: log_config.log_level,
+            format: log_config.log_format,
+            min_level: Some(LevelFilter::Info),
+            max_level: None,
+            remove_ansi_codes: log_config.remove_ansi_codes,
+            includes: None,
+            excludes: None,
+        };
+
+        let logger = if let Some(writer) = &log_config.stdout {
+            Logger::new(
+                "stdout",
+                LogTarget::Writer(Arc::clone(writer)),
+                config,
+                self.invocation_id,
+            )
+        } else {
+            Logger::new("stdout", LogTarget::Stdout, config, self.invocation_id)
+        };
+
+        Box::new(logger)
+    }
+
+    fn make_stderr_logger(&self, log_config: &FsLogConfig) -> Box<dyn log::Log> {
+        let config = LoggerConfig {
+            level_filter: log_config.log_level,
+            format: log_config.log_format,
+            min_level: None,
+            max_level: Some(LevelFilter::Warn),
+            remove_ansi_codes: log_config.remove_ansi_codes,
+            includes: None,
+            excludes: Some(vec![EXECUTING.to_string()]),
+        };
+
+        let logger = if let Some(writer) = &log_config.stderr {
+            Logger::new(
+                "stderr",
+                LogTarget::Writer(Arc::clone(writer)),
+                config,
+                self.invocation_id,
+            )
+        } else {
+            Logger::new("stderr", LogTarget::Stderr, config, self.invocation_id)
+        };
+
+        Box::new(logger)
+    }
+
+    pub fn add_terminal_loggers(mut self, log_config: &FsLogConfig) -> Self {
+        let stdout_logger = self.make_stdout_logger(log_config);
+        let stderr_logger = self.make_stderr_logger(log_config);
+
+        if log_config.log_format == LogFormat::Fancy {
+            let mut fancy_logger =
+                super::term::FancyLogger::new(vec![stdout_logger, stderr_logger]);
+            fancy_logger.start_ticker();
+            self.loggers.push(Box::new(fancy_logger));
+        } else {
+            // For text and json formats, we use the regular loggers
+            self.loggers.push(stdout_logger);
+            self.loggers.push(stderr_logger);
+        }
+        self
     }
 
     fn add_logger(
@@ -275,8 +426,12 @@ impl MultiLoggerBuilder {
         writer: Arc<Mutex<Box<dyn Write + Send>>>,
         config: LoggerConfig,
     ) -> Self {
-        self.loggers
-            .push(Logger::new(name, writer, config, self.invocation_id));
+        self.loggers.push(Box::new(Logger::new(
+            name,
+            LogTarget::Writer(writer),
+            config,
+            self.invocation_id,
+        )));
         self
     }
 
@@ -345,50 +500,13 @@ impl Default for FsLogConfig {
 }
 
 // Add a new static for storing the current logger
-static LOGGER: Mutex<Option<MultiLogger>> = Mutex::new(None);
+static LOGGER: RwLock<Option<MultiLogger>> = RwLock::new(None);
 
-pub fn init_logger(log_config: FsLogConfig) -> Result<(), SetLoggerError> {
+pub fn init_logger(log_config: FsLogConfig) -> FsResult<()> {
     // Build the multi-logger
     let mut builder = MultiLoggerBuilder::new(log_config.invocation_id);
 
-    // Add stdout logger
-    let stdout_config = LoggerConfig {
-        level_filter: log_config.log_level,
-        format: log_config.log_format,
-        min_level: Some(LevelFilter::Info),
-        max_level: None,
-        remove_ansi_codes: log_config.remove_ansi_codes,
-        includes: None,
-        excludes: None,
-    };
-
-    if let Some(stdout) = log_config.stdout {
-        builder = builder.add_logger("stdout", stdout, stdout_config);
-    } else {
-        let stdout = Arc::new(Mutex::new(
-            Box::new(std::io::stdout()) as Box<dyn Write + Send>
-        ));
-        builder = builder.add_logger("stdout", stdout, stdout_config);
-    }
-
-    // Add stderr logger
-    let stderr_config = LoggerConfig {
-        level_filter: log_config.log_level,
-        format: log_config.log_format,
-        min_level: None,
-        max_level: Some(LevelFilter::Warn),
-        remove_ansi_codes: log_config.remove_ansi_codes,
-        includes: None,
-        excludes: Some(vec![EXECUTING.to_string()]),
-    };
-    if let Some(stderr) = log_config.stderr {
-        builder = builder.add_logger("stderr", stderr, stderr_config);
-    } else {
-        let stderr = Arc::new(Mutex::new(
-            Box::new(std::io::stdout()) as Box<dyn Write + Send>
-        ));
-        builder = builder.add_logger("stderr", stderr, stderr_config);
-    }
+    builder = builder.add_terminal_loggers(&log_config);
 
     // Add file logger
     let file_config = LoggerConfig {
@@ -447,19 +565,23 @@ pub fn init_logger(log_config: FsLogConfig) -> Result<(), SetLoggerError> {
 
     // Build the logger
     let logger = builder.build();
-    let max_level = logger
-        .loggers
-        .iter()
-        .map(|l| l.config.level_filter)
-        .max()
-        .unwrap_or(LevelFilter::Error);
-    log::set_max_level(max_level);
+
+    if cfg!(debug_assertions) {
+        // For debug builds, log everything
+        log::set_max_level(LevelFilter::Trace);
+    } else {
+        // For release builds, cut off below info
+        log::set_max_level(LevelFilter::Info);
+    }
 
     // Update the global logger
-    let mut global_logger = LOGGER.lock().unwrap();
+    let mut global_logger = LOGGER
+        .write()
+        .map_err(|e| unexpected_fs_err!("Failed to acquire lock on global logger: {}", e))?;
     if global_logger.is_none() {
         // First initialization
-        log::set_logger(Box::leak(Box::new(LoggerWrapper)))?;
+        log::set_logger(&LOGGER_WRAPPER)
+            .map_err(|e| unexpected_fs_err!("Failed to set logger: {}", e))?;
     }
     *global_logger = Some(logger);
 
@@ -469,9 +591,11 @@ pub fn init_logger(log_config: FsLogConfig) -> Result<(), SetLoggerError> {
 // Add a wrapper struct that delegates to the current logger
 struct LoggerWrapper;
 
+static LOGGER_WRAPPER: LoggerWrapper = LoggerWrapper;
+
 impl log::Log for LoggerWrapper {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        if let Ok(logger) = LOGGER.lock() {
+        if let Ok(logger) = LOGGER.read() {
             if let Some(logger) = logger.as_ref() {
                 return logger.enabled(metadata);
             }
@@ -480,7 +604,7 @@ impl log::Log for LoggerWrapper {
     }
 
     fn log(&self, record: &Record) {
-        if let Ok(logger) = LOGGER.lock() {
+        if let Ok(logger) = LOGGER.read() {
             if let Some(logger) = logger.as_ref() {
                 logger.log(record);
             }
@@ -488,7 +612,7 @@ impl log::Log for LoggerWrapper {
     }
 
     fn flush(&self) {
-        if let Ok(logger) = LOGGER.lock() {
+        if let Ok(logger) = LOGGER.read() {
             if let Some(logger) = logger.as_ref() {
                 logger.flush();
             }
@@ -519,7 +643,12 @@ mod tests {
             excludes: None,
         };
 
-        let logger = Logger::new("name", writer(), config, uuid::Uuid::new_v4());
+        let logger = Logger::new(
+            "name",
+            LogTarget::Writer(writer()),
+            config,
+            uuid::Uuid::new_v4(),
+        );
         let metadata = MetadataBuilder::new().level(Level::Info).build();
         assert!(!logger.enabled(&metadata));
     }
@@ -536,7 +665,12 @@ mod tests {
             excludes: None,
         };
 
-        let logger = Logger::new("name", writer(), config, uuid::Uuid::new_v4());
+        let logger = Logger::new(
+            "name",
+            LogTarget::Writer(writer()),
+            config,
+            uuid::Uuid::new_v4(),
+        );
         let metadata: Metadata<'_> = MetadataBuilder::new()
             .level(Level::Info)
             .target(EXECUTING)
@@ -556,7 +690,12 @@ mod tests {
             excludes: None,
         };
 
-        let logger = Logger::new("name", writer(), config, uuid::Uuid::new_v4());
+        let logger = Logger::new(
+            "name",
+            LogTarget::Writer(writer()),
+            config,
+            uuid::Uuid::new_v4(),
+        );
         let metadata = MetadataBuilder::new()
             .level(Level::Info)
             .target("datafusion_something")
@@ -576,7 +715,12 @@ mod tests {
             excludes: Some(vec![EXECUTING.to_string()]),
         };
 
-        let logger = Logger::new("name", writer(), config, uuid::Uuid::new_v4());
+        let logger = Logger::new(
+            "name",
+            LogTarget::Writer(writer()),
+            config,
+            uuid::Uuid::new_v4(),
+        );
         let metadata = MetadataBuilder::new()
             .level(Level::Info)
             .target(EXECUTING)

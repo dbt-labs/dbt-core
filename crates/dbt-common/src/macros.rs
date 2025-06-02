@@ -184,6 +184,7 @@ macro_rules! show_result {
             // this preview field and name is used by the dbt-cloud CLI to display the result
             $crate::_log!(
                 $crate::macros::log_adapter::log::Level::Info,
+                _INVOCATION_ID_ = $io.invocation_id.as_u128(),
                 name= "ShowNode",
                 data:serde = json!({ "preview": $artifact.to_string(), "unique_id": INLINE_NODE });
                 "{}", output
@@ -202,6 +203,7 @@ macro_rules! show_error_result {
         // this preview field and name is used by the dbt-cloud CLI to display the result
         $crate::_log!(
             $crate::macros::log_adapter::log::Level::Info,
+            _INVOCATION_ID_ = $io.invocation_id.as_u128(),
             name= "ShowNode",
             data:serde = json!({ "preview": $artifact.to_string(), "unique_id": INLINE_NODE });
             "{}", output
@@ -216,7 +218,12 @@ macro_rules! show_result_with_default_title {
         use $crate::io_args::ShowOptions;
         if $io.should_show($option) {
             let output = format!("\n{}\n{}", $option.title(), $artifact);
-            $crate::_log!($crate::macros::log_adapter::log::Level::Info, "{}", output);
+            $crate::_log!(
+                $crate::macros::log_adapter::log::Level::Info,
+                _INVOCATION_ID_ = $io.invocation_id.as_u128();
+                "{}",
+                 output
+            );
         }
     }};
 }
@@ -236,6 +243,7 @@ macro_rules! show_list_result_with_default_title {
             for item in $list_result {
                 $crate::_log!(
                     $crate::macros::log_adapter::log::Level::Info,
+                    _INVOCATION_ID_ = $io.invocation_id.as_u128(),
                     name = "PrintEvent",
                     code = "Z052";
                     "{}",
@@ -257,6 +265,7 @@ macro_rules! show_result_with_title {
             let output = format!("\n{}\n{}", $title, $artifact);
             $crate::_log!(
                 $crate::macros::log_adapter::log::Level::Info,
+                _INVOCATION_ID_ = $io.invocation_id.as_u128(),
                 name= "ShowNode",
                 data:serde = json!({ "preview": $artifact.to_string(), "unique_id": INLINE_NODE });
                 "{}", output
@@ -277,6 +286,7 @@ macro_rules! show_progress {
             reporter.show_progress($info.event.action().as_str(), &$info.target, $info.desc.as_deref());
         }
 
+        // TODO: these filtering conditions should be moved to the logger side
         if (
             ($io.should_show(ShowOptions::Progress) && $info.is_phase_unknown())
             || ($io.should_show(ShowOptions::ProgressRun) && $info.is_phase_run())
@@ -289,14 +299,256 @@ macro_rules! show_progress {
                     || $info.event.action().as_str().contains(dbt_common::constants::COMPILING)))
         {
             let output = pretty_green($info.event.action().as_str(), &$info.target, $info.desc.as_deref());
-            let log_config = $info.event;
+            let event = $info.event;
             if let Some(data_json) = $info.data {
-                $crate::_log!(log_config.level(), name = log_config.name(), data:serde = data_json; "{}", output);
+                $crate::_log!(event.level(),
+                    _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+                    name = event.name(), data:serde = data_json;
+                     "{}", output
+                );
             } else {
-                $crate::_log!(log_config.level(), name = log_config.name(); "{}", output);
+                $crate::_log!(event.level(),
+                    _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+                    name = event.name();
+                     "{}", output
+                );
             }
         }
     }};
+}
+
+#[macro_export]
+/// Display a progress bar or spinner with optional context items.
+///
+/// Each progress bar or spinner must have a unique identifier (`uid`), which is
+/// a string that is displayed as a prefix to the left of the progress bar or
+/// spinner. It is the caller's responsibility to ensure that the `uid` is
+/// unique -- only a single progress bar or spinner with a given `uid` will be
+/// displayed at a time, if a bar or spinner with a given `uid` is already
+/// displayed, subsequent calls to this macro with the same `uid` will be
+/// silently ignored.
+///
+/// When a progress bar or spinner is active, it can be associated with context
+/// items that provide additional information about the progress being made.
+/// Context items will be displayed as a list of items on the right side of the
+/// progress bar or spinner, as much as space allows.
+///
+/// All variants of this macro returns a scope guard that will automatically
+/// remove the progress bar or item when it goes out of scope.
+macro_rules! with_progress {
+
+    // Start a new spinner
+    ($io:expr, spinner => $uid:expr ) => {{
+        use $crate::logging::ProgressBarGuard;
+        use $crate::logging::TermEvent;
+
+        $crate::_log!(
+            $crate::macros::log_adapter::log::Level::Info,
+            _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+            _TERM_ONLY_ = true,
+            _TERM_EVENT_:serde = TermEvent::start_spinner($uid.into());
+
+            "Starting spinner with uid: {}",
+            $uid
+        );
+        ProgressBarGuard::new(
+            $io.invocation_id.as_u128(),
+            TermEvent::remove_spinner($uid.into())
+        )
+    }};
+
+    // Add a context item to the spinner
+    ($io:expr, spinner => $uid:expr, item => $item:expr ) => {{
+        use $crate::logging::ProgressBarGuard;
+        use $crate::logging::TermEvent;
+
+        $crate::_log!(
+            $crate::macros::log_adapter::log::Level::Info,
+            _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+            _TERM_ONLY_ = true,
+            _TERM_EVENT_:serde = TermEvent::add_spinner_context_item($uid.into(), $item.into());
+
+            "Starting item: {} on spinner: {}",
+            $item, $uid
+        );
+        ProgressBarGuard::new(
+            $io.invocation_id.as_u128(),
+            TermEvent::finish_spinner_context_item($uid.into(), $item.into())
+        )
+    }};
+
+    // Start a new progress bar with a total length
+    ($io:expr, bar => $uid:expr, length => $total:expr ) => {{
+        use $crate::logging::ProgressBarGuard;
+        use $crate::logging::TermEvent;
+
+        $crate::_log!(
+            $crate::macros::log_adapter::log::Level::Info,
+            _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+            _TERM_ONLY_ = true,
+            _TERM_EVENT_:serde = TermEvent::start_bar($uid.into(), $total as u64);
+
+            "Starting progress bar with uid: {}, total: {}",
+            $uid, $total
+        );
+        ProgressBarGuard::new(
+            $io.invocation_id.as_u128(),
+            TermEvent::remove_bar($uid.into())
+        )
+    }};
+
+    // Add a context item to the progress bar and increment the progress bar by
+    // one
+    ($io:expr, bar => $uid:expr, item => $item:expr ) => {{
+        use $crate::logging::ProgressBarGuard;
+        use $crate::logging::TermEvent;
+
+        $crate::_log!(
+            $crate::macros::log_adapter::log::Level::Info,
+            _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+            _TERM_ONLY_ = true,
+            _TERM_EVENT_:serde = TermEvent::add_bar_context_item($uid.into(), $item.into());
+
+            "Starting item: {} on progress bar: {}",
+            $item, $uid
+        );
+        ProgressBarGuard::new(
+            $io.invocation_id.as_u128(),
+            TermEvent::finish_bar_context_item($uid.into(), $item.into(), None)
+        )
+    }};
+}
+
+#[macro_export]
+/// Show a new progress bar or spinner, or add an in-progress item to an
+/// existing one
+macro_rules! start_progress {
+
+    ($io:expr, spinner => $uid:expr) => {{
+        use $crate::logging::TermEvent;
+
+        $crate::_log!(
+            $crate::macros::log_adapter::log::Level::Info,
+            _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+            _TERM_ONLY_ = true,
+            _TERM_EVENT_:serde = TermEvent::start_spinner($uid.into());
+
+            "Starting spinner with uid: {}",
+            $uid
+        );
+    }};
+
+    ($io:expr, bar => $uid:expr, length => $total:expr) => {{
+        use $crate::logging::TermEvent;
+
+        $crate::_log!(
+            $crate::macros::log_adapter::log::Level::Info,
+            _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+            _TERM_ONLY_ = true,
+            _TERM_EVENT_:serde = TermEvent::start_bar($uid.into(), $total.into());
+
+            "Starting progress bar with uid: {}, total: {}",
+            $uid, $total
+        );
+    }};
+
+    ($io:expr, spinner => $uid:expr, item => $item:expr) => {{
+        use $crate::logging::TermEvent;
+
+        $crate::_log!(
+            $crate::macros::log_adapter::log::Level::Info,
+            _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+            _TERM_ONLY_ = true,
+            _TERM_EVENT_:serde = TermEvent::add_spinner_context_item($uid.into(), $item.into());
+
+            "Updating progress for uid: {}, item: {}",
+            $uid, $item
+        );
+    }};
+
+    ($io:expr, bar => $uid:expr, item => $item:expr) => {{
+        use $crate::logging::TermEvent;
+
+        $crate::_log!(
+            $crate::macros::log_adapter::log::Level::Info,
+            _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+            _TERM_ONLY_ = true,
+            _TERM_EVENT_:serde = TermEvent::add_bar_context_item($uid.into(), $item.into());
+
+            "Updating progress for uid: {}, item: {}",
+            $uid, $item
+        );
+    }};
+}
+
+#[macro_export]
+macro_rules! finish_progress {
+    ($io:expr, spinner => $uid:expr) => {{
+        use $crate::logging::TermEvent;
+
+        $crate::_log!(
+            $crate::macros::log_adapter::log::Level::Info,
+            _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+            _TERM_ONLY_ = true,
+            _TERM_EVENT_:serde = TermEvent::remove_spinner($uid.into());
+
+            "Finishing spinner with uid: {}",
+            $uid
+        );
+    }};
+
+    ($io:expr, bar => $uid:expr) => {{
+        use $crate::logging::TermEvent;
+
+        $crate::_log!(
+            $crate::macros::log_adapter::log::Level::Info,
+            _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+            _TERM_ONLY_ = true,
+            _TERM_EVENT_:serde = TermEvent::remove_bar($uid.into());
+
+            "Finishing progress bar with uid: {}",
+            $uid
+        );
+    }};
+
+    ($io:expr, bar => $uid:expr, item => $item:expr, outcome => $outcome:expr) => {{
+        use $crate::logging::TermEvent;
+        use $crate::logging::StatEvent;
+
+        $crate::_log!(
+            $crate::macros::log_adapter::log::Level::Info,
+            _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+            _TERM_ONLY_ = true,
+            _STAT_EVENT_:serde = $crate::logging::StatEvent::counter(
+                $outcome,
+                1
+            ),
+            _TERM_EVENT_:serde = TermEvent::finish_bar_context_item($uid.into(), $item.into());
+
+            "Finishing item: {} on progress bar: {}",
+            $item, $uid
+        );
+    }};
+
+    ($io:expr, spinner => $uid:expr, outcome => $outcome:expr) => {{
+        use $crate::logging::TermEvent;
+        use $crate::logging::StatEvent;
+
+        $crate::_log!(
+            $crate::macros::log_adapter::log::Level::Info,
+            _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+            _TERM_ONLY_ = true,
+            _STAT_EVENT_:serde = StatEvent::counter(
+                $outcome.into(),
+                1
+            ),
+            _TERM_EVENT_:serde = TermEvent::finish_spinner_context_item($uid.into(), "".into());
+
+            "Finishing spinner with uid: {}, outcome: {}",
+            $uid, $outcome
+        );
+    }};
+
 }
 
 #[macro_export]
@@ -314,6 +566,7 @@ macro_rules! show_warning {
 
         $crate::_log!(
             $crate::macros::log_adapter::log::Level::Warn,
+            _INVOCATION_ID_ = $io.invocation_id.as_u128(),
             code = err.code.to_string();
             "{} {}",
             YELLOW.apply_to(WARNING),
@@ -356,6 +609,7 @@ macro_rules! show_warning_soon_to_be_error {
 
         $crate::_log!(
             $crate::macros::log_adapter::log::Level::Warn,
+            _INVOCATION_ID_ = $io.invocation_id.as_u128(),
             code = err.code.to_string();
             "{} {} {}",
             YELLOW.apply_to(WARNING),
@@ -403,6 +657,7 @@ macro_rules! show_error {
 
         $crate::_log!(
             $crate::macros::log_adapter::log::Level::Error,
+            _INVOCATION_ID_ = $io.invocation_id.as_u128(),
             code = err.code.to_string();
             "{} {}",
             RED.apply_to(ERROR),
@@ -421,9 +676,19 @@ macro_rules! show_error {
             let output = pretty_red($info.event.action().as_str(), &$info.target, $info.desc.as_deref());
             let log_config = $info.event;
             if let Some(data_json) = $info.data {
-                $crate::_log!(log_config.level(), name = log_config.name(), data:serde = data_json; "{}", output);
+                $crate::_log!(
+                    log_config.level(),
+                    _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+                    name = log_config.name(),
+                    data:serde = data_json; "{}", output
+                );
             } else {
-                $crate::_log!(log_config.level(), name = log_config.name(); "{}", output);
+                $crate::_log!(
+                    log_config.level(),
+                    _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+                    name = log_config.name();
+                     "{}", output
+                );
             }
         }
     }};
@@ -437,6 +702,7 @@ macro_rules! show_fail {
 
         $crate::_log!(
             $crate::macros::log_adapter::log::Level::Error,
+            _INVOCATION_ID_ = $io.invocation_id.as_u128(),
             code = $crate::ErrorCode::Generic.to_string();
             "{}",
             $fmt
@@ -460,6 +726,7 @@ macro_rules! show_autofix_suggestion {
         );
         $crate::_log!(
             $crate::macros::log_adapter::log::Level::Info,
+            _INVOCATION_ID_ = $io.invocation_id.as_u128();
             "{} Try the autofix script: {}",
             BLUE.apply_to("suggestion:"),
             BLUE.apply_to("https://github.com/dbt-labs/dbt-autofix")
@@ -717,6 +984,7 @@ mod tests {
 ///     non-primitive cast: `&[(&str, Value<'_>); 1]` as `&[(&str, Value<'_>)]`rust-analyzer(E0605)
 ///
 /// TODO: remove this once the issue is fixed in upstream (either by 'rust-analyzer', or by 'log' crate)
+#[macro_use]
 pub mod log_adapter {
     pub use log;
 

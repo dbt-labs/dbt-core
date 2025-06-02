@@ -20,10 +20,12 @@ dbt-proc-macros = { workspace = true }
 datafusion = { workspace = true }
 
 clap = { workspace = true, features = ["derive", "env"] }
+counter = { workspace = true }
 dialoguer = { workspace = true }
 int-enum = { workspace = true }
 itertools = { workspace = true }
 regex = { workspace = true }
+unicode-segmentation = { version = "1.12" }
 uuid = { workspace = true }
 
 antlr-rust = { workspace = true }
@@ -51,6 +53,7 @@ tokio = { workspace = true, features = ["fs"] }
 
 pathdiff = { workspace = true }
 
+indicatif = { workspace = true }
 log = { workspace = true }
 rust-embed = { workspace = true }
 

@@ -1,3 +1,6 @@
+// !!@DEPRECATED@!! This module is deprecated -- statistics gathering should be
+// migrated to use the structured logging [crate::logging::StatEvent]
+
 // This module keep track of error and warning counters.
 // It uses `DashMap` for concurrent access
 // and `AtomicUsize` for atomic counter increments.

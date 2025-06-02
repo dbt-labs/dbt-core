@@ -1,11 +1,14 @@
+#[macro_use]
+pub mod macros;
+
 pub mod adapter;
+pub mod clap_cli;
 pub mod constants;
 // pub mod dbtz_clap_cli;
 pub mod error;
 pub mod error_counter;
 pub mod init;
 pub mod io_utils;
-pub mod macros;
 pub mod node_selector;
 pub mod pretty_string;
 pub mod pretty_table;

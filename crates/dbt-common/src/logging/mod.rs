@@ -1,5 +1,7 @@
-mod info;
+mod events;
 mod logger;
+mod term;
 
-pub use info::{FsInfo, LogEvent};
+pub use events::{ErrorEvent, FsInfo, LogEvent, StatEvent, TermEvent};
 pub use logger::{init_logger, FsLogConfig, LogFormat};
+pub use term::ProgressBarGuard;

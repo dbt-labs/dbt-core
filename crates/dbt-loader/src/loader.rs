@@ -22,7 +22,7 @@ use dbt_common::error::LiftableResult;
 use project::DbtProject;
 
 use dbt_common::stdfs::last_modified;
-use dbt_common::{ectx, err, show_progress, ErrorCode};
+use dbt_common::{ectx, err, show_progress, with_progress, ErrorCode};
 use dbt_common::{fs_err, FsResult};
 use dbt_schemas::schemas::project::{self, DbtProjectSimplified};
 use dbt_schemas::state::{DbtAsset, DbtPackage, DbtState, DbtVars, ResourcePathKind};
@@ -37,6 +37,8 @@ use crate::{
 use dbt_common::fsinfo;
 
 pub async fn load(arg: &LoadArgs, iarg: &InvocationArgs) -> FsResult<(DbtState, Option<usize>)> {
+    let _pb = with_progress!(arg.io, spinner => LOADING);
+
     // Read the input file
     let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);
     let raw_dbt_project: DbtProjectSimplified = load_raw_yml(&dbt_project_path)?;
@@ -168,25 +170,33 @@ pub async fn load(arg: &LoadArgs, iarg: &InvocationArgs) -> FsResult<(DbtState, 
 
     let lookup_map = packages_lock.lookup_map();
     let mut collected_vars = vec![];
-    let packages = load_packages(
-        arg,
-        &mut env,
-        &mut collected_vars,
-        &lookup_map,
-        &packages_install_path,
-    )
-    .await?;
-    dbt_state.packages = packages;
-    let packages = load_internal_packages(
-        arg,
-        &mut env,
-        &mut collected_vars,
-        &internal_packages_install_path,
-    )
-    .await?;
-    dbt_state.packages.extend(packages);
-    dbt_state.vars = collected_vars.into_iter().collect();
+    {
+        let _pb = with_progress!( arg.io, spinner => LOADING, item => "packages" );
 
+        let packages = load_packages(
+            arg,
+            &mut env,
+            &mut collected_vars,
+            &lookup_map,
+            &packages_install_path,
+        )
+        .await?;
+        dbt_state.packages = packages;
+    }
+
+    {
+        let _pb = with_progress!( arg.io, spinner => LOADING, item => "internal packages" );
+
+        let packages = load_internal_packages(
+            arg,
+            &mut env,
+            &mut collected_vars,
+            &internal_packages_install_path,
+        )
+        .await?;
+        dbt_state.packages.extend(packages);
+        dbt_state.vars = collected_vars.into_iter().collect();
+    }
     Ok((dbt_state, final_threads))
 }
 

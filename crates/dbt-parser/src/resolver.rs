@@ -1,9 +1,9 @@
 //! Module containing the entrypoint for the resolve phase.
-use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
+use dbt_common::constants::{DBT_GENERIC_TESTS_DIR_NAME, RESOLVING};
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 #[allow(unused_imports)]
 use dbt_common::FsError;
-use dbt_common::{err, fs_err, show_error, ErrorCode, FsResult};
+use dbt_common::{err, fs_err, show_error, with_progress, ErrorCode, FsResult};
 use dbt_common::{show_warning, stdfs};
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::phases::parse::build_resolve_context;
@@ -53,6 +53,8 @@ pub async fn resolve(
     invocation_args: &InvocationArgs,
     dbt_state: Arc<DbtState>,
 ) -> FsResult<(ResolverState, JinjaEnvironment<'static>)> {
+    let _pb = with_progress!(arg.io, spinner => RESOLVING);
+
     // Get the root project name
     let root_project_name = dbt_state.root_project_name();
     let adapter_type = dbt_state.dbt_profile.db_config.adapter_type();
