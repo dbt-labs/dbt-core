@@ -20,7 +20,7 @@ dbt-env = { workspace = true }
 dbt-jinja-utils = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-serde_yaml = { workspace = true }
-lazy_static = { workspace = true }
+http = { workspace = true }
 log = { workspace = true }
 md5 = { workspace = true }
 pbjson-types = { workspace = true }
@@ -29,6 +29,7 @@ reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
+url = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]

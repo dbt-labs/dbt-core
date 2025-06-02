@@ -1,5 +1,5 @@
 use std::env;
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
 
 #[derive(Debug)]
 pub struct VortexConfig {
@@ -28,9 +28,9 @@ pub struct InternalEnv {
 }
 
 impl InternalEnv {
-    fn from_env() -> Result<Self, env::VarError> {
+    fn from_env() -> Self {
         let version = env!("CARGO_PKG_VERSION").to_string();
-        Ok(Self {
+        Self {
             vortex_config: VortexConfig {
                 base_url: env::var("VORTEX_BASE_URL")
                     .unwrap_or_else(|_| "https://p.vx.dbt.com".to_string()),
@@ -51,28 +51,18 @@ impl InternalEnv {
                     .unwrap_or_else(|_| "".to_string()),
                 job_id: env::var("DBT_CLOUD_JOB_ID").unwrap_or_else(|_| "".to_string()),
             },
-        })
+        }
     }
 
     pub fn global() -> &'static Self {
-        static INSTANCE: OnceLock<Mutex<InternalEnv>> = OnceLock::new();
-        let instance = INSTANCE.get_or_init(|| {
-            Mutex::new(InternalEnv::from_env().expect("Failed to initialize InternalEnv"))
-        });
-        // Lock the Mutex to get access to the InternalEnv
-        let guard = instance.lock().unwrap();
-        // This transmute is now safe because the OnceLock guarantees the
-        // Mutex<InternalEnv> lives for the entire program. We are transmuting
-        // a reference to this long-lived data.
-        let _static_ref: &'static InternalEnv =
-            unsafe { std::mem::transmute::<&InternalEnv, &'static InternalEnv>(&guard) };
-        let env_ref = unsafe { std::mem::transmute::<&InternalEnv, &'static InternalEnv>(&guard) };
-        drop(guard); // Explicitly drop the guard
-        env_ref
+        static INSTANCE: OnceLock<InternalEnv> = OnceLock::new();
+        INSTANCE.get_or_init(InternalEnv::from_env)
     }
+
     pub fn vortex_config(&self) -> &VortexConfig {
         &self.vortex_config
     }
+
     pub fn invocation_config(&self) -> &InvocationConfig {
         &self.invocation_config
     }
