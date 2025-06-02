@@ -8,18 +8,8 @@
 All [ADBC (Arrow Database Connectivity)](https://arrow.apache.org/adbc/) drivers
 (shared libraries) are loaded dynamically.
 
-(Note: all script samples assume the current working directory is the root of
-the workspace)
-
-~Run this to download the ADBC drivers (before we have an even more automated solution).~
-
-```
-./scripts/install_xdbc_drivers.sh
-```
-
-UPDATE: we now automatically download the ADBC drivers from the dbt when dbt
-needs to connect to a data warehouse. The script stil exists in case we need
-to download drivers manually again.
+Drivers are automatically downloaded from the dbt CDN when dbt needs to connect to a
+data warehouse.
 
 [ODBC](https://en.wikipedia.org/wiki/Open_Database_Connectivity) drivers are
 also loaded dynamically, but should be installed on the system.
