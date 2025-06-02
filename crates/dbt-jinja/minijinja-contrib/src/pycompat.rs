@@ -26,6 +26,7 @@ use regex::Regex;
 /// * `dict.keys`
 /// * `dict.values`
 /// * `list.count`
+/// * `list.union`
 /// * `str.capitalize`
 /// * `str.count`
 /// * `str.endswith`
@@ -439,6 +440,38 @@ fn seq_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, Err
                 ErrorKind::InvalidOperation,
                 "Cannot subtract non-sequence".to_string(),
             ))
+        }
+        "union" => {
+            // Handle multiple arguments like Python's set.union(*others)
+            let mut result_set = BTreeSet::new();
+
+            // Add all items from the original sequence
+            if let Some(iter) = obj.try_iter() {
+                for item in iter {
+                    result_set.insert(item);
+                }
+            }
+
+            // Add all items from each argument sequence
+            for arg in args {
+                match arg.try_iter() {
+                    Ok(iter) => {
+                        for item in iter {
+                            result_set.insert(item);
+                        }
+                    }
+                    Err(_) => {
+                        return Err(Error::new(
+                            ErrorKind::InvalidOperation,
+                            "union() argument must be iterable",
+                        ));
+                    }
+                }
+            }
+
+            // Convert result back to a sequence
+            let result: Vec<Value> = result_set.into_iter().collect();
+            Ok(Value::from_object(MutableVec::from(result)))
         }
         _ => Err(Error::from(ErrorKind::UnknownMethod(
             "Sequence".to_string(),

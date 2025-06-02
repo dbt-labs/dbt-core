@@ -96,4 +96,22 @@ fn test_dict_methods() {
 #[test]
 fn test_list_methods() {
     assert!(eval_expr("[1, 2, 2, 3].count(2) == 2").is_true());
+
+    // Test basic union with two lists
+    assert!(eval_expr("[1, 2, 3].union([3, 4, 5]) | sort == [1, 2, 3, 4, 5]").is_true());
+
+    // Test union with duplicates (should be removed)
+    assert!(eval_expr("[1, 2, 2].union([2, 3, 3]) | sort == [1, 2, 3]").is_true());
+
+    // Test union with multiple arguments
+    assert!(eval_expr("[1, 2].union([3, 4], [5, 6]) | sort == [1, 2, 3, 4, 5, 6]").is_true());
+
+    // Test union with empty list
+    assert!(eval_expr("[1, 2].union([]) | sort == [1, 2]").is_true());
+
+    // Test union of empty list with non-empty
+    assert!(eval_expr("[].union([1, 2]) | sort == [1, 2]").is_true());
+
+    // Test union with string elements
+    assert!(eval_expr("['a', 'b'].union(['b', 'c']) | sort == ['a', 'b', 'c']").is_true());
 }

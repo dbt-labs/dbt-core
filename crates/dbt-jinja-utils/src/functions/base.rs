@@ -1033,3 +1033,84 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
     );
     MutableMap::from(graph)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use minijinja::{Environment, Value};
+    use minijinja_contrib::pycompat::unknown_method_callback;
+    use std::rc::Rc;
+
+    #[test]
+    fn test_set_union_integration() {
+        let mut env = Environment::new();
+
+        // Register the set function from base.rs
+        env.add_function("set", set_fn());
+
+        // Enable pycompat for union() method
+        env.set_unknown_method_callback(unknown_method_callback);
+
+        // Test the exact DBT use case: {% set res = set([1, 2]).union(set([3, 4])) %}
+        let template_source = r#"
+        {%- set set1 = set([1, 2, 2]) -%}
+        {%- set set2 = set([3, 4, 4]) -%}
+        {%- set result = set1.union(set2) -%}
+        {{ result | sort | join(',') }}
+        "#;
+
+        let tmpl = env.template_from_str(template_source).unwrap();
+        let (output, _) = tmpl
+            .render(Value::UNDEFINED, Rc::new(DefaultRenderingEventListener))
+            .unwrap();
+
+        // Should contain all unique elements from both sets: 1,2,3,4
+        let result = output.trim();
+        assert_eq!(result, "1,2,3,4");
+    }
+
+    #[test]
+    fn test_set_union_multiple_args() {
+        let mut env = Environment::new();
+        env.add_function("set", set_fn());
+        env.set_unknown_method_callback(unknown_method_callback);
+
+        let template_source = r#"
+        {%- set set1 = set([1, 2]) -%}
+        {%- set set2 = set([3, 4]) -%}
+        {%- set set3 = set([5, 6]) -%}
+        {%- set result = set1.union(set2, set3) -%}
+        {{ result | length }}
+        "#;
+
+        let tmpl = env.template_from_str(template_source).unwrap();
+        let (output, _) = tmpl
+            .render(Value::UNDEFINED, Rc::new(DefaultRenderingEventListener))
+            .unwrap();
+
+        // Should have 6 unique elements
+        assert_eq!(output.trim(), "6");
+    }
+
+    #[test]
+    fn test_set_union_with_duplicates() {
+        let mut env = Environment::new();
+        env.add_function("set", set_fn());
+        env.set_unknown_method_callback(unknown_method_callback);
+
+        let template_source = r#"
+        {%- set original = [1, 1, 2, 2, 3] -%}
+        {%- set other = [3, 4, 4, 5] -%}
+        {%- set result = set(original).union(set(other)) -%}
+        {{ result | sort | join(',') }}
+        "#;
+
+        let tmpl = env.template_from_str(template_source).unwrap();
+        let (output, _) = tmpl
+            .render(Value::UNDEFINED, Rc::new(DefaultRenderingEventListener))
+            .unwrap();
+
+        // Should remove duplicates: 1,2,3,4,5
+        assert_eq!(output.trim(), "1,2,3,4,5");
+    }
+}
