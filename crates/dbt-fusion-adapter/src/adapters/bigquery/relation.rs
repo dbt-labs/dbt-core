@@ -1,29 +1,30 @@
+use crate::adapters::relation_object::{RelationObject, StaticBaseRelation};
+
 use arrow::array::RecordBatch;
-use dbt_adapter_proc_macros::{BaseRelationObject, StaticBaseRelationObject};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::{
-    BaseRelation, BaseRelationProperties, Policy, RelationPath, StaticBaseRelation,
+    BaseRelation, BaseRelationProperties, Policy, RelationPath,
 };
-use minijinja::value::Enumerator;
 use minijinja::{Error as MinijinjaError, State, Value};
 
 use std::any::Any;
 use std::sync::Arc;
 
 /// A struct representing the relation type for use with static methods
-#[derive(Clone, Debug, StaticBaseRelationObject)]
+#[derive(Clone, Debug)]
 pub struct BigqueryRelationType;
 
 impl StaticBaseRelation for BigqueryRelationType {
     fn try_new(
+        &self,
         database: Option<String>,
         schema: Option<String>,
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: ResolvedQuoting,
     ) -> Result<Value, MinijinjaError> {
-        Ok(Value::from_object(BigqueryRelation::new(
+        Ok(RelationObject::new(Arc::new(BigqueryRelation::new(
             database,
             schema,
             identifier,
@@ -31,15 +32,16 @@ impl StaticBaseRelation for BigqueryRelationType {
             None,
             custom_quoting,
         )))
+        .into_value())
     }
 
-    fn get_adapter_type() -> String {
+    fn get_adapter_type(&self) -> String {
         "bigquery".to_string()
     }
 }
 
 /// A relation object for bigquery adapter
-#[derive(Clone, Debug, BaseRelationObject)]
+#[derive(Clone, Debug)]
 pub struct BigqueryRelation {
     /// The path of the relation
     pub path: RelationPath,
@@ -135,7 +137,7 @@ impl BaseRelation for BigqueryRelation {
     }
 
     fn relation_type(&self) -> Option<RelationType> {
-        self.relation_type.clone()
+        self.relation_type
     }
 
     /// Helper: is this relation renamable?
@@ -144,7 +146,7 @@ impl BaseRelation for BigqueryRelation {
     }
 
     fn as_value(&self) -> Value {
-        Value::from_object(self.clone())
+        RelationObject::new(Arc::new(self.clone())).into_value()
     }
 
     fn adapter_type(&self) -> Option<String> {
@@ -154,7 +156,7 @@ impl BaseRelation for BigqueryRelation {
     fn include_inner(&self, policy: Policy) -> Result<Value, MinijinjaError> {
         let relation = Self::new_with_policy(
             self.path.clone(),
-            self.relation_type.clone(),
+            self.relation_type,
             policy,
             self.quote_policy,
         );
@@ -183,6 +185,14 @@ impl BaseRelation for BigqueryRelation {
             custom_quoting,
         )))
     }
+
+    fn information_schema_inner(
+        &self,
+        _database: Option<String>,
+        _view_name: &str,
+    ) -> Result<Value, MinijinjaError> {
+        todo!("InformationSchema")
+    }
 }
 
 #[cfg(test)]
@@ -192,18 +202,19 @@ mod tests {
 
     #[test]
     fn test_try_new_via_static_base_relation() {
-        let relation = BigqueryRelationType::try_new(
-            Some("d".to_string()),
-            Some("s".to_string()),
-            Some("i".to_string()),
-            Some(RelationType::Table),
-            DEFAULT_RESOLVED_QUOTING,
-        )
-        .unwrap();
+        let relation = BigqueryRelationType
+            .try_new(
+                Some("d".to_string()),
+                Some("s".to_string()),
+                Some("i".to_string()),
+                Some(RelationType::Table),
+                DEFAULT_RESOLVED_QUOTING,
+            )
+            .unwrap();
 
-        let relation = relation.downcast_object::<BigqueryRelation>().unwrap();
+        let relation = relation.downcast_object::<RelationObject>().unwrap();
         assert_eq!(
-            relation.render_self().unwrap().as_str().unwrap(),
+            relation.inner().render_self().unwrap().as_str().unwrap(),
             "`d`.`s`.`i`"
         );
         assert_eq!(relation.relation_type().unwrap(), RelationType::Table);

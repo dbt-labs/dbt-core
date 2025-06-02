@@ -16,7 +16,7 @@ use dbt_common::show_warning;
 use dbt_common::tokiofs;
 use dbt_common::ErrorCode;
 use dbt_fusion_adapter::adapters::load_store::ResultStore;
-use dbt_fusion_adapter::adapters::utils::create_relation;
+use dbt_fusion_adapter::adapters::relation_object::create_relation;
 use dbt_schemas::schemas::{common::ResolvedQuoting, manifest::CommonAttributes};
 use minijinja::listener::RenderingEventListener;
 use minijinja::State;

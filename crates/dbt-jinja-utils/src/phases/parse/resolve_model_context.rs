@@ -13,7 +13,7 @@ use chrono_tz::{Europe::London, Tz};
 use dbt_common::{serde_utils::convert_json_to_map, FsResult};
 use dbt_frontend_common::error::CodeLocation;
 use dbt_fusion_adapter::adapters::load_store::ResultStore;
-use dbt_fusion_adapter::adapters::utils::create_relation;
+use dbt_fusion_adapter::adapters::relation_object::create_relation;
 use dbt_schemas::{
     dbt_types::RelationType,
     schemas::{

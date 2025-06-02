@@ -1,13 +1,14 @@
+use crate::adapters::information_schema::InformationSchema;
+use crate::adapters::relation_object::{RelationObject, StaticBaseRelation};
+
 use arrow::array::RecordBatch;
-use dbt_adapter_proc_macros::{BaseRelationObject, StaticBaseRelationObject};
 use dbt_common::current_function_name;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::{
-    BaseRelation, BaseRelationProperties, Policy, RelationPath, StaticBaseRelation,
+    BaseRelation, BaseRelationProperties, Policy, RelationPath,
 };
 use minijinja::arg_utils::{check_num_args, ArgParser};
-use minijinja::value::Enumerator;
 use minijinja::{Error as MinijinjaError, State, Value};
 
 use std::any::Any;
@@ -16,18 +17,19 @@ use std::sync::Arc;
 const MAX_CHARACTERS_IN_IDENTIFIER: u32 = 127;
 
 /// A struct representing the relation type for use with static methods
-#[derive(Clone, Debug, StaticBaseRelationObject)]
+#[derive(Clone, Debug)]
 pub struct RedshiftRelationType;
 
 impl StaticBaseRelation for RedshiftRelationType {
     fn try_new(
+        &self,
         database: Option<String>,
         schema: Option<String>,
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: ResolvedQuoting,
     ) -> Result<Value, MinijinjaError> {
-        Ok(Value::from_object(RedshiftRelation::new(
+        Ok(RelationObject::new(Arc::new(RedshiftRelation::new(
             database,
             schema,
             identifier,
@@ -35,15 +37,16 @@ impl StaticBaseRelation for RedshiftRelationType {
             None,
             custom_quoting,
         )))
+        .into_value())
     }
 
-    fn get_adapter_type() -> String {
+    fn get_adapter_type(&self) -> String {
         "redshift".to_string()
     }
 }
 
 /// A relation object for the adapter
-#[derive(Clone, Debug, BaseRelationObject)]
+#[derive(Clone, Debug)]
 pub struct RedshiftRelation {
     /// The path of the relation
     pub path: RelationPath,
@@ -132,11 +135,11 @@ impl BaseRelation for RedshiftRelation {
     }
 
     fn relation_type(&self) -> Option<RelationType> {
-        self.relation_type.clone()
+        self.relation_type
     }
 
     fn as_value(&self) -> Value {
-        Value::from_object(self.clone())
+        RelationObject::new(Arc::new(self.clone())).into_value()
     }
 
     fn adapter_type(&self) -> Option<String> {
@@ -144,7 +147,7 @@ impl BaseRelation for RedshiftRelation {
     }
 
     fn include_inner(&self, policy: Policy) -> Result<Value, MinijinjaError> {
-        let relation = Self::new_with_policy(self.path.clone(), self.relation_type.clone(), policy);
+        let relation = Self::new_with_policy(self.path.clone(), self.relation_type, policy);
 
         Ok(relation.as_value())
     }
@@ -176,6 +179,15 @@ impl BaseRelation for RedshiftRelation {
             custom_quoting,
         )))
     }
+
+    fn information_schema_inner(
+        &self,
+        database: Option<String>,
+        view_name: &str,
+    ) -> Result<Value, MinijinjaError> {
+        let result = InformationSchema::try_from_relation(database, view_name)?;
+        Ok(RelationObject::new(Arc::new(result)).into_value())
+    }
 }
 
 #[cfg(test)]
@@ -185,18 +197,19 @@ mod tests {
 
     #[test]
     fn test_try_new_via_static_base_relation() {
-        let relation = RedshiftRelationType::try_new(
-            Some("d".to_string()),
-            Some("s".to_string()),
-            Some("i".to_string()),
-            Some(RelationType::Table),
-            DEFAULT_RESOLVED_QUOTING,
-        )
-        .unwrap();
+        let relation = RedshiftRelationType
+            .try_new(
+                Some("d".to_string()),
+                Some("s".to_string()),
+                Some("i".to_string()),
+                Some(RelationType::Table),
+                DEFAULT_RESOLVED_QUOTING,
+            )
+            .unwrap();
 
-        let relation = relation.downcast_object::<RedshiftRelation>().unwrap();
+        let relation = relation.downcast_object::<RelationObject>().unwrap();
         assert_eq!(
-            relation.render_self().unwrap().as_str().unwrap(),
+            relation.inner().render_self().unwrap().as_str().unwrap(),
             "\"d\".\"s\".\"i\""
         );
         assert_eq!(relation.relation_type().unwrap(), RelationType::Table);

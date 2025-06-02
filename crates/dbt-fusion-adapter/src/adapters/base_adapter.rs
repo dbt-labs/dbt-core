@@ -53,10 +53,6 @@ pub trait AdapterTyping {
     /// Get a reference to the typed base adapter if supported.
     fn as_typed_base_adapter(&self) -> &dyn TypedBaseAdapter;
 
-    /// Get relation type instance
-    // TODO(felipecrv): this should be a boxed dyn trait instead of a jinja value
-    fn relation_type(&self) -> Option<Value>;
-
     /// Get column type instance
     fn column_type(&self) -> Option<Value>;
 

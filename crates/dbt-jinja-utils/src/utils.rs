@@ -1,7 +1,7 @@
 use dbt_common::stdfs;
 use dbt_common::{constants::DBT_CTE_PREFIX, error::MacroSpan, tokiofs, FsResult};
 use dbt_frontend_common::{error::CodeLocation, span::Span};
-use dbt_fusion_adapter::adapters::utils::create_relation;
+use dbt_fusion_adapter::adapters::relation_object::create_relation;
 use dbt_fusion_adapter::adapters::AdapterTyping;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::manifest::{

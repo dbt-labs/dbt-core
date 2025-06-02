@@ -1,23 +1,19 @@
-use crate::adapters::base_adapter::BaseAdapter;
 use crate::adapters::base_adapter::{AdapterType, AdapterTyping};
-use crate::adapters::bigquery::relation::BigqueryRelationType;
 use crate::adapters::cast_util::{downcast_value_to_dyn_base_relation, dyn_base_columns_to_value};
-use crate::adapters::databricks::relation::{DatabricksRelationType, DEFAULT_DATABRICKS_DATABASE};
+use crate::adapters::databricks::relation::DEFAULT_DATABRICKS_DATABASE;
 use crate::adapters::funcs::{
     dispatch_adapter_calls, dispatch_adapter_get_value, execute_macro, execute_macro_wrapper,
     none_value,
 };
 use crate::adapters::funcs::{execute_macro_wrapper_with_package, format_sql_with_bindings};
+use crate::adapters::information_schema::InformationSchema;
 use crate::adapters::metadata::MetadataAdapter;
-use crate::adapters::postgres::relation::PostgresRelationType;
 use crate::adapters::query_ctx::{query_ctx_from_state, query_ctx_from_state_with_sql};
 use crate::adapters::record_batch_utils::extract_first_value_as_i64;
-use crate::adapters::redshift::relation::RedshiftRelationType;
 use crate::adapters::render_constraint::render_model_constraint;
 use crate::adapters::snapshots::SnapshotStrategy;
-use crate::adapters::snowflake::relation::SnowflakeRelationType;
 use crate::adapters::typed_adapter::TypedBaseAdapter;
-use crate::adapters::SqlEngine;
+use crate::adapters::{BaseAdapter, SqlEngine};
 
 use adbc_core::error::Result as AdbcResult;
 use arrow_schema::Schema;
@@ -31,7 +27,7 @@ use dbt_schemas::schemas::manifest::{
     BigqueryClusterConfig, BigqueryPartitionConfig, BigqueryPartitionConfigLegacy, DbtModel,
     GrantAccessToTarget, ManifestModelConfig,
 };
-use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, InformationSchema};
+use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_xdbc::{Connection, Statement};
 use minijinja::arg_utils::{check_num_args, ArgParser};
 use minijinja::dispatch_object::DispatchObject;
@@ -255,20 +251,6 @@ impl BridgeAdapter {
     }
 }
 
-// Used by parse and replay adapters to make them behave like typed adapters.
-// TODO(felipecrv): make relation_type_from_adapter_type unnecessary
-pub fn relation_type_from_adapter_type(adapter_type: AdapterType) -> Option<Value> {
-    let value = match adapter_type {
-        AdapterType::Snowflake => Value::from_object(SnowflakeRelationType),
-        AdapterType::Postgres => Value::from_object(PostgresRelationType),
-        AdapterType::Bigquery => Value::from_object(BigqueryRelationType),
-        AdapterType::Databricks => Value::from_object(DatabricksRelationType),
-        AdapterType::Redshift => Value::from_object(RedshiftRelationType),
-        _ => unimplemented!("{} doesn't support relation types", adapter_type),
-    };
-    Some(value)
-}
-
 impl AdapterTyping for BridgeAdapter {
     fn adapter_type(&self) -> AdapterType {
         self.typed_adapter.adapter_type()
@@ -280,10 +262,6 @@ impl AdapterTyping for BridgeAdapter {
 
     fn as_typed_base_adapter(&self) -> &dyn TypedBaseAdapter {
         self.typed_adapter.as_ref()
-    }
-
-    fn relation_type(&self) -> Option<Value> {
-        self.typed_adapter.relation_type()
     }
 
     fn column_type(&self) -> Option<Value> {

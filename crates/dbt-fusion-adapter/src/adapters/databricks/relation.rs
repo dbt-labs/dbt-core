@@ -1,12 +1,12 @@
+use crate::adapters::relation_object::{RelationObject, StaticBaseRelation};
+
 use dbt_schemas::schemas::relations::base::{
-    BaseRelation, BaseRelationProperties, Policy, RelationPath, StaticBaseRelation,
+    BaseRelation, BaseRelationProperties, Policy, RelationPath,
 };
 
 use arrow::array::RecordBatch;
-use dbt_adapter_proc_macros::{BaseRelationObject, StaticBaseRelationObject};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
-use minijinja::value::Enumerator;
 use minijinja::{Error as MinijinjaError, State, Value};
 
 use std::any::Any;
@@ -17,18 +17,19 @@ use std::sync::Arc;
 pub const DEFAULT_DATABRICKS_DATABASE: &str = "hive_metastore";
 
 /// A struct representing the relation type for use with static methods
-#[derive(Clone, Debug, StaticBaseRelationObject)]
+#[derive(Clone, Debug)]
 pub struct DatabricksRelationType;
 
 impl StaticBaseRelation for DatabricksRelationType {
     fn try_new(
+        &self,
         database: Option<String>,
         schema: Option<String>,
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: ResolvedQuoting,
     ) -> Result<Value, MinijinjaError> {
-        Ok(Value::from_object(DatabricksRelation::new(
+        Ok(RelationObject::new(Arc::new(DatabricksRelation::new(
             database,
             schema,
             identifier,
@@ -39,15 +40,16 @@ impl StaticBaseRelation for DatabricksRelationType {
             None,
             false,
         )))
+        .into_value())
     }
 
-    fn get_adapter_type() -> String {
+    fn get_adapter_type(&self) -> String {
         "databricks".to_string()
     }
 }
 
 /// A relation object for the adapter
-#[derive(Clone, Debug, BaseRelationObject)]
+#[derive(Clone, Debug)]
 pub struct DatabricksRelation {
     /// The path of the relation
     pub path: RelationPath,
@@ -152,11 +154,11 @@ impl BaseRelation for DatabricksRelation {
     }
 
     fn relation_type(&self) -> Option<RelationType> {
-        self.relation_type.clone()
+        self.relation_type
     }
 
     fn as_value(&self) -> Value {
-        Value::from_object(self.clone())
+        RelationObject::new(Arc::new(self.clone())).into_value()
     }
 
     fn adapter_type(&self) -> Option<String> {
@@ -166,7 +168,7 @@ impl BaseRelation for DatabricksRelation {
     fn include_inner(&self, policy: Policy) -> Result<Value, MinijinjaError> {
         let relation = Self::new_with_policy(
             self.path.clone(),
-            self.relation_type.clone(),
+            self.relation_type,
             policy,
             self.quote_policy,
             self.metadata.clone(),
@@ -207,6 +209,14 @@ impl BaseRelation for DatabricksRelation {
             false,
         )))
     }
+
+    fn information_schema_inner(
+        &self,
+        _database: Option<String>,
+        _view_name: &str,
+    ) -> Result<Value, MinijinjaError> {
+        todo!("InformationSchema")
+    }
 }
 
 #[cfg(test)]
@@ -216,18 +226,19 @@ mod tests {
 
     #[test]
     fn test_try_new_via_static_base_relation() {
-        let relation = DatabricksRelationType::try_new(
-            Some("d".to_string()),
-            Some("s".to_string()),
-            Some("i".to_string()),
-            Some(RelationType::Table),
-            DEFAULT_RESOLVED_QUOTING,
-        )
-        .unwrap();
+        let relation = DatabricksRelationType
+            .try_new(
+                Some("d".to_string()),
+                Some("s".to_string()),
+                Some("i".to_string()),
+                Some(RelationType::Table),
+                DEFAULT_RESOLVED_QUOTING,
+            )
+            .unwrap();
 
-        let relation = relation.downcast_object::<DatabricksRelation>().unwrap();
+        let relation = relation.downcast_object::<RelationObject>().unwrap();
         assert_eq!(
-            relation.render_self().unwrap().as_str().unwrap(),
+            relation.inner().render_self().unwrap().as_str().unwrap(),
             "`d`.`s`.`i`"
         );
         assert_eq!(relation.relation_type().unwrap(), RelationType::Table);
@@ -235,16 +246,20 @@ mod tests {
 
     #[test]
     fn test_try_new_via_static_base_relation_with_default_database() {
-        let relation = DatabricksRelationType::try_new(
-            None,
-            Some("s".to_string()),
-            Some("i".to_string()),
-            Some(RelationType::Table),
-            DEFAULT_RESOLVED_QUOTING,
-        )
-        .unwrap();
+        let relation = DatabricksRelationType
+            .try_new(
+                None,
+                Some("s".to_string()),
+                Some("i".to_string()),
+                Some(RelationType::Table),
+                DEFAULT_RESOLVED_QUOTING,
+            )
+            .unwrap();
 
-        let relation = relation.downcast_object::<DatabricksRelation>().unwrap();
-        assert_eq!(relation.render_self().unwrap().as_str().unwrap(), "`s`.`i`");
+        let relation = relation.downcast_object::<RelationObject>().unwrap();
+        assert_eq!(
+            relation.inner().render_self().unwrap().as_str().unwrap(),
+            "`s`.`i`"
+        );
     }
 }

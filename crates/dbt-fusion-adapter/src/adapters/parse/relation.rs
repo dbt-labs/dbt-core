@@ -1,9 +1,8 @@
 use crate::adapters::funcs::{empty_string_value, none_value};
+use crate::adapters::relation_object::RelationObject;
 
-use dbt_adapter_proc_macros::BaseRelationObject;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::relations::base::{BaseRelation, BaseRelationProperties, Policy};
-use minijinja::value::Enumerator;
 use minijinja::{Error as MinijinjaError, State, Value};
 
 use std::any::Any;
@@ -12,7 +11,7 @@ use std::sync::Arc;
 /// Empty relation
 ///
 /// A relation that returns empty values for all fields.
-#[derive(Clone, Debug, Default, BaseRelationObject)]
+#[derive(Clone, Debug, Default)]
 pub struct EmptyRelation {}
 
 impl BaseRelationProperties for EmptyRelation {
@@ -54,7 +53,7 @@ impl BaseRelation for EmptyRelation {
     }
 
     fn as_value(&self) -> Value {
-        Value::from_object(self.clone())
+        RelationObject::new(Arc::new(self.clone())).into_value()
     }
 
     fn adapter_type(&self) -> Option<String> {
@@ -62,11 +61,11 @@ impl BaseRelation for EmptyRelation {
     }
 
     fn include(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
-        Ok(Value::from_object(self.clone()))
+        Ok(self.as_value())
     }
 
     fn include_inner(&self, _args: Policy) -> Result<Value, MinijinjaError> {
-        Ok(Value::from_object(self.clone()))
+        Ok(self.as_value())
     }
 
     fn render_self(&self) -> Result<Value, MinijinjaError> {
@@ -78,7 +77,7 @@ impl BaseRelation for EmptyRelation {
     }
 
     fn incorporate(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
-        Ok(Value::from_object(self.clone()))
+        Ok(self.as_value())
     }
 
     fn get_ddl_prefix_for_create(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
@@ -114,5 +113,13 @@ impl BaseRelation for EmptyRelation {
         _quote_policy: Policy,
     ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
         Ok(Arc::new(self.clone()))
+    }
+
+    fn information_schema_inner(
+        &self,
+        _database: Option<String>,
+        _view_name: &str,
+    ) -> Result<Value, MinijinjaError> {
+        Ok(none_value())
     }
 }

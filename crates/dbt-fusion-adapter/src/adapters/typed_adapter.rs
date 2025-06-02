@@ -1,8 +1,8 @@
 use crate::adapters::cast_util::dyn_base_columns_to_value;
-use crate::adapters::cast_util::BaseRelationExt;
 use crate::adapters::errors::{AdapterError, AdapterErrorKind};
 use crate::adapters::funcs::{execute_macro, none_value};
 use crate::adapters::record_batch_utils::get_column_values;
+use crate::adapters::relation_object::RelationObject;
 use crate::adapters::response::{AdapterResponse, ResultObject};
 use crate::adapters::snapshots::SnapshotStrategy;
 use crate::adapters::sql_engine::{execute_query_with_retry, SqlEngine};
@@ -162,7 +162,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 "relation has no type",
             ));
         }
-        let args = vec![relation.to_value()?];
+        let args = vec![RelationObject::new(relation).as_value()];
         execute_macro(state, &args, "drop_relation")?;
         Ok(none_value())
     }
@@ -240,7 +240,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         relation: Arc<dyn BaseRelation>,
     ) -> AdapterResult<Value> {
         // downcast relation
-        let relation = relation.to_value()?;
+        let relation = RelationObject::new(relation).as_value();
         execute_macro(state, &[relation], "truncate_relation")?;
         Ok(none_value())
     }
@@ -299,6 +299,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             .collect::<BTreeMap<_, _>>();
 
         for (column_name, reference_column) in from_columns_map {
+            let to_relation_cloned = to_relation.clone();
             if let Some(target_column) = to_columns_map.get(&column_name) {
                 if target_column.can_expand_to(reference_column.to_value()?)? {
                     let col_string_size = reference_column.string_size()?;
@@ -306,7 +307,10 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
 
                     // Create args for macro execution
                     let kwargs = Kwargs::from_iter([
-                        ("relation", to_relation.to_value()?),
+                        (
+                            "relation",
+                            RelationObject::new(to_relation_cloned).as_value(),
+                        ),
                         ("column_name", column_name),
                         ("new_column_type", Value::from(new_type)),
                     ]);

@@ -5,7 +5,9 @@ pub mod bridge_adapter;
 pub mod config;
 pub mod convert_type;
 pub mod errors;
+pub mod factory;
 pub mod funcs;
+pub mod information_schema;
 pub mod query_ctx;
 pub mod record_and_replay;
 pub mod render_constraint;
@@ -34,7 +36,7 @@ pub mod snowflake;
 
 pub mod cast_util;
 /// Utils
-pub mod utils;
+pub mod relation_object;
 
 /// SqlEngine
 pub use sql_engine::SqlEngine;

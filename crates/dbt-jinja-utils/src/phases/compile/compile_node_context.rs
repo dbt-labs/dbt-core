@@ -4,7 +4,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use dashmap::DashMap;
 use dbt_common::serde_utils::convert_json_to_dash_map;
-use dbt_fusion_adapter::adapters::{load_store::ResultStore, utils::create_relation};
+use dbt_fusion_adapter::adapters::{load_store::ResultStore, relation_object::create_relation};
 use dbt_schemas::schemas::{
     common::ResolvedQuoting, manifest::CommonAttributes, relations::base::BaseRelation,
 };

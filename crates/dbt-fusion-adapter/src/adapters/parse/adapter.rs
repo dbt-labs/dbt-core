@@ -1,5 +1,4 @@
 use crate::adapters::base_adapter::{AdapterType, AdapterTyping, BaseAdapter};
-use crate::adapters::bridge_adapter::relation_type_from_adapter_type;
 use crate::adapters::cast_util::downcast_value_to_dyn_base_relation;
 use crate::adapters::funcs::{
     dispatch_adapter_calls, empty_map_value, empty_mutable_vec_value, empty_string_value,
@@ -7,13 +6,13 @@ use crate::adapters::funcs::{
 };
 use crate::adapters::metadata::MetadataAdapter;
 use crate::adapters::parse::relation::EmptyRelation;
+use crate::adapters::relation_object::{create_relation, RelationObject};
 use crate::adapters::response::AdapterResponse;
 use crate::adapters::typed_adapter::TypedBaseAdapter;
-use crate::adapters::utils::create_relation;
 use crate::adapters::SqlEngine;
-use dbt_agate::AgateTable;
 
 use dashmap::{DashMap, DashSet};
+use dbt_agate::AgateTable;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::{current_function_name, FsResult};
 use dbt_schemas::schemas::columns::base::StdColumnType;
@@ -131,10 +130,6 @@ impl AdapterTyping for ParseAdapter {
         unimplemented!("as_typed_base_adapter")
     }
 
-    fn relation_type(&self) -> Option<Value> {
-        relation_type_from_adapter_type(self.adapter_type())
-    }
-
     fn column_type(&self) -> Option<Value> {
         let value = Value::from_object(StdColumnType);
         Some(value)
@@ -212,7 +207,7 @@ impl BaseAdapter for ParseAdapter {
                 println!("'TARGET_UNIQUE_ID' while get_relation is unset");
             }
         }
-        Ok(Value::from_object(EmptyRelation {}))
+        Ok(RelationObject::new(Arc::new(EmptyRelation {})).into_value())
     }
 
     fn get_columns_in_relation(

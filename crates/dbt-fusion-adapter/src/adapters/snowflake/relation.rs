@@ -1,13 +1,14 @@
-use dbt_adapter_proc_macros::{BaseRelationObject, StaticBaseRelationObject};
+use crate::adapters::information_schema::InformationSchema;
+use crate::adapters::relation_object::{RelationObject, StaticBaseRelation};
+
 use dbt_common::current_function_name;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::{
-    BaseRelation, BaseRelationProperties, Policy, RelationPath, StaticBaseRelation, TableFormat,
+    BaseRelation, BaseRelationProperties, Policy, RelationPath, TableFormat,
 };
 use dbt_schemas::schemas::relations::SNOWFLAKE_RESOLVED_QUOTING;
 use minijinja::arg_utils::check_num_args;
-use minijinja::value::Enumerator;
 use minijinja::{
     arg_utils::ArgParser, Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value,
 };
@@ -16,18 +17,19 @@ use std::any::Any;
 use std::sync::Arc;
 
 /// A struct representing the Snowflake relation type for use with static methods
-#[derive(Clone, Debug, StaticBaseRelationObject)]
+#[derive(Clone, Debug)]
 pub struct SnowflakeRelationType;
 
 impl StaticBaseRelation for SnowflakeRelationType {
     fn try_new(
+        &self,
         database: Option<String>,
         schema: Option<String>,
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: ResolvedQuoting,
     ) -> Result<Value, MinijinjaError> {
-        Ok(Value::from_object(SnowflakeRelation::new(
+        Ok(RelationObject::new(Arc::new(SnowflakeRelation::new(
             database,
             schema,
             identifier,
@@ -35,16 +37,17 @@ impl StaticBaseRelation for SnowflakeRelationType {
             TableFormat::Default,
             custom_quoting,
         )))
+        .into_value())
     }
 
-    fn create(args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn create(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut args = ArgParser::new(args, None);
         let database: Option<String> = args.get("database").ok();
         let schema: Option<String> = args.get("schema").ok();
         let identifier: Option<String> = args.get("identifier").ok();
         let relation_type: Option<String> = args.get("type").ok();
 
-        Self::try_new(
+        self.try_new(
             database,
             schema,
             identifier,
@@ -53,13 +56,13 @@ impl StaticBaseRelation for SnowflakeRelationType {
         )
     }
 
-    fn get_adapter_type() -> String {
+    fn get_adapter_type(&self) -> String {
         "snowflake".to_string()
     }
 }
 
 /// A struct representing a Snowflake relation
-#[derive(Clone, Debug, BaseRelationObject)]
+#[derive(Clone, Debug)]
 pub struct SnowflakeRelation {
     /// The path of the relation
     pub path: RelationPath,
@@ -162,11 +165,11 @@ impl BaseRelation for SnowflakeRelation {
 
     /// Returns the relation type
     fn relation_type(&self) -> Option<RelationType> {
-        self.relation_type.clone()
+        self.relation_type
     }
 
     fn as_value(&self) -> Value {
-        Value::from_object(self.clone())
+        RelationObject::new(Arc::new(self.clone())).into_value()
     }
 
     fn adapter_type(&self) -> Option<String> {
@@ -335,6 +338,15 @@ impl BaseRelation for SnowflakeRelation {
             custom_quoting,
         )))
     }
+
+    fn information_schema_inner(
+        &self,
+        database: Option<String>,
+        view_name: &str,
+    ) -> Result<Value, MinijinjaError> {
+        let result = InformationSchema::try_from_relation(database, view_name)?;
+        Ok(RelationObject::new(Arc::new(result)).into_value())
+    }
 }
 
 #[cfg(test)]
@@ -344,22 +356,23 @@ mod tests {
 
     #[test]
     fn test_try_new_via_static_base_relation() {
-        let relation = SnowflakeRelationType::try_new(
-            Some("d".to_string()),
-            Some("s".to_string()),
-            Some("i".to_string()),
-            Some(RelationType::Table),
-            ResolvedQuoting {
-                database: true,
-                schema: true,
-                identifier: true,
-            },
-        )
-        .unwrap();
+        let relation = SnowflakeRelationType
+            .try_new(
+                Some("d".to_string()),
+                Some("s".to_string()),
+                Some("i".to_string()),
+                Some(RelationType::Table),
+                ResolvedQuoting {
+                    database: true,
+                    schema: true,
+                    identifier: true,
+                },
+            )
+            .unwrap();
 
-        let relation = relation.downcast_object::<SnowflakeRelation>().unwrap();
+        let relation = relation.downcast_object::<RelationObject>().unwrap();
         assert_eq!(
-            relation.render_self().unwrap().as_str().unwrap(),
+            relation.inner().render_self().unwrap().as_str().unwrap(),
             r#""d"."s"."i""#
         );
         assert_eq!(relation.relation_type().unwrap(), RelationType::Table);

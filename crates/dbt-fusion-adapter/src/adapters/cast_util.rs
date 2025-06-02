@@ -1,9 +1,5 @@
 //! A set of util functions for casting from/to Value
-use crate::adapters::bigquery::relation::BigqueryRelation;
-use crate::adapters::databricks::relation::DatabricksRelation;
-use crate::adapters::postgres::relation::PostgresRelation;
-use crate::adapters::redshift::relation::RedshiftRelation;
-use crate::adapters::snowflake::relation::SnowflakeRelation;
+use crate::adapters::relation_object::RelationObject;
 
 use dbt_schemas::schemas::columns::base::BaseColumn;
 use dbt_schemas::schemas::columns::base::StdColumn;
@@ -17,36 +13,11 @@ use minijinja::jinja_err;
 use minijinja::Error as MinijinjaError;
 use minijinja::ErrorKind as MinijinjaErrorKind;
 use minijinja::Value as MinijinjaValue;
-use minijinja::{invalid_argument, invalid_argument_inner};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 
 use std::file;
 use std::sync::Arc;
-
-pub(crate) trait BaseRelationExt {
-    /// Downcast a BaseRelation to a MinijinjaValue
-    fn to_value(&self) -> Result<MinijinjaValue, MinijinjaError>;
-}
-
-impl BaseRelationExt for dyn BaseRelation {
-    fn to_value(&self) -> Result<MinijinjaValue, MinijinjaError> {
-        if let Some(snowflake_relation) = self.as_any().downcast_ref::<SnowflakeRelation>() {
-            Ok(MinijinjaValue::from_object(snowflake_relation.clone()))
-        } else if let Some(postgres_relation) = self.as_any().downcast_ref::<PostgresRelation>() {
-            Ok(MinijinjaValue::from_object(postgres_relation.clone()))
-        } else if let Some(bq_relation) = self.as_any().downcast_ref::<BigqueryRelation>() {
-            Ok(MinijinjaValue::from_object(bq_relation.clone()))
-        } else if let Some(redshift_relation) = self.as_any().downcast_ref::<RedshiftRelation>() {
-            Ok(MinijinjaValue::from_object(redshift_relation.clone()))
-        } else if let Some(databricks_relation) = self.as_any().downcast_ref::<DatabricksRelation>()
-        {
-            Ok(MinijinjaValue::from_object(databricks_relation.clone()))
-        } else {
-            invalid_argument!("Unsupported relation type")
-        }
-    }
-}
 
 macro_rules! try_downcast_columns {
     ($columns:expr, $($type:ty),+ $(,)?) => {
@@ -68,16 +39,8 @@ pub fn downcast_value_to_dyn_base_relation(
     value: MinijinjaValue,
 ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
     // Check if Arc<dyn BaseRelation> is Arc<SnowflakeRelation>
-    if let Some(snowflake_relation) = value.downcast_object::<SnowflakeRelation>() {
-        Ok(snowflake_relation)
-    } else if let Some(postgres_relation) = value.downcast_object::<PostgresRelation>() {
-        Ok(postgres_relation)
-    } else if let Some(bq_relation) = value.downcast_object::<BigqueryRelation>() {
-        Ok(bq_relation)
-    } else if let Some(redshift_relation) = value.downcast_object::<RedshiftRelation>() {
-        Ok(redshift_relation)
-    } else if let Some(databricks_relation) = value.downcast_object::<DatabricksRelation>() {
-        Ok(databricks_relation)
+    if let Some(relation_object) = value.downcast_object::<RelationObject>() {
+        Ok(relation_object.inner())
     } else {
         Err(MinijinjaError::new(
             MinijinjaErrorKind::InvalidOperation,
@@ -88,17 +51,6 @@ pub fn downcast_value_to_dyn_base_relation(
                 line!()
             ),
         ))
-    }
-}
-
-/// Downcast a MinijinjaValue to a BaseRelation
-pub fn downcast_value_to_relation<T: BaseRelation>(
-    value: MinijinjaValue,
-) -> Result<Arc<T>, MinijinjaError> {
-    if let Some(relation) = value.downcast_object::<T>() {
-        Ok(relation)
-    } else {
-        invalid_argument!("Unexpected relation, got {:?} in {}", value, file!())
     }
 }
 
