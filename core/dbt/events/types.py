@@ -2425,3 +2425,14 @@ class ArtifactUploadSkipped(DebugLevel):
 
     def message(self) -> str:
         return f"Artifacts skipped for command : {self.msg}"
+
+
+class OpenLineageException(WarnLevel):
+    def code(self) -> str:
+        return "Z064"
+
+    def message(self):
+        return (
+            f"Encountered an error while creating OpenLineageEvent: {self.exc}\n"
+            f"{self.exc_info}"
+        )

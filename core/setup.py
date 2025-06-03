@@ -84,6 +84,8 @@ setup(
         "typing-extensions>=4.4",
         "pydantic<2",
         # ----
+        # OpenLineage Dependencies
+        "openlineage-python==1.30.1",
     ],
     zip_safe=False,
     classifiers=[
