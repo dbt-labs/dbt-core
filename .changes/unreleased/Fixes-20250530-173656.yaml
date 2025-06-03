@@ -1,3 +1,0 @@
-kind: Fixes
-body: Fix the databricks function try_to_number() return type
-time: 2025-05-30T17:36:56.045945723-07:00
