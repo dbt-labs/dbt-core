@@ -340,6 +340,13 @@ mod builtins {
     /// ```jinja
     /// {% set new_dict = dict(old_dict, extra_value=2) %}
     /// ```
+    ///
+    /// It also supports creating a dictionary from an iterable of key-value pairs:
+    ///
+    /// ```jinja
+    /// {% set zipped = zip(['a', 'b'], [1, 2]) %}
+    /// {% set my_dict = dict(zipped) %}
+    /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     pub fn dict(value: Option<Value>, update_with: crate::value::Kwargs) -> Result<Value, Error> {
         let rv = match value {
@@ -355,7 +362,34 @@ mod builtins {
                     }
                     map
                 }
-                _ => return Err(Error::from(ErrorKind::InvalidOperation)),
+                _ => {
+                    // Try to handle as an iterable of key-value pairs for other types
+                    if let Ok(iter) = value.try_iter() {
+                        let map = MutableMap::default();
+                        for item in iter {
+                            // Each item should be a sequence/tuple with exactly 2 elements
+                            if let Ok(pair_iter) = item.try_iter() {
+                                let pair: Vec<Value> = pair_iter.collect();
+                                if pair.len() == 2 {
+                                    map.insert(pair[0].clone(), pair[1].clone());
+                                } else {
+                                    return Err(Error::new(
+                                        ErrorKind::InvalidOperation,
+                                        format!("dictionary update sequence element must have length 2, not {}", pair.len())
+                                    ));
+                                }
+                            } else {
+                                return Err(Error::new(
+                                    ErrorKind::InvalidOperation,
+                                    "dictionary update sequence element must be iterable",
+                                ));
+                            }
+                        }
+                        map
+                    } else {
+                        return Err(Error::from(ErrorKind::InvalidOperation));
+                    }
+                }
             },
         };
 
