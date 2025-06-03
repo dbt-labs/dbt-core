@@ -1392,6 +1392,7 @@ impl From<DbtConfig> for ManifestModelConfig {
                 buckets: config.buckets,
                 clustered_by: config.clustered_by.clone(),
                 compression: config.compression.clone(),
+                catalog: config.catalog.clone(),
                 databricks_tags: config.databricks_tags.clone(),
                 databricks_compute: config.databricks_compute.clone(),
             },

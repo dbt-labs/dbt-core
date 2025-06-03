@@ -402,6 +402,7 @@ pub struct DatabricksModelConfig {
     pub auto_liquid_cluster: Option<bool>,
     pub clustered_by: Option<String>,
     pub buckets: Option<i64>,
+    pub catalog: Option<String>,
     pub databricks_tags: Option<BTreeMap<String, Value>>,
     pub compression: Option<String>,
     pub databricks_compute: Option<String>,

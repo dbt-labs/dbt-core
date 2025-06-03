@@ -128,6 +128,7 @@ pub struct DbtConfig {
     pub buckets: Option<i64>,
     pub clustered_by: Option<String>,
     pub compression: Option<String>,
+    pub catalog: Option<String>,
     pub databricks_tags: Option<BTreeMap<String, Value>>,
     pub databricks_compute: Option<String>,
     pub liquid_clustered_by: Option<String>,

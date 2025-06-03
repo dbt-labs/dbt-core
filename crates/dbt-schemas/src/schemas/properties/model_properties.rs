@@ -73,6 +73,7 @@ pub struct ModelPropertiesConfigs {
     pub batch_size: Option<String>,
     pub begin: Option<String>,
     pub buckets: Option<i64>,
+    pub catalog: Option<String>,
     pub cluster_by: Option<BigqueryClusterConfig>,
     pub clustered_by: Option<String>,
     pub compression: Option<String>,

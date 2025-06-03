@@ -42,6 +42,8 @@ pub struct ProjectModelConfig {
     pub bind: Option<bool>,
     #[serde(rename = "+buckets")]
     pub buckets: Option<i64>,
+    #[serde(rename = "+catalog")]
+    pub catalog: Option<String>,
     #[serde(rename = "+cluster_by")]
     pub cluster_by: Option<BigqueryClusterConfig>,
     #[serde(rename = "+clustered_by")]
@@ -248,6 +250,7 @@ impl TryFrom<&ProjectModelConfig> for DbtConfig {
             buckets: model_configs.buckets,
             clustered_by: model_configs.clustered_by.clone(),
             compression: model_configs.compression.clone(),
+            catalog: model_configs.catalog.clone(),
             databricks_tags: try_from_value(model_configs.databricks_tags.clone())?,
             databricks_compute: model_configs.databricks_compute.clone(),
             liquid_clustered_by: model_configs.liquid_clustered_by.clone(),
