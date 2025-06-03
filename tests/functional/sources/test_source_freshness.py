@@ -18,6 +18,8 @@ from tests.functional.sources.fixtures import (
     error_models_schema_yml,
     filtered_models_schema_yml,
     freshness_via_metadata_schema_yml,
+    freshness_with_explicit_null_in_source_schema_yml,
+    freshness_with_explicit_null_in_table_schema_yml,
     override_freshness_models_schema_yml,
 )
 
@@ -310,6 +312,10 @@ class TestOverrideSourceFreshness(SuccessfulSourceFreshnessTest):
     def models(self):
         return {"schema.yml": override_freshness_models_schema_yml}
 
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"sources": {"+freshness": {"error_after": {"count": 24, "period": "hour"}}}}
+
     @staticmethod
     def get_result_from_unique_id(data, unique_id):
         try:
@@ -321,7 +327,7 @@ class TestOverrideSourceFreshness(SuccessfulSourceFreshnessTest):
         self._set_updated_at_to(project, timedelta(hours=-30))
 
         path = "target/pass_source.json"
-        results = self.run_dbt_with_vars(
+        results, log_output = self.run_dbt_and_capture_with_vars(
             project, ["source", "freshness", "-o", path], expect_pass=False
         )
         assert len(results) == 4  # freshness disabled for source_e
@@ -578,3 +584,23 @@ class TestHooksInSourceFreshnessDefault(SuccessfulSourceFreshnessTest):
         )
         # default behaviour - no hooks run in source freshness
         self._assert_project_hooks_not_called(log_output)
+
+
+class TestSourceFreshnessExplicitNullInTable(SuccessfulSourceFreshnessTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"schema.yml": freshness_with_explicit_null_in_table_schema_yml}
+
+    def test_source_freshness_explicit_null_in_table(self, project):
+        result = self.run_dbt_with_vars(project, ["source", "freshness"], expect_pass=True)
+        assert {r.node.name: r.status for r in result} == {}
+
+
+class TestSourceFreshnessExplicitNullInSource(SuccessfulSourceFreshnessTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"schema.yml": freshness_with_explicit_null_in_source_schema_yml}
+
+    def test_source_freshness_explicit_null_in_source(self, project):
+        result = self.run_dbt_with_vars(project, ["source", "freshness"], expect_pass=True)
+        assert {r.node.name: r.status for r in result} == {}

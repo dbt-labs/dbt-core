@@ -13,7 +13,7 @@
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.9.0b4"
+          "default": "1.9.4"
         },
         "generated_at": {
           "type": "string"
@@ -587,6 +587,31 @@
                         }
                       ],
                       "default": null
+                    },
+                    "config": {
+                      "type": "object",
+                      "title": "ColumnConfig",
+                      "properties": {
+                        "_extra": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": true
                     },
                     "tags": {
                       "type": "array",
@@ -1633,6 +1658,31 @@
                       ],
                       "default": null
                     },
+                    "config": {
+                      "type": "object",
+                      "title": "ColumnConfig",
+                      "properties": {
+                        "_extra": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": true
+                    },
                     "tags": {
                       "type": "array",
                       "items": {
@@ -2286,6 +2336,31 @@
                         }
                       ],
                       "default": null
+                    },
+                    "config": {
+                      "type": "object",
+                      "title": "ColumnConfig",
+                      "properties": {
+                        "_extra": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": true
                     },
                     "tags": {
                       "type": "array",
@@ -3080,6 +3155,31 @@
                         }
                       ],
                       "default": null
+                    },
+                    "config": {
+                      "type": "object",
+                      "title": "ColumnConfig",
+                      "properties": {
+                        "_extra": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": true
                     },
                     "tags": {
                       "type": "array",
@@ -3893,6 +3993,31 @@
                         }
                       ],
                       "default": null
+                    },
+                    "config": {
+                      "type": "object",
+                      "title": "ColumnConfig",
+                      "properties": {
+                        "_extra": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": true
                     },
                     "tags": {
                       "type": "array",
@@ -5261,6 +5386,31 @@
                       ],
                       "default": null
                     },
+                    "config": {
+                      "type": "object",
+                      "title": "ColumnConfig",
+                      "properties": {
+                        "_extra": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": true
+                    },
                     "tags": {
                       "type": "array",
                       "items": {
@@ -5914,6 +6064,31 @@
                         }
                       ],
                       "default": null
+                    },
+                    "config": {
+                      "type": "object",
+                      "title": "ColumnConfig",
+                      "properties": {
+                        "_extra": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": true
                     },
                     "tags": {
                       "type": "array",
@@ -6903,6 +7078,31 @@
                         }
                       ],
                       "default": null
+                    },
+                    "config": {
+                      "type": "object",
+                      "title": "ColumnConfig",
+                      "properties": {
+                        "_extra": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "additionalProperties": true
                     },
                     "tags": {
                       "type": "array",
@@ -8086,6 +8286,31 @@
                   ],
                   "default": null
                 },
+                "config": {
+                  "type": "object",
+                  "title": "ColumnConfig",
+                  "properties": {
+                    "_extra": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      }
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "additionalProperties": true
+                },
                 "tags": {
                   "type": "array",
                   "items": {
@@ -8164,6 +8389,112 @@
                 "default": true
               },
               "event_time": {
+                "default": null
+              },
+              "freshness": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "title": "FreshnessThreshold",
+                    "properties": {
+                      "warn_after": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "title": "Time",
+                            "properties": {
+                              "count": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              },
+                              "period": {
+                                "anyOf": [
+                                  {
+                                    "enum": [
+                                      "minute",
+                                      "hour",
+                                      "day"
+                                    ]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "error_after": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "title": "Time",
+                            "properties": {
+                              "count": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              },
+                              "period": {
+                                "anyOf": [
+                                  {
+                                    "enum": [
+                                      "minute",
+                                      "hour",
+                                      "day"
+                                    ]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "filter": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
                 "default": null
               }
             },
@@ -10517,6 +10848,31 @@
                             ],
                             "default": null
                           },
+                          "config": {
+                            "type": "object",
+                            "title": "ColumnConfig",
+                            "properties": {
+                              "_extra": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": true
+                          },
                           "tags": {
                             "type": "array",
                             "items": {
@@ -11562,6 +11918,31 @@
                             ],
                             "default": null
                           },
+                          "config": {
+                            "type": "object",
+                            "title": "ColumnConfig",
+                            "properties": {
+                              "_extra": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": true
+                          },
                           "tags": {
                             "type": "array",
                             "items": {
@@ -12215,6 +12596,31 @@
                               }
                             ],
                             "default": null
+                          },
+                          "config": {
+                            "type": "object",
+                            "title": "ColumnConfig",
+                            "properties": {
+                              "_extra": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": true
                           },
                           "tags": {
                             "type": "array",
@@ -13009,6 +13415,31 @@
                               }
                             ],
                             "default": null
+                          },
+                          "config": {
+                            "type": "object",
+                            "title": "ColumnConfig",
+                            "properties": {
+                              "_extra": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": true
                           },
                           "tags": {
                             "type": "array",
@@ -13822,6 +14253,31 @@
                               }
                             ],
                             "default": null
+                          },
+                          "config": {
+                            "type": "object",
+                            "title": "ColumnConfig",
+                            "properties": {
+                              "_extra": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": true
                           },
                           "tags": {
                             "type": "array",
@@ -15190,6 +15646,31 @@
                             ],
                             "default": null
                           },
+                          "config": {
+                            "type": "object",
+                            "title": "ColumnConfig",
+                            "properties": {
+                              "_extra": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": true
+                          },
                           "tags": {
                             "type": "array",
                             "items": {
@@ -15843,6 +16324,31 @@
                               }
                             ],
                             "default": null
+                          },
+                          "config": {
+                            "type": "object",
+                            "title": "ColumnConfig",
+                            "properties": {
+                              "_extra": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": true
                           },
                           "tags": {
                             "type": "array",
@@ -16832,6 +17338,31 @@
                               }
                             ],
                             "default": null
+                          },
+                          "config": {
+                            "type": "object",
+                            "title": "ColumnConfig",
+                            "properties": {
+                              "_extra": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": true
                           },
                           "tags": {
                             "type": "array",
@@ -18006,6 +18537,31 @@
                             ],
                             "default": null
                           },
+                          "config": {
+                            "type": "object",
+                            "title": "ColumnConfig",
+                            "properties": {
+                              "_extra": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                }
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": true
+                          },
                           "tags": {
                             "type": "array",
                             "items": {
@@ -18084,6 +18640,112 @@
                           "default": true
                         },
                         "event_time": {
+                          "default": null
+                        },
+                        "freshness": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "title": "FreshnessThreshold",
+                              "properties": {
+                                "warn_after": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "title": "Time",
+                                      "properties": {
+                                        "count": {
+                                          "anyOf": [
+                                            {
+                                              "type": "integer"
+                                            },
+                                            {
+                                              "type": "null"
+                                            }
+                                          ],
+                                          "default": null
+                                        },
+                                        "period": {
+                                          "anyOf": [
+                                            {
+                                              "enum": [
+                                                "minute",
+                                                "hour",
+                                                "day"
+                                              ]
+                                            },
+                                            {
+                                              "type": "null"
+                                            }
+                                          ],
+                                          "default": null
+                                        }
+                                      },
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "error_after": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "title": "Time",
+                                      "properties": {
+                                        "count": {
+                                          "anyOf": [
+                                            {
+                                              "type": "integer"
+                                            },
+                                            {
+                                              "type": "null"
+                                            }
+                                          ],
+                                          "default": null
+                                        },
+                                        "period": {
+                                          "anyOf": [
+                                            {
+                                              "enum": [
+                                                "minute",
+                                                "hour",
+                                                "day"
+                                              ]
+                                            },
+                                            {
+                                              "type": "null"
+                                            }
+                                          ],
+                                          "default": null
+                                        }
+                                      },
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "filter": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                }
+                              },
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
                           "default": null
                         }
                       },
