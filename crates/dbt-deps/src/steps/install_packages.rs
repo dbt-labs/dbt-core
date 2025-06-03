@@ -5,7 +5,7 @@ use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_schemas::schemas::packages::DbtPackagesLock;
 use flate2::read::GzDecoder;
 use std::path::{Path, PathBuf};
-use vortex_client::event_functions::package_install_event;
+use vortex_events::package_install_event;
 
 use crate::package_listing::UnpinnedPackage;
 

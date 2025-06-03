@@ -12,17 +12,9 @@ edition.workspace = true
 proto-rust = { path = "../proto-rust" }
 
 # client dependencies
-anyhow = { workspace = true }
-chrono = { workspace = true }
-dashmap = { workspace = true }
-dbt-common = { workspace = true }
 dbt-env = { workspace = true }
-dbt-jinja-utils = { workspace = true }
-dbt-schemas = { workspace = true }
-dbt-serde_yaml = { workspace = true }
 http = { workspace = true }
 log = { workspace = true }
-md5 = { workspace = true }
 pbjson-types = { workspace = true }
 prost = { workspace = true }
 reqwest = { workspace = true }

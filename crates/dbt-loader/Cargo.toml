@@ -29,7 +29,7 @@ reqwest = { workspace = true }
 rust-embed = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-vortex-client = { workspace = true }
+vortex-events = { workspace = true }
 walkdir = { workspace = true }
 
 [lib]

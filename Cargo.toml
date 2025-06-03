@@ -22,6 +22,7 @@ members = [
   "crates/dbt-xdbc",
   "crates/dbt-deps",
   "crates/vortex-client",
+  "crates/vortex-events",
   "crates/proto-rust",
   "crates/dbt-env",
 ]
@@ -139,6 +140,7 @@ dbt-schemas = { path = "crates/dbt-schemas" }
 dbt-selector-parser = { path = "crates/dbt-selector-parser" }
 proto-rust = { path = "crates/proto-rust" }
 vortex-client = { path = "crates/vortex-client" }
+vortex-events = { path = "crates/vortex-events" }
 
 # jinja dependencies
 minijinja = { path = "crates/dbt-jinja/minijinja", features = [

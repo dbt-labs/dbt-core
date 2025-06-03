@@ -1,21 +1,18 @@
-use crate::client::{log_proto, ErrorMode};
-use dbt_common::FsResult;
-use dbt_jinja_utils::invocation_args::InvocationArgs;
-use dbt_schemas::schemas::manifest::{DbtManifest, DbtNode, InternalDbtNode};
-use dbt_serde_yaml;
-use std::path::{Path, PathBuf};
-// use dbt_schemas::schemas::manifest::InternalDbtNode;
 use dashmap::DashMap;
 use dbt_common::stats::{NodeStatus, Stat};
+use dbt_common::FsResult;
 use dbt_env::env::InternalEnv;
-use md5;
+use dbt_jinja_utils::invocation_args::InvocationArgs;
+use dbt_schemas::schemas::manifest::{DbtManifest, DbtNode, InternalDbtNode};
 use proto_rust::v1::events::fusion::CloudInvocation;
 use proto_rust::v1::public::events::fusion::{
     AdapterInfo, AdapterInfoV2, Invocation, InvocationEnv, PackageInstall, ResourceCounts, RunModel,
 };
 use std::collections::HashMap;
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use vortex_client::client::{log_proto, ErrorMode};
 
 pub async fn invocation_start_event(
     invocation_id: String,
