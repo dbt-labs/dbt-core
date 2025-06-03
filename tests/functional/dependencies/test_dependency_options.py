@@ -101,7 +101,6 @@ class TestDepsOptions(object):
         run_dbt(["deps", "--upgrade"])
         assert patched_lock.call_count == 1
 
-
     def test_deps_read_fwd_compatible(self, clean_start, mocker):
         package_lock_content = """packages:
   - name: fivetran_utils
