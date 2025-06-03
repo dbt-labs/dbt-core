@@ -77,11 +77,7 @@ pub fn resolve_sources(
             base_ctx,
             None,
         )?;
-        let database: String = source
-            .database
-            .clone()
-            .or_else(|| source.catalog.clone())
-            .unwrap_or(database.to_owned());
+        let database: String = source.database.clone().unwrap_or(database.to_owned());
         let schema = source.schema.clone().unwrap_or(source.name.clone());
 
         let global_config =
