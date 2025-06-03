@@ -18,8 +18,9 @@ use std::collections::{BTreeMap, HashMap};
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct SourceProperties {
     pub config: Option<SourcePropertiesConfig>,
-    #[serde(alias = "catalog")]
     pub database: Option<String>,
+    // TODO: support alias then we can remove this field and use #[serde[alias = "catalog"]] on database
+    pub catalog: Option<String>,
     pub description: Option<String>,
     pub loaded_at_field: Option<String>,
     pub loaded_at_query: Option<String>,
