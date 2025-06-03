@@ -229,6 +229,7 @@ mod argtypes;
 #[cfg(feature = "deserialization")]
 mod deserialize;
 pub(crate) mod merge_object;
+pub(crate) mod namespace_name;
 pub(crate) mod namespace_object;
 mod object;
 pub(crate) mod ops;

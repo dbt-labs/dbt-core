@@ -20,6 +20,7 @@ use crate::output::{CaptureMode, MacroSpans, Output};
 use crate::output_tracker::OutputTrackerLocation;
 use crate::utils::{untrusted_size_hint, AutoEscape, UndefinedBehavior};
 use crate::value::mutable_vec::MutableVec;
+use crate::value::namespace_name::NamespaceName;
 use crate::value::namespace_object::Namespace;
 use crate::value::Object;
 use crate::value::{
@@ -436,19 +437,17 @@ impl<'env> Vm<'env> {
                     state.ctx.store(name, stack.pop());
                 }
                 Instruction::Lookup(name) => {
-                    // TODO: it is possible that a variable name conflict with the template name
-                    // look up if it is a package name first
-                    if namespace_registry.contains_key(&Value::from(name as &str)) {
-                        stack.push(Value::from(name.to_string()));
-                    // check if it is a regular variable in state first
-                    // Somehow a macro try to set all varibale it uses to undefined
-                    } else if state.lookup(name).is_some()
+                    if state.lookup(name).is_some()
                         && !state
                             .lookup(name)
                             .expect("we just checked that it is some")
                             .is_undefined()
                     {
                         stack.push(state.lookup(name).expect("we just checked that it is some"));
+                    } else if namespace_registry.contains_key(&Value::from(name as &str)) {
+                        stack.push(Value::from_object(NamespaceName::new(name)));
+                    // check if it is a regular variable in state first
+                    // Somehow a macro try to set all varibale it uses to undefined
                     } else if let Some(template_name) =
                         macro_namespace_template_resolver(state, name, &mut Vec::new())
                     {
@@ -476,22 +475,28 @@ impl<'env> Vm<'env> {
                     stack.push(match a.get_attr_fast(name) {
                         Some(value) => assert_valid!(value),
                         None => {
-                            // a could be a package name, we need to check if there's a macro in the namespace
-                            if namespace_registry.contains_key(&a)
-                                && namespace_registry
-                                    .get(&a)
+                            if let Some(namespace) = a.downcast_object_ref::<NamespaceName>() {
+                                let ns_name = Value::from(namespace.get_name());
+                                // a could be a package name, we need to check if there's a macro in the namespace
+                                if namespace_registry
+                                    .get(&ns_name)
                                     .unwrap_or(&Value::from_serialize(Vec::<Value>::new()))
                                     .downcast_object::<MutableVec<Value>>()
                                     .unwrap_or_default()
                                     .contains(&Value::from(name as &str))
-                            {
-                                Value::from_object(DispatchObject {
-                                    macro_name: name.to_string(),
-                                    package_name: Some(a.to_string()),
-                                    strict: true,
-                                    auto_execute: false,
-                                    context: state.get_base_context(),
-                                })
+                                {
+                                    Value::from_object(DispatchObject {
+                                        macro_name: name.to_string(),
+                                        package_name: Some(namespace.get_name().to_string()),
+                                        strict: true,
+                                        auto_execute: false,
+                                        context: state.get_base_context(),
+                                    })
+                                } else {
+                                    ctx_ok!(
+                                        undefined_behavior.handle_undefined(Some(a.is_undefined()))
+                                    )
+                                }
                             } else {
                                 ctx_ok!(undefined_behavior.handle_undefined(Some(a.is_undefined())))
                             }
@@ -1011,14 +1016,12 @@ impl<'env> Vm<'env> {
                     let args = stack.get_call_args(*arg_count);
                     let arg_count = args.len();
 
-                    let a = if let Some(arg0) = args[0]
-                        .as_str()
-                        .filter(|arg0| namespace_registry.contains_key(&Value::from(*arg0)))
-                    {
+                    let a = if let Some(ns) = args[0].downcast_object_ref::<NamespaceName>() {
+                        let ns_name = ns.get_name();
                         let args = &args[1..];
                         // if not found, attempt to lookup the template and function using name stripped of test_
                         // see generate_test_macro in resolve_generic_tests.rs -> a subset of generated macro names are prefixed with test_
-                        let Ok(template) = self.env.get_template(&format!("{}.{}", arg0, name))
+                        let Ok(template) = self.env.get_template(&format!("{}.{}", ns_name, name))
                         else {
                             bail!(Error::new(
                                 ErrorKind::UnknownFunction,
@@ -1028,7 +1031,7 @@ impl<'env> Vm<'env> {
 
                         let path_and_span_and_deltaline = if let Some((Some(path), Some(span))) =
                             template_registry
-                                .get(&Value::from(&format!("{}.{}", arg0, name)))
+                                .get(&Value::from(&format!("{}.{}", ns_name, name)))
                                 .map(|value| {
                                     (value.get_attr_fast("path"), value.get_attr_fast("span"))
                                 }) {
