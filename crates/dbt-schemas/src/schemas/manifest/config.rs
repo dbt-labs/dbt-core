@@ -183,6 +183,7 @@ impl DbtConfig {
             self,
             parent_config,
             [
+                query_tag,
                 alias,
                 schema,
                 database,

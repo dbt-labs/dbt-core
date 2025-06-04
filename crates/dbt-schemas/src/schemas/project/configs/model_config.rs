@@ -254,6 +254,7 @@ impl TryFrom<&ProjectModelConfig> for DbtConfig {
             databricks_tags: try_from_value(model_configs.databricks_tags.clone())?,
             databricks_compute: model_configs.databricks_compute.clone(),
             liquid_clustered_by: model_configs.liquid_clustered_by.clone(),
+            query_tag: model_configs.query_tag.clone(),
             ..Default::default()
         })
     }
