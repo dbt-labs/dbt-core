@@ -5,7 +5,7 @@ use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_schemas::project_configs::ProjectConfigs;
-use dbt_schemas::schemas::common::{DbtChecksum, DbtContract, DbtQuoting, NodeDependsOn};
+use dbt_schemas::schemas::common::{DbtContract, DbtQuoting, NodeDependsOn};
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::macros::DbtMacro;
 use dbt_schemas::schemas::manifest::{CommonAttributes, DbtSnapshot, NodeBaseAttributes};
@@ -204,7 +204,7 @@ pub async fn resolve_snapshots(
                 },
                 base_attr: NodeBaseAttributes {
                     alias: "".to_owned(), // will be updated below
-                    checksum: DbtChecksum::default(),
+                    checksum: sql_file_info.checksum,
                     relation_name: None, // will be updated below
                     build_path: None,
                     unrendered_config: BTreeMap::new(),
