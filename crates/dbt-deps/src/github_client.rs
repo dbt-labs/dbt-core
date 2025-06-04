@@ -1,14 +1,9 @@
 use dbt_common::{err, fs_err, ErrorCode, FsResult};
-use regex::Regex;
-use std::sync::LazyLock;
 use std::{path::PathBuf, process::Command};
 // Use the local git client!
 
-static GIT_COMMIT_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\b[0-9a-f]{40}\b").expect("Regex pattern should compile"));
-
 pub fn is_commit(revision: &str) -> bool {
-    GIT_COMMIT_REGEX.is_match(revision)
+    revision.len() == 40 && revision.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 pub fn clone_and_checkout(
