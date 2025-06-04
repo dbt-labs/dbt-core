@@ -4,7 +4,6 @@ pub mod macros;
 pub mod adapter;
 pub mod clap_cli;
 pub mod constants;
-// pub mod dbtz_clap_cli;
 pub mod error;
 pub mod error_counter;
 pub mod init;

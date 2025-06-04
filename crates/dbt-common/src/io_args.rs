@@ -529,7 +529,8 @@ pub enum ShowOptions {
     Progress,
     ProgressRun,
     ProgressParse,
-    ProgressCompile,
+    ProgressRender,
+    ProgressAnalyze,
     InputFiles,
     Manifest,
     Schedule,
@@ -562,7 +563,8 @@ impl ShowOptions {
             ShowOptions::Progress
             | ShowOptions::ProgressRun
             | ShowOptions::ProgressParse
-            | ShowOptions::ProgressCompile
+            | ShowOptions::ProgressRender
+            | ShowOptions::ProgressAnalyze
             | ShowOptions::Schema
             | ShowOptions::Data
             | ShowOptions::Lineage

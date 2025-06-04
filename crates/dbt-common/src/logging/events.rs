@@ -13,8 +13,8 @@ use std::time::Duration;
 
 use crate::{
     constants::{
-        COMPILED, COMPILING, DEBUGGED, FAILED, PARSING, PASS, PREVIEWING, RUNNING, SKIPPING,
-        SUCCESS,
+        ANALYZING, DEBUGGED, FAILED, PARSING, PASS, PREVIEWING, RENDERED, RENDERING, RUNNING,
+        SKIPPING, SUCCESS,
     },
     CodeLocation,
 };
@@ -245,16 +245,23 @@ pub enum Severity {
 // Mapping of action constants to event names for logging
 #[derive(Debug, Clone)]
 pub enum LogEvent {
+    // Parse phase
+    Parsing,
+    // Render phase
+    CompiledNode,
+    Rendering,
+    // Analyze phase
+    Analyzing,
+    // Debug phase
+    DebugResult,
+    // Run phase
     NodeStart,
     NodeSuccess,
     TestPass,
-    CompiledNode,
     ShowNode,
     Skipping,
     Failed,
-    DebugResult,
-    Parsing,
-    Compiling,
+    // Unknown phase
     Unknown(String),
 }
 
@@ -268,7 +275,8 @@ impl LogEvent {
             LogEvent::Skipping => "MarkSkippedChildren",
             LogEvent::DebugResult => "DebugCmdResult",
             LogEvent::Parsing => "ParseResource",
-            LogEvent::Compiling => "CompileResource",
+            LogEvent::Rendering => "CompileResource",
+            LogEvent::Analyzing => "AnalyzeResource",
             LogEvent::Unknown(_action) => "Unknown",
         }
     }
@@ -282,7 +290,10 @@ impl LogEvent {
             LogEvent::ShowNode => "Q041",
             LogEvent::Skipping => "Z033",
             LogEvent::DebugResult => "Z048",
-            LogEvent::Parsing | LogEvent::Compiling | LogEvent::Unknown(_) => "",
+            LogEvent::Parsing
+            | LogEvent::Analyzing
+            | LogEvent::Rendering
+            | LogEvent::Unknown(_) => "",
         }
     }
     pub fn level(&self) -> Level {
@@ -298,7 +309,8 @@ impl LogEvent {
             | LogEvent::TestPass
             | LogEvent::Failed
             | LogEvent::Parsing
-            | LogEvent::Compiling
+            | LogEvent::Analyzing
+            | LogEvent::Rendering
             | LogEvent::Unknown(_) => Level::Info,
             // Debug level events
             // (All events related to local phases: parse, compile should be at debug level.)
@@ -308,7 +320,8 @@ impl LogEvent {
     pub fn phase(&self) -> &str {
         match self {
             LogEvent::Parsing => "parse",
-            LogEvent::Compiling | LogEvent::CompiledNode => "compile",
+            LogEvent::Analyzing => "analyze",
+            LogEvent::Rendering | LogEvent::CompiledNode => "render",
             LogEvent::NodeStart
             | LogEvent::NodeSuccess
             | LogEvent::Failed
@@ -326,14 +339,15 @@ impl LogEvent {
             LogEvent::NodeSuccess => SUCCESS.to_string(),
             LogEvent::Failed => FAILED.to_string(),
             // Node status events
-            LogEvent::CompiledNode => COMPILED.to_string(),
+            LogEvent::CompiledNode => RENDERED.to_string(),
             LogEvent::ShowNode => PREVIEWING.to_string(),
             LogEvent::TestPass => PASS.to_string(),
             // Special events
             LogEvent::Skipping => SKIPPING.to_string(),
             LogEvent::DebugResult => DEBUGGED.to_string(),
             LogEvent::Parsing => PARSING.to_string(),
-            LogEvent::Compiling => COMPILING.to_string(),
+            LogEvent::Rendering => RENDERING.to_string(),
+            LogEvent::Analyzing => ANALYZING.to_string(),
             LogEvent::Unknown(action) => action.to_string(),
         }
     }
@@ -345,13 +359,14 @@ impl From<&str> for LogEvent {
             RUNNING => LogEvent::NodeStart,
             SUCCESS => LogEvent::NodeSuccess,
             PASS => LogEvent::TestPass,
-            COMPILED => LogEvent::CompiledNode,
+            RENDERED => LogEvent::CompiledNode,
             PREVIEWING => LogEvent::ShowNode,
             SKIPPING => LogEvent::Skipping,
             FAILED => LogEvent::Failed,
             DEBUGGED => LogEvent::DebugResult,
             PARSING => LogEvent::Parsing,
-            COMPILING => LogEvent::Compiling,
+            ANALYZING => LogEvent::Analyzing,
+            RENDERING => LogEvent::Rendering,
             _ => LogEvent::Unknown(value.to_string()),
         }
     }
@@ -364,11 +379,14 @@ pub struct FsInfo {
     pub desc: Option<String>,
 }
 impl FsInfo {
-    pub fn is_phase_compile(&self) -> bool {
-        self.event.phase() == "compile"
-    }
     pub fn is_phase_parse(&self) -> bool {
         self.event.phase() == "parse"
+    }
+    pub fn is_phase_render(&self) -> bool {
+        self.event.phase() == "render"
+    }
+    pub fn is_phase_analyze(&self) -> bool {
+        self.event.phase() == "analyze"
     }
     pub fn is_phase_run(&self) -> bool {
         self.event.phase() == "run"

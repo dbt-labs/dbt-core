@@ -2531,7 +2531,11 @@ impl CommonArgs {
         } else if self.show.contains(&ShowOptions::None) {
             HashSet::new()
         } else if self.show.is_empty() {
-            HashSet::from([ShowOptions::ProgressRun, ShowOptions::Progress])
+            HashSet::from([
+                ShowOptions::ProgressRender,
+                ShowOptions::ProgressRun,
+                ShowOptions::Progress,
+            ])
         } else {
             self.show
                 .iter()
@@ -2541,7 +2545,8 @@ impl CommonArgs {
                         vec![
                             ShowOptions::Progress,
                             ShowOptions::ProgressParse,
-                            ShowOptions::ProgressCompile,
+                            ShowOptions::ProgressRender,
+                            ShowOptions::ProgressAnalyze,
                             ShowOptions::ProgressRun,
                         ]
                     } else {

@@ -289,14 +289,16 @@ macro_rules! show_progress {
         // TODO: these filtering conditions should be moved to the logger side
         if (
             ($io.should_show(ShowOptions::Progress) && $info.is_phase_unknown())
-            || ($io.should_show(ShowOptions::ProgressRun) && $info.is_phase_run())
-            || ($io.should_show(ShowOptions::ProgressCompile) && $info.is_phase_compile())
             || ($io.should_show(ShowOptions::ProgressParse) && $info.is_phase_parse())
+            || ($io.should_show(ShowOptions::ProgressRender) && $info.is_phase_render())
+            || ($io.should_show(ShowOptions::ProgressAnalyze) && $info.is_phase_analyze())
+            || ($io.should_show(ShowOptions::ProgressRun) && $info.is_phase_run())
         )
             // Do not show parse/compile generic tests
             && !($info.target.contains(dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME)
                 && ($info.event.action().as_str().contains(dbt_common::constants::PARSING)
-                    || $info.event.action().as_str().contains(dbt_common::constants::COMPILING)))
+                    || $info.event.action().as_str().contains(dbt_common::constants::RENDERING)
+                    || $info.event.action().as_str().contains(dbt_common::constants::ANALYZING)))
         {
             let output = pretty_green($info.event.action().as_str(), &$info.target, $info.desc.as_deref());
             let event = $info.event;

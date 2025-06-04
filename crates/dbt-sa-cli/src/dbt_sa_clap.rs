@@ -435,7 +435,8 @@ impl CommonArgs {
             HashSet::from_iter(vec![
                 ShowOptions::Progress,
                 ShowOptions::ProgressParse,
-                ShowOptions::ProgressCompile,
+                ShowOptions::ProgressRender,
+                ShowOptions::ProgressAnalyze,
                 ShowOptions::ProgressRun,
             ])
         } else {
@@ -447,7 +448,8 @@ impl CommonArgs {
                         vec![
                             ShowOptions::Progress,
                             ShowOptions::ProgressParse,
-                            ShowOptions::ProgressCompile,
+                            ShowOptions::ProgressRender,
+                            ShowOptions::ProgressAnalyze,
                             ShowOptions::ProgressRun,
                         ]
                     } else {

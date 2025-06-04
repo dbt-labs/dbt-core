@@ -80,6 +80,7 @@ pub const FORMATTING: &str = " Formatting";
 pub const LINTING: &str = "   Linting";
 pub const DOWNLOADING: &str = " Downloading";
 pub const COMPILING: &str = " Compiling";
+pub const RENDERING: &str = " Rendering";
 pub const SEEDING: &str = "   Seeding";
 pub const HYDRATING: &str = "  Hydrating";
 pub const TESTING: &str = "   Testing";
@@ -92,7 +93,8 @@ pub const FAILED: &str = "    Failed";
 pub const REUSING: &str = "   Reusing";
 pub const STALE: &str = "     Stale";
 pub const SKIPPING: &str = "  Skipping";
-pub const COMPILED: &str = "  Compiled";
+pub const ANALYZED: &str = "  Analyzed";
+pub const RENDERED: &str = "  Rendered";
 
 // debug command
 pub const VALIDATING: &str = "Validating";
