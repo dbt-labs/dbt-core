@@ -801,20 +801,13 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                 )
                 project_freshness = None
 
-            model_freshness_dict = block.target.freshness or None
-            model_freshness = (
-                ModelFreshness.from_dict(model_freshness_dict)
-                if model_freshness_dict and "build_after" in model_freshness_dict
-                else None
-            )
-
             config_freshness_dict = block.target.config.get("freshness", None)
             config_freshness = (
                 ModelFreshness.from_dict(config_freshness_dict)
                 if config_freshness_dict and "build_after" in config_freshness_dict
                 else None
             )
-            freshness = merge_model_freshness(project_freshness, model_freshness, config_freshness)
+            freshness = merge_model_freshness(project_freshness, config_freshness)
 
         patch = ParsedNodePatch(
             name=block.target.name,
