@@ -20,6 +20,7 @@ impl StaticBaseColumn for DatabricksColumnType {
         name: String,
         dtype: String,
         char_size: Option<u32>,
+        // unused currently, may need to revisit for DECIMAL types!
         _numeric_precision: Option<u64>,
         _numeric_scale: Option<u64>,
     ) -> Result<Value, MinijinjaError> {
