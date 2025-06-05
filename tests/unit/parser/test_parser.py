@@ -309,22 +309,29 @@ SINGLE_TABLE_MODEL_FRESHNESS = """
 models:
     - name: my_model
       description: A description of my model
-      freshness:
-        build_after: {count: 4, period: day, updates_on: all}
       config:
         freshness:
           build_after: {count: 1, period: day, updates_on: any}
+"""
+
+SINGLE_TABLE_MODEL_TOP_LEVEL_FRESHNESS = """
+models:
+    - name: my_model
+      description: A description of my model
+      freshness:
+        build_after: {count: 1, period: day, updates_on: any}
 """
 
 SINGLE_TABLE_MODEL_FRESHNESS_ONLY_DEPEND_ON = """
 models:
     - name: my_model
       description: A description of my model
-      freshness:
-        build_after:
-            updates_on: all
-            period: hour
-            count: 0
+      config:
+        freshness:
+          build_after:
+          updates_on: all
+          period: hour
+          count: 0
 """
 
 
@@ -774,6 +781,15 @@ class SchemaParserModelsTest(SchemaParserTest):
         ].freshness.build_after == ModelBuildAfter(
             count=1, period="day", updates_on=ModelFreshnessUpdatesOnOptions.all
         )
+
+    def test__parse_model_ignores_top_level_freshness(self):
+        block = self.file_block_for(SINGLE_TABLE_MODEL_TOP_LEVEL_FRESHNESS, "test_one.yml")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        dct = yaml_from_file(block.file, validate=True)
+        self.parser.parse_file(block, dct)
+        self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
+
+        assert self.parser.manifest.nodes["model.root.my_model"].freshness is None
 
     def test__parse_model_freshness_depend_on(self):
         block = self.file_block_for(SINGLE_TABLE_MODEL_FRESHNESS_ONLY_DEPEND_ON, "test_one.yml")
