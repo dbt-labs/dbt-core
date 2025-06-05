@@ -328,7 +328,7 @@ class TestSimpleDependencyHooks(BaseDependencyTest):
 
         run_dbt(["deps", "--vars", cli_vars])
         results = run_dbt(["run", "--vars", cli_vars])
-        assert len(results) == 2
+        assert len(results) == 8
         check_relations_equal(project.adapter, ["actual", "expected"])
 
 

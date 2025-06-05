@@ -35,6 +35,8 @@ from dbt.parser.schemas import (
     YamlReader,
 )
 from dbt.utils import get_pseudo_test_path
+from dbt_common.events.functions import fire_event
+from dbt_common.events.types import SystemStdErr
 from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
 
 
@@ -50,6 +52,8 @@ class UnitTestManifestLoader:
         for unique_id in self.selected:
             if unique_id in self.manifest.unit_tests:
                 unit_test_case: UnitTestDefinition = self.manifest.unit_tests[unique_id]
+                if not unit_test_case.config.enabled:
+                    continue
                 self.parse_unit_test_case(unit_test_case)
         return self.unit_test_manifest
 
@@ -106,7 +110,6 @@ class UnitTestManifestLoader:
         # unit_test_node now has a populated refs/sources
 
         self.unit_test_manifest.nodes[unit_test_node.unique_id] = unit_test_node
-
         # Now create input_nodes for the test inputs
         """
         given:
@@ -128,7 +131,6 @@ class UnitTestManifestLoader:
                 given.input, tested_node, test_case.name
             )
             input_name = original_input_node.name
-
             common_fields = {
                 "resource_type": NodeType.Model,
                 # root directory for input and output fixtures
@@ -145,23 +147,25 @@ class UnitTestManifestLoader:
                 "name": input_name,
                 "path": f"{input_name}.sql",
             }
+            resource_type = original_input_node.resource_type
 
-            if original_input_node.resource_type in (
+            if resource_type in (
                 NodeType.Model,
                 NodeType.Seed,
                 NodeType.Snapshot,
             ):
+
                 input_node = ModelNode(
                     **common_fields,
                     defer_relation=original_input_node.defer_relation,
                 )
-                if (
-                    original_input_node.resource_type == NodeType.Model
-                    and original_input_node.version
-                ):
-                    input_node.version = original_input_node.version
+                if resource_type == NodeType.Model:
+                    if original_input_node.version:
+                        input_node.version = original_input_node.version
+                    if original_input_node.latest_version:
+                        input_node.latest_version = original_input_node.latest_version
 
-            elif original_input_node.resource_type == NodeType.Source:
+            elif resource_type == NodeType.Source:
                 # We are reusing the database/schema/identifier from the original source,
                 # but that shouldn't matter since this acts as an ephemeral model which just
                 # wraps a CTE around the unit test node.
@@ -293,7 +297,10 @@ class UnitTestParser(YamlReader):
             # for calculating state:modified
             unit_test_definition.build_unit_test_checksum()
             assert isinstance(self.yaml.file, SchemaSourceFile)
-            self.manifest.add_unit_test(self.yaml.file, unit_test_definition)
+            if unit_test_config.enabled:
+                self.manifest.add_unit_test(self.yaml.file, unit_test_definition)
+            else:
+                self.manifest.add_disabled(self.yaml.file, unit_test_definition)
 
         return ParseResult()
 
@@ -389,6 +396,44 @@ class UnitTestParser(YamlReader):
                     ut_fixture.fixture, self.project.project_name, unit_test_definition.unique_id
                 )
 
+        # sanitize order of input
+        if ut_fixture.rows and (
+            ut_fixture.format == UnitTestFormat.Dict or ut_fixture.format == UnitTestFormat.CSV
+        ):
+            self._promote_first_non_none_row(ut_fixture)
+
+    def _promote_first_non_none_row(self, ut_fixture):
+        """
+        Promote the first row with no None values to the top of the ut_fixture.rows list.
+
+        This function modifies the ut_fixture object in place.
+
+        Needed for databases like Redshift which uses the first value in a column to determine
+        the column type. If the first value is None, the type is assumed to be VARCHAR(1).
+        This leads to obscure type mismatch errors centered on a unit test fixture's `expect`.
+        See https://github.com/dbt-labs/dbt-redshift/issues/821 for more info.
+        """
+        non_none_row_index = None
+
+        # Iterate through each row and its index
+        for index, row in enumerate(ut_fixture.rows):
+            # Check if all values in the row are not None
+            if all(value is not None for value in row.values()):
+                non_none_row_index = index
+                break
+
+        if non_none_row_index is None:
+            fire_event(
+                SystemStdErr(
+                    bmsg="Unit Test fixtures benefit from having at least one row free of Null values to ensure consistent column types. Failure to meet this recommendation can result in type mismatch errors between unit test source models and `expected` fixtures."
+                )
+            )
+        else:
+            ut_fixture.rows[0], ut_fixture.rows[non_none_row_index] = (
+                ut_fixture.rows[non_none_row_index],
+                ut_fixture.rows[0],
+            )
+
     def get_fixture_file_rows(self, fixture_name, project_name, utdef_unique_id):
         # find fixture file object and store unit_test_definition unique_id
         fixture = self._get_fixture(fixture_name, project_name)
@@ -426,7 +471,7 @@ class UnitTestParser(YamlReader):
                     f"Unable to find seed '{package_name}.{seed_name}' for unit tests in directories: {self.project.seed_paths}"
                 )
 
-        seed_path = Path(seed_node.root_path) / seed_node.original_file_path
+        seed_path = Path(self.project.project_root) / seed_node.original_file_path
         with open(seed_path, "r") as f:
             for row in DictReader(f):
                 rows.append(row)
@@ -465,6 +510,16 @@ def process_models_for_unit_test(
     # The UnitTestDefinition should only have one "depends_on" at this point,
     # the one that's found by the "model" field.
     target_model_id = unit_test_def.depends_on.nodes[0]
+    if target_model_id not in manifest.nodes:
+        if target_model_id in manifest.disabled:
+            # The model is disabled, so we don't need to do anything (#10540)
+            return
+        else:
+            # If we've reached here and the model is not disabled, throw an error
+            raise ParsingError(
+                f"Unit test '{unit_test_def.name}' references a model that does not exist: {target_model_id}"
+            )
+
     target_model = manifest.nodes[target_model_id]
     assert isinstance(target_model, ModelNode)
 

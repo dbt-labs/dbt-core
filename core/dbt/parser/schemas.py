@@ -1,10 +1,34 @@
 import datetime
+import pathlib
+import re
 import time
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, Type, TypeVar
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generic,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+)
 
-from dbt import deprecations
+from dbt.artifacts.resources import RefArgs
+from dbt.artifacts.resources.v1.model import (
+    CustomGranularity,
+    ModelFreshness,
+    TimeSpine,
+    merge_model_freshness,
+)
+from dbt.clients.checked_load import (
+    checked_load,
+    issue_deprecation_warnings_for_failures,
+)
+from dbt.clients.jinja_static import statically_parse_ref_or_source
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config import RuntimeConfig
 from dbt.context.configured import SchemaYamlVars, generate_schema_yml_context
@@ -12,9 +36,11 @@ from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import SchemaSourceFile, SourceFile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import (
+    Macro,
     ModelNode,
     ParsedMacroPatch,
     ParsedNodePatch,
+    ParsedSingularTestPatch,
     UnpatchedSourceDefinition,
 )
 from dbt.contracts.graph.unparsed import (
@@ -25,9 +51,11 @@ from dbt.contracts.graph.unparsed import (
     UnparsedMacroUpdate,
     UnparsedModelUpdate,
     UnparsedNodeUpdate,
+    UnparsedSingularTestUpdate,
     UnparsedSourceDefinition,
 )
 from dbt.events.types import (
+    InvalidMacroAnnotation,
     MacroNotFoundForPatch,
     NoNodeForYamlKey,
     UnsupportedConstraintMaterialization,
@@ -46,6 +74,7 @@ from dbt.exceptions import (
     YamlParseDictError,
     YamlParseListError,
 )
+from dbt.flags import get_flags
 from dbt.node_types import AccessType, NodeType
 from dbt.parser.base import SimpleParser
 from dbt.parser.common import (
@@ -54,6 +83,7 @@ from dbt.parser.common import (
     TestBlock,
     VersionedTestBlock,
     YamlBlock,
+    schema_file_keys_to_resource_types,
     trimmed,
 )
 from dbt.parser.schema_generic_tests import SchemaGenericTestParser
@@ -62,23 +92,11 @@ from dbt.parser.search import FileBlock
 from dbt.utils import coerce_dict_str
 from dbt_common.contracts.constraints import ConstraintType, ModelLevelConstraint
 from dbt_common.dataclass_schema import ValidationError, dbtClassMixin
-from dbt_common.events.functions import warn_or_error
+from dbt_common.events import EventLevel
+from dbt_common.events.functions import fire_event, warn_or_error
+from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtValidationError
 from dbt_common.utils import deep_merge
-
-schema_file_keys = (
-    "models",
-    "seeds",
-    "snapshots",
-    "sources",
-    "macros",
-    "analyses",
-    "exposures",
-    "metrics",
-    "semantic_models",
-    "saved_queries",
-)
-
 
 # ===============================================================================
 #  Schema Parser classes
@@ -110,11 +128,31 @@ schema_file_keys = (
 # ===============================================================================
 
 
-def yaml_from_file(source_file: SchemaSourceFile) -> Optional[Dict[str, Any]]:
+def yaml_from_file(
+    source_file: SchemaSourceFile, validate: bool = False
+) -> Optional[Dict[str, Any]]:
     """If loading the yaml fails, raise an exception."""
     try:
         # source_file.contents can sometimes be None
-        contents = load_yaml_text(source_file.contents or "", source_file.path)
+        to_load = source_file.contents or ""
+
+        if validate:
+            contents, failures = checked_load(to_load)
+            issue_deprecation_warnings_for_failures(
+                failures=failures, file=source_file.path.original_file_path
+            )
+            if contents is not None:
+                from dbt.jsonschemas import jsonschema_validate, resources_schema
+
+                # Validate the yaml against the jsonschema to raise deprecation warnings
+                # for invalid fields.
+                jsonschema_validate(
+                    schema=resources_schema(),
+                    json=contents,
+                    file_path=source_file.path.original_file_path,
+                )
+        else:
+            contents = load_yaml_text(to_load, source_file.path)
 
         if contents is None:
             return contents
@@ -179,7 +217,6 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
         if dct:
             # contains the FileBlock and the data (dictionary)
             yaml_block = YamlBlock.from_file_block(block, dct)
-
             parser: YamlReader
 
             # There are 9 different yaml lists which are parsed by different parsers:
@@ -201,6 +238,7 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
 
             # PatchParser.parse()
             if "snapshots" in dct:
+                self._add_yaml_snapshot_nodes_to_manifest(dct["snapshots"], block)
                 snapshot_parse_result = TestablePatchParser(self, yaml_block, "snapshots").parse()
                 for test_block in snapshot_parse_result.test_blocks:
                     self.generic_test_parser.parse_tests(test_block)
@@ -216,6 +254,18 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
             if "macros" in dct:
                 parser = MacroPatchParser(self, yaml_block, "macros")
                 parser.parse()
+
+            if "data_tests" in dct:
+                parser = SingularTestPatchParser(self, yaml_block, "data_tests")
+                try:
+                    parser.parse()
+                except ParsingError as e:
+                    fire_event(
+                        Note(
+                            msg=f"Unable to parse 'data_tests' section of file '{block.path.original_file_path}'\n{e}",
+                        ),
+                        EventLevel.WARN,
+                    )
 
             # PatchParser.parse() (but never test_blocks)
             if "analyses" in dct:
@@ -261,8 +311,66 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
                 saved_query_parser = SavedQueryParser(self, yaml_block)
                 saved_query_parser.parse()
 
+    def _add_yaml_snapshot_nodes_to_manifest(
+        self, snapshots: List[Dict[str, Any]], block: FileBlock
+    ) -> None:
+        """We support the creation of simple snapshots in yaml, without an
+        accompanying SQL definition. For such snapshots, the user must supply
+        a 'relation' property to indicate the target of the snapshot. This
+        function looks for such snapshots and adds a node to manifest for each
+        one we find, since they were not added during SQL parsing."""
 
-Parsed = TypeVar("Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch)
+        rebuild_refs = False
+        for snapshot in snapshots:
+            if "relation" in snapshot:
+                from dbt.parser import SnapshotParser
+
+                if "name" not in snapshot:
+                    raise ParsingError("A snapshot must define the 'name' property. ")
+
+                # Reuse the logic of SnapshotParser as far as possible to create
+                # a new node we can add to the manifest.
+                parser = SnapshotParser(self.project, self.manifest, self.root_project)
+                fqn = parser.get_fqn_prefix(block.path.relative_path)
+                fqn.append(snapshot["name"])
+
+                compiled_path = str(
+                    pathlib.PurePath("").joinpath(
+                        block.path.relative_path, snapshot["name"] + ".sql"
+                    )
+                )
+                snapshot_node = parser._create_parsetime_node(
+                    block,
+                    compiled_path,
+                    parser.initial_config(fqn),
+                    fqn,
+                    snapshot["name"],
+                )
+
+                # Parse the expected ref() or source() expression given by
+                # 'relation' so that we know what we are snapshotting.
+                source_or_ref = statically_parse_ref_or_source(snapshot["relation"])
+                if isinstance(source_or_ref, RefArgs):
+                    snapshot_node.refs.append(source_or_ref)
+                else:
+                    snapshot_node.sources.append(source_or_ref)
+
+                # Implement the snapshot SQL as a simple select *
+                snapshot_node.raw_code = "select * from {{ " + snapshot["relation"] + " }}"
+
+                # Add our new node to the manifest, and note that ref lookup collections
+                # will need to be rebuilt. This adds the node unique_id to the "snapshots"
+                # list in the SchemaSourceFile.
+                self.manifest.add_node(block.file, snapshot_node)
+                rebuild_refs = True
+
+        if rebuild_refs:
+            self.manifest.rebuild_ref_lookup()
+
+
+Parsed = TypeVar(
+    "Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch, ParsedSingularTestPatch
+)
 NodeTarget = TypeVar("NodeTarget", UnparsedNodeUpdate, UnparsedAnalysisUpdate, UnparsedModelUpdate)
 NonSourceTarget = TypeVar(
     "NonSourceTarget",
@@ -270,6 +378,7 @@ NonSourceTarget = TypeVar(
     UnparsedAnalysisUpdate,
     UnparsedMacroUpdate,
     UnparsedModelUpdate,
+    UnparsedSingularTestUpdate,
 )
 
 
@@ -337,13 +446,42 @@ class YamlReader(metaclass=ABCMeta):
             if "name" not in entry and "model" not in entry:
                 raise ParsingError("Entry did not contain a name")
 
+            unrendered_config = {}
+            if "config" in entry:
+                unrendered_config = entry["config"]
+
+            unrendered_version_configs = {}
+            if "versions" in entry:
+                for version in entry["versions"]:
+                    if "v" in version:
+                        unrendered_version_configs[version["v"]] = version.get("config", {})
+
+            # For sources
+            unrendered_database = entry.get("database", None)
+            unrendered_schema = entry.get("schema", None)
+
             # Render the data (except for tests, data_tests and descriptions).
             # See the SchemaYamlRenderer
             entry = self.render_entry(entry)
+
+            schema_file = self.yaml.file
+            assert isinstance(schema_file, SchemaSourceFile)
+
+            if unrendered_config:
+                schema_file.add_unrendered_config(unrendered_config, self.key, entry["name"])
+
+            for version, unrendered_version_config in unrendered_version_configs.items():
+                schema_file.add_unrendered_config(
+                    unrendered_version_config, self.key, entry["name"], version
+                )
+
+            if unrendered_database:
+                schema_file.add_unrendered_database(self.key, entry["name"], unrendered_database)
+            if unrendered_schema:
+                schema_file.add_unrendered_schema(self.key, entry["name"], unrendered_schema)
+
             if self.schema_yaml_vars.env_vars:
                 self.schema_parser.manifest.env_vars.update(self.schema_yaml_vars.env_vars)
-                schema_file = self.yaml.file
-                assert isinstance(schema_file, SchemaSourceFile)
                 for var in self.schema_yaml_vars.env_vars.keys():
                     schema_file.add_env_var(var, self.key, entry["name"])
                 self.schema_yaml_vars.env_vars = {}
@@ -402,6 +540,15 @@ class SourceParser(YamlReader):
                 source_file.source_patches.append(key)
             else:
                 source = self._target_from_dict(UnparsedSourceDefinition, data)
+                # Store unrendered_database and unrendered_schema for state:modified comparisons
+                if isinstance(self.yaml.file, SchemaSourceFile):
+                    source.unrendered_database = self.yaml.file.get_unrendered_database(
+                        "sources", source.name
+                    )
+                    source.unrendered_schema = self.yaml.file.get_unrendered_schema(
+                        "sources", source.name
+                    )
+
                 self.add_source_definitions(source)
         return ParseResult()
 
@@ -563,12 +710,6 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
                     raise ValidationError(
                         "Invalid test config: cannot have both 'tests' and 'data_tests' defined"
                     )
-                if is_root_project:
-                    deprecations.warn(
-                        "project-test-config",
-                        deprecated_path="tests",
-                        exp_path="data_tests",
-                    )
                 data["data_tests"] = data.pop("tests")
 
         # model-level tests
@@ -606,7 +747,13 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
         )
         # We need to re-apply the config_call_dict after the patch config
         config._config_call_dict = node.config_call_dict
-        self.schema_parser.update_parsed_node_config(node, config, patch_config_dict=patch.config)
+        config._unrendered_config_call_dict = node.unrendered_config_call_dict
+        self.schema_parser.update_parsed_node_config(
+            node,
+            config,
+            patch_config_dict=patch.config,
+            patch_file_id=patch.file_id,
+        )
 
 
 # Subclasses of NodePatchParser: TestablePatchParser, ModelPatchParser, AnalysisPatchParser,
@@ -617,8 +764,57 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         # could possibly skip creating one. Leaving here for now for
         # code consistency.
         deprecation_date: Optional[datetime.datetime] = None
+        time_spine: Optional[TimeSpine] = None
+
+        freshness: Optional[ModelFreshness] = None
+
         if isinstance(block.target, UnparsedModelUpdate):
             deprecation_date = block.target.deprecation_date
+            time_spine = (
+                TimeSpine(
+                    standard_granularity_column=block.target.time_spine.standard_granularity_column,
+                    custom_granularities=[
+                        CustomGranularity(
+                            name=custom_granularity.name,
+                            column_name=custom_granularity.column_name,
+                        )
+                        for custom_granularity in block.target.time_spine.custom_granularities
+                    ],
+                )
+                if block.target.time_spine
+                else None
+            )
+
+            try:
+                project_freshness_dict = self.project.models.get("+freshness", None)
+                project_freshness = (
+                    ModelFreshness.from_dict(project_freshness_dict)
+                    if project_freshness_dict and "build_after" in project_freshness_dict
+                    else None
+                )
+            except ValueError:
+                fire_event(
+                    Note(
+                        msg="Could not validate `freshness` for `models` in 'dbt_project.yml', ignoring.",
+                    ),
+                    EventLevel.WARN,
+                )
+                project_freshness = None
+
+            model_freshness_dict = block.target.freshness or None
+            model_freshness = (
+                ModelFreshness.from_dict(model_freshness_dict)
+                if model_freshness_dict and "build_after" in model_freshness_dict
+                else None
+            )
+
+            config_freshness_dict = block.target.config.get("freshness", None)
+            config_freshness = (
+                ModelFreshness.from_dict(config_freshness_dict)
+                if config_freshness_dict and "build_after" in config_freshness_dict
+                else None
+            )
+            freshness = merge_model_freshness(project_freshness, model_freshness, config_freshness)
 
         patch = ParsedNodePatch(
             name=block.target.name,
@@ -635,6 +831,8 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             latest_version=None,
             constraints=block.target.constraints,
             deprecation_date=deprecation_date,
+            time_spine=time_spine,
+            freshness=freshness,
         )
         assert isinstance(self.yaml.file, SchemaSourceFile)
         source_file: SchemaSourceFile = self.yaml.file
@@ -667,7 +865,10 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         # handle disabled nodes
         if unique_id is None:
             # Node might be disabled. Following call returns list of matching disabled nodes
-            found_nodes = self.manifest.disabled_lookup.find(patch.name, patch.package_name)
+            resource_type = schema_file_keys_to_resource_types[patch.yaml_key]
+            found_nodes = self.manifest.disabled_lookup.find(
+                patch.name, patch.package_name, resource_types=[resource_type]
+            )
             if found_nodes:
                 if len(found_nodes) > 1 and patch.config.get("enabled"):
                     # There are multiple disabled nodes for this model and the schema file wants to enable one.
@@ -799,7 +1000,9 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
                 if versioned_model_unique_id is None:
                     # Node might be disabled. Following call returns list of matching disabled nodes
-                    found_nodes = self.manifest.disabled_lookup.find(versioned_model_name, None)
+                    found_nodes = self.manifest.disabled_lookup.find(
+                        versioned_model_name, None, resource_types=[NodeType.Model]
+                    )
                     if found_nodes:
                         if len(found_nodes) > 1 and target.config.get("enabled"):
                             # There are multiple disabled nodes for this model and the schema file wants to enable one.
@@ -900,6 +1103,11 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
     def patch_node_properties(self, node, patch: "ParsedNodePatch") -> None:
         super().patch_node_properties(node, patch)
+
+        # Remaining patch properties are only relevant to ModelNode objects
+        if not isinstance(node, ModelNode):
+            return
+
         node.version = patch.version
         node.latest_version = patch.latest_version
         node.deprecation_date = patch.deprecation_date
@@ -913,9 +1121,11 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                 )
         # These two will have to be reapplied after config is built for versioned models
         self.patch_constraints(node, patch.constraints)
+        self.patch_time_spine(node, patch.time_spine)
+        node.freshness = patch.freshness
         node.build_contract_checksum()
 
-    def patch_constraints(self, node, constraints) -> None:
+    def patch_constraints(self, node: ModelNode, constraints: List[Dict[str, Any]]) -> None:
         contract_config = node.config.get("contract")
         if contract_config.enforced is True:
             self._validate_constraint_prerequisites(node)
@@ -930,6 +1140,29 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
 
         self._validate_pk_constraints(node, constraints)
         node.constraints = [ModelLevelConstraint.from_dict(c) for c in constraints]
+        self._process_constraints_refs_and_sources(node)
+
+    def _process_constraints_refs_and_sources(self, model_node: ModelNode) -> None:
+        """
+        Populate model_node.refs and model_node.sources based on foreign-key constraint references,
+        whether defined at the model-level or column-level.
+        """
+        for constraint in model_node.all_constraints:
+            if constraint.type == ConstraintType.foreign_key and constraint.to:
+                try:
+                    ref_or_source = statically_parse_ref_or_source(constraint.to)
+                except ParsingError:
+                    raise ParsingError(
+                        f"Invalid 'ref' or 'source' syntax on foreign key constraint 'to' on model {model_node.name}: {constraint.to}."
+                    )
+
+                if isinstance(ref_or_source, RefArgs):
+                    model_node.refs.append(ref_or_source)
+                else:
+                    model_node.sources.append(ref_or_source)
+
+    def patch_time_spine(self, node: ModelNode, time_spine: Optional[TimeSpine]) -> None:
+        node.time_spine = time_spine
 
     def _validate_pk_constraints(
         self, model_node: ModelNode, constraints: List[Dict[str, Any]]
@@ -1008,6 +1241,53 @@ class AnalysisPatchParser(NodePatchParser[UnparsedAnalysisUpdate]):
         return UnparsedAnalysisUpdate
 
 
+class SingularTestPatchParser(PatchParser[UnparsedSingularTestUpdate, ParsedSingularTestPatch]):
+    def get_block(self, node: UnparsedSingularTestUpdate) -> TargetBlock:
+        return TargetBlock.from_yaml_block(self.yaml, node)
+
+    def _target_type(self) -> Type[UnparsedSingularTestUpdate]:
+        return UnparsedSingularTestUpdate
+
+    def parse_patch(self, block: TargetBlock[UnparsedSingularTestUpdate], refs: ParserRef) -> None:
+        patch = ParsedSingularTestPatch(
+            name=block.target.name,
+            description=block.target.description,
+            meta=block.target.meta,
+            docs=block.target.docs,
+            config=block.target.config,
+            original_file_path=block.target.original_file_path,
+            yaml_key=block.target.yaml_key,
+            package_name=block.target.package_name,
+        )
+
+        assert isinstance(self.yaml.file, SchemaSourceFile)
+        source_file: SchemaSourceFile = self.yaml.file
+
+        unique_id = self.manifest.singular_test_lookup.get_unique_id(
+            block.name, block.target.package_name
+        )
+        if not unique_id:
+            warn_or_error(
+                NoNodeForYamlKey(
+                    patch_name=patch.name,
+                    yaml_key=patch.yaml_key,
+                    file_path=source_file.path.original_file_path,
+                )
+            )
+            return
+
+        node = self.manifest.nodes.get(unique_id)
+        assert node is not None
+
+        source_file.append_patch(patch.yaml_key, unique_id)
+        if patch.config:
+            self.patch_node_config(node, patch)
+
+        node.patch_path = patch.file_id
+        node.description = patch.description
+        node.created_at = time.time()
+
+
 class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
     def get_block(self, node: UnparsedMacroUpdate) -> TargetBlock:
         return TargetBlock.from_yaml_block(self.yaml, node)
@@ -1046,4 +1326,108 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
         macro.created_at = time.time()
         macro.meta = patch.meta
         macro.docs = patch.docs
-        macro.arguments = patch.arguments
+
+        if getattr(get_flags(), "validate_macro_args", False):
+            self._check_patch_arguments(macro, patch)
+            macro.arguments = patch.arguments if patch.arguments else macro.arguments
+        else:
+            macro.arguments = patch.arguments
+
+    def _check_patch_arguments(self, macro: Macro, patch: ParsedMacroPatch) -> None:
+        if not patch.arguments:
+            return
+
+        for macro_arg, patch_arg in zip(macro.arguments, patch.arguments):
+            if patch_arg.name != macro_arg.name:
+                msg = f"Argument {patch_arg.name} in yaml for macro {macro.name} does not match the jinja definition."
+                self._fire_macro_arg_warning(msg, macro)
+
+        if len(patch.arguments) != len(macro.arguments):
+            msg = f"The number of arguments in the yaml for macro {macro.name} does not match the jinja definition."
+            self._fire_macro_arg_warning(msg, macro)
+
+        for patch_arg in patch.arguments:
+            arg_type = patch_arg.type
+            if arg_type is not None and arg_type.strip() != "" and not is_valid_type(arg_type):
+                msg = f"Argument {patch_arg.name} in the yaml for macro {macro.name} has an invalid type."
+                self._fire_macro_arg_warning(msg, macro)
+
+    def _fire_macro_arg_warning(self, msg: str, macro: Macro) -> None:
+        warn_or_error(
+            InvalidMacroAnnotation(
+                msg=msg, macro_unique_id=macro.unique_id, macro_file_path=macro.original_file_path
+            )
+        )
+
+
+# valid type names, along with the number of parameters they require
+macro_types: Dict[str, int] = {
+    "str": 0,
+    "string": 0,
+    "bool": 0,
+    "int": 0,
+    "integer": 0,
+    "float": 0,
+    "any": 0,
+    "list": 1,
+    "dict": 2,
+    "optional": 1,
+    "relation": 0,
+    "column": 0,
+}
+
+
+def is_valid_type(buffer: str) -> bool:
+    buffer = buffer.replace(" ", "").replace("\t", "")
+    type_desc, remainder = match_type_desc(buffer)
+    return type_desc is not None and remainder == ""
+
+
+def match_type_desc(buffer: str) -> Tuple[Optional[str], str]:
+    """A matching buffer is a type name followed by an argument list with
+    the correct number of arguments."""
+    type_name, remainder = match_type_name(buffer)
+    if type_name is None:
+        return None, buffer
+    attr_list, remainder = match_arg_list(remainder, macro_types[type_name])
+    if attr_list is None:
+        return None, buffer
+    return type_name + attr_list, remainder
+
+
+alpha_pattern = re.compile(r"[a-z]+")
+
+
+def match_type_name(buffer: str) -> Tuple[Optional[str], str]:
+    """A matching buffer starts with one of the valid type names from macro_types"""
+    match = alpha_pattern.match(buffer)
+    if match is not None and buffer[: match.end(0)] in macro_types:
+        return buffer[: match.end(0)], buffer[match.end(0) :]
+    else:
+        return None, buffer
+
+
+def match_arg_list(buffer: str, arg_count: int) -> Tuple[Optional[str], str]:
+    """A matching buffer must begin with '[', followed by exactly arg_count type
+    specs, followed by ']'"""
+
+    if arg_count == 0:
+        return "", buffer
+
+    if not buffer.startswith("["):
+        return None, buffer
+
+    remainder = buffer[1:]
+    for i in range(arg_count):
+        type_desc, remainder = match_type_desc(remainder)
+        if type_desc is None:
+            return None, buffer
+        if i != arg_count - 1:
+            if not remainder.startswith(","):
+                return None, buffer
+            remainder = remainder[1:]
+
+    if not remainder.startswith("]"):
+        return None, buffer
+    else:
+        return "", remainder[1:]

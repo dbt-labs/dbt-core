@@ -38,11 +38,14 @@ class TestSemanticModelParsing:
             semantic_model.node_relation.relation_name
             == f'"dbt"."{project.test_schema}"."fct_revenue"'
         )
-        assert len(semantic_model.measures) == 6
-        # manifest should have one metric (that was created from a measure)
-        assert len(manifest.metrics) == 2
+        assert len(semantic_model.measures) == 7
+        # manifest should have two metrics created from measures
+        assert len(manifest.metrics) == 3
         metric = manifest.metrics["metric.test.txn_revenue"]
         assert metric.name == "txn_revenue"
+        metric_with_label = manifest.metrics["metric.test.txn_revenue_with_label"]
+        assert metric_with_label.name == "txn_revenue_with_label"
+        assert metric_with_label.label == "Transaction Revenue with label"
 
     def test_semantic_model_error(self, project):
         # Next, modify the default schema.yml to remove the semantic model.
@@ -107,6 +110,7 @@ class TestSemanticModelPartialParsing:
 
     def test_semantic_model_flipping_create_metric_partial_parsing(self, project):
         generated_metric = "metric.test.txn_revenue"
+        generated_metric_with_label = "metric.test.txn_revenue_with_label"
         # First, use the default schema.yml to define our semantic model, and
         # run the dbt parse command
         write_file(schema_yml, project.project_root, "models", "schema.yml")
@@ -117,6 +121,11 @@ class TestSemanticModelPartialParsing:
         # Verify the metric created by `create_metric: true` exists
         metric = result.result.metrics[generated_metric]
         assert metric.name == "txn_revenue"
+        assert metric.label == "txn_revenue"
+
+        metric_with_label = result.result.metrics[generated_metric_with_label]
+        assert metric_with_label.name == "txn_revenue_with_label"
+        assert metric_with_label.label == "Transaction Revenue with label"
 
         # --- Next, modify the default schema.yml to have no `create_metric: true` ---
         no_create_metric_schema_yml = schema_yml.replace(

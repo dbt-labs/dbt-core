@@ -27,6 +27,14 @@ select *
 from {{ source('seed_sources', 'raw_source') }}
 """
 
+model_no_ephemeral_ref_sql = """
+select *
+from {{ ref('model_input') }}
+union all
+select *
+from {{ source('seed_sources', 'raw_source') }}
+"""
+
 
 schema_sources_yml = """
 sources:
@@ -34,6 +42,29 @@ sources:
     schema: "{{ target.schema }}"
     tables:
       - name: raw_source
+"""
+
+unit_tests_yml = """
+unit_tests:
+  - name: test_my_model
+    model: model_no_ephemeral_ref
+    given:
+      - input: ref('model_input')
+        format: csv
+        rows: |
+          id
+          1
+      - input: source('seed_sources', 'raw_source')
+        format: csv
+        rows: |
+          id
+          2
+    expect:
+      format: csv
+      rows: |
+        id
+        1
+        2
 """
 
 
@@ -50,7 +81,9 @@ class TestEmptyFlag:
             "model_input.sql": model_input_sql,
             "ephemeral_model_input.sql": ephemeral_model_input_sql,
             "model.sql": model_sql,
+            "model_no_ephemeral_ref.sql": model_no_ephemeral_ref_sql,
             "sources.yml": schema_sources_yml,
+            "unit_tests.yml": unit_tests_yml,
         }
 
     def assert_row_count(self, project, relation_name: str, expected_row_count: int):

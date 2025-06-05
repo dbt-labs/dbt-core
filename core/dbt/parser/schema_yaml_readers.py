@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Any, Dict, List, Optional, Union
 
 from dbt.artifacts.resources import (
@@ -21,6 +22,7 @@ from dbt.artifacts.resources import (
     WhereFilter,
     WhereFilterIntersection,
 )
+from dbt.artifacts.resources.v1.semantic_model import SemanticLayerElementConfig
 from dbt.clients.jinja import get_rendered
 from dbt.context.context_config import (
     BaseContextConfigGenerator,
@@ -115,6 +117,12 @@ class ExposureParser(YamlReader):
                 f"Calculated a {type(config)} for an exposure, but expected an ExposureConfig"
             )
 
+        tags = sorted(set(self.project.exposures.get("tags", []) + unparsed.tags + config.tags))
+        meta = {**self.project.exposures.get("meta", {}), **unparsed.meta, **config.meta}
+
+        config.tags = tags
+        config.meta = meta
+
         parsed = Exposure(
             resource_type=NodeType.Exposure,
             package_name=package_name,
@@ -125,8 +133,8 @@ class ExposureParser(YamlReader):
             name=unparsed.name,
             type=unparsed.type,
             url=unparsed.url,
-            meta=unparsed.meta,
-            tags=unparsed.tags,
+            meta=meta,
+            tags=tags,
             description=unparsed.description,
             label=unparsed.label,
             owner=unparsed.owner,
@@ -228,19 +236,11 @@ class MetricParser(YamlReader):
     def _get_period_agg(self, unparsed_period_agg: str) -> PeriodAggregation:
         return PeriodAggregation(unparsed_period_agg)
 
-    def _get_optional_grain_to_date(
-        self, unparsed_grain_to_date: Optional[str]
-    ) -> Optional[TimeGranularity]:
-        if not unparsed_grain_to_date:
-            return None
-
-        return TimeGranularity(unparsed_grain_to_date)
-
     def _get_optional_time_window(
         self, unparsed_window: Optional[str]
     ) -> Optional[MetricTimeWindow]:
         if unparsed_window is not None:
-            parts = unparsed_window.split(" ")
+            parts = unparsed_window.lower().split(" ")
             if len(parts) != 2:
                 raise YamlParseDictError(
                     self.yaml.path,
@@ -252,16 +252,11 @@ class MetricParser(YamlReader):
 
             granularity = parts[1]
             # once we drop python 3.8 this could just be `granularity = parts[0].removesuffix('s')
-            if granularity.endswith("s"):
-                # months -> month
+            if granularity.endswith("s") and granularity[:-1] in [
+                item.value for item in TimeGranularity
+            ]:
+                # Can only remove the `s` if it's a standard grain, months -> month
                 granularity = granularity[:-1]
-            if granularity not in [item.value for item in TimeGranularity]:
-                raise YamlParseDictError(
-                    self.yaml.path,
-                    "window",
-                    {"window": unparsed_window},
-                    f"Invalid time granularity {granularity} in cumulative/conversion metric window string: ({unparsed_window})",
-                )
 
             count = parts[0]
             if not count.isdigit():
@@ -274,7 +269,7 @@ class MetricParser(YamlReader):
 
             return MetricTimeWindow(
                 count=int(count),
-                granularity=TimeGranularity(granularity),
+                granularity=granularity,
             )
         else:
             return None
@@ -283,16 +278,12 @@ class MetricParser(YamlReader):
         if isinstance(unparsed, str):
             return MetricInput(name=unparsed)
         else:
-            offset_to_grain: Optional[TimeGranularity] = None
-            if unparsed.offset_to_grain is not None:
-                offset_to_grain = TimeGranularity(unparsed.offset_to_grain)
-
             return MetricInput(
                 name=unparsed.name,
                 filter=parse_where_filter(unparsed.filter),
                 alias=unparsed.alias,
                 offset_window=self._get_optional_time_window(unparsed.offset_window),
-                offset_to_grain=offset_to_grain,
+                offset_to_grain=unparsed.offset_to_grain,
             )
 
     def _get_optional_metric_input(
@@ -354,9 +345,7 @@ class MetricParser(YamlReader):
                 window=self._get_optional_time_window(
                     unparsed_type_params.cumulative_type_params.window
                 ),
-                grain_to_date=self._get_optional_grain_to_date(
-                    unparsed_type_params.cumulative_type_params.grain_to_date
-                ),
+                grain_to_date=unparsed_type_params.cumulative_type_params.grain_to_date,
                 period_agg=self._get_period_agg(
                     unparsed_type_params.cumulative_type_params.period_agg
                 ),
@@ -369,6 +358,10 @@ class MetricParser(YamlReader):
 
         grain_to_date: Optional[TimeGranularity] = None
         if type_params.grain_to_date is not None:
+            # This should've been changed to a string (to support custom grain), but since this
+            # is a legacy field waiting to be deprecated, we will not support custom grain here
+            # in order to force customers off of using this field. The field to use should be
+            # `cumulative_type_params.grain_to_date`
             grain_to_date = TimeGranularity(type_params.grain_to_date)
 
         return MetricTypeParams(
@@ -435,9 +428,7 @@ class MetricParser(YamlReader):
             label=unparsed.label,
             type=MetricType(unparsed.type),
             type_params=self._get_metric_type_params(unparsed),
-            time_granularity=(
-                TimeGranularity(unparsed.time_granularity) if unparsed.time_granularity else None
-            ),
+            time_granularity=unparsed.time_granularity,
             filter=parse_where_filter(unparsed.filter),
             meta=unparsed.meta,
             tags=unparsed.tags,
@@ -499,6 +490,10 @@ class GroupParser(YamlReader):
         unique_id = f"{NodeType.Group}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
 
+        fqn = self.schema_parser.get_fqn_prefix(path)
+        fqn.append(unparsed.name)
+        config = self._generate_group_config(unparsed, fqn, package_name, True)
+
         parsed = Group(
             resource_type=NodeType.Group,
             package_name=package_name,
@@ -507,6 +502,8 @@ class GroupParser(YamlReader):
             unique_id=unique_id,
             name=unparsed.name,
             owner=unparsed.owner,
+            description=unparsed.description,
+            config=config,
         )
 
         assert isinstance(self.yaml.file, SchemaSourceFile)
@@ -521,6 +518,30 @@ class GroupParser(YamlReader):
                 raise YamlParseDictError(self.yaml.path, self.key, data, exc)
 
             self.parse_group(unparsed)
+
+    def _generate_group_config(
+        self, target: UnparsedGroup, fqn: List[str], package_name: str, rendered: bool
+    ):
+        generator: BaseContextConfigGenerator
+        if rendered:
+            generator = ContextConfigGenerator(self.root_project)
+        else:
+            generator = UnrenderedConfigGenerator(self.root_project)
+
+        # configs with precendence set
+        precedence_configs = dict()
+        # first apply metric configs
+        precedence_configs.update(target.config)
+
+        config = generator.calculate_node_config(
+            config_call_dict={},
+            fqn=fqn,
+            resource_type=NodeType.Group,
+            project_name=package_name,
+            base=False,
+            patch_config_dict=precedence_configs,
+        )
+        return config
 
 
 class SemanticModelParser(YamlReader):
@@ -553,6 +574,7 @@ class SemanticModelParser(YamlReader):
                     type_params=self._get_dimension_type_params(unparsed=unparsed.type_params),
                     expr=unparsed.expr,
                     metadata=None,  # TODO: requires a fair bit of parsing context
+                    config=SemanticLayerElementConfig(meta=unparsed.config.get("meta", {})),
                 )
             )
         return dimensions
@@ -568,6 +590,7 @@ class SemanticModelParser(YamlReader):
                     label=unparsed.label,
                     role=unparsed.role,
                     expr=unparsed.expr,
+                    config=SemanticLayerElementConfig(meta=unparsed.config.get("meta", {})),
                 )
             )
 
@@ -600,6 +623,7 @@ class SemanticModelParser(YamlReader):
                         unparsed.non_additive_dimension
                     ),
                     agg_time_dimension=unparsed.agg_time_dimension,
+                    config=SemanticLayerElementConfig(meta=unparsed.config.get("meta", {})),
                 )
             )
         return measures
@@ -612,7 +636,7 @@ class SemanticModelParser(YamlReader):
     ) -> None:
         unparsed_metric = UnparsedMetric(
             name=measure.name,
-            label=measure.name,
+            label=measure.label or measure.name,
             type="simple",
             type_params=UnparsedMetricTypeParams(measure=measure.name, expr=measure.name),
             description=measure.description or f"Metric created from measure {measure.name}",
@@ -655,12 +679,29 @@ class SemanticModelParser(YamlReader):
         fqn = self.schema_parser.get_fqn_prefix(path)
         fqn.append(unparsed.name)
 
+        entities = self._get_entities(unparsed.entities)
+        measures = self._get_measures(unparsed.measures)
+        dimensions = self._get_dimensions(unparsed.dimensions)
+
         config = self._generate_semantic_model_config(
             target=unparsed,
             fqn=fqn,
             package_name=package_name,
             rendered=True,
         )
+
+        # Combine configs according to the behavior documented here https://docs.getdbt.com/reference/configs-and-properties#combining-configs
+        elements: Sequence[Union[Dimension, Entity, Measure]] = [
+            *dimensions,
+            *entities,
+            *measures,
+        ]
+        for element in elements:
+            if config is not None:
+                if element.config is None:
+                    element.config = SemanticLayerElementConfig(meta=config.meta)
+                else:
+                    element.config.meta = {**config.get("meta", {}), **element.config.meta}
 
         config = config.finalize_and_validate()
 
@@ -683,9 +724,9 @@ class SemanticModelParser(YamlReader):
             path=path,
             resource_type=NodeType.SemanticModel,
             unique_id=unique_id,
-            entities=self._get_entities(unparsed.entities),
-            measures=self._get_measures(unparsed.measures),
-            dimensions=self._get_dimensions(unparsed.dimensions),
+            entities=entities,
+            measures=measures,
+            dimensions=dimensions,
             defaults=unparsed.defaults,
             primary_entity=unparsed.primary_entity,
             config=config,
@@ -778,7 +819,9 @@ class SavedQueryParser(YamlReader):
         self, unparsed: UnparsedExport, saved_query_config: SavedQueryConfig
     ) -> Export:
         return Export(
-            name=unparsed.name, config=self._get_export_config(unparsed.config, saved_query_config)
+            name=unparsed.name,
+            config=self._get_export_config(unparsed.config, saved_query_config),
+            unrendered_config=unparsed.config,
         )
 
     def _get_query_params(self, unparsed: UnparsedQueryParams) -> QueryParams:
@@ -786,6 +829,8 @@ class SavedQueryParser(YamlReader):
             group_by=unparsed.group_by,
             metrics=unparsed.metrics,
             where=parse_where_filter(unparsed.where),
+            order_by=unparsed.order_by,
+            limit=unparsed.limit,
         )
 
     def parse_saved_query(self, unparsed: UnparsedSavedQuery) -> None:
@@ -812,6 +857,18 @@ class SavedQueryParser(YamlReader):
             rendered=False,
         )
 
+        # The parser handles plain strings just fine, but we need to be able
+        # to join two lists, remove duplicates, and sort, so we have to wrap things here.
+        def wrap_tags(s: Union[List[str], str]) -> List[str]:
+            if s is None:
+                return []
+            return [s] if isinstance(s, str) else s
+
+        config_tags = wrap_tags(config.get("tags"))
+        unparsed_tags = wrap_tags(unparsed.tags)
+        tags = list(set([*unparsed_tags, *config_tags]))
+        tags.sort()
+
         parsed = SavedQuery(
             description=unparsed.description,
             label=unparsed.label,
@@ -827,6 +884,7 @@ class SavedQueryParser(YamlReader):
             config=config,
             unrendered_config=unrendered_config,
             group=config.group,
+            tags=tags,
         )
 
         for export in parsed.exports:

@@ -23,6 +23,7 @@ from dbt.adapters.contracts.connection import (
 )
 from dbt.adapters.contracts.relation import ComponentName
 from dbt.adapters.factory import get_include_paths, get_relation_class_by_name
+from dbt.artifacts.resources.v1.components import Quoting
 from dbt.config.project import load_raw_project
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.project import Configuration
@@ -50,11 +51,12 @@ def load_project(
     version_check: bool,
     profile: HasCredentials,
     cli_vars: Optional[Dict[str, Any]] = None,
+    validate: bool = False,
 ) -> Project:
     # get the project with all of the provided information
     project_renderer = DbtProjectYamlRenderer(profile, cli_vars)
     project = Project.from_project_root(
-        project_root, project_renderer, verify_version=version_check
+        project_root, project_renderer, verify_version=version_check, validate=validate
     )
 
     # Save env_vars encountered in rendering for partial parsing
@@ -193,6 +195,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             log_cache_events=log_cache_events,
             dependencies=dependencies,
             dbt_cloud=project.dbt_cloud,
+            flags=project.flags,
         )
 
     # Called by 'load_projects' in this class
@@ -294,6 +297,12 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                 get_flags().SEND_ANONYMOUS_USAGE_STATS if tracking.active_user else None
             ),
             adapter_type=self.credentials.type,
+            quoting=Quoting(
+                database=self.quoting.get("database", None),
+                schema=self.quoting.get("schema", None),
+                identifier=self.quoting.get("identifier", None),
+                column=self.quoting.get("column", None),
+            ),
         )
 
     def _get_v2_config_paths(

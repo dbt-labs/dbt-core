@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import pytest
 
 from dbt import deprecations
@@ -25,7 +27,7 @@ def models():
 @pytest.fixture(scope="class")
 def set_up_deprecations():
     deprecations.reset_deprecations()
-    assert deprecations.active_deprecations == set()
+    assert deprecations.active_deprecations == defaultdict(int)
 
 
 class TestOverrideAdapterDependency:
@@ -64,7 +66,7 @@ class TestOverrideAdapterDependencyDeprecated:
         run_dbt(["run"])
 
         # no deprecation warning -- flag used correctly
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
 
 
 class TestOverrideAdapterDependencyLegacy:
@@ -88,7 +90,7 @@ class TestOverrideAdapterDependencyLegacy:
         run_dbt(["run"], expect_pass=False)
 
         # overriding a built-in materialization scoped to adapter from package is deprecated
-        assert deprecations.active_deprecations == {"package-materialization-override"}
+        assert "package-materialization-override" in deprecations.active_deprecations
 
 
 class TestOverrideDefaultDependency:
@@ -123,7 +125,7 @@ class TestOverrideDefaultDependencyDeprecated:
         run_dbt(["run"])
 
         # overriding a built-in materialization from package is deprecated
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
 
 
 class TestOverrideDefaultDependencyLegacy:
@@ -145,7 +147,7 @@ class TestOverrideDefaultDependencyLegacy:
         run_dbt(["run"], expect_pass=False)
 
         # overriding a built-in materialization from package is deprecated
-        assert deprecations.active_deprecations == {"package-materialization-override"}
+        assert "package-materialization-override" in deprecations.active_deprecations
 
 
 root_view_override_macro = """
@@ -172,7 +174,7 @@ class TestOverrideDefaultDependencyRootOverride:
         run_dbt(["run"], expect_pass=False)
 
         # using an package-overriden built-in materialization in a root matereialization is _not_ deprecated
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
 
 
 class TestCustomMaterializationDependency:
@@ -192,7 +194,7 @@ class TestCustomMaterializationDependency:
         run_dbt(["run"])
 
         # using a custom materialization is from an installed package is _not_ deprecated
-        assert deprecations.active_deprecations == set()
+        assert deprecations.active_deprecations == defaultdict(int)
 
 
 class TestOverrideAdapterDependencyPassing:

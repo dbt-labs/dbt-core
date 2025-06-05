@@ -12,12 +12,22 @@
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.9.0a1"
+          "default": "1.10.0a1"
         },
         "generated_at": {
           "type": "string"
         },
         "invocation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "invocation_started_at": {
           "anyOf": [
             {
               "type": "string"

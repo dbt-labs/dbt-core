@@ -1,4 +1,5 @@
 import json
+from typing import List
 
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
 from dbt.events.base_types import (
@@ -8,13 +9,22 @@ from dbt.events.base_types import (
     InfoLevel,
     WarnLevel,
 )
+from dbt.flags import get_flags
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.format import (
     format_fancy_output_line,
     pluralize,
     timestamp_to_datetime_string,
 )
-from dbt_common.ui import error_tag, green, line_wrap_message, red, warning_tag, yellow
+from dbt_common.ui import (
+    deprecation_tag,
+    error_tag,
+    green,
+    line_wrap_message,
+    red,
+    warning_tag,
+    yellow,
+)
 
 # Event codes have prefixes which follow this table
 #
@@ -231,6 +241,13 @@ Happy modeling!
 # =======================================================
 
 
+def require_event_names_in_deprecations():
+    # The require_event_names_in_deprecations flag isn't guaranteed to be set by the
+    # time some deprecations are fired. We could have done the following ever single deprecation
+    # that needs it, but this makes it simpler to flip the flag later.
+    return getattr(get_flags(), "require_event_names_in_deprecations", False)
+
+
 class DeprecatedModel(WarnLevel):
     def code(self) -> str:
         return "I065"
@@ -241,7 +258,11 @@ class DeprecatedModel(WarnLevel):
             f"Model {self.model_name}{version} has passed its deprecation date of {self.deprecation_date}. "
             "This model should be disabled or removed."
         )
-        return warning_tag(msg)
+
+        if require_event_names_in_deprecations():
+            return line_wrap_message(deprecation_tag(msg, self.__class__.__name__))
+        else:
+            return warning_tag(msg)
 
 
 class PackageRedirectDeprecation(WarnLevel):
@@ -253,7 +274,11 @@ class PackageRedirectDeprecation(WarnLevel):
             f"The `{self.old_name}` package is deprecated in favor of `{self.new_name}`. Please "
             f"update your `packages.yml` configuration to use `{self.new_name}` instead."
         )
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+        if require_event_names_in_deprecations():
+            return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+        else:
+            return line_wrap_message(deprecation_tag(description))
 
 
 class PackageInstallPathDeprecation(WarnLevel):
@@ -266,7 +291,11 @@ class PackageInstallPathDeprecation(WarnLevel):
         Please update `clean-targets` in `dbt_project.yml` and check `.gitignore` as well.
         Or, set `packages-install-path: dbt_modules` if you'd like to keep the current value.
         """
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+        if require_event_names_in_deprecations():
+            return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+        else:
+            return line_wrap_message(deprecation_tag(description))
 
 
 class ConfigSourcePathDeprecation(WarnLevel):
@@ -278,7 +307,11 @@ class ConfigSourcePathDeprecation(WarnLevel):
             f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`. "
             "Please update your `dbt_project.yml` configuration to reflect this change."
         )
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+        if require_event_names_in_deprecations():
+            return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+        else:
+            return line_wrap_message(deprecation_tag(description))
 
 
 class ConfigDataPathDeprecation(WarnLevel):
@@ -290,7 +323,11 @@ class ConfigDataPathDeprecation(WarnLevel):
             f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`. "
             "Please update your `dbt_project.yml` configuration to reflect this change."
         )
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+        if require_event_names_in_deprecations():
+            return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+        else:
+            return line_wrap_message(deprecation_tag(description))
 
 
 class MetricAttributesRenamed(WarnLevel):
@@ -307,7 +344,10 @@ class MetricAttributesRenamed(WarnLevel):
             "\nRelevant issue here: https://github.com/dbt-labs/dbt-core/issues/5849"
         )
 
-        return warning_tag(f"Deprecated functionality\n\n{description}")
+        if require_event_names_in_deprecations():
+            return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+        else:
+            return deprecation_tag(description)
 
 
 class ExposureNameDeprecation(WarnLevel):
@@ -322,7 +362,11 @@ class ExposureNameDeprecation(WarnLevel):
             "follow this pattern. Please update the 'name', and use the 'label' property for a "
             "human-friendly title. This will raise an error in a future version of dbt-core."
         )
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+        if require_event_names_in_deprecations():
+            return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+        else:
+            return line_wrap_message(deprecation_tag(description))
 
 
 class InternalDeprecation(WarnLevel):
@@ -337,7 +381,11 @@ class InternalDeprecation(WarnLevel):
             f"`{self.name}` is deprecated and will be removed in dbt-core version {self.version}\n\n"
             f"Adapter maintainers can resolve this deprecation by {self.suggested_action}. {extra_reason}"
         )
-        return warning_tag(msg)
+
+        if require_event_names_in_deprecations():
+            return deprecation_tag(msg, self.__class__.__name__)
+        else:
+            return warning_tag(msg)
 
 
 class EnvironmentVariableRenamed(WarnLevel):
@@ -351,7 +399,11 @@ class EnvironmentVariableRenamed(WarnLevel):
             f"Set `{self.new_name}` and unset `{self.old_name}` to avoid this deprecation warning and "
             "ensure it works properly in a future release."
         )
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+        if require_event_names_in_deprecations():
+            return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+        else:
+            return line_wrap_message(deprecation_tag(description))
 
 
 class ConfigLogPathDeprecation(WarnLevel):
@@ -368,7 +420,11 @@ class ConfigLogPathDeprecation(WarnLevel):
             f"If you wish to write dbt {output} to a custom directory, please use "
             f"the {cli_flag} CLI flag or {env_var} env var instead."
         )
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+        if require_event_names_in_deprecations():
+            return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+        else:
+            return line_wrap_message(deprecation_tag(description))
 
 
 class ConfigTargetPathDeprecation(WarnLevel):
@@ -385,9 +441,16 @@ class ConfigTargetPathDeprecation(WarnLevel):
             f"If you wish to write dbt {output} to a custom directory, please use "
             f"the {cli_flag} CLI flag or {env_var} env var instead."
         )
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+        if require_event_names_in_deprecations():
+            return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+        else:
+            return line_wrap_message(deprecation_tag(description))
 
 
+# Note: this deprecation has been removed, but we are leaving
+# the event class here, because users may have specified it in
+# warn_error_options.
 class TestsConfigDeprecation(WarnLevel):
     def code(self) -> str:
         return "D012"
@@ -397,7 +460,11 @@ class TestsConfigDeprecation(WarnLevel):
             f"The `{self.deprecated_path}` config has been renamed to `{self.exp_path}`. "
             "Please see https://docs.getdbt.com/docs/build/data-tests#new-data_tests-syntax for more information."
         )
-        return line_wrap_message(warning_tag(f"Deprecated functionality\n\n{description}"))
+
+        if require_event_names_in_deprecations():
+            return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+        else:
+            return line_wrap_message(deprecation_tag(description))
 
 
 class ProjectFlagsMovedDeprecation(WarnLevel):
@@ -410,7 +477,10 @@ class ProjectFlagsMovedDeprecation(WarnLevel):
             "key in dbt_project.yml."
         )
         # Can't use line_wrap_message here because flags.printer_width isn't available yet
-        return warning_tag(f"Deprecated functionality\n\n{description}")
+        if require_event_names_in_deprecations():
+            return deprecation_tag(description, self.__class__.__name__)
+        else:
+            return deprecation_tag(description)
 
 
 class SpacesInResourceNameDeprecation(DynamicLevel):
@@ -425,7 +495,10 @@ class SpacesInResourceNameDeprecation(DynamicLevel):
         elif self.level == EventLevel.WARN.value:
             description = warning_tag(description)
 
-        return line_wrap_message(description)
+        if require_event_names_in_deprecations():
+            return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+        else:
+            return line_wrap_message(description)
 
 
 class ResourceNamesWithSpacesDeprecation(WarnLevel):
@@ -440,7 +513,10 @@ class ResourceNamesWithSpacesDeprecation(WarnLevel):
 
         description += " For more information: https://docs.getdbt.com/reference/global-configs/legacy-behaviors"
 
-        return line_wrap_message(warning_tag(description))
+        if require_event_names_in_deprecations():
+            return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+        else:
+            return line_wrap_message(warning_tag(description))
 
 
 class PackageMaterializationOverrideDeprecation(WarnLevel):
@@ -450,7 +526,10 @@ class PackageMaterializationOverrideDeprecation(WarnLevel):
     def message(self) -> str:
         description = f"Installed package '{self.package_name}' is overriding the built-in materialization '{self.materialization_name}'. Overrides of built-in materializations from installed packages will be deprecated in future versions of dbt. For more information: https://docs.getdbt.com/reference/global-configs/legacy-behaviors"
 
-        return line_wrap_message(warning_tag(description))
+        if require_event_names_in_deprecations():
+            return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+        else:
+            return line_wrap_message(warning_tag(description))
 
 
 class SourceFreshnessProjectHooksNotRun(WarnLevel):
@@ -460,7 +539,165 @@ class SourceFreshnessProjectHooksNotRun(WarnLevel):
     def message(self) -> str:
         description = "In a future version of dbt, the `source freshness` command will start running `on-run-start` and `on-run-end` hooks by default. For more information: https://docs.getdbt.com/reference/global-configs/legacy-behaviors"
 
-        return line_wrap_message(warning_tag(description))
+        if require_event_names_in_deprecations():
+            return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+        else:
+            return line_wrap_message(warning_tag(description))
+
+
+class MFTimespineWithoutYamlConfigurationDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D018"
+
+    def message(self) -> str:
+        description = "Time spines without YAML configuration are in the process of deprecation. Please add YAML configuration for your 'metricflow_time_spine' model. See documentation on MetricFlow time spines: https://docs.getdbt.com/docs/build/metricflow-time-spine and behavior change documentation: https://docs.getdbt.com/reference/global-configs/behavior-changes."
+
+        if require_event_names_in_deprecations():
+            return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+        else:
+            return line_wrap_message(warning_tag(description))
+
+
+class MFCumulativeTypeParamsDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D019"
+
+    def message(self) -> str:
+        description = "Cumulative fields `type_params.window` and `type_params.grain_to_date` have been moved and will soon be deprecated. Please nest those values under `type_params.cumulative_type_params.window` and `type_params.cumulative_type_params.grain_to_date`. See documentation on behavior changes: https://docs.getdbt.com/reference/global-configs/behavior-changes."
+
+        if require_event_names_in_deprecations():
+            return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+        else:
+            return line_wrap_message(warning_tag(description))
+
+
+class MicrobatchMacroOutsideOfBatchesDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D020"
+
+    def message(self) -> str:
+        description = "The use of a custom microbatch macro outside of batched execution is deprecated. To use it with batched execution, set `flags.require_batched_execution_for_custom_microbatch_strategy` to `True` in `dbt_project.yml`. In the future this will be the default behavior."
+
+        if require_event_names_in_deprecations():
+            return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+        else:
+            return line_wrap_message(warning_tag(description))
+
+
+# Skipping D021. It belonged to the now deleted PackageRedirectDeprecationSummary event.
+
+
+class GenericJSONSchemaValidationDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D022"
+
+    def message(self) -> str:
+        if self.key_path == "":
+            description = f"{self.violation} at top level in file `{self.file}`"
+        else:
+            description = f"{self.violation} in file `{self.file}` at path `{self.key_path}`"
+
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+
+
+class UnexpectedJinjaBlockDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D023"
+
+    def message(self) -> str:
+        description = f"{self.msg} in file `{self.file}`"
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+
+
+class DuplicateYAMLKeysDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D024"
+
+    def message(self) -> str:
+        description = f"{self.duplicate_description} in file `{self.file}`"
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+
+
+class CustomTopLevelKeyDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D025"
+
+    def message(self) -> str:
+        description = f"{self.msg} in file `{self.file}`"
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+
+
+class CustomKeyInConfigDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D026"
+
+    def message(self) -> str:
+        description = f"Custom key `{self.key}` found in `config` at path `{self.key_path}` in file `{self.file}`. Custom config keys should move into the `config.meta`."
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+
+
+class CustomKeyInObjectDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D027"
+
+    def message(self) -> str:
+        description = f"Custom key `{self.key}` found at `{self.key_path}` in file `{self.file}`. This may mean the key is a typo, or is simply not a key supported by the object."
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+
+
+class DeprecationsSummary(WarnLevel):
+    def code(self) -> str:
+        return "D028"
+
+    def message(self) -> str:
+        description = "Summary of encountered deprecations:"
+        for summary in self.summaries:
+            description += (
+                f"\n\n- {summary.event_name}: {pluralize(summary.occurrences, 'occurrence')}"
+            )
+
+        if self.show_all_hint:
+            description += "\n\nTo see all deprecation instances instead of just the first occurrence of each, run command again with the `--show-all-deprecations` flag. You may also need to run with `--no-partial-parse` as some deprecations are only encountered during parsing."
+
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+
+
+class CustomOutputPathInSourceFreshnessDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D029"
+
+    def message(self) -> str:
+        description = f"Custom output path usage `--output {self.path}` usage detected in `dbt source freshness` command."
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+
+
+class PropertyMovedToConfigDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D030"
+
+    def message(self) -> str:
+        description = f"Found `{self.key}` as a top-level property of `{self.key_path}` in file `{self.file}`. The `{self.key}` top-level property should be moved into the `config` of `{self.key_path}`."
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+
+
+class WEOIncludeExcludeDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D031"
+
+    def message(self) -> str:
+        found_keys: List[str] = []
+        if self.found_include:
+            found_keys.append("`include`")
+        if self.found_exclude:
+            found_keys.append("`exclude`")
+
+        description = f"Found {' and '.join(found_keys)} in `warn_error_options` specification."
+        if self.found_include:
+            description += " Please use `error` instead of `include`."
+        if self.found_exclude:
+            description += " Please use `warn` instead of `exclude`."
+
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
 # =======================================================
@@ -921,6 +1158,37 @@ class FreshnessConfigProblem(WarnLevel):
         return self.msg
 
 
+class MicrobatchModelNoEventTimeInputs(WarnLevel):
+    def code(self) -> str:
+        return "I074"
+
+    def message(self) -> str:
+        msg = (
+            f"The microbatch model '{self.model_name}' has no 'ref' or 'source' input with an 'event_time' configuration. "
+            "\nThis means no filtering can be applied and can result in unexpected duplicate records in the resulting microbatch model."
+        )
+
+        return warning_tag(msg)
+
+
+class InvalidConcurrentBatchesConfig(WarnLevel):
+    def code(self) -> str:
+        return "I075"
+
+    def message(self) -> str:
+        maybe_plural_count_of_models = pluralize(self.num_models, "microbatch model")
+        description = f"Found {maybe_plural_count_of_models} with the `concurrent_batches` config set to true, but the {self.adapter_type} adapter does not support running batches concurrently. Batches will be run sequentially."
+        return line_wrap_message(warning_tag(description))
+
+
+class InvalidMacroAnnotation(WarnLevel):
+    def code(self) -> str:
+        return "I076"
+
+    def message(self) -> str:
+        return self.msg
+
+
 # =======================================================
 # M - Deps generation
 # =======================================================
@@ -1185,6 +1453,19 @@ class DepsScrubbedPackageName(WarnLevel):
 
 
 # =======================================================
+# P - Artifacts
+# =======================================================
+
+
+class ArtifactWritten(DebugLevel):
+    def code(self):
+        return "P001"
+
+    def message(self) -> str:
+        return f"Wrote artifact {self.artifact_type} to {self.artifact_path}"
+
+
+# =======================================================
 # Q - Node execution
 # =======================================================
 
@@ -1273,7 +1554,15 @@ class LogTestResult(DynamicLevel):
             return EventLevel.INFO
 
 
-# Skipped Q008, Q009, Q010
+class LogNodeResult(DynamicLevel):
+    def code(self) -> str:
+        return "Q008"
+
+    def message(self) -> str:
+        return self.msg
+
+
+# Skipped Q009, Q010
 
 
 class LogStartLine(InfoLevel):
@@ -1293,6 +1582,9 @@ class LogModelResult(DynamicLevel):
         if self.status == "error":
             info = "ERROR creating"
             status = red(self.status.upper())
+        elif "PARTIAL SUCCESS" in self.status:
+            info = "PARTIALLY created"
+            status = yellow(self.status.upper())
         else:
             info = "OK created"
             status = green(self.status)
@@ -1510,10 +1802,20 @@ class LogHookEndLine(InfoLevel):
         return "Q033"
 
     def message(self) -> str:
-        msg = f"OK hook: {self.statement}"
+        if self.status == "success":
+            info = "OK"
+            status = green(info)
+        elif self.status == "skipped":
+            info = "SKIP"
+            status = yellow(info)
+        else:
+            info = "ERROR"
+            status = red(info)
+        msg = f"{info} hook: {self.statement}"
+
         return format_fancy_output_line(
             msg=msg,
-            status=green(self.status),
+            status=status,
             index=self.index,
             total=self.total,
             execution_time=self.execution_time,
@@ -1591,7 +1893,9 @@ class ShowNode(InfoLevel):
                     {"node": self.node_name, "show": json.loads(self.preview)}, indent=2
                 )
         else:
-            if self.is_inline:
+            if self.quiet:
+                return self.preview
+            elif self.is_inline:
                 return f"Previewing inline node:\n{self.preview}"
             else:
                 return f"Previewing node '{self.node_name}':\n{self.preview}"
@@ -1608,10 +1912,77 @@ class CompiledNode(InfoLevel):
             else:
                 return json.dumps({"node": self.node_name, "compiled": self.compiled}, indent=2)
         else:
-            if self.is_inline:
+            if self.quiet:
+                return self.compiled
+            elif self.is_inline:
                 return f"Compiled inline node is:\n{self.compiled}"
             else:
                 return f"Compiled node '{self.node_name}' is:\n{self.compiled}"
+
+
+class SnapshotTimestampWarning(WarnLevel):
+    def code(self) -> str:
+        return "Q043"
+
+    def message(self) -> str:
+        return (
+            f"Data type of snapshot table timestamp columns ({self.snapshot_time_data_type}) "
+            f"doesn't match derived column 'updated_at' ({self.updated_at_data_type}). "
+            "Please update snapshot config 'updated_at'."
+        )
+
+
+class MicrobatchExecutionDebug(DebugLevel):
+    def code(self) -> str:
+        return "Q044"
+
+    def message(self) -> str:
+        return self.msg
+
+
+class LogStartBatch(InfoLevel):
+    def code(self) -> str:
+        return "Q045"
+
+    def message(self) -> str:
+        msg = f"START {self.description}"
+
+        # TODO update common so that we can append "batch" in `format_fancy_output_line`
+        formatted = format_fancy_output_line(
+            msg=msg,
+            status="RUN",
+            index=self.batch_index,
+            total=self.total_batches,
+        )
+        return f"Batch {formatted}"
+
+
+class LogBatchResult(DynamicLevel):
+    def code(self) -> str:
+        return "Q046"
+
+    def message(self) -> str:
+        if self.status == "error":
+            info = "ERROR creating"
+            status = red(self.status.upper())
+        elif self.status == "skipped":
+            info = "SKIP"
+            status = yellow(self.status.upper())
+        else:
+            info = "OK created"
+            status = green(self.status)
+
+        msg = f"{info} {self.description}"
+
+        # TODO update common so that we can append "batch" in `format_fancy_output_line`
+        formatted = format_fancy_output_line(
+            msg=msg,
+            status=status,
+            index=self.batch_index,
+            total=self.total_batches,
+            execution_time=self.execution_time,
+        )
+        return f"Batch {formatted}"
 
 
 # =======================================================
@@ -1796,7 +2167,9 @@ class StatsLine(InfoLevel):
         return "Z023"
 
     def message(self) -> str:
-        stats_line = "Done. PASS={pass} WARN={warn} ERROR={error} SKIP={skip} TOTAL={total}"
+        stats_line = (
+            "Done. PASS={pass} WARN={warn} ERROR={error} SKIP={skip} NO-OP={noop} TOTAL={total}"
+        )
         return stats_line.format(**self.stats)
 
 
@@ -1845,10 +2218,16 @@ class EndOfRunSummary(InfoLevel):
     def message(self) -> str:
         error_plural = pluralize(self.num_errors, "error")
         warn_plural = pluralize(self.num_warnings, "warning")
+        partial_success_plural = f"""{self.num_partial_success} partial {"success" if self.num_partial_success == 1 else "successes"}"""
+
         if self.keyboard_interrupt:
             message = yellow("Exited because of keyboard interrupt")
         elif self.num_errors > 0:
-            message = red(f"Completed with {error_plural} and {warn_plural}:")
+            message = red(
+                f"Completed with {error_plural}, {partial_success_plural}, and {warn_plural}:"
+            )
+        elif self.num_partial_success > 0:
+            message = yellow(f"Completed with {partial_success_plural} and {warn_plural}")
         elif self.num_warnings > 0:
             message = yellow(f"Completed with {warn_plural}:")
         else:
@@ -2010,3 +2389,30 @@ class ResourceReport(DebugLevel):
 
     def message(self) -> str:
         return f"Resource report: {self.to_json()}"
+
+
+# Artifact Upload Events #
+
+
+class ArtifactUploadError(ErrorLevel):
+    def code(self) -> str:
+        return "Z061"
+
+    def message(self) -> str:
+        return f"Error uploading artifacts to artifact ingestion API: {self.msg}"
+
+
+class ArtifactUploadSuccess(InfoLevel):
+    def code(self) -> str:
+        return "Z062"
+
+    def message(self) -> str:
+        return f"Artifacts uploaded successfully to artifact ingestion API: {self.msg}"
+
+
+class ArtifactUploadSkipped(DebugLevel):
+    def code(self) -> str:
+        return "Z063"
+
+    def message(self) -> str:
+        return f"Artifacts skipped for command : {self.msg}"

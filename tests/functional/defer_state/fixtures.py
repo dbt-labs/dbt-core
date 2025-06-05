@@ -540,3 +540,118 @@ models:
 metricflow_time_spine_sql = """
 SELECT to_date('02/20/2023', 'mm/dd/yyyy') as date_day
 """
+
+
+model_with_env_var_in_config_sql = """
+{{ config(materialized=env_var('DBT_TEST_STATE_MODIFIED')) }}
+select 1 as id
+"""
+
+model_with_no_in_config_sql = """
+select 1 as id
+"""
+
+
+schema_model_with_env_var_in_config_yml = """
+models:
+  - name: model
+    config:
+      materialized: "{{ env_var('DBT_TEST_STATE_MODIFIED') }}"
+
+"""
+
+
+model_with_var_in_config_sql = """
+{{ config(materialized=var('DBT_TEST_STATE_MODIFIED')) }}
+select 1 as id
+"""
+
+model_with_jinja_in_config_sql = """
+{{ config(
+    materialized = ('table' if execute else 'view')
+) }}
+
+select 1 as id
+"""
+
+model_with_updated_jinja_in_config_sql = """
+{{ config(
+    materialized = ('view' if execute else 'table')
+) }}
+
+select 1 as id
+"""
+
+schema_model_with_jinja_in_config_yml = """
+models:
+  - name: model
+    config:
+      materialized: "{{ ('table' if execute else 'view') }}"
+"""
+
+schema_model_with_updated_jinja_in_config_yml = """
+models:
+  - name: model
+    config:
+      materialized: "{{ ('view' if execute else 'table') }}"
+"""
+
+schema_source_with_env_var_as_database_property_yml = """
+sources:
+  - name: jaffle_shop
+    database: "{{ env_var('DBT_TEST_STATE_MODIFIED') }}"
+    tables:
+      - name: customers
+"""
+
+schema_source_with_env_var_as_schema_property_yml = """
+sources:
+  - name: jaffle_shop
+    database: "test"
+    schema: "{{ env_var('DBT_TEST_STATE_MODIFIED') }}"
+    tables:
+      - name: customers
+"""
+
+schema_source_with_updated_env_var_as_schema_property_yml = """
+sources:
+  - name: jaffle_shop
+    database: "test"
+    schema: "updated"
+    tables:
+      - name: customers
+"""
+
+schema_source_with_jinja_as_database_property_yml = """
+sources:
+  - name: jaffle_shop
+    database: "{{ ('foo' if execute else 'bar') }}"
+    tables:
+      - name: customers
+"""
+
+schema_source_with_updated_jinja_as_database_property_yml = """
+sources:
+  - name: jaffle_shop
+    database: "{{ ('bar' if execute else 'foo') }}"
+    tables:
+      - name: customers
+"""
+
+schema_source_with_jinja_as_schema_property_yml = """
+sources:
+  - name: jaffle_shop
+    database: "test"
+    schema: "{{ ('foo' if execute else 'bar') }}"
+    tables:
+      - name: customers
+"""
+
+schema_source_with_updated_jinja_as_schema_property_yml = """
+sources:
+  - name: jaffle_shop
+    database: "test"
+    schema: "{{ ('bar' if execute else 'foo') }}"
+    tables:
+      - name: customers
+"""

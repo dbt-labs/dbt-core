@@ -8,6 +8,10 @@ from typing_extensions import Protocol, runtime_checkable
 
 from dbt import deprecations
 from dbt.adapters.contracts.connection import QueryComment
+from dbt.clients.checked_load import (
+    checked_load,
+    issue_deprecation_warnings_for_failures,
+)
 from dbt.clients.yaml_helper import load_yaml_text
 from dbt.config.selectors import SelectorDict
 from dbt.config.utils import normalize_warn_error_options
@@ -86,9 +90,14 @@ class IsFQNResource(Protocol):
     package_name: str
 
 
-def _load_yaml(path):
+def _load_yaml(path, validate: bool = False):
     contents = load_file_contents(path)
-    return load_yaml_text(contents)
+    if validate:
+        result, failures = checked_load(contents)
+        issue_deprecation_warnings_for_failures(failures=failures, file=path)
+        return result
+    else:
+        return load_yaml_text(contents)
 
 
 def load_yml_dict(file_path):
@@ -158,14 +167,8 @@ def _parse_versions(versions: Union[List[str], str]) -> List[VersionSpecifier]:
     return [VersionSpecifier.from_version_string(v) for v in versions]
 
 
-def _all_source_paths(
-    model_paths: List[str],
-    seed_paths: List[str],
-    snapshot_paths: List[str],
-    analysis_paths: List[str],
-    macro_paths: List[str],
-) -> List[str]:
-    paths = chain(model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths)
+def _all_source_paths(*args: List[str]) -> List[str]:
+    paths = chain(*args)
     # Strip trailing slashes since the path is the same even though the name is not
     stripped_paths = map(lambda s: s.rstrip("/"), paths)
     return list(set(stripped_paths))
@@ -188,7 +191,7 @@ def value_or(value: Optional[T], default: T) -> T:
         return value
 
 
-def load_raw_project(project_root: str) -> Dict[str, Any]:
+def load_raw_project(project_root: str, validate: bool = False) -> Dict[str, Any]:
     project_root = os.path.normpath(project_root)
     project_yaml_filepath = os.path.join(project_root, DBT_PROJECT_FILE_NAME)
 
@@ -200,10 +203,20 @@ def load_raw_project(project_root: str) -> Dict[str, Any]:
             )
         )
 
-    project_dict = _load_yaml(project_yaml_filepath)
+    project_dict = _load_yaml(project_yaml_filepath, validate=validate)
+
+    if validate:
+        from dbt.jsonschemas import jsonschema_validate, project_schema
+
+        jsonschema_validate(
+            schema=project_schema(), json=project_dict, file_path=project_yaml_filepath
+        )
 
     if not isinstance(project_dict, dict):
         raise DbtProjectError(f"{DBT_PROJECT_FILE_NAME} does not parse to a dictionary")
+
+    if "tests" in project_dict and "data_tests" not in project_dict:
+        project_dict["data_tests"] = project_dict.pop("tests")
 
     return project_dict
 
@@ -409,7 +422,7 @@ class PartialProject(RenderComponents):
         snapshot_paths: List[str] = value_or(cfg.snapshot_paths, ["snapshots"])
 
         all_source_paths: List[str] = _all_source_paths(
-            model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths
+            model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths, test_paths
         )
 
         docs_paths: List[str] = value_or(cfg.docs_paths, all_source_paths)
@@ -480,6 +493,7 @@ class PartialProject(RenderComponents):
                 rendered.selectors_dict["selectors"]
             )
         dbt_cloud = cfg.dbt_cloud
+        flags: Dict[str, Any] = cfg.flags
 
         project = Project(
             project_name=name,
@@ -524,6 +538,7 @@ class PartialProject(RenderComponents):
             project_env_vars=project_env_vars,
             restrict_access=cfg.restrict_access,
             dbt_cloud=dbt_cloud,
+            flags=flags,
         )
         # sanity check - this means an internal issue
         project.validate()
@@ -535,7 +550,7 @@ class PartialProject(RenderComponents):
         project_root: str,
         project_dict: Dict[str, Any],
         packages_dict: Dict[str, Any],
-        selectors_dict: Dict[str, Any],
+        selectors_dict: Optional[Dict[str, Any]],
         *,
         verify_version: bool = False,
         packages_specified_path: str = PACKAGES_FILE_NAME,
@@ -551,27 +566,22 @@ class PartialProject(RenderComponents):
             project_root=project_root,
             project_dict=project_dict,
             packages_dict=packages_dict,
-            selectors_dict=selectors_dict,
+            selectors_dict=selectors_dict,  # type: ignore
             verify_version=verify_version,
             packages_specified_path=packages_specified_path,
         )
 
     @classmethod
     def from_project_root(
-        cls, project_root: str, *, verify_version: bool = False
+        cls, project_root: str, *, verify_version: bool = False, validate: bool = False
     ) -> "PartialProject":
         project_root = os.path.normpath(project_root)
-        project_dict = load_raw_project(project_root)
+        project_dict = load_raw_project(project_root, validate=validate)
         (
             packages_dict,
             packages_specified_path,
         ) = package_and_project_data_from_root(project_root)
         selectors_dict = selector_data_from_root(project_root)
-
-        if "flags" in project_dict:
-            # We don't want to include "flags" in the Project,
-            # it goes in ProjectFlags
-            project_dict.pop("flags")
 
         return cls.from_dicts(
             project_root=project_root,
@@ -645,6 +655,7 @@ class Project:
     project_env_vars: Dict[str, Any]
     restrict_access: bool
     dbt_cloud: Dict[str, Any]
+    flags: Dict[str, Any]
 
     @property
     def all_source_paths(self) -> List[str]:
@@ -654,6 +665,7 @@ class Project:
             self.snapshot_paths,
             self.analysis_paths,
             self.macro_paths,
+            self.test_paths,
         )
 
     @property
@@ -724,6 +736,7 @@ class Project:
                 "require-dbt-version": [v.to_version_string() for v in self.dbt_version],
                 "restrict-access": self.restrict_access,
                 "dbt-cloud": self.dbt_cloud,
+                "flags": self.flags,
             }
         )
         if self.query_comment:
@@ -750,8 +763,11 @@ class Project:
         renderer: DbtProjectYamlRenderer,
         *,
         verify_version: bool = False,
+        validate: bool = False,
     ) -> "Project":
-        partial = PartialProject.from_project_root(project_root, verify_version=verify_version)
+        partial = PartialProject.from_project_root(
+            project_root, verify_version=verify_version, validate=validate
+        )
         return partial.render(renderer)
 
     def hashed_name(self):
@@ -821,8 +837,8 @@ def read_project_flags(project_dir: str, profiles_dir: str) -> ProjectFlags:
 
         if profile_project_flags:
             # This can't use WARN_ERROR or WARN_ERROR_OPTIONS because they're in
-            # the config that we're loading. Uses special "warn" method.
-            deprecations.warn("project-flags-moved")
+            # the config that we're loading. Uses special "buffer" method and fired after flags are initialized in preflight.
+            deprecations.buffer("project-flags-moved")
             project_flags = profile_project_flags
 
         if project_flags is not None:

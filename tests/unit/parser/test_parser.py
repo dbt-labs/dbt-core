@@ -6,10 +6,12 @@ from unittest import mock
 
 import yaml
 
-import dbt.flags
-import dbt.parser
 from dbt import tracking
 from dbt.artifacts.resources import ModelConfig, RefArgs
+from dbt.artifacts.resources.v1.model import (
+    ModelBuildAfter,
+    ModelFreshnessUpdatesOnOptions,
+)
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import FileHash, FilePath, SchemaSourceFile, SourceFile
 from dbt.contracts.graph.manifest import Manifest
@@ -60,7 +62,9 @@ from tests.unit.utils import (
     normalize,
 )
 
-set_from_args(Namespace(WARN_ERROR=False), None)
+set_from_args(
+    Namespace(warn_error=False, state_modified_compare_more_unrendered_values=False), None
+)
 
 
 def get_abs_os_path(unix_path):
@@ -94,7 +98,10 @@ class BaseParserTest(unittest.TestCase):
             yield pm
 
     def setUp(self):
-        dbt.flags.WARN_ERROR = True
+        set_from_args(
+            Namespace(warn_error=True, state_modified_compare_more_unrendered_values=False),
+            None,
+        )
         # HACK: this is needed since tracking events can
         # be sent when using the model parser
         tracking.do_not_track()
@@ -276,6 +283,7 @@ models:
             - not_null:
                 severity: WARN
             - accepted_values:
+                description: Only primary colors are allowed in here
                 values: ['red', 'blue', 'green']
             - foreign_package.test_case:
                 arg: 100
@@ -295,6 +303,28 @@ models:
                 values: ['red', 'blue', 'green']
             - foreign_package.test_case:
                 arg: 100
+"""
+
+SINGLE_TABLE_MODEL_FRESHNESS = """
+models:
+    - name: my_model
+      description: A description of my model
+      freshness:
+        build_after: {count: 4, period: day, updates_on: all}
+      config:
+        freshness:
+          build_after: {count: 1, period: day, updates_on: any}
+"""
+
+SINGLE_TABLE_MODEL_FRESHNESS_ONLY_DEPEND_ON = """
+models:
+    - name: my_model
+      description: A description of my model
+      freshness:
+        build_after:
+            updates_on: all
+            period: hour
+            count: 0
 """
 
 
@@ -400,6 +430,48 @@ sources:
               - unique
 """
 
+SOURCE_CUSTOM_FRESHNESS_AT_SOURCE = """
+sources:
+  - name: my_source
+    loaded_at_query: "select 1 as id"
+    tables:
+      - name: my_table
+"""
+SOURCE_CUSTOM_FRESHNESS_AT_SOURCE_FIELD_AT_TABLE = """
+sources:
+  - name: my_source
+    loaded_at_query: "select 1 as id"
+    tables:
+      - name: my_table
+        loaded_at_field: test
+"""
+SOURCE_FIELD_AT_SOURCE_CUSTOM_FRESHNESS_AT_TABLE = """
+sources:
+  - name: my_source
+    loaded_at_field: test
+    tables:
+      - name: my_table
+        loaded_at_query: "select 1 as id"
+"""
+SOURCE_FIELD_AT_CUSTOM_FRESHNESS_BOTH_AT_TABLE = """
+sources:
+  - name: my_source
+    loaded_at_field: test
+    tables:
+      - name: my_table
+        loaded_at_query: "select 1 as id"
+        loaded_at_field: test
+"""
+SOURCE_FIELD_AT_CUSTOM_FRESHNESS_BOTH_AT_SOURCE = """
+sources:
+  - name: my_source
+    loaded_at_field: test
+    loaded_at_query: "select 1 as id"
+    tables:
+      - name: my_table
+        loaded_at_field: test
+"""
+
 
 class SchemaParserTest(BaseParserTest):
     def setUp(self):
@@ -444,9 +516,61 @@ class SchemaParserSourceTest(SchemaParserTest):
         self.assertEqual(source_values[0].table.description, "")
         self.assertEqual(len(source_values[0].table.columns), 0)
 
+    @mock.patch("dbt.parser.sources.get_adapter")
+    def test_parse_source_custom_freshness_at_source(self, _):
+        block = self.file_block_for(SOURCE_CUSTOM_FRESHNESS_AT_SOURCE, "test_one.yml")
+        dct = yaml_from_file(block.file, validate=True)
+        self.parser.parse_file(block, dct)
+        unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
+        src_default = self.source_patcher.parse_source(unpatched_src_default)
+        assert src_default.loaded_at_query == "select 1 as id"
+
+    @mock.patch("dbt.parser.sources.get_adapter")
+    def test_parse_source_custom_freshness_at_source_field_at_table(self, _):
+        block = self.file_block_for(
+            SOURCE_CUSTOM_FRESHNESS_AT_SOURCE_FIELD_AT_TABLE, "test_one.yml"
+        )
+        dct = yaml_from_file(block.file, validate=True)
+        self.parser.parse_file(block, dct)
+        unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
+        src_default = self.source_patcher.parse_source(unpatched_src_default)
+        # source loaded_at_query not propagate to table since there's loaded_at_field defined
+        assert src_default.loaded_at_query is None
+
+    @mock.patch("dbt.parser.sources.get_adapter")
+    def test_parse_source_field_at_source_custom_freshness_at_table(self, _):
+        block = self.file_block_for(
+            SOURCE_FIELD_AT_SOURCE_CUSTOM_FRESHNESS_AT_TABLE, "test_one.yml"
+        )
+        dct = yaml_from_file(block.file, validate=True)
+        self.parser.parse_file(block, dct)
+        unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
+        src_default = self.source_patcher.parse_source(unpatched_src_default)
+        assert src_default.loaded_at_query == "select 1 as id"
+
+    @mock.patch("dbt.parser.sources.get_adapter")
+    def test_parse_source_field_at_custom_freshness_both_at_table_fails(self, _):
+        block = self.file_block_for(SOURCE_FIELD_AT_CUSTOM_FRESHNESS_BOTH_AT_TABLE, "test_one.yml")
+        dct = yaml_from_file(block.file, validate=True)
+        self.parser.parse_file(block, dct)
+        unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
+        with self.assertRaises(ParsingError):
+            self.source_patcher.parse_source(unpatched_src_default)
+
+    @mock.patch("dbt.parser.sources.get_adapter")
+    def test_parse_source_field_at_custom_freshness_both_at_source_fails(self, _):
+        block = self.file_block_for(
+            SOURCE_FIELD_AT_CUSTOM_FRESHNESS_BOTH_AT_SOURCE, "test_one.yml"
+        )
+        dct = yaml_from_file(block.file, validate=True)
+        self.parser.parse_file(block, dct)
+        unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
+        with self.assertRaises(ParsingError):
+            self.source_patcher.parse_source(unpatched_src_default)
+
     def test__parse_basic_source(self):
         block = self.file_block_for(SINGLE_TABLE_SOURCE, "test_one.yml")
-        dct = yaml_from_file(block.file)
+        dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
         self.assert_has_manifest_lengths(self.parser.manifest, sources=1)
         src = list(self.parser.manifest.sources.values())[0]
@@ -460,7 +584,7 @@ class SchemaParserSourceTest(SchemaParserTest):
     @mock.patch("dbt.parser.sources.get_adapter")
     def test__parse_basic_source_meta(self, mock_get_adapter):
         block = self.file_block_for(MULTIPLE_TABLE_SOURCE_META, "test_one.yml")
-        dct = yaml_from_file(block.file)
+        dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
         self.assert_has_manifest_lengths(self.parser.manifest, sources=2)
 
@@ -514,7 +638,7 @@ class SchemaParserSourceTest(SchemaParserTest):
     def test__parse_basic_source_tests(self):
         block = self.file_block_for(SINGLE_TABLE_SOURCE_TESTS, "test_one.yml")
         self.parser.manifest.files[block.file.file_id] = block.file
-        dct = yaml_from_file(block.file)
+        dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
         self.assertEqual(len(self.parser.manifest.nodes), 0)
         self.assertEqual(len(self.parser.manifest.sources), 1)
@@ -598,14 +722,39 @@ class SchemaParserModelsTest(SchemaParserTest):
 
     def test__read_basic_model_tests(self):
         block = self.yaml_block_for(SINGLE_TABLE_MODEL_TESTS, "test_one.yml")
-        dct = yaml_from_file(block.file)
+        dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
         self.assertEqual(len(list(self.parser.manifest.sources)), 0)
         self.assertEqual(len(list(self.parser.manifest.nodes)), 4)
 
+    def test__parse_model_freshness(self):
+        block = self.file_block_for(SINGLE_TABLE_MODEL_FRESHNESS, "test_one.yml")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        dct = yaml_from_file(block.file, validate=True)
+        self.parser.parse_file(block, dct)
+        self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
+
+        assert self.parser.manifest.nodes[
+            "model.root.my_model"
+        ].freshness.build_after == ModelBuildAfter(
+            count=1, period="day", updates_on=ModelFreshnessUpdatesOnOptions.all
+        )
+
+    def test__parse_model_freshness_depend_on(self):
+        block = self.file_block_for(SINGLE_TABLE_MODEL_FRESHNESS_ONLY_DEPEND_ON, "test_one.yml")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        dct = yaml_from_file(block.file, validate=True)
+        self.parser.parse_file(block, dct)
+        self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
+        assert self.parser.manifest.nodes[
+            "model.root.my_model"
+        ].freshness.build_after == ModelBuildAfter(
+            count=0, period="hour", updates_on=ModelFreshnessUpdatesOnOptions.all
+        )
+
     def test__read_basic_model_tests_wrong_severity(self):
         block = self.yaml_block_for(SINGLE_TABLE_MODEL_TESTS_WRONG_SEVERITY, "test_one.yml")
-        dct = yaml_from_file(block.file)
+        dct = yaml_from_file(block.file, validate=True)
         with self.assertRaisesRegex(
             SchemaConfigError, "Severity must be either 'warn' or 'error'. Got 'WARNING'"
         ):
@@ -614,7 +763,7 @@ class SchemaParserModelsTest(SchemaParserTest):
     def test__parse_basic_model_tests(self):
         block = self.file_block_for(SINGLE_TABLE_MODEL_TESTS, "test_one.yml")
         self.parser.manifest.files[block.file.file_id] = block.file
-        dct = yaml_from_file(block.file)
+        dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=4)
 
@@ -628,6 +777,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(tests[0].tags, [])
         self.assertEqual(tests[0].refs, [RefArgs(name="my_model")])
         self.assertEqual(tests[0].column_name, "color")
+        self.assertEqual(tests[0].description, "Only primary colors are allowed in here")
         self.assertEqual(tests[0].package_name, "snowplow")
         self.assertTrue(tests[0].name.startswith("accepted_values_"))
         self.assertEqual(tests[0].fqn, ["snowplow", tests[0].name])
@@ -651,7 +801,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assertEqual(tests[1].tags, [])
         self.assertEqual(tests[1].refs, [RefArgs(name="my_model")])
         self.assertEqual(tests[1].column_name, "color")
-        self.assertEqual(tests[1].column_name, "color")
+        self.assertEqual(tests[1].description, "")
         self.assertEqual(tests[1].fqn, ["snowplow", tests[1].name])
         self.assertTrue(tests[1].name.startswith("foreign_package_test_case_"))
         self.assertEqual(tests[1].package_name, "snowplow")
@@ -738,7 +888,7 @@ class SchemaParserVersionedModels(SchemaParserTest):
 
     def test__read_versioned_model_tests(self):
         block = self.yaml_block_for(MULTIPLE_TABLE_VERSIONED_MODEL_TESTS, "test_one.yml")
-        dct = yaml_from_file(block.file)
+        dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
         self.assertEqual(len(list(self.parser.manifest.sources)), 0)
         self.assertEqual(len(list(self.parser.manifest.nodes)), 5)
@@ -746,7 +896,7 @@ class SchemaParserVersionedModels(SchemaParserTest):
     def test__parse_versioned_model_tests(self):
         block = self.file_block_for(MULTIPLE_TABLE_VERSIONED_MODEL_TESTS, "test_one.yml")
         self.parser.manifest.files[block.file.file_id] = block.file
-        dct = yaml_from_file(block.file)
+        dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=5)
 
@@ -828,7 +978,7 @@ class SchemaParserVersionedModels(SchemaParserTest):
     def test__parsed_versioned_models(self):
         block = self.file_block_for(MULTIPLE_TABLE_VERSIONED_MODEL, "test_one.yml")
         self.parser.manifest.files[block.file.file_id] = block.file
-        dct = yaml_from_file(block.file)
+        dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=2)
 
@@ -837,7 +987,7 @@ class SchemaParserVersionedModels(SchemaParserTest):
             MULTIPLE_TABLE_VERSIONED_MODEL_CONTRACT_ENFORCED, "test_one.yml"
         )
         self.parser.manifest.files[block.file.file_id] = block.file
-        dct = yaml_from_file(block.file)
+        dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=2)
         for node in self.parser.manifest.nodes.values():
@@ -847,7 +997,7 @@ class SchemaParserVersionedModels(SchemaParserTest):
     def test__parsed_versioned_models_v0(self):
         block = self.file_block_for(MULTIPLE_TABLE_VERSIONED_MODEL_V0, "test_one.yml")
         self.parser.manifest.files[block.file.file_id] = block.file
-        dct = yaml_from_file(block.file)
+        dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=2)
 
@@ -856,7 +1006,7 @@ class SchemaParserVersionedModels(SchemaParserTest):
             MULTIPLE_TABLE_VERSIONED_MODEL_V0_LATEST_VERSION, "test_one.yml"
         )
         self.parser.manifest.files[block.file.file_id] = block.file
-        dct = yaml_from_file(block.file)
+        dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=2)
 
@@ -1000,7 +1150,7 @@ python_model_custom_materialization = """
 import pandas as pd
 
 def model(dbt, session):
-    dbt.config(materialized="view")
+    dbt.config(materialized="incremental")
     return pd.dataframe([1, 2])
 """
 
@@ -1195,7 +1345,7 @@ class ModelParserTest(BaseParserTest):
         self.parser.manifest.files[block.file.file_id] = block.file
         self.parser.parse_file(block)
         node = list(self.parser.manifest.nodes.values())[0]
-        self.assertEqual(node.get_materialization(), "view")
+        self.assertEqual(node.get_materialization(), "incremental")
 
 
 class StaticModelParserTest(BaseParserTest):
@@ -1471,6 +1621,7 @@ class SnapshotParserTest(BaseParserTest):
                 "unique_key": "id",
                 "updated_at": "last_update",
             },
+            unrendered_config_call_dict={},
         )
         assertEqualNodes(expected, node)
         file_id = "snowplow://" + normalize("snapshots/nested/snap_1.sql")
@@ -1541,6 +1692,8 @@ class SnapshotParserTest(BaseParserTest):
                 "unique_key": "id",
                 "updated_at": "last_update",
             },
+            # Empty until state_modified_compare_more_unrendered_values=True
+            unrendered_config_call_dict={},
         )
         expect_bar = SnapshotNode(
             alias="bar",
@@ -1578,6 +1731,8 @@ class SnapshotParserTest(BaseParserTest):
                 "unique_key": "id",
                 "updated_at": "last_update",
             },
+            # Empty until state_modified_compare_more_unrendered_values=True
+            unrendered_config_call_dict={},
         )
         assertEqualNodes(nodes[0], expect_bar)
         assertEqualNodes(nodes[1], expect_foo)

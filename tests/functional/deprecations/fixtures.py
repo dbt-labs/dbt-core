@@ -30,6 +30,23 @@ exposures:
       email: something@example.com
 """
 
+
+deprecated_model_exposure_yaml = """
+version: 2
+
+models:
+  - name: model
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+
+exposures:
+  - name: simple_exposure
+    type: dashboard
+    depends_on:
+      - ref('model')
+    owner:
+      email: something@example.com
+"""
+
 # deprecated test config fixtures
 data_tests_yaml = """
 models:
@@ -120,4 +137,51 @@ local_dependency__seed_csv = """id,name
 1,Mary
 2,Sam
 3,John
+"""
+
+
+invalid_deprecation_date_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1
+"""
+
+duplicate_keys_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+"""
+
+custom_key_in_config_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+    config:
+      my_custom_key: "my_custom_value"
+"""
+
+multiple_custom_keys_in_config_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+    config:
+      my_custom_key: "my_custom_value"
+      my_custom_key2: "my_custom_value2"
+"""
+
+custom_key_in_object_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+    my_custom_property: "It's over, I have the high ground"
 """

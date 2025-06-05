@@ -56,9 +56,9 @@ def safe_load(contents) -> Optional[Dict[str, Any]]:
     return yaml.load(contents, Loader=SafeLoader)
 
 
-def load_yaml_text(contents, path=None):
+def load_yaml_text(contents, path=None, loader=SafeLoader) -> Optional[Dict[str, Any]]:
     try:
-        return safe_load(contents)
+        return yaml.load(contents, loader)
     except (yaml.scanner.ScannerError, yaml.YAMLError) as e:
         if hasattr(e, "problem_mark"):
             error = contextualized_yaml_error(contents, e)

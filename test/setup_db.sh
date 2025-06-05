@@ -1,5 +1,30 @@
 #!/bin/bash
 set -x
+
+brew install postgresql@16
+brew link postgresql@16 --force
+export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"
+
+# Start PostgreSQL using the full command instead of brew services
+pg_ctl -D /opt/homebrew/var/postgresql@16 start
+
+echo "Check PostgreSQL service is running"
+i=10
+COMMAND='pg_isready'
+while [ $i -gt -1 ]; do
+    if [ $i == 0 ]; then
+        echo "PostgreSQL service not ready, all attempts exhausted"
+        exit 1
+    fi
+    echo "Check PostgreSQL service status"
+    eval $COMMAND && break
+    echo "PostgreSQL service not ready, wait 10 more sec, attempts left: $i"
+    sleep 10
+    ((i--))
+done
+
+createuser -s postgres
+
 env | grep '^PG'
 
 # If you want to run this script for your own postgresql (run with
@@ -11,24 +36,6 @@ PGPORT="${PGPORT:-5432}"
 export PGPORT
 PGHOST="${PGHOST:-localhost}"
 
-function connect_circle() {
-	# try to handle circleci/docker oddness
-	let rc=1
-	while [[ $rc -eq 1 ]]; do
-		nc -z ${PGHOST} ${PGPORT}
-		let rc=$?
-	done
-	if [[ $rc -ne 0 ]]; then
-		echo "Fatal: Could not connect to $PGHOST"
-		exit 1
-	fi
-}
-
-# appveyor doesn't have 'nc', but it also doesn't have these issues
-if [[ -n $CIRCLECI ]]; then
-	connect_circle
-fi
-
 for i in {1..10}; do
 	if pg_isready -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" ; then
 		break
@@ -39,6 +46,7 @@ for i in {1..10}; do
 done;
 
 createdb dbt
+psql -c "SELECT version();"
 psql -c "CREATE ROLE root WITH PASSWORD 'password';"
 psql -c "ALTER ROLE root WITH LOGIN;"
 psql -c "GRANT CREATE, CONNECT ON DATABASE dbt TO root WITH GRANT OPTION;"

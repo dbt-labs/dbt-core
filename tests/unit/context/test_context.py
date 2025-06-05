@@ -465,7 +465,11 @@ def test_invocation_args_to_dict_in_macro_runtime_context(
     assert ctx["invocation_args_dict"]["profile_dir"] == "/dev/null"
 
     assert isinstance(ctx["invocation_args_dict"]["warn_error_options"], Dict)
-    assert ctx["invocation_args_dict"]["warn_error_options"] == {"include": [], "exclude": []}
+    assert ctx["invocation_args_dict"]["warn_error_options"] == {
+        "error": [],
+        "warn": [],
+        "silence": [],
+    }
 
 
 def test_model_parse_context(config_postgres, manifest_fx, get_adapter, get_include_paths):

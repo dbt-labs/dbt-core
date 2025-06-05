@@ -2,6 +2,7 @@ import os
 
 import pytest
 
+from dbt.exceptions import SchemaConfigError
 from dbt.tests.util import (
     check_relations_equal,
     run_dbt,
@@ -56,7 +57,7 @@ class TestTargetConfigs(BaseConfigProject):
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
-            "target-path": "target_{{ modules.datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%S') }}",
+            "target-path": "target_{{ modules.datetime.datetime.now(modules.pytz.timezone('Etc/UTC')).strftime('%Y%m%dT%H%M%S') }}",
             "seeds": {
                 "quote_columns": False,
             },
@@ -81,7 +82,7 @@ class TestInvalidTestsMaterializationProj(object):
         tests_dir = os.path.join(project.project_root, "tests")
         write_file("select * from foo", tests_dir, "test.sql")
 
-        with pytest.raises(ValidationError):
+        with pytest.raises(SchemaConfigError):
             run_dbt()
 
 
@@ -93,7 +94,7 @@ class TestInvalidSeedsMaterializationProj(object):
         seeds_dir = os.path.join(project.project_root, "seeds")
         write_file("id1, id2\n1, 2", seeds_dir, "seed.csv")
 
-        with pytest.raises(ValidationError):
+        with pytest.raises(SchemaConfigError):
             run_dbt()
 
 
@@ -107,7 +108,7 @@ class TestInvalidSeedsMaterializationSchema(object):
         )
         write_file("id1, id2\n1, 2", seeds_dir, "myseed.csv")
 
-        with pytest.raises(ValidationError):
+        with pytest.raises(SchemaConfigError):
             run_dbt()
 
 

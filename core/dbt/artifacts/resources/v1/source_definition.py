@@ -19,6 +19,8 @@ from dbt_common.exceptions import CompilationError
 @dataclass
 class SourceConfig(BaseConfig):
     enabled: bool = True
+    event_time: Any = None
+    freshness: Optional[FreshnessThreshold] = None
 
 
 @dataclass
@@ -58,6 +60,7 @@ class ParsedSourceMandatory(GraphResource, HasRelationMetadata):
 class SourceDefinition(ParsedSourceMandatory):
     quoting: Quoting = field(default_factory=Quoting)
     loaded_at_field: Optional[str] = None
+    loaded_at_query: Optional[str] = None
     freshness: Optional[FreshnessThreshold] = None
     external: Optional[ExternalTable] = None
     description: str = ""
@@ -70,3 +73,6 @@ class SourceDefinition(ParsedSourceMandatory):
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     relation_name: Optional[str] = None
     created_at: float = field(default_factory=lambda: time.time())
+    unrendered_database: Optional[str] = None
+    unrendered_schema: Optional[str] = None
+    doc_blocks: List[str] = field(default_factory=list)

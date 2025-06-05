@@ -58,6 +58,8 @@ models:
         description: The user's first name
       - name: last_name
         description: "{{ doc('test', 'my_model_doc__last_name') }}"
+      - name: tricky
+        description: "{{ doc('my_model_doc__id') }} The user's first name {{ doc('test', 'my_model_doc__last_name') }}"
 """
 
 
@@ -82,6 +84,7 @@ class TestGoodDocsBlocks:
         model_data = manifest["nodes"]["model.test.model"]
 
         assert model_data["description"] == "My model is just a copy of the seed"
+        assert model_data["doc_blocks"] == ["doc.test.my_model_doc"]
 
         assert {
             "name": "id",
@@ -91,6 +94,9 @@ class TestGoodDocsBlocks:
             "meta": {},
             "quote": None,
             "tags": [],
+            "granularity": None,
+            "doc_blocks": ["doc.test.my_model_doc__id"],
+            "config": {"meta": {}, "tags": []},
         } == model_data["columns"]["id"]
 
         assert {
@@ -101,6 +107,9 @@ class TestGoodDocsBlocks:
             "meta": {},
             "quote": None,
             "tags": [],
+            "granularity": None,
+            "doc_blocks": [],
+            "config": {"meta": {}, "tags": []},
         } == model_data["columns"]["first_name"]
 
         assert {
@@ -111,9 +120,28 @@ class TestGoodDocsBlocks:
             "meta": {},
             "quote": None,
             "tags": [],
+            "granularity": None,
+            "doc_blocks": ["doc.test.my_model_doc__last_name"],
+            "config": {"meta": {}, "tags": []},
         } == model_data["columns"]["last_name"]
 
-        assert len(model_data["columns"]) == 3
+        assert {
+            "name": "tricky",
+            "description": "The user ID number The user's first name The user's last name",
+            "data_type": None,
+            "constraints": [],
+            "meta": {},
+            "quote": None,
+            "tags": [],
+            "granularity": None,
+            "doc_blocks": [
+                "doc.test.my_model_doc__id",
+                "doc.test.my_model_doc__last_name",
+            ],
+            "config": {"meta": {}, "tags": []},
+        } == model_data["columns"]["tricky"]
+
+        assert len(model_data["columns"]) == 4
 
 
 class TestGoodDocsBlocksAltPath:
@@ -143,6 +171,7 @@ class TestGoodDocsBlocksAltPath:
         model_data = manifest["nodes"]["model.test.model"]
 
         assert model_data["description"] == "Alt text about the model"
+        assert model_data["doc_blocks"] == ["doc.test.my_model_doc"]
 
         assert {
             "name": "id",
@@ -152,6 +181,9 @@ class TestGoodDocsBlocksAltPath:
             "meta": {},
             "quote": None,
             "tags": [],
+            "granularity": None,
+            "doc_blocks": ["doc.test.my_model_doc__id"],
+            "config": {"meta": {}, "tags": []},
         } == model_data["columns"]["id"]
 
         assert {
@@ -162,6 +194,9 @@ class TestGoodDocsBlocksAltPath:
             "meta": {},
             "quote": None,
             "tags": [],
+            "granularity": None,
+            "doc_blocks": [],
+            "config": {"meta": {}, "tags": []},
         } == model_data["columns"]["first_name"]
 
         assert {
@@ -172,6 +207,25 @@ class TestGoodDocsBlocksAltPath:
             "meta": {},
             "quote": None,
             "tags": [],
+            "granularity": None,
+            "doc_blocks": ["doc.test.my_model_doc__last_name"],
+            "config": {"meta": {}, "tags": []},
         } == model_data["columns"]["last_name"]
 
-        assert len(model_data["columns"]) == 3
+        assert {
+            "name": "tricky",
+            "description": "The user ID number with alternative text The user's first name The user's last name in this other file",
+            "data_type": None,
+            "constraints": [],
+            "meta": {},
+            "quote": None,
+            "tags": [],
+            "granularity": None,
+            "doc_blocks": [
+                "doc.test.my_model_doc__id",
+                "doc.test.my_model_doc__last_name",
+            ],
+            "config": {"meta": {}, "tags": []},
+        } == model_data["columns"]["tricky"]
+
+        assert len(model_data["columns"]) == 4

@@ -17,7 +17,8 @@ from dbt.contracts.files import (
 )
 from dbt.events.types import InputFileDiffError
 from dbt.exceptions import ParsingError
-from dbt.parser.schemas import schema_file_keys, yaml_from_file
+from dbt.parser.common import schema_file_keys
+from dbt.parser.schemas import yaml_from_file
 from dbt.parser.search import filesystem_search
 from dbt_common.clients.system import load_file_contents
 from dbt_common.dataclass_schema import dbtClassMixin
@@ -85,7 +86,7 @@ def load_source_file(
         source_file.checksum = FileHash.from_contents(file_contents)
 
     if parse_file_type == ParseFileType.Schema and source_file.contents:
-        dfy = yaml_from_file(source_file)
+        dfy = yaml_from_file(source_file=source_file, validate=True)
         if dfy:
             validate_yaml(source_file.path.original_file_path, dfy)
             source_file.dfy = dfy

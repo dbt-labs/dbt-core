@@ -19,9 +19,12 @@ override_freshness_models_schema_yml = """version: 2
 sources:
   - name: test_source
     loader: custom
-    freshness: # default freshness
-      warn_after: {count: 12, period: hour}
+    freshness:
+      warn_after: {count: 18, period: hour}
       error_after: {count: 24, period: hour}
+    config:
+      freshness: # default freshness, takes precedence over top-level key above
+        warn_after: {count: 12, period: hour}
     schema: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}"
     loaded_at_field: loaded_at
     quoting:
@@ -32,9 +35,12 @@ sources:
       - name: source_a
         identifier: source
         loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
+        config:
+          freshness:
+            warn_after: {count: 6, period: hour}
+            # use default error_after, takes precedence over top-level key above
         freshness:
-          warn_after: {count: 6, period: hour}
-          # use the default error_after defined above
+          warn_after: {count: 9, period: hour}
       - name: source_b
         identifier: source
         loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
@@ -52,7 +58,10 @@ sources:
         loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
         freshness:
           warn_after: {count: 6, period: hour}
-          error_after: {count: 72, period: hour} # override: use this new behavior instead of error_after defined above
+          error_after: {count: 144, period: hour}
+        config:
+          freshness:
+            error_after: {count: 72, period: hour} # override: use this new behavior instead of error_after defined above
       - name: source_e
         identifier: source
         loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
@@ -471,4 +480,57 @@ sources:
     tables:
       - name: test_table
         identifier: source
+"""
+
+freshness_via_custom_sql_schema_yml = """version: 2
+sources:
+  - name: test_source
+    freshness:
+      warn_after: {count: 10, period: hour}
+    schema: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}"
+    quoting:
+      identifier: True
+    tags:
+      - my_test_source_tag
+    tables:
+      - name: source_a
+        identifier: source
+        loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
+      - name: source_b
+        identifier: source
+        loaded_at_query: "select max({{ var('test_loaded_at') | as_text }}) from {{this}}"
+      - name: source_c
+        identifier: source
+        loaded_at_query: "select {{current_timestamp()}}"
+
+"""
+
+freshness_with_explicit_null_in_table_schema_yml = """version: 2
+sources:
+  - name: test_source
+    schema: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}"
+    freshness:
+        warn_after:
+          count: 24
+          period: hour
+    quoting:
+      identifier: True
+    tables:
+      - name: source_a
+        loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
+        config:
+          freshness: null
+"""
+
+freshness_with_explicit_null_in_source_schema_yml = """version: 2
+sources:
+  - name: test_source
+    schema: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}"
+    config:
+      freshness: null
+    quoting:
+      identifier: True
+    tables:
+      - name: source_a
+        loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
 """

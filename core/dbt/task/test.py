@@ -3,7 +3,17 @@ import json
 import re
 import threading
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Collection,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
 
 import daff
 
@@ -25,17 +35,18 @@ from dbt.events.types import LogStartLine, LogTestResult
 from dbt.exceptions import BooleanError, DbtInternalError
 from dbt.flags import get_flags
 from dbt.graph import ResourceTypeSelector
-from dbt.node_types import NodeType
+from dbt.node_types import TEST_NODE_TYPES, NodeType
 from dbt.parser.unit_tests import UnitTestManifestLoader
+from dbt.task import group_lookup
+from dbt.task.base import BaseRunner, resource_types_from_args
+from dbt.task.compile import CompileRunner
+from dbt.task.run import RunTask
 from dbt.utils import _coerce_decimal, strtobool
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.format import pluralize
 from dbt_common.events.functions import fire_event
 from dbt_common.exceptions import DbtBaseException, DbtRuntimeError
 from dbt_common.ui import green, red
-
-from .compile import CompileRunner
-from .run import RunTask
 
 if TYPE_CHECKING:
     import agate
@@ -82,23 +93,26 @@ class UnitTestResultData(dbtClassMixin):
 
 class TestRunner(CompileRunner):
     _ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
-    _LOG_TEST_RESULT_EVENTS = LogTestResult
 
-    def describe_node_name(self):
+    def describe_node_name(self) -> str:
         if self.node.resource_type == NodeType.Unit:
             name = f"{self.node.model}::{self.node.versioned_name}"
             return name
         else:
             return self.node.name
 
-    def describe_node(self):
+    def describe_node(self) -> str:
         return f"{self.node.resource_type} {self.describe_node_name()}"
 
     def print_result_line(self, result):
         model = result.node
+        group = group_lookup.get(model.unique_id)
+        attached_node = (
+            result.node.attached_node if isinstance(result.node, GenericTestNode) else None
+        )
 
         fire_event(
-            self._LOG_TEST_RESULT_EVENTS(
+            LogTestResult(
                 name=self.describe_node_name(),
                 status=str(result.status),
                 index=self.node_index,
@@ -106,6 +120,8 @@ class TestRunner(CompileRunner):
                 execution_time=result.execution_time,
                 node_info=model.node_info,
                 num_failures=result.failures,
+                group=group,
+                attached_node=attached_node,
             ),
             level=LogTestResult.status_to_level(str(result.status)),
         )
@@ -120,13 +136,13 @@ class TestRunner(CompileRunner):
             )
         )
 
-    def before_execute(self):
+    def before_execute(self) -> None:
         self.print_start_line()
 
     def execute_data_test(self, data_test: TestNode, manifest: Manifest) -> TestResultData:
         context = generate_runtime_model_context(data_test, self.config, manifest)
 
-        hook_ctx = self.adapter.pre_model_hook(context)
+        hook_ctx = self.adapter.pre_model_hook(context["config"])
 
         materialization_macro = manifest.find_materialization_macro_by_name(
             self.config.project_name, data_test.get_materialization(), self.adapter.type()
@@ -204,7 +220,7 @@ class TestRunner(CompileRunner):
         # materialization, not compile the node.compiled_code
         context = generate_runtime_model_context(unit_test_node, self.config, unit_test_manifest)
 
-        hook_ctx = self.adapter.pre_model_hook(context)
+        hook_ctx = self.adapter.pre_model_hook(context["config"])
 
         materialization_macro = unit_test_manifest.find_materialization_macro_by_name(
             self.config.project_name, unit_test_node.get_materialization(), self.adapter.type()
@@ -287,7 +303,7 @@ class TestRunner(CompileRunner):
             failures = result.failures
         elif result.should_warn:
             if get_flags().WARN_ERROR or get_flags().WARN_ERROR_OPTIONS.includes(
-                self._LOG_TEST_RESULT_EVENTS.__name__
+                LogTestResult.__name__
             ):
                 status = TestStatus.Fail
                 message = f"Got {num_errors}, configured to fail if {test.config.warn_if}"
@@ -307,6 +323,7 @@ class TestRunner(CompileRunner):
             message=message,
             adapter_response=result.adapter_response,
             failures=failures,
+            batch_results=None,
         )
         return run_result
 
@@ -332,9 +349,10 @@ class TestRunner(CompileRunner):
             message=message,
             adapter_response=result.adapter_response,
             failures=failures,
+            batch_results=None,
         )
 
-    def after_execute(self, result):
+    def after_execute(self, result) -> None:
         self.print_result_line(result)
 
     def _get_unit_test_agate_table(self, result_table, actual_or_expected: str):
@@ -374,16 +392,6 @@ class TestRunner(CompileRunner):
         return rendered
 
 
-class TestSelector(ResourceTypeSelector):
-    def __init__(self, graph, manifest, previous_state) -> None:
-        super().__init__(
-            graph=graph,
-            manifest=manifest,
-            previous_state=previous_state,
-            resource_types=[NodeType.Test, NodeType.Unit],
-        )
-
-
 class TestTask(RunTask):
     """
     Testing:
@@ -393,19 +401,30 @@ class TestTask(RunTask):
 
     __test__ = False
 
-    def raise_on_first_error(self):
+    def raise_on_first_error(self) -> bool:
         return False
 
-    def get_node_selector(self) -> TestSelector:
+    @property
+    def resource_types(self) -> List[NodeType]:
+        resource_types: Collection[NodeType] = resource_types_from_args(
+            self.args, set(TEST_NODE_TYPES), set(TEST_NODE_TYPES)
+        )
+
+        # filter out any non-test node types
+        resource_types = [rt for rt in resource_types if rt in TEST_NODE_TYPES]
+        return list(resource_types)
+
+    def get_node_selector(self) -> ResourceTypeSelector:
         if self.manifest is None or self.graph is None:
             raise DbtInternalError("manifest and graph must be set to get perform node selection")
-        return TestSelector(
+        return ResourceTypeSelector(
             graph=self.graph,
             manifest=self.manifest,
             previous_state=self.previous_state,
+            resource_types=self.resource_types,
         )
 
-    def get_runner_type(self, _):
+    def get_runner_type(self, _) -> Optional[Type[BaseRunner]]:
         return TestRunner
 
 

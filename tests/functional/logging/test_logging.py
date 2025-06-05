@@ -5,6 +5,7 @@ import pytest
 
 from dbt.events.types import InvalidOptionYAML
 from dbt.tests.util import get_manifest, read_file, run_dbt
+from dbt_common.events import EventLevel
 from dbt_common.events.functions import fire_event
 
 my_model_sql = """
@@ -100,40 +101,250 @@ def test_invalid_event_value(project, logs_dir):
     with pytest.raises(Exception) as excinfo:
         fire_event(InvalidOptionYAML(option_name=1))
 
-    assert str(excinfo.value) == "[InvalidOptionYAML]: Unable to parse dict {'option_name': 1}"
+    assert "[InvalidOptionYAML]: Unable to parse logging event dictionary." in str(excinfo.value)
 
 
-class TestNodeInfo:
+groups_yml = """
+groups:
+  - name: my_group_with_owner_metadata
+    owner:
+      name: my_name
+      email: my.email@gmail.com
+      slack: my_slack
+      other_property: something_else
+
+models:
+  - name: my_model
+    group: my_group_with_owner_metadata
+    access: public
+"""
+
+groups_yml_with_multiple_emails = """
+groups:
+  - name: my_group_with_multiple_emails
+    owner:
+      name: my_name
+      email:
+        - my.email@gmail.com
+        - my.second.email@gmail.com
+      slack: my_slack
+      other_property: something_else
+
+models:
+  - name: my_model
+    group: my_group_with_multiple_emails
+    access: public
+    columns:
+      - name: my_column
+        tests:
+         - not_null
+"""
+
+
+class TestRunResultErrorNodeInfo:
     @pytest.fixture(scope="class")
     def models(self):
-        return {"my_model.sql": "select not_found as id"}
+        return {
+            "my_model.sql": "select not_found as id",
+        }
 
     def test_node_info_on_results(self, project, logs_dir):
         results = run_dbt(["--log-format=json", "run"], expect_pass=False)
         assert len(results) == 1
-        # get log file
+
         log_file = read_file(logs_dir, "dbt.log")
-        task_printer_events = [
-            "RunResultWarning",
-            "RunResultFailure",
-            "RunResultWarningMessage",
-            "RunResultError",
-            "RunResultErrorNoMessage",
-            "SQLCompiledPath",
-            "CheckNodeTestFailure",
-        ]
-        count = 0
+
         for log_line in log_file.split("\n"):
-            # skip empty lines
-            if len(log_line) == 0:
+            if not log_line:
                 continue
-            # The adapter logging also shows up, so skip non-json lines
-            if "[debug]" in log_line:
+
+            log_json = json.loads(log_line)
+            if log_json["info"]["level"] == EventLevel.DEBUG:
                 continue
-            log_dct = json.loads(log_line)
-            log_data = log_dct["data"]
-            log_event = log_dct["info"]["name"]
-            if log_event in task_printer_events:
-                assert "node_info" in log_data
-                count += 1
-        assert count > 0
+
+            if log_json["info"]["name"] == "RunResultError":
+                assert "node_info" in log_json["data"]
+                assert log_json["data"]["node_info"]["unique_id"] == "model.test.my_model"
+                assert "Database Error" in log_json["data"]["msg"]
+
+
+def assert_group_data(group_data):
+    assert group_data["name"] == "my_group_with_owner_metadata"
+    assert group_data["owner"] == {
+        "name": "my_name",
+        "email": "my.email@gmail.com",
+        "slack": "my_slack",
+        "other_property": "something_else",
+    }
+
+
+class TestRunResultErrorGroup:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": "select not_found as id",
+            "groups.yml": groups_yml,
+        }
+
+    def test_node_info_on_results(self, project, logs_dir):
+        results = run_dbt(["--log-format=json", "run"], expect_pass=False)
+        assert len(results) == 1
+
+        log_file = read_file(logs_dir, "dbt.log")
+        run_result_error_count = 0
+
+        for log_line in log_file.split("\n"):
+            if not log_line:
+                continue
+
+            log_json = json.loads(log_line)
+            if log_json["info"]["level"] == EventLevel.DEBUG:
+                continue
+
+            if log_json["info"]["name"] == "RunResultError":
+                assert "group" in log_json["data"]
+                assert_group_data(log_json["data"]["group"])
+                run_result_error_count += 1
+
+        assert run_result_error_count == 1
+
+
+class TestRunResultFailureGroup:
+    @pytest.fixture(scope="class")
+    def models(self):
+        schema_yml = (
+            groups_yml
+            + """
+    columns:
+      - name: my_column
+        tests:
+         - not_null
+"""
+        )
+        print(schema_yml)
+        return {
+            "my_model.sql": "select 1 as id, null as my_column",
+            "groups.yml": schema_yml,
+        }
+
+    def test_node_info_on_results(self, project, logs_dir):
+        results = run_dbt(["--log-format=json", "build"], expect_pass=False)
+        assert len(results) == 2
+
+        log_file = read_file(logs_dir, "dbt.log")
+        run_result_error_count = 0
+        run_result_failure_count = 0
+
+        for log_line in log_file.split("\n"):
+            if not log_line:
+                continue
+
+            log_json = json.loads(log_line)
+            if log_json["info"]["level"] == EventLevel.DEBUG:
+                continue
+
+            if log_json["info"]["name"] == "RunResultError":
+                assert "group" in log_json["data"]
+                assert_group_data(log_json["data"]["group"])
+                run_result_error_count += 1
+
+            if log_json["info"]["name"] == "RunResultFailure":
+                assert "group" in log_json["data"]
+                assert_group_data(log_json["data"]["group"])
+                run_result_failure_count += 1
+
+        assert run_result_error_count == 1
+        assert run_result_failure_count == 1
+
+
+class TestRunResultWarningGroup:
+    @pytest.fixture(scope="class")
+    def models(self):
+        schema_yml = (
+            groups_yml
+            + """
+    columns:
+      - name: my_column
+        tests:
+         - not_null:
+             config:
+               severity: warn
+"""
+        )
+        print(schema_yml)
+        return {
+            "my_model.sql": "select 1 as id, null as my_column",
+            "groups.yml": schema_yml,
+        }
+
+    def test_node_info_on_results(self, project, logs_dir):
+        results = run_dbt(["--log-format=json", "build"])
+        assert len(results) == 2
+
+        log_file = read_file(logs_dir, "dbt.log")
+        run_result_warning_count = 0
+
+        for log_line in log_file.split("\n"):
+            if not log_line:
+                continue
+
+            log_json = json.loads(log_line)
+            if log_json["info"]["level"] == EventLevel.DEBUG:
+                continue
+
+            if log_json["info"]["name"] == "RunResultWarning":
+                assert "group" in log_json["data"]
+                assert_group_data(log_json["data"]["group"])
+                run_result_warning_count += 1
+
+        assert run_result_warning_count == 1
+
+
+class TestRunResultNoGroup:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": "select 1 as id",
+        }
+
+    def test_node_info_on_results(self, project, logs_dir):
+        results = run_dbt(["--no-write-json", "run"])
+        assert len(results) == 1
+
+
+class TestRunResultGroupWithMultipleEmails:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": "select 1 as id, null as my_column",
+            "groups.yml": groups_yml_with_multiple_emails,
+        }
+
+    def test_node_info_on_results(self, project, logs_dir):
+        results = run_dbt(["--log-format=json", "build"], expect_pass=False)
+        assert len(results) == 2
+
+        log_file = read_file(logs_dir, "dbt.log")
+        run_result_error_count = 0
+
+        for log_line in log_file.split("\n"):
+            if not log_line:
+                continue
+
+            log_json = json.loads(log_line)
+            if log_json["info"]["level"] == EventLevel.DEBUG:
+                continue
+
+            if log_json["info"]["name"] == "RunResultError":
+                assert "group" in log_json["data"]
+                group_data = log_json["data"]["group"]
+                assert group_data["name"] == "my_group_with_multiple_emails"
+                assert group_data["owner"] == {
+                    "name": "my_name",
+                    "email": "['my.email@gmail.com', 'my.second.email@gmail.com']",
+                    "slack": "my_slack",
+                    "other_property": "something_else",
+                }
+                run_result_error_count += 1
+
+        assert run_result_error_count == 1

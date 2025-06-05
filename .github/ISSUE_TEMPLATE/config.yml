@@ -12,15 +12,6 @@ contact_links:
   - name: Participate in Discussions
     url: https://github.com/dbt-labs/dbt-core/discussions
     about: Do you have a Big Idea for dbt? Read open discussions, or start a new one
-  - name: Create an issue for dbt-redshift
-    url: https://github.com/dbt-labs/dbt-redshift/issues/new/choose
-    about: Report a bug or request a feature for dbt-redshift
-  - name: Create an issue for dbt-bigquery
-    url: https://github.com/dbt-labs/dbt-bigquery/issues/new/choose
-    about: Report a bug or request a feature for dbt-bigquery
-  - name: Create an issue for dbt-snowflake
-    url: https://github.com/dbt-labs/dbt-snowflake/issues/new/choose
-    about: Report a bug or request a feature for dbt-snowflake
-  - name: Create an issue for dbt-spark
-    url: https://github.com/dbt-labs/dbt-spark/issues/new/choose
-    about: Report a bug or request a feature for dbt-spark
+  - name: Create an issue for adapters
+    url: https://github.com/dbt-labs/dbt-adapters/issues/new/choose
+    about: Report a bug or request a feature for an adapter

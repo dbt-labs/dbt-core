@@ -3,7 +3,7 @@ import itertools
 import os
 from typing import Any, Dict, Generic, List, Optional, TypeVar
 
-from dbt import hooks, utils
+from dbt import deprecations, hooks, utils
 from dbt.adapters.factory import get_adapter  # noqa: F401
 from dbt.artifacts.resources import Contract
 from dbt.clients.jinja import MacroGenerator, get_rendered
@@ -13,6 +13,7 @@ from dbt.context.providers import (
     generate_generate_name_macro_context,
     generate_parser_model_context,
 )
+from dbt.contracts.files import SchemaSourceFile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import BaseNode, ManifestNode
 from dbt.contracts.graph.unparsed import Docs, UnparsedNode
@@ -22,9 +23,13 @@ from dbt.exceptions import (
     DictParseError,
     InvalidAccessTypeError,
 )
+from dbt.flags import get_flags
 from dbt.node_types import AccessType, ModelLanguage, NodeType
+from dbt.parser.common import resource_types_to_schema_file_keys
 from dbt.parser.search import FileBlock
+from dbt_common.clients._jinja_blocks import ExtractWarning
 from dbt_common.dataclass_schema import ValidationError
+from dbt_common.utils import deep_merge
 
 # internally, the parser may store a less-restrictive type that will be
 # transformed into the final type. But it will have to be derived from
@@ -59,6 +64,9 @@ class BaseParser(Generic[FinalValue]):
             filter(None, [self.resource_type, self.project.project_name, resource_name, hash])
         )
 
+    def _handle_extract_warning(self, warning: ExtractWarning, file: str) -> None:
+        deprecations.warn("unexpected-jinja-block-deprecation", msg=warning.msg, file=file)
+
 
 class Parser(BaseParser[FinalValue], Generic[FinalValue]):
     def __init__(
@@ -72,6 +80,7 @@ class Parser(BaseParser[FinalValue], Generic[FinalValue]):
 
 
 class RelationUpdate:
+    # "component" is database, schema or alias
     def __init__(self, config: RuntimeConfig, manifest: Manifest, component: str) -> None:
         default_macro = manifest.find_generate_macro_by_name(
             component=component,
@@ -127,6 +136,7 @@ class ConfiguredParser(
     ) -> None:
         super().__init__(project, manifest, root_project)
 
+        # this sets callables from RelationUpdate
         self._update_node_database = RelationUpdate(
             manifest=manifest, config=root_project, component="database"
         )
@@ -216,7 +226,6 @@ class ConfiguredParser(
             name = block.name
         if block.path.relative_path.endswith(".py"):
             language = ModelLanguage.python
-            config.add_config_call({"materialized": "table"})
         else:
             # this is not ideal but we have a lot of tests to adjust if don't do it
             language = ModelLanguage.sql
@@ -288,7 +297,10 @@ class ConfiguredParser(
         self._update_node_schema(parsed_node, config_dict.get("schema"))
         self._update_node_alias(parsed_node, config_dict.get("alias"))
 
-        # Snapshot nodes use special "target_database" and "target_schema" fields for some reason
+        # Snapshot nodes use special "target_database" and "target_schema" fields
+        # for backward compatibility
+        # We have to do getattr here because saved_query parser calls this method with
+        # Export object instead of a node.
         if getattr(parsed_node, "resource_type", None) == NodeType.Snapshot:
             if "target_database" in config_dict and config_dict["target_database"]:
                 parsed_node.database = config_dict["target_database"]
@@ -303,6 +315,7 @@ class ConfiguredParser(
         config: ContextConfig,
         context=None,
         patch_config_dict=None,
+        patch_file_id=None,
     ) -> None:
         """Given the ContextConfig used for parsing and the parsed node,
         generate and set the true values to use, overriding the temporary parse
@@ -312,6 +325,15 @@ class ConfiguredParser(
         # build_config_dict takes the config_call_dict in the ContextConfig object
         # and calls calculate_node_config to combine dbt_project configs and
         # config calls from SQL files, plus patch configs (from schema files)
+        # This normalize the config for a model node due #8520; should be improved latter
+        if not patch_config_dict:
+            patch_config_dict = {}
+        if (
+            parsed_node.resource_type == NodeType.Model
+            and parsed_node.language == ModelLanguage.python
+        ):
+            if "materialized" not in patch_config_dict:
+                patch_config_dict["materialized"] = "table"
         config_dict = config.build_config_dict(patch_config_dict=patch_config_dict)
 
         # Set tags on node provided in config blocks. Tags are additive, so even if
@@ -364,6 +386,18 @@ class ConfiguredParser(
             if hasattr(parsed_node, "contract"):
                 parsed_node.contract = Contract.from_dict(contract_dct)
 
+        if get_flags().state_modified_compare_more_unrendered_values:
+            # Use the patch_file.unrendered_configs if available to update patch_dict_config,
+            # as provided patch_config_dict may actuallly already be rendered and thus sensitive to jinja evaluations
+            if patch_file_id:
+                patch_file = self.manifest.files.get(patch_file_id, None)
+                if patch_file and isinstance(patch_file, SchemaSourceFile):
+                    schema_key = resource_types_to_schema_file_keys[parsed_node.resource_type]
+                    if unrendered_patch_config := patch_file.get_unrendered_config(
+                        schema_key, parsed_node.name, getattr(parsed_node, "version", None)
+                    ):
+                        patch_config_dict = deep_merge(patch_config_dict, unrendered_patch_config)
+
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls
         parsed_node.unrendered_config = config.build_config_dict(
@@ -371,6 +405,7 @@ class ConfiguredParser(
         )
 
         parsed_node.config_call_dict = config._config_call_dict
+        parsed_node.unrendered_config_call_dict = config._unrendered_config_call_dict
 
         # do this once before we parse the node database/schema/alias, so
         # parsed_node.config is what it would be if they did nothing
@@ -443,9 +478,8 @@ class ConfiguredParser(
             fqn=fqn,
         )
         self.render_update(node, config)
-        result = self.transform(node)
-        self.add_result_node(block, result)
-        return result
+        self.add_result_node(block, node)
+        return node
 
     def _update_node_relation_name(self, node: ManifestNode):
         # Seed and Snapshot nodes and Models that are not ephemeral,
@@ -464,17 +498,12 @@ class ConfiguredParser(
     def parse_file(self, file_block: FileBlock) -> None:
         pass
 
-    @abc.abstractmethod
-    def transform(self, node: FinalNode) -> FinalNode:
-        pass
-
 
 class SimpleParser(
     ConfiguredParser[ConfiguredBlockType, FinalNode],
     Generic[ConfiguredBlockType, FinalNode],
 ):
-    def transform(self, node):
-        return node
+    pass
 
 
 class SQLParser(ConfiguredParser[FileBlock, FinalNode], Generic[FinalNode]):
@@ -483,5 +512,4 @@ class SQLParser(ConfiguredParser[FileBlock, FinalNode], Generic[FinalNode]):
 
 
 class SimpleSQLParser(SQLParser[FinalNode]):
-    def transform(self, node):
-        return node
+    pass

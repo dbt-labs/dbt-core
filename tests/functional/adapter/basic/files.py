@@ -65,8 +65,15 @@ models:
 
 generic_test_view_yml = """
 version: 2
+
+groups:
+  - name: my_group
+    owner:
+      name: group_owner
+
 models:
   - name: view_model
+    group: my_group
     columns:
      - name: id
        data_tests:

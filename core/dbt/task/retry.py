@@ -7,6 +7,7 @@ from dbt.artifacts.schemas.results import NodeStatus
 from dbt.cli.flags import Flags
 from dbt.cli.types import Command as CliCommand
 from dbt.config import RuntimeConfig
+from dbt.constants import RUN_RESULTS_FILE_NAME
 from dbt.contracts.state import load_result_state
 from dbt.flags import get_flags, set_flags
 from dbt.graph import GraphQueue
@@ -23,7 +24,13 @@ from dbt.task.snapshot import SnapshotTask
 from dbt.task.test import TestTask
 from dbt_common.exceptions import DbtRuntimeError
 
-RETRYABLE_STATUSES = {NodeStatus.Error, NodeStatus.Fail, NodeStatus.Skipped, NodeStatus.RuntimeErr}
+RETRYABLE_STATUSES = {
+    NodeStatus.Error,
+    NodeStatus.Fail,
+    NodeStatus.Skipped,
+    NodeStatus.RuntimeErr,
+    NodeStatus.PartialSuccess,
+}
 IGNORE_PARENT_FLAGS = {
     "log_path",
     "output_path",
@@ -36,7 +43,7 @@ IGNORE_PARENT_FLAGS = {
     "warn_error",
 }
 
-ALLOW_CLI_OVERRIDE_FLAGS = {"vars"}
+ALLOW_CLI_OVERRIDE_FLAGS = {"vars", "threads"}
 
 TASK_DICT = {
     "build": BuildTask,
@@ -68,7 +75,7 @@ class RetryTask(ConfiguredTask):
         # load previous run results
         state_path = args.state or config.target_path
         self.previous_results = load_result_state(
-            Path(config.project_root) / Path(state_path) / "run_results.json"
+            Path(config.project_root) / Path(state_path) / RUN_RESULTS_FILE_NAME
         )
         if not self.previous_results:
             raise DbtRuntimeError(
@@ -86,7 +93,7 @@ class RetryTask(ConfiguredTask):
         args_to_remove = {
             "show": lambda x: True,
             "resource_types": lambda x: x == [],
-            "warn_error_options": lambda x: x == {"exclude": [], "include": []},
+            "warn_error_options": lambda x: x == {"warn": [], "error": [], "silence": []},
         }
         for k, v in args_to_remove.items():
             if k in self.previous_args and v(self.previous_args[k]):
@@ -115,13 +122,33 @@ class RetryTask(ConfiguredTask):
         self.task_class = TASK_DICT.get(self.previous_command_name)  # type: ignore
 
     def run(self):
-        unique_ids = set(
-            [
-                result.unique_id
-                for result in self.previous_results.results
-                if result.status in RETRYABLE_STATUSES
-            ]
-        )
+        unique_ids = {
+            result.unique_id
+            for result in self.previous_results.results
+            if result.status in RETRYABLE_STATUSES
+            and not (
+                self.previous_command_name != "run-operation"
+                and result.unique_id.startswith("operation.")
+            )
+        }
+
+        # We need this so that re-running of a microbatch model will only rerun
+        # batches that previously failed. Note _explicitly_ do no pass the
+        # batch info if there were _no_ successful batches previously. This is
+        # because passing the batch info _forces_ the microbatch process into
+        # _incremental_ model, and it may be that we need to be in full refresh
+        # mode which is only handled if previous_batch_results _isn't_ passed for a node
+        batch_map = {
+            result.unique_id: result.batch_results
+            for result in self.previous_results.results
+            if result.batch_results is not None
+            and len(result.batch_results.successful) != 0
+            and len(result.batch_results.failed) > 0
+            and not (
+                self.previous_command_name != "run-operation"
+                and result.unique_id.startswith("operation.")
+            )
+        }
 
         class TaskWrapper(self.task_class):
             def get_graph_queue(self):
@@ -137,6 +164,9 @@ class RetryTask(ConfiguredTask):
             self.config,
             self.manifest,
         )
+
+        if self.task_class == RunTask:
+            task.batch_map = batch_map
 
         return_value = task.run()
         return return_value

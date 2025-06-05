@@ -6,12 +6,28 @@ from typing import Any, Dict, List, Optional, Union
 from dbt.artifacts.resources.base import Docs, FileHash, GraphResource
 from dbt.artifacts.resources.types import NodeType, TimePeriod
 from dbt.artifacts.resources.v1.config import NodeConfig
+from dbt_common.contracts.config.base import BaseConfig, MergeBehavior
 from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
 from dbt_common.contracts.constraints import ColumnLevelConstraint
 from dbt_common.contracts.util import Mergeable
 from dbt_common.dataclass_schema import ExtensibleDbtClassMixin, dbtClassMixin
+from dbt_semantic_interfaces.type_enums import TimeGranularity
 
 NodeVersion = Union[str, float]
+
+
+def _backcompat_doc_blocks(doc_blocks: Any) -> List[str]:
+    """
+    Make doc_blocks backwards-compatible for scenarios where a user specifies `doc_blocks` on a model or column.
+    Mashumaro will raise a serialization error if the specified `doc_blocks` isn't a list of strings.
+    In such a scenario, this method returns an empty list to avoid a serialization error.
+    Further along, `_get_doc_blocks` in `manifest.py` populates the correct `doc_blocks` for the happy path.
+    """
+
+    if isinstance(doc_blocks, list) and all(isinstance(x, str) for x in doc_blocks):
+        return doc_blocks
+
+    return []
 
 
 @dataclass
@@ -55,6 +71,12 @@ class RefArgs(dbtClassMixin):
 
 
 @dataclass
+class ColumnConfig(BaseConfig):
+    meta: Dict[str, Any] = field(default_factory=dict, metadata=MergeBehavior.Update.meta())
+    tags: List[str] = field(default_factory=list)
+
+
+@dataclass
 class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     """Used in all ManifestNodes and SourceDefinition"""
 
@@ -64,8 +86,16 @@ class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     data_type: Optional[str] = None
     constraints: List[ColumnLevelConstraint] = field(default_factory=list)
     quote: Optional[bool] = None
+    config: ColumnConfig = field(default_factory=ColumnConfig)
     tags: List[str] = field(default_factory=list)
     _extra: Dict[str, Any] = field(default_factory=dict)
+    granularity: Optional[TimeGranularity] = None
+    doc_blocks: List[str] = field(default_factory=list)
+
+    def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None) -> dict:
+        dct = super().__post_serialize__(dct, context)
+        dct["doc_blocks"] = _backcompat_doc_blocks(dct["doc_blocks"])
+        return dct
 
 
 @dataclass
@@ -192,13 +222,21 @@ class ParsedResource(ParsedResourceMandatory):
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     created_at: float = field(default_factory=lambda: time.time())
     config_call_dict: Dict[str, Any] = field(default_factory=dict)
+    unrendered_config_call_dict: Dict[str, Any] = field(default_factory=dict)
     relation_name: Optional[str] = None
     raw_code: str = ""
+    doc_blocks: List[str] = field(default_factory=list)
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
         dct = super().__post_serialize__(dct, context)
+
         if context and context.get("artifact") and "config_call_dict" in dct:
             del dct["config_call_dict"]
+        if context and context.get("artifact") and "unrendered_config_call_dict" in dct:
+            del dct["unrendered_config_call_dict"]
+
+        dct["doc_blocks"] = _backcompat_doc_blocks(dct["doc_blocks"])
+
         return dct
 
 

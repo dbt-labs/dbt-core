@@ -5,7 +5,7 @@ import pytest
 
 from dbt.contracts.results import RunStatus, TestStatus
 from dbt.exceptions import DbtRuntimeError, TargetNotFoundError
-from dbt.tests.util import rm_file, run_dbt, write_file
+from dbt.tests.util import rm_file, run_dbt, update_config_file, write_file
 from tests.functional.retry.fixtures import (
     macros__alter_timezone_sql,
     models__sample_model,
@@ -52,7 +52,7 @@ class TestCustomTargetRetry:
         write_file(models__sample_model, "models", "sample_model.sql")
 
 
-class TestRetry:
+class BaseTestRetry:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -66,6 +66,8 @@ class TestRetry:
     def macros(self):
         return {"alter_timezone.sql": macros__alter_timezone_sql}
 
+
+class TestRetryNoPreviousRun(BaseTestRetry):
     def test_no_previous_run(self, project):
         with pytest.raises(
             DbtRuntimeError, match="Could not find previous run in 'target' target directory"
@@ -77,6 +79,8 @@ class TestRetry:
         ):
             run_dbt(["retry", "--state", "walmart"])
 
+
+class TestRetryPreviousRun(BaseTestRetry):
     def test_previous_run(self, project):
         # Regular build
         results = run_dbt(["build"], expect_pass=False)
@@ -126,6 +130,8 @@ class TestRetry:
 
         write_file(models__sample_model, "models", "sample_model.sql")
 
+
+class TestRetryWarnError(BaseTestRetry):
     def test_warn_error(self, project):
         # Our test command should succeed when run normally...
         results = run_dbt(["build", "--select", "second_model"])
@@ -146,6 +152,8 @@ class TestRetry:
         # Retry with --warn-error, should fail
         run_dbt(["--warn-error", "retry"], expect_pass=False)
 
+
+class TestRetryRunOperation(BaseTestRetry):
     def test_run_operation(self, project):
         results = run_dbt(
             ["run-operation", "alter_timezone", "--args", "{timezone: abc}"], expect_pass=False
@@ -160,6 +168,8 @@ class TestRetry:
         results = run_dbt(["retry"], expect_pass=False)
         assert {n.unique_id: n.status for n in results.results} == expected_statuses
 
+
+class TestRetryRemovedFile(BaseTestRetry):
     def test_removed_file(self, project):
         run_dbt(["build"], expect_pass=False)
 
@@ -172,6 +182,8 @@ class TestRetry:
 
         write_file(models__sample_model, "models", "sample_model.sql")
 
+
+class TestRetryRemovedFileLeafNode(BaseTestRetry):
     def test_removed_file_leaf_node(self, project):
         write_file(models__sample_model, "models", "third_model.sql")
         run_dbt(["build"], expect_pass=False)
@@ -365,3 +377,92 @@ class TestRetryTargetPathFlag:
         results = run_dbt(["retry", "--state", "artifacts", "--target-path", "my_target_path"])
         assert len(results) == 1
         assert Path("my_target_path").is_dir()
+
+
+class TestRetryHooksAlwaysRun:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "on-run-start": ["select 1;"],
+            "on-run-end": ["select 2;"],
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": models__sample_model,
+        }
+
+    def test_retry_hooks_always_run(self, project):
+        res = run_dbt(["run", "--target-path", "target"], expect_pass=False)
+        assert len(res) == 3
+
+        write_file(models__second_model, "models", "sample_model.sql")
+        res = run_dbt(["retry", "--state", "target"])
+        assert len(res) == 3
+
+
+class TestFixRetryHook:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "flags": {
+                "skip_nodes_if_on_run_start_fails": True,
+            },
+            "on-run-start": [
+                "select 1 as id",
+                "select column_does_not_exist",
+                "select 2 as id",
+            ],
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sample_model.sql": "select 1 as id, 1 as foo",
+            "second_model.sql": models__second_model,
+            "union_model.sql": models__union_model,
+        }
+
+    def test_fix_retry_hook(self, project):
+        res = run_dbt(["run"], expect_pass=False)
+        assert {r.node.unique_id: r.status for r in res.results} == {
+            "operation.test.test-on-run-start-0": RunStatus.Success,
+            "operation.test.test-on-run-start-1": RunStatus.Error,
+            "operation.test.test-on-run-start-2": RunStatus.Skipped,
+            "model.test.sample_model": RunStatus.Skipped,
+            "model.test.second_model": RunStatus.Skipped,
+            "model.test.union_model": RunStatus.Skipped,
+        }
+
+        res = run_dbt(["retry"], expect_pass=False)
+        assert {r.node.unique_id: r.status for r in res.results} == {
+            "operation.test.test-on-run-start-0": RunStatus.Success,
+            "operation.test.test-on-run-start-1": RunStatus.Error,
+            "operation.test.test-on-run-start-2": RunStatus.Skipped,
+            "model.test.sample_model": RunStatus.Skipped,
+            "model.test.second_model": RunStatus.Skipped,
+            "model.test.union_model": RunStatus.Skipped,
+        }
+
+        new_dbt_project_yml = {
+            "flags": {
+                "skip_nodes_if_on_run_start_fails": True,
+            },
+            "on-run-start": [
+                "select 1 as id",
+                "select 3 as id",
+                "select 2 as id",
+            ],
+        }
+
+        update_config_file(new_dbt_project_yml, project.project_root, "dbt_project.yml")
+        res = run_dbt(["retry"])
+        assert {r.node.unique_id: r.status for r in res.results} == {
+            "operation.test.test-on-run-start-0": RunStatus.Success,
+            "operation.test.test-on-run-start-1": RunStatus.Success,
+            "operation.test.test-on-run-start-2": RunStatus.Success,
+            "model.test.sample_model": RunStatus.Success,
+            "model.test.second_model": RunStatus.Success,
+            "model.test.union_model": RunStatus.Success,
+        }

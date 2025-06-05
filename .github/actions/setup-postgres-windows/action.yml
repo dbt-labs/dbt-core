@@ -5,8 +5,22 @@ runs:
   steps:
     - shell: pwsh
       run: |
-        $pgService = Get-Service -Name postgresql*
+        Write-Host -Object "Installing PostgreSQL 16 as windows service..."
+        $installerArgs = @("--install_runtimes 0", "--superpassword root", "--enable_acledit 1", "--unattendedmodeui none", "--mode unattended")
+        $filePath = Invoke-DownloadWithRetry -Url "https://get.enterprisedb.com/postgresql/postgresql-16.1-1-windows-x64.exe" -Path "$env:PGROOT/postgresql-16.1-1-windows-x64.exe"
+        Start-Process -FilePath $filePath -ArgumentList $installerArgs -Wait -PassThru
+
+        Write-Host -Object "Validating PostgreSQL 16 Install..."
+        Get-Service -Name postgresql*
+        $pgReady = Start-Process -FilePath "$env:PGBIN\pg_isready" -Wait -PassThru
+        $exitCode = $pgReady.ExitCode
+        if ($exitCode -ne 0) {
+            Write-Host -Object "PostgreSQL is not ready. Exitcode: $exitCode"
+            exit $exitCode
+        }
+
+        Write-Host -Object "Starting PostgreSQL 16 Service..."
+        $pgService = Get-Service -Name postgresql-x64-16
         Set-Service -InputObject $pgService -Status running -StartupType automatic
-        Start-Process -FilePath "$env:PGBIN\pg_isready" -Wait -PassThru
         $env:Path += ";$env:PGBIN"
         bash ${{ github.action_path }}/setup_db.sh

@@ -3,7 +3,7 @@ import unittest
 from argparse import Namespace
 from collections import namedtuple
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timezone
 from itertools import product
 from unittest import mock
 
@@ -26,7 +26,7 @@ from dbt.artifacts.resources import (
     WhereFilterIntersection,
 )
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
+from dbt.contracts.graph.manifest import DisabledLookup, Manifest, ManifestMetadata
 from dbt.contracts.graph.nodes import (
     DependsOn,
     Exposure,
@@ -37,7 +37,7 @@ from dbt.contracts.graph.nodes import (
     SeedNode,
     SourceDefinition,
 )
-from dbt.exceptions import AmbiguousResourceNameRefError
+from dbt.exceptions import AmbiguousResourceNameRefError, ParsingError
 from dbt.flags import set_from_args
 from dbt.node_types import NodeType
 from dbt_common.events.functions import reset_metadata_vars
@@ -82,8 +82,10 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "compiled_path",
         "patch_path",
         "docs",
+        "doc_blocks",
         "checksum",
         "unrendered_config",
+        "unrendered_config_call_dict",
         "created_at",
         "config_call_dict",
         "relation_name",
@@ -94,6 +96,9 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "constraints",
         "deprecation_date",
         "defer_relation",
+        "time_spine",
+        "batch",
+        "freshness",
     }
 )
 
@@ -372,12 +377,15 @@ class ManifestTest(unittest.TestCase):
             exposures={},
             metrics={},
             selectors={},
-            metadata=ManifestMetadata(generated_at=datetime.utcnow()),
+            metadata=ManifestMetadata(
+                generated_at=datetime.now(timezone.utc).replace(tzinfo=None)
+            ),
             semantic_models={},
             saved_queries={},
         )
 
         invocation_id = dbt_common.invocation._INVOCATION_ID
+        invocation_started_at = dbt_common.invocation._INVOCATION_STARTED_AT
         mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
         set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
         self.assertEqual(
@@ -399,8 +407,10 @@ class ManifestTest(unittest.TestCase):
                     "dbt_version": dbt.version.__version__,
                     "env": {ENV_KEY_NAME: "value"},
                     "invocation_id": invocation_id,
+                    "invocation_started_at": str(invocation_started_at).replace(" ", "T") + "Z",
                     "send_anonymous_usage_stats": False,
                     "user_id": "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
+                    "quoting": {},
                 },
                 "docs": {},
                 "disabled": {},
@@ -426,7 +436,9 @@ class ManifestTest(unittest.TestCase):
             exposures={},
             metrics={},
             selectors={},
-            metadata=ManifestMetadata(generated_at=datetime.utcnow()),
+            metadata=ManifestMetadata(
+                generated_at=datetime.now(timezone.utc).replace(tzinfo=None)
+            ),
         )
         serialized = manifest.writable_manifest().to_dict(omit_none=True)
         self.assertEqual(serialized["metadata"]["generated_at"], "2018-02-14T09:15:13Z")
@@ -526,11 +538,15 @@ class ManifestTest(unittest.TestCase):
     def test_no_nodes_with_metadata(self, mock_user):
         mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
         dbt_common.invocation._INVOCATION_ID = "01234567-0123-0123-0123-0123456789ab"
+        dbt_common.invocation._INVOCATION_STARTED_AT = datetime.now(timezone.utc).replace(
+            tzinfo=None
+        )
         set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
         metadata = ManifestMetadata(
             project_id="098f6bcd4621d373cade4e832627b4f6",
             adapter_type="postgres",
-            generated_at=datetime.utcnow(),
+            generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            invocation_started_at=dbt_common.invocation._INVOCATION_STARTED_AT,
             user_id="cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
             send_anonymous_usage_stats=False,
         )
@@ -548,6 +564,9 @@ class ManifestTest(unittest.TestCase):
             saved_queries={},
         )
 
+        invocation_started_at = (
+            str(dbt_common.invocation._INVOCATION_STARTED_AT).replace(" ", "T") + "Z"
+        )
         self.assertEqual(
             manifest.writable_manifest().to_dict(omit_none=True),
             {
@@ -571,7 +590,9 @@ class ManifestTest(unittest.TestCase):
                     "send_anonymous_usage_stats": False,
                     "adapter_type": "postgres",
                     "invocation_id": "01234567-0123-0123-0123-0123456789ab",
+                    "invocation_started_at": invocation_started_at,
                     "env": {ENV_KEY_NAME: "value"},
+                    "quoting": {},
                 },
                 "disabled": {},
                 "semantic_models": {},
@@ -879,8 +900,11 @@ class MixedManifestTest(unittest.TestCase):
     def test_no_nodes(self, mock_user):
         mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
         set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
+        invocation_started_at = datetime.now(timezone.utc).replace(tzinfo=None)
         metadata = ManifestMetadata(
-            generated_at=datetime.utcnow(), invocation_id="01234567-0123-0123-0123-0123456789ab"
+            generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            invocation_id="01234567-0123-0123-0123-0123456789ab",
+            invocation_started_at=invocation_started_at,
         )
         manifest = Manifest(
             nodes={},
@@ -913,9 +937,11 @@ class MixedManifestTest(unittest.TestCase):
                     "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json",
                     "dbt_version": dbt.version.__version__,
                     "invocation_id": "01234567-0123-0123-0123-0123456789ab",
+                    "invocation_started_at": str(invocation_started_at).replace(" ", "T") + "Z",
                     "env": {ENV_KEY_NAME: "value"},
                     "send_anonymous_usage_stats": False,
                     "user_id": "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
+                    "quoting": {},
                 },
                 "docs": {},
                 "disabled": {},
@@ -935,7 +961,9 @@ class MixedManifestTest(unittest.TestCase):
             docs={},
             disabled={},
             selectors={},
-            metadata=ManifestMetadata(generated_at=datetime.utcnow()),
+            metadata=ManifestMetadata(
+                generated_at=datetime.now(timezone.utc).replace(tzinfo=None)
+            ),
             files={},
             exposures={},
         )
@@ -1063,9 +1091,9 @@ class MixedManifestTest(unittest.TestCase):
 
 
 class TestManifestSearch(unittest.TestCase):
-    _macros = []
-    _nodes = []
-    _docs = []
+    _macros: list = []
+    _nodes: list = []
+    _docs: list = []
 
     @property
     def macros(self):
@@ -1962,3 +1990,176 @@ def test_resolve_doc(docs, package, expected):
         expected_package, expected_name = expected
         assert result.name == expected_name
         assert result.package_name == expected_package
+
+
+class TestManifestFindNodeFromRefOrSource:
+    @pytest.fixture
+    def mock_node(self):
+        return MockNode("my_package", "my_model")
+
+    @pytest.fixture
+    def mock_disabled_node(self):
+        return MockNode("my_package", "disabled_node", config={"enabled": False})
+
+    @pytest.fixture
+    def mock_source(self):
+        return MockSource("root", "my_source", "source_table")
+
+    @pytest.fixture
+    def mock_disabled_source(self):
+        return MockSource("root", "my_source", "disabled_source_table", config={"enabled": False})
+
+    @pytest.fixture
+    def mock_manifest(self, mock_node, mock_source, mock_disabled_node, mock_disabled_source):
+        return make_manifest(
+            nodes=[mock_node, mock_disabled_node], sources=[mock_source, mock_disabled_source]
+        )
+
+    @pytest.mark.parametrize(
+        "expression,expected_node",
+        [
+            ("ref('my_package', 'my_model')", "mock_node"),
+            ("ref('my_package', 'doesnt_exist')", None),
+            ("ref('my_package', 'disabled_node')", "mock_disabled_node"),
+            ("source('my_source', 'source_table')", "mock_source"),
+            ("source('my_source', 'doesnt_exist')", None),
+            ("source('my_source', 'disabled_source_table')", "mock_disabled_source"),
+        ],
+    )
+    def test_find_node_from_ref_or_source(self, expression, expected_node, mock_manifest, request):
+        node = mock_manifest.find_node_from_ref_or_source(expression)
+
+        if expected_node is None:
+            assert node is None
+        else:
+            assert node == request.getfixturevalue(expected_node)
+
+    @pytest.mark.parametrize("invalid_expression", ["invalid", "ref(')"])
+    def test_find_node_from_ref_or_source_invalid_expression(
+        self, invalid_expression, mock_manifest
+    ):
+        with pytest.raises(ParsingError):
+            mock_manifest.find_node_from_ref_or_source(invalid_expression)
+
+
+class TestDisabledLookup:
+    @pytest.fixture(scope="class")
+    def manifest(self):
+        return Manifest(
+            nodes={},
+            sources={},
+            macros={},
+            docs={},
+            disabled={},
+            files={},
+            exposures={},
+            selectors={},
+        )
+
+    @pytest.fixture(scope="class")
+    def mock_model(self):
+        return MockNode("package", "name", NodeType.Model)
+
+    @pytest.fixture(scope="class")
+    def mock_model_with_version(self):
+        return MockNode("package", "name", NodeType.Model, version=3)
+
+    @pytest.fixture(scope="class")
+    def mock_seed(self):
+        return MockNode("package", "name", NodeType.Seed)
+
+    def test_find(self, manifest, mock_model):
+        manifest.disabled = {"model.package.name": [mock_model]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package") == [mock_model]
+
+    def test_find_wrong_name(self, manifest, mock_model):
+        manifest.disabled = {"model.package.name": [mock_model]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("missing_name", "package") is None
+
+    def test_find_wrong_package(self, manifest, mock_model):
+        manifest.disabled = {"model.package.name": [mock_model]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "missing_package") is None
+
+    def test_find_wrong_version(self, manifest, mock_model):
+        manifest.disabled = {"model.package.name": [mock_model]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package", version=3) is None
+
+    def test_find_wrong_resource_types(self, manifest, mock_model):
+        manifest.disabled = {"model.package.name": [mock_model]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package", resource_types=[NodeType.Analysis]) is None
+
+    def test_find_no_package(self, manifest, mock_model):
+        manifest.disabled = {"model.package.name": [mock_model]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", None) == [mock_model]
+
+    def test_find_versioned_node(self, manifest, mock_model_with_version):
+        manifest.disabled = {"model.package.name": [mock_model_with_version]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package", version=3) == [mock_model_with_version]
+
+    def test_find_versioned_node_no_package(self, manifest, mock_model_with_version):
+        manifest.disabled = {"model.package.name": [mock_model_with_version]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", None, version=3) == [mock_model_with_version]
+
+    def test_find_versioned_node_no_version(self, manifest, mock_model_with_version):
+        manifest.disabled = {"model.package.name": [mock_model_with_version]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package") is None
+
+    def test_find_versioned_node_wrong_version(self, manifest, mock_model_with_version):
+        manifest.disabled = {"model.package.name": [mock_model_with_version]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package", version=2) is None
+
+    def test_find_versioned_node_wrong_name(self, manifest, mock_model_with_version):
+        manifest.disabled = {"model.package.name": [mock_model_with_version]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("wrong_name", "package", version=3) is None
+
+    def test_find_versioned_node_wrong_package(self, manifest, mock_model_with_version):
+        manifest.disabled = {"model.package.name": [mock_model_with_version]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "wrong_package", version=3) is None
+
+    def test_find_multiple_nodes(self, manifest, mock_model, mock_seed):
+        manifest.disabled = {"model.package.name": [mock_model, mock_seed]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package") == [mock_model, mock_seed]
+
+    def test_find_multiple_nodes_with_resource_types(self, manifest, mock_model, mock_seed):
+        manifest.disabled = {"model.package.name": [mock_model, mock_seed]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package", resource_types=[NodeType.Model]) == [mock_model]
+
+    def test_find_multiple_nodes_with_wrong_resource_types(self, manifest, mock_model, mock_seed):
+        manifest.disabled = {"model.package.name": [mock_model, mock_seed]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package", resource_types=[NodeType.Analysis]) is None
+
+    def test_find_multiple_nodes_with_resource_types_empty(self, manifest, mock_model, mock_seed):
+        manifest.disabled = {"model.package.name": [mock_model, mock_seed]}
+        lookup = DisabledLookup(manifest)
+
+        assert lookup.find("name", "package", resource_types=[]) is None

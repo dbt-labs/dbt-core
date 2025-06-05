@@ -21,6 +21,7 @@ from dbt.artifacts.resources import (
     SqlOperation,
     UnitTestDefinition,
 )
+from dbt.artifacts.resources.v1.components import Quoting
 from dbt.artifacts.schemas.base import (
     ArtifactMixin,
     BaseArtifactMetadata,
@@ -28,6 +29,7 @@ from dbt.artifacts.schemas.base import (
     schema_version,
 )
 from dbt.artifacts.schemas.upgrades import upgrade_manifest_json
+from dbt_common.exceptions import DbtInternalError
 
 NodeEdgeMap = Dict[str, List[str]]
 UniqueID = str
@@ -86,6 +88,10 @@ class ManifestMetadata(BaseArtifactMetadata):
     adapter_type: Optional[str] = field(
         default=None,
         metadata=dict(description="The type name of the adapter"),
+    )
+    quoting: Optional[Quoting] = field(
+        default_factory=Quoting,
+        metadata=dict(description="The quoting configuration for the project"),
     )
 
     @classmethod
@@ -180,3 +186,13 @@ class WritableManifest(ArtifactMixin):
         if manifest_schema_version < cls.dbt_schema_version.version:
             data = upgrade_manifest_json(data, manifest_schema_version)
         return cls.from_dict(data)
+
+    @classmethod
+    def validate(cls, _):
+        # When dbt try to load an artifact with additional optional fields
+        # that are not present in the schema, from_dict will work fine.
+        # As long as validate is not called, the schema will not be enforced.
+        # This is intentional, as it allows for safer schema upgrades.
+        raise DbtInternalError(
+            "The WritableManifest should never be validated directly to allow for schema upgrades."
+        )
