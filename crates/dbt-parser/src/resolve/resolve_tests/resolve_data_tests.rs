@@ -100,6 +100,12 @@ pub async fn resolve_data_tests(
         &root_project_configs.tests,
         &local_project_config,
         runtime_config.clone(),
+        &package
+            .dbt_project
+            .test_paths
+            .as_ref()
+            .unwrap_or(&vec![])
+            .clone(),
     )
     .await?;
     // make deterministic

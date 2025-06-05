@@ -85,10 +85,10 @@ pub fn resolve_sources(
         let schema = source.schema.clone().unwrap_or(source.name.clone());
 
         let global_config =
-            local_project_config.get_config_for_path(&mpe.relative_path, package_name);
+            local_project_config.get_config_for_path(&mpe.relative_path, package_name, &[]);
         let mut project_config = root_project_configs
             .sources
-            .get_config_for_path(&mpe.relative_path, package_name)
+            .get_config_for_path(&mpe.relative_path, package_name, &[])
             .clone();
         project_config.default_to(global_config);
 

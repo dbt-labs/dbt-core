@@ -136,6 +136,7 @@ pub async fn render_unresolved_sql_files_sequentially<
     root_project_config: &DbtProjectConfig,
     local_project_config: &DbtProjectConfig,
     runtime_config: Arc<DbtRuntimeConfig>,
+    resource_paths: &[String],
 ) -> FsResult<Vec<SqlFileRenderResult<T>>> {
     let mut model_sql_resources_map = Vec::new();
     let mut duplicate_errors = Vec::new();
@@ -169,7 +170,7 @@ pub async fn render_unresolved_sql_files_sequentially<
         }
 
         let project_config =
-            local_project_config.get_config_for_path(&dbt_asset.path, package_name);
+            local_project_config.get_config_for_path(&dbt_asset.path, package_name, resource_paths);
         let properties_config: DbtConfig = if let Some(model) = &maybe_model {
             if let Some(mut properties_config) = model.try_build_config().map_err(|e| *e)? {
                 properties_config.default_to(project_config);
@@ -233,7 +234,7 @@ pub async fn render_unresolved_sql_files_sequentially<
 
                 if root_project_name != package_name {
                     let root_config: DbtConfig = root_project_config
-                        .get_config_for_path(&dbt_asset.path, package_name)
+                        .get_config_for_path(&dbt_asset.path, package_name, resource_paths)
                         .clone();
                     sql_resources_cloned
                         .lock()
@@ -345,6 +346,7 @@ pub async fn render_unresolved_sql_files<
     root_project_config: &DbtProjectConfig,
     local_project_config: &DbtProjectConfig,
     runtime_config: Arc<DbtRuntimeConfig>,
+    resource_paths: &[String],
 ) -> FsResult<Vec<SqlFileRenderResult<T>>> {
     let mut model_sql_resources_map = Vec::new();
     let mut duplicate_errors = Vec::new();
@@ -369,6 +371,7 @@ pub async fn render_unresolved_sql_files<
             root_project_config,
             local_project_config,
             runtime_config,
+            resource_paths,
         )
         .await;
     }
@@ -408,6 +411,7 @@ pub async fn render_unresolved_sql_files<
         let base_ctx = base_ctx.clone();
         let local_project_config = local_project_config.clone();
         let runtime_config = runtime_config.clone();
+        let resource_paths = resource_paths.to_vec();
 
         let root_project_name = root_project_name.to_owned();
         // TODO: a potentially expensive clone. Arc this
@@ -444,8 +448,11 @@ pub async fn render_unresolved_sql_files<
                     continue;
                 }
 
-                let project_config =
-                    local_project_config.get_config_for_path(&dbt_asset.path, &package_name);
+                let project_config = local_project_config.get_config_for_path(
+                    &dbt_asset.path,
+                    &package_name,
+                    &resource_paths,
+                );
                 let properties_config: DbtConfig = if let Some(model) = &maybe_model {
                     if let Some(mut properties_config) = model.try_build_config().map_err(|e| *e)? {
                         properties_config.default_to(project_config);
@@ -511,7 +518,11 @@ pub async fn render_unresolved_sql_files<
 
                         if root_project_name != package_name {
                             let root_config: DbtConfig = root_project_config
-                                .get_config_for_path(&dbt_asset.path, &package_name)
+                                .get_config_for_path(
+                                    &dbt_asset.path,
+                                    &package_name,
+                                    &resource_paths,
+                                )
                                 .clone();
                             sql_resources_cloned
                                 .lock()

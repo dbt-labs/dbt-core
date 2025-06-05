@@ -1,0 +1,3 @@
+kind: Fixes
+body: resolve project configs relative to resource path
+time: 2025-06-04T18:53:22.635790717-07:00

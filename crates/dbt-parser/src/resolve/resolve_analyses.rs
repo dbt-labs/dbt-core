@@ -79,6 +79,12 @@ pub async fn resolve_analyses(
         &root_project_configs.models,
         &local_project_config,
         runtime_config.clone(),
+        &package
+            .dbt_project
+            .analysis_paths
+            .as_ref()
+            .unwrap_or(&vec![])
+            .clone(),
     )
     .await?;
     // make deterministic

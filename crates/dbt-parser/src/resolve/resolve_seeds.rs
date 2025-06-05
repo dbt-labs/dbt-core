@@ -100,7 +100,16 @@ pub fn resolve_seeds(
             (SeedProperties::empty(seed_name.to_owned()), None)
         };
 
-        let project_config = local_project_config.get_config_for_path(&path, package_name);
+        let project_config = local_project_config.get_config_for_path(
+            &path,
+            package_name,
+            &package
+                .dbt_project
+                .seed_paths
+                .as_ref()
+                .unwrap_or(&vec![])
+                .clone(),
+        );
         let mut properties_config = if let Some(properties) = &seed.config {
             let mut properties_config: DbtConfig = properties.try_into()?;
             properties_config.default_to(project_config);
@@ -137,7 +146,16 @@ pub fn resolve_seeds(
         if package_name != root_project.name {
             let mut root_config = root_project_configs
                 .seeds
-                .get_config_for_path(&path, package_name)
+                .get_config_for_path(
+                    &path,
+                    package_name,
+                    &package
+                        .dbt_project
+                        .seed_paths
+                        .as_ref()
+                        .unwrap_or(&vec!["seeds".to_string()])
+                        .clone(),
+                )
                 .clone();
             root_config.default_to(&properties_config);
             properties_config = root_config;

@@ -98,19 +98,19 @@ pub fn resolve_unit_tests(
             vec![unit_test.model.to_owned(), unit_test_name.to_owned()],
         );
 
-        let local_config =
-            local_project_config.get_config_for_path(&mpe.relative_path, package_name);
-        let mut root_config = root_project_configs
+        let global_config =
+            local_project_config.get_config_for_path(&mpe.relative_path, package_name, &[]);
+        let mut project_config = root_project_configs
             .unit_tests
-            .get_config_for_path(&mpe.relative_path, package_name)
+            .get_config_for_path(&mpe.relative_path, package_name, &[])
             .clone();
-        root_config.default_to(local_config);
+        project_config.default_to(global_config);
         let mut properties_config = if let Some(properties) = &unit_test.config {
             let mut properties_config: DbtConfig = properties.try_into()?;
-            properties_config.default_to(&root_config);
+            properties_config.default_to(&project_config);
             properties_config
         } else {
-            root_config
+            project_config
         };
 
         let enabled = properties_config.is_enabled();

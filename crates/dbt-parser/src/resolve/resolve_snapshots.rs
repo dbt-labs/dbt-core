@@ -149,6 +149,12 @@ pub async fn resolve_snapshots(
         &root_project_configs.snapshots,
         &local_project_config,
         runtime_config.clone(),
+        &package
+            .dbt_project
+            .snapshot_paths
+            .as_ref()
+            .unwrap_or(&vec![])
+            .clone(),
     )
     .await?;
 
