@@ -1,6 +1,6 @@
 use serde::{de, Deserialize, Deserializer};
 
-use std::{path::PathBuf, sync::atomic::AtomicBool};
+use std::path::PathBuf;
 
 use datafusion::sql::{ResolvedTableReference, TableReference};
 use itertools::Itertools as _;
@@ -16,23 +16,6 @@ pub use dbt_frontend_schemas::ident::{Ident, Identifier};
 
 /// Owned version of [Qualified].
 pub type QualifiedName = Qualified<'static>;
-
-static IS_FQN_CASE_SENSITIVE: AtomicBool = AtomicBool::new(false);
-
-/// Set the case sensitivity of fully qualified names. Applies globally.
-///
-/// Note: This must be called *at most once* per process, before any FQN objects
-/// are created!!
-pub fn set_fqn_case_sensitive(value: bool) {
-    IS_FQN_CASE_SENSITIVE.store(value, std::sync::atomic::Ordering::Relaxed);
-}
-
-/// Get the case sensitivity setting of fully qualified names for the current
-/// process.
-#[inline]
-pub fn is_fqn_case_sensitive() -> bool {
-    IS_FQN_CASE_SENSITIVE.load(std::sync::atomic::Ordering::Relaxed)
-}
 
 pub trait IdentJoin<Separator> {
     type Output;
@@ -405,23 +388,11 @@ pub struct FullyQualifiedName {
 
 impl Ord for FullyQualifiedName {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        if !is_fqn_case_sensitive() {
-            self.catalog.cmp(&other.catalog).then_with(|| {
-                self.schema
-                    .cmp(&other.schema)
-                    .then_with(|| self.table.cmp(&other.table))
-            })
-        } else {
-            self.catalog
-                .as_str()
-                .cmp(other.catalog.as_str())
-                .then_with(|| {
-                    self.schema
-                        .as_str()
-                        .cmp(other.schema.as_str())
-                        .then_with(|| self.table.as_str().cmp(other.table.as_str()))
-                })
-        }
+        self.catalog.cmp(&other.catalog).then_with(|| {
+            self.schema
+                .cmp(&other.schema)
+                .then_with(|| self.table.cmp(&other.table))
+        })
     }
 }
 
@@ -433,29 +404,15 @@ impl PartialOrd for FullyQualifiedName {
 
 impl PartialEq for FullyQualifiedName {
     fn eq(&self, other: &Self) -> bool {
-        if !is_fqn_case_sensitive() {
-            self.catalog == other.catalog
-                && self.schema == other.schema
-                && self.table == other.table
-        } else {
-            self.catalog.matches_exact(&other.catalog)
-                && self.schema.matches_exact(&other.schema)
-                && self.table.matches_exact(&other.table)
-        }
+        self.catalog == other.catalog && self.schema == other.schema && self.table == other.table
     }
 }
 
 impl std::hash::Hash for FullyQualifiedName {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        if !is_fqn_case_sensitive() {
-            self.catalog.hash(state);
-            self.schema.hash(state);
-            self.table.hash(state);
-        } else {
-            self.catalog.as_str().hash(state);
-            self.schema.as_str().hash(state);
-            self.table.as_str().hash(state);
-        }
+        self.catalog.hash(state);
+        self.schema.hash(state);
+        self.table.hash(state);
     }
 }
 
