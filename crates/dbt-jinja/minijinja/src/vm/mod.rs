@@ -1225,10 +1225,10 @@ impl<'env> Vm<'env> {
                 }
                 Instruction::MacroStart(line, col, index) => {
                     if let Some((path, span, _)) = state.ctx.file_stack.last() {
-                        let line = span.start_line + *line;
+                        let line = span.start_line + *line - 1;
                         let col = *col
                             + if span.start_line == 1 {
-                                span.start_col
+                                span.start_col - 1
                             } else {
                                 0
                             };
@@ -1249,10 +1249,10 @@ impl<'env> Vm<'env> {
                 }
                 Instruction::MacroStop(line, col, index) => {
                     if let Some((path, span, _)) = state.ctx.file_stack.last() {
-                        let line = span.start_line + *line;
+                        let line = span.start_line + *line - 1;
                         let col = *col
                             + if span.start_line == 1 {
-                                span.start_col
+                                span.start_col - 1
                             } else {
                                 0
                             };

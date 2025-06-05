@@ -1,0 +1,3 @@
+kind: Fixes
+body: Fix for go to definitions for jinja functions containing a 'return'
+time: 2025-06-05T14:38:53.776956+03:00
