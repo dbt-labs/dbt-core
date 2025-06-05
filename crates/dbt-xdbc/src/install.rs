@@ -8,6 +8,7 @@ use std::{env, io};
 use adbc_core::error::{Error, Status};
 use percent_encoding::AsciiSet;
 use sha2::{Digest, Sha256};
+use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
 
 use crate::checksums::SORTED_CDN_DRIVER_CHECKSUMS;
 use crate::{
@@ -371,10 +372,20 @@ pub fn download_zst_driver_file<P: AsRef<Path>>(
     );
 
     // Configure the HTTP agent
-    let http_config = ureq::Agent::config_builder()
-        .timeout_global(Some(DRIVER_DOWNLOAD_TIMEOUT))
-        .build();
-    let http_agent = ureq::Agent::new_with_config(http_config);
+    let http_agent = {
+        // Use Rustls as the TLS provider but on the OS for the root certificates.
+        //
+        // [1]: https://github.com/dbt-labs/dbt-fusion/issues/147
+        let tls_config = TlsConfig::builder()
+            .provider(TlsProvider::Rustls)
+            .root_certs(RootCerts::PlatformVerifier)
+            .build();
+        let http_config = ureq::Agent::config_builder()
+            .tls_config(tls_config)
+            .timeout_global(Some(DRIVER_DOWNLOAD_TIMEOUT))
+            .build();
+        ureq::Agent::new_with_config(http_config)
+    };
 
     let mut response = http_agent.get(url).call().map_err(InstallError::Http)?;
 
