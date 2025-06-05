@@ -127,6 +127,7 @@ class SemanticManifest:
     def _get_pydantic_semantic_manifest(self) -> PydanticSemanticManifest:
         pydantic_time_spines: List[PydanticTimeSpine] = []
         minimum_time_spine_granularity: Optional[TimeGranularity] = None
+        has_legacy_time_spine_with_config: bool = False
         for node in self.manifest.nodes.values():
             if not (isinstance(node, ModelNode) and node.time_spine):
                 continue
@@ -166,6 +167,8 @@ class SemanticManifest:
                 ],
             )
             pydantic_time_spines.append(pydantic_time_spine)
+            if pydantic_time_spine.node_relation.relation_name == LEGACY_TIME_SPINE_MODEL_NAME:
+                has_legacy_time_spine_with_config = True
             if (
                 not minimum_time_spine_granularity
                 or standard_granularity_column.granularity.to_int()
@@ -194,16 +197,17 @@ class SemanticManifest:
             )
 
         if self.manifest.semantic_models:
-            legacy_time_spine_model = self.manifest.ref_lookup.find(
-                LEGACY_TIME_SPINE_MODEL_NAME, None, None, self.manifest
-            )
-            if legacy_time_spine_model:
-                if (
-                    not minimum_time_spine_granularity
-                    or LEGACY_TIME_SPINE_GRANULARITY.to_int()
-                    < minimum_time_spine_granularity.to_int()
-                ):
-                    minimum_time_spine_granularity = LEGACY_TIME_SPINE_GRANULARITY
+            if not has_legacy_time_spine_with_config:
+                legacy_time_spine_model = self.manifest.ref_lookup.find(
+                    LEGACY_TIME_SPINE_MODEL_NAME, None, None, self.manifest
+                )
+                if legacy_time_spine_model:
+                    if (
+                        not minimum_time_spine_granularity
+                        or LEGACY_TIME_SPINE_GRANULARITY.to_int()
+                        < minimum_time_spine_granularity.to_int()
+                    ):
+                        minimum_time_spine_granularity = LEGACY_TIME_SPINE_GRANULARITY
 
             # If no time spines have been configured at DAY or smaller AND legacy time spine model does not exist, error.
             if (

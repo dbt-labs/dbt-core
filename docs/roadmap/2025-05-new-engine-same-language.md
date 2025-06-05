@@ -116,7 +116,7 @@ The first supported use case for external catalogs is around materializing dbt m
 select * from {{ source('my_catalog', 'my_iceberg_table') }}
 ```
 
-You can already hack this with the [experimental code](https://www.notion.so/Core-Roadmap-Post-5-28-1f8bb38ebda780ce8dd4ec19a7411fc7?pvs=21) today — but we see an opportunity to build it into dbt out-of-the-box, and to standardize the configurations for everyone interacting with Iceberg tables, for both use cases (sources and models) in their dbt projects.
+You can already hack this with the [experimental code](https://github.com/dbt-labs/dbt-labs-experimental-features/tree/main/read-external-iceberg) today — but we see an opportunity to build it into dbt out-of-the-box, and to standardize the configurations for everyone interacting with Iceberg tables, for both use cases (sources and models) in their dbt projects.
 
 ### **Model freshness checks**
 
@@ -137,7 +137,7 @@ models:
   - name: stg_orders
     config:
       freshness:
-	      # Fusion-powered state-aware orchestration: build this model after 4 hours, as long as it has new data
+        # Fusion-powered state-aware orchestration: build this model after 4 hours, as long as it has new data
         build_after: {count: 4, period: hour}
         
         # Future: check that model has successfully updated within expected SLA, warn/error owner otherwise

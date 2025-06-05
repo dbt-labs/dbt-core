@@ -21,6 +21,7 @@ sources:
     loader: custom
     freshness:
       warn_after: {count: 18, period: hour}
+      error_after: {count: 24, period: hour}
     config:
       freshness: # default freshness, takes precedence over top-level key above
         warn_after: {count: 12, period: hour}
@@ -502,4 +503,34 @@ sources:
         identifier: source
         loaded_at_query: "select {{current_timestamp()}}"
 
+"""
+
+freshness_with_explicit_null_in_table_schema_yml = """version: 2
+sources:
+  - name: test_source
+    schema: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}"
+    freshness:
+        warn_after:
+          count: 24
+          period: hour
+    quoting:
+      identifier: True
+    tables:
+      - name: source_a
+        loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
+        config:
+          freshness: null
+"""
+
+freshness_with_explicit_null_in_source_schema_yml = """version: 2
+sources:
+  - name: test_source
+    schema: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}"
+    config:
+      freshness: null
+    quoting:
+      identifier: True
+    tables:
+      - name: source_a
+        loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
 """
