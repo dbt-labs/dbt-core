@@ -25,33 +25,20 @@ use serde::Serialize;
 
 use super::run_config::RunConfig;
 
-/// Build a run context
+/// Build model-specific context (model, common_attr, alias, quoting, config, resource_type, sql_header)
 #[allow(clippy::too_many_arguments)]
-pub async fn build_run_node_context<T: Serialize, S: Serialize>(
+async fn extend_with_model_context<T: Serialize, S: Serialize>(
+    base_context: &mut BTreeMap<String, MinijinjaValue>,
     model: &T,
     common_attr: &CommonAttributes,
     alias: &str,
     quoting: ResolvedQuoting,
     config: &S,
     adapter_type: &str,
-    agate_table: Option<AgateTable>,
-    base_context: &BTreeMap<String, MinijinjaValue>,
     io_args: &IoArgs,
     resource_type: &str,
     sql_header: Option<MinijinjaValue>,
-) -> BTreeMap<String, MinijinjaValue> {
-    let mut context = base_context.clone();
-    let mut base_builtins = if let Some(builtins) = base_context.get("builtins") {
-        builtins
-            .as_object()
-            .unwrap()
-            .downcast_ref::<BTreeMap<String, MinijinjaValue>>()
-            .unwrap()
-            .clone()
-    } else {
-        BTreeMap::new()
-    };
-
+) {
     // Create a relation for 'this' using config values
     let this_relation = create_relation(
         adapter_type.to_string(),
@@ -64,16 +51,16 @@ pub async fn build_run_node_context<T: Serialize, S: Serialize>(
     .unwrap()
     .as_value();
 
-    context.insert("this".to_owned(), this_relation);
-    context.insert(
+    base_context.insert("this".to_owned(), this_relation);
+    base_context.insert(
         "database".to_owned(),
         MinijinjaValue::from(common_attr.database.clone()),
     );
-    context.insert(
+    base_context.insert(
         "schema".to_owned(),
         MinijinjaValue::from(common_attr.schema.clone()),
     );
-    context.insert(
+    base_context.insert(
         "identifier".to_owned(),
         MinijinjaValue::from(common_attr.name.clone()),
     );
@@ -100,7 +87,7 @@ pub async fn build_run_node_context<T: Serialize, S: Serialize>(
             .map(|hook| MinijinjaValue::from_object(hook.clone()))
             .collect::<Vec<MinijinjaValue>>()
             .into();
-        context.insert("pre_hooks".to_owned(), pre_hooks_vals);
+        base_context.insert("pre_hooks".to_owned(), pre_hooks_vals);
     }
     if let Some(post_hook) = config_json.get("post_hook") {
         let values: Vec<HookConfig> = match post_hook {
@@ -126,7 +113,7 @@ pub async fn build_run_node_context<T: Serialize, S: Serialize>(
             .map(|hook| MinijinjaValue::from_object(hook.clone()))
             .collect::<Vec<MinijinjaValue>>()
             .into();
-        context.insert("post_hooks".to_owned(), post_hooks_vals);
+        base_context.insert("post_hooks".to_owned(), post_hooks_vals);
     }
 
     let mut config_map = convert_json_to_map(config_json);
@@ -163,45 +150,63 @@ pub async fn build_run_node_context<T: Serialize, S: Serialize>(
         model: model_map.clone(),
     };
 
-    context.insert(
+    base_context.insert(
         "config".to_owned(),
-        MinijinjaValue::from_object(node_config.clone()),
-    );
-    base_builtins.insert(
-        "config".to_string(),
         MinijinjaValue::from_object(node_config),
     );
 
-    context.insert("model".to_owned(), MinijinjaValue::from_object(model_map));
+    base_context.insert("model".to_owned(), MinijinjaValue::from_object(model_map));
+}
 
-    // Register builtins as a global
-    context.insert(
-        "builtins".to_owned(),
-        MinijinjaValue::from_object(base_builtins),
-    );
-
+/// Extend the base context with stateful functions
+pub fn extend_base_context_stateful_fn(base_context: &mut BTreeMap<String, MinijinjaValue>) {
     let result_store = ResultStore::default();
-    context.insert(
+    base_context.insert(
         "store_result".to_owned(),
         MinijinjaValue::from_function(result_store.store_result()),
     );
-    context.insert(
+    base_context.insert(
         "load_result".to_owned(),
         MinijinjaValue::from_function(result_store.load_result()),
     );
-    context.insert(
+    base_context.insert(
         "store_raw_result".to_owned(),
         MinijinjaValue::from_function(result_store.store_raw_result()),
     );
+}
 
-    if let Some(agate_table) = agate_table {
-        context.insert(
-            "load_agate_table".to_owned(),
-            MinijinjaValue::from_function(move |_args: &[MinijinjaValue]| {
-                MinijinjaValue::from_object(agate_table.clone())
-            }),
-        );
-    }
+/// Build a run context - parent function that orchestrates the context building
+#[allow(clippy::too_many_arguments)]
+pub async fn build_run_node_context<T: Serialize, S: Serialize>(
+    model: &T,
+    common_attr: &CommonAttributes,
+    alias: &str,
+    quoting: ResolvedQuoting,
+    config: &S,
+    adapter_type: &str,
+    agate_table: Option<AgateTable>,
+    base_context: &BTreeMap<String, MinijinjaValue>,
+    io_args: &IoArgs,
+    resource_type: &str,
+    sql_header: Option<MinijinjaValue>,
+) -> BTreeMap<String, MinijinjaValue> {
+    // Build model-specific context
+    let mut context = base_context.clone();
+    extend_base_context_stateful_fn(&mut context);
+
+    extend_with_model_context(
+        &mut context,
+        model,
+        common_attr,
+        alias,
+        quoting,
+        config,
+        adapter_type,
+        io_args,
+        resource_type,
+        sql_header,
+    )
+    .await;
 
     let model_name = common_attr.name.clone();
     // Add write function
@@ -213,6 +218,46 @@ pub async fn build_run_node_context<T: Serialize, S: Serialize>(
             project_root: io_args.in_dir.clone(),
             target_path: io_args.out_dir.clone(),
         }),
+    );
+
+    if let Some(agate_table) = agate_table {
+        context.insert(
+            "load_agate_table".to_owned(),
+            MinijinjaValue::from_function(move |_args: &[MinijinjaValue]| {
+                MinijinjaValue::from_object(agate_table.clone())
+            }),
+        );
+    }
+
+    let mut base_builtins = if let Some(builtins) = context.get("builtins") {
+        builtins
+            .as_object()
+            .unwrap()
+            .downcast_ref::<BTreeMap<String, MinijinjaValue>>()
+            .unwrap()
+            .clone()
+    } else {
+        BTreeMap::new()
+    };
+
+    // Get the config from model context to pass to general context
+    let node_config = context
+        .get("config")
+        .unwrap()
+        .as_object()
+        .unwrap()
+        .downcast_ref::<RunConfig>()
+        .unwrap();
+
+    base_builtins.insert(
+        "config".to_string(),
+        MinijinjaValue::from_object(node_config.clone()),
+    );
+
+    // Register builtins as a global
+    context.insert(
+        "builtins".to_owned(),
+        MinijinjaValue::from_object(base_builtins),
     );
 
     context
