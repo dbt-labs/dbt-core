@@ -133,16 +133,6 @@ pub async fn build_run_node_context<T: Serialize, S: Serialize>(
     if let Some(sql_header) = sql_header {
         config_map.insert("sql_header".to_string(), sql_header);
     }
-    let node_config = RunConfig { config: config_map };
-
-    context.insert(
-        "config".to_owned(),
-        MinijinjaValue::from_object(node_config.clone()),
-    );
-    base_builtins.insert(
-        "config".to_string(),
-        MinijinjaValue::from_object(node_config),
-    );
 
     let mut model_map =
         convert_json_to_map(serde_json::to_value(model).expect("Failed to serialize object"));
@@ -167,6 +157,20 @@ pub async fn build_run_node_context<T: Serialize, S: Serialize>(
             );
         };
     }
+
+    let node_config = RunConfig {
+        model_config: config_map,
+        model: model_map.clone(),
+    };
+
+    context.insert(
+        "config".to_owned(),
+        MinijinjaValue::from_object(node_config.clone()),
+    );
+    base_builtins.insert(
+        "config".to_string(),
+        MinijinjaValue::from_object(node_config),
+    );
 
     context.insert("model".to_owned(), MinijinjaValue::from_object(model_map));
 

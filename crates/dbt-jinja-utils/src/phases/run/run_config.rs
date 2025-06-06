@@ -4,8 +4,10 @@ use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
 use dbt_common::serde_utils::convert_json_to_map;
 use minijinja::{
-    arg_utils::ArgParser, listener::RenderingEventListener, value::Object, Error as MinijinjaError,
-    ErrorKind as MinijinjaErrorKind, State, Value,
+    arg_utils::ArgParser,
+    listener::RenderingEventListener,
+    value::{Enumerator, Object},
+    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value,
 };
 use serde::Serialize;
 
@@ -15,24 +17,35 @@ pub struct ModelConfig {
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct ModelNode {
-    pub config: BTreeMap<String, Value>,
+    pub model: BTreeMap<String, Value>,
 }
 impl Object for ModelNode {
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
         if key.as_str().unwrap() == "config" {
             return Some(Value::from_serialize(ModelConfig {
-                config: self.config.clone(),
+                config: self.model.clone(),
             }));
         }
-        self.config.get(key.as_str().unwrap()).cloned()
+        self.model.get(key.as_str().unwrap()).cloned()
+    }
+
+    fn enumerate(self: &Arc<Self>) -> Enumerator {
+        let keys = self
+            .model
+            .keys()
+            .map(|k| Value::from(k.to_string()))
+            .collect::<Vec<_>>();
+        Enumerator::Iter(Box::new(keys.into_iter()))
     }
 }
 
 /// A struct that represents a runtime config object to be used during runtime
 #[derive(Debug, Clone)]
 pub struct RunConfig {
-    /// A map of config values to be used during runtime
-    pub config: BTreeMap<String, Value>,
+    /// The `config` entry from `model`
+    pub model_config: BTreeMap<String, Value>,
+    /// Model attributes/config values
+    pub model: BTreeMap<String, Value>,
 }
 
 impl Object for RunConfig {
@@ -40,10 +53,10 @@ impl Object for RunConfig {
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
         if key.as_str().unwrap() == "model" {
             return Some(Value::from_object(ModelNode {
-                config: convert_json_to_map(serde_json::to_value(self.config.clone()).unwrap()),
+                model: convert_json_to_map(serde_json::to_value(self.model.clone()).unwrap()),
             }));
         }
-        self.config.get(key.as_str().unwrap()).cloned()
+        self.model_config.get(key.as_str().unwrap()).cloned()
     }
 
     fn call_method(
@@ -63,7 +76,7 @@ impl Object for RunConfig {
                     .get_optional::<Value>("default")
                     .unwrap_or(Value::from(None::<Option<String>>));
 
-                match self.config.get(&name) {
+                match self.model_config.get(&name) {
                     Some(val) => {
                         if val.is_none() {
                             Ok(default)
@@ -88,7 +101,7 @@ impl Object for RunConfig {
             }
             "persist_relation_docs" => {
                 let default_value = Value::from(BTreeMap::<String, Value>::new());
-                let persist_docs = match self.config.get("persist_docs") {
+                let persist_docs = match self.model_config.get("persist_docs") {
                     Some(val) if !val.is_none() => val,
                     _ => &default_value,
                 };
@@ -108,7 +121,7 @@ impl Object for RunConfig {
             }
             "persist_column_docs" => {
                 let default_value = Value::from(BTreeMap::<String, Value>::new());
-                let persist_docs = match self.config.get("persist_docs") {
+                let persist_docs = match self.model_config.get("persist_docs") {
                     Some(val) if !val.is_none() => val,
                     _ => &default_value,
                 };
@@ -131,5 +144,14 @@ impl Object for RunConfig {
                 format!("Unknown method on parse: {}", name),
             )),
         }
+    }
+
+    fn enumerate(self: &Arc<Self>) -> Enumerator {
+        let keys = self
+            .model_config
+            .keys()
+            .map(|k| Value::from(k.to_string()))
+            .collect::<Vec<_>>();
+        Enumerator::Iter(Box::new(keys.into_iter()))
     }
 }
