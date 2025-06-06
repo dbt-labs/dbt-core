@@ -3,9 +3,6 @@ set -x
 
 brew install postgresql@16
 brew link postgresql@16 --force
-
-# Add the services tap and ensure PATH is updated
-brew tap homebrew/services
 export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"
 
 # Start PostgreSQL using the full command instead of brew services
