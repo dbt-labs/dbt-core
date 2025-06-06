@@ -20,10 +20,11 @@ use odbc_sys::CompletionType;
 
 #[cfg(feature = "odbc")]
 use crate::odbc::ManagedOdbcConnection;
+use crate::semaphore::Semaphore;
 use crate::statement::AdbcStatement;
 #[cfg(feature = "odbc")]
 use crate::statement::OdbcStatement;
-use crate::{Backend, Semaphore, Statement};
+use crate::{Backend, Statement};
 
 mod builder;
 pub use builder::*;

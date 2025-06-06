@@ -7,7 +7,8 @@ use arrow::compute::concat_batches;
 use arrow_schema::Schema;
 use core::result::Result;
 use dbt_common::constants::EXECUTING;
-use dbt_xdbc::{connection, database, driver, Connection, Database, QueryCtx, Semaphore};
+use dbt_xdbc::semaphore::Semaphore;
+use dbt_xdbc::{connection, database, driver, Connection, Database, QueryCtx};
 use log;
 use serde_json::json;
 use tracy_client::span;
@@ -77,10 +78,10 @@ impl ActualEngine {
         let threads = config
             .get_str("threads")
             .ok()
-            .and_then(|s| s.parse::<usize>().ok())
+            .and_then(|s| s.parse::<u32>().ok())
             .unwrap_or_default();
 
-        let permits = if threads > 0 { threads } else { usize::MAX };
+        let permits = if threads > 0 { threads } else { u32::MAX };
         Self {
             auth,
             config,

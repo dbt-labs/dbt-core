@@ -16,7 +16,7 @@ use arrow_schema::Schema;
 
 #[cfg(feature = "odbc")]
 use crate::odbc::ManagedOdbcStatement;
-use crate::{Backend, QueryCtx, Semaphore};
+use crate::{semaphore::Semaphore, Backend, QueryCtx};
 
 /// XDBC Statement.
 ///

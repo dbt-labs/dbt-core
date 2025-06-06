@@ -1,36 +1,116 @@
-use std::sync::{Condvar, Mutex};
+use std::fmt;
+use std::sync::atomic::{AtomicU32, Ordering};
 
-/// A semaphore implementation
-#[derive(Debug)]
-pub struct Semaphore {
-    permits: Mutex<usize>,
-    initial_permits: usize,
-    condvar: Condvar,
+/// General-case semaphore implementation.
+///
+/// Typical Dijkstra Semaphore algorithm over atomics, wait and notify functions.
+///
+/// The `atomic-wait` crate by Mara Bos is used as it provides the atomic wait and wake
+/// functionality that exists in C++20's `std::atomic<T>::wait` and `std::atomic<T>::notify_all`
+/// but is not yet available in stable Rust.
+struct AtomicSemaphoreBase {
+    /// The atomic counter representing the number of available permits.
+    ///
+    /// `u32` was chosen because that is the atomic that Linux uses for futexes,
+    /// and as such, the type chosen byt the `atomic-wait` crate.
+    a: AtomicU32,
 }
 
-impl Semaphore {
-    pub fn new(permits: usize) -> Self {
-        debug_assert!(permits > 0, "Semaphore must have at least one permit");
-        Self {
-            permits: Mutex::new(permits),
-            initial_permits: permits,
-            condvar: Condvar::new(),
-        }
+impl AtomicSemaphoreBase {
+    pub fn new(count: u32) -> Self {
+        let a = AtomicU32::new(count);
+        Self { a }
     }
 
-    pub fn acquire(&self) {
-        let mut permits = self.permits.lock().unwrap();
-
-        permits = self.condvar.wait_while(permits, |p| *p == 0).unwrap();
-        *permits -= 1;
+    #[inline]
+    pub fn release_impl(&self, update: u32) {
+        let old = self.a.fetch_add(update, Ordering::Release);
+        debug_assert!(
+            update <= u32::MAX - old,
+            "update is greater than the expected value"
+        );
+        if old == 0u32 {
+            atomic_wait::wake_all(&self.a);
+        }
     }
 
     pub fn release(&self) {
-        let mut permits = self.permits.lock().unwrap();
-        if *permits < self.initial_permits {
-            *permits += 1;
-            self.condvar.notify_one();
+        self.release_impl(1);
+    }
+
+    // Try to acquire a permit without blocking.
+    #[inline]
+    fn try_acquire_impl(&self, old: u32) -> bool {
+        old > 0
+            && self
+                .a
+                .compare_exchange_weak(old, old - 1, Ordering::Acquire, Ordering::Relaxed)
+                .is_ok()
+    }
+
+    pub fn acquire(&self) {
+        loop {
+            // wait until the value is not 0 anymore
+            atomic_wait::wait(&self.a, 0);
+            let old = self.a.load(Ordering::Relaxed);
+            if self.try_acquire_impl(old) {
+                break;
+            }
         }
+    }
+
+    pub fn try_acquire(&self) -> bool {
+        let old = self.a.load(Ordering::Acquire);
+        self.try_acquire_impl(old)
+    }
+}
+
+/// Counting semaphore implementation.
+pub struct Semaphore {
+    /// The maximum number of permits the semaphore can hold.
+    ///
+    /// NOTE: If release() gets called more than this number, it will not
+    /// panic, but will simply increase the count of available permits.
+    max: u32,
+    base: AtomicSemaphoreBase,
+}
+
+impl Semaphore {
+    pub fn new(count: u32) -> Self {
+        debug_assert!(count > 0, "Semaphore must allow for at least one permit");
+        Self {
+            max: count,
+            base: AtomicSemaphoreBase::new(count),
+        }
+    }
+
+    /// Get the number of available permits the semaphore started with.
+    pub fn max(&self) -> u32 {
+        self.max
+    }
+
+    /// Release a permit, incrementing the count of available permits.
+    pub fn release(&self) {
+        self.base.release();
+    }
+
+    /// Acquire a permit, blocking until one is available.
+    pub fn acquire(&self) {
+        self.base.acquire();
+    }
+
+    /// Try to acquire a permit without blocking.
+    pub fn try_acquire(&self) -> bool {
+        self.base.try_acquire()
+    }
+}
+
+impl fmt::Debug for Semaphore {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Semaphore")
+            .field("max", &self.max)
+            .field("available", &self.base.a.load(Ordering::Relaxed))
+            .finish()
     }
 }
 
@@ -45,21 +125,28 @@ mod tests {
     #[test]
     fn test_semaphore_basic_acquire_release() {
         let semaphore = Semaphore::new(2);
+        assert_eq!(semaphore.max(), 2);
 
         semaphore.acquire();
         semaphore.acquire();
 
         semaphore.release();
         semaphore.acquire();
+        assert!(!semaphore.try_acquire());
     }
 
     #[test]
     fn test_semaphore_release_more_than_initial() {
         let semaphore = Semaphore::new(1);
+        // releasing without acquiring first
+        semaphore.release();
 
-        semaphore.release();
-        semaphore.release();
-        assert_eq!(*semaphore.permits.lock().unwrap(), 1);
+        assert!(semaphore.try_acquire());
+        // The semaphore handles the case where more permits are released than
+        // initially available by expanding the count of available permits.
+        // Any other strategy would be too complicated and error-prone.
+        assert!(semaphore.try_acquire());
+        assert!(!semaphore.try_acquire());
     }
 
     #[test]

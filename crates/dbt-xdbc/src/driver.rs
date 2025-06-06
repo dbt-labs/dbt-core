@@ -6,8 +6,8 @@ use crate::database::AdbcDatabase;
 #[cfg(feature = "odbc")]
 use crate::database::OdbcDatabase;
 use crate::install;
+use crate::semaphore::Semaphore;
 use crate::Database;
-use crate::Semaphore;
 use adbc_core::{
     driver_manager::ManagedDriver as ManagedAdbcDriver,
     error::{Error, Result, Status},

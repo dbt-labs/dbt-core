@@ -7,7 +7,7 @@ use std::sync::Arc;
 #[cfg(feature = "odbc")]
 use super::OdbcDriver;
 use super::{AdbcDriver, FFIProtocol};
-use crate::{Backend, Driver, Semaphore};
+use crate::{semaphore::Semaphore, Backend, Driver};
 #[allow(unused_imports)]
 use adbc_core::{
     error::{Error, Result, Status},

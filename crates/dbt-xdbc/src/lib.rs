@@ -33,7 +33,6 @@ pub mod query_ctx;
 pub use query_ctx::QueryCtx;
 
 pub mod semaphore;
-pub use semaphore::Semaphore;
 
 #[cfg(feature = "odbc")]
 pub(crate) mod odbc;

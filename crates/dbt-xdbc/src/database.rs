@@ -30,7 +30,8 @@ use crate::connection::OdbcConnection;
 #[cfg(feature = "odbc")]
 use crate::odbc::OdbcEnv;
 use crate::{
-    connection::AdbcConnection, snowflake, str_from_sqlstate, Backend, Connection, Semaphore,
+    connection::AdbcConnection, semaphore::Semaphore, snowflake, str_from_sqlstate, Backend,
+    Connection,
 };
 
 mod builder;
