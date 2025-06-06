@@ -366,7 +366,7 @@ pub fn generate_component_name(
         find_generate_macro_template(env, component, root_project_name, current_project_name)?;
 
     // Optimization: If the template starts with "default__", use the native Rust implementation
-    if template_name.contains(&format!("dbt.generate_{}_name", component)) {
+    if template_name == format!("dbt.generate_{}_name", component) {
         // technically this would call adapter.dispatch and the user could overwrite the default
         // but this isn't a a behavior we should support cause the user can already overrride without the default prefix
         // Determine which default implementation to use based on component type

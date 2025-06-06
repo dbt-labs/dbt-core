@@ -61,7 +61,7 @@ pub fn resolve_seeds(
     for seed_file in package.seed_files.iter() {
         // Validate that path extension is one of csv, parquet, or json
         let path = seed_file.path.clone();
-        let path_extension = path.extension().unwrap_or_default();
+        let path_extension = path.extension().unwrap_or_default().to_ascii_lowercase();
         if path_extension != "csv" && path_extension != "parquet" && path_extension != "json" {
             continue;
         }

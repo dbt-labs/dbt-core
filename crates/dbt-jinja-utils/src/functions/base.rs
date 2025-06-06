@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use dbt_schemas::schemas::manifest::{DbtNode, Nodes};
+use dbt_schemas::schemas::manifest::{DbtNode, InternalDbtNode, Nodes};
 use minijinja::{
     listener::DefaultRenderingEventListener,
     value::{mutable_map::MutableMap, ValueMap},
@@ -1007,9 +1007,21 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
         }))
         .collect();
     graph.insert(Value::from("nodes"), Value::from_serialize(nodes_insert));
+
+    let sources_insert: BTreeMap<String, Value> = nodes
+        .sources
+        .iter()
+        .map(|(unique_id, source)| {
+            (
+                unique_id.clone(),
+                Value::from_serialize((Arc::as_ref(source) as &dyn InternalDbtNode).serialize()),
+            )
+        })
+        .collect();
+
     graph.insert(
         Value::from("sources"),
-        Value::from_serialize(nodes.sources.clone()),
+        Value::from_serialize(sources_insert),
     );
     graph.insert(
         Value::from("exposures"),

@@ -467,7 +467,7 @@ fn find_files_by_kind_and_extension(
         .filter_map(|(path, _)| {
             path.extension()
                 .and_then(OsStr::to_str)
-                .filter(|ext| extensions.contains(ext))
+                .filter(|ext| extensions.contains(&ext.to_lowercase().as_str()))
                 .filter(|_| !should_exclude_path(path_kind, path))
                 .map(|_| DbtAsset {
                     package_name: project_name.to_string(),
