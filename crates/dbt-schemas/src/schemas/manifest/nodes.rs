@@ -1266,6 +1266,7 @@ fn default_false() -> bool {
 }
 
 /// refer to https://docs.getdbt.com/reference/resource-configs/{field} for documentation
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct ManifestModelConfig {
     pub enabled: Option<bool>,

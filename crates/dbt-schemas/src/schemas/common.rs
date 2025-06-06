@@ -391,6 +391,7 @@ impl TryFrom<String> for HardDeletes {
     }
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct DatabricksModelConfig {
     pub file_format: Option<String>,
@@ -408,6 +409,7 @@ pub struct DatabricksModelConfig {
     pub databricks_compute: Option<String>,
 }
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct SnowflakeModelConfig {
     pub external_volume: Option<String>,

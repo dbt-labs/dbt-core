@@ -7,10 +7,12 @@ use minijinja::{
 };
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
 use serde::{Deserialize, Serialize};
+use serde_with::skip_serializing_none;
 use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
 use crate::schemas::columns::base::StdColumn;
 
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct BigQueryModelConfig {
     pub partition_by: Option<BigqueryPartitionConfigLegacy>,
