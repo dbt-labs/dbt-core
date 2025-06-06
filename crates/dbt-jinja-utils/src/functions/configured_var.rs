@@ -91,7 +91,10 @@ impl Object for ConfiguredVar {
         } else if state.lookup("this").is_none() {
             Err(Error::new(
                 ErrorKind::InvalidOperation,
-                format!("Var should be initialized for package: {}", package_name),
+                format!(
+                    "Missing context variable 'this'. Var should be initialized for package: {}",
+                    package_name
+                ),
             ))
         // if the var isn't found, if parse, return none, if compile, return error
         } else if let Some(execute) = state.lookup("execute").map(|v| v.is_true()) {

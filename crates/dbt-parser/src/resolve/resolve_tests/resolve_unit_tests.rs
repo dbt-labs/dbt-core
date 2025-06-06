@@ -11,6 +11,7 @@ use dbt_common::CodeLocation;
 use dbt_common::ErrorCode;
 use dbt_common::FsResult;
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
+use dbt_jinja_utils::phases::parse::build_resolve_model_context;
 use dbt_jinja_utils::phases::parse::render_extract_ref_or_source_expr;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
@@ -30,11 +31,14 @@ use dbt_schemas::schemas::properties::UnitTestProperties;
 use dbt_schemas::schemas::ref_and_source::DbtRef;
 use dbt_schemas::schemas::ref_and_source::DbtSourceWrapper;
 use dbt_schemas::state::DbtPackage;
+use dbt_schemas::state::DbtRuntimeConfig;
 use dbt_schemas::state::ResourcePathKind;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn resolve_unit_tests(
@@ -50,6 +54,7 @@ pub fn resolve_unit_tests(
     jinja_env: &JinjaEnvironment<'static>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     model_properties: &BTreeMap<String, MinimalPropertiesEntry>,
+    runtime_config: Arc<DbtRuntimeConfig>,
 ) -> FsResult<(
     BTreeMap<String, Arc<DbtUnitTest>>,
     BTreeMap<String, Arc<DbtUnitTest>>,
@@ -143,8 +148,28 @@ pub fn resolve_unit_tests(
             for g in given_group.iter() {
                 let input = &g.input;
                 if input.contains("ref") || input.contains("source") {
-                    let sql_resource =
-                        render_extract_ref_or_source_expr(jinja_env, adapter_type, input)?;
+                    let sql_resources: Arc<Mutex<Vec<SqlResource>>> =
+                        Arc::new(Mutex::new(Vec::new()));
+                    let mut resolve_model_context = base_ctx.clone();
+                    resolve_model_context.extend(build_resolve_model_context(
+                        &properties_config,
+                        adapter_type,
+                        &database,
+                        &schema,
+                        &unit_test_name,
+                        fqn.clone(),
+                        package_name,
+                        package_quoting,
+                        runtime_config.clone(),
+                        sql_resources.clone(),
+                        Arc::new(AtomicBool::new(false)),
+                    ));
+                    let sql_resource = render_extract_ref_or_source_expr(
+                        jinja_env,
+                        &resolve_model_context,
+                        sql_resources.clone(),
+                        input,
+                    )?;
                     match sql_resource {
                         SqlResource::Ref(ref_info) => {
                             dependent_refs.push(DbtRef {

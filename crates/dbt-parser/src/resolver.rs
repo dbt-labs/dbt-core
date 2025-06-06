@@ -389,7 +389,7 @@ pub async fn resolve_inner(
         adapter_type,
         jinja_env,
         &base_ctx,
-        runtime_config,
+        runtime_config.clone(),
         &collected_tests,
     )
     .await?;
@@ -409,6 +409,7 @@ pub async fn resolve_inner(
         jinja_env,
         &base_ctx,
         &min_properties.models,
+        runtime_config,
     )?;
     nodes.unit_tests.extend(unit_tests);
     disabled_nodes.unit_tests.extend(disabled_unit_tests);

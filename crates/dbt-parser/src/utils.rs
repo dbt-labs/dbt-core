@@ -210,7 +210,6 @@ pub fn generate_relation_components(
         node.common().schema.clone(),
         node.base().alias,
     );
-
     // Generate database name
     let database = if is_snapshot && config.database.is_some() {
         config.database.clone().unwrap()
@@ -269,8 +268,11 @@ pub fn generate_relation_components(
         .as_ref()
         .is_some_and(|m| matches!(m, DbtMaterialization::Ephemeral))
     {
+        let parse_adapter = env
+            .get_parse_adapter()
+            .expect("Failed to get parse adapter");
         generate_relation_name(
-            env,
+            parse_adapter,
             database.as_str(),
             schema.as_str(),
             alias.as_str(),

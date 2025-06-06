@@ -2,7 +2,7 @@ use dbt_common::stdfs;
 use dbt_common::{constants::DBT_CTE_PREFIX, error::MacroSpan, tokiofs, FsResult};
 use dbt_frontend_common::{error::CodeLocation, span::Span};
 use dbt_fusion_adapter::adapters::relation_object::create_relation;
-use dbt_fusion_adapter::adapters::AdapterTyping;
+use dbt_fusion_adapter::adapters::{AdapterTyping, ParseAdapter};
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::manifest::{
     DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, InternalDbtNode,
@@ -13,7 +13,7 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
@@ -568,16 +568,13 @@ pub fn find_generate_macro_template(
 
 /// Generate a relation name from database, schema, alias
 pub fn generate_relation_name(
-    env: &JinjaEnvironment,
+    parse_adapter: Arc<ParseAdapter>,
     database: &str,
     schema: &str,
     identifier: &str,
     quote_config: ResolvedQuoting,
 ) -> Result<String, Error> {
-    let adapter = env
-        .get_parse_adapter()
-        .expect("Failed to get parse adapter");
-    let adapter_type = adapter.adapter_type().to_string();
+    let adapter_type = parse_adapter.adapter_type().to_string();
     // Create relation using the adapter
     match create_relation(
         adapter_type,

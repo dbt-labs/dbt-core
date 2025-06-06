@@ -21,7 +21,6 @@ use dbt_schemas::{
         manifest::{
             CommonAttributes, DbtConfig, DbtModel, ManifestModelConfig, NodeBaseAttributes,
         },
-        relations::DEFAULT_DBT_QUOTING,
     },
     state::DbtRuntimeConfig,
 };
@@ -602,34 +601,15 @@ impl Object for ParseConfig {
 /// Render a reference or source string and return the corresponding SqlResource
 pub fn render_extract_ref_or_source_expr(
     jinja_env: &JinjaEnvironment<'static>,
-    adapter_type: &str,
+    resolve_model_context: &BTreeMap<String, MinijinjaValue>,
+    sql_resources: Arc<Mutex<Vec<SqlResource>>>,
     ref_str: &str,
 ) -> FsResult<SqlResource> {
-    let sql_resources = Arc::new(Mutex::new(Vec::new()));
-    let runtime_config = Arc::new(DbtRuntimeConfig::default());
-    let ref_function = ResolveRefFunction {
-        database: "".to_string(),
-        schema: "".to_string(),
-        adapter_type: adapter_type.to_string(),
-        sql_resources: sql_resources.clone(),
-        runtime_config,
-        package_quoting: DEFAULT_DBT_QUOTING,
-    };
-
-    let source_function = ResolveSourceFunction {
-        database: "".to_string(),
-        schema: "".to_string(),
-        adapter_type: adapter_type.to_string(),
-        sql_resources: sql_resources.clone(),
-        package_quoting: DEFAULT_DBT_QUOTING,
-    };
-    let ref_value = MinijinjaValue::from_object(ref_function);
-    let source_value = MinijinjaValue::from_object(source_function);
-    let mut ctx = BTreeMap::new();
-    ctx.insert("ref".to_string(), ref_value);
-    ctx.insert("source".to_string(), source_value);
     let expr = jinja_env.compile_expression(ref_str)?;
-    let _ = expr.eval(&ctx, Rc::new(DefaultRenderingEventListener))?;
+    let _ = expr.eval(
+        resolve_model_context,
+        Rc::new(DefaultRenderingEventListener),
+    )?;
     // Remove from Mutex and return last item
     let mut sql_resources = sql_resources.lock().unwrap();
     let sql_resource = sql_resources.pop().unwrap();

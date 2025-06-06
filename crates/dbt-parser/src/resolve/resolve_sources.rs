@@ -157,8 +157,12 @@ pub fn resolve_sources(
             &table.identifier.clone().unwrap_or(table_name.to_owned()),
         );
 
+        let parse_adapter = jinja_env
+            .get_parse_adapter()
+            .expect("Failed to get parse adapter");
+
         let relation_name =
-            generate_relation_name(jinja_env, &database, &schema, &identifier, quoting)?;
+            generate_relation_name(parse_adapter, &database, &schema, &identifier, quoting)?;
 
         let source_tags: Option<Vec<String>> = source_properties_config.tags.clone();
         let table_tags: Option<Vec<String>> = table_config.tags.clone().map(|tags| tags.into());
