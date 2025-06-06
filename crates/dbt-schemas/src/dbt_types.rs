@@ -23,6 +23,8 @@ pub enum RelationType {
     PointerTable,
     /// An enum for a dynamic table (snowflake only)
     DynamicTable,
+    /// An enum for a delta table type that supports streaming or incremental data processing (databricks only)
+    StreamingTable,
 }
 
 impl RelationType {
@@ -52,6 +54,7 @@ impl fmt::Display for RelationType {
             RelationType::Ephemeral => "ephemeral",
             RelationType::PointerTable => "pointer_table",
             RelationType::DynamicTable => "dynamic_table",
+            RelationType::StreamingTable => "streaming_table",
         };
         write!(f, "{}", s)
     }
@@ -67,6 +70,7 @@ impl From<&str> for RelationType {
             "ephemeral" => RelationType::Ephemeral,
             "external" => RelationType::External,
             "dynamic_table" => RelationType::DynamicTable,
+            "streaming_table" => RelationType::StreamingTable,
             _ => panic!("Invalid relation type: {}", s),
         }
     }

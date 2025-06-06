@@ -96,6 +96,8 @@ pub enum DbtMaterialization {
     Test,
     Ephemeral,
     Unit,
+    /// only for databricks
+    StreamingTable,
     #[serde(untagged)]
     Unknown(String),
 }
@@ -113,6 +115,7 @@ impl std::fmt::Display for DbtMaterialization {
             DbtMaterialization::Test => "test",
             DbtMaterialization::Ephemeral => "ephemeral",
             DbtMaterialization::Unit => "unit",
+            DbtMaterialization::StreamingTable => "streaming_table",
             DbtMaterialization::Unknown(s) => s.as_str(),
         };
         write!(f, "{}", materialized_str)
@@ -133,6 +136,7 @@ impl From<DbtMaterialization> for RelationType {
             DbtMaterialization::Incremental => RelationType::External, // TODO Validate this
             DbtMaterialization::Snapshot => RelationType::External, // TODO Validate this
             DbtMaterialization::Unit => RelationType::External, // TODO Validate this
+            DbtMaterialization::StreamingTable => RelationType::StreamingTable,
             DbtMaterialization::Unknown(_) => RelationType::External, // TODO Validate this
         }
     }

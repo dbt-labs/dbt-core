@@ -21,7 +21,6 @@ pub mod schemas {
     pub mod serde;
     mod sources;
     pub use prev_state::{ModificationType, PreviousState};
-
     pub use run_results::{
         RunResult, RunResultsArgs, RunResultsArtifact, RunResultsMetadata, TimingInfo,
     };

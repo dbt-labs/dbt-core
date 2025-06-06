@@ -26,8 +26,7 @@ use dbt_schemas::schemas::manifest::{
 };
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_xdbc::{Connection, QueryCtx};
-use minijinja::value::Kwargs;
-use minijinja::{State, Value};
+use minijinja::{args, State, Value};
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -306,15 +305,15 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                     let new_type = string_type(col_string_size);
 
                     // Create args for macro execution
-                    let kwargs = Kwargs::from_iter([
-                        (
-                            "relation",
-                            RelationObject::new(to_relation_cloned).as_value(),
+                    execute_macro(
+                        state,
+                        args!(
+                            relation => RelationObject::new(to_relation_cloned).as_value(),
+                            column_name => column_name,
+                            new_column_type => Value::from(new_type),
                         ),
-                        ("column_name", column_name),
-                        ("new_column_type", Value::from(new_type)),
-                    ]);
-                    execute_macro(state, &[Value::from(kwargs)], "alter_column_type")?;
+                        "alter_column_type",
+                    )?;
                 }
             }
         }
@@ -505,13 +504,12 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         state: &State,
         sources: Vec<Value>,
     ) -> AdapterResult<Value> {
-        let kwargs = Kwargs::from_iter([
-            ("information_schema", Value::from("INFORMATION_SCHEMA")),
-            ("relations", Value::from_object(sources)),
-        ]);
+        let kwargs = args!(
+            information_schema => Value::from("INFORMATION_SCHEMA"),
+            relations => Value::from_object(sources),
+        );
 
-        let result: Value =
-            execute_macro(state, &[Value::from(kwargs)], "get_relation_last_modified")?;
+        let result: Value = execute_macro(state, kwargs, "get_relation_last_modified")?;
         let result = result.downcast_object::<ResultObject>().unwrap();
 
         let table = result.table.as_ref().expect("AgateTable exists");
@@ -651,12 +649,16 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     }
 
     /// get_relation_config
-    fn get_relation_config(&self, _relation: Arc<dyn BaseRelation>) -> AdapterResult<Value> {
+    fn get_relation_config(
+        &self,
+        _state: &State,
+        _relation: Arc<dyn BaseRelation>,
+    ) -> AdapterResult<Value> {
         unimplemented!("only available with Databricks adapter")
     }
 
     /// get_config_from_model
-    fn get_config_from_model(&self, _model: Value) -> AdapterResult<Value> {
+    fn get_config_from_model(&self, _model: &DbtModel) -> AdapterResult<Value> {
         unimplemented!("only available with Databricks adapter")
     }
 

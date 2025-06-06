@@ -1326,15 +1326,15 @@ impl BaseAdapter for BridgeAdapter {
         unimplemented!("get_persist_doc_columns")
     }
 
-    #[tracing::instrument(skip(self, _state, args))]
-    fn get_relation_config(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
+    #[tracing::instrument(skip(self, state, args))]
+    fn get_relation_config(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 1, 1)?;
 
         let relation = parser.get::<Value>("relation")?;
         let relation = downcast_value_to_dyn_base_relation(relation)?;
 
-        Ok(self.typed_adapter.get_relation_config(relation)?)
+        Ok(self.typed_adapter.get_relation_config(state, relation)?)
     }
 
     #[tracing::instrument(skip(self, _state, args))]
@@ -1347,7 +1347,13 @@ impl BaseAdapter for BridgeAdapter {
         check_num_args(current_function_name!(), &parser, 1, 1)?;
 
         let model = parser.get::<Value>("model")?;
-        Ok(self.typed_adapter.get_config_from_model(model)?)
+        let model = DbtModel::deserialize(model).map_err(|e| {
+            MinijinjaError::new(
+                MinijinjaErrorKind::SerdeDeserializeError,
+                format!("adapter.get_config_from_model expected a DbtModel: {}", e),
+            )
+        })?;
+        Ok(self.typed_adapter.get_config_from_model(&model)?)
     }
 
     #[tracing::instrument(skip(self, _state, _args))]

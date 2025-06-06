@@ -30,12 +30,13 @@ impl Object for ModelNode {
     }
 
     fn enumerate(self: &Arc<Self>) -> Enumerator {
-        let keys = self
-            .model
-            .keys()
-            .map(|k| Value::from(k.to_string()))
-            .collect::<Vec<_>>();
-        Enumerator::Iter(Box::new(keys.into_iter()))
+        Enumerator::Iter(Box::new(
+            self.model
+                .keys()
+                .map(Value::from)
+                .collect::<Vec<_>>()
+                .into_iter(),
+        ))
     }
 }
 
