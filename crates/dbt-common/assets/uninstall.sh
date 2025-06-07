@@ -29,6 +29,7 @@ help() {
     echo ""
     echo "Options:"
     echo "  --installLocation, -i     Install location of dbt"
+    echo "  --package PACKAGE         Uninstall package PACKAGE [dbt|dbt-lsp|all]"
     echo "  --help, -h                Show this help text"
 }
 
@@ -43,29 +44,46 @@ while test $# -gt 0; do
         installLocation=$2
         shift
         ;;
+    --package | -p)
+        package=$2
+        shift
+        ;;
     *) ;;
 
     esac
     shift
 done
 
+package="${package:-dbt}"
+
 if [ -z "${installLocation:-}" ]; then
-    installLocation="$HOME/.local/bin/dbt"
+    dbtInstallLocation="$HOME/.local/bin/dbt"
+    lspInstallLocation="$HOME/.local/bin/dbt-lsp"
 else
-    case "$installLocation" in
-        *"/dbt") ;;
-        *) installLocation="$installLocation/dbt" ;;
-    esac
+    dbtInstallLocation="$installLocation/dbt"
+    lspInstallLocation="$installLocation/dbt-lsp"
 fi
 
 operating_system=$(uname -s | tr '[:upper:]' '[:lower:]')
 
 if [ "$operating_system" = "linux" ]; then
-    rm -rf $installLocation
-    log "Uninstalled dbt from $installLocation"
+    if [ "$package" = "all" ] || [ "$package" = "dbt" ]; then
+        rm -rf $dbtInstallLocation
+        log "Uninstalled dbt from $dbtInstallLocation"
+    fi
+    if [ "$package" = "all" ] || [ "$package" = "dbt-lsp" ]; then
+        rm -rf $lspInstallLocation
+        log "Uninstalled dbt-lsp from $lspInstallLocation"
+    fi
 elif [ "$operating_system" = "darwin" ]; then
-    rm -rf $installLocation
-    log "Uninstalled dbt from $installLocation"
+    if [ "$package" = "all" ] || [ "$package" = "dbt" ]; then
+        rm -rf $dbtInstallLocation
+        log "Uninstalled dbt from $dbtInstallLocation"
+    fi
+    if [ "$package" = "all" ] || [ "$package" = "dbt-lsp" ]; then
+        rm -rf $lspInstallLocation
+        log "Uninstalled dbt-lsp from $lspInstallLocation"
+    fi
 else
     err "Unsupported OS: $operating_system"
 fi
