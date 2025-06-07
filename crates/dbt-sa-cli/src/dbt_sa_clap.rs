@@ -4,8 +4,7 @@ use dbt_common::logging::LogFormat;
 use dbt_serde_yaml::Value;
 use log::LevelFilter;
 use serde::{Deserialize, Serialize};
-use std::io::Write;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::LazyLock;
 use std::{
     collections::{BTreeMap, HashSet},
     path::{Path, PathBuf},
@@ -387,8 +386,6 @@ impl InitArgs {
                 out_dir: out_dir.to_path_buf(),
                 show,
                 invocation_id: arg.io.invocation_id,
-                stderr: arg.io.stderr,
-                stdout: arg.io.stdout,
                 status_reporter: arg.io.status_reporter.clone(),
                 should_cancel_compilation: arg.io.should_cancel_compilation.clone(),
                 log_format: self.common_args.log_format,
@@ -467,8 +464,6 @@ impl CommonArgs {
             command: arg.command.clone(),
             io: IoArgs {
                 show,
-                stdout: arg.io.stdout.clone(),
-                stderr: arg.io.stderr.clone(),
                 invocation_id: arg.io.invocation_id,
                 in_dir: in_dir.to_path_buf(),
                 out_dir: out_dir.to_path_buf(),
@@ -530,8 +525,6 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
     SystemArgs {
         command: cli.get_command_str().to_string(),
         io: IoArgs {
-            stderr: None,
-            stdout: None,
             invocation_id: uuid::Uuid::new_v4(),
             show: cli.common_args().show.iter().cloned().collect(),
             in_dir: PathBuf::new(),
@@ -559,16 +552,10 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
     }
 }
 
-pub fn from_lib(
-    cli: &Cli,
-    stdout: Option<Arc<Mutex<Box<dyn Write + Send>>>>,
-    stderr: Option<Arc<Mutex<Box<dyn Write + Send>>>>,
-) -> SystemArgs {
+pub fn from_lib(cli: &Cli) -> SystemArgs {
     SystemArgs {
         command: cli.get_command_str().to_string(),
         io: IoArgs {
-            stderr,
-            stdout,
             invocation_id: uuid::Uuid::new_v4(),
             show: cli.common_args().show.iter().cloned().collect(),
             in_dir: PathBuf::new(),

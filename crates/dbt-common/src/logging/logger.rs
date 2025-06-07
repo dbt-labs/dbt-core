@@ -8,9 +8,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::io::Write;
+use std::io::{IsTerminal as _, Write};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 
 const QUERY_LOG_SQL: &str = "query_log.sql";
 
@@ -28,7 +28,6 @@ struct LoggerConfig {
     format: LogFormat,
     min_level: Option<LevelFilter>, // Minimum level to log (inclusive)
     max_level: Option<LevelFilter>, // Maximum level to log (inclusive)
-    remove_ansi_codes: bool,
     // targets to include
     includes: Option<Vec<String>>,
     // targets to exclude
@@ -64,7 +63,6 @@ impl Default for LoggerConfig {
             format: LogFormat::default(),
             min_level: None,
             max_level: None,
-            remove_ansi_codes: false,
             includes: None,
             excludes: None,
         }
@@ -103,6 +101,7 @@ struct Logger {
     config: LoggerConfig,
     name: String,
     invocation_id: uuid::Uuid,
+    remove_ansi_codes: bool,
 }
 
 impl Display for Logger {
@@ -142,11 +141,17 @@ impl Logger {
         config: LoggerConfig,
         invocation_id: uuid::Uuid,
     ) -> Self {
+        let remove_ansi_codes = match writer {
+            LogTarget::Stdout => !std::io::stdout().is_terminal(),
+            LogTarget::Stderr => !std::io::stderr().is_terminal(),
+            LogTarget::Writer(_) => true, // Always remove ANSI codes for file writers
+        };
         Self {
             target: writer,
             config,
             name: name.into(),
             invocation_id,
+            remove_ansi_codes,
         }
     }
 
@@ -281,7 +286,7 @@ impl log::Log for Logger {
             match self.config.format {
                 LogFormat::Text | LogFormat::Fancy => {
                     let mut text = record.args().to_string();
-                    if self.config.remove_ansi_codes {
+                    if self.remove_ansi_codes {
                         text = remove_ansi_codes(&text);
                     }
                     locked_writeln!(self, "{}", text);
@@ -290,7 +295,7 @@ impl log::Log for Logger {
                     let json = Self::format_json(
                         record,
                         &self.invocation_id.to_string(),
-                        self.config.remove_ansi_codes,
+                        self.remove_ansi_codes,
                     );
                     locked_writeln!(self, "{}", json);
                 }
@@ -359,21 +364,11 @@ impl MultiLoggerBuilder {
             format: log_config.log_format,
             min_level: Some(LevelFilter::Info),
             max_level: None,
-            remove_ansi_codes: log_config.remove_ansi_codes,
             includes: None,
             excludes: None,
         };
 
-        let logger = if let Some(writer) = &log_config.stdout {
-            Logger::new(
-                "stdout",
-                LogTarget::Writer(Arc::clone(writer)),
-                config,
-                self.invocation_id,
-            )
-        } else {
-            Logger::new("stdout", LogTarget::Stdout, config, self.invocation_id)
-        };
+        let logger = Logger::new("stdout", LogTarget::Stdout, config, self.invocation_id);
 
         Box::new(logger)
     }
@@ -384,21 +379,11 @@ impl MultiLoggerBuilder {
             format: log_config.log_format,
             min_level: None,
             max_level: Some(LevelFilter::Warn),
-            remove_ansi_codes: log_config.remove_ansi_codes,
             includes: None,
             excludes: Some(vec![EXECUTING.to_string()]),
         };
 
-        let logger = if let Some(writer) = &log_config.stderr {
-            Logger::new(
-                "stderr",
-                LogTarget::Writer(Arc::clone(writer)),
-                config,
-                self.invocation_id,
-            )
-        } else {
-            Logger::new("stderr", LogTarget::Stderr, config, self.invocation_id)
-        };
+        let logger = Logger::new("stderr", LogTarget::Stderr, config, self.invocation_id);
 
         Box::new(logger)
     }
@@ -443,22 +428,17 @@ impl MultiLoggerBuilder {
 }
 
 pub struct FsLogConfig {
-    pub stdout: Option<Arc<Mutex<Box<dyn Write + Send>>>>,
-    pub stderr: Option<Arc<Mutex<Box<dyn Write + Send>>>>,
     pub log_format: LogFormat,
     pub log_level: LevelFilter,
     pub file_log_path: PathBuf,
     pub file_log_level: LevelFilter,
     pub file_log_format: LogFormat,
-    pub remove_ansi_codes: bool,
     pub invocation_id: uuid::Uuid,
 }
 
 impl From<IoArgs> for FsLogConfig {
     fn from(args: IoArgs) -> Self {
         Self {
-            stdout: args.stdout.clone(),
-            stderr: args.stderr.clone(),
             log_format: args.log_format, // TODO support different log format for different loggers
             log_level: args.log_level.unwrap_or(LevelFilter::Info), // default log level
             file_log_path: args.log_path.map(|p| p.join("dbt.log")).unwrap_or_else(|| {
@@ -471,7 +451,6 @@ impl From<IoArgs> for FsLogConfig {
             }),
             file_log_level: args.log_level.unwrap_or(LevelFilter::Info), // default file log level
             file_log_format: args.log_format,
-            remove_ansi_codes: (args.stdout.is_some() && args.stderr.is_some()),
             invocation_id: args.invocation_id,
         }
     }
@@ -479,30 +458,36 @@ impl From<IoArgs> for FsLogConfig {
 
 impl std::fmt::Debug for FsLogConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "FsLogConfig {{ stdout: {:?}, stderr: {:?}, log_format: {:?}, log_level: {:?}, file_log_path: {:?}, file_log_level: {:?}, file_log_format: {:?}, remove_ansi_codes: {:?} }}", self.stdout.is_some(), self.stderr.is_some(), self.log_format, self.log_level, self.file_log_path, self.file_log_level, self.file_log_format, self.remove_ansi_codes)
+        write!(
+            f,
+            "FsLogConfig {{ log_format: {:?}, log_level: {:?}, file_log_path: {:?}, file_log_level: {:?}, file_log_format: {:?} }}",
+            self.log_format, self.log_level, self.file_log_path, self.file_log_level, self.file_log_format
+        )
     }
 }
 
 impl Default for FsLogConfig {
     fn default() -> Self {
         Self {
-            stdout: None,
-            stderr: None,
             log_format: LogFormat::Text,
             log_level: LevelFilter::Info,
             file_log_path: PathBuf::from("dbt.log"),
             file_log_level: LevelFilter::Info,
             file_log_format: LogFormat::Text,
-            remove_ansi_codes: false,
             invocation_id: uuid::Uuid::new_v4(),
         }
     }
 }
 
-// Add a new static for storing the current logger
-static LOGGER: RwLock<Option<MultiLogger>> = RwLock::new(None);
-
 pub fn init_logger(log_config: FsLogConfig) -> FsResult<()> {
+    static LOGGER: std::sync::OnceLock<Box<MultiLogger>> = std::sync::OnceLock::new();
+
+    if LOGGER.get().is_some() {
+        // We should probably error here, but it breaks the tests for some
+        // reason
+        return Ok(());
+    }
+
     // Build the multi-logger
     let mut builder = MultiLoggerBuilder::new(log_config.invocation_id);
 
@@ -514,7 +499,6 @@ pub fn init_logger(log_config: FsLogConfig) -> FsResult<()> {
         format: log_config.file_log_format,
         min_level: None,
         max_level: None,
-        remove_ansi_codes: true,
         includes: None,
         excludes: None,
     };
@@ -539,7 +523,6 @@ pub fn init_logger(log_config: FsLogConfig) -> FsResult<()> {
         format: LogFormat::Text,
         min_level: None,
         max_level: None,
-        remove_ansi_codes: true,
         includes: Some(vec![EXECUTING.to_string()]),
         excludes: None,
     };
@@ -565,6 +548,10 @@ pub fn init_logger(log_config: FsLogConfig) -> FsResult<()> {
 
     // Build the logger
     let logger = builder.build();
+    // Register the logger globally
+    LOGGER
+        .set(Box::new(logger))
+        .map_err(|_| unexpected_fs_err!("Failed to set global logger"))?;
 
     if cfg!(debug_assertions) {
         // For debug builds, log everything
@@ -575,49 +562,10 @@ pub fn init_logger(log_config: FsLogConfig) -> FsResult<()> {
     }
 
     // Update the global logger
-    let mut global_logger = LOGGER
-        .write()
-        .map_err(|e| unexpected_fs_err!("Failed to acquire lock on global logger: {}", e))?;
-    if global_logger.is_none() {
-        // First initialization
-        log::set_logger(&LOGGER_WRAPPER)
-            .map_err(|e| unexpected_fs_err!("Failed to set logger: {}", e))?;
-    }
-    *global_logger = Some(logger);
+    log::set_logger(LOGGER.get().expect("Was just set"))
+        .map_err(|e| unexpected_fs_err!("Failed to set global logger: {}", e))?;
 
     Ok(())
-}
-
-// Add a wrapper struct that delegates to the current logger
-struct LoggerWrapper;
-
-static LOGGER_WRAPPER: LoggerWrapper = LoggerWrapper;
-
-impl log::Log for LoggerWrapper {
-    fn enabled(&self, metadata: &Metadata) -> bool {
-        if let Ok(logger) = LOGGER.read() {
-            if let Some(logger) = logger.as_ref() {
-                return logger.enabled(metadata);
-            }
-        }
-        false
-    }
-
-    fn log(&self, record: &Record) {
-        if let Ok(logger) = LOGGER.read() {
-            if let Some(logger) = logger.as_ref() {
-                logger.log(record);
-            }
-        }
-    }
-
-    fn flush(&self) {
-        if let Ok(logger) = LOGGER.read() {
-            if let Some(logger) = logger.as_ref() {
-                logger.flush();
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -638,7 +586,6 @@ mod tests {
             format: LogFormat::Text,
             min_level: None,
             max_level: None,
-            remove_ansi_codes: true,
             includes: Some(vec![EXECUTING.to_string()]),
             excludes: None,
         };
@@ -660,7 +607,6 @@ mod tests {
             format: LogFormat::Text,
             min_level: None,
             max_level: None,
-            remove_ansi_codes: true,
             includes: Some(vec![EXECUTING.to_string()]),
             excludes: None,
         };
@@ -685,7 +631,6 @@ mod tests {
             format: LogFormat::Text,
             min_level: None,
             max_level: None,
-            remove_ansi_codes: true,
             includes: None,
             excludes: None,
         };
@@ -710,7 +655,6 @@ mod tests {
             format: LogFormat::Text,
             min_level: None,
             max_level: None,
-            remove_ansi_codes: true,
             includes: None,
             excludes: Some(vec![EXECUTING.to_string()]),
         };

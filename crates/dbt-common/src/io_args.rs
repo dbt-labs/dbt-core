@@ -8,9 +8,8 @@ use std::str::FromStr;
 use std::{
     collections::{BTreeMap, HashSet},
     fmt::{self, Display},
-    io::Write,
     path::{Path, PathBuf},
-    sync::{atomic::AtomicBool, Arc, Mutex},
+    sync::{atomic::AtomicBool, Arc},
 };
 use strum::EnumIter;
 use strum_macros::Display;
@@ -38,9 +37,6 @@ pub struct IoArgs {
     pub out_dir: PathBuf,
     pub log_path: Option<PathBuf>,
     pub trace_path: Option<PathBuf>,
-    // todo: replace std Mutex with tokio Mutex
-    pub stdout: Option<Arc<Mutex<Box<dyn Write + Send>>>>,
-    pub stderr: Option<Arc<Mutex<Box<dyn Write + Send>>>>,
     pub log_format: LogFormat,
     pub log_level: Option<LevelFilter>,
     pub log_level_file: Option<LevelFilter>,
@@ -59,8 +55,6 @@ impl Clone for IoArgs {
             out_dir: self.out_dir.clone(),
             log_path: self.log_path.clone(),
             trace_path: self.trace_path.clone(),
-            stdout: self.stdout.as_ref().map(|w| w.clone()),
-            stderr: self.stderr.as_ref().map(|w| w.clone()),
             log_format: self.log_format,
             log_level_file: self.log_level_file,
             log_level: self.log_level,
@@ -76,8 +70,6 @@ impl fmt::Debug for IoArgs {
             .field("show", &self.show)
             .field("in_dir", &self.in_dir)
             .field("out_dir", &self.out_dir)
-            .field("stdout", &self.stdout.is_some())
-            .field("stderr", &self.stderr.is_some())
             .field("status_reporter", &self.status_reporter.is_some())
             .finish()
     }
@@ -277,17 +269,6 @@ impl EvalArgs {
     pub fn without_show(&self, option: ShowOptions) -> Self {
         let mut new_args = self.clone();
         new_args.io.show.remove(&option);
-        new_args
-    }
-
-    pub fn with_std_out_std_err(
-        &self,
-        stdout: Option<Arc<Mutex<Box<dyn Write + Send>>>>,
-        stderr: Option<Arc<Mutex<Box<dyn Write + Send>>>>,
-    ) -> EvalArgs {
-        let mut new_args = self.clone();
-        new_args.io.stdout = stdout;
-        new_args.io.stderr = stderr;
         new_args
     }
 
