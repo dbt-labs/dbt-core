@@ -58,6 +58,6 @@ where
         .unwrap_or_else(|| panic!("expected column {} not found", column_name))
         .as_any()
         .downcast_ref::<T>()
-        .expect("column is of type");
+        .unwrap_or_else(|| panic!("expected column of type: {}", std::any::type_name::<T>()));
     res.to_owned()
 }

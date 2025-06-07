@@ -1,0 +1,3 @@
+kind: Fixes
+body: Updated column cast to have a better error message
+time: 2025-06-06T07:28:16.712608-04:00
