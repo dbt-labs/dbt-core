@@ -553,13 +553,10 @@ pub fn init_logger(log_config: FsLogConfig) -> FsResult<()> {
         .set(Box::new(logger))
         .map_err(|_| unexpected_fs_err!("Failed to set global logger"))?;
 
-    if cfg!(debug_assertions) {
-        // For debug builds, log everything
-        log::set_max_level(LevelFilter::Trace);
-    } else {
-        // For release builds, cut off below info
-        log::set_max_level(LevelFilter::Info);
-    }
+    // We have to raise the global max level here because we have downstream
+    // systems depending on DEBUG level logs.
+    // TODO: move all mission critical logs to INFO level and above
+    log::set_max_level(LevelFilter::Trace);
 
     // Update the global logger
     log::set_logger(LOGGER.get().expect("Was just set"))
