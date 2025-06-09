@@ -295,7 +295,7 @@ impl Object for PyDate {
 
     // When rendered directly, e.g. {{ some_date }}, produce YYYY-MM-DD.
     fn render(self: &Arc<Self>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.date.format("%Y-%m-%d"))
+        write!(f, "'{}'", self.date.format("%Y-%m-%d"))
     }
 
     fn call_method(
