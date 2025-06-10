@@ -18,7 +18,6 @@ from dbt.artifacts.resources import (
     MacroArgument,
     MaturityType,
     MeasureAggregationParameters,
-    ModelFreshness,
     NodeVersion,
     Owner,
     Quoting,
@@ -226,7 +225,7 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
     versions: Sequence[UnparsedVersion] = field(default_factory=list)
     deprecation_date: Optional[datetime.datetime] = None
     time_spine: Optional[TimeSpine] = None
-    freshness: Optional[ModelFreshness] = None
+    freshness: Optional[Dict[str, Any]] = None
 
     def __post_init__(self) -> None:
         if self.latest_version:
