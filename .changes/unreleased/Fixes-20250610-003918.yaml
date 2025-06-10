@@ -1,3 +1,0 @@
-kind: Fixes
-body: Fix duplicate snapshot ingestion when projects begin with 'dbt_'
-time: 2025-06-10T00:39:18.353637-04:00

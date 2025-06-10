@@ -1,3 +1,0 @@
-kind: Fixes
-body: Add missing 'skip_serializing_none' to reduce the manifest size
-time: 2025-06-06T10:50:11.737647315-07:00
