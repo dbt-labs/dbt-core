@@ -789,7 +789,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                 project_freshness_dict = self.project.models.get("+freshness", None)
                 project_freshness = (
                     ModelFreshness.from_dict(project_freshness_dict)
-                    if project_freshness_dict
+                    if project_freshness_dict and "build_after" in project_freshness_dict
                     else None
                 )
             except ValueError:
@@ -801,11 +801,18 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                 )
                 project_freshness = None
 
-            model_freshness = block.target.freshness or None
+            model_freshness_dict = block.target.freshness or None
+            model_freshness = (
+                ModelFreshness.from_dict(model_freshness_dict)
+                if model_freshness_dict and "build_after" in model_freshness_dict
+                else None
+            )
 
             config_freshness_dict = block.target.config.get("freshness", None)
             config_freshness = (
-                ModelFreshness.from_dict(config_freshness_dict) if config_freshness_dict else None
+                ModelFreshness.from_dict(config_freshness_dict)
+                if config_freshness_dict and "build_after" in config_freshness_dict
+                else None
             )
             freshness = merge_model_freshness(project_freshness, model_freshness, config_freshness)
 
