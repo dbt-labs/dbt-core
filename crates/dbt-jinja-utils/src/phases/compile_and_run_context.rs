@@ -1,6 +1,6 @@
 //! This module contains the functions for initializing the Jinja environment for the compile phase.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use crate::functions::build_flat_graph;
@@ -11,6 +11,7 @@ use dbt_schemas::schemas::manifest::Nodes;
 use dbt_schemas::state::{DbtRuntimeConfig, RefsAndSourcesTracker};
 use minijinja::arg_utils::ArgParser;
 use minijinja::constants::MACRO_DISPATCH_ORDER;
+use minijinja::dispatch_object::DispatchObject;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::Object;
 use minijinja::{
@@ -250,6 +251,47 @@ impl Object for SourceFunction {
                     source_name, table_name
                 ),
             )),
+        }
+    }
+}
+
+/// This is a special context object that is available during the compile or run phase.
+/// It allows users to lookup macros by string and returns a DispatchObject, which when called
+/// executes the macro. Users can also lookup macro namespaces by string, and this returns a Context
+/// object, which when called with a macro name returns a DispatchObject.
+#[derive(Debug)]
+pub struct MacroLookupContext {
+    /// The root project name.
+    pub root_project_name: String,
+    /// The current project name.
+    pub current_project_name: String,
+    /// The packages in the project.
+    pub packages: BTreeSet<String>,
+}
+
+impl Object for MacroLookupContext {
+    fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
+        match key.as_str()? {
+            "project_name" => Some(MinijinjaValue::from(self.root_project_name.clone())),
+            lookup_macro => {
+                if self.packages.contains(lookup_macro) {
+                    Some(MinijinjaValue::from_object(MacroLookupContext {
+                        root_project_name: self.root_project_name.clone(),
+                        current_project_name: lookup_macro.to_string(),
+                        packages: self.packages.clone(),
+                    }))
+                } else {
+                    Some(MinijinjaValue::from_object(DispatchObject {
+                        macro_name: lookup_macro.to_string(),
+                        package_name: Some(self.current_project_name.clone()),
+                        strict: true,
+                        auto_execute: false,
+                        // TODO: If the macro uses a recursive context (i.e. context['self']) we will stack overflow
+                        // but there is no way to conjure up a context object here without access to State
+                        context: None,
+                    }))
+                }
+            }
         }
     }
 }

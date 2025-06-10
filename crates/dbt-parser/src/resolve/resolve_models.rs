@@ -366,6 +366,7 @@ pub async fn resolve_models(
         env,
         adapter_type,
         package_name,
+        &root_project.name,
         runtime_config,
     )
     .await?;

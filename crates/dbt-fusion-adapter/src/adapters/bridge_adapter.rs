@@ -617,7 +617,7 @@ impl BaseAdapter for BridgeAdapter {
             package_name: None,
             strict: false,
             auto_execute: false,
-            context: state.get_base_context(),
+            context: Some(state.get_base_context()),
         }))
     }
 

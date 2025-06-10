@@ -401,6 +401,7 @@ pub async fn resolve_inner(
         min_properties.unit_tests,
         package,
         package_quoting,
+        dbt_state.root_project(),
         root_project_configs,
         database,
         schema,

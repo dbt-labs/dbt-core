@@ -33,7 +33,7 @@ pub struct DispatchObject {
     /// interpreter in case it is result of a method call
     pub auto_execute: bool,
     /// The context of the macro
-    pub context: Value,
+    pub context: Option<Value>,
 }
 
 impl Object for DispatchObject {
@@ -271,7 +271,9 @@ impl DispatchObject {
         };
 
         let template_state = template.eval_to_state_with_outer_stack_depth(
-            self.context.clone(),
+            self.context
+                .clone()
+                .unwrap_or_else(|| state.get_base_context()),
             listener.clone(),
             state.ctx.depth() + INCLUDE_RECURSION_COST,
         )?;

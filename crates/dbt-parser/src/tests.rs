@@ -50,6 +50,7 @@ mod tests {
                 vec!["my_model".to_string()],
             ),
             "common",
+            "test",
             DEFAULT_DBT_QUOTING,
             Arc::new(DbtRuntimeConfig::default()),
             sql_resources.clone(),

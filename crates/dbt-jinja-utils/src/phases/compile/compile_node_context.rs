@@ -1,6 +1,9 @@
 //! This module contains the scope guard for resolving models.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use dashmap::DashMap;
 use dbt_common::serde_utils::convert_json_to_dash_map;
@@ -14,11 +17,13 @@ use minijinja::{
 };
 use serde::Serialize;
 
+use crate::phases::MacroLookupContext;
+
 use super::compile_config::CompileConfig;
 
 /// Build a compile model context
 /// Returns a context and the current relation
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn build_compile_node_context<S: Serialize>(
     model: &MinijinjaValue,
     common_attr: &CommonAttributes,
@@ -27,6 +32,8 @@ pub fn build_compile_node_context<S: Serialize>(
     quoting: ResolvedQuoting,
     adapter_type: &str,
     base_context: &BTreeMap<String, MinijinjaValue>,
+    root_project_name: &str,
+    packages: BTreeSet<String>,
 ) -> (
     BTreeMap<String, MinijinjaValue>,
     Arc<dyn BaseRelation>,
@@ -110,6 +117,18 @@ pub fn build_compile_node_context<S: Serialize>(
     ctx.insert(
         TARGET_UNIQUE_ID.to_owned(),
         MinijinjaValue::from(&common_attr.unique_id),
+    );
+
+    let mut packages = packages;
+    packages.insert(root_project_name.to_string());
+
+    ctx.insert(
+        "context".to_owned(),
+        MinijinjaValue::from_object(MacroLookupContext {
+            root_project_name: root_project_name.to_string(),
+            current_project_name: common_attr.package_name.clone(),
+            packages,
+        }),
     );
 
     (ctx, this_relation, config_map)

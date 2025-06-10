@@ -457,7 +457,7 @@ impl<'env> Vm<'env> {
                                 package_name: Some(pkg.to_string()),
                                 strict: true,
                                 auto_execute: false,
-                                context: state.get_base_context(),
+                                context: Some(state.get_base_context()),
                             }));
                         }
                     // check if it is a regular variable in the state
@@ -490,7 +490,7 @@ impl<'env> Vm<'env> {
                                         package_name: Some(namespace.get_name().to_string()),
                                         strict: true,
                                         auto_execute: false,
-                                        context: state.get_base_context(),
+                                        context: Some(state.get_base_context()),
                                     })
                                 } else {
                                     ctx_ok!(

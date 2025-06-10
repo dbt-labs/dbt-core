@@ -214,6 +214,7 @@ pub async fn render_unresolved_sql_files_sequentially<
                 vec![model_name.clone()],
             ),
             package_name,
+            root_project_name,
             package_quoting,
             runtime_config.clone(),
             sql_resources.clone(),
@@ -498,6 +499,7 @@ pub async fn render_unresolved_sql_files<
                         vec![model_name.clone()],
                     ),
                     &package_name,
+                    &root_project_name,
                     package_quoting,
                     runtime_config.clone(),
                     sql_resources.clone(),
@@ -658,6 +660,7 @@ pub async fn collect_adapter_identifiers_detect_unsafe(
     jinja_env: &JinjaEnvironment<'static>,
     adapter_type: &str,
     package_name: &str,
+    root_project_name: &str,
     runtime_config: Arc<DbtRuntimeConfig>,
 ) -> FsResult<()> {
     if models.is_empty() {
@@ -690,6 +693,7 @@ pub async fn collect_adapter_identifiers_detect_unsafe(
             jinja_env,
             adapter_type,
             package_name,
+            root_project_name,
             runtime_config,
             parse_adapter,
             chunk_size,
@@ -703,6 +707,7 @@ pub async fn collect_adapter_identifiers_detect_unsafe(
             jinja_env,
             adapter_type,
             package_name,
+            root_project_name,
             runtime_config,
             parse_adapter,
             chunk_size,
@@ -730,6 +735,7 @@ async fn process_model_chunk_for_unsafe_detection(
     jinja_env: JinjaEnvironment<'static>,
     adapter_type: String,
     package_name: String,
+    root_project_name: String,
     runtime_config: Arc<DbtRuntimeConfig>,
     parse_adapter: Arc<dbt_fusion_adapter::adapters::ParseAdapter>,
 ) -> FsResult<Vec<String>> {
@@ -738,7 +744,7 @@ async fn process_model_chunk_for_unsafe_detection(
         Arc::new(refs_and_sources.clone()),
         &package_name,
         &Nodes::default(),
-        runtime_config,
+        runtime_config.clone(),
     );
     silence_base_context(&mut render_base_context);
 
@@ -779,6 +785,8 @@ async fn process_model_chunk_for_unsafe_detection(
             quoting,
             &adapter_type,
             &render_base_context,
+            &root_project_name,
+            runtime_config.dependencies.keys().cloned().collect(),
         );
         let display_path = if arg
             .io
@@ -816,6 +824,7 @@ async fn collect_adapter_identifiers_sequential(
     jinja_env: &JinjaEnvironment<'static>,
     adapter_type: &str,
     package_name: &str,
+    root_project_name: &str,
     runtime_config: Arc<DbtRuntimeConfig>,
     parse_adapter: Arc<dbt_fusion_adapter::adapters::ParseAdapter>,
     chunk_size: usize,
@@ -831,6 +840,7 @@ async fn collect_adapter_identifiers_sequential(
             jinja_env.clone(),
             adapter_type.to_string(),
             package_name.to_string(),
+            root_project_name.to_string(),
             runtime_config.clone(),
             parse_adapter.clone(),
         )
@@ -850,6 +860,7 @@ async fn collect_adapter_identifiers_parallel(
     jinja_env: &JinjaEnvironment<'static>,
     adapter_type: &str,
     package_name: &str,
+    root_project_name: &str,
     runtime_config: Arc<DbtRuntimeConfig>,
     parse_adapter: Arc<dbt_fusion_adapter::adapters::ParseAdapter>,
     chunk_size: usize,
@@ -863,6 +874,7 @@ async fn collect_adapter_identifiers_parallel(
         let jinja_env = jinja_env.clone();
         let adapter_type = adapter_type.to_string();
         let package_name = package_name.to_string();
+        let root_project_name = root_project_name.to_string();
         let runtime_config = runtime_config.clone();
         let parse_adapter = parse_adapter.clone();
 
@@ -874,6 +886,7 @@ async fn collect_adapter_identifiers_parallel(
                 jinja_env,
                 adapter_type,
                 package_name,
+                root_project_name,
                 runtime_config,
                 parse_adapter,
             )

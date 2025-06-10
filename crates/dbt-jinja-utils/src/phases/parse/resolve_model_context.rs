@@ -1,11 +1,13 @@
 //! This module contains the scope guard for resolving models.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     path::PathBuf,
     rc::Rc,
-    sync::atomic::{AtomicBool, Ordering},
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
 };
 
 use chrono::TimeZone;
@@ -33,7 +35,7 @@ use minijinja::{
 };
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
 
-use crate::jinja_environment::JinjaEnvironment;
+use crate::{jinja_environment::JinjaEnvironment, phases::MacroLookupContext};
 
 use super::sql_resource::SqlResource;
 
@@ -59,6 +61,7 @@ pub fn build_resolve_model_context(
     model_name: &str,
     fqn: Vec<String>,
     package_name: &str,
+    root_project_name: &str,
     package_quoting: DbtQuoting,
     runtime_config: Arc<DbtRuntimeConfig>,
     sql_resources: Arc<Mutex<Vec<SqlResource>>>,
@@ -98,7 +101,7 @@ pub fn build_resolve_model_context(
         schema: schema.to_string(),
         adapter_type: adapter_type.to_string(),
         sql_resources: sql_resources_clone,
-        runtime_config,
+        runtime_config: runtime_config.clone(),
         package_quoting,
     };
     let ref_value = MinijinjaValue::from_object(ref_function);
@@ -262,6 +265,18 @@ pub fn build_resolve_model_context(
     context.insert(
         "execute".to_owned(),
         MinijinjaValue::from_object(ParseExecute(execute_exists)),
+    );
+
+    let mut packages: BTreeSet<String> = runtime_config.dependencies.keys().cloned().collect();
+    packages.insert(root_project_name.to_string());
+
+    context.insert(
+        "context".to_owned(),
+        MinijinjaValue::from_object(MacroLookupContext {
+            root_project_name: root_project_name.to_string(),
+            current_project_name: package_name.to_string(),
+            packages,
+        }),
     );
 
     context

@@ -136,7 +136,7 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
             package_name,
             strict: false,
             auto_execute: false,
-            context: state.get_base_context(),
+            context: Some(state.get_base_context()),
         }))
     }
 

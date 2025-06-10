@@ -1,6 +1,7 @@
 //! This module contains the scope for materializing nodes
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -23,6 +24,8 @@ use minijinja::State;
 use minijinja::{value::Object, Error, ErrorKind, Value as MinijinjaValue};
 use serde::Serialize;
 
+use crate::phases::MacroLookupContext;
+
 use super::run_config::RunConfig;
 
 /// Build model-specific context (model, common_attr, alias, quoting, config, resource_type, sql_header)
@@ -38,6 +41,8 @@ async fn extend_with_model_context<T: Serialize, S: Serialize>(
     io_args: &IoArgs,
     resource_type: &str,
     sql_header: Option<MinijinjaValue>,
+    root_project_name: &str,
+    packages: BTreeSet<String>,
 ) {
     // Create a relation for 'this' using config values
     let this_relation = create_relation(
@@ -156,6 +161,18 @@ async fn extend_with_model_context<T: Serialize, S: Serialize>(
     );
 
     base_context.insert("model".to_owned(), MinijinjaValue::from_object(model_map));
+
+    let mut packages = packages.clone();
+    packages.insert(root_project_name.to_string());
+
+    base_context.insert(
+        "context".to_owned(),
+        MinijinjaValue::from_object(MacroLookupContext {
+            root_project_name: root_project_name.to_string(),
+            current_project_name: common_attr.package_name.clone(),
+            packages,
+        }),
+    );
 }
 
 /// Extend the base context with stateful functions
@@ -189,6 +206,8 @@ pub async fn build_run_node_context<T: Serialize, S: Serialize>(
     io_args: &IoArgs,
     resource_type: &str,
     sql_header: Option<MinijinjaValue>,
+    root_project_name: &str,
+    packages: BTreeSet<String>,
 ) -> BTreeMap<String, MinijinjaValue> {
     // Build model-specific context
     let mut context = base_context.clone();
@@ -205,6 +224,8 @@ pub async fn build_run_node_context<T: Serialize, S: Serialize>(
         io_args,
         resource_type,
         sql_header,
+        root_project_name,
+        packages,
     )
     .await;
 
