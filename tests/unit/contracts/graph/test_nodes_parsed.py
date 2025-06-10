@@ -1886,6 +1886,10 @@ def basic_parsed_source_definition_dict():
         "tags": [],
         "config": {
             "enabled": True,
+            "freshness": {
+                "warn_after": {},
+                "error_after": {},
+            },
         },
         "unrendered_config": {},
     }
@@ -1916,6 +1920,10 @@ def complex_parsed_source_definition_dict():
         "tags": ["my_tag"],
         "config": {
             "enabled": True,
+            "freshness": {
+                "warn_after": {},
+                "error_after": {},
+            },
         },
         "freshness": {"warn_after": {"period": "hour", "count": 1}, "error_after": {}},
         "loaded_at_field": "loaded_at",

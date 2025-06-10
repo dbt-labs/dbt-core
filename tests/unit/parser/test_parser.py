@@ -404,10 +404,31 @@ sources:
               - unique
 """
 
+SOURCE_FRESHNESS_AT_TABLE_AND_CONFIG = """
+sources:
+  - name: my_source
+    loaded_at_field: test
+    tables:
+      - name: my_table
+        freshness:
+            warn_after: {count: 1, period: hour}
+            error_after: {count: 1, period: day}
+        config:
+            freshness:
+                warn_after: {count: 2, period: hour}
+                error_after: {count: 2, period: day}
+"""
+
 
 class SchemaParserTest(BaseParserTest):
     def setUp(self):
         super().setUp()
+        # Reset `warn_error` to False so we don't raise warnigns about top level freshness as errors
+        set_from_args(
+            Namespace(warn_error=False, state_modified_compare_more_unrendered_values=False),
+            None,
+        )
+
         self.parser = SchemaParser(
             project=self.snowplow_project_config,
             manifest=self.manifest,
@@ -447,6 +468,19 @@ class SchemaParserSourceTest(SchemaParserTest):
         self.assertEqual(source_values[0].table.name, "my_table")
         self.assertEqual(source_values[0].table.description, "")
         self.assertEqual(len(source_values[0].table.columns), 0)
+
+    @mock.patch("dbt.parser.sources.get_adapter")
+    def test_parse_source_resulting_node_freshness_matches_config_freshness(self, _):
+        block = self.file_block_for(SOURCE_FRESHNESS_AT_TABLE_AND_CONFIG, "test_one.yml")
+        dct = yaml_from_file(block.file)
+        self.parser.parse_file(block, dct)
+        unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
+        src_default = self.source_patcher.parse_source(unpatched_src_default)
+        assert src_default.freshness == src_default.config.freshness
+        assert src_default.freshness.warn_after.count == 2
+        assert src_default.freshness.warn_after.period == "hour"
+        assert src_default.freshness.error_after.count == 2
+        assert src_default.freshness.error_after.period == "day"
 
     def test__parse_basic_source(self):
         block = self.file_block_for(SINGLE_TABLE_SOURCE, "test_one.yml")
