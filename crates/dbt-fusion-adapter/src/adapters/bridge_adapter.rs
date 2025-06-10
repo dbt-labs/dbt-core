@@ -15,8 +15,6 @@ use crate::adapters::snapshots::SnapshotStrategy;
 use crate::adapters::typed_adapter::TypedBaseAdapter;
 use crate::adapters::{BaseAdapter, SqlEngine};
 
-use adbc_core::error::Result as AdbcResult;
-use arrow_schema::Schema;
 use dbt_agate::AgateTable;
 use dbt_common::adapter::SchemaRegistry;
 use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
@@ -29,7 +27,7 @@ use dbt_schemas::schemas::manifest::{
     GrantAccessToTarget, ManifestModelConfig,
 };
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
-use dbt_xdbc::{Connection, Statement};
+use dbt_xdbc::Connection;
 use minijinja::arg_utils::{check_num_args, ArgParser};
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::listener::RenderingEventListener;
@@ -40,22 +38,24 @@ use serde::Deserialize;
 use tracing;
 use tracy_client::span;
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::str::FromStr;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, LazyLock};
 
-// Thread-local connection pool for the bridge adapter.
+// Thread-local connection.
 //
 // This implementation provides an efficient connection management strategy:
 // 1. Each thread maintains its own connection instance
 // 2. Connections are reused across multiple operations within the same thread
 // 3. This approach ensures proper transaction management within a DAG node
-// 4. The ConnectionGuard wrapper ensures connections are returned to the pool
+// 4. The ConnectionGuard wrapper ensures connections are returned to the thread-local
 thread_local! {
-    static CONNECTION: Mutex<Option<Box<dyn Connection>>> = Mutex::new(None);
+    static CONNECTION: RefCell<Option<Box<dyn Connection>>> = RefCell::new(None);
 }
 
 // https://github.com/dbt-labs/dbt-adapters/blob/3ed165d452a0045887a5032c621e605fd5c57447/dbt-adapters/src/dbt/adapters/base/impl.py#L117
@@ -74,96 +74,57 @@ static DEFAULT_BASE_BEHAVIOR_FLAGS: LazyLock<[BehaviorFlag; 2]> = LazyLock::new(
 
 /// A connection wrapper that automatically returns the connection to the thread local when dropped
 /// This ensures that for a single thread, a connection is reused across multiple operations
-struct ConnectionGuard<'a> {
+pub struct ConnectionGuard<'a> {
     conn: Option<Box<dyn Connection>>,
-    adapter: &'a BridgeAdapter,
+    _phantom: PhantomData<&'a ()>,
 }
-
-impl Drop for ConnectionGuard<'_> {
-    fn drop(&mut self) {
-        if let Some(conn) = self.conn.take() {
-            self.adapter.put_thread_local_connection(conn);
+impl ConnectionGuard<'_> {
+    fn new(conn: Box<dyn Connection>) -> Self {
+        Self {
+            conn: Some(conn),
+            _phantom: PhantomData,
         }
     }
 }
+impl Deref for ConnectionGuard<'_> {
+    type Target = Box<dyn Connection>;
 
-impl AsRef<Box<dyn Connection>> for ConnectionGuard<'_> {
-    fn as_ref(&self) -> &Box<dyn Connection> {
+    fn deref(&self) -> &Self::Target {
         self.conn.as_ref().unwrap()
     }
 }
-
-impl AsMut<Box<dyn Connection>> for ConnectionGuard<'_> {
-    fn as_mut(&mut self) -> &'_ mut Box<dyn Connection> {
+impl DerefMut for ConnectionGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
         self.conn.as_mut().unwrap()
     }
 }
-
-impl Connection for ConnectionGuard<'_> {
-    fn new_statement(&mut self) -> AdbcResult<Box<dyn Statement>> {
-        (**self
-            .conn
-            .as_mut()
-            .expect("connection always exists except drop"))
-        .new_statement()
-    }
-
-    /// Cancel the in-progress operation on a connection.
-    fn cancel(&mut self) -> AdbcResult<()> {
-        (**self
-            .conn
-            .as_mut()
-            .expect("connection always exists except drop"))
-        .cancel()
-    }
-
-    fn commit(&mut self) -> AdbcResult<()> {
-        (**self
-            .conn
-            .as_mut()
-            .expect("connection always exists except drop"))
-        .commit()
-    }
-
-    fn rollback(&mut self) -> AdbcResult<()> {
-        (**self
-            .conn
-            .as_mut()
-            .expect("connection always exists except drop"))
-        .rollback()
-    }
-
-    fn get_table_schema(
-        &self,
-        catalog: Option<&str>,
-        db_schema: Option<&str>,
-        table_name: &str,
-    ) -> AdbcResult<Schema> {
-        (**self
-            .conn
-            .as_ref()
-            .expect("connection always exists except drop"))
-        .get_table_schema(catalog, db_schema, table_name)
-    }
-}
-
-impl Deref for ConnectionGuard<'_> {
-    type Target = dyn Connection;
-
-    fn deref(&self) -> &Self::Target {
-        &**self
-            .conn
-            .as_ref()
-            .expect("connection always exists except drop")
-    }
-}
-
-impl DerefMut for ConnectionGuard<'_> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut **self
-            .conn
-            .as_mut()
-            .expect("connection always exists except drop")
+impl Drop for ConnectionGuard<'_> {
+    fn drop(&mut self) {
+        let conn = self.conn.take();
+        let prev = CONNECTION.replace(conn);
+        if prev.is_some() {
+            // We should avoid nested borrows because they mean we are creating more
+            // than one connection when one would be sufficient. But if we reached
+            // this branch, we did exactly that (!).
+            //
+            //     {
+            //       let outer_guard = adapter.borrow_tlocal_connection()?;
+            //       f(outer_guard.as_mut());  // Pass the conn as ref. GOOD.
+            //       {
+            //         // We tried to borrow, but a new connection had to
+            //         // be created. BAD.
+            //         let inner_guard = adapter.borrow_tlocal_connection()?;
+            //         ...
+            //       }  // Connection from inner_guard returns to CONNECTION.
+            //     }  // Connection from outer_guard is returning to CONNECTION,
+            //        // but one was already there -- the one from inner_guard.
+            //
+            // The right choice is to simply drop the innermost connection.
+            drop(prev);
+            // An assert could be added here to help finding code that creates
+            // a connection instead of taking one as a parameter so that the
+            // outermost caller can pass the thread-local one by reference.
+        }
     }
 }
 
@@ -179,14 +140,14 @@ impl DerefMut for ConnectionGuard<'_> {
 ///
 /// # Connection Management
 ///
-/// This adapter implements a thread-local connection pool to efficiently
-/// manage database connections. The preferred way to get a connection is
-/// through the `get_guarded_connection` method, which returns a connection
-/// that is automatically returned to the pool when it goes out of scope.
+/// This adapter caches the database connection used by the thread in a
+/// thread-local. This allows Jinja code to use the connection without
+/// explicitly referring to database connections.
 ///
-/// All methods that need database access should use `get_guarded_connection`
-/// rather than directly calling `get_connection` to ensure proper connection
-/// lifecycle management.
+/// Use the `borrow_tlocal_connection` method, which returns a guard that
+/// can be dereferenced into a mutable [Box<dyn Connection>]. When the
+/// guard instance is destroyed, the connection returns to the thread-local
+/// variable.
 #[derive(Clone)]
 pub struct BridgeAdapter {
     typed_adapter: Arc<dyn TypedBaseAdapter>,
@@ -209,41 +170,21 @@ impl BridgeAdapter {
         Self { typed_adapter, db }
     }
 
-    fn get_thread_local_connection(&self) -> Result<Box<dyn Connection>, MinijinjaError> {
-        CONNECTION.with(|conn| {
-            let mut conn_guard = conn.lock().map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
-                    format!("Failed to lock connection mutex: {}", e),
-                )
-            })?;
-
-            if conn_guard.is_none() {
-                *conn_guard = Some(self.new_connection()?);
-            }
-
-            Ok(conn_guard.take().expect("Connection just set above."))
-        })
-    }
-
-    fn put_thread_local_connection(&self, conn: Box<dyn Connection>) {
-        CONNECTION.with(|conn_mutex| {
-            if let Ok(mut conn_guard) = conn_mutex.lock() {
-                *conn_guard = Some(conn);
-            }
-            // If we can't lock the mutex, the connection will be dropped
-        });
-    }
-
-    /// Get a guarded connection that will automatically be returned to the pool when dropped
-    /// This is the preferred way to get a connection as it ensures proper cleanup
-    fn get_guarded_connection(&self) -> Result<ConnectionGuard, MinijinjaError> {
-        let _span = span!("BridgeAdapter::get_guarded_connection");
-        let conn = self.get_thread_local_connection()?;
-        Ok(ConnectionGuard {
-            conn: Some(conn),
-            adapter: self,
-        })
+    /// Borrow the current thread-local connection or create one if it's not set yet.
+    ///
+    /// A guard is returned. When destroyed, the guard returns the connection to
+    /// the thread-local variable. If another connection became the thread-local
+    /// in the mean time, that connection is dropped and the return proceeds as
+    /// normal.
+    fn borrow_tlocal_connection(&self) -> Result<ConnectionGuard<'_>, MinijinjaError> {
+        let _span = span!("BridgeAdapter::borrow_thread_local_connection");
+        let mut conn = CONNECTION.take();
+        if conn.is_none() {
+            self.new_connection()
+                .map(|new_conn| conn.replace(new_conn))?;
+        }
+        let guard = ConnectionGuard::new(conn.unwrap());
+        Ok(guard)
     }
 
     /// Get a reference to the [TypedBaseAdapter]
@@ -454,12 +395,12 @@ impl BaseAdapter for BridgeAdapter {
         let fetch = parser.get_optional::<bool>("fetch");
         let limit = parser.get_optional::<u32>("limit");
 
-        let mut conn = self.get_guarded_connection()?;
+        let mut conn = self.borrow_tlocal_connection()?;
         let query_ctx =
             query_ctx_from_state_with_sql(state, sql)?.with_desc("execute adapter call");
-        let (response, table) = self
-            .typed_adapter
-            .execute(&mut conn, &query_ctx, auto_begin, fetch, limit)?;
+        let (response, table) =
+            self.typed_adapter
+                .execute(conn.as_mut(), &query_ctx, auto_begin, fetch, limit)?;
         Ok(Value::from_iter([
             Value::from_object(response),
             Value::from_object(table),
@@ -481,12 +422,12 @@ impl BaseAdapter for BridgeAdapter {
             sql
         };
 
-        let mut conn = self.get_guarded_connection()?;
+        let mut conn = self.borrow_tlocal_connection()?;
         let query_ctx = query_ctx_from_state_with_sql(state, formatted_sql)?
             .with_desc("add_query adapter call");
 
         self.typed_adapter.add_query(
-            &mut conn,
+            conn.as_mut(),
             &query_ctx,
             auto_begin.unwrap_or(true),
             abridge_sql_log.unwrap_or(false),
@@ -707,11 +648,11 @@ impl BaseAdapter for BridgeAdapter {
         let identifier = parser.get::<String>("identifier")?;
         let needs_information = parser.get_optional::<bool>("needs_information");
 
-        let mut conn = self.get_guarded_connection()?;
+        let mut conn = self.borrow_tlocal_connection()?;
         let query_ctx = query_ctx_from_state(state)?.with_desc("get_relation adapter call");
         let relation = self.typed_adapter.get_relation(
             &query_ctx,
-            &mut conn,
+            conn.as_mut(),
             &database,
             &schema,
             &identifier,
@@ -843,10 +784,10 @@ impl BaseAdapter for BridgeAdapter {
 
         let query_ctx = query_ctx_from_state_with_sql(state, sql)?
             .with_desc("get_column_schema_from_query adapter call");
-        let mut conn = self.get_guarded_connection()?;
+        let mut conn = self.borrow_tlocal_connection()?;
         let result = self
             .typed_adapter
-            .get_column_schema_from_query(&mut conn, &query_ctx)?;
+            .get_column_schema_from_query(conn.as_mut(), &query_ctx)?;
         let result = dyn_base_columns_to_value(result)?;
         Ok(result)
     }
@@ -925,10 +866,10 @@ impl BaseAdapter for BridgeAdapter {
             Some(BigqueryClusterConfig::deserialize(cluster_by)?)
         };
 
-        let mut conn = self.get_guarded_connection()?;
+        let mut conn = self.borrow_tlocal_connection()?;
         let result =
             self.typed_adapter
-                .is_replaceable(&mut conn, relation, partition_by, cluster_by)?;
+                .is_replaceable(conn.as_mut(), relation, partition_by, cluster_by)?;
         Ok(Value::from(result))
     }
 
@@ -1059,10 +1000,10 @@ impl BaseAdapter for BridgeAdapter {
                     .ok_or(invalid_argument_inner!("role must be a string"))?,
             )
         };
-        let mut conn = self.get_guarded_connection()?;
+        let mut conn = self.borrow_tlocal_connection()?;
         let result = self.typed_adapter.grant_access_to(
             state,
-            &mut conn,
+            conn.as_mut(),
             &entity,
             &entity_type,
             role,
@@ -1078,10 +1019,10 @@ impl BaseAdapter for BridgeAdapter {
         check_num_args(current_function_name!(), &parser, 1, 1)?;
 
         let relation = parser.get::<Value>("relation")?;
-        let mut conn = self.get_guarded_connection()?;
+        let mut conn = self.borrow_tlocal_connection()?;
         let result = self
             .typed_adapter
-            .get_dataset_location(state, &mut conn, relation)?;
+            .get_dataset_location(state, conn.as_mut(), relation)?;
         Ok(Value::from(result))
     }
 
@@ -1099,10 +1040,10 @@ impl BaseAdapter for BridgeAdapter {
         let identifier = parser.get::<String>("identifier")?;
         let description = parser.get::<String>("description")?;
 
-        let mut conn = self.get_guarded_connection()?;
+        let mut conn = self.borrow_tlocal_connection()?;
         let result = self.typed_adapter.update_table_description(
             state,
-            &mut conn,
+            conn.as_mut(),
             &database,
             &schema,
             &identifier,
@@ -1123,10 +1064,10 @@ impl BaseAdapter for BridgeAdapter {
         let relation = parser.get::<Value>("relation")?;
         let columns = parser.get::<Value>("columns")?;
 
-        let mut conn = self.get_guarded_connection()?;
-        let result = self
-            .typed_adapter
-            .alter_table_add_columns(state, &mut conn, relation, columns)?;
+        let mut conn = self.borrow_tlocal_connection()?;
+        let result =
+            self.typed_adapter
+                .alter_table_add_columns(state, conn.as_mut(), relation, columns)?;
         Ok(result)
     }
 
@@ -1141,10 +1082,10 @@ impl BaseAdapter for BridgeAdapter {
             MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
         })?;
 
-        let mut conn = self.get_guarded_connection()?;
+        let mut conn = self.borrow_tlocal_connection()?;
         let result = self.typed_adapter.update_columns_descriptions(
             state,
-            &mut conn,
+            conn.as_mut(),
             relation,
             columns_map,
         )?;
@@ -1173,10 +1114,10 @@ impl BaseAdapter for BridgeAdapter {
 
         let relation = parser.get::<Value>("schema_relation")?;
 
-        let mut conn = self.get_guarded_connection()?;
-        let result = self
-            .typed_adapter
-            .list_relations_without_caching(state, &mut conn, relation)?;
+        let mut conn = self.borrow_tlocal_connection()?;
+        let result =
+            self.typed_adapter
+                .list_relations_without_caching(state, conn.as_mut(), relation)?;
         Ok(result)
     }
 
@@ -1188,10 +1129,10 @@ impl BaseAdapter for BridgeAdapter {
         let major = parser.get::<i64>("major")?;
         let minor = parser.get::<i64>("minor")?;
 
-        let mut conn = self.get_guarded_connection()?;
+        let mut conn = self.borrow_tlocal_connection()?;
         let result = self
             .typed_adapter
-            .compare_dbr_version(state, &mut conn, major, minor)?;
+            .compare_dbr_version(state, conn.as_mut(), major, minor)?;
         Ok(result)
     }
 
@@ -1244,10 +1185,10 @@ impl BaseAdapter for BridgeAdapter {
             _ => BTreeMap::new(),
         };
 
-        let mut conn = self.get_guarded_connection()?;
+        let mut conn = self.borrow_tlocal_connection()?;
         self.typed_adapter.update_tblproperties_for_iceberg(
             state,
-            &mut conn,
+            conn.as_mut(),
             config,
             &mut tblproperties,
         )?;
@@ -1267,9 +1208,9 @@ impl BaseAdapter for BridgeAdapter {
         let source = downcast_value_to_dyn_base_relation(source)?;
         let dest = downcast_value_to_dyn_base_relation(dest)?;
 
-        let mut conn = self.get_guarded_connection()?;
+        let mut conn = self.borrow_tlocal_connection()?;
         self.typed_adapter
-            .copy_table(state, &mut conn, source, dest, materialization)?;
+            .copy_table(state, conn.as_mut(), source, dest, materialization)?;
 
         Ok(none_value())
     }
@@ -1282,8 +1223,10 @@ impl BaseAdapter for BridgeAdapter {
         let relation = parser.get::<Value>("relation")?;
         let relation = downcast_value_to_dyn_base_relation(relation)?;
 
-        let mut conn = self.get_guarded_connection()?;
-        let result = self.typed_adapter.describe_relation(&mut conn, relation)?;
+        let mut conn = self.borrow_tlocal_connection()?;
+        let result = self
+            .typed_adapter
+            .describe_relation(conn.as_mut(), relation)?;
         Ok(result.map_or(none_value(), Value::from_serialize))
     }
 
