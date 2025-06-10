@@ -43,6 +43,7 @@ pub struct IoArgs {
 
     /// Optional status reporter for reporting status messages during execution
     pub status_reporter: Option<Arc<dyn StatusReporter>>,
+    pub send_anonymous_usage_stats: bool,
     pub should_cancel_compilation: Option<Arc<AtomicBool>>,
 }
 // define a clone for IoArgs
@@ -59,6 +60,7 @@ impl Clone for IoArgs {
             log_level_file: self.log_level_file,
             log_level: self.log_level,
             status_reporter: self.status_reporter.clone(),
+            send_anonymous_usage_stats: self.send_anonymous_usage_stats,
             should_cancel_compilation: self.should_cancel_compilation.clone(),
         }
     }

@@ -252,6 +252,10 @@ pub struct CommonArgs {
     #[arg(global = true, long, env = "DBT_LOG_LEVEL_FILE")]
     pub log_level_file: Option<LevelFilter>,
 
+    /// Set send_anonymous_usage_stats for sending vortex events
+    #[arg(global = true, long, default_value = "true", env = "SEND_ANONYMOUS_USAGE_STATE", value_parser = BoolishValueParser::new())]
+    pub send_anonymous_usage_stats: bool,
+
     /// Debug flag
     #[arg(global = true, long, short = 'd', default_value = "false", action = ArgAction::SetTrue,  env = "DBT_DEBUG", value_parser = BoolishValueParser::new(),hide = true)]
     pub debug: bool,
@@ -386,6 +390,7 @@ impl InitArgs {
                 out_dir: out_dir.to_path_buf(),
                 show,
                 invocation_id: arg.io.invocation_id,
+                send_anonymous_usage_stats: self.common_args.send_anonymous_usage_stats,
                 status_reporter: arg.io.status_reporter.clone(),
                 should_cancel_compilation: arg.io.should_cancel_compilation.clone(),
                 log_format: self.common_args.log_format,
@@ -467,6 +472,7 @@ impl CommonArgs {
                 invocation_id: arg.io.invocation_id,
                 in_dir: in_dir.to_path_buf(),
                 out_dir: out_dir.to_path_buf(),
+                send_anonymous_usage_stats: arg.io.send_anonymous_usage_stats,
                 status_reporter: arg.io.status_reporter.clone(),
                 should_cancel_compilation: arg.io.should_cancel_compilation.clone(),
                 log_format: self.log_format,
@@ -529,6 +535,7 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             show: cli.common_args().show.iter().cloned().collect(),
             in_dir: PathBuf::new(),
             out_dir: PathBuf::new(),
+            send_anonymous_usage_stats: cli.common_args().send_anonymous_usage_stats,
             status_reporter: None,
             should_cancel_compilation: None,
             log_format: cli.common_args().log_format,
@@ -560,6 +567,7 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             show: cli.common_args().show.iter().cloned().collect(),
             in_dir: PathBuf::new(),
             out_dir: PathBuf::new(),
+            send_anonymous_usage_stats: cli.common_args().send_anonymous_usage_stats,
             status_reporter: None,
             should_cancel_compilation: None,
             log_format: cli.common_args().log_format,

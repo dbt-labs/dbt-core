@@ -97,13 +97,15 @@ pub async fn install_packages(
                 } else {
                     return err!(ErrorCode::IoError, "No common prefix for package found");
                 }
-                package_install_event(
-                    io_args.invocation_id.to_string(),
-                    pinned_package.name.clone(),
-                    pinned_package.version.clone(),
-                    "hub".to_string(),
-                )
-                .await;
+                if io_args.send_anonymous_usage_stats {
+                    package_install_event(
+                        io_args.invocation_id.to_string(),
+                        pinned_package.name.clone(),
+                        pinned_package.version.clone(),
+                        "hub".to_string(),
+                    )
+                    .await;
+                }
             }
             UnpinnedPackage::Git(git_unpinned_package) => {
                 let (tmp_dir, checkout_path, commit_sha) = handle_git_like_package(
