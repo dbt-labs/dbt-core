@@ -7,7 +7,13 @@
             database=base_relation.database,
             type='table') %}
     {%- else -%}
-        {% set tmp_relation = api.Relation.create(identifier=tmp_identifier, type='view') %}
+        -- This is intentional - it's to create a view relation instead of a temp view
+        -- since DBX v2 api doesn't support session
+        {% set tmp_relation = api.Relation.create(
+            identifier=tmp_identifier,
+            schema=base_relation.schema,
+            database=base_relation.database,
+            type='view') %}
     {%- endif -%}
     {% do return(tmp_relation) %}
 {% endmacro %}

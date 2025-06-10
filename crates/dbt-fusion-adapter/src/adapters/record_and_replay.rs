@@ -28,6 +28,11 @@ use std::sync::Arc;
 // can create more than one adapter total).
 static COUNTERS: Lazy<DashMap<String, usize>> = Lazy::new(DashMap::new);
 
+// Static regex pattern for matching dbt temporary table names with UUIDs
+static DBT_TMP_UUID_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"dbt_tmp_[0-9a-f]{8}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{12}").unwrap()
+});
+
 fn checksum8(input: &str) -> String {
     // NOTE: This is cleaning we need to do for our auto generated
     // schemas in tests. Note ideal it is not localized but if things
@@ -394,9 +399,10 @@ impl Statement for ReplayEngineStatement {
         if !fs::exists(&sql_path).map_err(|e| from_io_error(e, Some(&sql_path)))? {
             panic!("Missing query file ({:?}) during replay", &sql_path);
         }
+        // dbt_tmp_800c2fb4_a0ba_4708_a0b1_813316032bfb
         let record_sql =
             fs::read_to_string(&sql_path).map_err(|e| from_io_error(e, Some(&sql_path)))?;
-        if record_sql != *replay_sql {
+        if normalize_dbt_tmp_name(&record_sql) != normalize_dbt_tmp_name(&replay_sql) {
             panic!(
                 "Recorded query ({}) and actual query ({}) do not match ({:?})",
                 record_sql, replay_sql, sql_path
@@ -472,5 +478,27 @@ impl Statement for ReplayEngineStatement {
 
     fn cancel(&mut self) -> AdbcResult<()> {
         todo!("ReplayEngineStatement::cancel")
+    }
+}
+
+/// Replaces the UUID in a relation name created adapter.generate_unique_temporary_table_suffix
+/// Example: "dbt_tmp_800c2fb4_a0ba_4708_a0b1_813316032bfb" -> "dbt_tmp_"
+pub fn normalize_dbt_tmp_name(sql: &str) -> String {
+    // Replace all matches with "dbt_tmp_"
+    DBT_TMP_UUID_PATTERN
+        .replace_all(sql, "dbt_tmp_")
+        .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_dbt_tmp_name() {
+        // Test basic UUID replacement
+        let input = "SELECT * FROM dbt_tmp_800c2fb4_a0ba_4708_a0b1_813316032bfb";
+        let expected = "SELECT * FROM dbt_tmp_";
+        assert_eq!(normalize_dbt_tmp_name(input), expected);
     }
 }

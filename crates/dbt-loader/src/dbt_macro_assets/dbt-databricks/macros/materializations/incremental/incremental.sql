@@ -22,7 +22,9 @@
   {%- if unique_tmp_table_suffix == True and raw_strategy in ['merge', 'replace_where'] and raw_file_format == 'delta' -%}
     {%- set temp_relation_suffix = adapter.generate_unique_temporary_table_suffix() -%}
   {%- else -%}
-    {%- set temp_relation_suffix = '__dbt_tmp' -%}
+    -- This is intentional - it's to create a view relation instead of a temp view
+    -- since DBX v2 api doesn't support session
+    {%- set temp_relation_suffix = adapter.generate_unique_temporary_table_suffix() -%}
   {%- endif -%}
 
   {#-- Set Overwrite Mode to STATIC for initial replace --#}
@@ -123,6 +125,10 @@
 
   {{ run_hooks(post_hooks) }}
 
-  {{ return({'relations': [target_relation]}) }}
+  -- This is intentional - it's to create a view relation instead of a temp view
+  -- since DBX v2 api doesn't support session
+  {% if temp_relation %}
+    {% do adapter.drop_relation(temp_relation) %}
+  {% endif %}
 
 {%- endmaterialization %}

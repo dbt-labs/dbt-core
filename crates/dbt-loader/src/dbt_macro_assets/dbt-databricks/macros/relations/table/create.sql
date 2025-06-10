@@ -1,7 +1,7 @@
 {% macro databricks__create_table_as(temporary, relation, compiled_code, language='sql') -%}
   {%- if language == 'sql' -%}
     {%- if temporary -%}
-      {{ create_temporary_view(relation, compiled_code) }}
+      {{ databricks__create_temporary_view(relation, compiled_code) }}
     {%- else -%}
       {%- set file_format = config.get('file_format', default='delta') -%}
       {% if file_format == 'delta' %}
@@ -57,4 +57,10 @@
       {%- endfor %}
     )
   {%- endif %}
+{%- endmacro -%}
+
+
+{% macro databricks__create_temporary_view(relation, compiled_code) -%}
+    create or replace view {{ relation }} as
+      {{ compiled_code }}
 {%- endmacro -%}

@@ -123,6 +123,19 @@ impl<'template, 'env> State<'template, 'env> {
             .unwrap_or_default()
     }
 
+    /// Returns true if the model to be executed is materialized as incremental
+    pub fn is_run_incremental(&self) -> bool {
+        let model = self.lookup("model");
+        if let Some(model) = model {
+            if let Some(config) = model.get_attr_fast("config") {
+                if let Some(result) = config.get_attr_fast("materialized") {
+                    return result.as_str() == Some("incremental");
+                }
+            }
+        }
+        false
+    }
+
     /// Returns the base context of the state and add file_stack to it.
     /// This should always be a mutable map wrapped in a Value:from_object
     pub fn get_base_context(&self) -> Value {

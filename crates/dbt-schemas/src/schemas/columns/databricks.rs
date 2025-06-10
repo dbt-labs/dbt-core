@@ -56,9 +56,9 @@ impl BaseColumn for DatabricksColumn {
         Value::from_object(self.clone())
     }
 
-    // The default impl for `quoted` from BaseColumn is used here
-    // Though Spark is ` - (has override) https://github.com/dbt-labs/dbt-core/blob/main/env/lib/python3.12/site-packages/dbt/adapters/spark/column.py#L32
-    // Databricks is " - (no override, default impl provided in parent class) https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/column.py#L9
+    fn quoted(&self) -> Value {
+        Value::from(&format!("`{}`", self.name()))
+    }
 }
 
 impl BaseColumnProperties for DatabricksColumn {

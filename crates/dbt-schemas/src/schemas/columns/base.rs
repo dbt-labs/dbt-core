@@ -1,4 +1,5 @@
-use std::any::Any;
+use crate::schemas::columns::databricks::DatabricksColumn;
+use crate::schemas::columns::utils::downcast_value_to_base_column;
 
 use dbt_adapter_proc_macros::{BaseColumnObject, StaticBaseColumnObject};
 use dbt_common::current_function_name;
@@ -9,7 +10,7 @@ use minijinja::{Error as MinijinjaError, ErrorKind, Value};
 use regex;
 use serde::{Deserialize, Serialize};
 
-use super::utils::downcast_value_to_base_column;
+use std::any::Any;
 
 /// Trait for static methods on relations
 pub trait StaticBaseColumn {
@@ -88,6 +89,47 @@ pub trait StaticBaseColumn {
             numeric_precision,
             numeric_scale,
         }))
+    }
+
+    /// https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/column.py#L66
+    fn format_add_column_list(args: &[Value]) -> Result<Value, MinijinjaError> {
+        let mut args: ArgParser = ArgParser::new(args, None);
+        let columns = args.get::<Value>("columns")?;
+
+        let columns = Vec::<DatabricksColumn>::deserialize(columns)?;
+        Ok(Value::from(
+            columns
+                .iter()
+                .map(|c| {
+                    format!(
+                        "{} {}",
+                        c.quoted().as_str().expect("column.quoted returns a string"),
+                        c.dtype_prop()
+                    )
+                })
+                .collect::<Vec<String>>()
+                .join(", "),
+        ))
+    }
+
+    /// https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/column.py#L62
+    fn format_remove_column_list(args: &[Value]) -> Result<Value, MinijinjaError> {
+        let mut args: ArgParser = ArgParser::new(args, None);
+        let columns = args.get::<Value>("columns")?;
+
+        let columns = Vec::<DatabricksColumn>::deserialize(columns)?;
+        Ok(Value::from(
+            columns
+                .iter()
+                .map(|c| {
+                    c.quoted()
+                        .as_str()
+                        .expect("column.quoted returns a string")
+                        .to_owned()
+                })
+                .collect::<Vec<String>>()
+                .join(", "),
+        ))
     }
 }
 

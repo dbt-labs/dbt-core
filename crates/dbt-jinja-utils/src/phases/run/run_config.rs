@@ -2,50 +2,19 @@
 
 use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
-use dbt_common::serde_utils::convert_json_to_map;
 use minijinja::{
     arg_utils::ArgParser,
     listener::RenderingEventListener,
     value::{Enumerator, Object},
     Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value,
 };
-use serde::Serialize;
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ModelConfig {
-    pub config: BTreeMap<String, Value>,
-}
-#[derive(Debug, Clone, Serialize)]
-pub struct ModelNode {
-    pub model: BTreeMap<String, Value>,
-}
-impl Object for ModelNode {
-    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        if key.as_str().unwrap() == "config" {
-            return Some(Value::from_serialize(ModelConfig {
-                config: self.model.clone(),
-            }));
-        }
-        self.model.get(key.as_str().unwrap()).cloned()
-    }
-
-    fn enumerate(self: &Arc<Self>) -> Enumerator {
-        Enumerator::Iter(Box::new(
-            self.model
-                .keys()
-                .map(Value::from)
-                .collect::<Vec<_>>()
-                .into_iter(),
-        ))
-    }
-}
 
 /// A struct that represents a runtime config object to be used during runtime
 #[derive(Debug, Clone)]
 pub struct RunConfig {
-    /// The `config` entry from `model`
+    /// The `config` entry from `model` (converted from a ManifestModelConfig value)
     pub model_config: BTreeMap<String, Value>,
-    /// Model attributes/config values
+    /// A model's attributes/config values (converted from a DbtModel value)
     pub model: BTreeMap<String, Value>,
 }
 
@@ -53,9 +22,7 @@ impl Object for RunConfig {
     /// Get the value of a key from the config
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
         if key.as_str().unwrap() == "model" {
-            return Some(Value::from_object(ModelNode {
-                model: convert_json_to_map(serde_json::to_value(self.model.clone()).unwrap()),
-            }));
+            return Some(Value::from_serialize(self.model.clone()));
         }
         self.model_config.get(key.as_str().unwrap()).cloned()
     }
