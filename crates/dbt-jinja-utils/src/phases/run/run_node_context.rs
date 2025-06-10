@@ -41,8 +41,6 @@ async fn extend_with_model_context<T: Serialize, S: Serialize>(
     io_args: &IoArgs,
     resource_type: &str,
     sql_header: Option<MinijinjaValue>,
-    root_project_name: &str,
-    packages: BTreeSet<String>,
 ) {
     // Create a relation for 'this' using config values
     let this_relation = create_relation(
@@ -161,22 +159,15 @@ async fn extend_with_model_context<T: Serialize, S: Serialize>(
     );
 
     base_context.insert("model".to_owned(), MinijinjaValue::from_object(model_map));
-
-    let mut packages = packages.clone();
-    packages.insert(root_project_name.to_string());
-
-    base_context.insert(
-        "context".to_owned(),
-        MinijinjaValue::from_object(MacroLookupContext {
-            root_project_name: root_project_name.to_string(),
-            current_project_name: common_attr.package_name.clone(),
-            packages,
-        }),
-    );
 }
 
 /// Extend the base context with stateful functions
-pub fn extend_base_context_stateful_fn(base_context: &mut BTreeMap<String, MinijinjaValue>) {
+pub fn extend_base_context_stateful_fn(
+    base_context: &mut BTreeMap<String, MinijinjaValue>,
+    package_name: &str,
+    root_project_name: &str,
+    packages: BTreeSet<String>,
+) {
     let result_store = ResultStore::default();
     base_context.insert(
         "store_result".to_owned(),
@@ -189,6 +180,18 @@ pub fn extend_base_context_stateful_fn(base_context: &mut BTreeMap<String, Minij
     base_context.insert(
         "store_raw_result".to_owned(),
         MinijinjaValue::from_function(result_store.store_raw_result()),
+    );
+
+    let mut packages = packages;
+    packages.insert(root_project_name.to_string());
+
+    base_context.insert(
+        "context".to_owned(),
+        MinijinjaValue::from_object(MacroLookupContext {
+            root_project_name: root_project_name.to_string(),
+            current_project_name: package_name.to_string(),
+            packages,
+        }),
     );
 }
 
@@ -211,7 +214,12 @@ pub async fn build_run_node_context<T: Serialize, S: Serialize>(
 ) -> BTreeMap<String, MinijinjaValue> {
     // Build model-specific context
     let mut context = base_context.clone();
-    extend_base_context_stateful_fn(&mut context);
+    extend_base_context_stateful_fn(
+        &mut context,
+        &common_attr.package_name,
+        root_project_name,
+        packages,
+    );
 
     extend_with_model_context(
         &mut context,
@@ -224,8 +232,6 @@ pub async fn build_run_node_context<T: Serialize, S: Serialize>(
         io_args,
         resource_type,
         sql_header,
-        root_project_name,
-        packages,
     )
     .await;
 
