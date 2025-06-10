@@ -1,0 +1,6 @@
+kind: Fixes
+body: Ensure source node `.freshness` is equal to node's `.config.freshness`
+time: 2025-06-09T17:52:39.978403-05:00
+custom:
+  Author: QMalcolm
+  Issue: "11717"
