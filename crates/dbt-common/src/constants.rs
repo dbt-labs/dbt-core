@@ -95,6 +95,7 @@ pub const STALE: &str = "     Stale";
 pub const SKIPPING: &str = "  Skipping";
 pub const ANALYZED: &str = "  Analyzed";
 pub const RENDERED: &str = "  Rendered";
+pub const FRESHNESS: &str = " Freshness";
 
 // debug command
 pub const VALIDATING: &str = "Validating";

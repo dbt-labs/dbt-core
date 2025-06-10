@@ -2658,6 +2658,7 @@ impl CommonArgs {
             task_cache_url: self.task_cache_url.clone(),
             static_analysis: StaticAnalysisKind::default(),
             full_refresh: false,
+            check_all: false,
         }
     }
 }

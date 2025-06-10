@@ -228,6 +228,7 @@ pub struct EvalArgs {
     pub full_refresh: bool,
     pub favor_state: bool,
     pub send_anonymous_usage_stats: bool,
+    pub check_all: bool,
 }
 impl fmt::Debug for EvalArgs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
