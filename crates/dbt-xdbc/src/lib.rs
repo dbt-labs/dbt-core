@@ -51,6 +51,10 @@ pub mod databricks;
 pub mod redshift;
 pub mod snowflake;
 
+// REPL for ADBC drivers
+#[cfg(feature = "repl")]
+pub mod repl;
+
 /// Interpret the SQLSTATE [1] 5-char ASCII string as a Rust string.
 ///
 /// [1] https://en.wikipedia.org/wiki/SQLSTATE

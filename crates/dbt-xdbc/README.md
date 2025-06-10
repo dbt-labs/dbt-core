@@ -140,3 +140,17 @@ WARNING: BigQuery ADBC driver is being loaded from /Users/felipe/code/fs/lib in 
 When you're done with your changes, open a PR against [](https://github.com/dbt-labs/arrow-adbc),
 after review and merge, trigger an `ADBC Release` workflow in the `fs`
 repository and bump the driver version in `fs`.
+
+### Using the REPL
+
+We expose a basic REPL that is tightly coupled with the drivers in order to execute queries against and enable a tighter feedback loop.
+
+To invoke this REPL (for Databricks):
+
+```bash
+$ cargo xtask xdbc-repl --backend databricks
+```
+
+The backend argument can take multiple arguments and supports inputs such as `snowflake` or `bigquery`.
+
+Follow the prompts within the REPL for features such as executing queries, inspect schemas, and check `RecordBatch` objects extracted from the `RecordBatchReader`.
