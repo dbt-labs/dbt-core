@@ -73,7 +73,7 @@ pub async fn resolve_snapshots(
     // Save snapshots to the `snapshots` directory
     let mut snapshot_files = Vec::new();
     for (macro_uid, macro_node) in macros {
-        if macro_uid.starts_with(&format!("snapshot.{}", package_name)) {
+        if macro_node.package_name == package_name && macro_uid.starts_with("snapshot.") {
             // Write the macro call to the `snapshots` directory
             let macro_call = format!("{{{{ {}() }}}}", macro_node.name);
             let macro_name = macro_node.name.clone();
