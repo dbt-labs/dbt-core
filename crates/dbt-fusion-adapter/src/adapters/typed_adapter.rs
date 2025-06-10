@@ -14,7 +14,7 @@ use arrow::array::{RecordBatch, StringArray, TimestampMillisecondArray};
 use arrow_schema::{DataType, Schema};
 use dbt_common::behavior_flags::BehaviorFlag;
 use dbt_frontend_schemas::dialect::Dialect;
-use dbt_schemas::schemas::columns::base::{string_type, BaseColumn};
+use dbt_schemas::schemas::columns::base::{string_type, BaseColumn, StdColumn};
 use dbt_schemas::schemas::common::Constraint;
 use dbt_schemas::schemas::common::ConstraintSupport;
 use dbt_schemas::schemas::common::ConstraintType;
@@ -412,6 +412,18 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             _ => ConstraintSupport::NotSupported,
         }
     }
+
+    /// Given existing columns and columns from our model
+    /// we determine which columns to update and persist docs for
+    /// This is only supported by Databricks
+    fn get_persist_doc_columns(
+        &self,
+        _existing_columns: Vec<StdColumn>,
+        _model_columns: BTreeMap<String, DbtColumn>,
+    ) -> AdapterResult<BTreeMap<String, DbtColumn>> {
+        unimplemented!("Only available for Databricks Adapter")
+    }
+
     /// Translate the result of `show grants` (or equivalent) to match the
     /// grants which a user would configure in their project.
     /// Ideally, the SQL to show grants should also be filtering:

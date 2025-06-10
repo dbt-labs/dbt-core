@@ -31,7 +31,7 @@ impl StaticBaseColumn for DatabricksColumnType {
         }))
     }
 
-    /// Translate the column type to a Snowflake type
+    /// Translate the column type to a Databricks type
     fn translate_type(args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut args = ArgParser::new(args, None);
         let column_type: String = args.get("dtype")?;

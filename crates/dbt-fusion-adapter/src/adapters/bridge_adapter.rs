@@ -21,6 +21,7 @@ use dbt_agate::AgateTable;
 use dbt_common::adapter::SchemaRegistry;
 use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::current_function_name;
+use dbt_schemas::schemas::columns::base::StdColumn;
 use dbt_schemas::schemas::common::{Constraint, DbtIncrementalStrategy};
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::manifest::{
@@ -1322,13 +1323,26 @@ impl BaseAdapter for BridgeAdapter {
         unimplemented!("get_partitions_metadata")
     }
 
-    #[tracing::instrument(skip(self, _state, _args))]
+    #[tracing::instrument(skip(self, _state, args))]
     fn get_persist_doc_columns(
         &self,
         _state: &State,
-        _args: &[Value],
+        args: &[Value],
     ) -> Result<Value, MinijinjaError> {
-        unimplemented!("get_persist_doc_columns")
+        let mut parser = ArgParser::new(args, None);
+        check_num_args(current_function_name!(), &parser, 2, 2)?;
+
+        let existing_columns = parser.get::<Value>("existing_columns")?;
+
+        let model_columns = parser.get::<Value>("model_columns")?;
+
+        let existing_columns = Vec::<StdColumn>::deserialize(existing_columns)?;
+        let model_columns = BTreeMap::<String, DbtColumn>::deserialize(model_columns)?;
+
+        Ok(Value::from_serialize(
+            self.typed_adapter
+                .get_persist_doc_columns(existing_columns, model_columns)?,
+        ))
     }
 
     #[tracing::instrument(skip(self, state, args))]

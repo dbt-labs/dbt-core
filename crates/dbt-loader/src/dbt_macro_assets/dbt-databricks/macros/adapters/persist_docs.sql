@@ -4,7 +4,8 @@
       {% set comment = column['description'] %}
       {% set escaped_comment = comment | replace('\'', '\\\'') %}
       {% set comment_query %}
-        alter table {{ relation.render()|lower }} change column {{ api.Column.get_name(column) }} comment '{{ escaped_comment }}';
+        --- TODO(jasonlin45): We are deviating from the Python impl on api.Column.get_name, so we need to update this elsewhere too!
+        alter table {{ relation.render()|lower }} change column {{ adapter.quote(column['name']) if column.get('config', {}).get('quote', false) else column['name'] }} comment '{{ escaped_comment }}';
       {% endset %}
       {% do run_query(comment_query) %}
     {% endfor %}
