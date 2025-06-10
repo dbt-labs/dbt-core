@@ -818,7 +818,11 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "config": {
                     "enabled": True,
                     "event_time": None,
-                    "freshness": None,
+                    "freshness": {
+                        "error_after": {"count": None, "period": None},
+                        "warn_after": {"count": None, "period": None},
+                        "filter": None,
+                    },
                 },
                 "quoting": {
                     "database": None,
@@ -1358,7 +1362,11 @@ def expected_references_manifest(project):
                 "config": {
                     "enabled": True,
                     "event_time": None,
-                    "freshness": None,
+                    "freshness": {
+                        "error_after": {"count": None, "period": None},
+                        "warn_after": {"count": None, "period": None},
+                        "filter": None,
+                    },
                 },
                 "quoting": {
                     "database": False,
