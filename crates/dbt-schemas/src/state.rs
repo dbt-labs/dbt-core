@@ -462,7 +462,6 @@ impl DbtRuntimeConfig {
                     .clone(),
             );
         }
-        // dbg!(&runtime_config);
         runtime_config
     }
 
