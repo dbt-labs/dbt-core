@@ -58,8 +58,8 @@
 use std::{path::Path, rc::Rc, sync::LazyLock};
 
 use dbt_common::{
-    fs_err, io_args::IoArgs, show_warning, show_warning_soon_to_be_error, stdfs, ErrorCode,
-    FsError, FsResult,
+    fs_err, io_args::IoArgs, io_utils::try_read_yml_to_str, show_warning,
+    show_warning_soon_to_be_error, stdfs, ErrorCode, FsError, FsResult,
 };
 use dbt_serde_yaml::Value;
 use minijinja::listener::{DefaultRenderingEventListener, RenderingEventListener};
@@ -120,8 +120,15 @@ fn trim_beginning_whitespace_for_first_line_with_content(input: &str) -> String 
     input.to_string()
 }
 
-/// Deserializes a Yaml string into a `Value`.
-pub fn value_from_str(
+/// Deserializes a YAML file into a `Value`, using the file's absolute path for error reporting.
+pub fn value_from_file(io_args: Option<&IoArgs>, path: &Path) -> FsResult<Value> {
+    let input = try_read_yml_to_str(path)?;
+    value_from_str(io_args, &input, Some(path))
+}
+
+/// Internal function that deserializes a YAML string into a `Value`.
+/// The error_display_path should be an absolute, canonicalized path.
+fn value_from_str(
     io_args: Option<&IoArgs>,
     input: &str,
     error_display_path: Option<&Path>,

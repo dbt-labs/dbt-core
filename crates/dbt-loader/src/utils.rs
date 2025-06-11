@@ -1,10 +1,9 @@
 use dbt_common::io_args::IoArgs;
 use dbt_common::{
     constants::{DBT_DEPENDENCIES_YML, DBT_PACKAGES_YML},
-    err, fs_err,
-    io_utils::try_read_yml_to_str,
-    show_warning, stdfs, ErrorCode, FsResult,
+    err, fs_err, show_warning, stdfs, ErrorCode, FsResult,
 };
+use dbt_jinja_utils::serde::value_from_file;
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::Read,
@@ -13,7 +12,7 @@ use std::{
 
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnvironment,
-    serde::{from_yaml_raw, into_typed_with_jinja, value_from_str},
+    serde::{from_yaml_raw, into_typed_with_jinja},
 };
 use dbt_schemas::schemas::{
     packages::{DbtPackageEntry, DbtPackages},
@@ -116,17 +115,14 @@ pub fn read_profiles_and_extract_db_config(
     profile_path: PathBuf,
 ) -> Result<(String, DbConfig), Box<dbt_common::FsError>> {
     // if profile_path is under io_args.in_dir, use the relative path
-    let maybe_relative_profile_path = if profile_path.starts_with(&io_args.in_dir) {
+    let _maybe_relative_profile_path = if profile_path.starts_with(&io_args.in_dir) {
         stdfs::diff_paths(&profile_path, &io_args.in_dir)?
     } else {
         #[allow(clippy::redundant_clone)]
         profile_path.clone()
     };
-    let prepared_profile_val = value_from_str(
-        Some(io_args),
-        &try_read_yml_to_str(&profile_path)?,
-        Some(&maybe_relative_profile_path),
-    )?;
+
+    let prepared_profile_val = value_from_file(Some(io_args), &profile_path)?;
     let dbt_profiles = dbt_serde_yaml::from_value::<DbtProfilesIntermediate>(prepared_profile_val)?;
     if dbt_profiles.config.is_some() {
         return err!(

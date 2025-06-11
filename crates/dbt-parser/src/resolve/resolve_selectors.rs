@@ -1,11 +1,9 @@
-use dbt_common::io_utils::try_read_yml_to_str;
 use dbt_common::node_selector::{IndirectSelection, SelectExpression};
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
-use dbt_common::stdfs::diff_paths;
 use dbt_common::{err, fs_err, ErrorCode, FsResult};
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::phases::parse::build_resolve_context;
-use dbt_jinja_utils::serde::value_from_str;
+use dbt_jinja_utils::serde::value_from_file;
 use dbt_schemas::schemas::selectors::{SelectorEntry, SelectorFile};
 use dbt_selector_parser::{ResolvedSelector, SelectorParser};
 use std::collections::{BTreeMap, HashMap};
@@ -52,11 +50,7 @@ pub fn resolve_final_selectors(
         return Ok(resolved);
     }
 
-    let raw_selectors = value_from_str(
-        Some(&arg.io),
-        &try_read_yml_to_str(&path)?,
-        Some(&diff_paths(&path, &arg.io.in_dir)?),
-    )?;
+    let raw_selectors = value_from_file(Some(&arg.io), &path)?;
 
     let context = build_resolve_context(
         root_package_name,
