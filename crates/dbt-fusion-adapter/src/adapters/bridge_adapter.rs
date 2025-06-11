@@ -1,6 +1,7 @@
 use crate::adapters::base_adapter::{AdapterType, AdapterTyping};
 use crate::adapters::cast_util::{downcast_value_to_dyn_base_relation, dyn_base_columns_to_value};
 use crate::adapters::databricks::relation::DEFAULT_DATABRICKS_DATABASE;
+use crate::adapters::formatter::create_sql_literal_formatter;
 use crate::adapters::funcs::{
     dispatch_adapter_calls, dispatch_adapter_get_value, execute_macro, execute_macro_wrapper,
     none_value,
@@ -416,8 +417,11 @@ impl BaseAdapter for BridgeAdapter {
         let bindings = parser.get_optional::<Value>("bindings");
         let abridge_sql_log = parser.get_optional::<bool>("abridge_sql_log");
 
+        let adapter_type = self.typed_adapter.adapter_type();
+        let formatter = create_sql_literal_formatter(adapter_type);
+
         let formatted_sql = if let Some(bindings) = bindings {
-            format_sql_with_bindings(&sql, &bindings)?
+            format_sql_with_bindings(&sql, &bindings, formatter)?
         } else {
             sql
         };

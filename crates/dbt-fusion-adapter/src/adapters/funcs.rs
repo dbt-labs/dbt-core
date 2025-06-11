@@ -1,6 +1,7 @@
 use crate::adapters::base_adapter::BaseAdapter;
 use crate::adapters::errors::AdapterResult;
 use crate::adapters::errors::{AdapterError, AdapterErrorKind};
+use crate::adapters::formatter::SqlLiteralFormatter;
 use crate::adapters::response::ResultObject;
 use dbt_agate::AgateTable;
 
@@ -9,6 +10,7 @@ use minijinja::listener::RenderingEventListener;
 use minijinja::value::mutable_vec::MutableVec;
 use minijinja::value::ValueKind;
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
+use minijinja_contrib::modules::py_datetime::date::PyDate;
 
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -224,7 +226,11 @@ pub fn empty_map_value() -> Value {
 }
 
 // Helper function to format SQL with bindings
-pub fn format_sql_with_bindings(sql: &str, bindings: &Value) -> AdapterResult<String> {
+pub fn format_sql_with_bindings(
+    sql: &str,
+    bindings: &Value,
+    formatter: Box<dyn SqlLiteralFormatter>,
+) -> AdapterResult<String> {
     let mut result = String::with_capacity(sql.len());
     // this placeholder char is seen from `get_binding_char` macro
     let mut parts = sql.split("%s");
@@ -242,13 +248,17 @@ pub fn format_sql_with_bindings(sql: &str, bindings: &Value) -> AdapterResult<St
                 // Convert minijinja::Value to a SQL-safe string
                 match value.kind() {
                     ValueKind::String => {
-                        let raw_str = value.as_str().unwrap();
-                        let escaped_str = raw_str.replace("'", "''");
-                        result.push_str(&format!("'{}'", escaped_str))
+                        result.push_str(&formatter.format_str(value.as_str().unwrap()))
                     }
-                    ValueKind::None => result.push_str("NULL"),
-                    // TODO: handle the SQL escaping of more data types
-                    _ => result.push_str(&value.to_string()),
+                    ValueKind::None => result.push_str(&formatter.none_value()),
+                    _ => {
+                        // TODO: handle the SQL escaping of more data types
+                        if let Some(date) = value.downcast_object::<PyDate>() {
+                            result.push_str(&formatter.format_date(date.as_ref().clone()))
+                        } else {
+                            result.push_str(&value.to_string())
+                        }
+                    }
                 }
             }
             None => {

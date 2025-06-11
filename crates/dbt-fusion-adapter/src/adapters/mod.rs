@@ -6,6 +6,7 @@ pub mod config;
 pub mod convert_type;
 pub mod errors;
 pub mod factory;
+pub(crate) mod formatter;
 pub mod funcs;
 pub mod information_schema;
 pub mod query_ctx;

@@ -657,8 +657,8 @@ mod tests {
                 Value::from_object(PyDate::new(NaiveDate::from_ymd_opt(2025, 5, 28).unwrap()));
             let date1 =
                 Value::from_object(PyDate::new(NaiveDate::from_ymd_opt(2025, 5, 29).unwrap()));
-            assert_eq!(date0.to_string(), "'2025-05-28'");
-            assert_eq!(date1.to_string(), "'2025-05-29'");
+            assert_eq!(date0.to_string(), "2025-05-28");
+            assert_eq!(date1.to_string(), "2025-05-29");
 
             // Convert Arrow array to minijinja values and assert the result.
             let result = arrow_to_values(&array).unwrap();
