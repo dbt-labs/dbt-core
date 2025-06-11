@@ -674,6 +674,11 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         unimplemented!("only available with Databricks adapter")
     }
 
+    /// clean_sql
+    fn clean_sql(&self, _args: &str) -> AdapterResult<String> {
+        unimplemented!("only available with Databricks adapter")
+    }
+
     /// relation_max_name_length
     fn relation_max_name_length(&self) -> AdapterResult<u32> {
         unimplemented!("only available with Postgres and Redshift adapters")

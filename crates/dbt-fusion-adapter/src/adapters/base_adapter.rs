@@ -402,6 +402,9 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
         _args: &[Value],
     ) -> Result<Value, MinijinjaError>;
 
+    /// clean_sql
+    fn clean_sql(&self, _args: &[Value]) -> Result<Value, MinijinjaError>;
+
     /// get_relation_config
     fn get_relation_config(&self, _state: &State, _args: &[Value])
         -> Result<Value, MinijinjaError>;

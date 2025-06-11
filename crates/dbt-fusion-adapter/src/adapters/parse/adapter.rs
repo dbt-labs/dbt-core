@@ -652,6 +652,10 @@ impl BaseAdapter for ParseAdapter {
     ) -> Result<Value, MinijinjaError> {
         Ok(empty_string_value())
     }
+
+    fn clean_sql(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+        unimplemented!("clean_sql")
+    }
 }
 
 impl fmt::Display for ParseAdapter {

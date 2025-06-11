@@ -1340,6 +1340,16 @@ impl BaseAdapter for BridgeAdapter {
     fn redact_credentials(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
         unimplemented!("redact_credentials")
     }
+
+    #[tracing::instrument(skip(self, args))]
+    fn clean_sql(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+        let mut parser = ArgParser::new(args, None);
+        check_num_args(current_function_name!(), &parser, 1, 1)?;
+
+        let sql = parser.get::<String>("sql")?;
+
+        Ok(Value::from(self.typed_adapter.clean_sql(&sql)?))
+    }
 }
 
 impl fmt::Display for BridgeAdapter {

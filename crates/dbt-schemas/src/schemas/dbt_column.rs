@@ -24,6 +24,7 @@ pub struct DbtColumn {
     // Note: DbtConfig is ginormous, so we put it on the heap to save some memory:
     pub config: Option<Box<DbtConfig>>,
     pub policy_tags: Option<Vec<String>>,
+    pub quote: Option<bool>,
 }
 
 impl TryFrom<ColumnProperties> for DbtColumn {
@@ -59,6 +60,7 @@ impl TryFrom<ColumnProperties> for DbtColumn {
             constraints,
             policy_tags: value.policy_tags,
             config: config.map(Box::new),
+            quote: value.quote.map(bool::from),
         })
     }
 }

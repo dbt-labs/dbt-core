@@ -96,6 +96,7 @@ pub fn derive_static_base_column_object(input: TokenStream) -> TokenStream {
                     // Below are DatabricksColumn-only
                     "format_add_column_list" => Self::format_add_column_list(args),
                     "format_remove_column_list" => Self::format_remove_column_list(args),
+                    "get_name" => Self::get_name(args),
                     _ => Err(minijinja::Error::new(
                         minijinja::ErrorKind::InvalidOperation,
                         format!("Unknown method on StaticBaseColumnObject: '{}'", name),

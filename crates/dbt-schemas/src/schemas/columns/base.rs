@@ -1,4 +1,3 @@
-use crate::schemas::columns::databricks::DatabricksColumn;
 use crate::schemas::columns::utils::downcast_value_to_base_column;
 
 use dbt_adapter_proc_macros::{BaseColumnObject, StaticBaseColumnObject};
@@ -91,45 +90,16 @@ pub trait StaticBaseColumn {
         }))
     }
 
-    /// https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/column.py#L66
-    fn format_add_column_list(args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut args: ArgParser = ArgParser::new(args, None);
-        let columns = args.get::<Value>("columns")?;
-
-        let columns = Vec::<DatabricksColumn>::deserialize(columns)?;
-        Ok(Value::from(
-            columns
-                .iter()
-                .map(|c| {
-                    format!(
-                        "{} {}",
-                        c.quoted().as_str().expect("column.quoted returns a string"),
-                        c.dtype_prop()
-                    )
-                })
-                .collect::<Vec<String>>()
-                .join(", "),
-        ))
+    fn format_add_column_list(_args: &[Value]) -> Result<Value, MinijinjaError> {
+        unimplemented!("Only available for Databricks")
     }
 
-    /// https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/column.py#L62
-    fn format_remove_column_list(args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut args: ArgParser = ArgParser::new(args, None);
-        let columns = args.get::<Value>("columns")?;
+    fn format_remove_column_list(_args: &[Value]) -> Result<Value, MinijinjaError> {
+        unimplemented!("Only available for Databricks")
+    }
 
-        let columns = Vec::<DatabricksColumn>::deserialize(columns)?;
-        Ok(Value::from(
-            columns
-                .iter()
-                .map(|c| {
-                    c.quoted()
-                        .as_str()
-                        .expect("column.quoted returns a string")
-                        .to_owned()
-                })
-                .collect::<Vec<String>>()
-                .join(", "),
-        ))
+    fn get_name(_args: &[Value]) -> Result<Value, MinijinjaError> {
+        unimplemented!("Only available for Databricks")
     }
 }
 

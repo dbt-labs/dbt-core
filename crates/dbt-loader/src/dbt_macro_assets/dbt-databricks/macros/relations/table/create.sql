@@ -1,7 +1,9 @@
 {% macro databricks__create_table_as(temporary, relation, compiled_code, language='sql') -%}
   {%- if language == 'sql' -%}
     {%- if temporary -%}
-      {{ databricks__create_temporary_view(relation, compiled_code) }}
+      -- INTENTIONAL DIVERGENCE 
+      -- create_temporary_view method cannot be used here, because DBX v2 api doesn't support session
+      {{ _create_view_simple(relation, compiled_code) }}
     {%- else -%}
       {%- set file_format = config.get('file_format', default='delta') -%}
       {% if file_format == 'delta' %}
@@ -60,7 +62,8 @@
 {%- endmacro -%}
 
 
-{% macro databricks__create_temporary_view(relation, compiled_code) -%}
+-- INTENTIONAL DIVERGENCE
+{% macro _create_view_simple(relation, compiled_code) -%}
     create or replace view {{ relation }} as
       {{ compiled_code }}
 {%- endmacro -%}

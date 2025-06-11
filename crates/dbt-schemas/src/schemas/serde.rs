@@ -173,6 +173,15 @@ pub enum BooleanOrJinjaString {
     Boolean(bool),
 }
 
+impl From<BooleanOrJinjaString> for bool {
+    fn from(value: BooleanOrJinjaString) -> Self {
+        match value {
+            BooleanOrJinjaString::Boolean(b) => b,
+            BooleanOrJinjaString::JinjaString(s) => s.to_lowercase().parse::<bool>().unwrap(),
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 #[serde(untagged)]
 pub enum FloatOrString {
@@ -186,5 +195,35 @@ impl std::fmt::Display for FloatOrString {
             FloatOrString::Number(n) => write!(f, "{}", n),
             FloatOrString::String(s) => write!(f, "{}", s),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_boolean_or_jinja_string_from_string() {
+        // Test string values that should parse to true
+        assert!(bool::from(BooleanOrJinjaString::JinjaString(
+            "true".to_string()
+        )));
+        assert!(bool::from(BooleanOrJinjaString::JinjaString(
+            "TRUE".to_string()
+        )));
+        assert!(bool::from(BooleanOrJinjaString::JinjaString(
+            "True".to_string()
+        )));
+
+        // Test string values that should parse to false
+        assert!(!bool::from(BooleanOrJinjaString::JinjaString(
+            "false".to_string()
+        )));
+        assert!(!bool::from(BooleanOrJinjaString::JinjaString(
+            "FALSE".to_string()
+        )));
+        assert!(!bool::from(BooleanOrJinjaString::JinjaString(
+            "False".to_string()
+        )));
     }
 }

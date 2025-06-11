@@ -98,6 +98,7 @@ pub fn dispatch_adapter_calls(
             adapter.generate_unique_temporary_table_suffix(state, args)
         }
         "parse_columns_and_constraints" => adapter.parse_columns_and_constraints(state, args),
+        "clean_sql" => adapter.clean_sql(args),
         _ => Err(MinijinjaError::new(
             MinijinjaErrorKind::InvalidOperation,
             format!("Unknown method on adapter object: '{}'", name),

@@ -1,4 +1,5 @@
-use std::any::Any;
+use crate::schemas::columns::base::{BaseColumn, BaseColumnProperties, StaticBaseColumn};
+use crate::schemas::dbt_column::DbtColumn;
 
 use dbt_adapter_proc_macros::{BaseColumnObject, StaticBaseColumnObject};
 use dbt_common::current_function_name;
@@ -8,8 +9,7 @@ use minijinja::value::Enumerator;
 use minijinja::{Error as MinijinjaError, Value};
 use serde::{Deserialize, Serialize};
 
-use super::base::StaticBaseColumn;
-use super::base::{BaseColumn, BaseColumnProperties};
+use std::any::Any;
 
 /// A struct representing a column type for use with static methods
 #[derive(Clone, Debug, StaticBaseColumnObject)]
@@ -37,6 +37,60 @@ impl StaticBaseColumn for DatabricksColumnType {
         let column_type: String = args.get("dtype")?;
         Ok(Value::from(column_type))
     }
+
+    /// https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/column.py#L66
+    fn format_add_column_list(args: &[Value]) -> Result<Value, MinijinjaError> {
+        let mut args: ArgParser = ArgParser::new(args, None);
+        let columns = args.get::<Value>("columns")?;
+
+        let columns = Vec::<DatabricksColumn>::deserialize(columns)?;
+        Ok(Value::from(
+            columns
+                .iter()
+                .map(|c| {
+                    format!(
+                        "{} {}",
+                        c.quoted().as_str().expect("column.quoted returns a string"),
+                        c.dtype_prop()
+                    )
+                })
+                .collect::<Vec<String>>()
+                .join(", "),
+        ))
+    }
+
+    /// https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/column.py#L62
+    fn format_remove_column_list(args: &[Value]) -> Result<Value, MinijinjaError> {
+        let mut args: ArgParser = ArgParser::new(args, None);
+        let columns = args.get::<Value>("columns")?;
+
+        let columns = Vec::<DatabricksColumn>::deserialize(columns)?;
+        Ok(Value::from(
+            columns
+                .iter()
+                .map(|c| {
+                    c.quoted()
+                        .as_str()
+                        .expect("column.quoted returns a string")
+                        .to_owned()
+                })
+                .collect::<Vec<String>>()
+                .join(", "),
+        ))
+    }
+
+    /// https://github.com/databricks/dbt-databricks/blob/5e20eeaef43e671913f995d8079d4ec2b8a1da6d/dbt/adapters/databricks/column.py#L34
+    fn get_name(args: &[Value]) -> Result<Value, MinijinjaError> {
+        let mut args: ArgParser = ArgParser::new(args, None);
+        let column = args.get::<Value>("column")?;
+        let column = DbtColumn::deserialize(column)?;
+
+        if column.quote.unwrap_or(false) {
+            Ok(Value::from(quote(&column.name)))
+        } else {
+            Ok(Value::from(column.name))
+        }
+    }
 }
 
 /// A struct representing a column
@@ -57,7 +111,7 @@ impl BaseColumn for DatabricksColumn {
     }
 
     fn quoted(&self) -> Value {
-        Value::from(&format!("`{}`", self.name()))
+        Value::from(&quote(&self.name))
     }
 }
 
@@ -81,4 +135,8 @@ impl BaseColumnProperties for DatabricksColumn {
     fn numeric_scale_prop(&self) -> Option<u64> {
         None
     }
+}
+
+fn quote(name: &str) -> String {
+    format!("`{}`", name)
 }

@@ -7,13 +7,14 @@
             database=base_relation.database,
             type='table') %}
     {%- else -%}
-        -- This is intentional - it's to create a view relation instead of a temp view
-        -- since DBX v2 api doesn't support session
+        -- INTENTIONAL DIVERGENCE - the original impl assumes the view to be created is a temp view 
+        -- But because DBX v2 api doesn't support session, session-scoped objects like temp view won't work
+        -- For a regular view, we need the 3-part fully qualified name so that the relation can be referenced across queries
         {% set tmp_relation = api.Relation.create(
-            identifier=tmp_identifier,
-            schema=base_relation.schema,
-            database=base_relation.database,
-            type='view') %}
+          identifier=tmp_identifier,
+          schema=base_relation.schema,
+          database=base_relation.database,
+          type='view') %}
     {%- endif -%}
     {% do return(tmp_relation) %}
 {% endmacro %}
