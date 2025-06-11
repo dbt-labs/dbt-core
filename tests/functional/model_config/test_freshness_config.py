@@ -55,6 +55,16 @@ models__model_freshness_sql = """
 select 1 as id
 """
 
+models__model_freshness_sql_inline = """
+{{ config(
+    materialized='table',
+    freshness={
+        'warn_after': {'count': 24, 'period': 'hour'}
+    }
+) }}
+select 1 as id
+"""
+
 models__source_freshness_sql = """
 select * from {{ source('my_source', 'source_table') }}
 """
@@ -74,9 +84,10 @@ class TestModelFreshnessConfig:
             "model_b.sql": models__model_freshness_sql,
             "model_c.sql": models__source_freshness_sql,
             "model_d.sql": models__both_freshness_sql,
+            "model_e.sql": models__model_freshness_sql_inline,
         }
 
     def test_model_freshness_configs(self, project):
         run_dbt(["parse"])
         compile_results = run_dbt(["compile"])
-        assert len(compile_results) == 4  # All 4 models compiled successfully
+        assert len(compile_results) == 5  # All 4 models compiled successfully

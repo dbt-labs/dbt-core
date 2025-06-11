@@ -1,0 +1,6 @@
+kind: Fixes
+body: ignore invalid model freshness configs in inline model configs
+time: 2025-06-10T21:12:41.972614-07:00
+custom:
+  Author: colin-rogers-dbt
+  Issue: "11728"
