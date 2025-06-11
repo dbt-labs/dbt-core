@@ -1,5 +1,5 @@
 use dbt_common::FsError;
-use dbt_serde_yaml::JsonSchema;
+use dbt_serde_yaml::{JsonSchema, Verbatim};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
@@ -18,8 +18,8 @@ pub struct ProjectUnitTestConfig {
     pub meta: Option<serde_json::Value>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
-    #[serde(flatten)]
-    pub __additional_properties__: BTreeMap<String, dbt_serde_yaml::Value>,
+    // Flattened field:
+    pub __additional_properties__: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
 }
 
 impl TryFrom<&ProjectUnitTestConfig> for DbtConfig {

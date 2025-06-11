@@ -54,7 +54,7 @@ pub struct ProjectSeedConfig {
     pub transient: Option<bool>,
     #[serde(rename = "+quoting")]
     pub quoting: Option<DbtQuoting>,
-    #[serde(flatten)]
+    // Flattened field:
     pub __additional_properties__: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
 }
 
