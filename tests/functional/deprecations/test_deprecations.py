@@ -1,4 +1,5 @@
 import os
+import sys
 from collections import defaultdict
 from unittest import mock
 
@@ -15,6 +16,7 @@ from dbt.events.types import (
     DeprecationsSummary,
     DuplicateYAMLKeysDeprecation,
     GenericJSONSchemaValidationDeprecation,
+    ModelParamUsageDeprecation,
     PackageRedirectDeprecation,
     WEOIncludeExcludeDeprecation,
 )
@@ -491,3 +493,57 @@ class TestWEOIncludeExcludeDeprecation:
                 assert "exclude" in event_catcher.caught_events[0].info.msg
             else:
                 assert "exclude" not in event_catcher.caught_events[0].info.msg
+
+
+class TestModelsParamUsageDeprecation:
+
+    @mock.patch.object(sys, "argv", ["dbt", "ls", "--models", "some_model"])
+    def test_models_usage(self, project):
+        event_catcher = EventCatcher(ModelParamUsageDeprecation)
+
+        assert len(event_catcher.caught_events) == 0
+        run_dbt(
+            ["ls", "--models", "some_model"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 1
+
+
+class TestModelParamUsageDeprecation:
+    @mock.patch.object(sys, "argv", ["dbt", "ls", "--model", "some_model"])
+    def test_model_usage(self, project):
+        event_catcher = EventCatcher(ModelParamUsageDeprecation)
+
+        assert len(event_catcher.caught_events) == 0
+        run_dbt(
+            ["ls", "--model", "some_model"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 1
+
+
+class TestMParamUsageDeprecation:
+    @mock.patch.object(sys, "argv", ["dbt", "ls", "-m", "some_model"])
+    def test_m_usage(self, project):
+        event_catcher = EventCatcher(ModelParamUsageDeprecation)
+
+        assert len(event_catcher.caught_events) == 0
+        run_dbt(
+            ["ls", "-m", "some_model"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 1
+
+
+class TestSelectParamNoModelUsageDeprecation:
+
+    @mock.patch.object(sys, "argv", ["dbt", "ls", "--select", "some_model"])
+    def test_select_usage(self, project):
+        event_catcher = EventCatcher(ModelParamUsageDeprecation)
+
+        assert len(event_catcher.caught_events) == 0
+        run_dbt(
+            ["ls", "--select", "some_model"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 0
