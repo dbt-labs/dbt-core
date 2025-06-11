@@ -399,7 +399,7 @@ class Flags:
         # Handle firing deprecations of CLI aliases separately using argv
         # because click because it difficult to disambiguite which CLI option was used
         # and only preserves the 'canonical' representation.
-        for deprecated_flags, warning in DEPRECATED_FLAGS_TO_WARNINGS.item():
+        for deprecated_flags, warning in DEPRECATED_FLAGS_TO_WARNINGS.items():
             for deprecated_flag in deprecated_flags:
                 if deprecated_flag in sys.argv:
                     warn(warning)
