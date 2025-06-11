@@ -17,7 +17,7 @@ from dbt.cli.types import Command as CliCommand
 from dbt.config.project import read_project_flags
 from dbt.config.utils import normalize_warn_error_options
 from dbt.contracts.project import ProjectFlags
-from dbt.deprecations import fire_buffered_deprecations, renamed_env_var
+from dbt.deprecations import fire_buffered_deprecations, renamed_env_var, warn
 from dbt.events import ALL_EVENT_NAMES
 from dbt_common import ui
 from dbt_common.clients import jinja
@@ -49,6 +49,8 @@ DEPRECATED_PARAMS = {
     "deprecated_state": "state",
 }
 
+
+DEPRECATED_FLAGS_TO_WARNINGS = {("--models", "--model", "-m"): "model-param-usage-deprecation"}
 
 WHICH_KEY = "which"
 
@@ -393,6 +395,14 @@ class Flags:
         object.__delattr__(self, "deprecated_env_var_warnings")
 
         fire_buffered_deprecations()
+
+        # Handle firing deprecations of CLI aliases separately using argv
+        # because click because it difficult to disambiguite which CLI option was used
+        # and only preserves the 'canonical' representation.
+        for deprecated_flags, warning in DEPRECATED_FLAGS_TO_WARNINGS.item():
+            for deprecated_flag in deprecated_flags:
+                if deprecated_flag in sys.argv:
+                    warn(warning)
 
     @classmethod
     def from_dict(cls, command: CliCommand, args_dict: Dict[str, Any]) -> "Flags":
