@@ -21,7 +21,8 @@ pub struct DbtColumn {
     pub data_type: Option<String>,
     pub description: Option<String>,
     pub constraints: Vec<Constraint>,
-    pub config: Option<DbtConfig>,
+    // Note: DbtConfig is ginormous, so we put it on the heap to save some memory:
+    pub config: Option<Box<DbtConfig>>,
     pub policy_tags: Option<Vec<String>>,
 }
 
@@ -57,7 +58,7 @@ impl TryFrom<ColumnProperties> for DbtColumn {
             description: value.description,
             constraints,
             policy_tags: value.policy_tags,
-            config,
+            config: config.map(Box::new),
         })
     }
 }
@@ -117,7 +118,7 @@ pub fn process_columns(
                     if let Some(config) = &mut dbt_col.config {
                         config.default_to(parent_config);
                     } else {
-                        dbt_col.config = Some(parent_config.clone());
+                        dbt_col.config = Some(Box::new(parent_config.clone()));
                     }
                     Ok(dbt_col)
                 })
