@@ -84,7 +84,7 @@ class ModelConfig(NodeConfig):
             and isinstance(data["freshness"], dict)
             and "build_after" in data["freshness"]
         ):
-            data["freshness"] = ModelFreshness.from_dict(data["freshness"])
+            data["freshness"] = ModelFreshness.from_dict(data["freshness"]).to_dict()
         else:
             data.pop("freshness", None)
         return data
