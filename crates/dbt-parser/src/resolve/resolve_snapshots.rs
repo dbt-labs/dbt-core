@@ -5,7 +5,7 @@ use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_schemas::project_configs::ProjectConfigs;
-use dbt_schemas::schemas::common::{DbtContract, DbtQuoting, NodeDependsOn};
+use dbt_schemas::schemas::common::{DbtContract, DbtMaterialization, DbtQuoting, NodeDependsOn};
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::macros::DbtMacro;
 use dbt_schemas::schemas::manifest::{CommonAttributes, DbtSnapshot, NodeBaseAttributes};
@@ -192,6 +192,8 @@ pub async fn resolve_snapshots(
             let unique_id = format!("snapshot.{}.{}", package_name, snapshot_name);
 
             final_config.enabled = Some(!(status == ModelStatus::Disabled));
+
+            final_config.materialized = Some(DbtMaterialization::Snapshot);
 
             // Create initial snapshot with default values
             let mut dbt_snapshot = DbtSnapshot {
