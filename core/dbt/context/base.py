@@ -83,7 +83,15 @@ def get_itertools_module_context() -> Dict[str, Any]:
         "combinations_with_replacement",
     ]
 
-    return {name: getattr(itertools, name) for name in context_exports}
+    def deprecation_wrapper(fn):
+        def deprecation_wrapper_inner():
+            # TODO: call dbt.deprecations.warn + plumb that through
+            print("deprecated!")
+            return fn
+
+        return deprecation_wrapper_inner
+
+    return {name: deprecation_wrapper(getattr(itertools, name)) for name in context_exports}
 
 
 def get_context_modules() -> Dict[str, Dict[str, Any]]:
