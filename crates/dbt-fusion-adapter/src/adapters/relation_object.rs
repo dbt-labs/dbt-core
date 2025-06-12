@@ -96,6 +96,10 @@ impl Object for RelationObject {
             Some("type") => Some(self.relation_type_as_value()),
             Some("can_be_renamed") => Some(Value::from(self.can_be_renamed())),
             Some("can_be_replaced") => Some(Value::from(self.can_be_replaced())),
+            Some("MaterializedView") => {
+                Some(Value::from(RelationType::MaterializedView.to_string()))
+            }
+            Some("Table") => Some(Value::from(RelationType::Table.to_string())),
             _ => None,
         }
     }
