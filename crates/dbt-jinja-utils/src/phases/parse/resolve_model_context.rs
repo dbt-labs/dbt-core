@@ -16,6 +16,7 @@ use dbt_common::{serde_utils::convert_json_to_map, FsResult};
 use dbt_frontend_common::error::CodeLocation;
 use dbt_fusion_adapter::adapters::load_store::ResultStore;
 use dbt_fusion_adapter::adapters::relation_object::create_relation;
+use dbt_schemas::schemas::manifest::InternalDbtNode;
 use dbt_schemas::{
     dbt_types::RelationType,
     schemas::{
@@ -228,8 +229,7 @@ pub fn build_resolve_model_context(
         is_extended_model: false,
     };
 
-    let mut model_map =
-        convert_json_to_map(serde_json::to_value(model).expect("Failed to serialize object"));
+    let mut model_map = convert_json_to_map(model.serialize());
     model_map.insert(
         "batch".to_string(),
         MinijinjaValue::from_object(init_batch_context()),
