@@ -18,12 +18,7 @@ from typing import (
 )
 
 from dbt.artifacts.resources import RefArgs
-from dbt.artifacts.resources.v1.model import (
-    CustomGranularity,
-    ModelFreshness,
-    TimeSpine,
-    merge_model_freshness,
-)
+from dbt.artifacts.resources.v1.model import CustomGranularity, TimeSpine
 from dbt.clients.checked_load import (
     checked_load,
     issue_deprecation_warnings_for_failures,
@@ -766,8 +761,6 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         deprecation_date: Optional[datetime.datetime] = None
         time_spine: Optional[TimeSpine] = None
 
-        freshness: Optional[ModelFreshness] = None
-
         if isinstance(block.target, UnparsedModelUpdate):
             deprecation_date = block.target.deprecation_date
             time_spine = (
@@ -785,37 +778,6 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                 else None
             )
 
-            try:
-                project_freshness_dict = self.project.models.get("+freshness", None)
-                project_freshness = (
-                    ModelFreshness.from_dict(project_freshness_dict)
-                    if project_freshness_dict and "build_after" in project_freshness_dict
-                    else None
-                )
-            except ValueError:
-                fire_event(
-                    Note(
-                        msg="Could not validate `freshness` for `models` in 'dbt_project.yml', ignoring.",
-                    ),
-                    EventLevel.WARN,
-                )
-                project_freshness = None
-
-            model_freshness_dict = block.target.freshness or None
-            model_freshness = (
-                ModelFreshness.from_dict(model_freshness_dict)
-                if model_freshness_dict and "build_after" in model_freshness_dict
-                else None
-            )
-
-            config_freshness_dict = block.target.config.get("freshness", None)
-            config_freshness = (
-                ModelFreshness.from_dict(config_freshness_dict)
-                if config_freshness_dict and "build_after" in config_freshness_dict
-                else None
-            )
-            freshness = merge_model_freshness(project_freshness, model_freshness, config_freshness)
-
         patch = ParsedNodePatch(
             name=block.target.name,
             original_file_path=block.target.original_file_path,
@@ -832,7 +794,6 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             constraints=block.target.constraints,
             deprecation_date=deprecation_date,
             time_spine=time_spine,
-            freshness=freshness,
         )
         assert isinstance(self.yaml.file, SchemaSourceFile)
         source_file: SchemaSourceFile = self.yaml.file
@@ -1122,7 +1083,6 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
         # These two will have to be reapplied after config is built for versioned models
         self.patch_constraints(node, patch.constraints)
         self.patch_time_spine(node, patch.time_spine)
-        node.freshness = patch.freshness
         node.build_contract_checksum()
 
     def patch_constraints(self, node: ModelNode, constraints: List[Dict[str, Any]]) -> None:

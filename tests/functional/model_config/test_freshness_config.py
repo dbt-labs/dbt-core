@@ -22,9 +22,10 @@ sources:
   - name: my_source
     database: "{{ target.database }}"
     schema: "{{ target.schema }}"
-    freshness:
-      warn_after: {count: 24, period: hour}
-      error_after: {count: 48, period: hour}
+    config:
+      freshness:
+        warn_after: {count: 24, period: hour}
+        error_after: {count: 48, period: hour}
     loaded_at_field: _loaded_at
     tables:
       - name: source_table
@@ -35,16 +36,18 @@ models:
     description: Model with no freshness defined
   - name: model_b
     description: Model with only model freshness defined
-    freshness:
-      build_after:
-        count: 1
-        period: day
-        updates_on: all
+    config:
+      freshness:
+        build_after:
+          count: 1
+          period: day
+          updates_on: all
   - name: model_c
     description: Model with only source freshness defined
-    freshness:
-      warn_after: {count: 24, period: hour}
-      error_after: {count: 48, period: hour}
+    config:
+      freshness:
+        warn_after: {count: 24, period: hour}
+        error_after: {count: 48, period: hour}
     loaded_at_field: _loaded_at
     tables:
       - name: source_table
