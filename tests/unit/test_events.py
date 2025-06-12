@@ -169,6 +169,7 @@ sample_values = [
     core_types.CustomOutputPathInSourceFreshnessDeprecation(path=""),
     core_types.PropertyMovedToConfigDeprecation(key="", key_path="", file=""),
     core_types.WEOIncludeExcludeDeprecation(found_include=True, found_exclude=True),
+    core_types.ModelParamUsageDeprecation(),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),
