@@ -387,7 +387,7 @@ class Flags:
                     "Value for `--event-time-start` must be less than `--event-time-end`"
                 )
 
-    def fire_deprecations(self, ctx):
+    def fire_deprecations(self, ctx: Optional[Context] = None):
         """Fires events for deprecated env_var usage."""
         [dep_fn() for dep_fn in self.deprecated_env_var_warnings]
         # It is necessary to remove this attr from the class so it does
@@ -399,7 +399,11 @@ class Flags:
         # Handle firing deprecations of CLI aliases separately using argv or dbtRunner args
         # because click doesn't make it possible to disambiguite which literal CLI option was used
         # and only preserves the 'canonical' representation.
-        original_command_args = ctx.obj.get("dbt_runner_command_args") or sys.argv
+        original_command_args = (
+            ctx.obj["dbt_runner_command_args"]
+            if (ctx and ctx.obj and "dbt_runner_command_args" in ctx.obj)
+            else sys.argv
+        )
         for deprecated_flags, warning in DEPRECATED_FLAGS_TO_WARNINGS.items():
             for deprecated_flag in deprecated_flags:
                 if deprecated_flag in original_command_args:
