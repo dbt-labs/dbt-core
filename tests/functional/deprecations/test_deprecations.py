@@ -791,3 +791,12 @@ class TestMissingArgumentsPropertyInGenericTestDeprecation:
             callbacks=[event_catcher.catch],
         )
         assert len(event_catcher.caught_events) == 4
+class TestModulesItertoolsDeprecation:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models_itertools.sql": "select {{ modules.itertools.count() }}",
+        }
+
+    def test_models_itertools(self, project):
+        run_dbt(["parse", "--no-partial-parse"])  # , callbacks=[event_catcher.catch])
