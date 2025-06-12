@@ -311,7 +311,7 @@ models:
       description: A description of my model
       config:
         freshness:
-          build_after: {count: 1, period: day, updates_on: any}
+          build_after: {count: 1, period: day, updates_on: all}
 """
 
 SINGLE_TABLE_MODEL_TOP_LEVEL_FRESHNESS = """
@@ -329,9 +329,9 @@ models:
       config:
         freshness:
           build_after:
-          updates_on: all
-          period: hour
-          count: 0
+            updates_on: all
+            period: hour
+            count: 5
 """
 
 
@@ -745,7 +745,7 @@ class SchemaParserModelsTest(SchemaParserTest):
         my_model_node = MockNode(
             package="root",
             name="my_model",
-            config=mock.MagicMock(enabled=True),
+            config=ModelConfig(enabled=True),
             refs=[],
             sources=[],
             patch_path=None,
@@ -778,7 +778,7 @@ class SchemaParserModelsTest(SchemaParserTest):
 
         assert self.parser.manifest.nodes[
             "model.root.my_model"
-        ].freshness.build_after == ModelBuildAfter(
+        ].config.freshness.build_after == ModelBuildAfter(
             count=1, period="day", updates_on=ModelFreshnessUpdatesOnOptions.all
         )
 
@@ -789,7 +789,11 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.parser.parse_file(block, dct)
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
 
-        assert self.parser.manifest.nodes["model.root.my_model"].freshness is None
+        # we can't use hasattr because the model node is a mock, and checking with hasattr will add it to the mock
+        assert "freshness" not in self.parser.manifest.nodes["model.root.my_model"].__dir__()
+
+        # should be None because nothing set it
+        assert self.parser.manifest.nodes["model.root.my_model"].config.freshness is None
 
     def test__parse_model_freshness_depend_on(self):
         block = self.file_block_for(SINGLE_TABLE_MODEL_FRESHNESS_ONLY_DEPEND_ON, "test_one.yml")
@@ -799,8 +803,8 @@ class SchemaParserModelsTest(SchemaParserTest):
         self.assert_has_manifest_lengths(self.parser.manifest, nodes=1)
         assert self.parser.manifest.nodes[
             "model.root.my_model"
-        ].freshness.build_after == ModelBuildAfter(
-            count=0, period="hour", updates_on=ModelFreshnessUpdatesOnOptions.all
+        ].config.freshness.build_after == ModelBuildAfter(
+            count=5, period="hour", updates_on=ModelFreshnessUpdatesOnOptions.all
         )
 
     def test__read_basic_model_tests_wrong_severity(self):
