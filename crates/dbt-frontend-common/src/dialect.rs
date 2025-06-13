@@ -237,7 +237,7 @@ impl Dialect {
                 // TODO: revert this once
                 // https://github.com/sdf-labs/sdf/issues/3328 is fixed:
                 // c.is_alphanumeric() || ['_', '`', '@'].contains(&c)
-                c != '.' && c != self.quote_char() && !c.is_whitespace() && c != '/'
+                c != '.' && c != self.quote_char() && !c.is_whitespace() && c != '/' && c != ';'
             }
             Dialect::Redshift => c.is_alphanumeric() || c == '_',
             _ => c.is_alphanumeric() || c == '_',
@@ -367,7 +367,7 @@ where
 
     let Some((_, c)) = chars.peek() else {
         // Empty string is not a syntactically valid identifier
-        return internal_err!("expecting identifier but got end of input");
+        return internal_err!("Expecting identifier but got end of input");
     };
 
     let is_quoted = *c == quote_char;
