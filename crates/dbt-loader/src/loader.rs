@@ -4,6 +4,7 @@ use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::phases::load::init::initialize_load_jinja_environment;
+use dbt_jinja_utils::serde::from_yaml_error;
 use dbt_schemas::schemas::serde::StringOrInteger;
 use fs_deps::get_or_install_packages;
 use pathdiff::diff_paths;
@@ -229,6 +230,7 @@ pub async fn load_inner(
         arg.io,
         fsinfo!(LOADING.into(), show_project_path.display().to_string())
     );
+
     let dbt_project = load_project_yml(&arg.io, env, &dbt_project_path, arg.vars.clone())?;
     load_vars(
         &dbt_project.name,
@@ -236,7 +238,8 @@ pub async fn load_inner(
             .vars
             .as_ref()
             .map(|vars| Deserialize::deserialize(vars.clone()))
-            .transpose()?,
+            .transpose()
+            .map_err(|e| from_yaml_error(e, Some(&dbt_project_path)))?,
         collected_vars,
     )?;
     // Set dispatch config for future use

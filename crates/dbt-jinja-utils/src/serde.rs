@@ -55,11 +55,15 @@
 //!  `minijinja::Value`, serialize them to a `yaml::Value` *first*, then
 //!  serialize the `yaml::Value` to the target format.
 
-use std::{path::Path, rc::Rc, sync::LazyLock};
+use std::{
+    path::{Path, PathBuf},
+    rc::Rc,
+    sync::LazyLock,
+};
 
 use dbt_common::{
     fs_err, io_args::IoArgs, io_utils::try_read_yml_to_str, show_warning,
-    show_warning_soon_to_be_error, stdfs, ErrorCode, FsError, FsResult,
+    show_warning_soon_to_be_error, CodeLocation, ErrorCode, FsError, FsResult,
 };
 use dbt_serde_yaml::Value;
 use minijinja::listener::{DefaultRenderingEventListener, RenderingEventListener};
@@ -133,8 +137,7 @@ fn value_from_str(
     input: &str,
     error_display_path: Option<&Path>,
 ) -> FsResult<Value> {
-    let _f =
-        dbt_serde_yaml::with_filename(error_display_path.and_then(|p| stdfs::canonicalize(p).ok()));
+    let _f = dbt_serde_yaml::with_filename(error_display_path.map(PathBuf::from));
 
     // replace tabs with spaces
     // trim beginning whitespace for the first line with content
@@ -159,8 +162,11 @@ fn value_from_str(
         }
         // last key wins:
         dbt_serde_yaml::mapping::DuplicateKey::Overwrite
-    })?;
-    value.apply_merge()?;
+    })
+    .map_err(|e| from_yaml_error(e, error_display_path))?;
+    value
+        .apply_merge()
+        .map_err(|e| from_yaml_error(e, error_display_path))?;
 
     Ok(value)
 }
@@ -256,7 +262,9 @@ where
         ))
     };
 
-    let res = value.into_typed(warn_unused_keys, transform)?;
+    let res = value
+        .into_typed(warn_unused_keys, transform)
+        .map_err(|e| from_yaml_error(e, None))?;
     Ok((res, warnings))
 }
 
@@ -274,7 +282,14 @@ fn render_jinja_str<S: Serialize>(
             ctx,
             listener.unwrap_or_else(|| Rc::new(DefaultRenderingEventListener)),
         )?;
-        let val = dbt_serde_yaml::to_value(eval)?;
+        let val = dbt_serde_yaml::to_value(eval).map_err(|e| {
+            from_yaml_error(
+                e,
+                // The caller will attach the error location using the span in the
+                // `Value` object, if available:
+                None,
+            )
+        })?;
         let val = match val {
             Value::String(s, span) if should_render_secrets => {
                 Value::string(render_secrets(s)?).with_span(span)
@@ -348,6 +363,29 @@ pub fn check_single_expression_without_whitepsace_control(input: &str) -> bool {
         && input.starts_with("{{")
         && input.ends_with("}}")
         && { RE_SIMPLE_EXPR.is_match(input) }
+}
+
+/// Converts a `dbt_serde_yaml::Error` into a `FsError`, attaching the error location
+pub fn from_yaml_error(err: dbt_serde_yaml::Error, filename: Option<&Path>) -> Box<FsError> {
+    let msg = err.display_no_mark().to_string();
+    let location = err
+        .span()
+        .map_or_else(CodeLocation::default, CodeLocation::from);
+    let location = if let Some(filename) = filename {
+        location.with_file(filename)
+    } else {
+        location
+    };
+
+    if let Some(err) = err.into_external() {
+        if let Ok(err) = err.downcast::<FsError>() {
+            // These are errors raised from our own callbacks:
+            return err;
+        }
+    }
+    FsError::new(ErrorCode::SerializationError, format!("YAML error: {msg}"))
+        .with_location(location)
+        .into()
 }
 
 #[cfg(test)]

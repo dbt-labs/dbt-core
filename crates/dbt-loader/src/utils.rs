@@ -3,7 +3,7 @@ use dbt_common::{
     constants::{DBT_DEPENDENCIES_YML, DBT_PACKAGES_YML},
     err, fs_err, show_warning, stdfs, ErrorCode, FsResult,
 };
-use dbt_jinja_utils::serde::value_from_file;
+use dbt_jinja_utils::serde::{from_yaml_error, value_from_file};
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::Read,
@@ -114,16 +114,9 @@ pub fn read_profiles_and_extract_db_config(
     profile_str: &str,
     profile_path: PathBuf,
 ) -> Result<(String, DbConfig), Box<dbt_common::FsError>> {
-    // if profile_path is under io_args.in_dir, use the relative path
-    let _maybe_relative_profile_path = if profile_path.starts_with(&io_args.in_dir) {
-        stdfs::diff_paths(&profile_path, &io_args.in_dir)?
-    } else {
-        #[allow(clippy::redundant_clone)]
-        profile_path.clone()
-    };
-
     let prepared_profile_val = value_from_file(Some(io_args), &profile_path)?;
-    let dbt_profiles = dbt_serde_yaml::from_value::<DbtProfilesIntermediate>(prepared_profile_val)?;
+    let dbt_profiles = dbt_serde_yaml::from_value::<DbtProfilesIntermediate>(prepared_profile_val)
+        .map_err(|e| from_yaml_error(e, Some(&profile_path)))?;
     if dbt_profiles.config.is_some() {
         return err!(
             ErrorCode::InvalidConfig,

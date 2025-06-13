@@ -1,5 +1,5 @@
 use dbt_common::io_args::IoArgs;
-use dbt_common::{io_utils::try_read_yml_to_str, stdfs, unexpected_fs_err, FsResult};
+use dbt_common::{io_utils::try_read_yml_to_str, unexpected_fs_err, FsResult};
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnvironment,
     phases::{load::RenderProjectScope, parse::build_resolve_context},
@@ -19,12 +19,6 @@ pub fn load_project_yml(
 ) -> FsResult<DbtProject> {
     let dbt_project_render_scope = RenderProjectScope::new(env, cli_vars);
     let template = try_read_yml_to_str(dbt_project_path)?;
-    // if profile_path is under io_args.in_dir, use the relative path
-    let maybe_relative_dbt_project_path = if dbt_project_path.starts_with(&io_args.in_dir) {
-        stdfs::diff_paths(dbt_project_path, &io_args.in_dir)?
-    } else {
-        dbt_project_path.to_path_buf()
-    };
 
     let context = build_resolve_context(
         "dbt_project.yml",
@@ -41,7 +35,7 @@ pub fn load_project_yml(
         dbt_project_render_scope.jinja_env,
         &context,
         None,
-        Some(maybe_relative_dbt_project_path.as_path()),
+        Some(dbt_project_path),
     )?;
 
     // Set default model paths if not specified

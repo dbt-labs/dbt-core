@@ -1,6 +1,6 @@
 use dbt_common::constants::DBT_SNAPSHOTS_DIR_NAME;
 use dbt_common::error::AbstractLocation;
-use dbt_common::{fs_err, show_error, show_warning, stdfs, ErrorCode, FsResult};
+use dbt_common::{fs_err, show_error, show_warning, stdfs, unexpected_fs_err, ErrorCode, FsResult};
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
@@ -129,7 +129,12 @@ pub async fn resolve_snapshots(
                 snapshot_files.push(asset.to_owned());
             }
             // Put snapshot back in as it is unused
-            let _ = std::mem::replace(&mut mpe.schema_value, dbt_serde_yaml::to_value(snapshot)?);
+            let _ = std::mem::replace(
+                &mut mpe.schema_value,
+                dbt_serde_yaml::to_value(snapshot).map_err(|e| {
+                    unexpected_fs_err!("Failed to serialize snapshot properties: {e}")
+                })?,
+            );
         }
     }
 

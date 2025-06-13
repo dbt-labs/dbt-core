@@ -759,34 +759,6 @@ impl From<std::string::FromUtf8Error> for WrappedError {
     }
 }
 
-impl From<dbt_serde_yaml::Error> for FsError {
-    fn from(err: dbt_serde_yaml::Error) -> Self {
-        let msg = err.display_no_mark().to_string();
-        let span = err.span();
-        if let Some(err) = err.into_external() {
-            if let Ok(err) = err.downcast::<FsError>() {
-                // These are errors raised from our own callbacks:
-                return *err;
-            }
-        }
-        let err = FsError::new(
-            ErrorCode::SerializationError,
-            format!("YAML error: {}", msg),
-        );
-        if let Some(span) = span {
-            err.with_location(super::CodeLocation::from(span))
-        } else {
-            err
-        }
-    }
-}
-
-impl From<dbt_serde_yaml::Error> for Box<FsError> {
-    fn from(e: dbt_serde_yaml::Error) -> Self {
-        Box::new(e.into())
-    }
-}
-
 impl From<dbt_serde_yaml::Error> for WrappedError {
     fn from(e: dbt_serde_yaml::Error) -> Self {
         WrappedError::SerdeYml(e)

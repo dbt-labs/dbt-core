@@ -1,8 +1,8 @@
 use crate::args::ResolveArgs;
-use dbt_common::fs_err;
 use dbt_common::io_args::IoArgs;
 use dbt_common::show_warning_soon_to_be_error;
 use dbt_common::{constants::PARSING, fsinfo, show_progress, show_warning, ErrorCode, FsResult};
+use dbt_common::{fs_err, unexpected_fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::serde::{into_typed_raw, into_typed_with_jinja, value_from_file};
 use dbt_schemas::schemas::properties::{
@@ -97,6 +97,11 @@ impl MinimalProperties {
                         // Clear the tables field since it's already processed here:
                         tables: Verbatim(None),
                         ..source.clone()
+                    })
+                    .map_err(|e| {
+                        unexpected_fs_err!(
+                            "Failed to convert MinimalSchemaValue to dbt_serde_yaml::Value: {e}"
+                        )
                     })?;
 
                     for table in tables.iter() {
