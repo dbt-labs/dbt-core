@@ -1,3 +1,0 @@
-kind: Fixes
-body: Use absolute paths for error reporting when reading yml files
-time: 2025-06-10T22:26:35.008346685-07:00
