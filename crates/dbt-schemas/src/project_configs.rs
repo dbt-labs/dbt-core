@@ -6,8 +6,8 @@ use dbt_serde_yaml::Value;
 use crate::schemas::{
     manifest::DbtConfig,
     project::{
-        ProjectDataTestConfig, ProjectModelConfig, ProjectSeedConfig, ProjectSnapshotConfig,
-        ProjectSourceConfig, ProjectUnitTestConfig,
+        ProjectDataTestConfig, ProjectExposureConfig, ProjectModelConfig, ProjectSeedConfig,
+        ProjectSnapshotConfig, ProjectSourceConfig, ProjectUnitTestConfig,
     },
 };
 
@@ -28,6 +28,7 @@ pub enum ProjectConfigs<'a> {
     SnapshotConfigs(&'a ProjectSnapshotConfig),
     SourceConfigs(&'a ProjectSourceConfig),
     UnitTestConfigs(&'a ProjectUnitTestConfig),
+    ExposuresConfigs(&'a ProjectExposureConfig),
 }
 
 impl ProjectConfigs<'_> {
@@ -47,6 +48,9 @@ impl ProjectConfigs<'_> {
             ProjectConfigs::UnitTestConfigs(unit_test_configs) => {
                 &unit_test_configs.__additional_properties__
             }
+            ProjectConfigs::ExposuresConfigs(exposures_configs) => {
+                &exposures_configs.__additional_properties__
+            }
         }
     }
 }
@@ -62,6 +66,7 @@ impl<'a> TryInto<DbtConfig> for &'a ProjectConfigs<'a> {
             ProjectConfigs::SnapshotConfigs(snapshot) => DbtConfig::try_from(*snapshot),
             ProjectConfigs::SourceConfigs(source) => DbtConfig::try_from(*source),
             ProjectConfigs::UnitTestConfigs(unit_test) => DbtConfig::try_from(*unit_test),
+            ProjectConfigs::ExposuresConfigs(exposures) => DbtConfig::try_from(*exposures),
         }
     }
 }

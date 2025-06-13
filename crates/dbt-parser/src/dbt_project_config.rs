@@ -20,8 +20,8 @@ use dbt_schemas::{
         common::DbtQuoting,
         manifest::DbtConfig,
         project::{
-            DbtProject, ProjectDataTestConfig, ProjectModelConfig, ProjectSeedConfig,
-            ProjectSnapshotConfig, ProjectSourceConfig, ProjectUnitTestConfig,
+            DbtProject, ProjectDataTestConfig, ProjectExposureConfig, ProjectModelConfig,
+            ProjectSeedConfig, ProjectSnapshotConfig, ProjectSourceConfig, ProjectUnitTestConfig,
         },
     },
 };
@@ -283,6 +283,28 @@ pub fn recur_build_dbt_project_config(
                         io_args,
                         &child_config,
                         &ProjectConfigs::UnitTestConfigs(&child),
+                        env,
+                        context,
+                    )?,
+                );
+            }
+
+            ProjectConfigs::ExposuresConfigs(_) => {
+                let child: ProjectExposureConfig = into_typed_with_jinja(
+                    Some(io_args),
+                    childs_child.clone(),
+                    true,
+                    env,
+                    context,
+                    None,
+                )?;
+
+                children.insert(
+                    key.clone(),
+                    recur_build_dbt_project_config(
+                        io_args,
+                        &child_config,
+                        &ProjectConfigs::ExposuresConfigs(&child),
                         env,
                         context,
                     )?,

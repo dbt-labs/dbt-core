@@ -14,6 +14,7 @@ use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::StringOrInteger;
 
 use super::ProjectDataTestConfig;
+use super::ProjectExposureConfig;
 use super::ProjectMetricConfigs;
 use super::ProjectModelConfig;
 use super::ProjectSeedConfig;
@@ -89,6 +90,7 @@ pub struct DbtProject {
     pub tests: Option<ProjectDataTestConfig>,
     pub unit_tests: Option<ProjectUnitTestConfig>,
     pub data_tests: Option<ProjectDataTestConfig>,
+    pub exposures: Option<ProjectExposureConfig>,
     #[serde(rename = "saved-queries")]
     pub saved_queries: Option<SavedQueriesConfig>,
     #[serde(rename = "semantic-models")]
@@ -170,6 +172,7 @@ mod tests {
             data_tests: None,
             saved_queries: None,
             semantic_models: None,
+            exposures: None,
             clean_targets: None,
             config_version: None,
             dbt_cloud: None,

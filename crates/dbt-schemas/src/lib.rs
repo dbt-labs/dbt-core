@@ -66,6 +66,7 @@ pub mod schemas {
         mod dbt_project;
         mod configs {
             pub mod data_test_config;
+            pub mod exposure_config;
             pub mod metric_config;
             pub mod model_config;
             pub mod saved_queries_config;
@@ -76,6 +77,7 @@ pub mod schemas {
         }
 
         pub use configs::data_test_config::ProjectDataTestConfig;
+        pub use configs::exposure_config::ProjectExposureConfig;
         pub use configs::metric_config::ProjectMetricConfigs;
         pub use configs::model_config::ProjectModelConfig;
         pub use configs::saved_queries_config::SavedQueriesConfig;
