@@ -1,10 +1,12 @@
 use dbt_common::FsError;
 use dbt_serde_yaml::JsonSchema;
+use dbt_serde_yaml::Spanned;
 use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 
+use crate::dbt_utils::validate_delimeter;
 use crate::schemas::common::DbtQuoting;
 use crate::schemas::common::DocsConfig;
 use crate::schemas::common::Hooks;
@@ -54,6 +56,8 @@ pub struct ProjectSeedConfig {
     pub transient: Option<bool>,
     #[serde(rename = "+quoting")]
     pub quoting: Option<DbtQuoting>,
+    #[serde(rename = "+delimiter")]
+    pub delimiter: Spanned<Option<String>>,
     // Flattened field:
     pub __additional_properties__: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
 }
@@ -87,6 +91,7 @@ impl TryFrom<&ProjectSeedConfig> for DbtConfig {
             snowflake_warehouse: seed_configs.snowflake_warehouse.clone(),
             transient: seed_configs.transient,
             alias: seed_configs.alias.clone(),
+            delimiter: validate_delimeter(&seed_configs.delimiter)?,
             ..Default::default()
         })
     }

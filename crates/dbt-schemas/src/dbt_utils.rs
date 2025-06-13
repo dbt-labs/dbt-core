@@ -1,5 +1,8 @@
 use std::path::{Path, PathBuf};
 
+use dbt_common::{err, ErrorCode, FsResult};
+use dbt_serde_yaml::Spanned;
+
 use crate::{constants::DBT_BASE_SCHEMAS_URL, schemas::common::DbtQuoting};
 
 /// Macro that assigns values from `parent_config` to `self` for each field
@@ -63,4 +66,24 @@ pub fn resolve_package_quoting(quoting: Option<DbtQuoting>, adapter_type: &str) 
             identifier: Some(default_quoting_bool),
         }
     }
+}
+
+/// Validate a delimiter
+pub fn validate_delimeter(spanned_delimiter: &Spanned<Option<String>>) -> FsResult<Option<String>> {
+    if let Some(delimiter) = spanned_delimiter.as_ref() {
+        if delimiter.is_empty() {
+            return Ok(None);
+        } else if delimiter.len() != 1 || !delimiter.chars().next().unwrap().is_ascii() {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                loc => spanned_delimiter.span().clone(),
+                "Delimeter '{}' must be exactly one ascii character",
+                delimiter
+            );
+        } else {
+            return Ok(Some(delimiter.clone()));
+        }
+    }
+
+    Ok(None)
 }

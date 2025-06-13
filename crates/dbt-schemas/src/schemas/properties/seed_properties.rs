@@ -1,3 +1,4 @@
+use crate::dbt_utils::validate_delimeter;
 use crate::schemas::common::DocsConfig;
 use crate::schemas::common::Hooks;
 use crate::schemas::common::PersistDocsConfig;
@@ -7,6 +8,7 @@ use crate::schemas::manifest::DbtConfig;
 use crate::schemas::serde::try_from_value;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use dbt_serde_yaml::JsonSchema;
+use dbt_serde_yaml::Spanned;
 use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -50,7 +52,7 @@ pub struct SeedsConfig {
     pub alias: Option<String>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub persist_docs: Option<PersistDocsConfig>,
-    pub delimiter: Option<String>,
+    pub delimiter: Spanned<Option<String>>,
     pub event_time: Option<String>,
     pub full_refresh: Option<bool>,
     pub meta: Option<BTreeMap<String, serde_json::Value>>,
@@ -78,6 +80,7 @@ impl TryFrom<&SeedsConfig> for DbtConfig {
                 Some(StringOrArrayOfStrings::ArrayOfStrings(tags)) => Some(tags.clone()),
                 None => None,
             },
+            delimiter: validate_delimeter(&config.delimiter)?,
             ..Default::default()
         })
     }
