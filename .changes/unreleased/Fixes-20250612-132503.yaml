@@ -1,0 +1,3 @@
+kind: Fixes
+body: Validate --vars key-value pairs that do not have a space between key and value
+time: 2025-06-12T13:25:03.046841-04:00
