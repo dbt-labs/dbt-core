@@ -56,6 +56,7 @@ setup(
         # dbt-core uses these packages in standard ways. Pin to the major version, and check compatibility
         # with major versions in each new minor version of dbt-core.
         "click>=8.0.2,<9.0",
+        "jsonschema>=4.19.1,<5.0",
         "networkx>=2.3,<4.0",
         "protobuf>=5.0,<6.0",
         "requests<3.0.0",  # should match dbt-common
