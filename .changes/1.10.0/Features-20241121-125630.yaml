@@ -1,6 +1,0 @@
-kind: Features
-body: Add `batch` context object to model jinja context
-time: 2024-11-21T12:56:30.715473-06:00
-custom:
-  Author: QMalcolm
-  Issue: "11025"

@@ -1,7 +1,0 @@
-kind: Fixes
-body: Ensure build_after is present in model freshness in parsing, otherwise skip
-  freshness definition
-time: 2025-06-05T11:06:45.329942-07:00
-custom:
-  Author: QMalcolm
-  Issue: "11709"

@@ -1,6 +1,0 @@
-kind: Breaking Changes
-body: Flip behavior flag `source-freshness-run-project-hooks` to true
-time: 2025-05-12T15:04:36.70678-05:00
-custom:
-  Author: QMalcolm
-  Issue: "11609"

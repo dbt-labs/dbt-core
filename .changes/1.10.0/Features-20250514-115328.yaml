@@ -1,6 +1,0 @@
-kind: Features
-body: Deprecate --output/-o usage in source freshness
-time: 2025-05-14T11:53:28.640657-04:00
-custom:
-  Author: michelleark
-  Issue: "11559"
