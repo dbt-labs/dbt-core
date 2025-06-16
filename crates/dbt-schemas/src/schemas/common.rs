@@ -430,6 +430,17 @@ pub struct SnowflakeModelConfig {
     pub secure: Option<bool>,
 }
 
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct RedshiftModelConfig {
+    pub auto_refresh: Option<bool>,
+    pub backup: Option<bool>,
+    pub bind: Option<bool>,
+    pub dist: Option<String>,
+    pub sort: Option<Vec<String>>,
+    pub sort_type: Option<String>,
+}
+
 /// Constraints (model level or column level)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, JsonSchema)]
 #[serde(rename_all = "snake_case")]

@@ -11,7 +11,7 @@ use crate::schemas::{
         Access, Constraint, DatabricksModelConfig, DbtBatchSize, DbtChecksum, DbtContract,
         DbtIncrementalStrategy, DbtMaterialization, DbtQuoting, DbtUniqueKey, DocsConfig, Expect,
         FreshnessDefinition, Given, Hooks, IncludeExclude, NodeDependsOn, OnConfigurationChange,
-        OnSchemaChange, PersistDocsConfig, SnowflakeModelConfig,
+        OnSchemaChange, PersistDocsConfig, RedshiftModelConfig, SnowflakeModelConfig,
     },
     dbt_column::DbtColumn,
     macros::DbtMacro,
@@ -1310,6 +1310,8 @@ pub struct ManifestModelConfig {
     pub bigquery_model_config: BigQueryModelConfig,
     #[serde(flatten)]
     pub databricks_model_config: DatabricksModelConfig,
+    #[serde(flatten)]
+    pub redshift_model_config: RedshiftModelConfig,
     // Unsafe Designation
     #[serde(rename = "unsafe")]
     pub unsafe_: Option<bool>,
@@ -1396,6 +1398,14 @@ impl From<DbtConfig> for ManifestModelConfig {
                 catalog: config.catalog.clone(),
                 databricks_tags: config.databricks_tags.clone(),
                 databricks_compute: config.databricks_compute.clone(),
+            },
+            redshift_model_config: RedshiftModelConfig {
+                auto_refresh: config.auto_refresh,
+                backup: config.backup,
+                bind: config.bind,
+                dist: config.dist,
+                sort: config.sort,
+                sort_type: config.sort_type,
             },
             unsafe_: config.unsafe_,
             skip_compile: config.skip_compile,

@@ -72,6 +72,7 @@ pub struct ModelPropertiesConfigs {
     pub base_location_subpath: Option<String>,
     pub batch_size: Option<String>,
     pub begin: Option<String>,
+    pub bind: Option<bool>,
     pub buckets: Option<i64>,
     pub catalog: Option<String>,
     pub cluster_by: Option<BigqueryClusterConfig>,
@@ -84,6 +85,7 @@ pub struct ModelPropertiesConfigs {
     pub databricks_tags: Option<serde_json::Value>,
     pub databricks_compute: Option<String>,
     pub description: Option<String>,
+    pub dist: Option<String>,
     pub docs: Option<DocsConfig>,
     pub enable_refresh: Option<bool>,
     pub enabled: Option<bool>,
@@ -120,6 +122,8 @@ pub struct ModelPropertiesConfigs {
     pub schema: Option<String>,
     pub secure: Option<bool>,
     pub snowflake_warehouse: Option<String>,
+    pub sort: Option<StringOrArrayOfStrings>,
+    pub sort_type: Option<String>,
     pub sql_header: Option<String>,
     pub table_format: Option<String>,
     pub tags: Option<StringOrArrayOfStrings>,
@@ -218,6 +222,13 @@ impl TryFrom<&ModelPropertiesConfigs> for DbtConfig {
             pre_hook: (*config.pre_hook).clone(),
             model_freshness: config.freshness.clone(),
             static_analysis: config.static_analysis,
+            sort: match &config.sort {
+                Some(StringOrArrayOfStrings::String(sort)) => {
+                    Some(sort.split(',').map(|s| s.to_string()).collect())
+                }
+                Some(StringOrArrayOfStrings::ArrayOfStrings(sort)) => Some(sort.clone()),
+                None => None,
+            },
             ..Default::default()
         })
     }

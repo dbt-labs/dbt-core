@@ -64,6 +64,8 @@ pub struct ProjectModelConfig {
     pub databricks_tags: Option<serde_json::Value>,
     #[serde(rename = "+description")]
     pub description: Option<String>,
+    #[serde(rename = "+dist")]
+    pub dist: Option<String>,
     #[serde(rename = "+docs")]
     pub docs: Option<DocsConfig>,
     #[serde(rename = "+enable_refresh")]
@@ -146,6 +148,10 @@ pub struct ProjectModelConfig {
     pub schema: Option<String>,
     #[serde(rename = "+secure")]
     pub secure: Option<bool>,
+    #[serde(rename = "+sort")]
+    pub sort: Option<StringOrArrayOfStrings>,
+    #[serde(rename = "+sort_type")]
+    pub sort_type: Option<String>,
     #[serde(rename = "+snowflake_warehouse")]
     pub snowflake_warehouse: Option<String>,
     #[serde(rename = "+sql_header")]
@@ -255,6 +261,17 @@ impl TryFrom<&ProjectModelConfig> for DbtConfig {
             databricks_compute: model_configs.databricks_compute.clone(),
             liquid_clustered_by: model_configs.liquid_clustered_by.clone(),
             query_tag: model_configs.query_tag.clone(),
+            sort: match &model_configs.sort {
+                Some(StringOrArrayOfStrings::String(tags)) => {
+                    Some(tags.split(',').map(|s| s.to_string()).collect())
+                }
+                Some(StringOrArrayOfStrings::ArrayOfStrings(sort)) => Some(sort.clone()),
+                None => None,
+            },
+            sort_type: model_configs.sort_type.clone(),
+            dist: model_configs.dist.clone(),
+            bind: model_configs.bind,
+            auto_refresh: model_configs.auto_refresh,
             ..Default::default()
         })
     }

@@ -132,6 +132,12 @@ pub struct DbtConfig {
     pub databricks_tags: Option<BTreeMap<String, Value>>,
     pub databricks_compute: Option<String>,
     pub liquid_clustered_by: Option<String>,
+    // below are configs for Redshift
+    pub bind: Option<bool>,
+    pub dist: Option<String>,
+    #[serde(default, deserialize_with = "string_or_array")]
+    pub sort: Option<Vec<String>>,
+    pub sort_type: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub include_full_name_in_path: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
