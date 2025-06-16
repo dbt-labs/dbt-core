@@ -8,7 +8,7 @@ use std::{
 use chrono::DateTime;
 use chrono_tz::Tz;
 use dbt_common::{fs_err, ErrorCode, FsResult};
-use dbt_fusion_adapter::adapters::parse::adapter::create_parse_adapter;
+use dbt_fusion_adapter::parse::adapter::create_parse_adapter;
 use dbt_schemas::{
     schemas::{
         common::DbtQuoting,

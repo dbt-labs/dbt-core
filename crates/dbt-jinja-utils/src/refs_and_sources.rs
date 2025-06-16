@@ -7,7 +7,7 @@ use std::{
 use dbt_common::{
     err, io_args::IoArgs, show_error, unexpected_err, CodeLocation, ErrorCode, FsResult,
 };
-use dbt_fusion_adapter::adapters::relation_object::create_relation;
+use dbt_fusion_adapter::relation_object::create_relation;
 use dbt_schemas::{
     dbt_types::RelationType,
     schemas::{

@@ -1,4 +1,4 @@
-use dbt_fusion_adapter::adapters::{
+use dbt_fusion_adapter::{
     factory::create_static_relation, BaseAdapter, BridgeAdapter, ParseAdapter, SqlEngine,
 };
 use minijinja::{

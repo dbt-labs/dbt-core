@@ -5,7 +5,7 @@
 mod tests {
     use dbt_common::FsResult;
     use dbt_frontend_common::error::CodeLocation;
-    use dbt_fusion_adapter::adapters::parse::adapter::create_parse_adapter;
+    use dbt_fusion_adapter::parse::adapter::create_parse_adapter;
     use dbt_jinja_utils::invocation_args::InvocationArgs;
     use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
     use dbt_jinja_utils::phases::parse::build_resolve_model_context;

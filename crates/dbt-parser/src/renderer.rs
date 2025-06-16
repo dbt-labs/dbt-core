@@ -737,7 +737,7 @@ async fn process_model_chunk_for_unsafe_detection(
     package_name: String,
     root_project_name: String,
     runtime_config: Arc<DbtRuntimeConfig>,
-    parse_adapter: Arc<dbt_fusion_adapter::adapters::ParseAdapter>,
+    parse_adapter: Arc<dbt_fusion_adapter::ParseAdapter>,
 ) -> FsResult<Vec<String>> {
     let mut unsafe_ids = Vec::new();
     let mut render_base_context = build_compile_and_run_base_context(
@@ -826,7 +826,7 @@ async fn collect_adapter_identifiers_sequential(
     package_name: &str,
     root_project_name: &str,
     runtime_config: Arc<DbtRuntimeConfig>,
-    parse_adapter: Arc<dbt_fusion_adapter::adapters::ParseAdapter>,
+    parse_adapter: Arc<dbt_fusion_adapter::ParseAdapter>,
     chunk_size: usize,
 ) -> FsResult<Vec<String>> {
     let mut all_unsafe_ids = Vec::new();
@@ -862,7 +862,7 @@ async fn collect_adapter_identifiers_parallel(
     package_name: &str,
     root_project_name: &str,
     runtime_config: Arc<DbtRuntimeConfig>,
-    parse_adapter: Arc<dbt_fusion_adapter::adapters::ParseAdapter>,
+    parse_adapter: Arc<dbt_fusion_adapter::ParseAdapter>,
     chunk_size: usize,
 ) -> FsResult<Vec<String>> {
     let mut tasks = Vec::new();

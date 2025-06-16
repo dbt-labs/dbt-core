@@ -1,5 +1,5 @@
 use crate::{functions::register_base_functions, jinja_environment::JinjaEnvironment};
-use dbt_fusion_adapter::adapters::BaseAdapter;
+use dbt_fusion_adapter::BaseAdapter;
 use minijinja::{
     constants::{
         DBT_AND_ADAPTERS_NAMESPACE, MACRO_NAMESPACE_REGISTRY, MACRO_TEMPLATE_REGISTRY,
@@ -365,7 +365,7 @@ impl Default for JinjaEnvironmentBuilder {
 mod tests {
     use std::{collections::BTreeSet, path::PathBuf, sync::Mutex};
 
-    use dbt_fusion_adapter::adapters::parse::adapter::create_parse_adapter;
+    use dbt_fusion_adapter::parse::adapter::create_parse_adapter;
     use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
     use minijinja::{
         constants::MACRO_DISPATCH_ORDER, context, dispatch_object::THREAD_LOCAL_DEPENDENCIES,
