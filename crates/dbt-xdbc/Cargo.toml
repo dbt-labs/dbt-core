@@ -30,7 +30,6 @@ base64 = { workspace = true }
 chrono = { workspace = true }
 dirs = { workspace = true }
 futures = { workspace = true }
-futures-util = { workspace = true }
 getrandom = "0.2.15"
 http = { workspace = true }
 ini = { workspace = true }

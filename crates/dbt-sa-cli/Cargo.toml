@@ -14,15 +14,11 @@ workspace = true
 
 [dependencies]
 dbt-common = { workspace = true }
-dbt-frontend-common = { workspace = true }
 dbt-jinja-utils = { workspace = true }
 dbt-loader = { workspace = true }
 dbt-parser = { workspace = true }
 dbt-schemas = { workspace = true }
 
-
-minijinja = { workspace = true }
-schemars = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 
@@ -30,16 +26,11 @@ clap = { workspace = true, features = ["derive"] }
 log = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
-async-trait = { workspace = true }
 chrono = { workspace = true }
 console = { workspace = true }
 dbt-serde_yaml = { workspace = true }
 git-version = { version = "0.3.9" }
-num_cpus = { workspace = true }
-pathdiff = { workspace = true }
-rust-embed = { workspace = true }
 strum = { workspace = true }
-tracing = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]

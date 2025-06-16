@@ -28,7 +28,6 @@ regex = { workspace = true }
 unicode-segmentation = { version = "1.12" }
 uuid = { workspace = true }
 
-antlr-rust = { workspace = true }
 arrow = { workspace = true }
 arrow-schema = { workspace = true }
 chrono = { workspace = true }
@@ -38,7 +37,6 @@ dashmap = { workspace = true }
 dbt-serde_yaml = { workspace = true }
 humantime = { workspace = true }
 minijinja = { workspace = true }
-once_cell = { workspace = true }
 
 schemars = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

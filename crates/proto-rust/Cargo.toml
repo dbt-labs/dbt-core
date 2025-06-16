@@ -30,12 +30,10 @@ bytes = { workspace = true }
 pbjson = { workspace = true }
 pbjson-types = { workspace = true }
 prost = { workspace = true }
-prost-types = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
 prost-reflect = "0.14"
-serde_json = "1.0"
 
 [lib]
 name = "proto_rust"

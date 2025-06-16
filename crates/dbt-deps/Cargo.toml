@@ -18,7 +18,6 @@ dbt-jinja-utils = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-serde_yaml = { workspace = true }
 flate2 = { workspace = true }
-minijinja = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = ['json'] }
 reqwest-middleware = { workspace = true, features = ['json'] }

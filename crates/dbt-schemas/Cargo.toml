@@ -13,10 +13,8 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-arrow = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
-csv = { workspace = true }
 dbt-adapter-proc-macros = { workspace = true }
 dbt-common = { workspace = true }
 dbt-frontend-common = { workspace = true }
@@ -32,7 +30,6 @@ serde_json = { workspace = true }
 serde_with = { workspace = true }
 sha2 = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
-strum_macros = { workspace = true }
 
 
 [lib]

@@ -27,15 +27,6 @@ chrono-tz = { workspace = true }
 dbt-serde_yaml = { workspace = true }
 itertools = { workspace = true }
 minijinja = { workspace = true }
-minijinja-contrib = { workspace = true, features = [
-  "pycompat",
-  "datetime",
-  "timezone",
-  "rand",
-  "unicode_wordwrap",
-  "wordcount",
-] }
-num_cpus = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
