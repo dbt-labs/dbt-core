@@ -1,6 +1,0 @@
-kind: Fixes
-body: Catch DbtRuntimeError for hooks
-time: 2024-11-21T18:17:39.753235Z
-custom:
-    Author: aranke
-    Issue: "11012"

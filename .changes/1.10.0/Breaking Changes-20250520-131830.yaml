@@ -1,6 +1,0 @@
-kind: Breaking Changes
-body: Flip behavior flag to disallow spaces in resource names
-time: 2025-05-20T13:18:30.352998-05:00
-custom:
-  Author: QMalcolm
-  Issue: "11610"

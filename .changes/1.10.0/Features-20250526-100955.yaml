@@ -1,6 +1,0 @@
-kind: Features
-body: Include event names in deprecation warning messages
-time: 2025-05-26T10:09:55.012225-05:00
-custom:
-  Author: QMalcolm
-  Issue: "11471"
