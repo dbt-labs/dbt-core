@@ -7,6 +7,7 @@ use crate::schemas::serde::StringOrArrayOfStrings;
 use dbt_common::err;
 use dbt_common::serde_utils::Omissible;
 use dbt_common::ErrorCode;
+use dbt_common::FsError;
 use dbt_common::FsResult;
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::Spanned;
@@ -84,7 +85,7 @@ pub struct TablesConfig {
 }
 
 impl TryFrom<&SourcePropertiesConfig> for DbtConfig {
-    type Error = Box<dyn std::error::Error>;
+    type Error = Box<FsError>;
     fn try_from(config: &SourcePropertiesConfig) -> Result<Self, Self::Error> {
         Ok(DbtConfig {
             enabled: config.enabled,

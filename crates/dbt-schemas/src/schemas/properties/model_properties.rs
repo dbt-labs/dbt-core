@@ -18,6 +18,7 @@ use crate::schemas::serde::try_string_to_type;
 use crate::schemas::serde::FloatOrString;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use dbt_common::io_args::StaticAnalysisKind;
+use dbt_common::FsError;
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
@@ -156,7 +157,7 @@ pub struct ModelFreshness {
 }
 
 impl TryFrom<&ModelPropertiesConfigs> for DbtConfig {
-    type Error = Box<dyn std::error::Error>;
+    type Error = Box<FsError>;
     fn try_from(config: &ModelPropertiesConfigs) -> Result<Self, Self::Error> {
         Ok(DbtConfig {
             access: config.access.clone(),

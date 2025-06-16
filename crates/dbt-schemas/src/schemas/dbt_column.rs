@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
-use dbt_common::FsResult;
+use dbt_common::{FsError, FsResult};
 use dbt_serde_yaml::{JsonSchema, Verbatim};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -28,7 +28,7 @@ pub struct DbtColumn {
 }
 
 impl TryFrom<ColumnProperties> for DbtColumn {
-    type Error = Box<dyn std::error::Error>;
+    type Error = Box<FsError>;
 
     fn try_from(value: ColumnProperties) -> Result<Self, Self::Error> {
         let constraints = value

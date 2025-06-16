@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use dbt_common::FsError;
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
@@ -120,7 +121,7 @@ pub struct SnapshotsConfig {
 }
 
 impl TryFrom<&SnapshotsConfig> for DbtConfig {
-    type Error = Box<dyn std::error::Error>;
+    type Error = Box<FsError>;
     fn try_from(config: &SnapshotsConfig) -> Result<Self, Self::Error> {
         Ok(DbtConfig {
             alias: config.alias.clone(),

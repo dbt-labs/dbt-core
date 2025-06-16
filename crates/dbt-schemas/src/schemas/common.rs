@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 
-use dbt_common::{fs_err, CodeLocation, ErrorCode, FsError, FsResult};
+use dbt_common::{err, fs_err, CodeLocation, ErrorCode, FsError, FsResult};
 use dbt_frontend_common::Dialect;
 use dbt_serde_yaml::{JsonSchema, Verbatim};
 use hex;
@@ -252,14 +252,14 @@ impl Serialize for DbtCheckColsSpec {
 }
 
 impl TryFrom<StringOrArrayOfStrings> for DbtCheckColsSpec {
-    type Error = Box<dyn std::error::Error>;
+    type Error = Box<FsError>;
     fn try_from(value: StringOrArrayOfStrings) -> Result<Self, Self::Error> {
         match value {
             StringOrArrayOfStrings::String(all) => {
                 if all == "all" {
                     Ok(DbtCheckColsSpec::All)
                 } else {
-                    Err(format!("Invalid check_cols value: {}", all).into())
+                    err!(ErrorCode::Generic, "Invalid check_cols value: {}", all)
                 }
             }
             StringOrArrayOfStrings::ArrayOfStrings(cols) => Ok(DbtCheckColsSpec::Cols(cols)),
@@ -383,14 +383,14 @@ pub enum HardDeletes {
 
 // Impl try from string
 impl TryFrom<String> for HardDeletes {
-    type Error = Box<dyn std::error::Error>;
+    type Error = Box<FsError>;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         Ok(match value.as_str() {
             "ignore" => HardDeletes::Ignore,
             "invalidate" => HardDeletes::Invalidate,
             "new_record" => HardDeletes::NewRecord,
-            _ => return Err(format!("Invalid hard_deletes value: {}", value).into()),
+            _ => return err!(ErrorCode::Generic, "Invalid hard_deletes value: {}", value),
         })
     }
 }

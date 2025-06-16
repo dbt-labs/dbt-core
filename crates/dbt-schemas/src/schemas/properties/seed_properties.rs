@@ -7,6 +7,7 @@ use crate::schemas::dbt_column::ColumnProperties;
 use crate::schemas::manifest::DbtConfig;
 use crate::schemas::serde::try_from_value;
 use crate::schemas::serde::StringOrArrayOfStrings;
+use dbt_common::FsError;
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::Spanned;
 use dbt_serde_yaml::Verbatim;
@@ -62,7 +63,7 @@ pub struct SeedsConfig {
 }
 
 impl TryFrom<&SeedsConfig> for DbtConfig {
-    type Error = Box<dyn std::error::Error>;
+    type Error = Box<FsError>;
     fn try_from(config: &SeedsConfig) -> Result<Self, Self::Error> {
         Ok(DbtConfig {
             enabled: config.enabled,
