@@ -63,7 +63,7 @@ pub fn resolve_sources(
             false,
             jinja_env,
             base_ctx,
-            None,
+            &[],
         )?;
 
         // Throw an error if overrides are used
@@ -75,7 +75,7 @@ pub fn resolve_sources(
             false,
             jinja_env,
             base_ctx,
-            None,
+            &[],
         )?;
         let database: String = source
             .database

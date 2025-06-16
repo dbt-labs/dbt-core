@@ -104,7 +104,7 @@ pub async fn resolve_snapshots(
                 false,
                 jinja_env,
                 base_ctx,
-                None,
+                &[],
             )?;
 
             if let Some(relation) = &snapshot.relation {

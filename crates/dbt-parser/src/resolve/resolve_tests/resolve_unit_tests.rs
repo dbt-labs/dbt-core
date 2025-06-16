@@ -81,7 +81,7 @@ pub fn resolve_unit_tests(
             false,
             jinja_env,
             base_ctx,
-            None,
+            &[],
         )?;
         // todo: Unit test should have a database and schema,
         //    derived from the underlying model, correct?

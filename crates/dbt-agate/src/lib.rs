@@ -116,7 +116,7 @@ impl Object for Tuple {
         state: &State,
         name: &str,
         args: &[Value],
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
         match name {
             "count" => {
@@ -151,7 +151,7 @@ impl Object for Tuple {
                     Ok(Value::from(idx))
                 }
             }
-            _ => Object::call_method(self, state, name, args, listener),
+            _ => Object::call_method(self, state, name, args, listeners),
         }
     }
 
@@ -389,7 +389,7 @@ pub trait MappedSequence {
         state: &State,
         name: &str,
         args: &[Value],
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
         match name {
             // MappedSequence methods
@@ -446,7 +446,7 @@ pub trait MappedSequence {
             }
             _ => {
                 if let Some(value) = self.get_value(&Value::from(name)) {
-                    return value.call(state, args, listener);
+                    return value.call(state, args, listeners);
                 }
                 Err(MinijinjaError::from(ErrorKind::UnknownMethod(
                     "MappedSequence".to_string(),

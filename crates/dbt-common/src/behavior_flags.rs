@@ -60,7 +60,7 @@ impl Object for BehaviorFlag {
         _state: &State,
         _name: &str,
         _args: &[Value],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
         panic!("Cannot call any method on BehaviorFlag, such feature is not supported")
     }
@@ -114,7 +114,7 @@ impl Object for Behavior {
         _state: &State,
         _name: &str,
         _args: &[Value],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
         panic!("Cannot call any method on Behavior, such feature is not supported")
     }

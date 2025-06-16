@@ -398,7 +398,7 @@ impl Object for AgateTable {
         _state: &State,
         name: &str,
         args: &[Value],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
         match name {
             "print_table" => {

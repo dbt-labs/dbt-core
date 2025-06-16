@@ -266,7 +266,7 @@ impl Object for BigqueryPartitionConfig {
         _state: &State,
         name: &str,
         args: &[MinijinjaValue],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<MinijinjaValue, MinijinjaError> {
         match name {
             "data_type_for_partition" => self.data_type_for_partition(),

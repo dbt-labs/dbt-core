@@ -19,7 +19,7 @@ pub fn derive_base_column_object(input: TokenStream) -> TokenStream {
                 state: &minijinja::State,
                 name: &str,
                 args: &[minijinja::Value],
-                _listener: std::rc::Rc<dyn minijinja::listener::RenderingEventListener>,
+                _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
             ) -> Result<minijinja::Value, minijinja::Error> {
                 match name {
                     "is_string" => Ok(Value::from(self.is_string())),
@@ -85,7 +85,7 @@ pub fn derive_static_base_column_object(input: TokenStream) -> TokenStream {
                 _state: &minijinja::State,
                 name: &str,
                 args: &[minijinja::Value],
-                _listener: std::rc::Rc<dyn minijinja::listener::RenderingEventListener>,
+                _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
             ) -> Result<minijinja::Value, minijinja::Error> {
                 match name {
                     "create" => Self::create(args),
@@ -108,7 +108,7 @@ pub fn derive_static_base_column_object(input: TokenStream) -> TokenStream {
                 self: &std::sync::Arc<Self>,
                 _state: &minijinja::State,
                 args: &[minijinja::Value],
-                _listener: std::rc::Rc<dyn minijinja::listener::RenderingEventListener>,
+                _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
             ) -> Result<minijinja::Value, minijinja::Error> {
                 Self::create(args)
             }

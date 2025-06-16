@@ -1,18 +1,13 @@
 #![cfg(feature = "pycompat")]
 
-use minijinja::listener::DefaultRenderingEventListener;
 use minijinja::{Environment, Value};
 use minijinja_contrib::pycompat::unknown_method_callback;
 use similar_asserts::assert_eq;
-use std::rc::Rc;
 
 fn eval_expr(expr: &str) -> Value {
     let mut env = Environment::new();
     env.set_unknown_method_callback(unknown_method_callback);
-    env.compile_expression(expr)
-        .unwrap()
-        .eval((), Rc::new(DefaultRenderingEventListener))
-        .unwrap()
+    env.compile_expression(expr).unwrap().eval((), &[]).unwrap()
 }
 
 #[test]

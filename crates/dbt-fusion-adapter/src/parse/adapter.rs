@@ -670,9 +670,9 @@ impl Object for ParseAdapter {
         state: &State,
         name: &str,
         args: &[Value],
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
-        dispatch_adapter_calls(&**self, state, name, args, listener)
+        dispatch_adapter_calls(&**self, state, name, args, listeners)
     }
 }
 

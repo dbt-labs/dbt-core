@@ -157,7 +157,7 @@ impl Object for Column {
         state: &State<'_, '_>,
         method: &str,
         args: &[Value],
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
         match method {
             // Column methods
@@ -178,7 +178,7 @@ impl Object for Column {
                 Ok(Value::from_object(without_nulls_sorted))
             }
             // MappedSequence methods
-            _ => MappedSequence::call_method(self, state, method, args, listener),
+            _ => MappedSequence::call_method(self, state, method, args, listeners),
         }
     }
 

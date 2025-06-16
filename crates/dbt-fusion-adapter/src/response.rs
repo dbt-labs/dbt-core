@@ -25,7 +25,7 @@ impl Object for AdapterResponse {
         self: &Arc<Self>,
         _state: &State,
         _args: &[Value],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
         unimplemented!("Is response from 'execute' callable?")
     }

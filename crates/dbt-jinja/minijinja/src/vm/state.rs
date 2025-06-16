@@ -203,13 +203,13 @@ impl<'template, 'env> State<'template, 'env> {
         &self,
         name: &str,
         args: &[Value],
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<String, Error> {
         let f = ok!(self.lookup(name).ok_or_else(|| Error::new(
             crate::error::ErrorKind::UnknownFunction,
             "macro not found"
         )));
-        f.call(self, args, listener).map(Into::into)
+        f.call(self, args, listeners).map(Into::into)
     }
 
     /// Renders a block with the given name into a string.
@@ -244,26 +244,18 @@ impl<'template, 'env> State<'template, 'env> {
     pub fn render_block(
         &mut self,
         block: &str,
-        listener: Rc<dyn RenderingEventListener>,
-    ) -> Result<(String, crate::MacroSpans), Error> {
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<String, Error> {
         use crate::output_tracker;
 
         let mut buf = String::new();
         let mut output_tracker = output_tracker::OutputTracker::new(&mut buf);
         let current_location = output_tracker.location.clone();
         let mut out = Output::with_write(&mut output_tracker);
-        let mut macro_spans = crate::MacroSpans::default();
         let value = crate::vm::Vm::new(self.env)
-            .call_block(
-                block,
-                self,
-                &mut out,
-                current_location,
-                &mut macro_spans,
-                listener,
-            )
+            .call_block(block, self, &mut out, current_location, listeners)
             .map(|_| buf)?;
-        Ok((value, macro_spans))
+        Ok(value)
     }
 
     /// Renders a block with the given name into an [`io::Write`](std::io::Write).
@@ -275,13 +267,13 @@ impl<'template, 'env> State<'template, 'env> {
         &mut self,
         block: &str,
         w: W,
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<(), Error>
     where
         W: std::io::Write,
     {
         use crate::{
-            output::{self, MacroSpans},
+            output::{self},
             output_tracker::OutputTracker,
         };
 
@@ -290,14 +282,7 @@ impl<'template, 'env> State<'template, 'env> {
         let current_location = output_tracker.location;
         let mut out = output::Output::with_write(&mut wrapper);
         crate::vm::Vm::new(self.env)
-            .call_block(
-                block,
-                self,
-                &mut out,
-                current_location,
-                &mut MacroSpans::default(),
-                listener,
-            )
+            .call_block(block, self, &mut out, current_location, listeners)
             .map(|_| ())
             .map_err(|err| wrapper.take_err(err))
     }

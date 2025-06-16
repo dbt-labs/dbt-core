@@ -34,7 +34,7 @@ pub fn load_project_yml(
         false,
         dbt_project_render_scope.jinja_env,
         &context,
-        None,
+        &[],
         Some(dbt_project_path),
     )?;
 

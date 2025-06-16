@@ -12,7 +12,6 @@ use minijinja::{functions::debug, value::Rest, Error, ErrorKind, MacroSpans, Sta
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::sync::{Arc, LazyLock};
 use std::{
     collections::{HashMap, HashSet},
@@ -277,26 +276,19 @@ pub fn render_sql<'a, E>(
     sql: &str,
     env: E,
     ctx: BTreeMap<String, Value>,
-    listener_factory: Option<&dyn ListenerFactory>,
+    listener_factory: &dyn ListenerFactory,
     filename: &Path,
-) -> Result<(String, MacroSpans), Error>
+) -> Result<String, Error>
 where
     E: AsRef<JinjaEnvironment<'a>>,
 {
-    let result = if let Some(listener_factory) = &listener_factory {
-        let listener = listener_factory.create_listener(filename);
-        let result = env.as_ref().render_named_str(
-            filename.to_str().unwrap(),
-            sql,
-            ctx,
-            Some(listener.to_owned()),
-        );
+    let listeners = listener_factory.create_listeners(filename);
+    let result = env
+        .as_ref()
+        .render_named_str(filename.to_str().unwrap(), sql, ctx, &listeners);
+    for listener in listeners {
         listener_factory.destroy_listener(filename, listener);
-        result
-    } else {
-        env.as_ref()
-            .render_named_str(filename.to_str().unwrap(), sql, ctx, None)
-    };
+    }
 
     result
 }
@@ -383,11 +375,9 @@ pub fn generate_component_name(
 
     // Create a state object for rendering
     let template = env.get_template(&template_name)?;
-    // Create a listener
-    let listener = Rc::new(minijinja::listener::DefaultRenderingEventListener);
 
     // Create a new state
-    let new_state = template.eval_to_state(base_ctx, listener.clone())?;
+    let new_state = template.eval_to_state(base_ctx, &[])?;
 
     // Build the args
     let mut args = custom_name
@@ -397,7 +387,7 @@ pub fn generate_component_name(
         args.push(Value::from_serialize(node.serialize()));
     }
     // Call the macro
-    let result = match new_state.call_macro(macro_name.as_str(), &args, listener) {
+    let result = match new_state.call_macro(macro_name.as_str(), &args, &[]) {
         Ok(value) => value,
         Err(e) => {
             // These macros can call do return which returns an abrupt return error

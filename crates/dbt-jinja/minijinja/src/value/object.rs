@@ -235,7 +235,7 @@ pub trait Object: fmt::Debug + Send + Sync {
         self: &Arc<Self>,
         state: &State<'_, '_>,
         args: &[Value],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         let (_, _) = (state, args);
         Err(Error::new(
@@ -256,10 +256,10 @@ pub trait Object: fmt::Debug + Send + Sync {
         state: &State<'_, '_>,
         method: &str,
         args: &[Value],
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         if let Some(value) = self.get_value(&Value::from(method)) {
-            return value.call(state, args, listener);
+            return value.call(state, args, listeners);
         }
 
         Err(Error::from(ErrorKind::UnknownMethod(
@@ -673,7 +673,7 @@ type_erase! {
             &self,
             state: &State<'_, '_>,
             args: &[Value],
-            listener: Rc<dyn RenderingEventListener>
+            listeners: &[Rc<dyn RenderingEventListener>]
         ) -> Result<Value, Error>;
 
         fn call_method(
@@ -681,7 +681,7 @@ type_erase! {
             state: &State<'_, '_>,
             method: &str,
             args: &[Value],
-            listener: Rc<dyn RenderingEventListener>
+            listeners: &[Rc<dyn RenderingEventListener>]
         ) -> Result<Value, Error>;
 
         fn render(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result;
@@ -1106,7 +1106,7 @@ pub mod mutable_vec {
             _state: &State<'_, '_>,
             method: &str,
             args: &[Value],
-            _listener: Rc<dyn RenderingEventListener>,
+            _listeners: &[Rc<dyn RenderingEventListener>],
         ) -> Result<Value, Error> {
             match method {
                 "append" => append_impl(self, args),
@@ -1453,7 +1453,7 @@ pub mod mutable_map {
             state: &State<'_, '_>,
             method: &str,
             args: &[Value],
-            listener: Rc<dyn RenderingEventListener>,
+            listeners: &[Rc<dyn RenderingEventListener>],
         ) -> Result<Value, Error> {
             match method {
                 "update" => update_impl(self, args),
@@ -1481,7 +1481,7 @@ pub mod mutable_map {
                 "setdefault" => setdefault_impl(self, args),
                 _ => {
                     if let Some(value) = self.get(&Value::from(method)) {
-                        return value.call(state, args, listener);
+                        return value.call(state, args, listeners);
                     }
                     Err(Error::from(ErrorKind::UnknownMethod(
                         "MutableMap".to_string(),

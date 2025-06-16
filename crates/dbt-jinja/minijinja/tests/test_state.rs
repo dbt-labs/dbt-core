@@ -8,9 +8,6 @@ fn test_state_lookup_global() {
         state.lookup("the_global").unwrap_or_default()
     });
     env.add_global("the_global", true);
-    let rv = env
-        .render_str("[{{ lookup_global() }}]", (), None)
-        .unwrap()
-        .0;
+    let rv = env.render_str("[{{ lookup_global() }}]", (), &[]).unwrap();
     assert_eq!(rv, "[true]");
 }

@@ -53,7 +53,7 @@ impl Object for PyTimeDeltaClass {
         self: &std::sync::Arc<Self>,
         _state: &minijinja::State<'_, '_>,
         args: &[Value],
-        _listener: std::rc::Rc<dyn minijinja::listener::RenderingEventListener>,
+        _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
     ) -> Result<Value, Error> {
         Self::timedelta_new(args).map(Value::from_object)
     }
@@ -211,7 +211,7 @@ impl Object for PyTimeDelta {
         _state: &minijinja::State<'_, '_>,
         method: &str,
         args: &[Value],
-        _listener: std::rc::Rc<dyn minijinja::listener::RenderingEventListener>,
+        _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
     ) -> Result<Value, Error> {
         match method {
             "__add__" => self.add(args),
@@ -267,7 +267,6 @@ mod tests {
     use minijinja::args;
     use minijinja::Environment;
     use minijinja::Value;
-    use std::rc::Rc;
 
     #[test]
     fn test_timedelta_creation() {
@@ -322,25 +321,15 @@ mod tests {
                 "{{ timedelta(days=2, hours=3).days }}, {{ timedelta(minutes=90).seconds }}",
             )
             .unwrap();
-        let result = template
-            .render(
-                minijinja::context!(),
-                Rc::new(minijinja::listener::DefaultRenderingEventListener),
-            )
-            .unwrap();
-        assert_eq!(result.0, "2, 5400");
+        let result = template.render(minijinja::context!(), &[]).unwrap();
+        assert_eq!(result, "2, 5400");
 
         // Test arithmetic
         let template = env
             .template_from_str("{{ (timedelta(days=2) + timedelta(days=1)).days }}")
             .unwrap();
-        let result = template
-            .render(
-                minijinja::context!(),
-                Rc::new(minijinja::listener::DefaultRenderingEventListener),
-            )
-            .unwrap();
-        assert_eq!(result.0, "3");
+        let result = template.render(minijinja::context!(), &[]).unwrap();
+        assert_eq!(result, "3");
     }
 
     #[test]

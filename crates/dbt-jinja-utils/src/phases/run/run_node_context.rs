@@ -345,7 +345,7 @@ impl Object for WriteConfig {
         self: &Arc<Self>,
         _state: &State<'_, '_>,
         args: &[MinijinjaValue],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<MinijinjaValue, Error> {
         if args.is_empty() {
             return Err(Error::new(

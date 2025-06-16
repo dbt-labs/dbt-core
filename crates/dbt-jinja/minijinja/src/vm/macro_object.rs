@@ -50,7 +50,7 @@ impl Object for Macro {
         self: &Arc<Self>,
         state: &State<'_, '_>,
         args: &[Value],
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         // we can only call macros that point to loaded template state.
         if state.id != self.state_id {
@@ -116,7 +116,7 @@ impl Object for Macro {
             current_location,
             state,
             arg_values,
-            listener
+            listeners
         ));
 
         Ok(if !matches!(state.auto_escape(), AutoEscape::None) {

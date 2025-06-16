@@ -134,7 +134,7 @@ pub fn read_profiles_and_extract_db_config(
         true,
         jinja_env,
         &(),
-        None,
+        &[],
     )?;
     let target = match dbt_target_override {
         Some(target) => db_targets

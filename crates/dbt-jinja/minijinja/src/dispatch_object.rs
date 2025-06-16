@@ -59,7 +59,7 @@ impl Object for DispatchObject {
         self: &Arc<Self>,
         state: &State<'_, '_>,
         args: &[Value],
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         // Check for "." in macro_name
         // TODO: delete this, this is already checked in the adapter.dispatch method
@@ -86,7 +86,7 @@ impl Object for DispatchObject {
                 attempts.push(template_name.clone());
 
                 // Try to execute the template, but catch any errors and convert to a strict mode error
-                match self.execute_template(state, &template_name, args, listener.clone()) {
+                match self.execute_template(state, &template_name, args, listeners) {
                     Ok(rv) => return Ok(rv),
                     Err(_) => {
                         // In strict mode, we want a specific error message
@@ -131,12 +131,8 @@ impl Object for DispatchObject {
                         if let Some(pkg) = dbt_and_adapters_namespace.get(&search_name_value) {
                             let template_name = format!("{}.{}", pkg, search_name);
                             attempts.push(template_name.clone());
-                            let rv = self.execute_template(
-                                state,
-                                &template_name,
-                                args,
-                                listener.clone(),
-                            )?;
+                            let rv =
+                                self.execute_template(state, &template_name, args, listeners)?;
                             return Ok(rv);
                         }
                     } else if non_internal_namespace.contains_key(&Value::from(package_name)) {
@@ -144,12 +140,8 @@ impl Object for DispatchObject {
                         let template_name = format!("{}.{}", package_name, search_name);
                         attempts.push(template_name.clone());
                         if template_exists(state, &template_name) {
-                            let rv = self.execute_template(
-                                state,
-                                &template_name,
-                                args,
-                                listener.clone(),
-                            )?;
+                            let rv =
+                                self.execute_template(state, &template_name, args, listeners)?;
                             return Ok(rv);
                         }
                     }
@@ -162,8 +154,7 @@ impl Object for DispatchObject {
                     if let Some(template_name) =
                         macro_namespace_template_resolver(state, &search_name, &mut attempts)
                     {
-                        let rv =
-                            self.execute_template(state, &template_name, args, listener.clone())?;
+                        let rv = self.execute_template(state, &template_name, args, listeners)?;
                         return Ok(rv);
                     }
                 }
@@ -253,7 +244,7 @@ impl DispatchObject {
         state: &State<'_, '_>,
         template_name: &str,
         args: &[Value],
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         let template = match state.env().get_template(template_name) {
             Ok(template) => template,
@@ -274,7 +265,7 @@ impl DispatchObject {
             self.context
                 .clone()
                 .unwrap_or_else(|| state.get_base_context()),
-            listener.clone(),
+            listeners,
             state.ctx.depth() + INCLUDE_RECURSION_COST,
         )?;
 
@@ -287,7 +278,7 @@ impl DispatchObject {
             )
             .expect("function should exist in template");
 
-        match func.call(&template_state, args, listener) {
+        match func.call(&template_state, args, listeners) {
             Ok(rv) => Ok(rv),
             Err(err) => match err.try_abrupt_return() {
                 Some(rv) => Ok(rv.clone()),

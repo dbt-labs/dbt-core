@@ -52,7 +52,7 @@ pub fn cycler(items: Vec<Value>) -> Result<Value, Error> {
             _state: &State<'_, '_>,
             method: &str,
             args: &[Value],
-            _listener: Rc<dyn RenderingEventListener>,
+            _listeners: &[Rc<dyn RenderingEventListener>],
         ) -> Result<Value, Error> {
             match method {
                 "next" => {
@@ -116,7 +116,7 @@ pub fn joiner(sep: Option<Value>) -> Value {
             self: &Arc<Self>,
             _state: &State<'_, '_>,
             args: &[Value],
-            _listener: Rc<dyn RenderingEventListener>,
+            _listeners: &[Rc<dyn RenderingEventListener>],
         ) -> Result<Value, Error> {
             let () = from_args(args)?;
             let used = self.used.swap(true, Ordering::Relaxed);

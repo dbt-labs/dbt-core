@@ -1,7 +1,5 @@
 #![cfg(feature = "macros")]
-use minijinja::listener::DefaultRenderingEventListener;
 use std::collections::BTreeMap;
-use std::rc::Rc;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
@@ -110,25 +108,15 @@ fn test_macro_passing() {
     let tmpl = env
         .template_from_str("{% macro m(a) %}{{ a }}{% endmacro %}")
         .unwrap();
-    let (_, _, state) = tmpl
-        .render_and_return_state((), Rc::new(DefaultRenderingEventListener))
-        .unwrap();
+    let (_, state) = tmpl.render_and_return_state((), &[]).unwrap();
     let m = state.lookup("m").unwrap();
     assert_eq!(m.get_attr("name").unwrap().as_str(), Some("m"));
-    let rv = m
-        .call(&state, args!(42), Rc::new(DefaultRenderingEventListener))
-        .unwrap();
+    let rv = m.call(&state, args!(42), &[]).unwrap();
     assert_eq!(rv.as_str(), Some("42"));
 
     // if we call the macro on an empty state it errors
     let empty_state = env.empty_state();
-    let err = m
-        .call(
-            &empty_state,
-            args!(42),
-            Rc::new(DefaultRenderingEventListener),
-        )
-        .unwrap_err();
+    let err = m.call(&empty_state, args!(42), &[]).unwrap_err();
     assert_eq!(err.kind(), ErrorKind::InvalidOperation);
     assert_eq!(
         err.detail(),
@@ -177,10 +165,9 @@ fn test_no_leak() {
         {%- endfor -%}
     "#,
             ctx,
-            None,
+            &[],
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
     assert!(dropped.load(std::sync::atomic::Ordering::Relaxed));
     assert_eq!(
@@ -259,10 +246,9 @@ fn test_unenclosed_resolve() {
     {%- endcall -%}
     "#,
             context! { render_global => "render global" },
-            None,
+            &[],
         )
-        .unwrap()
-        .0;
+        .unwrap();
     assert_snapshot!(rv, @"render global|ctx global|");
 }
 
@@ -300,10 +286,9 @@ fn test_unenclosed_resolve_with_template() {
     {%- endcall -%}
     "#,
             context! { render_global => "render global" },
-            None,
+            &[],
         )
-        .unwrap()
-        .0;
+        .unwrap();
     // different from not using template, but it should okay for dbt usecase
     assert_snapshot!(rv, @"a variable|render global|ctx global||1");
 }
@@ -343,10 +328,9 @@ fn test_unenclosed_resolve_with_template_with_args() {
     {%- endcall -%}
     "#,
             context! { render_global => "render global" },
-            None,
+            &[],
         )
-        .unwrap()
-        .0;
+        .unwrap();
     // different from not using template, but it should okay for dbt usecase
     assert_snapshot!(rv, @r"
     a variable|
@@ -420,16 +404,14 @@ fn test_ref_override() {
 
     // Test single argument case
     let rv = env
-        .render_str(r#"{{ ref('my_model') }}"#, context! {}, None)
-        .unwrap()
-        .0;
+        .render_str(r#"{{ ref('my_model') }}"#, context! {}, &[])
+        .unwrap();
     assert_snapshot!(rv.trim(), @"ref(my_model, package=test, version=2)");
 
     // Test two argument case
     let rv = env
-        .render_str(r#"{{ ref('my_model','my_package') }}"#, context! {}, None)
-        .unwrap()
-        .0;
+        .render_str(r#"{{ ref('my_model','my_package') }}"#, context! {}, &[])
+        .unwrap();
     assert_snapshot!(rv.trim(), @"ref(my_model, package=my_package, version=2)");
 }
 
@@ -444,16 +426,14 @@ fn test_unary_operator_with_function() {
 
     // Test negation with function call
     let rv = env
-        .render_str("{{ -get_value() }}", context! {}, None)
-        .unwrap()
-        .0;
+        .render_str("{{ -get_value() }}", context! {}, &[])
+        .unwrap();
     assert_snapshot!(rv.trim(), @"-42");
 
     // Test negation with function call and parentheses
     let rv = env
-        .render_str("{{ -(get_value()) }}", context! {}, None)
-        .unwrap()
-        .0;
+        .render_str("{{ -(get_value()) }}", context! {}, &[])
+        .unwrap();
     assert_snapshot!(rv.trim(), @"-42");
 
     // Test with var function (common in DBT)
@@ -462,9 +442,8 @@ fn test_unary_operator_with_function() {
     });
 
     let rv = env
-        .render_str("{{ -var('some_var') }}", context! {}, None)
-        .unwrap()
-        .0;
+        .render_str("{{ -var('some_var') }}", context! {}, &[])
+        .unwrap();
     assert_snapshot!(rv.trim(), @"-90");
 }
 
@@ -487,7 +466,7 @@ fn test_macro_default_arg_referencing_other_arg() {
     {{ basic_macro(dict) }}
     "#;
 
-    let rv = env.render_str(template, context! {}, None).unwrap().0;
+    let rv = env.render_str(template, context! {}, &[]).unwrap();
     let lines: Vec<&str> = rv.lines().filter(|l| !l.trim().is_empty()).collect();
 
     assert_eq!(lines.len(), 2);

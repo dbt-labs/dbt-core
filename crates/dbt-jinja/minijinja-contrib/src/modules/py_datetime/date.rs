@@ -129,7 +129,7 @@ impl Object for PyDateClass {
         self: &Arc<Self>,
         _state: &minijinja::State<'_, '_>,
         args: &[Value],
-        _listener: std::rc::Rc<dyn minijinja::listener::RenderingEventListener>,
+        _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
     ) -> Result<Value, Error> {
         // Convert PyDate to Value here
         Self::create_date(args).map(Value::from_object)
@@ -141,7 +141,7 @@ impl Object for PyDateClass {
         _state: &minijinja::State<'_, '_>,
         method: &str,
         args: &[Value],
-        _listener: std::rc::Rc<dyn minijinja::listener::RenderingEventListener>,
+        _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
     ) -> Result<Value, Error> {
         match method {
             "today" => Self::date_today(args).map(Value::from_object),
@@ -303,7 +303,7 @@ impl Object for PyDate {
         _state: &minijinja::State<'_, '_>,
         method: &str,
         args: &[Value],
-        _listener: std::rc::Rc<dyn minijinja::listener::RenderingEventListener>,
+        _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
     ) -> Result<Value, Error> {
         match method {
             "strftime" => Self::strftime(self, args),
@@ -328,8 +328,6 @@ impl Object for PyDate {
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
-
     use super::*;
     use crate::modules::py_datetime::timedelta::PyTimeDelta;
     use minijinja::args;
@@ -371,25 +369,15 @@ mod tests {
         let template = env
             .template_from_str("{{ date(2023, 5, 15).strftime('%Y-%m-%d') }}")
             .unwrap();
-        let result = template
-            .render(
-                context!(),
-                Rc::new(minijinja::listener::DefaultRenderingEventListener),
-            )
-            .unwrap();
-        assert_eq!(result.0, "2023-05-15");
+        let result = template.render(context!(), &[]).unwrap();
+        assert_eq!(result, "2023-05-15");
 
         // Test with a different format
         let template = env
             .template_from_str("{{ date(2023, 5, 15).strftime('%d/%m/%Y') }}")
             .unwrap();
-        let result = template
-            .render(
-                context!(),
-                Rc::new(minijinja::listener::DefaultRenderingEventListener),
-            )
-            .unwrap();
-        assert_eq!(result.0, "15/05/2023");
+        let result = template.render(context!(), &[]).unwrap();
+        assert_eq!(result, "15/05/2023");
     }
 
     #[test]
@@ -491,37 +479,22 @@ mod tests {
         let template = env
             .template_from_str("{{ (date(2023, 5, 15) + timedelta(days=5)).strftime('%Y-%m-%d') }}")
             .unwrap();
-        let result = template
-            .render(
-                context!(),
-                Rc::new(minijinja::listener::DefaultRenderingEventListener),
-            )
-            .unwrap();
-        assert_eq!(result.0, "2023-05-20");
+        let result = template.render(context!(), &[]).unwrap();
+        assert_eq!(result, "2023-05-20");
 
         // Test subtracting days
         let template = env
             .template_from_str("{{ (date(2023, 5, 15) - timedelta(days=3)).strftime('%Y-%m-%d') }}")
             .unwrap();
-        let result = template
-            .render(
-                context!(),
-                Rc::new(minijinja::listener::DefaultRenderingEventListener),
-            )
-            .unwrap();
-        assert_eq!(result.0, "2023-05-12");
+        let result = template.render(context!(), &[]).unwrap();
+        assert_eq!(result, "2023-05-12");
 
         // Test date subtraction
         let template = env
             .template_from_str("{{ (date(2023, 5, 20) - date(2023, 5, 15)).days }}")
             .unwrap();
-        let result = template
-            .render(
-                context!(),
-                Rc::new(minijinja::listener::DefaultRenderingEventListener),
-            )
-            .unwrap();
-        assert_eq!(result.0, "5");
+        let result = template.render(context!(), &[]).unwrap();
+        assert_eq!(result, "5");
     }
 
     #[test]

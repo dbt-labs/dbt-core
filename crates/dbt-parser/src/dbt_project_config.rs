@@ -144,7 +144,7 @@ pub fn recur_build_dbt_project_config(
                     true,
                     env,
                     context,
-                    None,
+                    &[],
                 )?;
                 children.insert(
                     key.clone(),
@@ -167,7 +167,7 @@ pub fn recur_build_dbt_project_config(
                     true,
                     env,
                     &context,
-                    None,
+                    &[],
                 )?;
 
                 children.insert(
@@ -188,7 +188,7 @@ pub fn recur_build_dbt_project_config(
                     true,
                     env,
                     &context,
-                    None,
+                    &[],
                 )?;
 
                 // "Unexpected config keys encountered in 'dbt_project.yml` for 'data_tests' under path '{}': {:?}",
@@ -210,7 +210,7 @@ pub fn recur_build_dbt_project_config(
                     true,
                     env,
                     context,
-                    None,
+                    &[],
                 )?;
 
                 children.insert(
@@ -231,7 +231,7 @@ pub fn recur_build_dbt_project_config(
                     true,
                     env,
                     context,
-                    None,
+                    &[],
                 )?;
 
                 children.insert(
@@ -252,7 +252,7 @@ pub fn recur_build_dbt_project_config(
                     true,
                     env,
                     context,
-                    None,
+                    &[],
                 )?;
 
                 children.insert(
@@ -274,7 +274,7 @@ pub fn recur_build_dbt_project_config(
                     true,
                     env,
                     context,
-                    None,
+                    &[],
                 )?;
 
                 children.insert(
@@ -296,7 +296,7 @@ pub fn recur_build_dbt_project_config(
                     true,
                     env,
                     context,
-                    None,
+                    &[],
                 )?;
 
                 children.insert(

@@ -145,7 +145,7 @@ impl Object for RefFunction {
         self: &Arc<Self>,
         _state: &State<'_, '_>,
         args: &[MinijinjaValue],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<MinijinjaValue, MinijinjaError> {
         let (package_name, model_name, version) = self.resolve_args(args)?;
 
@@ -171,7 +171,7 @@ impl Object for RefFunction {
         _state: &State<'_, '_>,
         method: &str,
         args: &[MinijinjaValue],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<MinijinjaValue, MinijinjaError> {
         match method {
             "id" => {
@@ -221,7 +221,7 @@ impl Object for SourceFunction {
         self: &Arc<Self>,
         _state: &State<'_, '_>,
         args: &[MinijinjaValue],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<MinijinjaValue, MinijinjaError> {
         let parser = ArgParser::new(args, None);
         let num_args = parser.positional_len();

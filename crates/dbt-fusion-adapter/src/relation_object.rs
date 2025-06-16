@@ -55,7 +55,7 @@ impl Object for RelationObject {
         state: &State,
         name: &str,
         args: &[Value],
-        _listener: std::rc::Rc<dyn RenderingEventListener>,
+        _listeners: &[std::rc::Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
         match name {
             "create_from" => self.create_from(state, args),
@@ -191,7 +191,7 @@ impl Object for &dyn StaticBaseRelation {
         _state: &State,
         name: &str,
         args: &[Value],
-        _listener: std::rc::Rc<dyn RenderingEventListener>,
+        _listeners: &[std::rc::Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
         match name {
             "create" => self.create(args),

@@ -198,4 +198,9 @@ impl MacroSpans {
     pub fn extend(&mut self, other: MacroSpans) {
         self.items.extend(other.items);
     }
+
+    /// clear the list
+    pub fn clear(&mut self) {
+        self.items.clear();
+    }
 }

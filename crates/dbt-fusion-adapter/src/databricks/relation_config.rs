@@ -19,7 +19,7 @@ impl Object for DatabricksRelationConfig {
         _state: &State,
         method: &str,
         args: &[Value],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
         match method {
             "get_changeset" => {

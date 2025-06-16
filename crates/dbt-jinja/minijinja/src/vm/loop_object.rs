@@ -32,7 +32,7 @@ impl Object for Loop {
         self: &Arc<Self>,
         _state: &State,
         _args: &[Value],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listener: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         Err(Error::new(
             ErrorKind::InvalidOperation,
@@ -45,7 +45,7 @@ impl Object for Loop {
         _state: &State,
         name: &str,
         args: &[Value],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         if name == "changed" {
             let mut last_changed_value = self.last_changed_value.lock().unwrap();

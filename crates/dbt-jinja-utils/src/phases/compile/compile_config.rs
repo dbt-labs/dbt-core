@@ -22,7 +22,7 @@ impl Object for CompileConfig {
         self: &Arc<Self>,
         _state: &State<'_, '_>,
         _args: &[Value],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
         Ok(Value::from(""))
     }
@@ -52,7 +52,7 @@ impl Object for CompileConfig {
         state: &State<'_, '_>,
         name: &str,
         args: &[Value],
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
         match name {
             // At compile time, this will return the value of the config variable if it exists
@@ -74,7 +74,7 @@ impl Object for CompileConfig {
                 let validator = args.get_optional::<Value>("validator");
                 if let Some(validator) = validator {
                     // Pass the actual value to the validator
-                    let result = validator.call(state, &[result.clone()], listener);
+                    let result = validator.call(state, &[result.clone()], listeners);
                     result?;
                 }
 

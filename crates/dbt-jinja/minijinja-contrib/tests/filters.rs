@@ -18,10 +18,9 @@ fn test_pluralize() {
                 context! {
                     num_messages => num,
                 },
-                None
+                &[]
             )
-            .unwrap()
-            .0,
+            .unwrap(),
             s
         );
     }
@@ -37,10 +36,9 @@ fn test_pluralize() {
                 context! {
                     num_walruses => num,
                 },
-                None
+                &[]
             )
-            .unwrap()
-            .0,
+            .unwrap(),
             s
         );
     }
@@ -56,10 +54,9 @@ fn test_pluralize() {
                 context! {
                     num_cherries => num,
                 },
-                None
+                &[]
             )
-            .unwrap()
-            .0,
+            .unwrap(),
             s
         );
     }
@@ -70,10 +67,9 @@ fn test_pluralize() {
             context! {
                 num_cherries => vec![(); 5],
             },
-            None
+            &[]
         )
-        .unwrap()
-        .0,
+        .unwrap(),
         "You have 5 cherries."
     );
     assert_eq!(
@@ -82,10 +78,9 @@ fn test_pluralize() {
             context! {
                 num_cherries => 5,
             },
-            None
+            &[]
         )
-        .unwrap()
-        .0,
+        .unwrap(),
         "You have 5 cherries."
     );
     assert_eq!(
@@ -94,7 +89,7 @@ fn test_pluralize() {
             context! {
                 num_cherries => 0.5f32,
             },
-            None
+            &[]
         )
         .unwrap_err()
         .to_string(),
@@ -207,7 +202,7 @@ fn test_truncate() {
     );
 
     assert_eq!(
-        env.render_str(r"{{ 'hello'|truncate(length=1) }}", context! {}, None)
+        env.render_str(r"{{ 'hello'|truncate(length=1) }}", context! {}, &[])
             .unwrap_err()
             .to_string(),
         "invalid operation: expected length >= 3, got 1\n(in <string>:1)"
@@ -228,10 +223,9 @@ fn test_wordcount() {
             context! {
                 text => "Hello world! How are you?"
             },
-            None
+            &[]
         )
-        .unwrap()
-        .0,
+        .unwrap(),
         "5"
     );
 
@@ -242,10 +236,9 @@ fn test_wordcount() {
             context! {
                 text => ""
             },
-            None
+            &[]
         )
-        .unwrap()
-        .0,
+        .unwrap(),
         "0"
     );
 
@@ -256,10 +249,9 @@ fn test_wordcount() {
             context! {
                 text => "Hello    world!   Test"
             },
-            None
+            &[]
         )
-        .unwrap()
-        .0,
+        .unwrap(),
         "3"
     );
 
@@ -270,10 +262,9 @@ fn test_wordcount() {
             context! {
                 text => "hello-again@world! It's_me!"
             },
-            None
+            &[]
         )
-        .unwrap()
-        .0,
+        .unwrap(),
         "5"
     );
 
@@ -284,10 +275,9 @@ fn test_wordcount() {
             context! {
                 text => "hello--again@-!world"
             },
-            None
+            &[]
         )
-        .unwrap()
-        .0,
+        .unwrap(),
         "3"
     );
 
@@ -298,10 +288,9 @@ fn test_wordcount() {
             context! {
                 text => "helloाworld"
             },
-            None
+            &[]
         )
-        .unwrap()
-        .0,
+        .unwrap(),
         "2"
     );
 }
@@ -321,10 +310,9 @@ fn test_wordwrap() {
             context! {
                 text => "This is a long piece of text that should be wrapped at a specific width."
             },
-            None
+            &[]
         )
-        .unwrap()
-        .0,
+        .unwrap(),
         "This is a long piece\nof text that should\nbe wrapped at a\nspecific width."
     );
 
@@ -335,10 +323,9 @@ fn test_wordwrap() {
             context! {
                 text => "This is a test of custom wrap strings."
             },
-            None
+            &[]
         )
-        .unwrap()
-        .0,
+        .unwrap(),
         "This is <br> a test <br> of custom <br> wrap <br> strings."
     );
 
@@ -349,10 +336,9 @@ fn test_wordwrap() {
             context! {
                 text => "First paragraph.\n\nSecond paragraph."
             },
-            None
+            &[]
         )
-        .unwrap()
-        .0,
+        .unwrap(),
         "First paragraph.\n\nSecond paragraph."
     );
 
@@ -363,10 +349,9 @@ fn test_wordwrap() {
             context! {
                 text => "ThisIsAVeryLongWordThatShouldBeBroken"
             },
-            None
+            &[]
         )
-        .unwrap()
-        .0,
+        .unwrap(),
         "ThisIsAVer\nyLongWordT\nhatShouldB\neBroken"
     );
 
@@ -377,10 +362,9 @@ fn test_wordwrap() {
             context! {
                 text => "ThisIsAVeryLongWordThatShouldBeBroken"
             },
-            None
+            &[]
         )
-        .unwrap()
-        .0,
+        .unwrap(),
         "ThisIsAVeryLongWordThatShouldBeBroken"
     );
 
@@ -391,10 +375,9 @@ fn test_wordwrap() {
             context! {
                 text => "This-is-a-hyphenated-word"
             },
-            None
+            &[]
         )
-        .unwrap()
-        .0,
+        .unwrap(),
         "This-is-a-\nhyphenated\n-word"
     );
 }

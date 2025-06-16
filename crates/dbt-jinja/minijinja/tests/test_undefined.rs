@@ -17,7 +17,7 @@ fn test_lenient_undefined() {
     assert_eq!(env.undefined_behavior(), UndefinedBehavior::Lenient);
     assert_eq!(render!(in env, "<{{ true.missing_attribute }}>"), "<>");
     assert_eq!(
-        env.render_str("{{ undefined.missing_attribute }}", (), None)
+        env.render_str("{{ undefined.missing_attribute }}", (), &[])
             .unwrap_err()
             .kind(),
         ErrorKind::UndefinedError
@@ -44,31 +44,31 @@ fn test_strict_undefined() {
     env.set_undefined_behavior(UndefinedBehavior::Strict);
 
     assert_eq!(
-        env.render_str("{{ true.missing_attribute }}", (), None)
+        env.render_str("{{ true.missing_attribute }}", (), &[])
             .unwrap_err()
             .kind(),
         ErrorKind::UndefinedError
     );
     assert_eq!(
-        env.render_str("{{ undefined.missing_attribute }}", (), None)
+        env.render_str("{{ undefined.missing_attribute }}", (), &[])
             .unwrap_err()
             .kind(),
         ErrorKind::UndefinedError
     );
     assert_eq!(
-        env.render_str("<{% for x in undefined %}...{% endfor %}>", (), None)
+        env.render_str("<{% for x in undefined %}...{% endfor %}>", (), &[])
             .unwrap_err()
             .kind(),
         ErrorKind::UndefinedError
     );
     assert_eq!(
-        env.render_str("{{ 'foo' is in(undefined) }}", (), None)
+        env.render_str("{{ 'foo' is in(undefined) }}", (), &[])
             .unwrap_err()
             .kind(),
         ErrorKind::UndefinedError
     );
     assert_eq!(
-        env.render_str("<{{ undefined }}>", (), None)
+        env.render_str("<{{ undefined }}>", (), &[])
             .unwrap_err()
             .kind(),
         ErrorKind::UndefinedError
@@ -82,20 +82,20 @@ fn test_strict_undefined() {
         env.render_str(
             "{% if x.foo %}...{% endif %}",
             context! { x => HashMap::<String, String>::new() },
-            None
+            &[]
         )
         .unwrap_err()
         .kind(),
         ErrorKind::UndefinedError
     );
     assert_eq!(
-        env.render_str("{{ undefined|list }}", (), None)
+        env.render_str("{{ undefined|list }}", (), &[])
             .unwrap_err()
             .kind(),
         ErrorKind::InvalidOperation
     );
     assert_eq!(
-        env.render_str("{{ 42 in undefined }}", (), None)
+        env.render_str("{{ 42 in undefined }}", (), &[])
             .unwrap_err()
             .kind(),
         ErrorKind::UndefinedError

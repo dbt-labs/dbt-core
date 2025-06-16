@@ -66,7 +66,7 @@ use dbt_common::{
     show_warning_soon_to_be_error, CodeLocation, ErrorCode, FsError, FsResult,
 };
 use dbt_serde_yaml::Value;
-use minijinja::listener::{DefaultRenderingEventListener, RenderingEventListener};
+use minijinja::listener::RenderingEventListener;
 use regex::Regex;
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -179,14 +179,14 @@ pub fn into_typed_with_jinja<T, S>(
     should_render_secrets: bool,
     env: &JinjaEnvironment<'static>,
     ctx: &S,
-    listener: Option<Rc<dyn RenderingEventListener>>,
+    listeners: &[Rc<dyn RenderingEventListener>],
 ) -> FsResult<T>
 where
     T: DeserializeOwned,
     S: Serialize,
 {
     let (res, errors) =
-        into_typed_with_jinja_error(value, should_render_secrets, env, ctx, listener)?;
+        into_typed_with_jinja_error(value, should_render_secrets, env, ctx, listeners)?;
 
     if let Some(io_args) = io_args {
         for error in errors {
@@ -204,7 +204,7 @@ pub fn into_typed_with_jinja_error<T, S>(
     should_render_secrets: bool,
     env: &JinjaEnvironment<'static>,
     ctx: &S,
-    listener: Option<Rc<dyn RenderingEventListener>>,
+    listeners: &[Rc<dyn RenderingEventListener>],
 ) -> FsResult<(T, Vec<FsError>)>
 where
     T: DeserializeOwned,
@@ -212,14 +212,8 @@ where
 {
     let jinja_renderer = |value: Value| match value {
         Value::String(s, span) => {
-            let expanded = render_jinja_str(
-                &s,
-                should_render_secrets,
-                env,
-                ctx,
-                listener.as_ref().map(|l| l.clone()),
-            )
-            .map_err(|e| e.with_location(span.clone()))?;
+            let expanded = render_jinja_str(&s, should_render_secrets, env, ctx, listeners)
+                .map_err(|e| e.with_location(span.clone()))?;
             Ok(expanded.with_span(span))
         }
         _ => Ok(value),
@@ -274,14 +268,11 @@ fn render_jinja_str<S: Serialize>(
     should_render_secrets: bool,
     env: &JinjaEnvironment,
     ctx: &S,
-    listener: Option<Rc<dyn RenderingEventListener>>,
+    listeners: &[Rc<dyn RenderingEventListener>],
 ) -> FsResult<Value> {
     if check_single_expression_without_whitepsace_control(s) {
         let compiled = env.compile_expression(&s[2..s.len() - 2])?;
-        let eval = compiled.eval(
-            ctx,
-            listener.unwrap_or_else(|| Rc::new(DefaultRenderingEventListener)),
-        )?;
+        let eval = compiled.eval(ctx, listeners)?;
         let val = dbt_serde_yaml::to_value(eval).map_err(|e| {
             from_yaml_error(
                 e,
@@ -299,7 +290,7 @@ fn render_jinja_str<S: Serialize>(
         Ok(val)
     // Otherwise, process the entire string through Jinja
     } else {
-        let (compiled, _) = env.render_str(s, ctx, listener)?;
+        let compiled = env.render_str(s, ctx, listeners)?;
         let compiled = if should_render_secrets {
             render_secrets(compiled)?
         } else {
@@ -317,7 +308,7 @@ pub fn from_yaml_jinja<T, S: Serialize>(
     should_render_secrets: bool,
     env: &JinjaEnvironment<'static>,
     ctx: &S,
-    listener: Option<Rc<dyn RenderingEventListener>>,
+    listeners: &[Rc<dyn RenderingEventListener>],
     error_display_path: Option<&Path>,
 ) -> FsResult<T>
 where
@@ -329,7 +320,7 @@ where
         should_render_secrets,
         env,
         ctx,
-        listener,
+        listeners,
     )
 }
 

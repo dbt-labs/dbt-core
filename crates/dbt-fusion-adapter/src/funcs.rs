@@ -22,7 +22,7 @@ pub fn dispatch_adapter_calls(
     state: &State,
     name: &str,
     args: &[Value],
-    _listener: Rc<dyn RenderingEventListener>,
+    _listeners: &[Rc<dyn RenderingEventListener>],
 ) -> Result<Value, MinijinjaError> {
     match name {
         "dispatch" => adapter.dispatch(state, args),
@@ -188,11 +188,11 @@ pub fn execute_macro_with_package(
     let template_name = format!("{}.{}", package, macro_name);
     let template = state.env().get_template(&template_name)?;
     let base_ctx = state.get_base_context();
-    let state = template.eval_to_state(base_ctx, Rc::new(()))?;
+    let state = template.eval_to_state(base_ctx, &[])?;
     let func = state
         .lookup(macro_name)
         .unwrap_or_else(|| panic!("{} exists", macro_name));
-    let rv = match func.call(&state, args, Rc::new(())) {
+    let rv = match func.call(&state, args, &[]) {
         Ok(rv) => rv,
         Err(err) => {
             let v = err.try_abrupt_return().ok_or(AdapterError::new(

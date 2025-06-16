@@ -7,10 +7,7 @@ use std::{
 };
 
 use dbt_schemas::schemas::manifest::{DbtNode, InternalDbtNode, Nodes};
-use minijinja::{
-    listener::DefaultRenderingEventListener,
-    value::{mutable_map::MutableMap, ValueMap},
-};
+use minijinja::value::{mutable_map::MutableMap, ValueMap};
 
 use minijinja::{
     arg_utils::ArgParser,
@@ -132,7 +129,7 @@ impl Object for DocMacro {
         self: &Arc<Self>,
         _state: &State<'_, '_>,
         args: &[Value],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         let mut args = ArgParser::new(args, None);
         let arg1 = args.get::<String>("");
@@ -621,10 +618,7 @@ pub fn render_fn() -> impl Fn(&State, &[Value], Kwargs) -> Result<Value, Error> 
         let env = state.env();
 
         let template = env.template_from_str(sql)?;
-        let (rendered, _macro_span) = template.render(
-            state.get_base_context(),
-            Rc::new(DefaultRenderingEventListener),
-        )?;
+        let rendered = template.render(state.get_base_context(), &[])?;
         Ok(Value::from(rendered))
     }
 }
@@ -687,11 +681,7 @@ pub fn try_or_compiler_error_fn(
         let remaining_kwargs = Kwargs::from_iter(drained_kwargs);
         remaining_args.push(remaining_kwargs.into());
         // Call the function
-        match func.call(
-            state,
-            &remaining_args,
-            Rc::new(DefaultRenderingEventListener),
-        ) {
+        match func.call(state, &remaining_args, &[]) {
             Ok(result) => Ok(result),
             // TODO: we need to raise CompilationError(message_if_exception, self.model)
             Err(_) => Err(Error::new(
@@ -932,7 +922,7 @@ impl Object for Exceptions {
         state: &State<'_, '_>,
         method: &str,
         args: &[Value],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         // TODO: Implement below
         // reference: https://github.com/dbt-labs/dbt-core/blob/c28cb92af51d7f2cb27618aeb43705ba951aa3ef/core/dbt/context/exceptions_jinja.py#L130
@@ -1051,7 +1041,6 @@ mod tests {
     use super::*;
     use minijinja::{Environment, Value};
     use minijinja_contrib::pycompat::unknown_method_callback;
-    use std::rc::Rc;
 
     #[test]
     fn test_set_union_integration() {
@@ -1072,9 +1061,7 @@ mod tests {
         "#;
 
         let tmpl = env.template_from_str(template_source).unwrap();
-        let (output, _) = tmpl
-            .render(Value::UNDEFINED, Rc::new(DefaultRenderingEventListener))
-            .unwrap();
+        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
 
         // Should contain all unique elements from both sets: 1,2,3,4
         let result = output.trim();
@@ -1096,9 +1083,7 @@ mod tests {
         "#;
 
         let tmpl = env.template_from_str(template_source).unwrap();
-        let (output, _) = tmpl
-            .render(Value::UNDEFINED, Rc::new(DefaultRenderingEventListener))
-            .unwrap();
+        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
 
         // Should have 6 unique elements
         assert_eq!(output.trim(), "6");
@@ -1118,9 +1103,7 @@ mod tests {
         "#;
 
         let tmpl = env.template_from_str(template_source).unwrap();
-        let (output, _) = tmpl
-            .render(Value::UNDEFINED, Rc::new(DefaultRenderingEventListener))
-            .unwrap();
+        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
 
         // Should remove duplicates: 1,2,3,4,5
         assert_eq!(output.trim(), "1,2,3,4,5");

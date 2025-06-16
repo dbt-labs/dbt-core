@@ -11,7 +11,7 @@ use crate::compiler::parser::parse_expr;
 use crate::environment::Environment;
 use crate::error::Error;
 use crate::listener::RenderingEventListener;
-use crate::output::{MacroSpans, Output};
+use crate::output::Output;
 use crate::output_tracker::OutputTrackerLocation;
 use crate::value::Value;
 use crate::vm::Vm;
@@ -92,11 +92,11 @@ impl<'env, 'source> Expression<'env, 'source> {
     pub fn eval<S: Serialize>(
         &self,
         ctx: S,
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         // reduce total amount of code faling under mono morphization into
         // this function, and share the rest in _eval.
-        self._eval(Value::from_serialize(&ctx), listener)
+        self._eval(Value::from_serialize(&ctx), listeners)
     }
 
     /// Returns a set of all undeclared variables in the expression.
@@ -116,7 +116,11 @@ impl<'env, 'source> Expression<'env, 'source> {
         }
     }
 
-    fn _eval(&self, root: Value, listener: Rc<dyn RenderingEventListener>) -> Result<Value, Error> {
+    fn _eval(
+        &self,
+        root: Value,
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<Value, Error> {
         Ok(ok!(Vm::new(self.env).eval(
             self.instructions(),
             root,
@@ -124,8 +128,7 @@ impl<'env, 'source> Expression<'env, 'source> {
             &mut Output::null(),
             Rc::new(OutputTrackerLocation::default()),
             crate::AutoEscape::None,
-            &mut MacroSpans::default(),
-            listener
+            listeners
         ))
         .0
         .expect("expression evaluation did not leave value on stack"))

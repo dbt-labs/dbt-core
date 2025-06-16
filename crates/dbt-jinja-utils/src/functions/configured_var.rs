@@ -30,7 +30,7 @@ impl Object for ConfiguredVar {
         self: &Arc<Self>,
         state: &State<'_, '_>,
         args: &[Value],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         // Safely get var_name, defaulting to empty string if args is empty or not a string
         let var_name = args
@@ -125,7 +125,7 @@ impl Object for ConfiguredVar {
         state: &State<'_, '_>,
         method: &str,
         args: &[Value],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         // implement the has_var method
         if method == "has_var" {

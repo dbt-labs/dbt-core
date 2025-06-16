@@ -32,7 +32,7 @@ impl Object for PyTzInfoClass {
         self: &Arc<Self>,
         _state: &minijinja::State<'_, '_>,
         _args: &[Value],
-        _listener: Rc<dyn minijinja::listener::RenderingEventListener>,
+        _listeners: &[Rc<dyn minijinja::listener::RenderingEventListener>],
     ) -> Result<Value, Error> {
         Err(Error::new(
             ErrorKind::InvalidOperation,

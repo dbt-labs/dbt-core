@@ -459,35 +459,30 @@ mod tests {
         let env = builder.build().unwrap();
         // one exists in test_package, dbt_postgres, and dbt
         let rv = env
-            .render_str("{{adapter.dispatch('one', 'dbt')()}}", context! {}, None)
-            .unwrap()
-            .0;
+            .render_str("{{adapter.dispatch('one', 'dbt')()}}", context! {}, &[])
+            .unwrap();
         assert_snapshot!(rv, "test_package one");
         // two exists in dbt_postgres, and dbt
         let rv = env
-            .render_str("{{adapter.dispatch('two', 'dbt')()}}", context! {}, None)
-            .unwrap()
-            .0;
+            .render_str("{{adapter.dispatch('two', 'dbt')()}}", context! {}, &[])
+            .unwrap();
         assert_snapshot!(rv, "postgres two");
         // three exists in dbt
         let rv = env
-            .render_str("{{adapter.dispatch('three', 'dbt')()}}", context! {}, None)
-            .unwrap()
-            .0;
+            .render_str("{{adapter.dispatch('three', 'dbt')()}}", context! {}, &[])
+            .unwrap();
         assert_snapshot!(rv, "dbt default three");
 
         // one exists in test_package, dbt_postgres, and dbt, but package is not specified, so last one wins
         let rv = env
-            .render_str("{{adapter.dispatch('one')()}}", context! {}, None)
-            .unwrap()
-            .0;
+            .render_str("{{adapter.dispatch('one')()}}", context! {}, &[])
+            .unwrap();
         assert_snapshot!(rv, "test_package one");
 
         // some_macro exists in a_package, and dbt_postgres, but package is not specified, so last one wins
         let rv = env
-            .render_str("{{adapter.dispatch('some_macro')()}}", context! {}, None)
-            .unwrap()
-            .0;
+            .render_str("{{adapter.dispatch('some_macro')()}}", context! {}, &[])
+            .unwrap();
         assert_snapshot!(rv, "some_macro in a_package");
 
         // some_macro exists in a_package, postgres, and dbt_postgres, but package is specified, so a_package wins
@@ -495,10 +490,9 @@ mod tests {
             .render_str(
                 "{{adapter.dispatch('some_macro', 'a_package')()}}",
                 context! {},
-                None,
+                &[],
             )
-            .unwrap()
-            .0;
+            .unwrap();
         assert_snapshot!(rv, "some_macro in a_package");
     }
     #[test]
@@ -568,17 +562,15 @@ mod tests {
             .render_str(
                 "{{adapter.dispatch('some_macro', 'a_package')()}}",
                 &ctx,
-                None,
+                &[],
             )
-            .unwrap()
-            .0;
+            .unwrap();
         assert_eq!(rv, "some_macro in test_package");
 
         // some_macro dispatched with dbt now resolves to dbt
         let rv = env
-            .render_str("{{adapter.dispatch('some_macro', 'dbt')()}}", &ctx, None)
-            .unwrap()
-            .0;
+            .render_str("{{adapter.dispatch('some_macro', 'dbt')()}}", &ctx, &[])
+            .unwrap();
         assert_eq!(rv, "some_macro in dbt");
 
         // some_macro does not exist in b_package, so when dispatched with test_package still resolves to test_package
@@ -586,10 +578,9 @@ mod tests {
             .render_str(
                 "{{adapter.dispatch('some_macro', 'test_package')()}}",
                 ctx,
-                None,
+                &[],
             )
-            .unwrap()
-            .0;
+            .unwrap();
         assert_snapshot!(rv, "some_macro in test_package");
     }
 
@@ -630,10 +621,7 @@ mod tests {
             .build()
             .unwrap();
         // Test assigning macro to variable and using it
-        let rv = env
-            .render_str("{{macro_b()}}", context! {}, None)
-            .unwrap()
-            .0;
+        let rv = env.render_str("{{macro_b()}}", context! {}, &[]).unwrap();
 
         // The first print should show the macro object, second print shows the macro output
         // assert!(rv.contains("<macro 'some_macro'>"));
@@ -646,10 +634,10 @@ mod tests {
             .render_str(
                 "{{modules.pytz.utc}} {{- modules.datetime.datetime.now(modules.pytz.utc).isoformat() -}}",
                 context! {},
-                None,
+                &[],
             )
             .unwrap()
-            .0;
+            ;
         assert!(rv.contains("UTC"));
         assert!(rv.contains("+00:00"));
     }
@@ -663,10 +651,10 @@ mod tests {
                 {%- set now = modules.datetime.datetime.now().astimezone(modules.pytz.timezone('UTC')) -%}
                 {{modules.datetime.datetime.strftime(today - modules.datetime.timedelta(days=1), '%Y-%m-%d')}}",
                 context! {},
-                None,
+                &[],
             )
             .unwrap()
-            .0;
+            ;
         // Extract the date from the rendered string and verify it's in the expected format
         let date_pattern = regex::Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
         assert!(

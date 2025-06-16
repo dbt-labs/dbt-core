@@ -146,10 +146,10 @@ impl<T: DecimalType> Object for DecimalValue<T> {
         state: &minijinja::State<'_, '_>,
         method: &str,
         args: &[Value],
-        listener: std::rc::Rc<dyn minijinja::listener::RenderingEventListener>,
+        listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
         if let Some(value) = self.get_value(&Value::from(method)) {
-            return value.call(state, args, listener);
+            return value.call(state, args, listeners);
         }
 
         // TODO: implement decimal methods

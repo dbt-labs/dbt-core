@@ -36,7 +36,7 @@ impl Object for Flags {
         _state: &State<'_, '_>,
         name: &str,
         args: &[Value],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
         match name {
             "get" => get_method(args, &self.flags),

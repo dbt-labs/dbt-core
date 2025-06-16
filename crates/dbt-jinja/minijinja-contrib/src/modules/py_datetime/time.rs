@@ -107,7 +107,7 @@ impl Object for PyTimeClass {
         self: &Arc<Self>,
         _state: &minijinja::State<'_, '_>,
         args: &[Value],
-        _listener: std::rc::Rc<dyn minijinja::listener::RenderingEventListener>,
+        _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
     ) -> Result<Value, Error> {
         Self::create_time(args).map(Value::from_object)
     }
@@ -118,7 +118,7 @@ impl Object for PyTimeClass {
         _state: &minijinja::State<'_, '_>,
         method: &str,
         args: &[Value],
-        _listener: std::rc::Rc<dyn minijinja::listener::RenderingEventListener>,
+        _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
     ) -> Result<Value, Error> {
         match method {
             "now" => Self::now(args).map(Value::from_object),
@@ -278,7 +278,7 @@ impl Object for PyTime {
         _state: &minijinja::State<'_, '_>,
         method: &str,
         args: &[Value],
-        _listener: std::rc::Rc<dyn minijinja::listener::RenderingEventListener>,
+        _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
     ) -> Result<Value, Error> {
         match method {
             "isoformat" => {
@@ -316,8 +316,6 @@ impl Object for PyTime {
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
-
     use super::*;
     use crate::modules::py_datetime::timedelta::PyTimeDelta;
     use minijinja::context;
@@ -361,37 +359,22 @@ mod tests {
         let template = env
             .template_from_str("{{ time(14, 30, 45, 123456).strftime('%H:%M:%S') }}")
             .unwrap();
-        let result = template
-            .render(
-                context!(),
-                Rc::new(minijinja::listener::DefaultRenderingEventListener),
-            )
-            .unwrap();
-        assert_eq!(result.0, "14:30:45");
+        let result = template.render(context!(), &[]).unwrap();
+        assert_eq!(result, "14:30:45");
 
         // Test with a different format
         let template = env
             .template_from_str("{{ time(14, 30, 45, 123456).strftime('%I:%M %p') }}")
             .unwrap();
-        let result = template
-            .render(
-                context!(),
-                Rc::new(minijinja::listener::DefaultRenderingEventListener),
-            )
-            .unwrap();
-        assert_eq!(result.0, "02:30 PM");
+        let result = template.render(context!(), &[]).unwrap();
+        assert_eq!(result, "02:30 PM");
 
         // Test with microseconds
         let template = env
             .template_from_str("{{ time(14, 30, 45, 123456).strftime('%H:%M:%S.%f') }}")
             .unwrap();
-        let result = template
-            .render(
-                context!(),
-                Rc::new(minijinja::listener::DefaultRenderingEventListener),
-            )
-            .unwrap();
-        assert_eq!(result.0, "14:30:45.123456");
+        let result = template.render(context!(), &[]).unwrap();
+        assert_eq!(result, "14:30:45.123456");
     }
 
     #[test]
@@ -491,13 +474,8 @@ mod tests {
         let template = env
             .template_from_str("{{ (time(14, 30, 0) + timedelta(hours=1)).strftime('%H:%M:%S') }}")
             .unwrap();
-        let result = template
-            .render(
-                context!(),
-                Rc::new(minijinja::listener::DefaultRenderingEventListener),
-            )
-            .unwrap();
-        assert_eq!(result.0, "15:30:00");
+        let result = template.render(context!(), &[]).unwrap();
+        assert_eq!(result, "15:30:00");
 
         // Test subtracting minutes
         let template = env
@@ -505,25 +483,15 @@ mod tests {
                 "{{ (time(14, 30, 0) - timedelta(minutes=45)).strftime('%H:%M:%S') }}",
             )
             .unwrap();
-        let result = template
-            .render(
-                context!(),
-                Rc::new(minijinja::listener::DefaultRenderingEventListener),
-            )
-            .unwrap();
-        assert_eq!(result.0, "13:45:00");
+        let result = template.render(context!(), &[]).unwrap();
+        assert_eq!(result, "13:45:00");
 
         // Test time subtraction
         let template = env
             .template_from_str("{{ (time(14, 30, 0) - time(13, 15, 0)).seconds }}")
             .unwrap();
-        let result = template
-            .render(
-                context!(),
-                Rc::new(minijinja::listener::DefaultRenderingEventListener),
-            )
-            .unwrap();
+        let result = template.render(context!(), &[]).unwrap();
         // 1 hour 15 minutes = 75 minutes = 4500 seconds
-        assert_eq!(result.0, "4500");
+        assert_eq!(result, "4500");
     }
 }

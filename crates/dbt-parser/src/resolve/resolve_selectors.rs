@@ -66,7 +66,7 @@ pub fn resolve_final_selectors(
         false,
         jinja_env,
         &context,
-        None,
+        &[],
     ) {
         Ok(yaml) => yaml,
         Err(e) => {

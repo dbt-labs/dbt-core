@@ -1,9 +1,6 @@
 use minijinja::{Environment, Error, Value};
 fn eval_expr(env: &Environment, expr: &str) -> Result<Value, Error> {
-    env.compile_expression(expr).unwrap().eval(
-        (),
-        std::rc::Rc::new(minijinja::listener::DefaultRenderingEventListener),
-    )
+    env.compile_expression(expr).unwrap().eval((), &[])
 }
 
 #[test]

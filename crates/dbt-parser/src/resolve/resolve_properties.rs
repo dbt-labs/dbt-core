@@ -58,7 +58,7 @@ impl MinimalProperties {
                     false,
                     jinja_env,
                     base_ctx,
-                    None,
+                    &[],
                 )?;
                 for (key, maybe_version_info) in collect_model_version_info(&model).into_iter() {
                     if let Some(existing_model) = self.models.get_mut(&key) {
@@ -89,7 +89,7 @@ impl MinimalProperties {
                     false,
                     jinja_env,
                     base_ctx,
-                    None,
+                    &[],
                 )?;
                 if let Some(tables) = &*source.tables {
                     // Construct this once and reuse it for all tables:
@@ -111,7 +111,7 @@ impl MinimalProperties {
                             false,
                             jinja_env,
                             base_ctx,
-                            None,
+                            &[],
                         )?;
                         let key = (source.name.clone(), minimum_table_value.name.clone());
 
@@ -169,7 +169,7 @@ impl MinimalProperties {
                     false,
                     jinja_env,
                     base_ctx,
-                    None,
+                    &[],
                 )?;
                 if let Some(existing_seed) = self.seeds.get_mut(&seed.name) {
                     existing_seed
@@ -198,7 +198,7 @@ impl MinimalProperties {
                     false,
                     jinja_env,
                     base_ctx,
-                    None,
+                    &[],
                 )?;
                 if let Some(existing_snapshot) = self.snapshots.get_mut(&snapshot.name) {
                     existing_snapshot
@@ -227,7 +227,7 @@ impl MinimalProperties {
                     false,
                     jinja_env,
                     base_ctx,
-                    None,
+                    &[],
                 )?;
                 if let Some(existing_unit_test) = self.unit_tests.get_mut(&unit_test.name) {
                     existing_unit_test
@@ -256,7 +256,7 @@ impl MinimalProperties {
                     false,
                     jinja_env,
                     base_ctx,
-                    None,
+                    &[],
                 )?;
                 if let Some(existing_test) = self.tests.get_mut(&test.name) {
                     existing_test
@@ -285,7 +285,7 @@ impl MinimalProperties {
                     false,
                     jinja_env,
                     base_ctx,
-                    None,
+                    &[],
                 )?;
                 if let Some(existing_test) = self.tests.get_mut(&test.name) {
                     existing_test

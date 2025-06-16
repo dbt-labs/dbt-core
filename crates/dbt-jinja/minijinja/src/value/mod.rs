@@ -1558,10 +1558,10 @@ impl Value {
         &self,
         state: &State,
         args: &[Value],
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         if let ValueRepr::Object(ref dy) = self.0 {
-            dy.call(state, args, listener)
+            dy.call(state, args, listeners)
         } else if self.is_undefined() {
             state.undefined_behavior().handle_undefined(None)
         } else {
@@ -1581,9 +1581,9 @@ impl Value {
         state: &State,
         name: &str,
         args: &[Value],
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
-        match self._call_method(state, name, args, listener) {
+        match self._call_method(state, name, args, listeners) {
             Ok(rv) => Ok(rv),
             Err(mut err) => {
                 if let ErrorKind::UnknownMethod(_caller, _method_name) = err.kind() {
@@ -1624,10 +1624,10 @@ impl Value {
         state: &State,
         name: &str,
         args: &[Value],
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         if let Some(object) = self.as_object() {
-            object.call_method(state, name, args, listener)
+            object.call_method(state, name, args, listeners)
         } else {
             Err(Error::from(ErrorKind::UnknownMethod(
                 "Value".to_string(),

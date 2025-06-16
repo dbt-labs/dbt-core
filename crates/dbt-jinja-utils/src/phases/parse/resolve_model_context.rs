@@ -30,7 +30,7 @@ use dbt_schemas::{
 use minijinja::{
     arg_utils::ArgParser,
     constants::TARGET_UNIQUE_ID,
-    listener::{DefaultRenderingEventListener, RenderingEventListener},
+    listener::RenderingEventListener,
     value::{Object, ObjectRepr, Value as MinijinjaValue, ValueKind},
     Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State,
 };
@@ -331,7 +331,7 @@ impl Object for ResolveRefFunction {
         self: &Arc<Self>,
         _state: &State<'_, '_>,
         args: &[MinijinjaValue],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<MinijinjaValue, MinijinjaError> {
         if args.is_empty() || args.len() > 4 {
             return Err(MinijinjaError::new(
@@ -414,7 +414,7 @@ impl Object for ResolveSourceFunction {
         self: &Arc<Self>,
         _state: &State<'_, '_>,
         args: &[MinijinjaValue],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<MinijinjaValue, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         if args.len() == 3 {
@@ -496,7 +496,7 @@ impl Object for ParseConfig {
         self: &Arc<Self>,
         _state: &State<'_, '_>,
         args: &[MinijinjaValue],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<MinijinjaValue, MinijinjaError> {
         let mut args = ArgParser::new(args, None);
         // If there is a positional argument, it must be a map
@@ -583,7 +583,7 @@ impl Object for ParseConfig {
         _state: &State<'_, '_>,
         name: &str,
         args: &[MinijinjaValue],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<MinijinjaValue, MinijinjaError> {
         match name {
             // At compile time, this will return the value of the config variable if it exists
@@ -621,10 +621,7 @@ pub fn render_extract_ref_or_source_expr(
     ref_str: &str,
 ) -> FsResult<SqlResource> {
     let expr = jinja_env.compile_expression(ref_str)?;
-    let _ = expr.eval(
-        resolve_model_context,
-        Rc::new(DefaultRenderingEventListener),
-    )?;
+    let _ = expr.eval(resolve_model_context, &[])?;
     // Remove from Mutex and return last item
     let mut sql_resources = sql_resources.lock().unwrap();
     let sql_resource = sql_resources.pop().unwrap();
@@ -660,11 +657,10 @@ mod test {
             .unwrap();
 
         // Render the template
-        let result = template.render(minijinja::context!(), Rc::new(())).unwrap();
-        println!("Result: {}", result.0);
+        let result = template.render(minijinja::context!(), &[]).unwrap();
 
-        assert!(result.0.contains("test_db"));
-        assert!(result.0.contains("test_schema"));
-        assert!(result.0.contains("my_table"));
+        assert!(result.contains("test_db"));
+        assert!(result.contains("test_schema"));
+        assert!(result.contains("my_table"));
     }
 }

@@ -5,10 +5,8 @@
     feature = "adjacent_loop_items",
     feature = "deserialization"
 ))]
-use minijinja::listener::DefaultRenderingEventListener;
 use std::collections::BTreeMap;
 use std::fmt::Write;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::{env, fs};
 
@@ -60,8 +58,8 @@ fn test_vm() {
                 one_shot_iterator => Value::make_one_shot_iterator(0..3),
                 ..ctx.clone()
             };
-            match template.render(&actual_context, Rc::new(DefaultRenderingEventListener)) {
-                Ok((mut rendered, _)) => {
+            match template.render(&actual_context, &[]) {
+                Ok(mut rendered) => {
                     rendered.push('\n');
                     rendered
                 }
@@ -127,11 +125,10 @@ fn test_vm_block_fragments() {
             let template = env.get_template(filename).unwrap();
 
             match template
-                .eval_to_state(&ctx, Rc::new(DefaultRenderingEventListener))
-                .and_then(|mut x| {
-                    x.render_block("fragment", Rc::new(DefaultRenderingEventListener))
-                }) {
-                Ok((mut rendered, _)) => {
+                .eval_to_state(&ctx, &[])
+                .and_then(|mut x| x.render_block("fragment", &[]))
+            {
+                Ok(mut rendered) => {
                     rendered.push('\n');
                     rendered
                 }
@@ -174,10 +171,7 @@ fn test_custom_filter() {
     env.add_filter("test", test_filter);
     env.add_template("test", "{{ var|test }}").unwrap();
     let tmpl = env.get_template("test").unwrap();
-    let rv = tmpl
-        .render(&ctx, Rc::new(DefaultRenderingEventListener))
-        .unwrap()
-        .0;
+    let rv = tmpl.render(&ctx, &[]).unwrap();
     assert_eq!(rv, "[42]");
 }
 
@@ -240,13 +234,7 @@ fn test_single() {
     let mut env = Environment::new();
     env.add_template("simple", "Hello {{ name }}!").unwrap();
     let tmpl = env.get_template("simple").unwrap();
-    let rv = tmpl
-        .render(
-            context!(name => "Peter"),
-            Rc::new(DefaultRenderingEventListener),
-        )
-        .unwrap()
-        .0;
+    let rv = tmpl.render(context!(name => "Peter"), &[]).unwrap();
     assert_eq!(rv, "Hello Peter!");
 }
 
@@ -256,43 +244,37 @@ fn test_values_scientific_notation() {
     env.add_template("sci1", "VALUE = {{ value or -12.4E-4 }}")
         .unwrap();
     let tmpl = env.get_template("sci1").unwrap();
-    let rv = tmpl
-        .render(
-            context!(value => -12.4E-3),
-            Rc::new(DefaultRenderingEventListener),
-        )
-        .unwrap()
-        .0;
+    let rv = tmpl.render(context!(value => -12.4E-3), &[]).unwrap();
     assert_eq!(rv, "VALUE = -0.0124");
-    let rv = tmpl.render(context!(), Rc::new(DefaultRenderingEventListener));
+    let rv = tmpl.render(context!(), &[]);
     // assert_eq!(rv, "VALUE = -0.00124");
     assert!(rv.is_ok());
 
     env.add_template("sci2", "VALUE = {{ value or 1.4E4 }}")
         .unwrap();
     let tmpl = env.get_template("sci2").unwrap();
-    let rv = tmpl.render(context!(), Rc::new(DefaultRenderingEventListener));
+    let rv = tmpl.render(context!(), &[]);
     assert!(rv.is_ok());
 
     env.add_template("sci3", "VALUE = {{ value or 1.4e+4}}")
         .unwrap();
     let tmpl = env.get_template("sci3").unwrap();
-    let rv = tmpl.render(context!(), Rc::new(DefaultRenderingEventListener));
+    let rv = tmpl.render(context!(), &[]);
     assert!(rv.is_ok());
 
     env.add_template("sci4", "VALUE = {{ 1.4+4}}").unwrap();
     let tmpl = env.get_template("sci4").unwrap();
-    let rv = tmpl.render(context!(), Rc::new(DefaultRenderingEventListener));
+    let rv = tmpl.render(context!(), &[]);
     assert!(rv.is_ok());
 
     env.add_template("sci5", "VALUE = {{ 1.4+1E-1}}").unwrap();
     let tmpl = env.get_template("sci5").unwrap();
-    let rv = tmpl.render(context!(), Rc::new(DefaultRenderingEventListener));
+    let rv = tmpl.render(context!(), &[]);
     assert!(rv.is_ok());
 
     env.add_template("sci6", "VALUE = {{ 1.0E0+1.0}}").unwrap();
     let tmpl = env.get_template("sci6").unwrap();
-    let rv = tmpl.render(context!(), Rc::new(DefaultRenderingEventListener));
+    let rv = tmpl.render(context!(), &[]);
     assert!(rv.is_ok());
 }
 
@@ -308,13 +290,7 @@ fn test_auto_escaping() {
 
     // html
     let tmpl = env.get_template("index.html").unwrap();
-    let rv = tmpl
-        .render(
-            context!(var => "<script>"),
-            Rc::new(DefaultRenderingEventListener),
-        )
-        .unwrap()
-        .0;
+    let rv = tmpl.render(context!(var => "<script>"), &[]).unwrap();
     insta::assert_snapshot!(rv, @"&lt;script&gt;");
 
     // JSON
@@ -322,33 +298,20 @@ fn test_auto_escaping() {
     {
         use minijinja::value::Value;
         let tmpl = env.get_template("index.js").unwrap();
-        let rv = tmpl
-            .render(
-                context!(var => "foo\"bar'baz"),
-                Rc::new(DefaultRenderingEventListener),
-            )
-            .unwrap()
-            .0;
+        let rv = tmpl.render(context!(var => "foo\"bar'baz"), &[]).unwrap();
         insta::assert_snapshot!(rv, @r###""foo\"bar'baz""###);
         let rv = tmpl
             .render(
                 context!(var => [Value::from(true), Value::from("<foo>"), Value::from(())]),
-                Rc::new(DefaultRenderingEventListener),
+                &[],
             )
-            .unwrap()
-            .0;
+            .unwrap();
         insta::assert_snapshot!(rv, @r###"[true,"<foo>",null]"###);
     }
 
     // Text
     let tmpl = env.get_template("index.txt").unwrap();
-    let rv = tmpl
-        .render(
-            context!(var => "foo\"bar'baz"),
-            Rc::new(DefaultRenderingEventListener),
-        )
-        .unwrap()
-        .0;
+    let rv = tmpl.render(context!(var => "foo\"bar'baz"), &[]).unwrap();
     insta::assert_snapshot!(rv, @r###"foo"bar'baz"###);
 }
 
@@ -385,8 +348,7 @@ fn test_flattening() {
     };
 
     let env = Environment::new();
-    env.render_str("{{ debug() }}", ctx, Rc::new(DefaultRenderingEventListener))
-        .unwrap();
+    env.render_str("{{ debug() }}", ctx, &[]).unwrap();
 }
 
 #[test]
@@ -400,7 +362,7 @@ fn test_flattening_sub_item_good() {
     let env = Environment::new();
 
     // we are not touching a bad value, so we are good
-    let rv = env.render_str("{{ good }}", ctx, None).unwrap().0;
+    let rv = env.render_str("{{ good }}", ctx, &[]).unwrap();
     assert_eq!(rv, "good");
 }
 
@@ -417,8 +379,7 @@ fn test_flattening_sub_item_bad_lookup() {
     let env = Environment::new();
 
     // resolving an invalid value will fail
-    env.render_str("{{ bad }}", ctx, Rc::new(DefaultRenderingEventListener))
-        .unwrap();
+    env.render_str("{{ bad }}", ctx, &[]).unwrap();
 }
 
 #[cfg(not(debug_assertions))]
@@ -434,11 +395,7 @@ fn test_flattening_sub_item_bad_attr() {
 
     // resolving an invalid value will fail, even in an attribute lookup
     let err = env
-        .render_str(
-            "{% if good.bad %}...{% endif %}",
-            ctx,
-            Rc::new(DefaultRenderingEventListener),
-        )
+        .render_str("{% if good.bad %}...{% endif %}", ctx, &[])
         .unwrap_err();
     assert_eq!(err.kind(), ErrorKind::BadSerialization);
     assert_eq!(
@@ -459,10 +416,7 @@ fn test_flattening_sub_item_shielded_print() {
     let env = Environment::new();
 
     // this on the other hand is okay
-    let value = env
-        .render_str("{{ good }}", ctx, Rc::new(DefaultRenderingEventListener))
-        .unwrap()
-        .0;
+    let value = env.render_str("{{ good }}", ctx, &[]).unwrap();
     assert_eq!(
         value,
         r#"{"bad": <invalid value: could not serialize to value: can only flatten structs and maps (got an enum)>}"#
@@ -484,9 +438,8 @@ fn test_custom_syntax() {
 
     // this on the other hand is okay
     let value = env
-        .render_str("{for x in range(3)}${x}{endfor}{* nothing *}", (), None)
-        .unwrap()
-        .0;
+        .render_str("{for x in range(3)}${x}{endfor}{* nothing *}", (), &[])
+        .unwrap();
     assert_eq!(value, r"012");
 }
 
@@ -549,16 +502,12 @@ fn test_block_fragments() {
     .unwrap();
     let tmpl = env.get_template("demo").unwrap();
 
-    let rv_a = tmpl
-        .render((), Rc::new(DefaultRenderingEventListener))
-        .unwrap()
-        .0;
+    let rv_a = tmpl.render((), &[]).unwrap();
     let rv_b = tmpl
-        .eval_to_state((), Rc::new(DefaultRenderingEventListener))
+        .eval_to_state((), &[])
         .unwrap()
-        .render_block("foo", Rc::new(DefaultRenderingEventListener))
-        .unwrap()
-        .0;
+        .render_block("foo", &[])
+        .unwrap();
 
     assert_eq!(rv_a, "I am outside the fragmentfooSo am I!");
     assert_eq!(rv_b, "foo");
@@ -582,25 +531,14 @@ fn test_state() {
             context! {
                 variable => 23
             },
-            Rc::new(DefaultRenderingEventListener),
+            &[],
         )
         .unwrap();
     assert!(state.lookup("range").is_some());
     assert!(!state.exports().contains(&"range"));
     assert_eq!(state.lookup("global"), Some(Value::from(23 * 2)));
-    assert_eq!(
-        state
-            .call_macro("something", &[], Rc::new(DefaultRenderingEventListener))
-            .unwrap(),
-        "46"
-    );
-    assert_eq!(
-        state
-            .render_block("baz", Rc::new(DefaultRenderingEventListener))
-            .unwrap()
-            .0,
-        "[46]"
-    );
+    assert_eq!(state.call_macro("something", &[], &[]).unwrap(), "46");
+    assert_eq!(state.render_block("baz", &[]).unwrap(), "[46]");
 }
 
 #[test]
@@ -614,11 +552,8 @@ fn test_render_and_return_state() {
     let tmpl = env
         .template_from_str("{% for x in range(3) %}Hello {{ name }}!\n{% endfor %}{% set x = 1 %}")
         .unwrap();
-    let (rv, _, state) = tmpl
-        .render_and_return_state(
-            context! { name => "Foo" },
-            Rc::new(DefaultRenderingEventListener),
-        )
+    let (rv, state) = tmpl
+        .render_and_return_state(context! { name => "Foo" }, &[])
         .unwrap();
     assert_eq!(rv, "Hello Foo!\nHello Foo!\nHello Foo!\n");
     assert_eq!(state.lookup("x"), Some(Value::from(1)));
@@ -636,18 +571,10 @@ fn test_render_to_write_state() {
         .template_from_str("{% set foo = 42 %}{% macro bar() %}x{% endmacro %}root")
         .unwrap();
     let mut out = Vec::<u8>::new();
-    let state = tmpl
-        .render_to_write((), &mut out, Rc::new(DefaultRenderingEventListener))
-        .unwrap();
+    let state = tmpl.render_to_write((), &mut out, &[]).unwrap();
     assert_eq!(String::from_utf8_lossy(&out), "root");
     assert_eq!(state.lookup("foo"), Some(Value::from(42)));
-    assert_eq!(
-        state
-            .call_macro("bar", &[], Rc::new(DefaultRenderingEventListener))
-            .ok()
-            .as_deref(),
-        Some("x")
-    );
+    assert_eq!(state.call_macro("bar", &[], &[]).ok().as_deref(), Some("x"));
 }
 
 #[test]
@@ -693,7 +620,7 @@ fn test_invalid_value_iteration() {
         .render_to_write(
             context! { iter => Value::from_object(FailingIteration) },
             &mut out,
-            Rc::new(DefaultRenderingEventListener),
+            &[],
         )
         .unwrap_err();
     let out = String::from_utf8_lossy(&out);
@@ -720,9 +647,8 @@ fn test_multiple_extended_includes_in_loop() {
     let rv = env
         .get_template("main.txt")
         .unwrap()
-        .render((), Rc::new(DefaultRenderingEventListener))
-        .unwrap()
-        .0;
+        .render((), &[])
+        .unwrap();
     assert_eq!(rv, "012");
 }
 
@@ -740,9 +666,8 @@ fn test_filter_caching() {
     let rv = env
         .get_template("child.txt")
         .unwrap()
-        .render((), Rc::new(DefaultRenderingEventListener))
-        .unwrap()
-        .0;
+        .render((), &[])
+        .unwrap();
     assert_eq!(rv, "hello foo");
 }
 
@@ -759,8 +684,7 @@ fn test_test_caching() {
     let rv = env
         .get_template("child.txt")
         .unwrap()
-        .render((), Rc::new(DefaultRenderingEventListener))
-        .unwrap()
-        .0;
+        .render((), &[])
+        .unwrap();
     assert_eq!(rv, "false");
 }

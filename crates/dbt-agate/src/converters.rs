@@ -464,9 +464,7 @@ mod tests {
     use arrow_buffer::Buffer;
     use arrow_data::decimal::MAX_DECIMAL128_FOR_EACH_PRECISION;
     use arrow_data::ArrayData;
-    use minijinja::listener::DefaultRenderingEventListener;
     use minijinja::Value;
-    use std::rc::Rc;
     use std::sync::Arc;
 
     const MAX_DECIMAL128: i128 = MAX_DECIMAL128_FOR_EACH_PRECISION[38];
@@ -671,20 +669,10 @@ mod tests {
             let date0 = &result[0];
             let date1 = &result[1];
 
-            let res0 = date0.call_method(
-                &state,
-                "strftime",
-                &[Value::from("%Y/%m/%d")],
-                Rc::new(DefaultRenderingEventListener),
-            );
+            let res0 = date0.call_method(&state, "strftime", &[Value::from("%Y/%m/%d")], &[]);
             assert_eq!(res0.unwrap().to_string(), "2025/05/28");
 
-            let res1 = date1.call_method(
-                &state,
-                "strftime",
-                &[Value::from("%Y/%m/%d")],
-                Rc::new(DefaultRenderingEventListener),
-            );
+            let res1 = date1.call_method(&state, "strftime", &[Value::from("%Y/%m/%d")], &[]);
             assert_eq!(res1.unwrap().to_string(), "2025/05/29");
         };
     }
@@ -728,20 +716,12 @@ mod tests {
             let time0 = &result[0];
             let time1 = &result[1];
 
-            let res0 = time0.call_method(
-                &state,
-                "strftime",
-                &[Value::from("h=%H, m=%M, s=%S")],
-                Rc::new(DefaultRenderingEventListener),
-            );
+            let res0 =
+                time0.call_method(&state, "strftime", &[Value::from("h=%H, m=%M, s=%S")], &[]);
             assert_eq!(res0.unwrap().to_string(), "h=13, m=37, s=00");
 
-            let res1 = time1.call_method(
-                &state,
-                "strftime",
-                &[Value::from("h=%H, m=%M, s=%S")],
-                Rc::new(DefaultRenderingEventListener),
-            );
+            let res1 =
+                time1.call_method(&state, "strftime", &[Value::from("h=%H, m=%M, s=%S")], &[]);
             assert_eq!(res1.unwrap().to_string(), "h=23, m=59, s=59");
         };
     }

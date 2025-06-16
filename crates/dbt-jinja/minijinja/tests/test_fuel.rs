@@ -1,8 +1,6 @@
 #![cfg(feature = "fuel")]
 
-use minijinja::listener::DefaultRenderingEventListener;
 use minijinja::{context, Environment, ErrorKind};
-use std::rc::Rc;
 
 #[test]
 fn test_basic() {
@@ -16,20 +14,13 @@ fn test_basic() {
 
     // this will still manage to run with 100 fuel
     let rv = t
-        .render(
-            context!(seq => (0..15).collect::<Vec<_>>()),
-            Rc::new(DefaultRenderingEventListener),
-        )
-        .unwrap()
-        .0;
+        .render(context!(seq => (0..15).collect::<Vec<_>>()), &[])
+        .unwrap();
     assert_eq!(rv.lines().count(), 15);
 
     // this is above the limit
     let rv = t
-        .render(
-            context!(seq => (0..20).collect::<Vec<_>>()),
-            Rc::new(DefaultRenderingEventListener),
-        )
+        .render(context!(seq => (0..20).collect::<Vec<_>>()), &[])
         .unwrap_err();
     assert_eq!(rv.kind(), ErrorKind::OutOfFuel);
 }
@@ -52,18 +43,9 @@ fn test_macro_fuel() {
     let t = env.get_template("test").unwrap();
 
     // this should succeed
-    t.render(
-        context!(macros => 3),
-        Rc::new(DefaultRenderingEventListener),
-    )
-    .unwrap();
+    t.render(context!(macros => 3), &[]).unwrap();
 
     // but running more macros should not
-    let err = t
-        .render(
-            context!(macros => 5),
-            Rc::new(DefaultRenderingEventListener),
-        )
-        .unwrap_err();
+    let err = t.render(context!(macros => 5), &[]).unwrap_err();
     assert_eq!(err.kind(), ErrorKind::OutOfFuel);
 }

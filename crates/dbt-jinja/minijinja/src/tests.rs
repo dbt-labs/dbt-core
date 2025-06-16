@@ -240,10 +240,8 @@ mod builtins {
     use super::*;
 
     use std::borrow::Cow;
-    use std::rc::Rc;
 
     use crate::error::ErrorKind;
-    use crate::listener::DefaultRenderingEventListener;
     use crate::value::ops::{coerce, CoerceResult};
     use crate::value::ValueKind;
 
@@ -260,7 +258,7 @@ mod builtins {
     /// Returns true if the object has this method
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     pub fn has_method(state: &State, obj: Value, name: String) -> bool {
-        match obj.call_method(state, &name, &[], Rc::new(DefaultRenderingEventListener)) {
+        match obj.call_method(state, &name, &[], &[]) {
             // if get_attr succeeds and returns something other than `Undefined`, it's “there”
             Ok(_) => panic!("should not happen"),
             Err(err)

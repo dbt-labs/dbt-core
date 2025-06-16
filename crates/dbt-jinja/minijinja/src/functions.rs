@@ -258,7 +258,7 @@ impl Object for BoxedFunction {
         self: &Arc<Self>,
         state: &State,
         args: &[Value],
-        _listener: Rc<dyn RenderingEventListener>,
+        _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         self.invoke(state, args)
     }

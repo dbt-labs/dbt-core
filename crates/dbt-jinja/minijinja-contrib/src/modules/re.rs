@@ -67,7 +67,7 @@ impl Object for Pattern {
         _state: &minijinja::State<'_, '_>,
         method: &str,
         args: &[Value],
-        _listener: std::rc::Rc<dyn minijinja::listener::RenderingEventListener>,
+        _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
     ) -> Result<Value, Error> {
         let args = iter::once(Value::from(self.raw.clone()))
             .chain(args.iter().cloned())
@@ -336,7 +336,7 @@ impl Object for Capture {
         _state: &minijinja::State<'_, '_>,
         method: &str,
         args: &[Value],
-        _listener: std::rc::Rc<dyn minijinja::listener::RenderingEventListener>,
+        _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
     ) -> Result<Value, Error> {
         if method == "group" {
             let idx = if args.is_empty() {

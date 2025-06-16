@@ -4,8 +4,7 @@ use dbt_fusion_adapter::{
 use minijinja::{
     listener::RenderingEventListener,
     value::{mutable_map::MutableMap, ValueMap},
-    Environment, Error as MinijinjaError, ErrorKind, MacroSpans, State, Template,
-    UndefinedBehavior, Value,
+    Environment, Error as MinijinjaError, ErrorKind, State, Template, UndefinedBehavior, Value,
 };
 use serde::Serialize;
 use std::{borrow::Cow, collections::BTreeMap, rc::Rc, sync::Arc};
@@ -52,10 +51,10 @@ impl<'source> JinjaEnvironment<'source> {
         &self,
         source: &str,
         ctx: S,
-        listener: Option<Rc<dyn RenderingEventListener>>,
-    ) -> Result<(String, MacroSpans), MinijinjaError> {
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<String, MinijinjaError> {
         let _span = span!("render_str");
-        self.env.render_str(source, ctx, listener)
+        self.env.render_str(source, ctx, listeners)
     }
 
     /// Render named template from a string.
@@ -64,9 +63,9 @@ impl<'source> JinjaEnvironment<'source> {
         name: &str,
         source: &str,
         ctx: S,
-        listener: Option<Rc<dyn RenderingEventListener>>,
-    ) -> Result<(String, MacroSpans), MinijinjaError> {
-        self.env.render_named_str(name, source, ctx, listener)
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<String, MinijinjaError> {
+        self.env.render_named_str(name, source, ctx, listeners)
     }
 
     /// Get a reference to the stored [SqlEngine], if available.

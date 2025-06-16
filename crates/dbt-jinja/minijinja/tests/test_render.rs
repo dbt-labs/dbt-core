@@ -17,10 +17,9 @@ fn test_set_unwarp() {
     {{ a }}|{{ b }}|{{ c }}
     "#,
             context! {},
-            None,
+            &[],
         )
-        .unwrap()
-        .0;
+        .unwrap();
     assert_snapshot!(rv, @"one|two|three");
 }
 
@@ -49,10 +48,9 @@ fn test_macro_namespace_lookup() {
     {{ m() }}
         "#,
             context! {},
-            None,
+            &[],
         )
-        .unwrap()
-        .0;
+        .unwrap();
     assert_snapshot!(rv, @"two");
     let rv = env
         .render_str(
@@ -61,10 +59,9 @@ fn test_macro_namespace_lookup() {
     {{ m() }}
         "#,
             context! {},
-            None,
+            &[],
         )
-        .unwrap()
-        .0;
+        .unwrap();
     assert_snapshot!(rv, @"two");
 }
 #[test]
@@ -81,10 +78,9 @@ writing
 {%- endfilter -%}
             "#,
             context! {},
-            None,
+            &[],
         )
-        .unwrap()
-        .0;
+        .unwrap();
     assert_snapshot!(rv, @"here
   i
   am

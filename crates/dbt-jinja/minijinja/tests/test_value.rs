@@ -1,6 +1,4 @@
-use minijinja::listener::DefaultRenderingEventListener;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque};
-use std::rc::Rc;
 use std::sync::Arc;
 
 use insta::{assert_debug_snapshot, assert_snapshot};
@@ -567,7 +565,7 @@ fn test_call_kwargs() {
         .call(
             &state,
             &[Kwargs::from_iter([("foo", Value::from(42))]).into()],
-            Rc::new(DefaultRenderingEventListener),
+            &[],
         )
         .unwrap();
     assert_eq!(rv, Value::from(42));
@@ -584,22 +582,10 @@ fn test_kwargs_error() {
 fn test_return_none() {
     let env = Environment::empty();
     let val = Value::from_function(|| -> Result<(), Error> { Ok(()) });
-    let rv = val
-        .call(
-            &env.empty_state(),
-            &[][..],
-            Rc::new(DefaultRenderingEventListener),
-        )
-        .unwrap();
+    let rv = val.call(&env.empty_state(), &[][..], &[]).unwrap();
     assert!(rv.is_none());
     let val = Value::from_function(|| ());
-    let rv = val
-        .call(
-            &env.empty_state(),
-            &[][..],
-            Rc::new(DefaultRenderingEventListener),
-        )
-        .unwrap();
+    let rv = val.call(&env.empty_state(), &[][..], &[]).unwrap();
     assert!(rv.is_none());
 }
 

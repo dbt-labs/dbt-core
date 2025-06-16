@@ -16,7 +16,7 @@ use crate::environment::Environment;
 use crate::error::{Error, ErrorKind};
 use crate::listener::RenderingEventListener;
 use crate::machinery::Span;
-use crate::output::{CaptureMode, MacroSpans, Output};
+use crate::output::{CaptureMode, Output};
 use crate::output_tracker::OutputTrackerLocation;
 use crate::utils::{untrusted_size_hint, AutoEscape, UndefinedBehavior};
 use crate::value::mutable_vec::MutableVec;
@@ -105,8 +105,7 @@ impl<'env> Vm<'env> {
         out: &mut Output,
         current_location: Rc<OutputTrackerLocation>,
         auto_escape: AutoEscape,
-        macro_spans: &mut MacroSpans,
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<(Option<Value>, State<'template, 'env>), Error> {
         self.eval_with_outer_stack_depth(
             instructions,
@@ -115,8 +114,7 @@ impl<'env> Vm<'env> {
             out,
             current_location,
             auto_escape,
-            macro_spans,
-            listener,
+            listeners,
             0,
         )
     }
@@ -130,8 +128,7 @@ impl<'env> Vm<'env> {
         out: &mut Output,
         current_location: Rc<OutputTrackerLocation>,
         auto_escape: AutoEscape,
-        macro_spans: &mut MacroSpans,
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
         outer_stack_depth: usize,
     ) -> Result<(Option<Value>, State<'template, 'env>), Error> {
         let _guard = value_optimization();
@@ -151,7 +148,7 @@ impl<'env> Vm<'env> {
             instructions,
             prepare_blocks(blocks),
         );
-        self.eval_state(&mut state, out, current_location, macro_spans, listener)
+        self.eval_state(&mut state, out, current_location, listeners)
             .map(|x| (x, state))
     }
 
@@ -171,7 +168,7 @@ impl<'env> Vm<'env> {
         current_location: Rc<OutputTrackerLocation>,
         state: &State,
         args: Vec<Value>,
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Option<Value>, Error> {
         let mut ctx = Context::new_with_frame(
             Frame::new(context_base),
@@ -206,10 +203,9 @@ impl<'env> Vm<'env> {
             },
             out,
             current_location,
-            &mut MacroSpans::default(),
             Stack::from(args),
             pc,
-            listener,
+            listeners,
         )
     }
 
@@ -220,18 +216,9 @@ impl<'env> Vm<'env> {
         state: &mut State<'_, 'env>,
         out: &mut Output,
         current_location: Rc<OutputTrackerLocation>,
-        macro_spans: &mut MacroSpans,
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Option<Value>, Error> {
-        self.do_eval(
-            state,
-            out,
-            current_location,
-            macro_spans,
-            Stack::default(),
-            0,
-            listener,
-        )
+        self.do_eval(state, out, current_location, Stack::default(), 0, listeners)
     }
 
     /// Performs the actual evaluation, optionally with stack growth functionality.
@@ -241,36 +228,19 @@ impl<'env> Vm<'env> {
         state: &mut State<'_, 'env>,
         out: &mut Output,
         current_location: Rc<OutputTrackerLocation>,
-        macro_spans: &mut MacroSpans,
         stack: Stack,
         pc: usize,
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Option<Value>, Error> {
         #[cfg(feature = "stacker")]
         {
             stacker::maybe_grow(32 * 1024, 1024 * 1024, || {
-                self.eval_impl(
-                    state,
-                    out,
-                    current_location,
-                    macro_spans,
-                    stack,
-                    pc,
-                    listener,
-                )
+                self.eval_impl(state, out, current_location, stack, pc, listeners)
             })
         }
         #[cfg(not(feature = "stacker"))]
         {
-            self.eval_impl(
-                state,
-                out,
-                current_location,
-                macro_spans,
-                stack,
-                pc,
-                listener,
-            )
+            self.eval_impl(state, out, current_location, stack, pc, listeners)
         }
     }
 
@@ -281,10 +251,9 @@ impl<'env> Vm<'env> {
         state: &mut State<'_, 'env>,
         out: &mut Output,
         current_location: Rc<OutputTrackerLocation>,
-        macro_spans: &mut MacroSpans,
         mut stack: Stack,
         mut pc: usize,
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Option<Value>, Error> {
         let initial_auto_escape = state.auto_escape;
         let undefined_behavior = state.undefined_behavior();
@@ -292,7 +261,6 @@ impl<'env> Vm<'env> {
         let mut next_loop_recursion_jump = None;
         let mut loaded_filters = [None; MAX_LOCALS];
         let mut loaded_tests = [None; MAX_LOCALS];
-        let mut macro_start_stack = vec![];
         let mut call_start_stack = vec![];
 
         // If we are extending we are holding the instructions of the target parent
@@ -363,7 +331,7 @@ impl<'env> Vm<'env> {
                     stack.push(match ops::$method(&a, &b) {
                         Ok(rv) => rv,
                         Err(e) if e.kind() == ErrorKind::InvalidOperation => {
-                            match a.call_method(state, $obj_method, &[b], listener.clone()) {
+                            match a.call_method(state, $obj_method, &[b], listeners) {
                                 Ok(rv) => rv,
                                 Err(e2) if matches!(e2.kind(), ErrorKind::UnknownMethod(_, _)) => {
                                     bail!(e)
@@ -742,14 +710,7 @@ impl<'env> Vm<'env> {
                 #[cfg(feature = "multi_template")]
                 Instruction::CallBlock(name) => {
                     if parent_instructions.is_none() && !out.is_discarding() {
-                        self.call_block(
-                            name,
-                            state,
-                            out,
-                            current_location.clone(),
-                            macro_spans,
-                            listener.clone(),
-                        )?;
+                        self.call_block(name, state, out, current_location.clone(), listeners)?;
                     }
                 }
                 Instruction::PushAutoEscape => {
@@ -823,7 +784,9 @@ impl<'env> Vm<'env> {
                             .file_stack
                             .push((path.clone(), *span, *delta_line));
                     }
-                    listener.on_reference(name);
+                    listeners
+                        .iter()
+                        .for_each(|listener| listener.on_reference(name));
                     let args = stack.get_call_args(*arg_count);
                     // super is a special function reserved for super-ing into blocks.
                     let rv = if *name == "super" {
@@ -837,9 +800,8 @@ impl<'env> Vm<'env> {
                             state,
                             out,
                             current_location.clone(),
-                            macro_spans,
                             true,
-                            listener.clone()
+                            listeners
                         ))
                     // loop is a special name which when called recurses the current loop.
                     } else if *name == "loop" {
@@ -871,11 +833,11 @@ impl<'env> Vm<'env> {
                         let inner_state: State<'_, '_> = template
                             .eval_to_state_with_outer_stack_depth(
                                 state.get_base_context(),
-                                listener.clone(),
+                                listeners,
                                 state.ctx.depth() + INCLUDE_RECURSION_COST,
                             )?;
                         let func = inner_state.lookup(name).unwrap();
-                        let rv = match func.call(&inner_state, args, listener.clone()) {
+                        let rv = match func.call(&inner_state, args, listeners) {
                             Ok(rv) => rv,
                             Err(err) => match err.try_abrupt_return() {
                                 Some(rv) => rv.clone(),
@@ -903,7 +865,7 @@ impl<'env> Vm<'env> {
                                 args.to_vec()
                             };
 
-                        let rv = match func.call(state, &args, listener.clone()) {
+                        let rv = match func.call(state, &args, listeners) {
                             Ok(rv) => {
                                 // return implements  https://docs.getdbt.com/reference/dbt-jinja-functions/return
                                 if *name == "return" {
@@ -926,7 +888,7 @@ impl<'env> Vm<'env> {
                         let template = self.env.get_template(&template_name)?;
                         let mut new_state = template.eval_to_state_with_outer_stack_depth(
                             state.get_base_context(),
-                            listener.clone(),
+                            listeners,
                             state.ctx.depth() + MACRO_RECURSION_COST,
                         )?;
                         let mut args = args.to_vec();
@@ -964,7 +926,7 @@ impl<'env> Vm<'env> {
 
                         // look up and evaluate the macro
                         let func = new_state.lookup(name).unwrap();
-                        let rv = match func.call(&new_state, &args, listener.clone()) {
+                        let rv = match func.call(&new_state, &args, listeners) {
                             Ok(rv) => {
                                 // return implements  https://docs.getdbt.com/reference/dbt-jinja-functions/return
                                 if *name == "return" {
@@ -982,8 +944,7 @@ impl<'env> Vm<'env> {
                     } else if *name == "render" {
                         let raw = args[0].as_str().unwrap_or_default();
                         let template = state.env().template_from_str(raw)?;
-                        let (rendered_sql, _) =
-                            template.render(state.get_base_context(), listener.clone())?;
+                        let rendered_sql = template.render(state.get_base_context(), listeners)?;
                         Value::from(rendered_sql)
                     } else {
                         bail!(Error::new(
@@ -995,10 +956,10 @@ impl<'env> Vm<'env> {
                     let rv = if (name == &"var" || name == &"env_var")
                         && rv.as_str().unwrap_or_default().contains("{{")
                     {
-                        let (rv, _) = self.env.render_str(
+                        let rv = self.env.render_str(
                             rv.as_str().unwrap(),
                             state.get_base_context(),
-                            Some(listener.clone()),
+                            listeners,
                         )?;
                         Value::from(rv)
                     } else {
@@ -1012,7 +973,9 @@ impl<'env> Vm<'env> {
                     }
                 }
                 Instruction::CallMethod(name, arg_count) => {
-                    listener.on_reference(name);
+                    listeners
+                        .iter()
+                        .for_each(|listener| listener.on_reference(name));
                     let args = stack.get_call_args(*arg_count);
                     let arg_count = args.len();
 
@@ -1057,11 +1020,11 @@ impl<'env> Vm<'env> {
                         }
                         let macro_state = template.eval_to_state_with_outer_stack_depth(
                             state.get_base_context(),
-                            listener.clone(),
+                            listeners,
                             state.ctx.depth() + MACRO_RECURSION_COST,
                         )?;
                         let func = macro_state.lookup(name).unwrap();
-                        let rv = match func.call(&macro_state, args, listener.clone()) {
+                        let rv = match func.call(&macro_state, args, listeners) {
                             Ok(rv) => {
                                 // return implements  https://docs.getdbt.com/reference/dbt-jinja-functions/return
 
@@ -1095,14 +1058,14 @@ impl<'env> Vm<'env> {
                         } else {
                             args[1..].to_vec()
                         };
-                        let res = args[0].call_method(state, name, &args_vals, listener.clone());
+                        let res = args[0].call_method(state, name, &args_vals, listeners);
                         match res {
                             Ok(rv) => match rv.downcast_object::<DispatchObject>() {
                                 // If we return DispatchObject from a
                                 // method call, we immediately forward
                                 // the call to the dispatch object.
                                 Some(obj) if obj.auto_execute => {
-                                    ctx_ok!(obj.call(state, &args[1..], listener.clone()))
+                                    ctx_ok!(obj.call(state, &args[1..], listeners))
                                 }
                                 _ => rv,
                             },
@@ -1115,7 +1078,7 @@ impl<'env> Vm<'env> {
                 Instruction::CallObject(arg_count) => {
                     let args = stack.get_call_args(*arg_count);
                     let arg_count = args.len();
-                    a = ctx_ok!(args[0].call(state, &args[1..], listener.clone()));
+                    a = ctx_ok!(args[0].call(state, &args[1..], listeners));
                     stack.drop_top(arg_count);
                     stack.push(a);
                 }
@@ -1130,9 +1093,8 @@ impl<'env> Vm<'env> {
                         state,
                         out,
                         current_location.clone(),
-                        macro_spans,
                         false,
-                        listener.clone()
+                        listeners
                     ));
                 }
                 Instruction::FastRecurse => {
@@ -1181,9 +1143,8 @@ impl<'env> Vm<'env> {
                         state,
                         out,
                         current_location.clone(),
-                        macro_spans,
                         *ignore_missing,
-                        listener.clone()
+                        listeners
                     ));
                 }
                 #[cfg(feature = "multi_template")]
@@ -1197,7 +1158,9 @@ impl<'env> Vm<'env> {
                 }
                 #[cfg(feature = "macros")]
                 Instruction::BuildMacro(name, offset, flags) => {
-                    listener.on_definition(name);
+                    listeners
+                        .iter()
+                        .for_each(|listener| listener.on_definition(name));
                     self.build_macro(&mut stack, state, *offset, name, *flags);
                 }
                 #[cfg(feature = "macros")]
@@ -1233,19 +1196,30 @@ impl<'env> Vm<'env> {
                                 0
                             };
                         let offset = *index + span.start_offset;
-                        listener.on_macro_start(Some(path), &line, &col, &offset);
+                        listeners.iter().for_each(|listener| {
+                            listener.on_macro_start(
+                                Some(path),
+                                &line,
+                                &col,
+                                &offset,
+                                &current_location.line(),
+                                &current_location.col(),
+                                &current_location.index(),
+                            )
+                        });
                     } else {
-                        listener.on_macro_start(None, line, col, index);
+                        listeners.iter().for_each(|listener| {
+                            listener.on_macro_start(
+                                None,
+                                line,
+                                col,
+                                index,
+                                &current_location.line(),
+                                &current_location.col(),
+                                &current_location.index(),
+                            )
+                        });
                     }
-
-                    macro_start_stack.push((
-                        *line,
-                        *col,
-                        *index,
-                        current_location.line(),
-                        current_location.col(),
-                        current_location.index(),
-                    ));
                 }
                 Instruction::MacroStop(line, col, index) => {
                     if let Some((path, span, _)) = state.ctx.file_stack.last() {
@@ -1257,37 +1231,29 @@ impl<'env> Vm<'env> {
                                 0
                             };
                         let offset = *index + span.start_offset;
-                        listener.on_macro_stop(Some(path), &line, &col, &offset);
+                        listeners.iter().for_each(|listener| {
+                            listener.on_macro_stop(
+                                Some(path),
+                                &line,
+                                &col,
+                                &offset,
+                                &current_location.line(),
+                                &current_location.col(),
+                                &current_location.index(),
+                            )
+                        });
                     } else {
-                        listener.on_macro_stop(None, line, col, index);
-                    }
-                    let (
-                        source_line,
-                        source_col,
-                        source_index,
-                        expanded_line,
-                        expanded_col,
-                        expanded_index,
-                    ) = macro_start_stack.pop().unwrap();
-                    if macro_start_stack.is_empty() {
-                        macro_spans.push(
-                            Span {
-                                start_line: source_line.to_owned(),
-                                start_col: source_col.to_owned(),
-                                start_offset: source_index.to_owned(),
-                                end_line: line.to_owned(),
-                                end_col: col.to_owned(),
-                                end_offset: index.to_owned(),
-                            },
-                            Span {
-                                start_line: expanded_line,
-                                start_col: expanded_col,
-                                start_offset: expanded_index,
-                                end_line: current_location.line(),
-                                end_col: current_location.col(),
-                                end_offset: current_location.index(),
-                            },
-                        );
+                        listeners.iter().for_each(|listener| {
+                            listener.on_macro_stop(
+                                None,
+                                line,
+                                col,
+                                index,
+                                &current_location.line(),
+                                &current_location.col(),
+                                &current_location.index(),
+                            )
+                        });
                     }
                 }
                 Instruction::ModelReference(
@@ -1299,15 +1265,17 @@ impl<'env> Vm<'env> {
                     end_col,
                     end_offset,
                 ) => {
-                    listener.on_model_reference(
-                        name,
-                        start_line,
-                        start_col,
-                        start_offset,
-                        end_line,
-                        end_col,
-                        end_offset,
-                    );
+                    listeners.iter().for_each(|listener| {
+                        listener.on_model_reference(
+                            name,
+                            start_line,
+                            start_col,
+                            start_offset,
+                            end_line,
+                            end_col,
+                            end_offset,
+                        )
+                    });
                 }
                 Instruction::CallStart(start_line, start_col, start_offset) => {
                     call_start_stack.push((*start_line, *start_col, *start_offset));
@@ -1330,9 +1298,8 @@ impl<'env> Vm<'env> {
         state: &mut State<'_, 'env>,
         out: &mut Output,
         current_location: Rc<OutputTrackerLocation>,
-        macro_spans: &mut MacroSpans,
         ignore_missing: bool,
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<(), Error> {
         let obj = name.as_object();
         let choices = obj
@@ -1375,7 +1342,7 @@ impl<'env> Vm<'env> {
             #[cfg(feature = "macros")]
             {
                 let old_closure = state.ctx.take_closure();
-                rv = self.eval_state(state, out, current_location, macro_spans, listener);
+                rv = self.eval_state(state, out, current_location, listeners);
                 state.ctx.reset_closure(old_closure);
             }
             #[cfg(not(feature = "macros"))]
@@ -1421,9 +1388,8 @@ impl<'env> Vm<'env> {
         state: &mut State<'_, 'env>,
         out: &mut Output,
         current_location: Rc<OutputTrackerLocation>,
-        macro_spans: &mut MacroSpans,
         capture: bool,
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         let name = ok!(state.current_block.ok_or_else(|| {
             Error::new(ErrorKind::InvalidOperation, "cannot super outside of block")
@@ -1443,7 +1409,7 @@ impl<'env> Vm<'env> {
 
         let old_instructions = mem::replace(&mut state.instructions, block_stack.instructions());
         ok!(state.ctx.push_frame(Frame::default()));
-        let rv = self.eval_state(state, out, current_location, macro_spans, listener);
+        let rv = self.eval_state(state, out, current_location, listeners);
         state.ctx.pop_frame();
         state.instructions = old_instructions;
         state.blocks.get_mut(name).unwrap().pop();
@@ -1517,15 +1483,14 @@ impl<'env> Vm<'env> {
         state: &mut State<'_, 'env>,
         out: &mut Output,
         current_location: Rc<OutputTrackerLocation>,
-        macro_spans: &mut MacroSpans,
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Option<Value>, Error> {
         if let Some((name, block_stack)) = state.blocks.get_key_value(name) {
             let old_block = mem::replace(&mut state.current_block, Some(name));
             let old_instructions =
                 mem::replace(&mut state.instructions, block_stack.instructions());
             state.ctx.push_frame(Frame::default())?;
-            let rv = self.eval_state(state, out, current_location, macro_spans, listener);
+            let rv = self.eval_state(state, out, current_location, listeners);
             state.ctx.pop_frame();
             state.instructions = old_instructions;
             state.current_block = old_block;

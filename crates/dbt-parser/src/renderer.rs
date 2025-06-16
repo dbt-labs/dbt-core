@@ -9,6 +9,7 @@ use dbt_common::{
     fs_err, show_error, show_progress, show_warning_soon_to_be_error, ErrorCode, FsError, FsResult,
 };
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
+use dbt_jinja_utils::listener::{DefaultListenerFactory, ListenerFactory};
 use dbt_jinja_utils::phases::build_compile_and_run_base_context;
 use dbt_jinja_utils::phases::compile::build_compile_node_context;
 use dbt_jinja_utils::phases::parse::build_resolve_model_context;
@@ -75,7 +76,7 @@ fn extract_model_and_version_config<T: TryBuildConfig + DeserializeOwned + std::
     let schema_value = std::mem::replace(&mut mpe.schema_value, dbt_serde_yaml::Value::null());
 
     let (maybe_model, errors) =
-        into_typed_with_jinja_error::<T, _>(schema_value, false, jinja_env, base_ctx, None)?;
+        into_typed_with_jinja_error::<T, _>(schema_value, false, jinja_env, base_ctx, &[])?;
 
     for error in errors {
         let context = format!(
@@ -93,7 +94,7 @@ fn extract_model_and_version_config<T: TryBuildConfig + DeserializeOwned + std::
                 false,
                 jinja_env,
                 base_ctx,
-                None,
+                &[],
             )?;
 
             for error in errors {
@@ -229,8 +230,15 @@ pub async fn render_unresolved_sql_files_sequentially<
             arg.io,
             fsinfo!(PARSING.into(), display_path.display().to_string())
         );
-        match render_sql(&sql, jinja_env, resolve_model_context, None, &display_path) {
-            Ok((rendered_sql_except_refs_and_sources, macro_spans)) => {
+        let listener_factory = DefaultListenerFactory::default();
+        match render_sql(
+            &sql,
+            jinja_env,
+            resolve_model_context,
+            &listener_factory,
+            &display_path,
+        ) {
+            Ok(rendered_sql_except_refs_and_sources) => {
                 let sql_resources_cloned = sql_resources.clone();
 
                 if root_project_name != package_name {
@@ -263,7 +271,7 @@ pub async fn render_unresolved_sql_files_sequentially<
                     asset: dbt_asset.clone(),
                     sql_file_info,
                     rendered_sql: rendered_sql_except_refs_and_sources,
-                    macro_spans,
+                    macro_spans: listener_factory.drain_macro_spans(&display_path),
                     properties: maybe_model,
                     status,
                     patch_path: node_properties
@@ -514,8 +522,15 @@ pub async fn render_unresolved_sql_files<
                     arg.io,
                     fsinfo!(PARSING.into(), display_path.display().to_string())
                 );
-                match render_sql(&sql, &jinja_env, resolve_model_context, None, &display_path) {
-                    Ok((rendered_sql_except_refs_and_sources, macro_spans)) => {
+                let listener_factory = DefaultListenerFactory::default();
+                match render_sql(
+                    &sql,
+                    &jinja_env,
+                    resolve_model_context,
+                    &listener_factory,
+                    &display_path,
+                ) {
+                    Ok(rendered_sql_except_refs_and_sources) => {
                         let sql_resources_cloned = sql_resources.clone();
 
                         if root_project_name != package_name {
@@ -553,7 +568,7 @@ pub async fn render_unresolved_sql_files<
                             asset: dbt_asset.clone(),
                             sql_file_info,
                             rendered_sql: rendered_sql_except_refs_and_sources,
-                            macro_spans,
+                            macro_spans: listener_factory.drain_macro_spans(&display_path),
                             properties: maybe_model,
                             status,
                             patch_path: chunk_node_properties
@@ -802,7 +817,7 @@ async fn process_model_chunk_for_unsafe_detection(
             &sql,
             &jinja_env,
             render_resolved_context,
-            None,
+            &DefaultListenerFactory::default(),
             &display_path,
         );
         if parse_adapter

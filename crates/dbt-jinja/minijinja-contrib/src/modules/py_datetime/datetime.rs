@@ -397,7 +397,7 @@ impl Object for PyDateTimeClass {
         self: &Arc<Self>,
         _state: &minijinja::State<'_, '_>,
         args: &[Value],
-        _listener: std::rc::Rc<dyn minijinja::listener::RenderingEventListener>,
+        _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
     ) -> Result<Value, Error> {
         Ok(Value::from_object(Self::new_datetime(args)?))
     }
@@ -407,7 +407,7 @@ impl Object for PyDateTimeClass {
         _state: &minijinja::State<'_, '_>,
         method: &str,
         args: &[Value],
-        _listener: std::rc::Rc<dyn minijinja::listener::RenderingEventListener>,
+        _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
     ) -> Result<Value, Error> {
         match method {
             "now" => Ok(Value::from_object(Self::now(args)?)),
@@ -833,7 +833,7 @@ impl Object for PyDateTime {
         _state: &minijinja::State<'_, '_>,
         method: &str,
         args: &[Value],
-        _listener: std::rc::Rc<dyn minijinja::listener::RenderingEventListener>,
+        _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
     ) -> Result<Value, Error> {
         match method {
             // "strftime(format)"

@@ -92,7 +92,7 @@ pub fn resolve_seeds(
                     false,
                     jinja_env,
                     base_ctx,
-                    None,
+                    &[],
                 )?,
                 Some(mpe.relative_path.clone()),
             )

@@ -1,11 +1,8 @@
 #![cfg(feature = "unstable_machinery")]
-use std::collections::BTreeMap;
-use std::rc::Rc;
-
-use minijinja::listener::DefaultRenderingEventListener;
-use minijinja::machinery::{make_macro_spans, CodeGenerator, Instruction, Instructions, Vm};
+use minijinja::machinery::{CodeGenerator, Instruction, Instructions, Vm};
 use minijinja::value::Value;
 use minijinja::{AutoEscape, Environment, Error, Output, OutputTracker};
+use std::collections::BTreeMap;
 
 use similar_asserts::assert_eq;
 
@@ -21,7 +18,6 @@ pub fn simple_eval<S: serde::Serialize>(
     let mut output_tracker = OutputTracker::new(&mut rv);
     let current_location = output_tracker.location.clone();
     let mut output = Output::with_write(&mut output_tracker);
-    let mut macro_spans = make_macro_spans();
     vm.eval(
         instructions,
         root,
@@ -29,8 +25,7 @@ pub fn simple_eval<S: serde::Serialize>(
         &mut output,
         current_location,
         AutoEscape::None,
-        &mut macro_spans,
-        Rc::new(DefaultRenderingEventListener),
+        &[],
     )?;
     Ok(rv)
 }
@@ -344,10 +339,7 @@ fn test_deep_recursion() {
     "#,
         )
         .unwrap();
-    let rv = tmpl
-        .render(context!(limit), Rc::new(DefaultRenderingEventListener))
-        .unwrap()
-        .0;
+    let rv = tmpl.render(context!(limit), &[]).unwrap();
     let pieces = rv
         .split('|')
         .filter_map(|x| x.parse::<usize>().ok())

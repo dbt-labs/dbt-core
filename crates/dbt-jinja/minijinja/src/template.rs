@@ -14,7 +14,7 @@ use crate::compiler::parser::parse;
 use crate::environment::Environment;
 use crate::error::{attach_basic_debug_info, Error};
 use crate::listener::RenderingEventListener;
-use crate::output::{MacroSpans, Output, WriteWrapper};
+use crate::output::{Output, WriteWrapper};
 use crate::output_tracker::{OutputTracker, OutputTrackerLocation};
 use crate::syntax::SyntaxConfig;
 use crate::utils::AutoEscape;
@@ -119,12 +119,12 @@ impl<'env, 'source> Template<'env, 'source> {
     pub fn render<S: Serialize>(
         &self,
         ctx: S,
-        listener: Rc<dyn RenderingEventListener>,
-    ) -> Result<(String, MacroSpans), Error> {
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<String, Error> {
         // reduce total amount of code faling under mono morphization into
         // this function, and share the rest in _render.
-        self._render(Value::from_serialize(&ctx), listener)
-            .map(|x| (x.0, x.1))
+        self._render(Value::from_serialize(&ctx), listeners)
+            .map(|x| x.0)
     }
 
     /// Like [`render`](Self::render) but also return the evaluated [`State`].
@@ -148,25 +148,24 @@ impl<'env, 'source> Template<'env, 'source> {
     pub fn render_and_return_state<S: Serialize>(
         &self,
         ctx: S,
-        listener: Rc<dyn RenderingEventListener>,
-    ) -> Result<(String, MacroSpans, State<'_, 'env>), Error> {
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<(String, State<'_, 'env>), Error> {
         // reduce total amount of code faling under mono morphization into
         // this function, and share the rest in _render.
-        self._render(Value::from_serialize(&ctx), listener)
+        self._render(Value::from_serialize(&ctx), listeners)
     }
 
     fn _render(
         &self,
         root: Value,
-        listener: Rc<dyn RenderingEventListener>,
-    ) -> Result<(String, MacroSpans, State<'_, 'env>), Error> {
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<(String, State<'_, 'env>), Error> {
         let mut rv = String::with_capacity(self.compiled.buffer_size_hint);
-        let mut macro_spans = MacroSpans::default();
         let mut output_tracker = OutputTracker::new(&mut rv);
         let current_location = output_tracker.location.clone();
         let mut out = Output::with_write(&mut output_tracker);
-        self._eval(root, &mut out, current_location, &mut macro_spans, listener)
-            .map(|(_, state)| (rv, macro_spans, state))
+        self._eval(root, &mut out, current_location, listeners)
+            .map(|(_, state)| (rv, state))
     }
 
     /// Renders the template into an [`io::Write`].
@@ -192,7 +191,7 @@ impl<'env, 'source> Template<'env, 'source> {
         &self,
         ctx: S,
         w: W,
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<State<'_, 'env>, Error> {
         let mut wrapper = WriteWrapper { w, err: None };
         let mut output_tracker = OutputTracker::new(&mut wrapper);
@@ -201,8 +200,7 @@ impl<'env, 'source> Template<'env, 'source> {
             Value::from_serialize(&ctx),
             &mut Output::with_write(&mut output_tracker),
             current_location,
-            &mut MacroSpans::default(),
-            listener,
+            listeners,
         )
         .map(|(_, state)| state)
         .map_err(|err| wrapper.take_err(err))
@@ -233,16 +231,16 @@ impl<'env, 'source> Template<'env, 'source> {
     pub fn eval_to_state<S: Serialize>(
         &self,
         ctx: S,
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<State<'_, 'env>, Error> {
-        self.eval_to_state_with_outer_stack_depth(ctx, listener, 0)
+        self.eval_to_state_with_outer_stack_depth(ctx, listeners, 0)
     }
 
     /// Evaluates the template into a [`State`] with a given outer stack depth.
     pub(crate) fn eval_to_state_with_outer_stack_depth<S: Serialize>(
         &self,
         ctx: S,
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
         outer_stack_depth: usize,
     ) -> Result<State<'_, 'env>, Error> {
         let root = Value::from_serialize(&ctx);
@@ -255,8 +253,7 @@ impl<'env, 'source> Template<'env, 'source> {
             &mut out,
             Rc::new(OutputTrackerLocation::default()),
             self.compiled.initial_auto_escape,
-            &mut MacroSpans::default(),
-            listener,
+            listeners,
             outer_stack_depth
         ))
         .1;
@@ -268,8 +265,7 @@ impl<'env, 'source> Template<'env, 'source> {
         root: Value,
         out: &mut Output,
         current_location: Rc<OutputTrackerLocation>,
-        macro_spans: &mut MacroSpans,
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<(Option<Value>, State<'_, 'env>), Error> {
         let vm = Vm::new(self.env);
 
@@ -280,8 +276,7 @@ impl<'env, 'source> Template<'env, 'source> {
             out,
             current_location,
             self.compiled.initial_auto_escape,
-            macro_spans,
-            listener,
+            listeners,
         )
     }
 

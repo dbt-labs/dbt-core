@@ -99,7 +99,7 @@ impl minijinja::value::Object for PytzTimezone {
         _state: &minijinja::State<'_, '_>,
         method: &str,
         _args: &[Value],
-        _listener: std::rc::Rc<dyn minijinja::listener::RenderingEventListener>,
+        _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
     ) -> Result<Value, Error> {
         // For example, if you want a "localize" method:
         match method {

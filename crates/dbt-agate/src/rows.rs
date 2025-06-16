@@ -123,9 +123,9 @@ impl Object for Rows {
         state: &State,
         name: &str,
         args: &[Value],
-        listener: Rc<dyn RenderingEventListener>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
-        MappedSequence::call_method(self, state, name, args, listener)
+        MappedSequence::call_method(self, state, name, args, listeners)
     }
 
     fn render(self: &Arc<Self>, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -41,7 +41,7 @@ pub fn load_profiles(
         true,
         profile_render_scope.jinja_env,
         &BTreeMap::<String, Value>::new(),
-        None,
+        &[],
         None,
     )?;
 
