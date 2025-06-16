@@ -1,5 +1,5 @@
 [package]
-name = "dbt-frontend-schemas"
+name = "dbt-ident"
 version.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -13,8 +13,5 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-itertools = { workspace = true }
-linked-hash-map = { workspace = true, features = ["serde_impl"] }
 serde = { workspace = true }
-strum_macros = { workspace = true }
 ustr = { workspace = true }

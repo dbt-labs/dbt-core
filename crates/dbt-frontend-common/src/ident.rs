@@ -1,18 +1,13 @@
+use crate::dialect::Dialect;
+use crate::error::InternalError;
+use crate::internal_err;
+use crate::utils::{get_version_hash, strip_version_hash};
+use datafusion::sql::{ResolvedTableReference, TableReference};
+use itertools::Itertools;
 use serde::{de, Deserialize, Deserializer};
-
 use std::path::PathBuf;
 
-use datafusion::sql::{ResolvedTableReference, TableReference};
-use itertools::Itertools as _;
-
-use crate::{
-    dialect::Dialect,
-    error::InternalError,
-    internal_err,
-    utils::{get_version_hash, strip_version_hash},
-};
-
-pub use dbt_frontend_schemas::ident::{Ident, Identifier};
+pub use dbt_ident::{Ident, Identifier};
 
 /// Owned version of [Qualified].
 pub type QualifiedName = Qualified<'static>;

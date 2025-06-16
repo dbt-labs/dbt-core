@@ -139,40 +139,6 @@ impl From<&Dialect> for Dialect {
     }
 }
 
-impl From<dbt_frontend_schemas::dialect::Dialect> for Dialect {
-    fn from(value: dbt_frontend_schemas::dialect::Dialect) -> Self {
-        match value {
-            dbt_frontend_schemas::dialect::Dialect::Trino => Self::Trino,
-            dbt_frontend_schemas::dialect::Dialect::Snowflake => Self::Snowflake,
-            dbt_frontend_schemas::dialect::Dialect::Sdf => Self::Sdf,
-            dbt_frontend_schemas::dialect::Dialect::Postgresql => Self::Postgresql,
-            dbt_frontend_schemas::dialect::Dialect::Bigquery => Self::Bigquery,
-            dbt_frontend_schemas::dialect::Dialect::DataFusion => Self::DataFusion,
-            dbt_frontend_schemas::dialect::Dialect::SparkSql => Self::SparkSql,
-            dbt_frontend_schemas::dialect::Dialect::SparkLp => Self::SparkLp,
-            dbt_frontend_schemas::dialect::Dialect::Redshift => Self::Redshift,
-            dbt_frontend_schemas::dialect::Dialect::Databricks => Self::Databricks,
-        }
-    }
-}
-
-impl From<Dialect> for dbt_frontend_schemas::dialect::Dialect {
-    fn from(value: Dialect) -> Self {
-        match value {
-            Dialect::Trino => Self::Trino,
-            Dialect::Snowflake => Self::Snowflake,
-            Dialect::Sdf => Self::Sdf,
-            Dialect::Postgresql => Self::Postgresql,
-            Dialect::Bigquery => Self::Bigquery,
-            Dialect::DataFusion => Self::DataFusion,
-            Dialect::SparkSql => Self::SparkSql,
-            Dialect::SparkLp => Self::SparkLp,
-            Dialect::Redshift => Self::Redshift,
-            Dialect::Databricks => Self::Databricks,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TypeFormattingContext {
     Production,

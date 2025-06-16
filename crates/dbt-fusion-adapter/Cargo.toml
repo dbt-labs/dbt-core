@@ -15,7 +15,7 @@ workspace = true
 [dependencies]
 dbt-agate = { workspace = true }
 dbt-common = { workspace = true }
-dbt-frontend-schemas = { workspace = true }
+dbt-frontend-common = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-xdbc = { workspace = true }
 

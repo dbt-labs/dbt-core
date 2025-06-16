@@ -2,7 +2,7 @@ use super::metadata::MetadataAdapter;
 use crate::sql_engine::SqlEngine;
 use crate::typed_adapter::TypedBaseAdapter;
 
-use dbt_frontend_schemas::dialect::Dialect;
+use dbt_frontend_common::dialect::Dialect;
 use dbt_xdbc::Connection;
 use minijinja::arg_utils::ArgParser;
 use minijinja::dispatch_object::DispatchObject;
@@ -11,6 +11,7 @@ use strum::{AsRefStr, Display, EnumString};
 
 use std::fmt;
 use std::sync::Arc;
+
 /// The type of the adapter
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display, AsRefStr, EnumString)]
 #[strum(serialize_all = "lowercase", ascii_case_insensitive)]

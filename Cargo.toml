@@ -6,7 +6,6 @@ members = [
   "crates/dbt-agate",
   "crates/dbt-common",
   "crates/dbt-frontend-common",
-  "crates/dbt-frontend-schemas",
   "crates/dbt-jinja/minijinja",
   "crates/dbt-jinja/minijinja-contrib",
   "crates/dbt-dag",
@@ -17,6 +16,7 @@ members = [
   "crates/dbt-proc-macros",
   "crates/dbt-adapter-proc-macros",
   "crates/dbt-fusion-adapter",
+  "crates/dbt-ident",
   "crates/dbt-jinja-utils",
   "crates/dbt-sa-cli",
   "crates/dbt-xdbc",
@@ -130,8 +130,8 @@ dbt-dag = { path = "crates/dbt-dag" }
 dbt-deps = { path = "crates/dbt-deps" }
 dbt-env = { path = "crates/dbt-env" }
 dbt-frontend-common = { path = "crates/dbt-frontend-common" }
-dbt-frontend-schemas = { path = "crates/dbt-frontend-schemas" }
 dbt-fusion-adapter = { path = "crates/dbt-fusion-adapter" }
+dbt-ident = { path = "crates/dbt-ident" }
 dbt-jinja-utils = { path = "crates/dbt-jinja-utils" }
 dbt-loader = { path = "crates/dbt-loader" }
 dbt-parser = { path = "crates/dbt-parser" }

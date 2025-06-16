@@ -17,7 +17,7 @@ antlr-rust = { workspace = true }
 arrow = { workspace = true }
 arrow-schema = { workspace = true }
 datafusion = { workspace = true }
-dbt-frontend-schemas = { workspace = true }
+dbt-ident = { workspace = true }
 enum-map = { workspace = true }
 int-enum = { workspace = true }
 itertools = { workspace = true }

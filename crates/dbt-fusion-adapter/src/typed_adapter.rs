@@ -13,7 +13,7 @@ use dbt_agate::AgateTable;
 use arrow::array::{RecordBatch, StringArray, TimestampMillisecondArray};
 use arrow_schema::{DataType, Schema};
 use dbt_common::behavior_flags::BehaviorFlag;
-use dbt_frontend_schemas::dialect::Dialect;
+use dbt_frontend_common::dialect::Dialect;
 use dbt_schemas::schemas::columns::base::{string_type, BaseColumn, StdColumn};
 use dbt_schemas::schemas::common::Constraint;
 use dbt_schemas::schemas::common::ConstraintSupport;
