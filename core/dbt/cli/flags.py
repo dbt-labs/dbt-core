@@ -17,7 +17,7 @@ from dbt.cli.types import Command as CliCommand
 from dbt.config.project import read_project_flags
 from dbt.config.utils import normalize_warn_error_options
 from dbt.contracts.project import ProjectFlags
-from dbt.deprecations import fire_buffered_deprecations, renamed_env_var
+from dbt.deprecations import fire_buffered_deprecations, renamed_env_var, warn
 from dbt.events import ALL_EVENT_NAMES
 from dbt_common import ui
 from dbt_common.clients import jinja
@@ -49,6 +49,8 @@ DEPRECATED_PARAMS = {
     "deprecated_state": "state",
 }
 
+
+DEPRECATED_FLAGS_TO_WARNINGS = {("--models", "--model", "-m"): "model-param-usage-deprecation"}
 
 WHICH_KEY = "which"
 
@@ -385,7 +387,7 @@ class Flags:
                     "Value for `--event-time-start` must be less than `--event-time-end`"
                 )
 
-    def fire_deprecations(self):
+    def fire_deprecations(self, ctx: Optional[Context] = None):
         """Fires events for deprecated env_var usage."""
         [dep_fn() for dep_fn in self.deprecated_env_var_warnings]
         # It is necessary to remove this attr from the class so it does
@@ -394,12 +396,25 @@ class Flags:
 
         fire_buffered_deprecations()
 
+        # Handle firing deprecations of CLI aliases separately using argv or dbtRunner args
+        # because click doesn't make it possible to disambiguite which literal CLI option was used
+        # and only preserves the 'canonical' representation.
+        original_command_args = (
+            ctx.obj["dbt_runner_command_args"]
+            if (ctx and ctx.obj and "dbt_runner_command_args" in ctx.obj)
+            else sys.argv
+        )
+        for deprecated_flags, warning in DEPRECATED_FLAGS_TO_WARNINGS.items():
+            for deprecated_flag in deprecated_flags:
+                if deprecated_flag in original_command_args:
+                    warn(warning)
+
     @classmethod
     def from_dict(cls, command: CliCommand, args_dict: Dict[str, Any]) -> "Flags":
         command_arg_list = command_params(command, args_dict)
         ctx = args_to_context(command_arg_list)
         flags = cls(ctx=ctx)
-        flags.fire_deprecations()
+        flags.fire_deprecations(ctx=ctx)
         return flags
 
     def set_common_global_flags(self):
