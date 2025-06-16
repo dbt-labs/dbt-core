@@ -114,7 +114,6 @@ class Model(CompiledResource):
     defer_relation: Optional[DeferRelation] = None
     primary_key: List[str] = field(default_factory=list)
     time_spine: Optional[TimeSpine] = None
-    freshness: Optional[ModelFreshness] = None
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
         dct = super().__post_serialize__(dct, context)
