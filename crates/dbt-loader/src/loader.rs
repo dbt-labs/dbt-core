@@ -445,25 +445,11 @@ fn find_files_by_kind_and_extension(
     all_paths: &HashMap<ResourcePathKind, Vec<(PathBuf, SystemTime)>>,
 ) -> Vec<DbtAsset> {
     let default = vec![];
-    // If docs, we need to specially filter for md files from either
-    // (1) docs-paths, if specified
-    // (2) all paths, if docs-paths is not specified
-    let paths_to_filter: Vec<&(PathBuf, SystemTime)> = if *path_kind == ResourcePathKind::DocsPaths
-    {
-        if all_paths.get(path_kind).is_some()
-            && !all_paths.get(path_kind).as_ref().unwrap().is_empty()
-        {
-            all_paths.get(path_kind).unwrap().iter().collect()
-        } else {
-            all_paths.values().flatten().collect()
-        }
-    } else {
-        all_paths
-            .get(path_kind)
-            .unwrap_or(&default)
-            .iter()
-            .collect()
-    };
+    let paths_to_filter: Vec<_> = all_paths
+        .get(path_kind)
+        .unwrap_or(&default)
+        .iter()
+        .collect();
 
     let mut paths = paths_to_filter
         .iter()
@@ -533,12 +519,23 @@ fn collect_paths(dbt_project: &DbtProject) -> HashMap<ResourcePathKind, Vec<Stri
         dbt_project.test_paths.clone().unwrap_or_default(),
     );
     // Only register docs paths if they are explicitly specified
-    // The default is to read all files in any directories for '*.md' files
     if dbt_project.docs_paths.is_some() && !dbt_project.docs_paths.as_ref().unwrap().is_empty() {
         all_dirs.insert(
             ResourcePathKind::DocsPaths,
             dbt_project.docs_paths.clone().unwrap_or_default(),
         );
+    } else {
+        // The default is to read all files in the following directories for '*.md' files
+        let mut result: Vec<String> = vec![];
+
+        result.extend_from_slice(dbt_project.analysis_paths.as_deref().unwrap_or_default());
+        result.extend_from_slice(dbt_project.macro_paths.as_deref().unwrap_or_default());
+        result.extend_from_slice(dbt_project.model_paths.as_deref().unwrap_or_default());
+        result.extend_from_slice(dbt_project.seed_paths.as_deref().unwrap_or_default());
+        result.extend_from_slice(dbt_project.snapshot_paths.as_deref().unwrap_or_default());
+        result.extend_from_slice(dbt_project.test_paths.as_deref().unwrap_or_default());
+
+        all_dirs.insert(ResourcePathKind::DocsPaths, result);
     }
     all_dirs
 }
