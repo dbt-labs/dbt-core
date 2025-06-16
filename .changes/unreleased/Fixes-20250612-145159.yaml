@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix store_failures hierarachical config parsing
+time: 2025-06-12T14:51:59.358498-04:00
+custom:
+  Author: michelleark
+  Issue: "10165"

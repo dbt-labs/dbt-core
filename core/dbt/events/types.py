@@ -700,6 +700,15 @@ class WEOIncludeExcludeDeprecation(WarnLevel):
         return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
+class ModelParamUsageDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D032"
+
+    def message(self) -> str:
+        description = "Usage of `--models`, `--model`, and `-m` is deprecated in favor of `--resource-type model --select`"
+        return line_wrap_message(deprecation_tag(description))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================

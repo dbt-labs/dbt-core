@@ -77,6 +77,9 @@ from tests.functional.schema_tests.fixtures import (
     quote_required_models__model_sql,
     quote_required_models__schema_yml,
     seeds__some_seed_csv,
+    store_failures_models__my_model_sql,
+    store_failures_models_false__config_yml,
+    store_failures_models_true__config_yml,
     test_context_macros__custom_schema_tests_sql,
     test_context_macros__my_test_sql,
     test_context_macros__test_my_datediff_sql,
@@ -1128,3 +1131,87 @@ class TestCustomSchemaTestMacroResolutionOrder:
         # leading to the macro being missing in the TestNamespace
         run_dbt(["deps"])
         run_dbt(["parse"])
+
+
+class TestSchemaTestStoreFailuresTrueParsing:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": store_failures_models_true__config_yml,
+            "my_model.sql": store_failures_models__my_model_sql,
+        }
+
+    def test_parse_store_failures_True_as_table(self, project):
+        manifest = run_dbt(["parse"])
+        test_node = [
+            node for node in manifest.nodes.values() if "not_null_my_model_id" in node.fqn
+        ][0]
+
+        assert test_node.config.store_failures
+        assert test_node.config.store_failures_as == "table"
+
+
+class TestSchemaTestStoreFailuresFalseParsing:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": store_failures_models_false__config_yml,
+            "my_model.sql": store_failures_models__my_model_sql,
+        }
+
+    def test_parse_store_failures_False_as_ephemeral(self, project):
+        manifest = run_dbt(["parse"])
+        test_node = [
+            node for node in manifest.nodes.values() if "not_null_my_model_id" in node.fqn
+        ][0]
+
+        assert not test_node.config.store_failures
+        assert test_node.config.store_failures_as == "ephemeral"
+
+
+class TestSchemaTestStoreFailuresTrueHierarchicalParsing:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": store_failures_models_true__config_yml,
+            "my_model.sql": store_failures_models__my_model_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "tests": {"+store_failures": False},
+        }
+
+    def test_parse_store_failures_True_as_table(self, project):
+        manifest = run_dbt(["parse"])
+        test_node = [
+            node for node in manifest.nodes.values() if "not_null_my_model_id" in node.fqn
+        ][0]
+
+        assert test_node.config.store_failures
+        assert test_node.config.store_failures_as == "table"
+
+
+class TestSchemaTestStoreFailuresFalseHierarchicalParsing:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": store_failures_models_false__config_yml,
+            "my_model.sql": store_failures_models__my_model_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "tests": {"+store_failures": True},
+        }
+
+    def test_parse_store_failures_False_as_ephemeral(self, project):
+        manifest = run_dbt(["parse"])
+        test_node = [
+            node for node in manifest.nodes.values() if "not_null_my_model_id" in node.fqn
+        ][0]
+
+        assert not test_node.config.store_failures
+        assert test_node.config.store_failures_as == "ephemeral"
