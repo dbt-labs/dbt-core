@@ -412,7 +412,23 @@ install_package() {
     esac
 
     log_grey "Downloading: $url"
-    curl -sL "$url" | tar -C "$td" -xz
+    # Check if URL exists and returns valid content
+    if ! curl -sL -f -o /dev/null "$url"; then
+        err "Failed to download package from $url. Verify you are requesting a valid version on a supported platform."
+        return 1
+    fi
+
+    # Now download and extract
+    if ! curl -sL "$url" | tar -C "$td" -xz; then
+        err "Failed to extract package. The downloaded archive appears to be invalid."
+        return 1
+    fi
+
+    # Check if any files were extracted
+    if [ -z "$(ls -A "$td")" ]; then
+        err "No files were extracted from the archive"
+        return 1
+    fi
 
     for f in $(cd "$td" && find . -type f); do
         test -x "$td/$f" || {
