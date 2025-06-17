@@ -25,6 +25,13 @@ impl StaticBaseColumn for BigqueryColumnType {
     ) -> Result<Value, MinijinjaError> {
         Ok(Value::from_object(BigqueryColumn::basic(name, dtype)))
     }
+
+    // Translate the column type to a Bigquery type
+    fn translate_type(args: &[Value]) -> Result<Value, MinijinjaError> {
+        let mut args = ArgParser::new(args, None);
+        let column_type: String = args.get("dtype")?;
+        Ok(Value::from(column_type))
+    }
 }
 
 /// A struct representing a column
@@ -101,5 +108,30 @@ impl BaseColumnProperties for BigqueryColumn {
 
     fn numeric_scale_prop(&self) -> Option<u64> {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // todo: refactor [StaticBaseColumn] and delete this test. We are just a pass-through since we
+    // should trust the formatter that creates the actual dtype on the column
+    #[test]
+    fn test_bigquery_column_type_translation() {
+        let args = vec![
+            ("string".to_string(), "string"),
+            ("STRING".to_string(), "STRING"),
+        ];
+
+        for (input, expected) in args {
+            let value = Value::from(input.clone());
+            let translated =
+                BigqueryColumnType::translate_type(&[value]).expect("Failed to translate type");
+            let result = translated
+                .as_str()
+                .expect("Failed to convert type to string");
+            assert_eq!(result, expected, "Failed to translate type: {}", input);
+        }
     }
 }

@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::any::Any;
 
 /// Trait for static methods on relations
+// TODO: Make this trait generic and put Snowflake specific implementations into Snowflake
 pub trait StaticBaseColumn {
     /// Create a new column from the given arguments
     fn try_new(
