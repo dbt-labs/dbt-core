@@ -7,7 +7,10 @@ use dbt_common::{err, ErrorCode};
 use dbt_common::{fs_err, stdfs};
 use dbt_jinja_utils::serde::check_single_expression_without_whitepsace_control;
 use dbt_schemas::schemas::common::Versions;
-use dbt_schemas::schemas::data_tests::DataTests;
+use dbt_schemas::schemas::data_tests::{
+    AcceptedValuesTestProperties, DataTests, NotNullTestProperties, RelationshipsTestProperties,
+    UniqueTestProperties,
+};
 
 use dbt_schemas::schemas::properties::Tables;
 use dbt_schemas::schemas::properties::{ModelProperties, SeedProperties, SnapshotProperties};
@@ -285,17 +288,28 @@ fn get_test_details(
     })
 }
 
-fn parse_builtin_macro_name_and_test_name(
+fn parse_builtin_macro_name_and_test_name<T>(
     kwargs: &mut BTreeMap<String, Value>,
     config: &mut BTreeMap<String, Value>,
-    test_inner: &Value,
+    test_inner: T,
     macro_name: &str,
-) -> FsResult<(Option<String>, String)> {
-    let mut args = test_inner
+) -> FsResult<(Option<String>, String)>
+where
+    T: serde::Serialize + std::fmt::Debug + Copy,
+{
+    let test_inner_value = serde_json::to_value(test_inner).map_err(|e| {
+        fs_err!(
+            ErrorCode::SchemaError,
+            "Failed to serialize test properties: {}",
+            e
+        )
+    })?;
+    let mut args = test_inner_value
         .as_object()
         .ok_or(fs_err!(
             ErrorCode::SchemaError,
-            "not_null test is not an object"
+            "{} test is not an object",
+            macro_name
         ))?
         .to_owned();
     let name = args

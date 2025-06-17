@@ -1,7 +1,7 @@
 use crate::default_to;
 use crate::schemas::common::{
     merge_meta, merge_tags, Access, DbtQuoting, DocsConfig, FreshnessDefinition, Hooks,
-    OnConfigurationChange, OnSchemaChange, PersistDocsConfig,
+    OnConfigurationChange, OnSchemaChange, PersistDocsConfig, StoreFailuresAs,
 };
 use crate::schemas::properties::ModelFreshness;
 use crate::schemas::{
@@ -73,6 +73,7 @@ pub struct DbtConfig {
     pub severity: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub store_failures: Option<bool>,
+    pub store_failures_as: Option<StoreFailuresAs>,
     pub batch_size: Option<DbtBatchSize>,
     pub lookback: Option<i32>,
     pub begin: Option<String>,

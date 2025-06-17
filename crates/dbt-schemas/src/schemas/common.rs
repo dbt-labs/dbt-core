@@ -738,6 +738,15 @@ pub enum TimeGranularity {
     Year,
 }
 
+#[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum StoreFailuresAs {
+    #[default]
+    Ephemeral,
+    Table,
+    View,
+}
+
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct Versions {

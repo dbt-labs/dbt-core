@@ -1,5 +1,5 @@
 use crate::schemas::{
-    common::DbtQuoting,
+    common::{DbtQuoting, StoreFailuresAs},
     manifest::DbtConfig,
     serde::{try_from_value, StringOrArrayOfStrings},
 };
@@ -40,9 +40,12 @@ pub struct TestPropertiesConfig {
     pub schema: Option<String>,
     pub severity: Option<String>,
     pub store_failures: Option<bool>,
+    pub store_failures_as: Option<StoreFailuresAs>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub warn_if: Option<String>,
     pub quoting: Option<DbtQuoting>,
+    #[serde(rename = "where")]
+    pub where_: Option<String>,
 }
 
 impl TryFrom<&TestPropertiesConfig> for DbtConfig {
