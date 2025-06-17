@@ -82,6 +82,8 @@ pub struct DbtConfig {
     pub contract: Option<DbtContract>,
     pub event_time: Option<String>,
     pub model_freshness: Option<ModelFreshness>,
+    // Catalog Config Parameters
+    pub catalog_name: Option<String>,
     // Additional Source Config Parameters
     pub freshness: Option<FreshnessDefinition>,
     // below are configs for Snowflake
