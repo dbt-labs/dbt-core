@@ -47,6 +47,11 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         unimplemented!("Only available with Databricks adapter")
     }
 
+    /// Redact credentials expressions from DDL statements
+    fn redact_credentials(&self, _sql: &str) -> AdapterResult<String> {
+        unimplemented!("Only available with Databricks adapter")
+    }
+
     /// Create a new connection
     fn new_connection(&self) -> AdapterResult<Box<dyn Connection>>;
 

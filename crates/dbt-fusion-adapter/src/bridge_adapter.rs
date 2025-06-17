@@ -1261,6 +1261,18 @@ impl BaseAdapter for BridgeAdapter {
         Ok(self.typed_adapter.valid_incremental_strategies_as_values())
     }
 
+    #[tracing::instrument(skip(self, _state))]
+    fn redact_credentials(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
+        let mut parser = ArgParser::new(args, None);
+        check_num_args(current_function_name!(), &parser, 1, 1)?;
+
+        let sql = parser.next_positional::<String>()?;
+
+        let sql_redacted = self.typed_adapter().redact_credentials(&sql)?;
+
+        Ok(Value::from(sql_redacted))
+    }
+
     #[tracing::instrument(skip(self, _state, _args))]
     fn get_partitions_metadata(
         &self,
@@ -1334,11 +1346,6 @@ impl BaseAdapter for BridgeAdapter {
     #[tracing::instrument(skip(self, _state, _args))]
     fn parse_index(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
         unimplemented!("parse_index")
-    }
-
-    #[tracing::instrument(skip(self, _state, _args))]
-    fn redact_credentials(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
-        unimplemented!("redact_credentials")
     }
 
     #[tracing::instrument(skip(self, args))]
