@@ -297,7 +297,7 @@ impl VortexProducerClient {
         // Override the client sent timestamp for each message that goes into the batch.
         let now = Self::current_timestamp();
         messages.iter_mut().for_each(|msg| {
-            msg.vortex_event_created_at = Some(now);
+            msg.vortex_client_sent_at = Some(now);
         });
 
         let body = {
