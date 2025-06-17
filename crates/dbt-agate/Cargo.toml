@@ -20,6 +20,7 @@ arrow-data = { workspace = true }
 arrow-schema = { workspace = true }
 
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 minijinja = { workspace = true, features = ["loader", "deserialization"] }
 minijinja-contrib = { workspace = true, features = [
   "pycompat",
