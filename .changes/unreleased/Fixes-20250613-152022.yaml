@@ -1,3 +1,0 @@
-kind: Fixes
-body: Fix parse_fqn with trailing semicolon for Snowflake
-time: 2025-06-13T15:20:22.54803+02:00

@@ -1,3 +1,0 @@
-kind: Under the Hood
-body: (dbt-agate) add all 4 arrow timestamp types as Arrow2Jinja converters.
-time: 2025-06-16T03:09:03.893796-07:00
