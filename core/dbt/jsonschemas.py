@@ -3,7 +3,7 @@ import os
 import re
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, Iterator, List
+from typing import Any, Dict, Iterator, List, Optional
 
 import jsonschema
 from jsonschema import ValidationError
@@ -12,6 +12,9 @@ from jsonschema.validators import Draft7Validator, extend
 
 from dbt import deprecations
 from dbt.include.jsonschemas import JSONSCHEMAS_PATH
+
+_PROJECT_SCHEMA: Optional[Dict[str, Any]] = None
+_RESOURCES_SCHEMA: Optional[Dict[str, Any]] = None
 
 
 def load_json_from_package(jsonschema_type: str, filename: str) -> Dict[str, Any]:
@@ -23,11 +26,24 @@ def load_json_from_package(jsonschema_type: str, filename: str) -> Dict[str, Any
 
 
 def project_schema() -> Dict[str, Any]:
-    return load_json_from_package(jsonschema_type="project", filename="0.0.110.json")
+    global _PROJECT_SCHEMA
+
+    if _PROJECT_SCHEMA is None:
+        _PROJECT_SCHEMA = load_json_from_package(
+            jsonschema_type="project", filename="0.0.110.json"
+        )
+    return _PROJECT_SCHEMA
 
 
 def resources_schema() -> Dict[str, Any]:
-    return load_json_from_package(jsonschema_type="resources", filename="latest.json")
+    global _RESOURCES_SCHEMA
+
+    if _RESOURCES_SCHEMA is None:
+        _RESOURCES_SCHEMA = load_json_from_package(
+            jsonschema_type="resources", filename="latest.json"
+        )
+
+    return _RESOURCES_SCHEMA
 
 
 def custom_type_rule(validator, types, instance, schema):
