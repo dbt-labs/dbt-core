@@ -157,7 +157,7 @@ minijinja-contrib = { path = "crates/dbt-jinja/minijinja-contrib", features = [
 ] }
 
 # serde
-dbt-serde_yaml = { git = "https://github.com/sdf-labs/dbt-serde-yaml", rev = "8ebed11a25e62487ffa69a266b888d57501efef8", features = [
+dbt-serde_yaml = { git = "https://github.com/sdf-labs/dbt-serde-yaml", rev = "427afa5e233fddbb2e71fd466dc9b4c15c99bfd8", features = [
   "filename",
   "schemars",
   "flatten_dunder",
@@ -166,11 +166,6 @@ serde = { version = "1.0.147", default-features = false, features = ["derive"] }
 serde_derive = "1.0.215"
 serde_json = "1.0.133"
 serde_with = "3.12.0"
-# dbt-serde_yaml = { path = "../dbt-serde-yaml/dbt-serde_yaml/", features = [
-#   "filename",
-#   "schemars",
-#   "flatten_dunder",
-# ] }
 
 # cloud providers
 aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }

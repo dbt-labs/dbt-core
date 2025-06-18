@@ -50,10 +50,19 @@
 //!   `__` (e.g. `__additional_properties__`) -- all such named fields are
 //!   flattened by `dbt_serde_yaml`, just as if they were annotated with
 //!   `#[serde(flatten)]`. **NOTE** structs containing such fields will not
-//!  serialize correctly with default serde serializers -- if you ever need to
-//!  (re)serialize structs containing such fields, say into a
-//!  `minijinja::Value`, serialize them to a `yaml::Value` *first*, then
-//!  serialize the `yaml::Value` to the target format.
+//!   serialize correctly with default serde serializers -- if you ever need to
+//!   (re)serialize structs containing such fields, say into a
+//!   `minijinja::Value`, serialize them to a `yaml::Value` *first*, then
+//!   serialize the `yaml::Value` to the target format.
+//!
+//! * `#[serde(untagged)]` also does not work with types that contain
+//!   `Verbatim<T>` or `flatten_dunder` fields. For the specific use case of
+//!   error recovery during deserialization, use the
+//!   `dbt_serde_yaml::ShouldBe<T>` wrapper type instead (see type documentation
+//!   for more details). More generally, however, `#[serde(untagged)]` should
+//!   *only* be used on simple enums (i.e. those without deep-nested structs),
+//!   as it introduces backtracking during deserialization, which can lead to
+//!   super-linear deserialization time on large inputs.
 
 use std::{
     path::{Path, PathBuf},
@@ -210,13 +219,13 @@ where
     T: DeserializeOwned,
     S: Serialize,
 {
-    let jinja_renderer = |value: Value| match value {
+    let jinja_renderer = |value: &Value| match value {
         Value::String(s, span) => {
-            let expanded = render_jinja_str(&s, should_render_secrets, env, ctx, listeners)
+            let expanded = render_jinja_str(s, should_render_secrets, env, ctx, listeners)
                 .map_err(|e| e.with_location(span.clone()))?;
-            Ok(expanded.with_span(span))
+            Ok(Some(expanded.with_span(span.clone())))
         }
-        _ => Ok(value),
+        _ => Ok(None),
     };
 
     into_typed_internal(value, jinja_renderer)
@@ -228,7 +237,7 @@ where
     T: DeserializeOwned,
 {
     // Use the identity transform for the 'raw' version of this function.
-    let expand_jinja = |value: Value| Ok(value);
+    let expand_jinja = |_: &Value| Ok(None);
 
     let (res, errors) = into_typed_internal(value, expand_jinja)?;
 
@@ -244,11 +253,11 @@ where
 fn into_typed_internal<T, F>(value: Value, transform: F) -> FsResult<(T, Vec<FsError>)>
 where
     T: DeserializeOwned,
-    F: FnMut(Value) -> Result<Value, Box<dyn std::error::Error + 'static + Send + Sync>>,
+    F: FnMut(&Value) -> Result<Option<Value>, Box<dyn std::error::Error + 'static + Send + Sync>>,
 {
     let mut warnings: Vec<FsError> = Vec::new();
-    let warn_unused_keys = |path: dbt_serde_yaml::path::Path, key: Value, _| {
-        let key_repr = dbt_serde_yaml::to_string(&key).unwrap_or_else(|_| "<opaque>".to_string());
+    let warn_unused_keys = |path: dbt_serde_yaml::path::Path, key: &Value, _: &Value| {
+        let key_repr = dbt_serde_yaml::to_string(key).unwrap_or_else(|_| "<opaque>".to_string());
         warnings.push(*fs_err!(
             code => ErrorCode::UnusedConfigKey,
             loc => key.span(),
