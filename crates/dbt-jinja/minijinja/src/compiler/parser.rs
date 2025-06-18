@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::fmt;
+use std::fmt::{self, Display};
 
 use crate::compiler::ast::{self, Comment, MacroKind, Spanned};
 use crate::compiler::lexer::{Tokenizer, WhitespaceConfig};
@@ -887,14 +887,11 @@ impl<'a> Parser<'a> {
             )),
             #[cfg(feature = "macros")]
             "materialization" => {
-                let (macro_, maybe_adapter) = ok!(self.parse_materialization());
+                let (macro_, adapter) = ok!(self.parse_materialization());
                 ast::Stmt::Macro((
                     respan!(macro_),
                     MacroKind::Materialization,
-                    BTreeMap::from([(
-                        "adapter".to_string(),
-                        Value::from(maybe_adapter.unwrap_or("default".to_string())),
-                    )]),
+                    BTreeMap::from([("adapter".to_string(), Value::from(adapter))]),
                 ))
             }
             #[cfg(feature = "macros")]
@@ -1322,18 +1319,19 @@ impl<'a> Parser<'a> {
 
     /// reference: https://docs.getdbt.com/guides/create-new-materializations?step=2
     /// syntax: {% materialization [materialization name], ["specified adapter" | default] %}
+    ///
+    /// Returns the adapter name parsed from the macro definition
     #[cfg(feature = "macros")]
     fn parse_materialization_adapter_languages(
         &mut self,
-        adapter: &mut Option<String>,
         supported_languages: &mut Option<ast::Expr<'a>>,
-    ) -> Result<(), Error> {
+    ) -> Result<String, Error> {
+        let mut ret = "default".to_string();
         loop {
             // First check if ',' is specified
             if skip_token!(self, Token::Comma) {
                 // Check if default is specified
                 if matches_token!(self, Token::Ident("default")) {
-                    *adapter = Some("default".to_string());
                     skip_token!(self, Token::Ident("default"));
                     break;
                 }
@@ -1342,7 +1340,7 @@ impl<'a> Parser<'a> {
                 if skip_token!(self, Token::Ident("adapter")) {
                     expect_token!(self, Token::Assign, "`=`");
                     let (adapter_name, _) = expect_token!(self, Token::Str(name) => name, "str");
-                    *adapter = Some(adapter_name.to_string());
+                    ret = adapter_name.to_string();
                 // Else, check if default expression is specified (i.e. {% materialization mat_name, default %})
                 } else if skip_token!(self, Token::Ident("supported_languages")) {
                     expect_token!(self, Token::Assign, "`=`");
@@ -1354,7 +1352,7 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
-        Ok(())
+        Ok(ret)
     }
 
     #[cfg(feature = "macros")]
@@ -1537,17 +1535,12 @@ impl<'a> Parser<'a> {
     }
 
     #[cfg(feature = "macros")]
-    fn parse_materialization(&mut self) -> Result<(ast::Macro<'a>, Option<String>), Error> {
+    fn parse_materialization(&mut self) -> Result<(ast::Macro<'a>, String), Error> {
         let (name, _) = expect_token!(self, Token::Ident(name) => name, "identifier");
-        let mut adapter = None;
         let mut supported_languages = None;
-        ok!(self.parse_materialization_adapter_languages(&mut adapter, &mut supported_languages));
-        let macro_name = self.intern_string(&format!(
-            "materialization_{}_{}",
-            name,
-            // TODO: This can be cleaned up to add better error messages for miss-formatted materialization macros
-            adapter.as_deref().unwrap_or("default")
-        ));
+        let adapter = ok!(self.parse_materialization_adapter_languages(&mut supported_languages));
+        // TODO: This can be cleaned up to add better error messages for miss-formatted materialization macros
+        let macro_name = self.intern_string(&materialization_macro_name(name, &adapter));
         Ok((
             ok!(self.parse_materialization_or_call_block_body(Some(macro_name))),
             adapter,
@@ -1764,4 +1757,8 @@ pub fn parse_expr(source: &str) -> Result<ast::Expr<'_>, Error> {
         Default::default(),
     )
     .parse_standalone_expr()
+}
+
+pub fn materialization_macro_name<N: Display>(name: N, adapter: &str) -> String {
+    format!("materialization_{}_{}", name, adapter)
 }

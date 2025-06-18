@@ -88,7 +88,7 @@ pub fn resolve_docs_macros(
 /// Resolve macros from a list of macro files
 pub fn resolve_macros(
     io: &IoArgs,
-    macro_files: &Vec<&DbtAsset>,
+    macro_files: &[&DbtAsset],
 ) -> FsResult<HashMap<String, DbtMacro>> {
     let mut nodes = HashMap::new();
 

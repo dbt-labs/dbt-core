@@ -73,7 +73,7 @@ pub async fn resolve(
                 // This is a temporary solution, for a feature that is supposed to be
                 // deprecated in the future
                 .chain(&package.snapshot_files)
-                .collect(),
+                .collect::<Vec<_>>(),
         )?;
         macros.macros.extend(resolved_macros);
         let docs_macros = resolve_docs_macros(&package.docs_files)?;

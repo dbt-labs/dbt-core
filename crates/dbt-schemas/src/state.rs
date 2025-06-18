@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::schemas::{
-    common::{DbtQuoting, ResolvedQuoting},
+    common::{DbtMaterialization, DbtQuoting, ResolvedQuoting},
     macros::{DbtDocsMacro, DbtMacro},
     manifest::{DbtOperation, DbtSource, InternalDbtNode, Nodes},
     profiles::DbConfig,
@@ -21,7 +21,8 @@ use crate::schemas::{
     serde::{FloatOrString, StringOrArrayOfStrings},
 };
 use chrono::{DateTime, Local, Utc};
-use dbt_common::{serde_utils::convert_json_to_map, FsResult};
+use dbt_common::{fs_err, serde_utils::convert_json_to_map, ErrorCode, FsResult};
+use minijinja::compiler::parser::materialization_macro_name;
 use minijinja::{value::Object, MacroSpans, Value as MinijinjaValue};
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -257,6 +258,36 @@ pub struct ResolverState {
     pub resolved_selectors: ResolvedSelector,
     pub root_project_quoting: ResolvedQuoting,
 }
+
+impl ResolverState {
+    // TODO: support finding custom materialization https://github.com/dbt-labs/fs/issues/2736
+    // a few details is here https://github.com/dbt-labs/fs/pull/3967#discussion_r2153355927
+    pub fn find_materialization_macro_name(
+        &self,
+        materialization: DbtMaterialization,
+        adapter: &str,
+    ) -> FsResult<String> {
+        let adapter_package = format!("dbt_{}", adapter);
+        for package in [&adapter_package, "dbt"] {
+            for adapter in [adapter, "default"] {
+                if let Some(macro_) = self.macros.macros.values().find(|m| {
+                    m.name == materialization_macro_name(materialization.clone(), adapter)
+                        && m.package_name == package
+                }) {
+                    return Ok(format!("{}.{}", package, macro_.name));
+                }
+            }
+        }
+
+        Err(fs_err!(
+            ErrorCode::Unexpected,
+            "Materialization macro not found for materialization: {}, adapter: {}",
+            materialization,
+            adapter
+        ))
+    }
+}
+
 impl fmt::Display for ResolverState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
