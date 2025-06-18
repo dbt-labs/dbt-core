@@ -89,6 +89,7 @@ pub const WAITING: &str = "   Waiting";
 pub const ABORTED: &str = "   Aborted";
 pub const SUCCESS: &str = "   Success";
 pub const PASS: &str = "      Pass";
+pub const WARN: &str = "      Warn";
 pub const FAILED: &str = "    Failed";
 pub const REUSING: &str = "   Reusing";
 pub const STALE: &str = "     Stale";

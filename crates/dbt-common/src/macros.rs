@@ -667,11 +667,14 @@ macro_rules! show_error {
         );
     }};
 
-    ( $io:expr, info => $info:expr) => {{
+    ( $io:expr, info => $info:expr, increment_counter: $increment:expr) => {{
         use $crate::io_args::ShowOptions;
         use $crate::pretty_string::pretty_red;
+        use $crate::error_counter::increment_error_counter;
         use $crate::logging::{FsInfo, LogEvent};
-
+        if $increment {
+            increment_error_counter(&$io.invocation_id.to_string());
+        }
         if $io.should_show(ShowOptions::ProgressRun)
             // Do not show parse generic tests
         {

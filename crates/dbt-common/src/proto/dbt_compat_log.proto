@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package dbt_compat_log;
+
+// Main log entry structure
+// the order here is because completion
+message LogEntry {
+  oneof data {
+    CompletionLogData completion = 1;
+    CompiledNodeLogData compiled_node = 2;
+    ShowLogData show = 3;
+    ExecutingLogData execution_data = 4;
+  }
+  LogInfo info = 10;
+}
+
+// Completion log data (for command completion)
+message CompletionLogData {
+  uint32 log_version = 1;
+  string version = 2;
+  string completed_at = 3;
+  double elapsed = 4;
+  bool success = 5;
+}
+
+// Compiled node log data (for dbt compile events)
+message CompiledNodeLogData {
+  uint32 log_version = 1;
+  string version = 2;
+  string compiled = 3;
+  string unique_id = 4;
+}
+
+// Node executing log data (for general dbt events, including node start and completion)
+message ExecutingLogData {
+  uint32 log_version = 1;
+  string version = 2;
+  optional NodeInfo node_info = 3;
+}
+
+message ShowLogData {
+  uint32 log_version = 1;
+  string version = 2;
+  string preview = 3;
+  string unique_id = 4;
+}
+
+// Log info structure
+message LogInfo {
+  string category = 1;
+  string code = 2;
+  map<string, string> extra = 3;
+  string invocation_id = 4;
+  string level = 5;
+  string msg = 6;
+  string name = 7;
+  uint64 pid = 8;
+  string thread = 9;
+  string ts = 10;
+  optional string elapsed = 11;
+}
+
+// Node info structure
+message NodeInfo {
+  string unique_id = 1;
+  optional string node_name = 2;
+  optional string node_started_at = 3;
+  optional string node_finished_at = 4;
+  optional string node_status = 5;
+}

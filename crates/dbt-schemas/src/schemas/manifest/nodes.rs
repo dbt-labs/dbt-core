@@ -120,7 +120,6 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
 
     fn get_node_end_data(&self, status: &str) -> Value {
         json!({
-            "completed_at": chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.6f").to_string(),
             "node_info":{
                 "node_name": self.common().name,
                 "unique_id": self.common().unique_id,

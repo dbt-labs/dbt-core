@@ -37,6 +37,7 @@ dashmap = { workspace = true }
 dbt-serde_yaml = { workspace = true }
 humantime = { workspace = true }
 minijinja = { workspace = true }
+prost = { workspace = true }
 
 schemars = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
