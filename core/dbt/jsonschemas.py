@@ -116,3 +116,20 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                 file=file_path,
                 key_path=error_path_to_string(error),
             )
+
+
+def validate_model_config(config: Dict[str, Any], file_path: str) -> None:
+    resources_jsonschema = resources_schema()
+    nested_definition_name = "ModelPropertiesConfigs"
+
+    model_config_schema = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": nested_definition_name,
+        **resources_jsonschema["definitions"][nested_definition_name],
+        "definitions": {
+            k: v
+            for k, v in resources_jsonschema["definitions"].items()
+            if k != nested_definition_name
+        },
+    }
+    jsonschema_validate(model_config_schema, config, file_path)
