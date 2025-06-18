@@ -83,7 +83,7 @@ pub fn get_db_config(
     // 6. Find the desired target
     let db_config = db_targets.outputs.get(&target_name).ok_or(fs_err!(
         ErrorCode::InvalidConfig,
-        "Could not find target {} in dbt profile.yml",
+        "Could not find target {} in profiles.yml",
         target_name,
     ))?;
     let db_config: DbConfig = serde_json::from_value(db_config.clone())?;

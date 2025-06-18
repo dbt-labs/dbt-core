@@ -99,7 +99,7 @@ pub async fn load(arg: &LoadArgs, iarg: &InvocationArgs) -> FsResult<(DbtState, 
                 StringOrInteger::String(ref s) => Some(s.parse::<usize>().map_err(|_| {
                     fs_err!(
                         ErrorCode::Generic,
-                        "Invalid number of threads in the profile.yml : {}",
+                        "Invalid number of threads in profiles.yml : {}",
                         s
                     )
                 })?),
