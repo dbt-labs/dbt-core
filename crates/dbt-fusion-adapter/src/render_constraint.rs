@@ -1,4 +1,5 @@
 use dbt_schemas::schemas::common::{Constraint, ConstraintType};
+use dbt_schemas::schemas::properties::ModelConstraint;
 
 use crate::base_adapter::AdapterType;
 
@@ -7,7 +8,7 @@ use crate::base_adapter::AdapterType;
 /// bigquery override: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L958-L959
 pub fn render_model_constraint(
     adapter_type: AdapterType,
-    constraint: Constraint,
+    constraint: ModelConstraint,
 ) -> Option<String> {
     let constraint_prefix = if let Some(name) = constraint.name {
         format!("constraint {} ", name)

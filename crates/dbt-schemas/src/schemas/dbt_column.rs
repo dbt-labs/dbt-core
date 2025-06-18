@@ -31,12 +31,7 @@ impl TryFrom<ColumnProperties> for DbtColumn {
     type Error = Box<FsError>;
 
     fn try_from(value: ColumnProperties) -> Result<Self, Self::Error> {
-        let constraints = value
-            .constraints
-            .iter()
-            .flatten()
-            .map(|c| serde_json::from_value::<Constraint>(c.clone()))
-            .collect::<Result<Vec<_>, _>>()?;
+        let constraints = value.constraints.unwrap_or_default();
 
         // Convert the column config to DbtConfig if it exists
         let config = value.config.map(|c| {
@@ -71,7 +66,7 @@ pub struct ColumnProperties {
     pub name: String,
     pub data_type: Option<String>,
     pub description: Option<String>,
-    pub constraints: Option<Vec<Value>>,
+    pub constraints: Option<Vec<Constraint>>,
     pub data_tests: Verbatim<Option<Vec<DataTests>>>,
     pub granularity: Option<ColumnPropertiesGranularity>,
     pub policy_tags: Option<Vec<String>>,

@@ -441,7 +441,7 @@ pub struct RedshiftModelConfig {
     pub sort_type: Option<String>,
 }
 
-/// Constraints (model level or column level)
+/// Column level contraint
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Constraint {
@@ -455,9 +455,8 @@ pub struct Constraint {
     /// Only ForeignKey constraints accept: a list columns in that table
     /// containing the corresponding primary or unique key.
     pub to_columns: Option<Vec<String>>,
-    /// model-level only
-    pub columns: Option<Vec<String>>,
     pub warn_unsupported: Option<bool>,
+    pub warn_unenforced: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

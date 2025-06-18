@@ -105,6 +105,7 @@ pub mod schemas {
         mod unit_test_properties;
 
         pub use metrics_properties::MetricsProperties;
+        pub use model_properties::ModelConstraint;
         pub use model_properties::ModelFreshness;
         pub use model_properties::ModelProperties;
         pub use properties::{

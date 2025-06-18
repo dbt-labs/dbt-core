@@ -8,7 +8,7 @@ use serde_with::skip_serializing_none;
 
 use crate::schemas::{
     common::{
-        Access, Constraint, DatabricksModelConfig, DbtBatchSize, DbtChecksum, DbtContract,
+        Access, DatabricksModelConfig, DbtBatchSize, DbtChecksum, DbtContract,
         DbtIncrementalStrategy, DbtMaterialization, DbtQuoting, DbtUniqueKey, DocsConfig, Expect,
         FreshnessDefinition, Given, Hooks, IncludeExclude, NodeDependsOn, OnConfigurationChange,
         OnSchemaChange, PersistDocsConfig, RedshiftModelConfig, SnowflakeModelConfig,
@@ -16,7 +16,7 @@ use crate::schemas::{
     dbt_column::DbtColumn,
     macros::DbtMacro,
     manifest::DbtConfig,
-    properties::ModelFreshness,
+    properties::{ModelConstraint, ModelFreshness},
     ref_and_source::{DbtRef, DbtSourceWrapper},
     serde::{default_type, StringOrInteger},
 };
@@ -1248,7 +1248,7 @@ pub struct DbtModel {
     pub introspection: Option<IntrospectionKind>,
     pub version: Option<StringOrInteger>,
     pub latest_version: Option<StringOrInteger>,
-    pub constraints: Vec<Constraint>,
+    pub constraints: Vec<ModelConstraint>,
     pub deprecation_date: Option<String>,
     pub primary_key: Vec<String>,
     pub time_spine: Option<Value>,

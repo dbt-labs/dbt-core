@@ -1,5 +1,5 @@
 use crate::schemas::common::Access;
-use crate::schemas::common::Constraint;
+use crate::schemas::common::ConstraintType;
 use crate::schemas::common::DbtContract;
 use crate::schemas::common::DbtUniqueKey;
 use crate::schemas::common::DocsConfig;
@@ -24,12 +24,31 @@ use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
+/// Model level contraint
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct ModelConstraint {
+    #[serde(rename = "type")]
+    pub type_: ConstraintType,
+    pub expression: Option<String>,
+    pub name: Option<String>,
+    // Only ForeignKey constraints accept: a relation input
+    // ref(), source() etc
+    pub to: Option<String>,
+    /// Only ForeignKey constraints accept: a list columns in that table
+    /// containing the corresponding primary or unique key.
+    pub to_columns: Option<Vec<String>>,
+    pub columns: Option<Vec<String>>,
+    pub warn_unsupported: Option<bool>,
+    pub warn_unenforced: Option<bool>,
+}
+
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ModelProperties {
     pub columns: Option<Vec<ColumnProperties>>,
     pub config: Option<ModelPropertiesConfigs>,
-    pub constraints: Option<Vec<Constraint>>,
+    pub constraints: Option<Vec<ModelConstraint>>,
     pub data_tests: Verbatim<Option<Vec<DataTests>>>,
     pub deprecation_date: Option<String>,
     pub description: Option<String>,

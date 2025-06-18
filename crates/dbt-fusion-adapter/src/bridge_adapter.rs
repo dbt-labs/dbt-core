@@ -21,12 +21,13 @@ use dbt_common::adapter::SchemaRegistry;
 use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::current_function_name;
 use dbt_schemas::schemas::columns::base::StdColumn;
-use dbt_schemas::schemas::common::{Constraint, DbtIncrementalStrategy};
+use dbt_schemas::schemas::common::DbtIncrementalStrategy;
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::manifest::{
     BigqueryClusterConfig, BigqueryPartitionConfig, BigqueryPartitionConfigLegacy, DbtModel,
     GrantAccessToTarget, ManifestModelConfig,
 };
+use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_xdbc::Connection;
 use minijinja::arg_utils::{check_num_args, ArgParser};
@@ -357,7 +358,7 @@ impl BaseAdapter for BridgeAdapter {
 
         let raw_constraints = parser.get::<Value>("raw_constraints")?;
 
-        let constraints = <Vec<Constraint>>::deserialize(raw_constraints)?;
+        let constraints = <Vec<ModelConstraint>>::deserialize(raw_constraints)?;
         let mut result = vec![];
         for constraint in constraints {
             let rendered = render_model_constraint(self.adapter_type(), constraint);
