@@ -1,4 +1,5 @@
 use minijinja_contrib::modules::py_datetime::date::PyDate;
+use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
 
 use crate::bigquery::formatter::BigquerySqlLiteralFormatter;
 use crate::databricks::formatter::DatabricksSqlLiteralFormatter;
@@ -17,6 +18,10 @@ pub trait SqlLiteralFormatter {
 
     fn format_date(&self, l: PyDate) -> String {
         format!("'{}'", l.date.format("%Y-%m-%d"))
+    }
+
+    fn format_datetime(&self, l: PyDateTime) -> String {
+        format!("'{}'", l.isoformat())
     }
 
     fn none_value(&self) -> String {

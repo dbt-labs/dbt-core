@@ -11,6 +11,7 @@ use minijinja::value::mutable_vec::MutableVec;
 use minijinja::value::ValueKind;
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
 use minijinja_contrib::modules::py_datetime::date::PyDate;
+use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
 
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -255,7 +256,9 @@ pub fn format_sql_with_bindings(
                     _ => {
                         // TODO: handle the SQL escaping of more data types
                         if let Some(date) = value.downcast_object::<PyDate>() {
-                            result.push_str(&formatter.format_date(date.as_ref().clone()))
+                            result.push_str(&formatter.format_date(date.as_ref().clone()));
+                        } else if let Some(datetime) = value.downcast_object::<PyDateTime>() {
+                            result.push_str(&formatter.format_datetime(datetime.as_ref().clone()));
                         } else {
                             result.push_str(&value.to_string())
                         }
