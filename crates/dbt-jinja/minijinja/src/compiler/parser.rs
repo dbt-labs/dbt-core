@@ -194,6 +194,7 @@ pub struct Parser<'a> {
     blocks: BTreeSet<&'a str>,
     depth: usize,
     string_interner: HashMap<String, &'a str>,
+    ignore_unknown_stmts: bool,
 }
 
 macro_rules! binop {
@@ -273,6 +274,7 @@ impl<'a> Parser<'a> {
             blocks: BTreeSet::new(),
             depth: 0,
             string_interner: HashMap::new(),
+            ignore_unknown_stmts: false,
         }
     }
 
@@ -946,7 +948,15 @@ impl<'a> Parser<'a> {
                     self.stream.expand_span(span),
                 ))
             }
-            name => syntax_error!("unknown statement {}", name),
+            name => {
+                if self.ignore_unknown_stmts {
+                    // If we ignore unknown statements, we just skip them.
+                    self.skip_until_block_end()?;
+                    ast::Stmt::Comment(Spanned::new(ast::Comment, self.stream.expand_span(span)))
+                } else {
+                    syntax_error!("unknown statement {}", name);
+                }
+            }
         })
     }
 
@@ -1730,7 +1740,9 @@ impl<'a> Parser<'a> {
                             syntax_error!("unexpected '{}' end of block identifier", ident);
                         } else {
                             // Skip until we find the end of this block ignoring any and all errors
+                            self.ignore_unknown_stmts = true;
                             let _ = self.parse_stmt();
+                            self.ignore_unknown_stmts = false;
                         }
                     } else {
                         // Skip non-identifier tokens
