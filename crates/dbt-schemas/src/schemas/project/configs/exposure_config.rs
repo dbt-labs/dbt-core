@@ -1,42 +1,76 @@
-use dbt_common::FsError;
-use dbt_serde_yaml::JsonSchema;
+use dbt_serde_yaml::{JsonSchema, ShouldBe};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 
-use crate::schemas::{
-    manifest::DbtConfig,
-    serde::{try_from_value, StringOrArrayOfStrings},
+use crate::{
+    default_to,
+    schemas::{
+        project::{configs::common::default_meta_and_tags, DefaultTo},
+        serde::{bool_or_string_bool, StringOrArrayOfStrings},
+    },
 };
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ProjectExposureConfig {
     #[serde(rename = "+meta")]
-    pub meta: Option<serde_json::Value>,
+    pub meta: Option<BTreeMap<String, serde_json::Value>>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
-    #[serde(rename = "+enabled")]
+    #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     #[serde(flatten)]
-    pub __additional_properties__: BTreeMap<String, dbt_serde_yaml::Value>,
+    pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectExposureConfig>>,
 }
 
-impl TryFrom<&ProjectExposureConfig> for DbtConfig {
-    type Error = Box<FsError>;
+#[skip_serializing_none]
+#[derive(Deserialize, Serialize, Debug, Clone, Default, JsonSchema)]
+pub struct ExposureConfig {
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub enabled: Option<bool>,
+    pub meta: Option<BTreeMap<String, serde_json::Value>>,
+    pub tags: Option<StringOrArrayOfStrings>,
+}
 
-    fn try_from(exposure_configs: &ProjectExposureConfig) -> Result<Self, Self::Error> {
-        Ok(DbtConfig {
-            enabled: exposure_configs.enabled,
-            meta: try_from_value(exposure_configs.meta.clone())?,
-            tags: match &exposure_configs.tags {
-                Some(StringOrArrayOfStrings::String(tags)) => {
-                    Some(tags.split(',').map(|s| s.to_string()).collect())
-                }
-                Some(StringOrArrayOfStrings::ArrayOfStrings(tags)) => Some(tags.clone()),
-                None => None,
-            },
-            ..Default::default()
-        })
+impl From<ProjectExposureConfig> for ExposureConfig {
+    fn from(config: ProjectExposureConfig) -> Self {
+        Self {
+            enabled: config.enabled,
+            meta: config.meta,
+            tags: config.tags,
+        }
+    }
+}
+
+impl From<ExposureConfig> for ProjectExposureConfig {
+    fn from(config: ExposureConfig) -> Self {
+        Self {
+            meta: config.meta,
+            tags: config.tags,
+            enabled: config.enabled,
+            __additional_properties__: BTreeMap::new(),
+        }
+    }
+}
+
+impl DefaultTo<ExposureConfig> for ExposureConfig {
+    fn get_enabled(&self) -> Option<bool> {
+        self.enabled
+    }
+
+    fn default_to(&mut self, parent: &ExposureConfig) {
+        let ExposureConfig {
+            ref mut meta,
+            ref mut tags,
+            ref mut enabled,
+        } = self;
+
+        #[allow(unused, clippy::let_unit_value)]
+        let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
+        #[allow(unused)]
+        let tags = ();
+
+        default_to!(parent, [enabled]);
     }
 }

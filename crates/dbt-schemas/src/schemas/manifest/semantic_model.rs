@@ -1,6 +1,6 @@
 use crate::schemas::{
     common::{Dimension, SemanticModelDependsOn},
-    manifest::DbtConfig,
+    project::SemanticModelConfig,
     ref_and_source::DbtRef,
 };
 use serde::{Deserialize, Serialize};
@@ -30,7 +30,7 @@ pub struct DbtSemanticModel {
     pub depends_on: SemanticModelDependsOn,
     pub refs: Vec<DbtRef>,
     pub created_at: Option<f64>,
-    pub config: DbtConfig,
+    pub config: SemanticModelConfig,
     pub unrendered_config: BTreeMap<String, Value>,
     pub primary_entity: Option<String>,
 }

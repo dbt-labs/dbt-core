@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::skip_serializing_none;
 
-use crate::schemas::{manifest::DbtConfig, ref_and_source::DbtRef};
+use crate::schemas::ref_and_source::DbtRef;
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,7 +22,6 @@ pub struct DbtMetric {
     pub filter: Option<MetricFilter>,
     pub metadata: Option<Value>,
     pub time_granularity: Option<String>,
-    pub config: DbtConfig,
     pub unrendered_config: BTreeMap<String, Value>,
     pub sources: Vec<Vec<String>>,
     pub depends_on: MetricDependsOn,

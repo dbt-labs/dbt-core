@@ -24,11 +24,13 @@ use dbt_schemas::schemas::columns::base::StdColumn;
 use dbt_schemas::schemas::common::DbtIncrementalStrategy;
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::manifest::{
-    BigqueryClusterConfig, BigqueryPartitionConfig, BigqueryPartitionConfigLegacy, DbtModel,
-    GrantAccessToTarget, ManifestModelConfig,
+    BigqueryClusterConfig, BigqueryPartitionConfig, BigqueryPartitionConfigLegacy,
+    GrantAccessToTarget,
 };
+use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
+use dbt_schemas::schemas::DbtModel;
 use dbt_xdbc::Connection;
 use minijinja::arg_utils::{check_num_args, ArgParser};
 use minijinja::dispatch_object::DispatchObject;
@@ -915,7 +917,7 @@ impl BaseAdapter for BridgeAdapter {
             .unwrap_or_default()
             .is_true();
 
-        let config = ManifestModelConfig::deserialize(config).map_err(|e| {
+        let config = ModelConfig::deserialize(config).map_err(|e| {
             MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
         })?;
         let node = DbtModel::deserialize(node).map_err(|e| {
@@ -936,7 +938,7 @@ impl BaseAdapter for BridgeAdapter {
         let config = parser.get::<Value>("config")?;
         let node = parser.get::<Value>("node")?;
 
-        let config = ManifestModelConfig::deserialize(config).map_err(|e| {
+        let config = ModelConfig::deserialize(config).map_err(|e| {
             MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
         })?;
 
@@ -1156,7 +1158,7 @@ impl BaseAdapter for BridgeAdapter {
             .get_optional::<bool>("is_incremental")
             .unwrap_or_default();
 
-        let config = ManifestModelConfig::deserialize(config).map_err(|e| {
+        let config = ModelConfig::deserialize(config).map_err(|e| {
             MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
         })?;
         let model = DbtModel::deserialize(model).map_err(|e| {
@@ -1179,7 +1181,7 @@ impl BaseAdapter for BridgeAdapter {
         check_num_args(current_function_name!(), &parser, 1, 2)?;
 
         let config = parser.get::<Value>("config")?;
-        let config = ManifestModelConfig::deserialize(config).map_err(|e| {
+        let config = ModelConfig::deserialize(config).map_err(|e| {
             MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
         })?;
 

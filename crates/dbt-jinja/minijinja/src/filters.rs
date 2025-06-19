@@ -404,7 +404,7 @@ mod builtins {
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     pub fn length(v: &Value) -> Result<usize, Error> {
-        if v.is_undefined() {
+        if v.is_undefined() || v.is_none() {
             return Ok(0);
         }
         v.len().ok_or_else(|| {

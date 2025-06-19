@@ -4,14 +4,13 @@ use dbt_common::{fs_err, show_error, show_warning, stdfs, unexpected_fs_err, Err
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
-use dbt_schemas::project_configs::ProjectConfigs;
-use dbt_schemas::schemas::common::{DbtContract, DbtMaterialization, DbtQuoting, NodeDependsOn};
-use dbt_schemas::schemas::dbt_column::DbtColumn;
+use dbt_schemas::schemas::common::{DbtContract, DbtQuoting, NodeDependsOn};
+use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::macros::DbtMacro;
-use dbt_schemas::schemas::manifest::{CommonAttributes, DbtSnapshot, NodeBaseAttributes};
-use dbt_schemas::schemas::project::DbtProject;
+use dbt_schemas::schemas::project::{DbtProject, SnapshotConfig};
 use dbt_schemas::schemas::properties::SnapshotProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
+use dbt_schemas::schemas::{CommonAttributes, DbtSnapshot, NodeBaseAttributes};
 use dbt_schemas::state::{
     DbtAsset, DbtPackage, DbtRuntimeConfig, ModelStatus, RefsAndSourcesTracker,
 };
@@ -24,7 +23,7 @@ use std::sync::Arc;
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{init_project_config, RootProjectConfigs};
 use crate::renderer::{render_unresolved_sql_files, SqlFileRenderResult};
-use crate::utils::update_node_relation_components;
+use crate::utils::{update_node_relation_components, RelationComponents};
 
 use super::resolve_properties::MinimalPropertiesEntry;
 
@@ -53,14 +52,12 @@ pub async fn resolve_snapshots(
 
     let local_project_config = init_project_config(
         &arg.io,
-        package_quoting,
-        &package
-            .dbt_project
-            .snapshots
-            .as_ref()
-            .map(ProjectConfigs::SnapshotConfigs),
-        jinja_env,
-        base_ctx,
+        &package.dbt_project.snapshots,
+        SnapshotConfig {
+            enabled: Some(true),
+            quoting: Some(package_quoting),
+            ..Default::default()
+        },
     )?;
     let package_name = package.dbt_project.name.to_owned();
 
@@ -139,29 +136,30 @@ pub async fn resolve_snapshots(
     }
 
     // Render the snapshots
-    let mut snapshot_sql_resources_map = render_unresolved_sql_files::<SnapshotProperties>(
-        arg,
-        &snapshot_files,
-        &package_name,
-        package_quoting,
-        adapter_type,
-        database,
-        schema,
-        jinja_env,
-        base_ctx,
-        &mut snapshot_properties,
-        root_project.name.as_str(),
-        &root_project_configs.snapshots,
-        &local_project_config,
-        runtime_config.clone(),
-        &package
-            .dbt_project
-            .snapshot_paths
-            .as_ref()
-            .unwrap_or(&vec![])
-            .clone(),
-    )
-    .await?;
+    let mut snapshot_sql_resources_map =
+        render_unresolved_sql_files::<SnapshotConfig, SnapshotProperties>(
+            arg,
+            &snapshot_files,
+            &package_name,
+            package_quoting,
+            adapter_type,
+            database,
+            schema,
+            jinja_env,
+            base_ctx,
+            &mut snapshot_properties,
+            root_project.name.as_str(),
+            &root_project_configs.snapshots,
+            &local_project_config,
+            runtime_config.clone(),
+            &package
+                .dbt_project
+                .snapshot_paths
+                .as_ref()
+                .unwrap_or(&vec![])
+                .clone(),
+        )
+        .await?;
 
     // make deterministic
     snapshot_sql_resources_map.sort_by(|a, b| {
@@ -198,7 +196,11 @@ pub async fn resolve_snapshots(
 
             final_config.enabled = Some(!(status == ModelStatus::Disabled));
 
-            final_config.materialized = Some(DbtMaterialization::Snapshot);
+            let columns = process_columns(
+                properties.columns.as_ref(),
+                final_config.meta.clone(),
+                final_config.tags.clone().map(|tags| tags.into()),
+            )?;
 
             // Create initial snapshot with default values
             let mut dbt_snapshot = DbtSnapshot {
@@ -223,21 +225,7 @@ pub async fn resolve_snapshots(
                     unrendered_config: BTreeMap::new(),
                     created_at: None,
                     raw_code: Some("--placeholder--".to_string()), // TODO: This is only so that dbt-evaluator returns truthy
-                    columns: properties
-                        .columns
-                        .as_ref()
-                        .map(|c| {
-                            c.iter()
-                                .map(|cp| cp.clone().try_into())
-                                .collect::<Result<Vec<DbtColumn>, _>>()
-                        })
-                        .transpose()?
-                        .map(|c| {
-                            c.into_iter()
-                                .map(|c| (c.name.clone(), c))
-                                .collect::<BTreeMap<_, _>>()
-                        })
-                        .unwrap_or_default(),
+                    columns,
                     depends_on: NodeDependsOn::default(),
                     refs: sql_file_info
                         .refs
@@ -267,8 +255,30 @@ pub async fn resolve_snapshots(
                     extra_ctes: None,
                     contract: DbtContract::default(),
                 },
-                config: final_config.clone(),
+                quoting: final_config
+                    .quoting
+                    .expect("quoting is required")
+                    .try_into()
+                    .expect("quoting is required"),
+                tags: final_config
+                    .tags
+                    .clone()
+                    .map(|tags| tags.into())
+                    .unwrap_or_default(),
+                meta: final_config.meta.clone().unwrap_or_default(),
+                snapshot_meta_column_names: final_config
+                    .snapshot_meta_column_names
+                    .clone()
+                    .unwrap_or_default(),
+                deprecated_config: final_config.clone(),
                 other: BTreeMap::new(),
+            };
+
+            let components = RelationComponents {
+                database: final_config.database.clone(),
+                schema: final_config.schema.clone(),
+                alias: final_config.alias.clone(),
+                store_failures: None,
             };
 
             // Update with relation components
@@ -278,7 +288,7 @@ pub async fn resolve_snapshots(
                 &root_project.name,
                 &package_name,
                 base_ctx,
-                &final_config,
+                &components,
                 adapter_type,
             )?;
             match refs_and_sources.insert_ref(&dbt_snapshot, adapter_type, status, false) {

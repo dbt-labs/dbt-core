@@ -3,7 +3,10 @@ use dbt_common::stats::{NodeStatus, Stat};
 use dbt_common::FsResult;
 use dbt_env::env::InternalEnv;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
-use dbt_schemas::schemas::manifest::{DbtManifest, DbtNode, InternalDbtNode};
+use dbt_schemas::schemas::{
+    manifest::{DbtManifest, DbtNode},
+    InternalDbtNodeAttributes,
+};
 use proto_rust::v1::events::fusion::CloudInvocation;
 use proto_rust::v1::public::events::fusion::{
     AdapterInfo, AdapterInfoV2, Invocation, InvocationEnv, PackageInstall, ResourceCounts, RunModel,
@@ -112,7 +115,10 @@ pub async fn invocation_end_event(invocation_id: String, result: &FsResult<i32>)
 pub async fn run_model_event(
     invocation_id: String,
     run_stats: &Arc<DashMap<String, Stat>>,
-    node: &dyn InternalDbtNode,
+    node: &dyn InternalDbtNodeAttributes,
+    maybe_incremental_strategy: Option<String>,
+    is_contract_enforced: bool,
+    has_group: bool,
 ) {
     let unique_id = node.common().unique_id.clone();
     if !run_stats.contains_key(&unique_id) {
@@ -122,18 +128,7 @@ pub async fn run_model_event(
     }
     let stat = run_stats.get(&unique_id).unwrap();
     let access = node
-        .get_dbt_config()
-        .access
-        .as_ref()
-        .map_or_else(|| "".to_string(), |a| a.to_string());
-    let contract_enforced = node
-        .get_dbt_config()
-        .contract
-        .as_ref()
-        .map_or_else(|| false, |a| a.enforced.unwrap_or(false));
-    let incremental_strategy = node
-        .get_dbt_config()
-        .incremental_strategy
+        .get_access()
         .as_ref()
         .map_or_else(|| "".to_string(), |a| a.to_string());
 
@@ -186,13 +181,9 @@ pub async fn run_model_event(
         // whether or not the model was skipped
         run_skipped: skipped,
         // the materialization strategy used for that model
-        model_materialization: if let Some(materialization) = node.get_dbt_config().materialized {
-            materialization.to_string()
-        } else {
-            "".to_string()
-        },
+        model_materialization: node.materialized().to_string(),
         // the incremental strategy used for that model (ex. append, merge, etc.)
-        model_incremental_strategy: incremental_strategy,
+        model_incremental_strategy: maybe_incremental_strategy.unwrap_or_default(),
         // unique identifier for the model
         model_id: format!("{:x}", md5::compute(unique_id)),
         // MD5 hash of the model's contents
@@ -201,9 +192,9 @@ pub async fn run_model_event(
         // TODO: if other languages are supported, this will need to change
         language: "sql".to_string(),
         // whether or not the model is in a group
-        has_group: node.get_dbt_config().group.is_some(),
+        has_group,
         // whether or not the model is contract enforced
-        contract_enforced,
+        contract_enforced: is_contract_enforced,
         // the access level of the model (ex. public, private, etc.)
         access,
         // whether or not the model is versioned

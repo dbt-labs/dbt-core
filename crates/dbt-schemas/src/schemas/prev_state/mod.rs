@@ -1,12 +1,10 @@
-use super::{
-    manifest::{DbtManifest, InternalDbtNode, Nodes},
-    RunResultsArtifact,
-};
-use crate::dbt_utils::resolve_package_quoting;
+use super::{manifest::DbtManifest, RunResultsArtifact};
+use crate::schemas::common::{DbtQuoting, ResolvedQuoting};
+use crate::schemas::manifest::nodes_from_dbt_manifest;
+use crate::schemas::{InternalDbtNode, Nodes};
 use dbt_common::{constants::DBT_MANIFEST_JSON, fs_err, stdfs, ErrorCode, FsResult};
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct PreviousState {
@@ -32,7 +30,7 @@ impl fmt::Display for PreviousState {
     }
 }
 impl PreviousState {
-    pub fn try_new(state_path: &Path) -> FsResult<Self> {
+    pub fn try_new(state_path: &Path, root_project_quoting: ResolvedQuoting) -> FsResult<Self> {
         let file = stdfs::File::open(state_path.join(DBT_MANIFEST_JSON)).map_err(|_| {
             fs_err!(
                 ErrorCode::FileNotFound,
@@ -48,19 +46,19 @@ impl PreviousState {
             )
         })?;
 
-        let maybe_mantle_quoting = manifest.metadata.quoting;
-        let adapter_type = manifest.metadata.adapter_type.as_str();
-        let maybe_resolved_quoting = maybe_mantle_quoting
-            .map(|quoting| resolve_package_quoting(Some(quoting), adapter_type));
+        let dbt_quoting = DbtQuoting {
+            database: Some(root_project_quoting.database),
+            schema: Some(root_project_quoting.schema),
+            identifier: Some(root_project_quoting.identifier),
+        };
+        let quoting = if let Some(mut mantle_quoting) = manifest.metadata.quoting {
+            mantle_quoting.default_to(&dbt_quoting);
+            mantle_quoting
+        } else {
+            dbt_quoting
+        };
 
-        let mut nodes: Nodes = manifest.into();
-        // if there is a mantle_quoting, update the models with the resolved quoting
-        if let Some(resolved) = &maybe_resolved_quoting {
-            for node in nodes.models.values_mut() {
-                let node = Arc::make_mut(node);
-                node.config.quoting = Some(*resolved);
-            }
-        }
+        let nodes = nodes_from_dbt_manifest(manifest, quoting);
 
         let run_results = RunResultsArtifact::from_file(&state_path.join("run_results.json")).ok();
         Ok(Self {

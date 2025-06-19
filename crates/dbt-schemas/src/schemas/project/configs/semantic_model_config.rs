@@ -7,24 +7,22 @@ use crate::{
     default_to,
     schemas::{
         project::{configs::common::default_meta_and_tags, DefaultTo, IterChildren},
-        serde::{bool_or_string_bool, StringOrArrayOfStrings},
+        serde::StringOrArrayOfStrings,
     },
 };
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
-pub struct ProjectUnitTestConfig {
-    #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
+pub struct ProjectSemanticModelConfig {
     pub enabled: Option<bool>,
-    #[serde(rename = "+meta")]
+    pub group: Option<String>,
     pub meta: Option<BTreeMap<String, serde_json::Value>>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
-    // Flattened fields
-    pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectUnitTestConfig>>,
+    pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectSemanticModelConfig>>,
 }
 
-impl IterChildren<ProjectUnitTestConfig> for ProjectUnitTestConfig {
+impl IterChildren<ProjectSemanticModelConfig> for ProjectSemanticModelConfig {
     fn iter_children(&self) -> Iter<String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }
@@ -32,27 +30,29 @@ impl IterChildren<ProjectUnitTestConfig> for ProjectUnitTestConfig {
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
-pub struct UnitTestConfig {
-    #[serde(default, deserialize_with = "bool_or_string_bool")]
+pub struct SemanticModelConfig {
     pub enabled: Option<bool>,
+    pub group: Option<String>,
     pub meta: Option<BTreeMap<String, serde_json::Value>>,
     pub tags: Option<StringOrArrayOfStrings>,
 }
 
-impl From<ProjectUnitTestConfig> for UnitTestConfig {
-    fn from(config: ProjectUnitTestConfig) -> Self {
+impl From<ProjectSemanticModelConfig> for SemanticModelConfig {
+    fn from(config: ProjectSemanticModelConfig) -> Self {
         Self {
             enabled: config.enabled,
+            group: config.group,
             meta: config.meta,
             tags: config.tags,
         }
     }
 }
 
-impl From<UnitTestConfig> for ProjectUnitTestConfig {
-    fn from(config: UnitTestConfig) -> Self {
+impl From<SemanticModelConfig> for ProjectSemanticModelConfig {
+    fn from(config: SemanticModelConfig) -> Self {
         Self {
             enabled: config.enabled,
+            group: config.group,
             meta: config.meta,
             tags: config.tags,
             __additional_properties__: BTreeMap::new(),
@@ -60,23 +60,24 @@ impl From<UnitTestConfig> for ProjectUnitTestConfig {
     }
 }
 
-impl DefaultTo<UnitTestConfig> for UnitTestConfig {
+impl DefaultTo<SemanticModelConfig> for SemanticModelConfig {
     fn get_enabled(&self) -> Option<bool> {
         self.enabled
     }
 
-    fn default_to(&mut self, parent: &UnitTestConfig) {
-        let UnitTestConfig {
+    fn default_to(&mut self, parent: &SemanticModelConfig) {
+        let SemanticModelConfig {
             ref mut enabled,
+            ref mut group,
             ref mut meta,
             ref mut tags,
         } = self;
 
         #[allow(unused, clippy::let_unit_value)]
         let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
-        #[allow(unused, clippy::let_unit_value)]
+        #[allow(unused)]
         let tags = ();
 
-        default_to!(parent, [enabled]);
+        default_to!(parent, [enabled, group]);
     }
 }

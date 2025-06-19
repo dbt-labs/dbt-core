@@ -9,13 +9,13 @@ use dashmap::DashMap;
 use dbt_common::serde_utils::convert_json_to_dash_map;
 use dbt_fusion_adapter::{load_store::ResultStore, relation_object::create_relation};
 use dbt_schemas::schemas::{
-    common::ResolvedQuoting, manifest::CommonAttributes, relations::base::BaseRelation,
+    common::ResolvedQuoting, relations::base::BaseRelation, CommonAttributes,
 };
 use minijinja::{
     constants::{TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID},
     Value as MinijinjaValue,
 };
-use serde::Serialize;
+use serde_json::Value;
 
 use crate::phases::MacroLookupContext;
 
@@ -24,11 +24,11 @@ use super::compile_config::CompileConfig;
 /// Build a compile model context
 /// Returns a context and the current relation
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
-pub fn build_compile_node_context<S: Serialize>(
+pub fn build_compile_node_context(
     model: &MinijinjaValue,
     common_attr: &CommonAttributes,
     alias: &str,
-    config: &S,
+    config: &Value,
     quoting: ResolvedQuoting,
     adapter_type: &str,
     base_context: &BTreeMap<String, MinijinjaValue>,
@@ -73,9 +73,7 @@ pub fn build_compile_node_context<S: Serialize>(
     );
     ctx.insert("identifier".to_owned(), MinijinjaValue::from(alias));
 
-    let config_map = Arc::new(convert_json_to_dash_map(
-        serde_json::to_value(config).unwrap(),
-    ));
+    let config_map = Arc::new(convert_json_to_dash_map(config.clone()));
     let compile_config = CompileConfig {
         config: config_map.clone(),
     };

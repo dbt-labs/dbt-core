@@ -8,13 +8,13 @@ use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
 use dbt_jinja_utils::serde::{into_typed_with_jinja, Omissible};
 use dbt_jinja_utils::utils::generate_relation_name;
-use dbt_schemas::project_configs::ProjectConfigs;
 use dbt_schemas::schemas::common::{
     merge_meta, merge_tags, normalize_quoting, DbtQuoting, FreshnessDefinition, FreshnessRules,
 };
 use dbt_schemas::schemas::dbt_column::process_columns;
-use dbt_schemas::schemas::manifest::{CommonAttributes, DbtConfig, DbtSource};
+use dbt_schemas::schemas::project::{DefaultTo, SourceConfig};
 use dbt_schemas::schemas::properties::{SourceProperties, Tables};
+use dbt_schemas::schemas::{CommonAttributes, DbtSource};
 use dbt_schemas::state::{DbtAsset, DbtPackage, ModelStatus, RefsAndSourcesTracker};
 use minijinja::Value as MinijinjaValue;
 use std::collections::BTreeMap;
@@ -47,14 +47,12 @@ pub fn resolve_sources(
 
     let local_project_config = init_project_config(
         io_args,
-        package_quoting,
-        &package
-            .dbt_project
-            .sources
-            .as_ref()
-            .map(ProjectConfigs::SourceConfigs),
-        jinja_env,
-        base_ctx,
+        &package.dbt_project.sources,
+        SourceConfig {
+            enabled: Some(true),
+            quoting: Some(package_quoting),
+            ..Default::default()
+        },
     )?;
     for ((source_name, table_name), mpe) in source_properties.into_iter() {
         let source: SourceProperties = into_typed_with_jinja(
@@ -93,7 +91,7 @@ pub fn resolve_sources(
         project_config.default_to(global_config);
 
         let source_properties_config = if let Some(properties) = &source.config {
-            let mut properties_config: DbtConfig = properties.try_into()?;
+            let mut properties_config: SourceConfig = properties.clone();
             properties_config.default_to(&project_config);
             properties_config
         } else {
@@ -104,7 +102,7 @@ pub fn resolve_sources(
 
         let is_enabled = table_config
             .enabled
-            .unwrap_or(source_properties_config.is_enabled());
+            .unwrap_or(source_properties_config.get_enabled().unwrap_or(true));
 
         let unique_id = format!("source.{}.{}.{}", &package_name, source_name, &table_name);
         let fqn = get_node_fqn(
@@ -150,7 +148,7 @@ pub fn resolve_sources(
         table_quoting.default_to(&source_quoting);
 
         let (database, schema, identifier, quoting) = normalize_quoting(
-            table_quoting.try_into()?,
+            &table_quoting.try_into()?,
             adapter_type,
             &database,
             &schema,
@@ -164,7 +162,10 @@ pub fn resolve_sources(
         let relation_name =
             generate_relation_name(parse_adapter, &database, &schema, &identifier, quoting)?;
 
-        let source_tags: Option<Vec<String>> = source_properties_config.tags.clone();
+        let source_tags: Option<Vec<String>> = source_properties_config
+            .tags
+            .clone()
+            .map(|tags| tags.into());
         let table_tags: Option<Vec<String>> = table_config.tags.clone().map(|tags| tags.into());
 
         let merged_tags = merge_tags(source_tags, table_tags);
@@ -173,27 +174,15 @@ pub fn resolve_sources(
             table_config.meta.clone(),
         );
 
-        let event_time = table_config
-            .event_time
-            .clone()
-            .or_else(|| source_properties_config.event_time.clone());
-
-        let table_properties_config = DbtConfig {
-            enabled: Some(is_enabled),
-            meta: merged_meta,
-            tags: merged_tags.clone(),
-            freshness: merged_freshness.clone(),
-            event_time,
-            quoting: Some(DbtQuoting {
-                database: Some(quoting.database),
-                identifier: Some(quoting.identifier),
-                schema: Some(quoting.schema),
-            }),
-            ..Default::default()
-        };
-
         let columns = if let Some(ref cols) = table.columns {
-            process_columns(Some(cols), &table_properties_config)?
+            process_columns(
+                Some(cols),
+                source_properties_config.meta.clone(),
+                source_properties_config
+                    .tags
+                    .clone()
+                    .map(|tags| tags.into()),
+            )?
         } else {
             BTreeMap::new()
         };
@@ -223,9 +212,9 @@ pub fn resolve_sources(
             identifier,
             relation_name: Some(relation_name),
             columns,
-            config: table_properties_config.clone(),
+            deprecated_config: source_properties_config.clone(),
             other: BTreeMap::new(),
-            quoting: table_properties_config.quoting,
+            quoting,
             source_description: source.description.clone().unwrap_or("".to_string()), // needs to be some or empty string per dbt spec
             unrendered_config: BTreeMap::new(),
             unrendered_database: None,
@@ -234,6 +223,8 @@ pub fn resolve_sources(
             freshness: merged_freshness.clone(),
             loaded_at_field: merged_loaded_at_field.clone(),
             loaded_at_query: merged_loaded_at_query.clone(),
+            meta: merged_meta.unwrap_or_default(),
+            tags: merged_tags.unwrap_or_default(),
         };
         let status = if is_enabled {
             ModelStatus::Enabled

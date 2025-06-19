@@ -1,26 +1,28 @@
 use std::collections::HashMap;
 use std::{collections::BTreeMap, sync::Arc};
 
+use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::show_error;
 use dbt_common::{error::AbstractLocation, FsResult};
 use dbt_jinja_utils::{jinja_environment::JinjaEnvironment, refs_and_sources::RefsAndSources};
-use dbt_schemas::schemas::common::DbtQuoting;
+use dbt_schemas::schemas::common::{Access, DbtMaterialization, DbtQuoting, ResolvedQuoting};
+use dbt_schemas::schemas::dbt_column::process_columns;
+use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::state::{ModelStatus, RefsAndSourcesTracker};
 use dbt_schemas::{
-    project_configs::ProjectConfigs,
     schemas::{
         common::{DbtContract, NodeDependsOn},
-        dbt_column::DbtColumn,
-        manifest::{CommonAttributes, DbtModel, ManifestModelConfig, NodeBaseAttributes},
         project::DbtProject,
         properties::ModelProperties,
         ref_and_source::{DbtRef, DbtSourceWrapper},
+        CommonAttributes, DbtModel, NodeBaseAttributes,
     },
     state::{DbtPackage, DbtRuntimeConfig},
 };
 use minijinja::MacroSpans;
 
 use crate::dbt_project_config::{init_project_config, RootProjectConfigs};
+use crate::utils::RelationComponents;
 use crate::{
     args::ResolveArgs,
     renderer::{render_unresolved_sql_files, SqlFileRenderResult},
@@ -52,41 +54,44 @@ pub async fn resolve_analyses(
     let mut analyses: HashMap<String, Arc<DbtModel>> = HashMap::new();
     let mut rendering_results: HashMap<String, (String, MacroSpans)> = HashMap::new();
 
-    let local_project_config = init_project_config(
-        &arg.io,
-        package_quoting,
-        &package
-            .dbt_project
-            .models // TODO
-            .as_ref()
-            .map(ProjectConfigs::ModelConfigs),
-        env,
-        base_ctx,
-    )?;
+    let local_project_config = if package.dbt_project.name == root_project.name {
+        root_project_configs.models.clone()
+    } else {
+        init_project_config(
+            &arg.io,
+            &package.dbt_project.models,
+            ModelConfig {
+                enabled: Some(true),
+                quoting: Some(package_quoting),
+                ..Default::default()
+            },
+        )?
+    };
 
-    let mut analysis_sql_resources_map = render_unresolved_sql_files::<ModelProperties>(
-        arg,
-        &package.analysis_files,
-        package_name,
-        package_quoting,
-        adapter_type,
-        database,
-        schema,
-        env,
-        base_ctx,
-        model_properties,
-        root_project.name.as_str(),
-        &root_project_configs.models,
-        &local_project_config,
-        runtime_config.clone(),
-        &package
-            .dbt_project
-            .analysis_paths
-            .as_ref()
-            .unwrap_or(&vec![])
-            .clone(),
-    )
-    .await?;
+    let mut analysis_sql_resources_map =
+        render_unresolved_sql_files::<ModelConfig, ModelProperties>(
+            arg,
+            &package.analysis_files,
+            package_name,
+            package_quoting,
+            adapter_type,
+            database,
+            schema,
+            env,
+            base_ctx,
+            model_properties,
+            root_project.name.as_str(),
+            &root_project_configs.models,
+            &local_project_config,
+            runtime_config.clone(),
+            &package
+                .dbt_project
+                .analysis_paths
+                .as_ref()
+                .unwrap_or(&vec![])
+                .clone(),
+        )
+        .await?;
     // make deterministic
     analysis_sql_resources_map.sort_by(|a, b| {
         a.asset
@@ -107,7 +112,7 @@ pub async fn resolve_analyses(
     } in analysis_sql_resources_map.into_iter()
     {
         let analysis_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
-        let analysis_config = ManifestModelConfig::from(*sql_file_info.config.clone());
+        let analysis_config = *sql_file_info.config;
 
         let original_file_path =
             get_original_file_path(&dbt_asset.base_path, &arg.io.in_dir, &dbt_asset.path);
@@ -136,6 +141,12 @@ pub async fn resolve_analyses(
             }
         }
 
+        let columns = process_columns(
+            properties.columns.as_ref(),
+            analysis_config.meta.clone(),
+            analysis_config.tags.clone().map(|tags| tags.into()),
+        )?;
+
         let mut dbt_model = DbtModel {
             common_attr: CommonAttributes {
                 database: database.to_string(), // will be updated below
@@ -157,21 +168,7 @@ pub async fn resolve_analyses(
                 compiled_path: None,
                 compiled: None,
                 compiled_code: None,
-                columns: properties
-                    .columns
-                    .as_ref()
-                    .map(|c| {
-                        c.iter()
-                            .map(|cp| cp.clone().try_into())
-                            .collect::<Result<Vec<DbtColumn>, _>>()
-                    })
-                    .transpose()?
-                    .map(|c| {
-                        c.into_iter()
-                            .map(|c| (c.name.clone(), c))
-                            .collect::<BTreeMap<_, _>>()
-                    })
-                    .unwrap_or_default(),
+                columns,
                 depends_on: NodeDependsOn::default(),
                 language: Some("sql".to_string()),
                 refs: sql_file_info
@@ -202,11 +199,37 @@ pub async fn resolve_analyses(
                 extra_ctes_injected: None,
                 extra_ctes: None,
             },
-            config: ManifestModelConfig {
+            deprecated_config: ModelConfig {
                 group: analysis_config.group.clone(),
                 ..Default::default()
             },
-            ..Default::default()
+            materialized: DbtMaterialization::Analysis,
+            quoting: ResolvedQuoting::trues(),
+            access: Access::default(),
+            group: None,
+            tags: vec![],
+            meta: BTreeMap::new(),
+            enabled: true,
+            introspection: None,
+            version: None,
+            latest_version: None,
+            constraints: vec![],
+            deprecation_date: None,
+            primary_key: vec![],
+            time_spine: None,
+            is_extended_model: false,
+            other: BTreeMap::new(),
+            static_analysis: StaticAnalysisKind::On,
+            incremental_strategy: None,
+            contract: None,
+            freshness: None,
+        };
+
+        let components = RelationComponents {
+            database: analysis_config.database.clone(),
+            schema: analysis_config.schema.clone(),
+            alias: analysis_config.alias.clone(),
+            store_failures: None,
         };
 
         // update model components using the generate_relation_components function
@@ -216,7 +239,7 @@ pub async fn resolve_analyses(
             &root_project.name,
             package_name,
             base_ctx,
-            &sql_file_info.config,
+            &components,
             adapter_type,
         )?;
 

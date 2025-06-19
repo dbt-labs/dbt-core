@@ -152,9 +152,10 @@ impl UndefinedBehavior {
         match (self, parent_was_undefined) {
             (UndefinedBehavior::Dbt, _) => Ok(Value::UNDEFINED),
             (UndefinedBehavior::Lenient, Some(false))
+            | (UndefinedBehavior::Lenient, None)
             | (UndefinedBehavior::Strict, Some(false))
             | (UndefinedBehavior::Chainable, _) => Ok(Value::UNDEFINED),
-            (UndefinedBehavior::Lenient, _) | (UndefinedBehavior::Strict, _) => {
+            (UndefinedBehavior::Lenient, Some(true)) | (UndefinedBehavior::Strict, _) => {
                 Err(Error::from(ErrorKind::UndefinedError))
             }
         }

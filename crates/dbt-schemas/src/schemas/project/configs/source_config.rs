@@ -1,50 +1,101 @@
-use dbt_common::FsError;
-use dbt_serde_yaml::JsonSchema;
-use dbt_serde_yaml::Verbatim;
+use dbt_serde_yaml::{JsonSchema, ShouldBe};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
+use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
-use crate::schemas::common::DbtQuoting;
-use crate::schemas::manifest::DbtConfig;
-use crate::schemas::serde::StringOrArrayOfStrings;
+use crate::default_to;
+use crate::schemas::common::{DbtQuoting, FreshnessDefinition};
+use crate::schemas::project::configs::common::{default_meta_and_tags, default_quoting};
+use crate::schemas::project::{DefaultTo, IterChildren};
+use crate::schemas::serde::{bool_or_string_bool, StringOrArrayOfStrings};
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ProjectSourceConfig {
-    #[serde(rename = "+enabled")]
+    #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     #[serde(rename = "+event_time")]
     pub event_time: Option<String>,
     #[serde(rename = "+meta")]
-    pub meta: Option<serde_json::Value>,
+    pub meta: Option<BTreeMap<String, serde_json::Value>>,
+    #[serde(rename = "+freshness")]
+    pub freshness: Option<FreshnessDefinition>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+quoting")]
     pub quoting: Option<DbtQuoting>,
-    // Flattened field:
-    pub __additional_properties__: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
+    // Flattened fields
+    pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectSourceConfig>>,
 }
 
-impl TryFrom<&ProjectSourceConfig> for DbtConfig {
-    type Error = Box<FsError>;
+impl IterChildren<ProjectSourceConfig> for ProjectSourceConfig {
+    fn iter_children(&self) -> Iter<String, ShouldBe<Self>> {
+        self.__additional_properties__.iter()
+    }
+}
 
-    fn try_from(source_configs: &ProjectSourceConfig) -> Result<Self, Self::Error> {
-        Ok(DbtConfig {
-            enabled: source_configs.enabled,
-            tags: match &source_configs.tags {
-                Some(StringOrArrayOfStrings::String(tags)) => {
-                    Some(tags.split(',').map(|s| s.to_string()).collect())
-                }
-                Some(StringOrArrayOfStrings::ArrayOfStrings(tags)) => Some(tags.clone()),
-                None => None,
-            },
-            meta: source_configs
-                .meta
-                .as_ref()
-                .and_then(|v| v.as_object().map(|obj| obj.clone().into_iter().collect())),
-            event_time: source_configs.event_time.clone(),
-            ..Default::default()
-        })
+#[skip_serializing_none]
+#[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
+pub struct SourceConfig {
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub enabled: Option<bool>,
+    pub event_time: Option<String>,
+    pub meta: Option<BTreeMap<String, serde_json::Value>>,
+    pub freshness: Option<FreshnessDefinition>,
+    pub tags: Option<StringOrArrayOfStrings>,
+    pub quoting: Option<DbtQuoting>,
+}
+
+impl From<ProjectSourceConfig> for SourceConfig {
+    fn from(config: ProjectSourceConfig) -> Self {
+        Self {
+            enabled: config.enabled,
+            event_time: config.event_time,
+            meta: config.meta,
+            freshness: config.freshness,
+            tags: config.tags,
+            quoting: config.quoting,
+        }
+    }
+}
+
+impl From<SourceConfig> for ProjectSourceConfig {
+    fn from(config: SourceConfig) -> Self {
+        Self {
+            enabled: config.enabled,
+            event_time: config.event_time,
+            meta: config.meta,
+            freshness: config.freshness,
+            tags: config.tags,
+            quoting: config.quoting,
+            __additional_properties__: BTreeMap::new(),
+        }
+    }
+}
+
+impl DefaultTo<SourceConfig> for SourceConfig {
+    fn get_enabled(&self) -> Option<bool> {
+        self.enabled
+    }
+
+    fn default_to(&mut self, parent: &SourceConfig) {
+        let SourceConfig {
+            ref mut enabled,
+            ref mut event_time,
+            ref mut meta,
+            ref mut freshness,
+            ref mut tags,
+            ref mut quoting,
+        } = self;
+
+        #[allow(unused, clippy::let_unit_value)]
+        let quoting = default_quoting(quoting, &parent.quoting);
+        #[allow(unused, clippy::let_unit_value)]
+        let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
+        #[allow(unused, clippy::let_unit_value)]
+        let tags = ();
+
+        default_to!(parent, [enabled, event_time, freshness]);
     }
 }

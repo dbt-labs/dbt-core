@@ -2,6 +2,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
     path::PathBuf,
     rc::Rc,
     sync::{
@@ -12,18 +13,19 @@ use std::{
 
 use chrono::TimeZone;
 use chrono_tz::{Europe::London, Tz};
-use dbt_common::{serde_utils::convert_json_to_map, FsResult};
+use dbt_common::{io_args::StaticAnalysisKind, serde_utils::convert_json_to_map, FsResult};
 use dbt_frontend_common::error::CodeLocation;
-use dbt_fusion_adapter::load_store::ResultStore;
-use dbt_fusion_adapter::relation_object::create_relation;
-use dbt_schemas::schemas::manifest::InternalDbtNode;
+use dbt_fusion_adapter::{load_store::ResultStore, relation_object::create_relation};
+use dbt_schemas::schemas::{
+    common::{Access, DbtMaterialization, ResolvedQuoting},
+    project::{DefaultTo, ModelConfig},
+    InternalDbtNode,
+};
 use dbt_schemas::{
     dbt_types::RelationType,
     schemas::{
         common::{DbtChecksum, DbtContract, DbtQuoting, NodeDependsOn},
-        manifest::{
-            CommonAttributes, DbtConfig, DbtModel, ManifestModelConfig, NodeBaseAttributes,
-        },
+        CommonAttributes, DbtModel, NodeBaseAttributes,
     },
     state::DbtRuntimeConfig,
 };
@@ -54,8 +56,8 @@ impl Object for ParseExecute {
 
 /// Builds a context for resolving models
 #[allow(clippy::too_many_arguments)]
-pub fn build_resolve_model_context(
-    config: &DbtConfig,
+pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
+    config: &T,
     adapter_type: &str,
     database: &str,
     schema: &str,
@@ -65,7 +67,7 @@ pub fn build_resolve_model_context(
     root_project_name: &str,
     package_quoting: DbtQuoting,
     runtime_config: Arc<DbtRuntimeConfig>,
-    sql_resources: Arc<Mutex<Vec<SqlResource>>>,
+    sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
     execute_exists: Arc<AtomicBool>,
 ) -> BTreeMap<String, MinijinjaValue> {
     // Create a relation for 'this' using config values
@@ -84,13 +86,6 @@ pub fn build_resolve_model_context(
     .as_value();
 
     context.insert("this".to_owned(), this_relation);
-    let is_incremental = config.incremental_strategy.is_some();
-    context.insert(
-        "is_incremental".to_owned(),
-        MinijinjaValue::from_function(move |_args: &[MinijinjaValue]| {
-            Ok(MinijinjaValue::from(is_incremental))
-        }),
-    );
 
     // Create a BTreeMap for builtins
     let mut builtins = BTreeMap::new();
@@ -161,23 +156,31 @@ pub fn build_resolve_model_context(
         .lock()
         .unwrap()
         .push(SqlResource::Config(Box::new(config.clone())));
+
+    let is_incremental = config.is_incremental();
+    context.insert(
+        "is_incremental".to_owned(),
+        MinijinjaValue::from_function(move |_args: &[MinijinjaValue]| {
+            Ok(MinijinjaValue::from(is_incremental))
+        }),
+    );
+    let is_enabled = config.get_enabled().unwrap_or(true);
     context.insert(
         "config".to_owned(),
         MinijinjaValue::from_object(ParseConfig {
-            enabled: config.enabled.unwrap_or(true),
+            enabled: is_enabled,
             sql_resources: sql_resources.clone(),
         }),
     );
     builtins.insert(
         "config".to_string(),
         MinijinjaValue::from_object(ParseConfig {
-            enabled: config.enabled.unwrap_or(true),
+            enabled: is_enabled,
             sql_resources,
         }),
     );
 
     // TODO (Ani): Make this more extensible and depending on the resouce it could be model, macro, or source
-    let config_clone = config.clone();
     let model = DbtModel {
         common_attr: CommonAttributes {
             database: database.to_string(),
@@ -192,7 +195,7 @@ pub fn build_resolve_model_context(
             description: None,
         },
         base_attr: NodeBaseAttributes {
-            alias: config_clone.alias.unwrap_or_else(|| model_name.to_string()),
+            alias: model_name.to_string(),
             relation_name: None,
             compiled_path: None,
             build_path: None,
@@ -217,8 +220,9 @@ pub fn build_resolve_model_context(
             contract: DbtContract::default(),
             created_at: None,
         },
+        materialized: DbtMaterialization::View,
+        quoting: ResolvedQuoting::trues(),
         introspection: None,
-        config: ManifestModelConfig::default(),
         other: BTreeMap::new(),
         version: None,
         latest_version: None,
@@ -227,6 +231,16 @@ pub fn build_resolve_model_context(
         primary_key: vec![],
         time_spine: None,
         is_extended_model: false,
+        access: Access::default(),
+        group: None,
+        tags: vec![],
+        meta: BTreeMap::new(),
+        enabled: true,
+        static_analysis: StaticAnalysisKind::On,
+        deprecated_config: ModelConfig::default(),
+        contract: None,
+        incremental_strategy: None,
+        freshness: None,
     };
 
     let mut model_map = convert_json_to_map(model.serialize());
@@ -307,16 +321,16 @@ fn init_batch_context() -> BTreeMap<String, MinijinjaValue> {
 }
 
 #[derive(Debug)]
-struct ResolveRefFunction {
+struct ResolveRefFunction<T: DefaultTo<T> + 'static> {
     database: String,
     schema: String,
     adapter_type: String,
-    sql_resources: Arc<Mutex<Vec<SqlResource>>>,
+    sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
     runtime_config: Arc<DbtRuntimeConfig>,
     package_quoting: DbtQuoting,
 }
 
-impl Object for ResolveRefFunction {
+impl<T: DefaultTo<T>> Object for ResolveRefFunction<T> {
     fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
         match key.as_str()? {
             "config" => Some(MinijinjaValue::from_object(
@@ -394,15 +408,15 @@ impl Object for ResolveRefFunction {
 }
 
 #[derive(Debug)]
-struct ResolveSourceFunction {
+struct ResolveSourceFunction<T: DefaultTo<T>> {
     database: String,
     schema: String,
     adapter_type: String,
-    sql_resources: Arc<Mutex<Vec<SqlResource>>>,
+    sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
     package_quoting: DbtQuoting,
 }
 
-impl Object for ResolveSourceFunction {
+impl<T: DefaultTo<T>> Object for ResolveSourceFunction<T> {
     fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
         match key.as_str()? {
             "function_name" => Some(MinijinjaValue::from("source")),
@@ -475,7 +489,7 @@ impl Object for ParseMetricReference {
     }
 }
 
-impl std::fmt::Debug for ParseMetricReference {
+impl Debug for ParseMetricReference {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.metric_name)
     }
@@ -483,14 +497,14 @@ impl std::fmt::Debug for ParseMetricReference {
 
 /// A struct that represents a parse config object to be used during parsing
 #[derive(Debug)]
-pub struct ParseConfig {
+pub struct ParseConfig<T: DefaultTo<T> + 'static> {
     /// A pointer to a vector of sql resources to be collected during parsing
-    pub sql_resources: Arc<Mutex<Vec<SqlResource>>>,
+    pub sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
     /// Whether the model is enabled (based on upstream config)
     pub enabled: bool,
 }
 
-impl Object for ParseConfig {
+impl<T: DefaultTo<T>> Object for ParseConfig<T> {
     /// Implement the call method on the config object
     fn call(
         self: &Arc<Self>,
@@ -551,25 +565,30 @@ impl Object for ParseConfig {
 
             result.insert(key.to_string(), value);
         }
+
+        // Get or insert enabled
+        let enabled = result
+            .remove("enabled")
+            .unwrap_or(MinijinjaValue::from(self.enabled));
+        result.insert("enabled".to_string(), enabled.clone());
+
         let value = serde_json::to_value(result).map_err(|e| {
             MinijinjaError::new(
                 MinijinjaErrorKind::InvalidOperation,
                 format!("Failed to serialize config into json: {}", e),
             )
         })?;
-        let mut config: DbtConfig = serde_json::from_value(value).map_err(|e| {
+        let config: T = serde_json::from_value(value).map_err(|e| {
             MinijinjaError::new(
                 MinijinjaErrorKind::InvalidOperation,
-                format!("Failed to deserialize config into DbtConfig: {}", e),
+                format!("Failed to parse node configuration: {}", e),
             )
         })?;
-        let enabled = config.enabled.unwrap_or(self.enabled);
-        config.enabled = Some(enabled);
         self.sql_resources
             .lock()
             .unwrap()
             .push(SqlResource::Config(Box::new(config)));
-        if !enabled {
+        if !enabled.is_true() {
             return Err(MinijinjaError::new(
                 MinijinjaErrorKind::DisabledModel,
                 "Model is disabled".to_string(),
@@ -614,12 +633,12 @@ impl Object for ParseConfig {
 }
 
 /// Render a reference or source string and return the corresponding SqlResource
-pub fn render_extract_ref_or_source_expr(
+pub fn render_extract_ref_or_source_expr<T: DefaultTo<T>>(
     jinja_env: &JinjaEnvironment<'static>,
     resolve_model_context: &BTreeMap<String, MinijinjaValue>,
-    sql_resources: Arc<Mutex<Vec<SqlResource>>>,
+    sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
     ref_str: &str,
-) -> FsResult<SqlResource> {
+) -> FsResult<SqlResource<T>> {
     let expr = jinja_env.compile_expression(ref_str)?;
     let _ = expr.eval(resolve_model_context, &[])?;
     // Remove from Mutex and return last item
@@ -641,7 +660,7 @@ mod test {
         // Create a minijinja environment to test rendering
         let mut env = minijinja::Environment::new();
 
-        let source_function = ResolveSourceFunction {
+        let source_function: ResolveSourceFunction<ModelConfig> = ResolveSourceFunction {
             database: "test_db".to_string(),
             schema: "test_schema".to_string(),
             sql_resources,

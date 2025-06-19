@@ -8,13 +8,13 @@ use crate::utils::generate_relation_components;
 use crate::utils::get_node_fqn;
 use crate::utils::get_original_file_path;
 use crate::utils::update_node_relation_components;
+use crate::utils::RelationComponents;
 use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use dbt_common::error::AbstractLocation;
 use dbt_common::io_utils::try_read_yml_to_str;
 use dbt_common::stdfs;
 use dbt_common::FsResult;
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
-use dbt_schemas::project_configs::ProjectConfigs;
 use dbt_schemas::schemas::common::DbtChecksum;
 use dbt_schemas::schemas::common::DbtContract;
 use dbt_schemas::schemas::common::DbtMaterialization;
@@ -22,15 +22,14 @@ use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::common::DocsConfig;
 use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::common::ResolvedQuoting;
-use dbt_schemas::schemas::manifest::CommonAttributes;
-use dbt_schemas::schemas::manifest::InternalDbtNode;
-use dbt_schemas::schemas::manifest::NodeBaseAttributes;
-use dbt_schemas::schemas::manifest::{DbtConfig, DbtTest};
+use dbt_schemas::schemas::project::DataTestConfig;
 use dbt_schemas::schemas::project::DbtProject;
+use dbt_schemas::schemas::project::DefaultTo;
+use dbt_schemas::schemas::properties::DataTestProperties;
 use dbt_schemas::schemas::properties::ModelProperties;
-use dbt_schemas::schemas::properties::TestProperties;
 use dbt_schemas::schemas::ref_and_source::DbtRef;
 use dbt_schemas::schemas::ref_and_source::DbtSourceWrapper;
+use dbt_schemas::schemas::{CommonAttributes, DbtTest, InternalDbtNode, NodeBaseAttributes};
 use dbt_schemas::state::DbtRuntimeConfig;
 use dbt_schemas::state::ModelStatus;
 use dbt_schemas::state::{DbtAsset, DbtPackage};
@@ -62,52 +61,56 @@ pub async fn resolve_data_tests(
     let mut disabled_tests: HashMap<String, Arc<DbtTest>> = HashMap::new();
     let package_name = package.dbt_project.name.as_str();
 
-    // TODO: merge tests and dbt_tests configs
-    let maybe_data_tests_config =
-        match (&package.dbt_project.tests, &package.dbt_project.data_tests) {
-            (Some(_), Some(_)) => {
-                unimplemented!("Merge logic for tests and data tests is unimplemented")
-            }
-            (Some(tests), None) => Some(ProjectConfigs::DataTestConfigs(tests)),
-            (None, Some(data_tests)) => Some(ProjectConfigs::DataTestConfigs(data_tests)),
-            (None, None) => None,
-        };
+    let tests_config = match (
+        package.dbt_project.tests.clone(),
+        package.dbt_project.data_tests.clone(),
+    ) {
+        (Some(_), Some(_)) => {
+            unimplemented!("Merge logic for tests and data tests is unimplemented")
+        }
+        (Some(tests), None) => Some(tests),
+        (None, Some(data_tests)) => Some(data_tests),
+        (None, None) => None,
+    };
 
     let local_project_config = init_project_config(
         &arg.io,
-        package_quoting,
-        &maybe_data_tests_config,
-        env,
-        base_ctx,
+        &tests_config,
+        DataTestConfig {
+            enabled: Some(true),
+            quoting: Some(package_quoting),
+            ..Default::default()
+        },
     )?;
 
     let mut test_assets_to_render = package.test_files.clone();
     test_assets_to_render.extend(collected_tests.to_owned());
     // Note (Ani):Tests have a different jinja context, need to render them separately
 
-    let mut test_sql_resources_map = render_unresolved_sql_files::<TestProperties>(
-        arg,
-        &test_assets_to_render,
-        package_name,
-        package_quoting,
-        adapter_type,
-        database,
-        schema,
-        env,
-        base_ctx,
-        test_properties,
-        root_project.name.as_str(),
-        &root_project_configs.tests,
-        &local_project_config,
-        runtime_config.clone(),
-        &package
-            .dbt_project
-            .test_paths
-            .as_ref()
-            .unwrap_or(&vec![])
-            .clone(),
-    )
-    .await?;
+    let mut test_sql_resources_map =
+        render_unresolved_sql_files::<DataTestConfig, DataTestProperties>(
+            arg,
+            &test_assets_to_render,
+            package_name,
+            package_quoting,
+            adapter_type,
+            database,
+            schema,
+            env,
+            base_ctx,
+            test_properties,
+            root_project.name.as_str(),
+            &root_project_configs.tests,
+            &local_project_config,
+            runtime_config.clone(),
+            &package
+                .dbt_project
+                .test_paths
+                .as_ref()
+                .unwrap_or(&vec![])
+                .clone(),
+        )
+        .await?;
     // make deterministic
     test_sql_resources_map.sort_by(|a, b| {
         a.asset
@@ -117,7 +120,7 @@ pub async fn resolve_data_tests(
             .then(a.asset.path.cmp(&b.asset.path))
     });
 
-    let default_dbt_config = DbtConfig {
+    let default_dbt_config = DataTestConfig {
         fail_calc: Some("count(*)".to_string()),
         warn_if: Some("!= 0".to_string()),
         error_if: Some("!= 0".to_string()),
@@ -152,7 +155,7 @@ pub async fn resolve_data_tests(
         let properties = if let Some(properties) = maybe_properties {
             properties
         } else {
-            &TestProperties::empty(model_name.to_owned())
+            &DataTestProperties::empty(model_name.to_owned())
         };
 
         let unique_id = format!("test.{}.{}", package_name, model_name);
@@ -166,10 +169,6 @@ pub async fn resolve_data_tests(
 
         // Errored models can be enabled, so enabled is set to the opposite of disabled
         test_config.enabled = Some(!(*status == ModelStatus::Disabled));
-
-        if test_config.materialized.is_none() {
-            test_config.materialized = Some(DbtMaterialization::View);
-        }
 
         let mut dbt_test = DbtTest {
             common_attr: CommonAttributes {
@@ -226,12 +225,30 @@ pub async fn resolve_data_tests(
                 extra_ctes_injected: None,
                 extra_ctes: None,
             },
-            config: *test_config.clone(),
+            deprecated_config: *test_config.clone(),
             column_name: None,
             attached_node: None,
             test_metadata: None,
             other: BTreeMap::new(),
             file_key_name: None,
+            quoting: test_config
+                .quoting
+                .expect("quoting is required")
+                .try_into()
+                .expect("quoting is required"),
+            tags: test_config
+                .tags
+                .clone()
+                .map(|tags| tags.into())
+                .unwrap_or_default(),
+            meta: test_config.meta.clone().unwrap_or_default(),
+        };
+
+        let components = RelationComponents {
+            database: test_config.database.clone(),
+            schema: test_config.schema.clone(),
+            alias: test_config.alias.clone(),
+            store_failures: None,
         };
 
         // Update with relation components
@@ -241,7 +258,7 @@ pub async fn resolve_data_tests(
             &root_project.name,
             package_name,
             base_ctx,
-            &test_config.clone(),
+            &components,
             adapter_type,
         )?;
 

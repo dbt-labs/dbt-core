@@ -3,7 +3,8 @@ use serde_json::Value;
 use serde_with::skip_serializing_none;
 use std::{collections::BTreeMap, path::PathBuf};
 
-use crate::schemas::manifest::DbtConfig;
+use crate::schemas::project::SavedQueriesConfig;
+use crate::schemas::serde::bool_or_string_bool;
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
@@ -20,7 +21,7 @@ pub struct DbtSavedQuery {
     pub description: Option<String>,
     pub label: Option<String>,
     pub metadata: Option<Value>,
-    pub config: DbtConfig,
+    pub config: SavedQueriesConfig,
     pub unrendered_config: BTreeMap<String, Value>,
     pub depends_on: SavedQueryDependsOn,
     pub created_at: f64,
@@ -81,6 +82,7 @@ pub struct DbtSavedQueryExportConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtSavedQueryConfig {
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub group: Option<String>,
     pub meta: BTreeMap<String, Value>,

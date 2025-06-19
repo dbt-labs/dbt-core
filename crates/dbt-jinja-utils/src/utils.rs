@@ -4,9 +4,7 @@ use dbt_frontend_common::{error::CodeLocation, span::Span};
 use dbt_fusion_adapter::relation_object::create_relation;
 use dbt_fusion_adapter::{AdapterTyping, ParseAdapter};
 use dbt_schemas::schemas::common::ResolvedQuoting;
-use dbt_schemas::schemas::manifest::{
-    DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, InternalDbtNode,
-};
+use dbt_schemas::schemas::{DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, InternalDbtNode};
 use minijinja::arg_utils::ArgParser;
 use minijinja::{functions::debug, value::Rest, Error, ErrorKind, MacroSpans, State, Value};
 use serde::Deserialize;

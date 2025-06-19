@@ -4,7 +4,7 @@ use std::{
 };
 
 use dbt_common::{node_selector::SelectExpression, pretty_table::DisplayFormat};
-use dbt_schemas::schemas::manifest::Nodes;
+use dbt_schemas::schemas::Nodes;
 use serde_json::{Map, Value};
 
 #[derive(Debug, Clone, Default)]

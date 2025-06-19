@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use dbt_schemas::schemas::manifest::{DbtNode, InternalDbtNode, Nodes};
+use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 use minijinja::value::{mutable_map::MutableMap, ValueMap};
 
 use minijinja::{
@@ -974,25 +974,25 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
         .map(|(unique_id, model)| {
             (
                 unique_id.clone(),
-                Value::from_serialize(DbtNode::Model((**model).clone())),
+                Value::from_serialize((Arc::as_ref(model) as &dyn InternalDbtNode).serialize()),
             )
         })
         .chain(nodes.snapshots.iter().map(|(unique_id, snapshot)| {
             (
                 unique_id.clone(),
-                Value::from_serialize(DbtNode::Snapshot((**snapshot).clone())),
+                Value::from_serialize((Arc::as_ref(snapshot) as &dyn InternalDbtNode).serialize()),
             )
         }))
         .chain(nodes.tests.iter().map(|(unique_id, test)| {
             (
                 unique_id.clone(),
-                Value::from_serialize(DbtNode::Test((**test).clone())),
+                Value::from_serialize((Arc::as_ref(test) as &dyn InternalDbtNode).serialize()),
             )
         }))
         .chain(nodes.seeds.iter().map(|(unique_id, seed)| {
             (
                 unique_id.clone(),
-                Value::from_serialize(DbtNode::Seed((**seed).clone())),
+                Value::from_serialize((Arc::as_ref(seed) as &dyn InternalDbtNode).serialize()),
             )
         }))
         .collect();

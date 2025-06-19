@@ -11,7 +11,7 @@ use dbt_jinja_utils::phases::parse::init::initialize_parse_jinja_environment;
 use dbt_jinja_utils::refs_and_sources::{resolve_dependencies, RefsAndSources};
 use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::schemas::macros::build_macro_units;
-use dbt_schemas::schemas::manifest::{InternalDbtNode, Nodes};
+use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_schemas::state::RenderResults;
@@ -125,12 +125,8 @@ pub async fn resolve(
 
     let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
-    let root_project_configs = build_root_project_configs(
-        &arg.io,
-        dbt_state.root_project(),
-        root_project_quoting,
-        &jinja_env,
-    )?;
+    let root_project_configs =
+        build_root_project_configs(&arg.io, dbt_state.root_project(), root_project_quoting)?;
     let root_project_configs = Arc::new(root_project_configs);
 
     // Process packages in topological order

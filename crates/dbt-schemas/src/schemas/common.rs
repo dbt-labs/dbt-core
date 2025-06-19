@@ -83,7 +83,7 @@ impl<T: Clone + Merge<T>> Merge<Option<T>> for Option<T> {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DbtMaterialization {
     View,
@@ -96,6 +96,7 @@ pub enum DbtMaterialization {
     Test,
     Ephemeral,
     Unit,
+    Analysis,
     /// only for databricks
     StreamingTable,
     #[serde(untagged)]
@@ -116,6 +117,7 @@ impl std::fmt::Display for DbtMaterialization {
             DbtMaterialization::Ephemeral => "ephemeral",
             DbtMaterialization::Unit => "unit",
             DbtMaterialization::StreamingTable => "streaming_table",
+            DbtMaterialization::Analysis => "analysis",
             DbtMaterialization::Unknown(s) => s.as_str(),
         };
         write!(f, "{}", materialized_str)
@@ -137,6 +139,7 @@ impl From<DbtMaterialization> for RelationType {
             DbtMaterialization::Snapshot => RelationType::External, // TODO Validate this
             DbtMaterialization::Unit => RelationType::External, // TODO Validate this
             DbtMaterialization::StreamingTable => RelationType::StreamingTable,
+            DbtMaterialization::Analysis => RelationType::External, // TODO Validate this
             DbtMaterialization::Unknown(_) => RelationType::External, // TODO Validate this
         }
     }
@@ -301,7 +304,7 @@ impl<'de> Deserialize<'de> for DbtCheckColsSpec {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumString, Display)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumString, Display, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum DbtBatchSize {
@@ -318,7 +321,7 @@ pub struct DbtContract {
     pub checksum: Option<Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumString, Display)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumString, Display, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum DbtIncrementalStrategy {
@@ -336,7 +339,7 @@ pub enum DbtIncrementalStrategy {
     Unknown,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 #[serde(untagged)]
 pub enum DbtUniqueKey {
     Single(String),
@@ -373,7 +376,7 @@ impl From<StringOrArrayOfStrings> for DbtUniqueKey {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HardDeletes {
     Ignore,
@@ -395,53 +398,7 @@ impl TryFrom<String> for HardDeletes {
     }
 }
 
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
-pub struct DatabricksModelConfig {
-    pub file_format: Option<String>,
-    pub location_root: Option<String>,
-    pub tblproperties: Option<BTreeMap<String, Value>>,
-    // this config is introduced here https://github.com/databricks/dbt-databricks/pull/823
-    pub include_full_name_in_path: Option<bool>,
-    pub liquid_clustered_by: Option<String>,
-    pub auto_liquid_cluster: Option<bool>,
-    pub clustered_by: Option<String>,
-    pub buckets: Option<i64>,
-    pub catalog: Option<String>,
-    pub databricks_tags: Option<BTreeMap<String, Value>>,
-    pub compression: Option<String>,
-    pub databricks_compute: Option<String>,
-}
-
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
-pub struct SnowflakeModelConfig {
-    pub external_volume: Option<String>,
-    pub base_location_root: Option<String>,
-    pub base_location_subpath: Option<String>,
-    pub target_lag: Option<String>,
-    pub snowflake_warehouse: Option<String>,
-    pub refresh_mode: Option<String>,
-    pub initialize: Option<String>,
-    pub tmp_relation_type: Option<String>,
-    pub query_tag: Option<String>,
-    pub automatic_clustering: Option<bool>,
-    pub copy_grants: Option<bool>,
-    pub secure: Option<bool>,
-}
-
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
-pub struct RedshiftModelConfig {
-    pub auto_refresh: Option<bool>,
-    pub backup: Option<bool>,
-    pub bind: Option<bool>,
-    pub dist: Option<String>,
-    pub sort: Option<Vec<String>>,
-    pub sort_type: Option<String>,
-}
-
-/// Column level contraint
+/// Constraints (model level or column level)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Constraint {
@@ -758,7 +715,7 @@ pub struct Versions {
 /// This function will parse the database, schema, and identifier
 /// according to the dialect and quoting rules.
 pub fn normalize_quoting(
-    quoting: ResolvedQuoting,
+    quoting: &ResolvedQuoting,
     adapter_type: &str,
     database: &str,
     schema: &str,

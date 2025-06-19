@@ -8,22 +8,19 @@ use serde_with::skip_serializing_none;
 
 use crate::schemas::{
     common::{
-        Access, DatabricksModelConfig, DbtBatchSize, DbtChecksum, DbtContract,
-        DbtIncrementalStrategy, DbtMaterialization, DbtQuoting, DbtUniqueKey, DocsConfig, Expect,
-        FreshnessDefinition, Given, Hooks, IncludeExclude, NodeDependsOn, OnConfigurationChange,
-        OnSchemaChange, PersistDocsConfig, RedshiftModelConfig, SnowflakeModelConfig,
+        Access, DbtChecksum, DbtContract, DbtIncrementalStrategy, DbtMaterialization, Expect,
+        FreshnessDefinition, Given, IncludeExclude, NodeDependsOn, ResolvedQuoting,
     },
     dbt_column::DbtColumn,
     macros::DbtMacro,
-    manifest::DbtConfig,
+    manifest::{DbtExposure, DbtMetric, DbtSavedQuery, DbtSemanticModel},
+    project::{
+        DataTestConfig, ModelConfig, SeedConfig, SnapshotConfig, SnapshotMetaColumnNames,
+        SourceConfig, UnitTestConfig,
+    },
     properties::{ModelConstraint, ModelFreshness},
     ref_and_source::{DbtRef, DbtSourceWrapper},
-    serde::{default_type, StringOrInteger},
-};
-
-use super::{
-    manifest::DbtNode, BigQueryModelConfig, DbtExposure, DbtManifest, DbtMetric, DbtSavedQuery,
-    DbtSemanticModel,
+    serde::StringOrInteger,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
@@ -52,8 +49,6 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     fn base(&self) -> NodeBaseAttributes;
     fn base_mut(&mut self) -> Option<&mut NodeBaseAttributes>;
     fn common_mut(&mut self) -> &mut CommonAttributes;
-    fn get_dbt_config(&self) -> DbtConfig;
-    fn set_dbt_config(&mut self, config: DbtConfig);
     fn version(&self) -> Option<StringOrInteger> {
         None
     }
@@ -87,9 +82,6 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     fn introspection(&self) -> Option<IntrospectionKind> {
         None
     }
-    fn get_static_analysis(&self) -> Option<StaticAnalysisKind> {
-        None
-    }
 
     fn is_test(&self) -> bool {
         self.resource_type() == "test"
@@ -97,16 +89,9 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
 
     // Incremental strategy validation
     fn warn_on_microbatch(&self) -> FsResult<()> {
-        let config = self.get_dbt_config();
-        if let Some(DbtIncrementalStrategy::Microbatch) = config.incremental_strategy {
-            return err!(
-                code => ErrorCode::UnsupportedFeature,
-                loc => self.common().path.clone(),
-                "Microbatch incremental strategy is not supported. Use --exclude config.incremental_strategy:microbatch to exclude these models."
-            );
-        }
         Ok(())
     }
+
     fn get_node_start_data(&self) -> Value {
         json!({
             "node_info":{
@@ -130,18 +115,36 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     }
 }
 
+pub trait InternalDbtNodeAttributes: InternalDbtNode {
+    // Required Fields
+    fn materialized(&self) -> DbtMaterialization;
+    fn quoting(&self) -> ResolvedQuoting;
+    fn tags(&self) -> Vec<String>;
+    fn meta(&self) -> BTreeMap<String, Value>;
+    fn static_analysis(&self) -> StaticAnalysisKind {
+        StaticAnalysisKind::On
+    }
+    // Setters
+    fn set_quoting(&mut self, quoting: ResolvedQuoting);
+
+    // Optional Fields
+    fn get_access(&self) -> Option<Access> {
+        None
+    }
+    fn get_group(&self) -> Option<String> {
+        None
+    }
+
+    // TO BE DEPRECATED
+    fn serialized_config(&self) -> Value;
+}
+
 impl InternalDbtNode for DbtModel {
     fn common(&self) -> &CommonAttributes {
         &self.common_attr
     }
     fn base(&self) -> NodeBaseAttributes {
         self.base_attr.clone()
-    }
-    fn get_dbt_config(&self) -> DbtConfig {
-        self.config.clone().into()
-    }
-    fn set_dbt_config(&mut self, config: DbtConfig) {
-        self.config = ManifestModelConfig::from(config);
     }
     fn version(&self) -> Option<StringOrInteger> {
         self.version.clone()
@@ -172,7 +175,7 @@ impl InternalDbtNode for DbtModel {
     }
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtModel>() {
-            self.config == other_model.config
+            self.deprecated_config == other_model.deprecated_config
         } else {
             false
         }
@@ -190,8 +193,45 @@ impl InternalDbtNode for DbtModel {
     fn introspection(&self) -> Option<IntrospectionKind> {
         self.introspection
     }
-    fn get_static_analysis(&self) -> Option<StaticAnalysisKind> {
-        self.config.static_analysis
+    fn warn_on_microbatch(&self) -> FsResult<()> {
+        if let Some(DbtIncrementalStrategy::Microbatch) = self.incremental_strategy {
+            return err!(
+                code => ErrorCode::UnsupportedFeature,
+                loc => self.common().path.clone(),
+                "Microbatch incremental strategy is not supported. Use --exclude config.incremental_strategy:microbatch to exclude these models."
+            );
+        }
+        Ok(())
+    }
+}
+
+impl InternalDbtNodeAttributes for DbtModel {
+    fn materialized(&self) -> DbtMaterialization {
+        self.materialized.clone()
+    }
+    fn quoting(&self) -> ResolvedQuoting {
+        self.quoting
+    }
+    fn static_analysis(&self) -> StaticAnalysisKind {
+        self.static_analysis
+    }
+    fn set_quoting(&mut self, quoting: ResolvedQuoting) {
+        self.quoting = quoting;
+    }
+    fn tags(&self) -> Vec<String> {
+        self.tags.clone()
+    }
+    fn meta(&self) -> BTreeMap<String, Value> {
+        self.meta.clone()
+    }
+    fn get_access(&self) -> Option<Access> {
+        Some(self.access.clone())
+    }
+    fn get_group(&self) -> Option<String> {
+        self.group.clone()
+    }
+    fn serialized_config(&self) -> Value {
+        serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
     }
 }
 
@@ -214,18 +254,12 @@ impl InternalDbtNode for DbtSeed {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn get_dbt_config(&self) -> DbtConfig {
-        self.config.clone()
-    }
-    fn set_dbt_config(&mut self, config: DbtConfig) {
-        self.config = config;
-    }
     fn serialize_inner(&self) -> Value {
         serde_json::to_value(self).expect("Failed to serialize DbtSeed")
     }
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtSeed>() {
-            self.config == other_model.config
+            self.deprecated_config == other_model.deprecated_config
         } else {
             false
         }
@@ -242,18 +276,33 @@ impl InternalDbtNode for DbtSeed {
     }
 }
 
+impl InternalDbtNodeAttributes for DbtSeed {
+    fn materialized(&self) -> DbtMaterialization {
+        DbtMaterialization::Seed
+    }
+    fn quoting(&self) -> ResolvedQuoting {
+        self.quoting
+    }
+    fn set_quoting(&mut self, quoting: ResolvedQuoting) {
+        self.quoting = quoting;
+    }
+    fn tags(&self) -> Vec<String> {
+        self.tags.clone()
+    }
+    fn meta(&self) -> BTreeMap<String, Value> {
+        self.meta.clone()
+    }
+    fn serialized_config(&self) -> Value {
+        serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
+    }
+}
+
 impl InternalDbtNode for DbtTest {
     fn common(&self) -> &CommonAttributes {
         &self.common_attr
     }
     fn base(&self) -> NodeBaseAttributes {
         self.base_attr.clone()
-    }
-    fn get_dbt_config(&self) -> DbtConfig {
-        self.config.clone()
-    }
-    fn set_dbt_config(&mut self, config: DbtConfig) {
-        self.config = config;
     }
     fn resource_type(&self) -> &str {
         "test"
@@ -274,27 +323,13 @@ impl InternalDbtNode for DbtTest {
         if let Some(other) = other.as_any().downcast_ref::<DbtTest>() {
             // these fields are what dbt compares for test nodes
             // Some other configs were skipped
-            self.config.enabled == other.config.enabled
-                && self.config.alias == other.config.alias
-                && self.config.database == other.config.database
-                && self.config.tags == other.config.tags
-                && self.config.meta == other.config.meta
-                && self.config.group == other.config.group
-                && self.config.materialized == other.config.materialized
-                && self.config.incremental_strategy == other.config.incremental_strategy
-                && self.config.persist_docs == other.config.persist_docs
-                && self.config.post_hook == other.config.post_hook
-                && self.config.pre_hook == other.config.pre_hook
-                && self.config.quoting == other.config.quoting
-                && self.config.column_types == other.config.column_types
-                && self.config.full_refresh == other.config.full_refresh
-                && self.config.unique_key == other.config.unique_key
-                && self.config.on_schema_change == other.config.on_schema_change
-                && self.config.on_configuration_change == other.config.on_configuration_change
-                && self.config.grants == other.config.grants
-                && self.config.packages == other.config.packages
-                && self.config.docs == other.config.docs
-                && self.config.access == other.config.access
+            self.deprecated_config.enabled == other.deprecated_config.enabled
+                && self.deprecated_config.alias == other.deprecated_config.alias
+                && self.deprecated_config.database == other.deprecated_config.database
+                && self.deprecated_config.tags == other.deprecated_config.tags
+                && self.deprecated_config.meta == other.deprecated_config.meta
+                && self.deprecated_config.group == other.deprecated_config.group
+                && self.deprecated_config.quoting == other.deprecated_config.quoting
         } else {
             false
         }
@@ -311,18 +346,33 @@ impl InternalDbtNode for DbtTest {
     }
 }
 
+impl InternalDbtNodeAttributes for DbtTest {
+    fn materialized(&self) -> DbtMaterialization {
+        DbtMaterialization::Test
+    }
+    fn quoting(&self) -> ResolvedQuoting {
+        self.quoting
+    }
+    fn set_quoting(&mut self, quoting: ResolvedQuoting) {
+        self.quoting = quoting;
+    }
+    fn tags(&self) -> Vec<String> {
+        self.tags.clone()
+    }
+    fn meta(&self) -> BTreeMap<String, Value> {
+        self.meta.clone()
+    }
+    fn serialized_config(&self) -> Value {
+        serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
+    }
+}
+
 impl InternalDbtNode for DbtUnitTest {
     fn common(&self) -> &CommonAttributes {
         &self.common_attr
     }
     fn base(&self) -> NodeBaseAttributes {
         self.base_attr.clone()
-    }
-    fn get_dbt_config(&self) -> DbtConfig {
-        self.config.clone()
-    }
-    fn set_dbt_config(&mut self, config: DbtConfig) {
-        self.config = config;
     }
     fn resource_type(&self) -> &str {
         "unit_test"
@@ -341,7 +391,7 @@ impl InternalDbtNode for DbtUnitTest {
     }
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other) = other.as_any().downcast_ref::<DbtUnitTest>() {
-            self.config == other.config
+            self.deprecated_config == other.deprecated_config
         } else {
             false
         }
@@ -358,18 +408,33 @@ impl InternalDbtNode for DbtUnitTest {
     }
 }
 
+impl InternalDbtNodeAttributes for DbtUnitTest {
+    fn materialized(&self) -> DbtMaterialization {
+        DbtMaterialization::Unit
+    }
+    fn quoting(&self) -> ResolvedQuoting {
+        self.quoting
+    }
+    fn set_quoting(&mut self, quoting: ResolvedQuoting) {
+        self.quoting = quoting;
+    }
+    fn tags(&self) -> Vec<String> {
+        self.tags.clone()
+    }
+    fn meta(&self) -> BTreeMap<String, Value> {
+        self.meta.clone()
+    }
+    fn serialized_config(&self) -> Value {
+        serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
+    }
+}
+
 impl InternalDbtNode for DbtSource {
     fn common(&self) -> &CommonAttributes {
         &self.common_attr
     }
     fn base(&self) -> NodeBaseAttributes {
         self.get_base_attr()
-    }
-    fn get_dbt_config(&self) -> DbtConfig {
-        self.config.clone()
-    }
-    fn set_dbt_config(&mut self, config: DbtConfig) {
-        self.config = config;
     }
     fn resource_type(&self) -> &str {
         "source"
@@ -388,7 +453,7 @@ impl InternalDbtNode for DbtSource {
     }
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_source) = other.as_any().downcast_ref::<DbtSource>() {
-            self.config == other_source.config
+            self.deprecated_config == other_source.deprecated_config
         } else {
             false
         }
@@ -400,7 +465,7 @@ impl InternalDbtNode for DbtSource {
                 && self.common_attr.name == other_source.common_attr.name
                 && self.identifier == other_source.identifier
                 && self.common_attr.fqn == other_source.common_attr.fqn
-                && self.config == other_source.config
+                && self.deprecated_config == other_source.deprecated_config
                 && self.quoting == other_source.quoting
                 && self.loaded_at_field == other_source.loaded_at_field
                 && self.loader == other_source.loader
@@ -413,18 +478,33 @@ impl InternalDbtNode for DbtSource {
     }
 }
 
+impl InternalDbtNodeAttributes for DbtSource {
+    fn materialized(&self) -> DbtMaterialization {
+        DbtMaterialization::External
+    }
+    fn quoting(&self) -> ResolvedQuoting {
+        self.quoting
+    }
+    fn set_quoting(&mut self, quoting: ResolvedQuoting) {
+        self.quoting = quoting;
+    }
+    fn tags(&self) -> Vec<String> {
+        self.tags.clone()
+    }
+    fn meta(&self) -> BTreeMap<String, Value> {
+        self.meta.clone()
+    }
+    fn serialized_config(&self) -> Value {
+        serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
+    }
+}
+
 impl InternalDbtNode for DbtSnapshot {
     fn common(&self) -> &CommonAttributes {
         &self.common_attr
     }
     fn base(&self) -> NodeBaseAttributes {
         self.base_attr.clone()
-    }
-    fn get_dbt_config(&self) -> DbtConfig {
-        self.config.clone()
-    }
-    fn set_dbt_config(&mut self, config: DbtConfig) {
-        self.config = config;
     }
     fn resource_type(&self) -> &str {
         "snapshot"
@@ -443,7 +523,7 @@ impl InternalDbtNode for DbtSnapshot {
     }
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_snapshot) = other.as_any().downcast_ref::<DbtSnapshot>() {
-            self.config == other_snapshot.config
+            self.deprecated_config == other_snapshot.deprecated_config
         } else {
             false
         }
@@ -460,6 +540,27 @@ impl InternalDbtNode for DbtSnapshot {
     }
 }
 
+impl InternalDbtNodeAttributes for DbtSnapshot {
+    fn materialized(&self) -> DbtMaterialization {
+        DbtMaterialization::Snapshot
+    }
+    fn quoting(&self) -> ResolvedQuoting {
+        self.quoting
+    }
+    fn set_quoting(&mut self, quoting: ResolvedQuoting) {
+        self.quoting = quoting;
+    }
+    fn tags(&self) -> Vec<String> {
+        self.tags.clone()
+    }
+    fn meta(&self) -> BTreeMap<String, Value> {
+        self.meta.clone()
+    }
+    fn serialized_config(&self) -> Value {
+        serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
+    }
+}
+
 impl InternalDbtNode for DbtSemanticModel {
     fn common(&self) -> &CommonAttributes {
         unimplemented!()
@@ -472,12 +573,6 @@ impl InternalDbtNode for DbtSemanticModel {
     }
     fn common_mut(&mut self) -> &mut CommonAttributes {
         unimplemented!()
-    }
-    fn get_dbt_config(&self) -> DbtConfig {
-        self.config.clone()
-    }
-    fn set_dbt_config(&mut self, config: DbtConfig) {
-        self.config = config;
     }
     fn resource_type(&self) -> &str {
         "semantic_model"
@@ -516,12 +611,6 @@ impl InternalDbtNode for DbtExposure {
     fn common_mut(&mut self) -> &mut CommonAttributes {
         unimplemented!()
     }
-    fn get_dbt_config(&self) -> DbtConfig {
-        self.config.clone()
-    }
-    fn set_dbt_config(&mut self, config: DbtConfig) {
-        self.config = config;
-    }
     fn resource_type(&self) -> &str {
         "exposure"
     }
@@ -531,12 +620,8 @@ impl InternalDbtNode for DbtExposure {
     fn serialize_inner(&self) -> Value {
         serde_json::to_value(self).expect("Failed to serialize DbtExposure")
     }
-    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
-        if let Some(other_exposure) = other.as_any().downcast_ref::<DbtExposure>() {
-            self.config == other_exposure.config
-        } else {
-            false
-        }
+    fn has_same_config(&self, _other: &dyn InternalDbtNode) -> bool {
+        unimplemented!()
     }
 
     fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
@@ -559,12 +644,6 @@ impl InternalDbtNode for DbtSavedQuery {
     }
     fn common_mut(&mut self) -> &mut CommonAttributes {
         unimplemented!()
-    }
-    fn get_dbt_config(&self) -> DbtConfig {
-        self.config.clone()
-    }
-    fn set_dbt_config(&mut self, config: DbtConfig) {
-        self.config = config;
     }
     fn resource_type(&self) -> &str {
         "saved_query"
@@ -603,12 +682,6 @@ impl InternalDbtNode for DbtMetric {
     fn common_mut(&mut self) -> &mut CommonAttributes {
         unimplemented!()
     }
-    fn get_dbt_config(&self) -> DbtConfig {
-        self.config.clone()
-    }
-    fn set_dbt_config(&mut self, config: DbtConfig) {
-        self.config = config;
-    }
     fn resource_type(&self) -> &str {
         "metric"
     }
@@ -618,12 +691,8 @@ impl InternalDbtNode for DbtMetric {
     fn serialize_inner(&self) -> Value {
         serde_json::to_value(self).expect("Failed to serialize DbtMetric")
     }
-    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
-        if let Some(other_metric) = other.as_any().downcast_ref::<DbtMetric>() {
-            self.config == other_metric.config
-        } else {
-            false
-        }
+    fn has_same_config(&self, _other: &dyn InternalDbtNode) -> bool {
+        unimplemented!()
     }
     fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
         unimplemented!()
@@ -644,12 +713,6 @@ impl InternalDbtNode for DbtMacro {
         unimplemented!()
     }
     fn common_mut(&mut self) -> &mut CommonAttributes {
-        unimplemented!()
-    }
-    fn get_dbt_config(&self) -> DbtConfig {
-        unimplemented!()
-    }
-    fn set_dbt_config(&mut self, _config: DbtConfig) {
         unimplemented!()
     }
     fn resource_type(&self) -> &str {
@@ -742,39 +805,39 @@ impl Nodes {
             .chain(self.analyses.keys())
     }
 
-    pub fn get_node(&self, unique_id: &str) -> Option<&dyn InternalDbtNode> {
+    pub fn get_node(&self, unique_id: &str) -> Option<&dyn InternalDbtNodeAttributes> {
         self.models
             .get(unique_id)
-            .map(|n| Arc::as_ref(n) as &dyn InternalDbtNode)
+            .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
             .or_else(|| {
                 self.seeds
                     .get(unique_id)
-                    .map(|n| Arc::as_ref(n) as &dyn InternalDbtNode)
+                    .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
             })
             .or_else(|| {
                 self.tests
                     .get(unique_id)
-                    .map(|n| Arc::as_ref(n) as &dyn InternalDbtNode)
+                    .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
             })
             .or_else(|| {
                 self.unit_tests
                     .get(unique_id)
-                    .map(|n| Arc::as_ref(n) as &dyn InternalDbtNode)
+                    .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
             })
             .or_else(|| {
                 self.sources
                     .get(unique_id)
-                    .map(|n| Arc::as_ref(n) as &dyn InternalDbtNode)
+                    .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
             })
             .or_else(|| {
                 self.snapshots
                     .get(unique_id)
-                    .map(|n| Arc::as_ref(n) as &dyn InternalDbtNode)
+                    .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
             })
             .or_else(|| {
                 self.analyses
                     .get(unique_id)
-                    .map(|n| Arc::as_ref(n) as &dyn InternalDbtNode)
+                    .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
             })
     }
 
@@ -788,43 +851,45 @@ impl Nodes {
             || self.analyses.contains_key(unique_id)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&String, &dyn InternalDbtNode)> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &dyn InternalDbtNodeAttributes)> + '_ {
         self.models
             .iter()
-            .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNode))
+            .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNodeAttributes))
             .chain(
                 self.seeds
                     .iter()
-                    .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNode)),
+                    .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNodeAttributes)),
             )
             .chain(
                 self.tests
                     .iter()
-                    .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNode)),
+                    .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNodeAttributes)),
             )
             .chain(
                 self.unit_tests
                     .iter()
-                    .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNode)),
+                    .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNodeAttributes)),
             )
             .chain(
                 self.sources
                     .iter()
-                    .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNode)),
+                    .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNodeAttributes)),
             )
             .chain(
                 self.snapshots
                     .iter()
-                    .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNode)),
+                    .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNodeAttributes)),
             )
             .chain(
                 self.analyses
                     .iter()
-                    .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNode)),
+                    .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNodeAttributes)),
             )
     }
 
-    pub fn into_iter(&self) -> impl Iterator<Item = (String, Arc<dyn InternalDbtNode>)> + '_ {
+    pub fn into_iter(
+        &self,
+    ) -> impl Iterator<Item = (String, Arc<dyn InternalDbtNodeAttributes>)> + '_ {
         let models = self
             .models
             .iter()
@@ -863,35 +928,37 @@ impl Nodes {
             .chain(analyses)
     }
 
-    pub fn iter_values_mut(&mut self) -> impl Iterator<Item = &mut dyn InternalDbtNode> + '_ {
+    pub fn iter_values_mut(
+        &mut self,
+    ) -> impl Iterator<Item = &mut dyn InternalDbtNodeAttributes> + '_ {
         let map_models = self
             .models
             .values_mut()
-            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNode);
+            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes);
         let map_seeds = self
             .seeds
             .values_mut()
-            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNode);
+            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes);
         let map_tests = self
             .tests
             .values_mut()
-            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNode);
+            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes);
         let map_unit_tests = self
             .unit_tests
             .values_mut()
-            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNode);
+            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes);
         let map_sources = self
             .sources
             .values_mut()
-            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNode);
+            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes);
         let map_snapshots = self
             .snapshots
             .values_mut()
-            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNode);
+            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes);
         let map_analyses = self
             .analyses
             .values_mut()
-            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNode);
+            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes);
 
         map_models
             .chain(map_seeds)
@@ -902,58 +969,61 @@ impl Nodes {
             .chain(map_analyses)
     }
 
-    pub fn get_value_mut(&mut self, unique_id: &str) -> Option<&mut dyn InternalDbtNode> {
+    pub fn get_value_mut(&mut self, unique_id: &str) -> Option<&mut dyn InternalDbtNodeAttributes> {
         self.models
             .get_mut(unique_id)
-            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNode)
+            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes)
             .or_else(|| {
                 self.seeds
                     .get_mut(unique_id)
-                    .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNode)
+                    .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes)
             })
             .or_else(|| {
                 self.tests
                     .get_mut(unique_id)
-                    .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNode)
+                    .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes)
             })
             .or_else(|| {
                 self.unit_tests
                     .get_mut(unique_id)
-                    .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNode)
+                    .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes)
             })
             .or_else(|| {
                 self.sources
                     .get_mut(unique_id)
-                    .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNode)
+                    .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes)
             })
             .or_else(|| {
                 self.snapshots
                     .get_mut(unique_id)
-                    .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNode)
+                    .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes)
             })
             .or_else(|| {
                 self.analyses
                     .get_mut(unique_id)
-                    .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNode)
+                    .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes)
             })
     }
 
-    pub fn get_by_relation_name(&self, relation_name: &str) -> Option<&dyn InternalDbtNode> {
+    pub fn get_by_relation_name(
+        &self,
+        relation_name: &str,
+    ) -> Option<&dyn InternalDbtNodeAttributes> {
         self.models
             .values()
             .find(|model| model.base().relation_name == Some(relation_name.to_string()))
-            .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNode)
+            .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNodeAttributes)
             .or_else(|| {
                 self.seeds
                     .values()
                     .find(|seed| seed.base().relation_name == Some(relation_name.to_string()))
-                    .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNode)
+                    .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNodeAttributes)
             })
             .or_else(|| {
                 self.tests
                     .values()
                     .find(|test| test.base().relation_name == Some(relation_name.to_string()))
-                    .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNode)
+                    .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNodeAttributes)
             })
             .or_else(|| {
                 self.unit_tests
@@ -961,13 +1031,13 @@ impl Nodes {
                     .find(|unit_test| {
                         unit_test.base().relation_name == Some(relation_name.to_string())
                     })
-                    .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNode)
+                    .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNodeAttributes)
             })
             .or_else(|| {
                 self.sources
                     .values()
                     .find(|source| source.base().relation_name == Some(relation_name.to_string()))
-                    .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNode)
+                    .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNodeAttributes)
             })
             .or_else(|| {
                 self.snapshots
@@ -975,7 +1045,7 @@ impl Nodes {
                     .find(|snapshot| {
                         snapshot.base().relation_name == Some(relation_name.to_string())
                     })
-                    .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNode)
+                    .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNodeAttributes)
             })
             .or_else(|| {
                 self.analyses
@@ -983,7 +1053,7 @@ impl Nodes {
                     .find(|analysis| {
                         analysis.base().relation_name == Some(relation_name.to_string())
                     })
-                    .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNode)
+                    .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNodeAttributes)
             })
     }
 
@@ -1001,8 +1071,7 @@ impl Nodes {
         let mut custom_materializations: Vec<(String, String)> = Vec::new();
 
         for (_, node) in self.iter() {
-            let config = node.get_dbt_config();
-            if let Some(DbtMaterialization::Unknown(custom)) = config.materialized {
+            if let DbtMaterialization::Unknown(custom) = node.materialized() {
                 custom_materializations.push((node.common().unique_id.clone(), custom));
             }
         }
@@ -1029,7 +1098,9 @@ impl Nodes {
     }
 }
 
-fn upcast<T: InternalDbtNode + 'static>(arc: Arc<T>) -> Arc<dyn InternalDbtNode> {
+fn upcast<T: InternalDbtNodeAttributes + 'static>(
+    arc: Arc<T>,
+) -> Arc<dyn InternalDbtNodeAttributes> {
     arc
 }
 
@@ -1107,8 +1178,17 @@ pub struct DbtSeed {
     #[serde(flatten)]
     pub base_attr: NodeBaseAttributes,
 
+    // [Start] Previously config fields
+    pub quoting: ResolvedQuoting,
+    pub tags: Vec<String>,
+    pub meta: BTreeMap<String, Value>,
+    // [End]
+
+    // To be deprecated
+    #[serde(rename = "config")]
+    pub deprecated_config: SeedConfig,
+
     // Test Specific Attributes
-    pub config: DbtConfig,
     pub root_path: Option<PathBuf>,
 
     #[serde(flatten)]
@@ -1124,8 +1204,18 @@ pub struct DbtUnitTest {
 
     #[serde(flatten)]
     pub base_attr: NodeBaseAttributes,
+
+    // [Start] Previously config fields
+    pub quoting: ResolvedQuoting,
+    pub tags: Vec<String>,
+    pub meta: BTreeMap<String, Value>,
+    // [End]
+
+    // To be deprecated
+    #[serde(rename = "config")]
+    pub deprecated_config: UnitTestConfig,
+
     /// Unit Test Specific Attributes
-    pub config: DbtConfig,
     pub model: String,
     pub given: Vec<Given>,
     pub expect: Expect,
@@ -1135,7 +1225,7 @@ pub struct DbtUnitTest {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtTest {
     #[serde(flatten)]
@@ -1143,8 +1233,17 @@ pub struct DbtTest {
     #[serde(flatten)]
     pub base_attr: NodeBaseAttributes,
 
+    // [Start] Previously config fields
+    pub quoting: ResolvedQuoting,
+    pub tags: Vec<String>,
+    pub meta: BTreeMap<String, Value>,
+    // [End]
+
+    // To be deprecated
+    #[serde(rename = "config")]
+    pub deprecated_config: DataTestConfig,
+
     /// Test Specific Attributes
-    pub config: DbtConfig,
     pub column_name: Option<String>,
     pub attached_node: Option<String>,
     pub test_metadata: Option<TestMetadata>,
@@ -1164,7 +1263,7 @@ pub struct TestMetadata {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtSnapshot {
     #[serde(flatten)]
@@ -1172,27 +1271,43 @@ pub struct DbtSnapshot {
     #[serde(flatten)]
     pub base_attr: NodeBaseAttributes,
 
-    /// Snapshot Specific Attributes
-    pub config: DbtConfig,
+    // [Start] Previously config fields
+    pub quoting: ResolvedQuoting,
+    pub tags: Vec<String>,
+    pub meta: BTreeMap<String, Value>,
+    pub snapshot_meta_column_names: SnapshotMetaColumnNames,
+    // [End]
+    /// To be deprecated
+    #[serde(rename = "config")]
+    pub deprecated_config: SnapshotConfig,
 
     #[serde(flatten)]
     pub other: BTreeMap<String, Value>,
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtSource {
     #[serde(flatten)]
     pub common_attr: CommonAttributes,
+
+    // [Start] Previously config fields
+    pub quoting: ResolvedQuoting,
+    pub tags: Vec<String>,
+    pub meta: BTreeMap<String, Value>,
+    // [End]
 
     // Source Specific Attributes
     pub relation_name: Option<String>,
     pub identifier: String,
     pub source_name: String,
     pub columns: BTreeMap<String, DbtColumn>,
-    pub config: DbtConfig,
-    pub quoting: Option<DbtQuoting>,
+
+    // To be deprecated
+    #[serde(rename = "config")]
+    pub deprecated_config: SourceConfig,
+
     pub source_description: String,
     pub unrendered_config: BTreeMap<String, Value>,
     pub unrendered_database: Option<String>,
@@ -1233,7 +1348,7 @@ impl DbtSource {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtModel {
     #[serde(flatten)]
@@ -1242,8 +1357,24 @@ pub struct DbtModel {
     #[serde(flatten)]
     pub base_attr: NodeBaseAttributes,
 
-    // Model Specific Attributes
-    pub config: ManifestModelConfig,
+    // [Start] Previously config fields
+    pub materialized: DbtMaterialization,
+    pub quoting: ResolvedQuoting,
+    pub access: Access,
+    pub group: Option<String>,
+    pub tags: Vec<String>,
+    pub meta: BTreeMap<String, Value>,
+    pub enabled: bool,
+    pub static_analysis: StaticAnalysisKind,
+    pub contract: Option<DbtContract>,
+    pub incremental_strategy: Option<DbtIncrementalStrategy>,
+    pub freshness: Option<ModelFreshness>,
+    // [End]
+
+    // TO BE DEPRECATED
+    #[serde(rename = "config")]
+    pub deprecated_config: ModelConfig,
+
     #[serde(skip_serializing, default)]
     pub introspection: Option<IntrospectionKind>,
     pub version: Option<StringOrInteger>,
@@ -1264,261 +1395,9 @@ fn default_false() -> bool {
     false
 }
 
-/// refer to https://docs.getdbt.com/reference/resource-configs/{field} for documentation
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
-pub struct ManifestModelConfig {
-    pub enabled: Option<bool>,
-    pub alias: Option<String>,
-    pub schema: Option<String>,
-    pub database: Option<String>,
-    pub tags: Option<Vec<String>>,
-    // need default to ensure None if field is not set
-    #[serde(default, deserialize_with = "default_type")]
-    pub meta: Option<BTreeMap<String, Value>>,
-    pub group: Option<String>,
-    pub materialized: Option<DbtMaterialization>,
-    pub incremental_strategy: Option<DbtIncrementalStrategy>,
-    pub batch_size: Option<DbtBatchSize>,
-    pub lookback: Option<i32>,
-    pub begin: Option<String>,
-    pub persist_docs: Option<PersistDocsConfig>,
-    pub post_hook: Option<Hooks>,
-    pub pre_hook: Option<Hooks>,
-    pub quoting: Option<DbtQuoting>,
-    #[serde(default)]
-    pub column_types: BTreeMap<String, String>,
-    pub full_refresh: Option<bool>,
-    pub unique_key: Option<DbtUniqueKey>,
-    pub on_schema_change: Option<OnSchemaChange>,
-    pub on_configuration_change: Option<OnConfigurationChange>,
-    pub grants: Option<BTreeMap<String, Value>>,
-    pub packages: Option<Vec<String>>,
-    pub docs: Option<DocsConfig>,
-    pub contract: Option<DbtContract>,
-    pub event_time: Option<String>,
-    pub concurrent_batches: Option<bool>,
-    pub merge_update_columns: Option<Vec<String>>,
-    pub merge_exclude_columns: Option<Vec<String>>,
-    #[serde(default)]
-    pub access: Access,
-    pub table_format: Option<String>,
-    #[serde(flatten)]
-    pub snowflake_model_config: SnowflakeModelConfig,
-    #[serde(flatten)]
-    pub bigquery_model_config: BigQueryModelConfig,
-    #[serde(flatten)]
-    pub databricks_model_config: DatabricksModelConfig,
-    #[serde(flatten)]
-    pub redshift_model_config: RedshiftModelConfig,
-    // Unsafe Designation
-    #[serde(rename = "unsafe")]
-    pub unsafe_: Option<bool>,
-    pub skip_compile: Option<bool>,
-    pub static_analysis: Option<StaticAnalysisKind>,
-    pub freshness: Option<ModelFreshness>,
-    pub sql_header: Option<String>,
-}
-
-impl From<DbtConfig> for ManifestModelConfig {
-    fn from(config: DbtConfig) -> Self {
-        ManifestModelConfig {
-            enabled: config.enabled,
-            alias: config.alias,
-            schema: config.schema,
-            database: config.database,
-            tags: config.tags,
-            meta: config.meta,
-            group: config.group,
-            materialized: config.materialized,
-            incremental_strategy: config.incremental_strategy,
-            batch_size: config.batch_size,
-            lookback: config.lookback,
-            begin: config.begin,
-            persist_docs: config.persist_docs,
-            post_hook: config.post_hook,
-            pre_hook: config.pre_hook,
-            quoting: config.quoting,
-            column_types: config.column_types.unwrap_or_default(),
-            full_refresh: config.full_refresh,
-            unique_key: config.unique_key,
-            on_schema_change: config.on_schema_change,
-            on_configuration_change: config.on_configuration_change,
-            grants: config.grants,
-            packages: config.packages,
-            docs: config.docs,
-            contract: config.contract,
-            event_time: config.event_time,
-            concurrent_batches: config.concurrent_batches,
-            access: config.access.unwrap_or_default(),
-            table_format: config.table_format,
-            merge_update_columns: config.merge_update_columns,
-            merge_exclude_columns: config.merge_exclude_columns,
-            snowflake_model_config: SnowflakeModelConfig {
-                external_volume: config.external_volume,
-                base_location_root: config.base_location_root,
-                base_location_subpath: config.base_location_subpath,
-                target_lag: config.target_lag,
-                snowflake_warehouse: config.snowflake_warehouse,
-                refresh_mode: config.refresh_mode,
-                initialize: config.initialize,
-                tmp_relation_type: config.tmp_relation_type,
-                query_tag: config.query_tag,
-                automatic_clustering: config.automatic_clustering,
-                copy_grants: config.copy_grants,
-                secure: config.secure,
-            },
-            bigquery_model_config: BigQueryModelConfig {
-                cluster_by: config.cluster_by,
-                partition_by: config.partition_by,
-                hours_to_expiration: config.hours_to_expiration,
-                labels: config.labels,
-                labels_from_meta: config.labels_from_meta,
-                kms_key_name: config.kms_key_name,
-                require_partition_filter: config.require_partition_filter.unwrap_or(false),
-                partition_expiration_days: config.partition_expiration_days,
-                grant_access_to: config.grant_access_to,
-                partitions: config.partitions,
-                enable_refresh: config.enable_refresh,
-                refresh_interval_minutes: config.refresh_interval_minutes,
-                description: config.description,
-                max_staleness: config.max_staleness,
-            },
-            databricks_model_config: DatabricksModelConfig {
-                file_format: config.file_format,
-                location_root: config.location_root,
-                tblproperties: config.tblproperties,
-                include_full_name_in_path: config.include_full_name_in_path,
-                auto_liquid_cluster: config.auto_liquid_cluster,
-                liquid_clustered_by: config.liquid_clustered_by,
-                buckets: config.buckets,
-                clustered_by: config.clustered_by.clone(),
-                compression: config.compression.clone(),
-                catalog: config.catalog.clone(),
-                databricks_tags: config.databricks_tags.clone(),
-                databricks_compute: config.databricks_compute.clone(),
-            },
-            redshift_model_config: RedshiftModelConfig {
-                auto_refresh: config.auto_refresh,
-                backup: config.backup,
-                bind: config.bind,
-                dist: config.dist,
-                sort: config.sort,
-                sort_type: config.sort_type,
-            },
-            unsafe_: config.unsafe_,
-            skip_compile: config.skip_compile,
-            static_analysis: config.static_analysis,
-            freshness: config.model_freshness,
-            sql_header: config.sql_header,
-        }
-    }
-}
-
-impl From<ManifestModelConfig> for DbtConfig {
-    fn from(config: ManifestModelConfig) -> Self {
-        DbtConfig {
-            enabled: config.enabled,
-            alias: config.alias,
-            schema: config.schema,
-            database: config.database,
-            tags: config.tags,
-            meta: config.meta,
-            group: config.group,
-            materialized: config.materialized,
-            incremental_strategy: config.incremental_strategy,
-            batch_size: config.batch_size,
-            lookback: config.lookback,
-            begin: config.begin,
-            persist_docs: config.persist_docs,
-            post_hook: config.post_hook,
-            pre_hook: config.pre_hook,
-            quoting: config.quoting,
-            column_types: Some(config.column_types),
-            full_refresh: config.full_refresh,
-            unique_key: config.unique_key,
-            on_schema_change: config.on_schema_change,
-            on_configuration_change: config.on_configuration_change,
-            grants: config.grants,
-            packages: config.packages,
-            docs: config.docs,
-            contract: config.contract,
-            event_time: config.event_time,
-            concurrent_batches: config.concurrent_batches,
-            access: Some(config.access),
-            table_format: config.table_format,
-            merge_update_columns: config.merge_update_columns,
-            merge_exclude_columns: config.merge_exclude_columns,
-            partition_by: config.bigquery_model_config.partition_by,
-            hours_to_expiration: config.bigquery_model_config.hours_to_expiration,
-            labels: config.bigquery_model_config.labels,
-            labels_from_meta: config.bigquery_model_config.labels_from_meta,
-            kms_key_name: config.bigquery_model_config.kms_key_name,
-            require_partition_filter: Some(config.bigquery_model_config.require_partition_filter),
-            partition_expiration_days: config.bigquery_model_config.partition_expiration_days,
-            grant_access_to: config.bigquery_model_config.grant_access_to,
-            file_format: config.databricks_model_config.file_format,
-            location_root: config.databricks_model_config.location_root,
-            tblproperties: config.databricks_model_config.tblproperties,
-            include_full_name_in_path: config.databricks_model_config.include_full_name_in_path,
-            unsafe_: config.unsafe_,
-            skip_compile: config.skip_compile,
-            static_analysis: config.static_analysis,
-            model_freshness: config.freshness,
-            sql_header: config.sql_header,
-            cluster_by: config.bigquery_model_config.cluster_by,
-            external_volume: config.snowflake_model_config.external_volume,
-            base_location_root: config.snowflake_model_config.base_location_root,
-            base_location_subpath: config.snowflake_model_config.base_location_subpath,
-            target_lag: config.snowflake_model_config.target_lag,
-            snowflake_warehouse: config.snowflake_model_config.snowflake_warehouse,
-            refresh_mode: config.snowflake_model_config.refresh_mode,
-            initialize: config.snowflake_model_config.initialize,
-            tmp_relation_type: config.snowflake_model_config.tmp_relation_type,
-            query_tag: config.snowflake_model_config.query_tag,
-            automatic_clustering: config.snowflake_model_config.automatic_clustering,
-            copy_grants: config.snowflake_model_config.copy_grants,
-            secure: config.snowflake_model_config.secure,
-            ..Default::default()
-        }
-    }
-}
-
-impl From<DbtManifest> for Nodes {
-    fn from(manifest: DbtManifest) -> Self {
-        let mut nodes = Nodes::default();
-        // Do not put disabled nodes into the nodes, because all things in Nodes object should be enabled.
-        for (unique_id, node) in manifest.nodes {
-            match node {
-                DbtNode::Model(model) => {
-                    nodes.models.insert(unique_id, Arc::new(model));
-                }
-                DbtNode::Test(test) => {
-                    nodes.tests.insert(unique_id, Arc::new(test));
-                }
-                DbtNode::Snapshot(snapshot) => {
-                    nodes.snapshots.insert(unique_id, Arc::new(snapshot));
-                }
-                DbtNode::Seed(seed) => {
-                    nodes.seeds.insert(unique_id, Arc::new(seed));
-                }
-                DbtNode::Operation(_) => {}
-            }
-        }
-        for (unique_id, source) in manifest.sources {
-            nodes.sources.insert(unique_id, Arc::new(source));
-        }
-        for (unique_id, unit_test) in manifest.unit_tests {
-            nodes.unit_tests.insert(unique_id, Arc::new(unit_test));
-        }
-
-        nodes
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::ManifestModelConfig;
+    use super::ModelConfig;
     use serde::Deserialize;
 
     #[test]
@@ -1528,7 +1407,7 @@ mod tests {
             // "meta" is missing
         });
 
-        let config = ManifestModelConfig::deserialize(config);
+        let config = ModelConfig::deserialize(config);
         if let Err(err) = config {
             panic!(
                 "Could not deserialize and failed with the following error: {}",

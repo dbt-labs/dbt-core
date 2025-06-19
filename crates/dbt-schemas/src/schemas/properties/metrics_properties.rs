@@ -1,5 +1,5 @@
 use crate::schemas::common::TimeGranularity;
-use crate::schemas::serde::StringOrArrayOfStrings;
+use crate::schemas::project::MetricConfig;
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ pub struct MetricsProperties {
     pub type_: MetricType,
     pub type_params: MetricTypeParams,
     pub description: Option<String>,
-    pub config: Option<MetricsPropertiesConfig>,
+    pub config: Option<MetricConfig>,
     pub filter: Option<String>,
     pub time_granularity: Option<TimeGranularity>,
     // Flattened field:
@@ -52,15 +52,6 @@ pub struct MetricTypeParams {
     pub metrics: Option<Vec<MetricInput>>,
     pub conversion_type_params: Option<ConversionTypeParams>,
     pub cumulative_type_params: Option<CumulativeTypeParams>,
-}
-
-#[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
-pub struct MetricsPropertiesConfig {
-    pub enabled: Option<bool>,
-    pub meta: Option<BTreeMap<String, serde_json::Value>>,
-    pub tags: Option<StringOrArrayOfStrings>,
-    pub group: Option<String>,
 }
 
 #[skip_serializing_none]

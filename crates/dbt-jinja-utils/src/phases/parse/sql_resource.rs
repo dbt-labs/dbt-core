@@ -1,13 +1,15 @@
 //! This module contains the resources that are encountered while rendering sql and macros.
 
-use dbt_schemas::schemas::manifest::DbtConfig;
+use std::fmt::Debug;
+
+use dbt_schemas::schemas::project::DefaultTo;
 
 use dbt_frontend_common::error::CodeLocation;
 use minijinja::machinery::Span;
 
 /// Resources that are encountered while rendering sql and macros
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SqlResource {
+pub enum SqlResource<T: DefaultTo<T>> {
     /// A source call (e.g. `{{ source('a', 'b') }}`)
     Source((String, String, CodeLocation)),
     /// A ref call (e.g. `{{ ref('a', 'b') }}`)
@@ -16,7 +18,7 @@ pub enum SqlResource {
     Metric((String, Option<String>)),
     // If all can be made numeric it is ordered numerically, if not it is ordered lexicographically
     /// A config call (e.g. `{{ config(database='a', schema='b') }}`)
-    Config(Box<DbtConfig>),
+    Config(Box<T>),
     /// A test definition (e.g. `{% test foo() %}`)
     Test(String, Span),
     /// A macro definition (e.g. `{% macro my_macro(a, b) %}`)
@@ -29,7 +31,7 @@ pub enum SqlResource {
     Materialization(String, String, Span),
 }
 
-impl std::fmt::Display for SqlResource {
+impl<T: DefaultTo<T>> std::fmt::Display for SqlResource<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SqlResource::Source((a, b, location)) => {

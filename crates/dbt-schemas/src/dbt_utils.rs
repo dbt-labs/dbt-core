@@ -5,26 +5,6 @@ use dbt_serde_yaml::Spanned;
 
 use crate::{constants::DBT_BASE_SCHEMAS_URL, schemas::common::DbtQuoting};
 
-/// Macro that assigns values from `parent_config` to `self` for each field
-/// if and only if `self.field` is `None`.
-#[macro_export]
-macro_rules! default_to {
-    (
-        // $dest is the current "child" struct,
-        // $parent is the parent config,
-        // followed by multiple fields (tokens).
-        $dest:ident,
-        $parent:ident,
-        [ $( $field:ident ),* $(,)? ]
-    ) => {
-        $(
-            if $dest.$field.is_none() {
-                $dest.$field = $parent.$field.clone();
-            }
-        )*
-    }
-}
-
 pub fn get_prefix(x: &Path, y: &Path) -> PathBuf {
     let x_components: Vec<_> = x.components().collect();
     let y_components: Vec<_> = y.components().collect();
@@ -69,19 +49,19 @@ pub fn resolve_package_quoting(quoting: Option<DbtQuoting>, adapter_type: &str) 
 }
 
 /// Validate a delimiter
-pub fn validate_delimeter(spanned_delimiter: &Spanned<Option<String>>) -> FsResult<Option<String>> {
+pub fn validate_delimeter(spanned_delimiter: &Option<Spanned<String>>) -> FsResult<Option<String>> {
     if let Some(delimiter) = spanned_delimiter.as_ref() {
         if delimiter.is_empty() {
             return Ok(None);
         } else if delimiter.len() != 1 || !delimiter.chars().next().unwrap().is_ascii() {
             return err!(
                 code => ErrorCode::InvalidConfig,
-                loc => spanned_delimiter.span().clone(),
+                loc => delimiter.span().clone(),
                 "Delimeter '{}' must be exactly one ascii character",
-                delimiter
+                delimiter.as_ref()
             );
         } else {
-            return Ok(Some(delimiter.clone()));
+            return Ok(Some(delimiter.clone().into_inner()));
         }
     }
 

@@ -2,7 +2,7 @@
 
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 
-use dbt_schemas::schemas::manifest::{DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest};
+use dbt_schemas::schemas::{DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest};
 use dbt_xdbc::QueryCtx;
 use minijinja::State;
 use serde::Deserialize;

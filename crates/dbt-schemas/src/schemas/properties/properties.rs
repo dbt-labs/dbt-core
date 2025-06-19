@@ -1,14 +1,16 @@
 use crate::schemas::common::DocsConfig;
 use crate::schemas::common::Versions;
-use crate::schemas::serde::FloatOrString;
-use crate::schemas::serde::StringOrArrayOfStrings;
+use crate::schemas::serde::{bool_or_string_bool, string_or_array, FloatOrString};
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::Verbatim;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 
 use super::unit_test_properties::UnitTestProperties;
+use super::DataTestProperties;
+use super::ExposureProperties;
 use super::MetricsProperties;
 use super::ModelProperties;
 use super::SavedQueriesProperties;
@@ -16,7 +18,6 @@ use super::SeedProperties;
 use super::SemanticModelsProperties;
 use super::SnapshotProperties;
 use super::SourceProperties;
-use super::TestProperties;
 
 #[derive(Deserialize, Debug)]
 pub struct DbtPropertiesFileValues {
@@ -64,10 +65,10 @@ pub struct DbtPropertiesFile {
     pub saved_queries: Option<Vec<SavedQueriesProperties>>,
     pub sources: Option<Vec<SourceProperties>>,
     pub unit_tests: Option<Vec<UnitTestProperties>>,
-    pub tests: Option<Vec<TestProperties>>,
-    pub data_tests: Option<Vec<TestProperties>>,
+    pub tests: Option<Vec<DataTestProperties>>,
+    pub data_tests: Option<Vec<DataTestProperties>>,
     pub analyses: Option<Vec<AnalysesProperties>>,
-    pub exposures: Option<Vec<ExposuresProperties>>,
+    pub exposures: Option<Vec<ExposureProperties>>,
     pub groups: Option<Vec<GroupsProperties>>,
     pub macros: Option<Vec<MacrosProperties>>,
     pub metrics: Option<Vec<MetricsProperties>>,
@@ -97,7 +98,9 @@ pub struct AnalysesColumns {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct AnalysesConfig {
-    pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(default, deserialize_with = "string_or_array")]
+    pub tags: Option<Vec<String>>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub meta: Option<BTreeMap<String, serde_json::Value>>,
     pub docs: Option<DocsConfig>,
@@ -106,32 +109,9 @@ pub struct AnalysesConfig {
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
-pub struct ExposuresProperties {
-    pub config: Option<ExposurePropertiesConfigs>,
-    pub depends_on: Option<Vec<String>>,
-    pub description: Option<String>,
-    pub label: Option<String>,
-    pub maturity: Option<String>,
-    pub name: String,
-    pub owner: ExposuresOwner,
-    #[serde(rename = "type")]
-    pub type_: String,
-    pub url: Option<String>,
-}
-
-#[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ExposuresOwner {
     pub email: Option<String>,
     pub name: Option<String>,
-}
-
-#[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
-pub struct ExposurePropertiesConfigs {
-    pub enabled: Option<bool>,
-    pub meta: Option<BTreeMap<String, serde_json::Value>>,
-    pub tags: Option<StringOrArrayOfStrings>,
 }
 
 #[skip_serializing_none]
@@ -172,4 +152,8 @@ pub struct MacrosArguments {
     pub name: String,
     #[serde(rename = "type")]
     pub type_: Option<String>,
+}
+
+pub trait GetConfig<T>: DeserializeOwned + Send + Sync {
+    fn get_config(&self) -> Option<&T>;
 }

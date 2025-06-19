@@ -7,7 +7,7 @@ use crate::functions::build_flat_graph;
 use crate::jinja_environment::JinjaEnvironment;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_fusion_adapter::BaseAdapter;
-use dbt_schemas::schemas::manifest::Nodes;
+use dbt_schemas::schemas::Nodes;
 use dbt_schemas::state::{DbtRuntimeConfig, RefsAndSourcesTracker};
 use minijinja::arg_utils::ArgParser;
 use minijinja::constants::MACRO_DISPATCH_ORDER;

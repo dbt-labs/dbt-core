@@ -21,10 +21,10 @@ use dbt_schemas::schemas::common::ConstraintType;
 use dbt_schemas::schemas::common::DbtIncrementalStrategy;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::dbt_column::DbtColumn;
-use dbt_schemas::schemas::manifest::{
-    BigqueryClusterConfig, BigqueryPartitionConfig, DbtModel, ManifestModelConfig,
-};
+use dbt_schemas::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfig};
+use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
+use dbt_schemas::schemas::DbtModel;
 use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::{args, State, Value};
 
@@ -590,7 +590,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// get_table_options
     fn get_table_options(
         &self,
-        _config: ManifestModelConfig,
+        _config: ModelConfig,
         _node: DbtModel,
         _temporary: bool,
     ) -> AdapterResult<BTreeMap<String, Value>> {
@@ -600,7 +600,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// get_view_options
     fn get_view_options(
         &self,
-        _config: ManifestModelConfig,
+        _config: ModelConfig,
         _node: DbtModel,
     ) -> AdapterResult<BTreeMap<String, Value>> {
         unimplemented!("only available with BigQuery adapter")
@@ -647,7 +647,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// compute_external_path
     fn compute_external_path(
         &self,
-        _config: ManifestModelConfig,
+        _config: ModelConfig,
         _model: DbtModel,
         _is_incremental: bool,
     ) -> AdapterResult<String> {
@@ -659,7 +659,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         _state: &State,
         _conn: &mut dyn Connection,
-        _config: ManifestModelConfig,
+        _config: ModelConfig,
         _tblproperties: &mut BTreeMap<String, Value>,
     ) -> AdapterResult<()> {
         unimplemented!("only available with Databricks adapter")

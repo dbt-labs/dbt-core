@@ -1,14 +1,20 @@
 // This code was generated from dbt-make-dbt-schemas/json_schemas/dbt_project.json on 2025-03-31T06:22:06. Do not edit.
 
+use std::collections::btree_map::Iter;
 use std::collections::HashMap;
+use std::fmt::Debug;
 
 use dbt_serde_yaml::JsonSchema;
+use dbt_serde_yaml::ShouldBe;
 use dbt_serde_yaml::Spanned;
 use dbt_serde_yaml::Verbatim;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
 use crate::schemas::common::DbtQuoting;
+use crate::schemas::project::configs::saved_queries_config::ProjectSavedQueriesConfig;
+use crate::schemas::project::ProjectSemanticModelConfig;
 use crate::schemas::serde::FloatOrString;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::StringOrInteger;
@@ -21,7 +27,6 @@ use super::ProjectSeedConfig;
 use super::ProjectSnapshotConfig;
 use super::ProjectSourceConfig;
 use super::ProjectUnitTestConfig;
-use super::SavedQueriesConfig;
 
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ProjectDbtCloudConfig {
@@ -92,9 +97,9 @@ pub struct DbtProject {
     pub data_tests: Option<ProjectDataTestConfig>,
     pub exposures: Option<ProjectExposureConfig>,
     #[serde(rename = "saved-queries")]
-    pub saved_queries: Option<SavedQueriesConfig>,
+    pub saved_queries: Option<ProjectSavedQueriesConfig>,
     #[serde(rename = "semantic-models")]
-    pub semantic_models: Option<ProjectModelConfig>,
+    pub semantic_models: Option<ProjectSemanticModelConfig>,
     // Misc
     #[serde(rename = "clean-targets")]
     pub clean_targets: Option<Vec<String>>,
@@ -139,6 +144,49 @@ pub struct _Dispatch {
 pub enum QueryComment {
     String(String),
     Object(serde_json::Value),
+}
+
+/// This trait is used to default fields in a config to the values of a parent config.
+pub trait DefaultTo<T>:
+    Serialize + DeserializeOwned + Default + Debug + Clone + Send + Sync
+{
+    fn default_to(&mut self, parent: &T);
+
+    fn get_enabled(&self) -> Option<bool> {
+        None
+    }
+
+    fn is_incremental(&self) -> bool {
+        false
+    }
+
+    fn database(&self) -> Option<String> {
+        None
+    }
+
+    fn schema(&self) -> Option<String> {
+        None
+    }
+
+    fn alias(&self) -> Option<String> {
+        None
+    }
+}
+
+// Improved macro for simple field defaulting with mutable references
+#[macro_export]
+macro_rules! default_to {
+    ($parent:ident, [$($field:ident),* $(,)?]) => {
+        $(
+            if $field.is_none() {
+                *$field = $parent.$field.clone();
+            }
+        )*
+    };
+}
+
+pub trait IterChildren<T> {
+    fn iter_children(&self) -> Iter<String, ShouldBe<T>>;
 }
 
 #[cfg(test)]

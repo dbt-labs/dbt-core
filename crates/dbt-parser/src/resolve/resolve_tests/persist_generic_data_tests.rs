@@ -12,6 +12,7 @@ use dbt_schemas::schemas::data_tests::{
     UniqueTestProperties,
 };
 
+use dbt_schemas::schemas::project::DataTestConfig;
 use dbt_schemas::schemas::properties::Tables;
 use dbt_schemas::schemas::properties::{ModelProperties, SeedProperties, SnapshotProperties};
 use dbt_schemas::state::DbtAsset;
@@ -539,12 +540,8 @@ fn generate_test_macro(
 
     // Add config block if present
     if !config.is_empty() {
-        // Convert config to a DbtConfig and use its to_string method
-        let config_value = serde_json::to_value(config)
-            .map_err(|e| fs_err!(ErrorCode::SchemaError, "Invalid test config: {}", e))?;
-        let dbt_config =
-            dbt_schemas::schemas::manifest::DbtConfig::from_serde_json_value(config_value);
-        let config_str = dbt_config.show_existing_fields();
+        // Convert config to a DataTestConfig and use its to_string method
+        let config_str = render_config_to_kwargs(config);
         sql.push_str(&format!("{{{{ config({}) }}}}\n", config_str));
     }
 
@@ -593,6 +590,95 @@ fn generate_test_macro(
         formatted_args.join(", ")
     ));
     Ok(sql)
+}
+
+fn render_config_to_kwargs(config: &BTreeMap<String, Value>) -> String {
+    let value = serde_json::to_value(config).unwrap();
+
+    // Convert to a map and filter out None values
+    if let Value::Object(map) = value {
+        let filtered_map: serde_json::Map<String, Value> =
+            map.into_iter().filter(|(_, v)| !v.is_null()).collect();
+
+        let output_str = serde_json::to_string(&Value::Object(filtered_map)).unwrap();
+
+        // Process Jinja expressions more robustly
+        process_jinja_expressions(&output_str)
+    } else {
+        // Fallback in case the value is not an object (shouldn't happen)
+        serde_json::to_string(&value).unwrap()
+    }
+}
+
+/// Processes a JSON string to find quoted Jinja expressions and remove the quotes
+/// while properly handling escaped content within the expressions
+fn process_jinja_expressions(input: &str) -> String {
+    let mut result = String::new();
+    let chars: Vec<char> = input.chars().collect();
+    let mut i = 0;
+
+    while i < chars.len() {
+        // Look for "{{
+        if i + 2 < chars.len() && chars[i] == '"' && chars[i + 1] == '{' && chars[i + 2] == '{' {
+            // Found start of a potential Jinja expression
+            let start_pos = i;
+            i += 1; // Move past the opening quote
+
+            let mut brace_count = 0;
+            let mut jinja_end = None;
+
+            // Find the matching }} and closing quote
+            while i < chars.len() {
+                if chars[i] == '{' && i + 1 < chars.len() && chars[i + 1] == '{' {
+                    brace_count += 1;
+                    i += 2;
+                } else if chars[i] == '}' && i + 1 < chars.len() && chars[i + 1] == '}' {
+                    brace_count -= 1;
+                    i += 2;
+
+                    // Check if this completes the expression and has a closing quote
+                    if brace_count == 0 && i < chars.len() && chars[i] == '"' {
+                        jinja_end = Some(i);
+                        break;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+
+            if let Some(end_pos) = jinja_end {
+                // Extract the content between the quotes, excluding the outer {{ and }}
+                let full_content: String = chars[start_pos + 1..end_pos].iter().collect();
+
+                // Remove the outer {{ and }} braces
+                let inner_content =
+                    if full_content.starts_with("{{") && full_content.ends_with("}}") {
+                        &full_content[2..full_content.len() - 2]
+                    } else {
+                        &full_content
+                    };
+
+                // Remove escape sequences within the Jinja expression
+                let unescaped_content = inner_content
+                    .replace("\\\"", "\"") // Unescape double quotes
+                    .replace("\\\\", "\\") // Unescape backslashes
+                    .replace("\\{", "{") // Unescape opening braces
+                    .replace("\\}", "}"); // Unescape closing braces
+
+                result.push_str(&unescaped_content);
+                i = end_pos + 1; // Move past the closing quote
+            } else {
+                // Not a valid Jinja expression, add the original character and continue
+                result.push(chars[start_pos]);
+                i = start_pos + 1;
+            }
+        } else {
+            result.push(chars[i]);
+            i += 1;
+        }
+    }
+
+    result
 }
 
 impl<T> TryFrom<&TestableNode<'_, T>> for Vec<GenericTestConfig>

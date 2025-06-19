@@ -91,6 +91,7 @@ impl MinimalProperties {
                     base_ctx,
                     &[],
                 )?;
+                // todo add the span from source value into schema value
                 if let Some(tables) = &*source.tables {
                     // Construct this once and reuse it for all tables:
                     let schema_value = dbt_serde_yaml::to_value(MinimalSchemaValue {

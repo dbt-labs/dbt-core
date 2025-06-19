@@ -10,7 +10,7 @@ use std::{
 use crate::schemas::{
     common::{DbtMaterialization, DbtQuoting, ResolvedQuoting},
     macros::{DbtDocsMacro, DbtMacro},
-    manifest::{DbtOperation, DbtSource, InternalDbtNode, Nodes},
+    manifest::DbtOperation,
     profiles::DbConfig,
     project::{
         DbtProject, ProjectDataTestConfig, ProjectModelConfig, ProjectSeedConfig,
@@ -19,6 +19,7 @@ use crate::schemas::{
     relations::base::{BaseRelation, RelationPattern},
     selectors::ResolvedSelector,
     serde::{FloatOrString, StringOrArrayOfStrings},
+    DbtSource, InternalDbtNodeAttributes, Nodes,
 };
 use chrono::{DateTime, Local, Utc};
 use dbt_common::{fs_err, serde_utils::convert_json_to_map, ErrorCode, FsResult};
@@ -201,7 +202,7 @@ pub trait RefsAndSourcesTracker: fmt::Debug + Send + Sync {
     fn as_any(&self) -> &dyn Any;
     fn insert_ref(
         &mut self,
-        node: &dyn InternalDbtNode,
+        node: &dyn InternalDbtNodeAttributes,
         adapter_type: &str,
         model_status: ModelStatus,
         overwrite: bool,

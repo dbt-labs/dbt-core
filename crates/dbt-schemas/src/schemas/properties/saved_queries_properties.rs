@@ -2,7 +2,9 @@ use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-use std::collections::HashMap;
+
+use crate::schemas::project::ExportConfigExportAs;
+use crate::schemas::project::SavedQueriesConfig;
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
@@ -13,22 +15,6 @@ pub struct SavedQueriesProperties {
     pub label: Option<String>,
     pub name: String,
     pub query_params: Verbatim<SavedQueriesQueryParams>,
-}
-
-#[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
-pub struct SavedQueriesConfig {
-    pub cache: Option<SavedQueriesConfigCache>,
-    pub enabled: Option<bool>,
-    pub meta: Option<serde_json::Value>,
-    #[serde(flatten)]
-    pub additional_properties: HashMap<String, Option<serde_json::Value>>,
-}
-
-#[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
-pub struct SavedQueriesConfigCache {
-    pub enabled: Option<bool>,
 }
 
 #[skip_serializing_none]
@@ -44,8 +30,8 @@ pub struct SavedQueriesQueryParams {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct Export {
-    pub config: Option<ExportConfig>,
     pub name: String,
+    pub config: Option<ExportConfig>,
 }
 
 #[skip_serializing_none]
@@ -54,15 +40,4 @@ pub struct ExportConfig {
     pub alias: Option<String>,
     pub export_as: Option<ExportConfigExportAs>,
     pub schema: Option<String>,
-    #[serde(flatten)]
-    pub additional_properties: HashMap<String, Option<serde_json::Value>>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, Default, JsonSchema)]
-#[allow(non_camel_case_types)]
-pub enum ExportConfigExportAs {
-    #[default]
-    table,
-    view,
-    cache,
 }

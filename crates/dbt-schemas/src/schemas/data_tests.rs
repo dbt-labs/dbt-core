@@ -1,7 +1,8 @@
-use super::properties::TestPropertiesConfig;
 use dbt_serde_yaml::{JsonSchema, Verbatim};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
+
+use crate::schemas::project::DataTestConfig;
 
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 #[serde(untagged)]
@@ -25,7 +26,7 @@ pub struct UniqueTest {
 pub struct UniqueTestProperties {
     pub name: Option<String>,
     pub description: Option<String>,
-    pub config: Option<TestPropertiesConfig>,
+    pub config: Option<DataTestConfig>,
 }
 
 #[skip_serializing_none]
@@ -39,7 +40,7 @@ pub struct NotNullTest {
 pub struct NotNullTestProperties {
     pub name: Option<String>,
     pub description: Option<String>,
-    pub config: Option<TestPropertiesConfig>,
+    pub config: Option<DataTestConfig>,
     pub column: Option<String>,
 }
 
@@ -54,7 +55,7 @@ pub struct RelationshipsTest {
 pub struct RelationshipsTestProperties {
     pub name: Option<String>,
     pub description: Option<String>,
-    pub config: Option<TestPropertiesConfig>,
+    pub config: Option<DataTestConfig>,
     pub field: String,
     pub to: Verbatim<String>,
 }
@@ -70,7 +71,7 @@ pub struct AcceptedValuesTest {
 pub struct AcceptedValuesTestProperties {
     pub name: Option<String>,
     pub description: Option<String>,
-    pub config: Option<TestPropertiesConfig>,
+    pub config: Option<DataTestConfig>,
     pub values: Vec<serde_json::Value>,
     pub quote: Option<bool>,
 }

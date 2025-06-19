@@ -1,4 +1,4 @@
-use crate::schemas::common::Dimension;
+use crate::schemas::{common::Dimension, project::SemanticModelConfig};
 
 use dbt_serde_yaml::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -18,14 +18,6 @@ pub struct SemanticModelsProperties {
     pub label: Option<String>,
     pub measures: Option<Vec<Measure>>,
     pub primary_entity: Option<String>,
-}
-
-#[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
-pub struct SemanticModelConfig {
-    pub enabled: Option<bool>,
-    pub group: Option<String>,
-    pub meta: Option<BTreeMap<String, serde_json::Value>>,
 }
 
 #[skip_serializing_none]

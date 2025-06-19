@@ -13,8 +13,8 @@ mod tests {
     use dbt_jinja_utils::phases::parse::init::initialize_parse_jinja_environment;
     use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
     use dbt_jinja_utils::utils::render_sql;
-    use dbt_schemas::schemas::manifest::DbtConfig;
     use dbt_schemas::schemas::profiles::{DbConfig, PostgresDbConfig};
+    use dbt_schemas::schemas::project::{DefaultTo, ModelConfig};
     use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
     use dbt_schemas::schemas::serde::StringOrInteger;
     use dbt_schemas::state::DbtRuntimeConfig;
@@ -33,9 +33,9 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::{collections::BTreeMap, path::PathBuf};
 
-    fn create_resolve_model_context(
-        init_config: &DbtConfig,
-        sql_resources: &Arc<Mutex<Vec<SqlResource>>>,
+    fn create_resolve_model_context<T: DefaultTo<T> + 'static>(
+        init_config: &T,
+        sql_resources: &Arc<Mutex<Vec<SqlResource<T>>>>,
     ) -> BTreeMap<String, Value> {
         let mut context = build_resolve_model_context(
             init_config,
@@ -61,10 +61,10 @@ mod tests {
 
     fn setup_test_env() -> (
         JinjaEnvironment<'static>,
-        Arc<Mutex<Vec<SqlResource>>>,
-        DbtConfig,
+        Arc<Mutex<Vec<SqlResource<ModelConfig>>>>,
+        ModelConfig,
     ) {
-        let init_config = DbtConfig {
+        let init_config = ModelConfig {
             alias: Some("alias".to_string()),
             ..Default::default()
         };
@@ -243,7 +243,7 @@ mod tests {
                 map.insert("schema".to_string(), Value::from("my_schema"));
                 map.insert("alias".to_string(), Value::from("my_aliassuffix"));
                 map.insert("materialized".to_string(), Value::from("view"));
-                map.insert("enabled".to_string(), Value::from("true")); // this gets inhertied from the global config which is true if not specified (important that this is not overridden)
+                map.insert("enabled".to_string(), Value::from(true)); // this gets inhertied from the global config which is true if not specified (important that this is not overridden)
                 let config = serde_json::from_value(serde_json::to_value(map).unwrap()).unwrap();
                 SqlResource::Config(config)
             };

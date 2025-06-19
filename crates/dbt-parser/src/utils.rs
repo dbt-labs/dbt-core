@@ -5,15 +5,15 @@ use dbt_common::{fs_err, show_error, ErrorCode, FsError, FsResult};
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_jinja_utils::utils::{generate_component_name, generate_relation_name};
-use dbt_schemas::schemas::common::{
-    normalize_quoting, DbtMaterialization, DbtQuoting, ResolvedQuoting,
-};
-use dbt_schemas::schemas::manifest::{DbtConfig, InternalDbtNode};
+use dbt_schemas::schemas::common::{normalize_quoting, DbtMaterialization, ResolvedQuoting};
+use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::properties::ModelProperties;
+use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use minijinja::compiler::ast::{MacroKind, Stmt};
 use minijinja::compiler::parser::Parser;
 use minijinja::machinery::WhitespaceConfig;
 use minijinja::syntax::SyntaxConfig;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 use std::path::Path;
@@ -197,8 +197,8 @@ pub fn generate_relation_components(
     root_project_name: &str,
     current_project_name: &str,
     base_ctx: &BTreeMap<String, minijinja::Value>,
-    config: &DbtConfig,
-    node: &dyn InternalDbtNode,
+    components: &RelationComponents,
+    node: &dyn InternalDbtNodeAttributes,
     adapter_type: &str,
 ) -> FsResult<(String, String, String, Option<String>, ResolvedQuoting)> {
     // Determine node type
@@ -211,8 +211,8 @@ pub fn generate_relation_components(
         node.base().alias,
     );
     // Generate database name
-    let database = if is_snapshot && config.database.is_some() {
-        config.database.clone().unwrap()
+    let database = if is_snapshot && components.database.is_some() {
+        components.database.clone().unwrap()
     } else {
         generate_component_name(
             env,
@@ -220,15 +220,15 @@ pub fn generate_relation_components(
             root_project_name,
             current_project_name,
             base_ctx,
-            config.database.clone(),
+            components.database.clone(),
             Some(node),
         )
         .unwrap_or_else(|_| default_database.to_owned()) // todo handle this error
     };
 
     // Generate schema name
-    let schema = if is_snapshot && config.schema.is_some() {
-        config.schema.clone().unwrap()
+    let schema = if is_snapshot && components.schema.is_some() {
+        components.schema.clone().unwrap()
     } else {
         generate_component_name(
             env,
@@ -236,7 +236,7 @@ pub fn generate_relation_components(
             root_project_name,
             current_project_name,
             base_ctx,
-            config.schema.clone(),
+            components.schema.clone(),
             Some(node),
         )
         .unwrap_or_else(|_| default_schema.to_owned()) // todo handle this error
@@ -249,25 +249,16 @@ pub fn generate_relation_components(
         root_project_name,
         current_project_name,
         base_ctx,
-        config.alias.clone(),
+        components.alias.clone(),
         Some(node),
     )
     .unwrap_or_else(|_| default_alias.to_owned()); // todo handle this error
 
-    let (database, schema, alias, quoting) = normalize_quoting(
-        config.quoting.expect("quoting is required").try_into()?,
-        adapter_type,
-        &database,
-        &schema,
-        &alias,
-    );
+    let (database, schema, alias, quoting) =
+        normalize_quoting(&node.quoting(), adapter_type, &database, &schema, &alias);
 
     // Only generate relation_name if not ephemeral
-    let relation_name = if !config
-        .materialized
-        .as_ref()
-        .is_some_and(|m| matches!(m, DbtMaterialization::Ephemeral))
-    {
+    let relation_name = if !matches!(node.materialized(), DbtMaterialization::Ephemeral) {
         let parse_adapter = env
             .get_parse_adapter()
             .expect("Failed to get parse adapter");
@@ -286,16 +277,28 @@ pub fn generate_relation_components(
     Ok((database, schema, alias, relation_name, quoting))
 }
 
+/// Relation components for a node
+pub struct RelationComponents {
+    /// The database name
+    pub database: Option<String>,
+    /// The schema name
+    pub schema: Option<String>,
+    /// The alias name
+    pub alias: Option<String>,
+    /// Whether to store failures
+    pub store_failures: Option<bool>,
+}
+
 /// Updates a InternalDbtNode with generated relation components (database, schema, alias, relation_name)
 ///
 /// This consolidates a common pattern across resolver modules.
 pub fn update_node_relation_components(
-    node: &mut dyn InternalDbtNode,
+    node: &mut dyn InternalDbtNodeAttributes,
     jinja_env: &JinjaEnvironment<'static>,
     root_project_name: &str,
     package_name: &str,
     base_ctx: &BTreeMap<String, minijinja::Value>,
-    config: &DbtConfig,
+    components: &RelationComponents,
     adapter_type: &str,
 ) -> FsResult<()> {
     // Source and unit test nodes do not have relation components
@@ -307,7 +310,7 @@ pub fn update_node_relation_components(
         root_project_name,
         package_name,
         base_ctx,
-        config,
+        components,
         node,
         adapter_type,
     )?;
@@ -316,21 +319,14 @@ pub fn update_node_relation_components(
 
         common_attr.database = database;
         common_attr.schema = schema;
-        node.set_dbt_config(DbtConfig {
-            quoting: Some(DbtQuoting {
-                database: Some(quoting.database),
-                schema: Some(quoting.schema),
-                identifier: Some(quoting.identifier),
-            }),
-            ..node.get_dbt_config()
-        });
+        node.set_quoting(quoting);
     }
 
     // Only set relation_name for:
     // - Test nodes with store_failures=true
     // - Nodes that are relational and not ephemeral models
     if node.resource_type() == "test" {
-        if let Some(store_failures) = config.store_failures {
+        if let Some(store_failures) = components.store_failures {
             if store_failures {
                 let Some(base_attr) = node.base_mut() else {
                     panic!("Test node has no base attributes");
@@ -340,7 +336,7 @@ pub fn update_node_relation_components(
         }
     } else {
         // Check if node is relational and not ephemeral
-        let is_ephemeral = matches!(config.materialized, Some(DbtMaterialization::Ephemeral));
+        let is_ephemeral = matches!(node.materialized(), DbtMaterialization::Ephemeral);
         if !is_ephemeral {
             let Some(base_attr) = node.base_mut() else {
                 panic!("Model node has no base attributes");
@@ -356,6 +352,16 @@ pub fn update_node_relation_components(
     Ok(())
 }
 
+/// A no-op config for the [parse_macro_statements] function
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct NoOpConfig {}
+
+impl DefaultTo<NoOpConfig> for NoOpConfig {
+    fn default_to(&mut self, _other: &Self) {
+        // no-op
+    }
+}
+
 /// Parse the macro sql and return the [SqlResource]s macro wrappers that are
 /// observed during the rendering phase.
 /// path is the path relative to the in_dir
@@ -363,7 +369,7 @@ pub fn parse_macro_statements(
     sql: &str,
     path: &Path,
     statement_types: &[&str],
-) -> FsResult<Vec<SqlResource>> {
+) -> FsResult<Vec<SqlResource<NoOpConfig>>> {
     let file_name = path.display().to_string();
     let mut parser = Parser::new(
         sql,
@@ -382,7 +388,7 @@ pub fn parse_macro_statements(
     Ok(sql_resources)
 }
 
-fn parse_macro_ast(ast: &Stmt, sql_resources: &mut Vec<SqlResource>) {
+fn parse_macro_ast<T: DefaultTo<T>>(ast: &Stmt, sql_resources: &mut Vec<SqlResource<T>>) {
     match ast {
         Stmt::Macro((macro_node, macro_kind, meta)) => {
             let span = macro_node.span;

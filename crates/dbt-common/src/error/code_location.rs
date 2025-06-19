@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use dbt_serde_yaml::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::stdfs;
@@ -7,7 +8,7 @@ use crate::stdfs;
 use super::preprocessor_location;
 
 /// Represents a concrete location in some source file.
-#[derive(Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize, Hash)]
+#[derive(Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, JsonSchema)]
 pub struct CodeLocation {
     pub line: usize,
     pub col: usize,

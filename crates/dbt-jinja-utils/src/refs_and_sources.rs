@@ -12,8 +12,8 @@ use dbt_schemas::{
     dbt_types::RelationType,
     schemas::{
         common::DbtQuoting,
-        manifest::{DbtSource, InternalDbtNode, Nodes},
         ref_and_source::{DbtRef, DbtSourceWrapper},
+        DbtSource, InternalDbtNodeAttributes, Nodes,
     },
     state::{ModelStatus, RefsAndSourcesTracker},
 };
@@ -99,7 +99,7 @@ impl RefsAndSourcesTracker for RefsAndSources {
     /// Insert or overwrite a ref from a node into the refs map
     fn insert_ref(
         &mut self,
-        node: &dyn InternalDbtNode,
+        node: &dyn InternalDbtNodeAttributes,
         adapter_type: &str,
         status: ModelStatus,
         override_existing: bool,
@@ -113,19 +113,13 @@ impl RefsAndSourcesTracker for RefsAndSources {
         } else {
             (None, None)
         };
-        let dbt_config = node.get_dbt_config();
-        let dbt_quoting = dbt_config
-            .quoting
-            .expect("quoting should be set in dbt_config");
         let relation = create_relation(
             adapter_type.to_string(),
             node.common().database.clone(),
             node.common().schema.clone(),
             Some(node.base().alias),
-            dbt_config.materialized.map(RelationType::from),
-            dbt_quoting
-                .try_into()
-                .expect("quoting should be resolved at this point"),
+            Some(RelationType::from(node.materialized())),
+            node.quoting(),
         )?
         .as_value();
         if maybe_version == maybe_latest_version {
@@ -213,17 +207,13 @@ impl RefsAndSourcesTracker for RefsAndSources {
         adapter_type: &str,
         status: ModelStatus,
     ) -> FsResult<()> {
-        let dbt_quoting = source
-            .config
-            .quoting
-            .expect("quoting should be set in dbt_config");
         let relation = create_relation(
             adapter_type.to_string(),
             source.common_attr.database.clone(),
             source.common_attr.schema.clone(),
             Some(source.identifier.clone()),
             None,
-            dbt_quoting.try_into()?,
+            source.quoting(),
         )?
         .as_value();
 

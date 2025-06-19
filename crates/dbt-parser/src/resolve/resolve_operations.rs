@@ -1,9 +1,8 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use dbt_schemas::schemas::{
-    common::DbtChecksum,
-    manifest::{CommonAttributes, DbtConfig, DbtOperation, NodeBaseAttributes},
-    project::DbtProject,
+    common::DbtChecksum, manifest::DbtOperation, project::DbtProject, CommonAttributes,
+    NodeBaseAttributes,
 };
 
 pub fn resolve_operations(
@@ -71,11 +70,6 @@ fn new_operation(
                     checksum: DbtChecksum::hash(operation_sql.as_bytes()),
                     raw_code: Some(operation_sql.to_string()),
                     language: Some("sql".to_string()),
-                    ..Default::default()
-                },
-                config: DbtConfig {
-                    enabled: Some(true),
-                    tags: vec![operation_type.to_string()].into(),
                     ..Default::default()
                 },
                 other: BTreeMap::new(),
