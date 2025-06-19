@@ -1,6 +1,7 @@
 use std::borrow::Cow;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::{self, Display};
+use std::sync::LazyLock;
 
 use crate::compiler::ast::{self, Comment, MacroKind, Spanned};
 use crate::compiler::lexer::{Tokenizer, WhitespaceConfig};
@@ -13,6 +14,28 @@ const MAX_RECURSION: usize = 100;
 const RESERVED_NAMES: [&str; 8] = [
     "true", "True", "false", "False", "none", "None", "loop", "self",
 ];
+
+#[allow(clippy::incompatible_msrv)]
+static ENDBLOCK_IDENT: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut m = HashSet::new();
+    m.insert("endfor");
+    m.insert("endwith");
+    m.insert("endset");
+    m.insert("endblock");
+    m.insert("endautoescape");
+    m.insert("endfilter");
+    m.insert("endmacro");
+    m.insert("endcall");
+    m.insert("endtest");
+    m.insert("endsnapshot");
+    m.insert("enddocs");
+    m.insert("endmaterialization");
+    // 'If' statement related idents
+    m.insert("endif");
+    m.insert("else");
+    m.insert("elif");
+    m
+});
 
 fn unexpected<D: fmt::Display>(unexpected: D, expected: &str) -> Error {
     Error::new(
@@ -1703,9 +1726,11 @@ impl<'a> Parser<'a> {
                     if let Token::Ident(ident) = tok {
                         if statement_type.contains(ident) {
                             rv.push(ok!(self.parse_stmt()));
+                        } else if ENDBLOCK_IDENT.contains(ident) {
+                            syntax_error!("unexpected '{}' end of block identifier", ident);
                         } else {
-                            // Skip until we find the end of this block
-                            self.skip_until_block_end()?;
+                            // Skip until we find the end of this block ignoring any and all errors
+                            let _ = self.parse_stmt();
                         }
                     } else {
                         // Skip non-identifier tokens
