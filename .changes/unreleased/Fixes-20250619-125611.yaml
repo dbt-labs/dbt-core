@@ -1,3 +1,0 @@
-kind: Fixes
-body: 'Jinja: refine dangling block end check'
-time: 2025-06-19T12:56:11.735832258-07:00

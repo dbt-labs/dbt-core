@@ -1,3 +1,0 @@
-kind: Fixes
-body: Add missing `warn_unenforced` to `Constraint` and split out `ModelConstraint`
-time: 2025-06-17T15:29:38.445876-05:00

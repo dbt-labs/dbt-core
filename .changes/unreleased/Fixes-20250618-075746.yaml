@@ -1,3 +1,0 @@
-kind: Fixes
-body: '`profiles.yml` in all log output instead of `profile.yml`'
-time: 2025-06-18T07:57:46.515053-06:00
