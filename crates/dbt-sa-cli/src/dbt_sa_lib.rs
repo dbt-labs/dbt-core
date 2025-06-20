@@ -185,7 +185,7 @@ async fn execute_all_phases(arg: &EvalArgs, _cli: &Cli) -> FsResult<i32> {
     // Loads all .yml files + collects all included files
     let load_args = LoadArgs::from_eval_args(arg);
     let invocation_args = InvocationArgs::from_eval_args(arg);
-    let (dbt_state, num_threads) = load(&load_args, &invocation_args).await?;
+    let (dbt_state, num_threads, _dbt_cloud) = load(&load_args, &invocation_args).await?;
 
     let arg = arg
         .with_target(dbt_state.dbt_profile.target.to_string())

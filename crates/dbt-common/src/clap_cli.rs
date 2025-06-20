@@ -2632,7 +2632,13 @@ impl CommonArgs {
             warn_error: self.warn_error,
             warn_error_options: self.warn_error_options.clone().unwrap_or_default(),
             version_check: self.version_check,
-            defer: self.defer || !self.no_defer,
+            defer: if self.no_defer {
+                Some(false)
+            } else if self.defer {
+                Some(true)
+            } else {
+                None
+            },
             debug: self.debug,
             log_format_file: self.log_format_file,
             log_format: self.log_format,

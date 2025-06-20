@@ -25,7 +25,7 @@ use project::DbtProject;
 use dbt_common::stdfs::last_modified;
 use dbt_common::{ectx, err, show_progress, with_progress, ErrorCode};
 use dbt_common::{fs_err, FsResult};
-use dbt_schemas::schemas::project::{self, DbtProjectSimplified};
+use dbt_schemas::schemas::project::{self, DbtProjectSimplified, ProjectDbtCloudConfig};
 use dbt_schemas::state::{DbtAsset, DbtPackage, DbtState, DbtVars, ResourcePathKind};
 
 use crate::args::LoadArgs;
@@ -37,7 +37,10 @@ use crate::{
 };
 use dbt_common::fsinfo;
 
-pub async fn load(arg: &LoadArgs, iarg: &InvocationArgs) -> FsResult<(DbtState, Option<usize>)> {
+pub async fn load(
+    arg: &LoadArgs,
+    iarg: &InvocationArgs,
+) -> FsResult<(DbtState, Option<usize>, Option<ProjectDbtCloudConfig>)> {
     let _pb = with_progress!(arg.io, spinner => LOADING);
 
     // Read the input file
@@ -128,7 +131,7 @@ pub async fn load(arg: &LoadArgs, iarg: &InvocationArgs) -> FsResult<(DbtState, 
 
     // If we are running `dbt debug` we don't need to collect dbt_project.yml files
     if arg.debug_profile {
-        return Ok((dbt_state, final_threads));
+        return Ok((dbt_state, final_threads, raw_dbt_project.dbt_cloud));
     }
 
     // Load the packages.yml file, if it exists and install the packages if arg.install_deps is true
@@ -166,7 +169,7 @@ pub async fn load(arg: &LoadArgs, iarg: &InvocationArgs) -> FsResult<(DbtState, 
     download_publication_artifacts(&upstream_projects, &raw_dbt_project.dbt_cloud, &arg.io).await?;
     // If we are running `dbt deps` we don't need to collect files
     if arg.install_deps {
-        return Ok((dbt_state, final_threads));
+        return Ok((dbt_state, final_threads, raw_dbt_project.dbt_cloud));
     }
 
     let lookup_map = packages_lock.lookup_map();
@@ -198,7 +201,7 @@ pub async fn load(arg: &LoadArgs, iarg: &InvocationArgs) -> FsResult<(DbtState, 
         dbt_state.packages.extend(packages);
         dbt_state.vars = collected_vars.into_iter().collect();
     }
-    Ok((dbt_state, final_threads))
+    Ok((dbt_state, final_threads, raw_dbt_project.dbt_cloud))
 }
 
 pub async fn load_inner(

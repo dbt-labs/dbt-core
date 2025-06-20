@@ -35,7 +35,7 @@ pub struct InvocationArgs {
     /// Version check
     pub version_check: bool,
     /// Defer
-    pub defer: bool,
+    pub defer: Option<bool>,
     /// Defer state
     pub defer_state: String,
     /// Debug

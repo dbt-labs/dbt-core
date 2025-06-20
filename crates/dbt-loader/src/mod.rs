@@ -1,9 +1,11 @@
+mod download_manifest;
 mod download_publication;
 mod load_packages;
 mod load_profiles;
 mod load_vars;
 mod loader;
 
+pub use download_manifest::download_manifest_from_cloud;
 pub use load_packages::{load_internal_packages, load_packages, persist_internal_packages};
 pub use load_profiles::load_profiles;
 pub use load_vars::load_vars;

@@ -224,7 +224,7 @@ pub struct EvalArgs {
     pub warn_error: bool,
     pub warn_error_options: BTreeMap<String, Value>,
     pub version_check: bool,
-    pub defer: bool,
+    pub defer: Option<bool>,
     pub fail_fast: bool,
     pub empty: bool,
     pub full_refresh: bool,
