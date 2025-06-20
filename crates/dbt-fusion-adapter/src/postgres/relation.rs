@@ -1,7 +1,7 @@
 use crate::information_schema::InformationSchema;
 use crate::relation_object::{RelationObject, StaticBaseRelation};
 
-use dbt_common::current_function_name;
+use dbt_common::{current_function_name, fs_err, ErrorCode, FsResult};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::{
@@ -119,6 +119,32 @@ impl BaseRelationProperties for PostgresRelation {
 
     fn quote_character(&self) -> char {
         '"'
+    }
+    fn get_database(&self) -> FsResult<String> {
+        self.path.database.clone().ok_or_else(|| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "database is required for postgres relation",
+            )
+        })
+    }
+
+    fn get_schema(&self) -> FsResult<String> {
+        self.path.schema.clone().ok_or_else(|| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "schema is required for postgres relation",
+            )
+        })
+    }
+
+    fn get_identifier(&self) -> FsResult<String> {
+        self.path.identifier.clone().ok_or_else(|| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "identifier is required for postgres relation",
+            )
+        })
     }
 }
 

@@ -1,5 +1,6 @@
 use crate::relation_object::{RelationObject, StaticBaseRelation};
 
+use dbt_common::{fs_err, ErrorCode, FsResult};
 use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath,
 };
@@ -80,6 +81,33 @@ impl BaseRelationProperties for DatabricksRelation {
     /// See [reference](https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/relation.py#L64)
     fn quote_character(&self) -> char {
         '`'
+    }
+
+    fn get_database(&self) -> FsResult<String> {
+        self.path.database.clone().ok_or_else(|| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "database is required for databricks relation",
+            )
+        })
+    }
+
+    fn get_schema(&self) -> FsResult<String> {
+        self.path.schema.clone().ok_or_else(|| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "schema is required for databricks relation",
+            )
+        })
+    }
+
+    fn get_identifier(&self) -> FsResult<String> {
+        self.path.identifier.clone().ok_or_else(|| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "identifier is required for databricks relation",
+            )
+        })
     }
 }
 

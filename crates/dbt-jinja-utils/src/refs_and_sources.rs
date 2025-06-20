@@ -7,7 +7,7 @@ use std::{
 use dbt_common::{
     err, io_args::IoArgs, show_error, unexpected_err, CodeLocation, ErrorCode, FsResult,
 };
-use dbt_fusion_adapter::relation_object::create_relation;
+use dbt_fusion_adapter::relation_object::create_relation_internal;
 use dbt_schemas::{
     dbt_types::RelationType,
     schemas::{
@@ -113,7 +113,7 @@ impl RefsAndSourcesTracker for RefsAndSources {
         } else {
             (None, None)
         };
-        let relation = create_relation(
+        let relation = create_relation_internal(
             adapter_type.to_string(),
             node.common().database.clone(),
             node.common().schema.clone(),
@@ -207,7 +207,7 @@ impl RefsAndSourcesTracker for RefsAndSources {
         adapter_type: &str,
         status: ModelStatus,
     ) -> FsResult<()> {
-        let relation = create_relation(
+        let relation = create_relation_internal(
             adapter_type.to_string(),
             source.common_attr.database.clone(),
             source.common_attr.schema.clone(),

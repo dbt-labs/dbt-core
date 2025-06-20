@@ -187,13 +187,11 @@ impl FsError {
     pub fn from_jinja_err(err: minijinja::Error, context: impl Display) -> Self {
         let err_code = match err.kind() {
             minijinja::ErrorKind::SyntaxError => ErrorCode::MacroSyntaxError,
+            minijinja::ErrorKind::DisabledModel => ErrorCode::DisabledModel,
             _ => ErrorCode::JinjaError,
         };
-        FsError::new(
-            err_code,
-            format!("{} {}", context, err.detail().unwrap_or_default()),
-        )
-        .with_location(MiniJinjaErrorWrapper(err))
+        FsError::new(err_code, format!("{} {}", context, err))
+            .with_location(MiniJinjaErrorWrapper(err))
     }
 
     /// True if this error contains a backtrace.
@@ -784,30 +782,6 @@ impl From<serde_json::Error> for WrappedError {
     }
 }
 
-impl From<minijinja::Error> for FsError {
-    fn from(e: minijinja::Error) -> Self {
-        let location = if let Some(span) = e.span() {
-            super::CodeLocation::new(
-                span.start_line as usize,
-                span.start_col as usize,
-                span.start_offset as usize,
-                e.name().unwrap_or_default(),
-            )
-        } else {
-            super::CodeLocation::new(
-                e.line().unwrap_or_default(),
-                0,
-                0,
-                e.name().unwrap_or_default(),
-            )
-        };
-
-        FsError::new(ErrorCode::JinjaError, "Macro error")
-            .with_cause(WrappedError::Jinja(e))
-            .with_location(location)
-    }
-}
-
 // impl From<sdf_preprocessor::error::PreprocError> for FsError {
 //     fn from(e: sdf_preprocessor::error::PreprocError) -> Self {
 //         match e {
@@ -834,12 +808,6 @@ impl From<minijinja::Error> for FsError {
 //             .with_cause(WrappedError::RemoteExecution(e))
 //     }
 // }
-
-impl From<minijinja::Error> for Box<FsError> {
-    fn from(e: minijinja::Error) -> Self {
-        Box::new(e.into())
-    }
-}
 
 // impl From<sdf_preprocessor::error::PreprocError> for Box<FsError> {
 //     fn from(e: sdf_preprocessor::error::PreprocError) -> Self {

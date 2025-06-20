@@ -22,7 +22,7 @@ use crate::{
 pub fn initialize_load_profile_jinja_environment(
     _iarg: &InvocationArgs,
 ) -> FsResult<JinjaEnvironment<'static>> {
-    Ok(JinjaEnvironmentBuilder::new().build().unwrap())
+    Ok(JinjaEnvironmentBuilder::new().build())
 }
 
 /// Initialize a Jinja environment for the load phase.
@@ -58,6 +58,5 @@ pub fn initialize_load_jinja_environment(
         .with_adapter(create_parse_adapter(adapter_type, package_quoting)?)
         .with_root_package("dbt".to_string())
         .with_globals(globals)
-        .build()
-        .unwrap())
+        .build())
 }

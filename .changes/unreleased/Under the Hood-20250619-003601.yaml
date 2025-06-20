@@ -1,0 +1,3 @@
+kind: Under the Hood
+body: 'Error handling: eliminate MinijinjaError implicit conversion'
+time: 2025-06-19T00:36:01.725042199-07:00

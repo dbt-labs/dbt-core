@@ -101,6 +101,8 @@ pub enum ErrorCode {
 
     StaleSource = 1063,
 
+    DisabledModel = 1064,
+
     // --------------------------------------------------------------------------------------------
     // Jinja
     MacroUnsupportedValueType = 1500,

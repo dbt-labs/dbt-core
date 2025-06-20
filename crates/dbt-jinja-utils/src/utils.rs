@@ -1,7 +1,7 @@
-use dbt_common::stdfs;
 use dbt_common::{constants::DBT_CTE_PREFIX, error::MacroSpan, tokiofs, FsResult};
+use dbt_common::{fs_err, stdfs, ErrorCode, FsError};
 use dbt_frontend_common::{error::CodeLocation, span::Span};
-use dbt_fusion_adapter::relation_object::create_relation;
+use dbt_fusion_adapter::relation_object::create_relation_internal;
 use dbt_fusion_adapter::{AdapterTyping, ParseAdapter};
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::{DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, InternalDbtNode};
@@ -276,19 +276,20 @@ pub fn render_sql<'a, E>(
     ctx: BTreeMap<String, Value>,
     listener_factory: &dyn ListenerFactory,
     filename: &Path,
-) -> Result<String, Error>
+) -> FsResult<String>
 where
     E: AsRef<JinjaEnvironment<'a>>,
 {
     let listeners = listener_factory.create_listeners(filename);
     let result = env
         .as_ref()
-        .render_named_str(filename.to_str().unwrap(), sql, ctx, &listeners);
+        .render_named_str(filename.to_str().unwrap(), sql, ctx, &listeners)
+        .map_err(|e| FsError::from_jinja_err(e, "Failed to render SQL"))?;
     for listener in listeners {
         listener_factory.destroy_listener(filename, listener);
     }
 
-    result
+    Ok(result)
 }
 
 /// Converts a MacroSpans object to a vector of MacroSpan objects
@@ -349,7 +350,7 @@ pub fn generate_component_name(
     base_ctx: &BTreeMap<String, Value>,
     custom_name: Option<String>,
     node: Option<&dyn InternalDbtNode>,
-) -> Result<String, Error> {
+) -> FsResult<String> {
     let macro_name = format!("generate_{}_name", component);
     // find the macro template - this is now cached for performance
     let template_name =
@@ -364,9 +365,10 @@ pub fn generate_component_name(
             "database" => default_generate_database_name(env, custom_name, node),
             "schema" => default_generate_schema_name(env, custom_name, node),
             "alias" => default_generate_alias_name(custom_name, node),
-            _ => Err(Error::new(
-                ErrorKind::InvalidOperation,
-                format!("No default implementation for component: {}", component),
+            _ => Err(fs_err!(
+                ErrorCode::JinjaError,
+                "No default implementation for component: {}",
+                component
             )),
         };
     }
@@ -393,7 +395,7 @@ pub fn generate_component_name(
             if let Some(value) = e.try_abrupt_return() {
                 value.to_string()
             } else {
-                return Err(e);
+                return Err(fs_err!(ErrorCode::JinjaError, "Failed to call macro"));
             }
         }
     }
@@ -408,16 +410,16 @@ fn default_generate_database_name(
     env: &JinjaEnvironment,
     custom_database_name: Option<String>,
     _node: Option<&dyn InternalDbtNode>,
-) -> Result<String, Error> {
+) -> FsResult<String> {
     // Get target.database from context
 
     let target = env
         .get_global("target")
-        .ok_or_else(|| Error::new(ErrorKind::InvalidOperation, "Target not found in context"))?;
+        .ok_or_else(|| fs_err!(ErrorCode::JinjaError, "Target not found in context"))?;
 
     let default_database = target
         .get_attr("database")
-        .map_err(|_| Error::new(ErrorKind::InvalidOperation, "database not found in target"))?
+        .map_err(|_| fs_err!(ErrorCode::JinjaError, "database not found in target"))?
         .to_string();
 
     // Return either the custom name or default database
@@ -433,16 +435,16 @@ fn default_generate_schema_name(
     env: &JinjaEnvironment,
     custom_schema_name: Option<String>,
     _node: Option<&dyn InternalDbtNode>,
-) -> Result<String, Error> {
+) -> FsResult<String> {
     // Get target.schema from context
 
     let target = env
         .get_global("target")
-        .ok_or_else(|| Error::new(ErrorKind::InvalidOperation, "Target not found in context"))?;
+        .ok_or_else(|| fs_err!(ErrorCode::JinjaError, "Target not found in context"))?;
 
     let default_schema = target
         .get_attr("schema")
-        .map_err(|_| Error::new(ErrorKind::InvalidOperation, "schema not found in target"))?
+        .map_err(|_| fs_err!(ErrorCode::JinjaError, "schema not found in target"))?
         .to_string();
 
     // Return either the default schema or a combination with custom schema
@@ -457,7 +459,7 @@ fn default_generate_schema_name(
 fn default_generate_alias_name(
     custom_alias_name: Option<String>,
     node: Option<&dyn InternalDbtNode>,
-) -> Result<String, Error> {
+) -> FsResult<String> {
     if let Some(name) = custom_alias_name {
         if !name.is_empty() {
             return Ok(name.trim().to_string());
@@ -485,9 +487,9 @@ fn default_generate_alias_name(
         return Ok(common.name.clone());
     }
 
-    Err(Error::new(
-        ErrorKind::InvalidOperation,
-        "Cannot generate alias: no custom name or node provided",
+    Err(fs_err!(
+        ErrorCode::JinjaError,
+        "Cannot generate alias: no custom name or node provided"
     ))
 }
 
@@ -504,7 +506,7 @@ pub fn find_generate_macro_template(
     component: &str,
     root_project_name: &str,
     current_project_name: &str,
-) -> Result<String, Error> {
+) -> FsResult<String> {
     let macro_name = format!("generate_{}_name", component);
     let cache_key = (current_project_name.to_string(), component.to_string());
 
@@ -548,9 +550,10 @@ pub fn find_generate_macro_template(
     }
 
     // Template not found in any location
-    Err(Error::new(
-        ErrorKind::TemplateNotFound,
-        format!("Could not find template for {}", macro_name),
+    Err(fs_err!(
+        ErrorCode::JinjaError,
+        "Could not find template for {}",
+        macro_name
     ))
 }
 
@@ -561,10 +564,10 @@ pub fn generate_relation_name(
     schema: &str,
     identifier: &str,
     quote_config: ResolvedQuoting,
-) -> Result<String, Error> {
+) -> FsResult<String> {
     let adapter_type = parse_adapter.adapter_type().to_string();
     // Create relation using the adapter
-    match create_relation(
+    match create_relation_internal(
         adapter_type,
         database.to_owned(),
         schema.to_owned(),
@@ -572,18 +575,7 @@ pub fn generate_relation_name(
         None, // relation_type
         quote_config,
     ) {
-        Ok(relation) => {
-            // Call render_self() to get the relation name
-            let relation_name = relation.render_self()?;
-            let name_str = relation_name.as_str().ok_or_else(|| {
-                Error::new(
-                    ErrorKind::InvalidOperation,
-                    "Failed to render relation name",
-                )
-            })?;
-
-            Ok(name_str.to_string())
-        }
+        Ok(relation) => Ok(relation.render_self_as_str()),
         Err(e) => Err(e),
     }
 }

@@ -14,7 +14,7 @@ use crate::SqlEngine;
 use dashmap::{DashMap, DashSet};
 use dbt_agate::AgateTable;
 use dbt_common::behavior_flags::Behavior;
-use dbt_common::{current_function_name, FsResult};
+use dbt_common::{current_function_name, FsError, FsResult};
 use dbt_schemas::schemas::columns::base::StdColumnType;
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
@@ -53,7 +53,7 @@ pub struct ParseAdapter {
 }
 
 type DanglingSources = (
-    Result<BTreeMap<String, Vec<Arc<dyn BaseRelation>>>, MinijinjaError>,
+    Result<BTreeMap<String, Vec<Arc<dyn BaseRelation>>>, FsError>,
     BTreeMap<String, Vec<RelationPattern>>,
 );
 
@@ -92,7 +92,8 @@ impl ParseAdapter {
                         .collect::<Result<Vec<Arc<dyn BaseRelation>>, MinijinjaError>>()?,
                 ))
             })
-            .collect::<Result<BTreeMap<String, Vec<Arc<dyn BaseRelation>>>, MinijinjaError>>();
+            .collect::<Result<BTreeMap<String, Vec<Arc<dyn BaseRelation>>>, MinijinjaError>>()
+            .map_err(|e| FsError::from_jinja_err(e, "Failed to collect dangling sources"));
 
         let patterned_dangling_sources: BTreeMap<String, Vec<RelationPattern>> = self
             .patterned_dangling_sources

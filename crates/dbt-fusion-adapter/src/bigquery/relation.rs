@@ -1,6 +1,7 @@
 use crate::relation_object::{RelationObject, StaticBaseRelation};
 
 use arrow::array::RecordBatch;
+use dbt_common::{fs_err, ErrorCode, FsResult};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::{
@@ -68,6 +69,33 @@ impl BaseRelationProperties for BigqueryRelation {
     /// See [reference](https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-bigquery/src/dbt/adapters/bigquery/relation.py#L30)
     fn quote_character(&self) -> char {
         '`'
+    }
+
+    fn get_database(&self) -> FsResult<String> {
+        self.path.database.clone().ok_or_else(|| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "database is required for bigquery relation",
+            )
+        })
+    }
+
+    fn get_schema(&self) -> FsResult<String> {
+        self.path.schema.clone().ok_or_else(|| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "schema is required for bigquery relation",
+            )
+        })
+    }
+
+    fn get_identifier(&self) -> FsResult<String> {
+        self.path.identifier.clone().ok_or_else(|| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "identifier is required for bigquery relation",
+            )
+        })
     }
 }
 

@@ -25,7 +25,7 @@ use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::{DbtModel, InternalDbtNode, IntrospectionKind, Nodes};
 use dbt_schemas::state::{DbtAsset, DbtRuntimeConfig, ModelStatus};
 use minijinja::constants::{TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID};
-use minijinja::{ErrorKind as MinijinjaErrorKind, MacroSpans, Value as MinijinjaValue};
+use minijinja::{MacroSpans, Value as MinijinjaValue};
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::sync::atomic::{self, AtomicBool};
@@ -280,16 +280,13 @@ pub async fn render_unresolved_sql_files_sequentially<
                     DbtChecksum::hash(sql.as_bytes()),
                     execute_exists.load(atomic::Ordering::Relaxed),
                 );
-                match err.kind() {
-                    MinijinjaErrorKind::DisabledModel => {
+                match err.code {
+                    ErrorCode::DisabledModel => {
                         status = ModelStatus::Disabled;
                     }
-                    MinijinjaErrorKind::SyntaxError => {
+                    ErrorCode::MacroSyntaxError => {
                         status = ModelStatus::ParsingFailed;
-                        show_error!(
-                            arg.io,
-                            FsError::from(err).with_location(dbt_asset.path.clone())
-                        );
+                        show_error!(arg.io, err.with_location(dbt_asset.path.clone()));
                     }
                     _ => {
                         if sql_file_info
@@ -298,10 +295,7 @@ pub async fn render_unresolved_sql_files_sequentially<
                             .expect("model config should be set by now")
                         {
                             status = ModelStatus::ParsingFailed;
-                            show_error!(
-                                arg.io,
-                                FsError::from(err).with_location(dbt_asset.path.clone())
-                            );
+                            show_error!(arg.io, err.with_location(dbt_asset.path.clone()));
                         } else {
                             status = ModelStatus::Disabled;
                         }
@@ -574,18 +568,15 @@ pub async fn render_unresolved_sql_files<T: DefaultTo<T> + 'static, S: GetConfig
                             DbtChecksum::hash(sql.as_bytes()),
                             execute_exists.load(atomic::Ordering::Relaxed),
                         );
-                        match err.kind() {
+                        match err.code {
                             // Model is disabled and template compiles
-                            MinijinjaErrorKind::DisabledModel => {
+                            ErrorCode::DisabledModel => {
                                 status = ModelStatus::Disabled;
                             }
                             // Template is invalid
-                            MinijinjaErrorKind::SyntaxError => {
+                            ErrorCode::MacroSyntaxError => {
                                 status = ModelStatus::ParsingFailed;
-                                show_error!(
-                                    arg.io,
-                                    FsError::from(err).with_location(dbt_asset.path.clone())
-                                );
+                                show_error!(arg.io, err.with_location(dbt_asset.path.clone()));
                             }
                             _ => {
                                 if sql_file_info
@@ -594,10 +585,7 @@ pub async fn render_unresolved_sql_files<T: DefaultTo<T> + 'static, S: GetConfig
                                     .expect("model config should be set by now")
                                 {
                                     status = ModelStatus::ParsingFailed;
-                                    show_error!(
-                                        arg.io,
-                                        FsError::from(err).with_location(dbt_asset.path.clone())
-                                    );
+                                    show_error!(arg.io, err.with_location(dbt_asset.path.clone()));
                                 } else {
                                     // Model is disabled and template fails to compile for a non-syntax/non-disabled error
                                     status = ModelStatus::Disabled;

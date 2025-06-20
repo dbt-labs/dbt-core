@@ -115,7 +115,7 @@ pub fn initialize_parse_jinja_environment(
         .with_root_package(project_name.to_string())
         .with_globals(globals)
         .try_with_macros(MacroUnitsWrapper::new(macro_units))?
-        .build()?;
+        .build();
     env.set_undefined_behavior(UndefinedBehavior::Dbt);
     Ok(env)
 }

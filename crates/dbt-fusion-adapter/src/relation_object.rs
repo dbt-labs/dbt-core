@@ -1,3 +1,4 @@
+use dbt_common::{FsError, FsResult};
 use dbt_schemas::{
     dbt_types::RelationType,
     schemas::{
@@ -130,6 +131,9 @@ impl Object for RelationObject {
 }
 
 /// Creates a relation based on the adapter type
+///
+/// Unlike [internal_create_relation]
+/// This is supposed to be used in places that are invoked by the Jinja rendering process
 pub fn create_relation(
     adapter_type: String,
     database: String,
@@ -183,6 +187,30 @@ pub fn create_relation(
         _ => panic!("not supported"),
     };
     Ok(relation)
+}
+
+/// Creates a relation based on the adapter type
+///
+/// This is a wrapper around the [create_relation] function
+/// that is supposed to be used outside the context of Jinja
+pub fn create_relation_internal(
+    adapter_type: String,
+    database: String,
+    schema: String,
+    identifier: Option<String>,
+    relation_type: Option<RelationType>,
+    custom_quoting: ResolvedQuoting,
+) -> FsResult<Arc<dyn BaseRelation>> {
+    let result = create_relation(
+        adapter_type,
+        database,
+        schema,
+        identifier,
+        relation_type,
+        custom_quoting,
+    )
+    .map_err(|e| FsError::from_jinja_err(e, "Failed to create relation"))?;
+    Ok(result)
 }
 
 impl Object for &dyn StaticBaseRelation {

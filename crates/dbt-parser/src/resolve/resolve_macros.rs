@@ -110,10 +110,9 @@ pub fn resolve_macros(
                 )
             })?;
             let relative_macro_file_path = stdfs::diff_paths(&macro_file_path, &io.in_dir)?;
-
             let resources = parse_macro_statements(
                 &macro_sql,
-                &macro_file_path,
+                &relative_macro_file_path,
                 &["macro", "test", "materialization", "snapshot"],
             )?;
 

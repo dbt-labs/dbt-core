@@ -1,5 +1,6 @@
 use crate::relation_object::RelationObject;
 
+use dbt_common::FsResult;
 use dbt_schemas::{
     dbt_types::RelationType,
     schemas::relations::base::{BaseRelation, BaseRelationProperties, Policy},
@@ -45,6 +46,18 @@ impl BaseRelationProperties for InformationSchema {
 
     fn quote_character(&self) -> char {
         unimplemented!("InformationSchema");
+    }
+
+    fn get_database(&self) -> FsResult<String> {
+        Ok(self.database.clone().unwrap_or_default())
+    }
+
+    fn get_schema(&self) -> FsResult<String> {
+        Ok(self.schema.clone())
+    }
+
+    fn get_identifier(&self) -> FsResult<String> {
+        Ok(self.identifier.clone().unwrap_or_default())
     }
 }
 

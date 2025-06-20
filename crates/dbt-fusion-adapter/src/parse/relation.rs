@@ -1,6 +1,7 @@
 use crate::funcs::{empty_string_value, none_value};
 use crate::relation_object::RelationObject;
 
+use dbt_common::FsResult;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::relations::base::{BaseRelation, BaseRelationProperties, Policy};
 use minijinja::{Error as MinijinjaError, State, Value};
@@ -25,6 +26,18 @@ impl BaseRelationProperties for EmptyRelation {
 
     fn quote_character(&self) -> char {
         unimplemented!("quote character is unavailable for EmptyRelation")
+    }
+
+    fn get_database(&self) -> FsResult<String> {
+        Ok(String::new())
+    }
+
+    fn get_schema(&self) -> FsResult<String> {
+        Ok(String::new())
+    }
+
+    fn get_identifier(&self) -> FsResult<String> {
+        Ok(String::new())
     }
 }
 

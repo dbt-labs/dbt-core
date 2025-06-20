@@ -1,4 +1,5 @@
 use crate::{functions::register_base_functions, jinja_environment::JinjaEnvironment};
+use dbt_common::{unexpected_fs_err, FsError, FsResult};
 use dbt_fusion_adapter::BaseAdapter;
 use minijinja::{
     constants::{
@@ -74,21 +75,16 @@ impl JinjaEnvironmentBuilder {
     }
 
     /// Register macros with the environment.
-    pub fn try_with_macros(mut self, macros: MacroUnitsWrapper) -> Result<Self, MinijinjaError> {
+    pub fn try_with_macros(mut self, macros: MacroUnitsWrapper) -> FsResult<Self> {
         let adapter = self.adapter.as_ref().ok_or_else(|| {
-            MinijinjaError::new(
-                MinijinjaErrorKind::InvalidOperation,
-                "try_with_macros requires adapter configuration to be set",
-            )
+            unexpected_fs_err!("try_with_macros requires adapter configuration to be set")
         })?;
 
         // Get the root package name
-        let root_package = self.root_package.clone().ok_or_else(|| {
-            MinijinjaError::new(
-                MinijinjaErrorKind::InvalidOperation,
-                "try_with_macros requires root package to be set",
-            )
-        })?;
+        let root_package = self
+            .root_package
+            .clone()
+            .ok_or_else(|| unexpected_fs_err!("try_with_macros requires root package to be set"))?;
 
         // Get internal packages for this adapter
         let internal_packages = get_internal_packages(adapter.adapter_type().as_ref());
@@ -133,7 +129,8 @@ impl JinjaEnvironmentBuilder {
 
                 // Add to environment and template registry
                 self.env
-                    .add_template_owned(template_name.clone(), macro_unit.sql.clone())?;
+                    .add_template_owned(template_name.clone(), macro_unit.sql.clone())
+                    .map_err(|e| FsError::from_jinja_err(e, "Failed to add template"))?;
 
                 macro_template_registry.insert(
                     Value::from(template_name),
@@ -190,7 +187,7 @@ impl JinjaEnvironmentBuilder {
     }
 
     /// Build the Minijinja Environment with all configured settings.
-    pub fn build(mut self) -> Result<JinjaEnvironment<'static>, MinijinjaError> {
+    pub fn build(mut self) -> JinjaEnvironment<'static> {
         // Register filters (as_bool, as_number, as_native, as_text)
         // These are used to convert values to the appropriate type that might be
         // expected by the jinja template.
@@ -221,7 +218,7 @@ impl JinjaEnvironmentBuilder {
             jinja_env.set_adapter(adapter);
         }
 
-        Ok(jinja_env)
+        jinja_env
     }
 
     fn register_filters(&mut self) {
@@ -456,7 +453,7 @@ mod tests {
             .with_root_package("test_package".to_string())
             .try_with_macros(macro_units)
             .expect("Failed to register macros");
-        let env = builder.build().unwrap();
+        let env = builder.build();
         // one exists in test_package, dbt_postgres, and dbt
         let rv = env
             .render_str("{{adapter.dispatch('one', 'dbt')()}}", context! {}, &[])
@@ -536,7 +533,7 @@ mod tests {
             .with_root_package("test_package".to_string())
             .try_with_macros(macro_units)
             .expect("Failed to register macros");
-        let env = builder.build().unwrap();
+        let env = builder.build();
 
         // Set non-default dispatch order of a_package and dbt
         let ctx = BTreeMap::from([(
@@ -618,8 +615,7 @@ mod tests {
                 ],
             )])))
             .unwrap()
-            .build()
-            .unwrap();
+            .build();
         // Test assigning macro to variable and using it
         let rv = env.render_str("{{macro_b()}}", context! {}, &[]).unwrap();
 
@@ -629,7 +625,7 @@ mod tests {
     }
     #[test]
     fn test_date_format() {
-        let env = JinjaEnvironmentBuilder::new().build().unwrap();
+        let env = JinjaEnvironmentBuilder::new().build();
         let rv = env
             .render_str(
                 "{{modules.pytz.utc}} {{- modules.datetime.datetime.now(modules.pytz.utc).isoformat() -}}",
@@ -643,7 +639,7 @@ mod tests {
     }
     #[test]
     fn test_datetime_strftime_with_timedelta() {
-        let env = JinjaEnvironmentBuilder::new().build().unwrap();
+        let env = JinjaEnvironmentBuilder::new().build();
         let rv = env
             .render_str(
                 "
@@ -699,7 +695,7 @@ mod tests {
             .try_with_macros(macro_units)
             .expect("Failed to register macros");
 
-        let env = builder.build().unwrap();
+        let env = builder.build();
 
         // Get the non_internal_packages registry
         let non_internal_packages = env.get_global(NON_INTERNAL_PACKAGES).unwrap();
