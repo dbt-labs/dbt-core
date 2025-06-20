@@ -540,10 +540,6 @@ validate_versions() {
 }
 
 
-# Check if it is already installed and get current versions
-current_dbt_version=$(check_binary_version "$dest/dbt" "dbt")
-current_lsp_version=$(check_binary_version "$dest/dbt-lsp" "dbt-lsp")
-
 # Determine version to install
 target_version=$(determine_version "$version")
 
