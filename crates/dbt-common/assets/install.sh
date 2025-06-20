@@ -226,8 +226,6 @@ setup_shell_config() {
         config_file="$HOME/.zshrc"
     elif [ "$shell_name" = "bash" ]; then
         config_file="$HOME/.bashrc"
-    elif [ "$shell_name" = "bash" ]; then
-        config_file="$HOME/.bash_profile"
     elif [ "$shell_name" = "fish" ]; then
         config_file="$HOME/.config/fish/config.fish"
     fi
