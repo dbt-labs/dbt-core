@@ -109,13 +109,6 @@ pub struct AnalysesConfig {
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
-pub struct ExposuresOwner {
-    pub email: Option<String>,
-    pub name: Option<String>,
-}
-
-#[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct GroupsProperties {
     pub name: String,
     pub owner: GroupsOwner,
