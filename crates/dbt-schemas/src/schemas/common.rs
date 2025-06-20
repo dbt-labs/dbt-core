@@ -89,10 +89,8 @@ pub enum DbtMaterialization {
     View,
     Table,
     Incremental,
-    Snapshot,
     MaterializedView,
     External,
-    Seed,
     Test,
     Ephemeral,
     Unit,
@@ -103,16 +101,20 @@ pub enum DbtMaterialization {
     Unknown(String),
 }
 
+impl From<DbtMaterialization> for String {
+    fn from(materialization: DbtMaterialization) -> Self {
+        materialization.to_string()
+    }
+}
+
 impl std::fmt::Display for DbtMaterialization {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let materialized_str = match self {
             DbtMaterialization::View => "view",
             DbtMaterialization::Table => "table",
             DbtMaterialization::Incremental => "incremental",
-            DbtMaterialization::Snapshot => "snapshot",
             DbtMaterialization::MaterializedView => "materialized_view",
             DbtMaterialization::External => "external",
-            DbtMaterialization::Seed => "seed",
             DbtMaterialization::Test => "test",
             DbtMaterialization::Ephemeral => "ephemeral",
             DbtMaterialization::Unit => "unit",
@@ -133,10 +135,8 @@ impl From<DbtMaterialization> for RelationType {
             DbtMaterialization::MaterializedView => RelationType::MaterializedView,
             DbtMaterialization::Ephemeral => RelationType::Ephemeral,
             DbtMaterialization::External => RelationType::External,
-            DbtMaterialization::Seed => RelationType::External, // TODO Validate this
             DbtMaterialization::Test => RelationType::External, // TODO Validate this
             DbtMaterialization::Incremental => RelationType::External, // TODO Validate this
-            DbtMaterialization::Snapshot => RelationType::External, // TODO Validate this
             DbtMaterialization::Unit => RelationType::External, // TODO Validate this
             DbtMaterialization::StreamingTable => RelationType::StreamingTable,
             DbtMaterialization::Analysis => RelationType::External, // TODO Validate this

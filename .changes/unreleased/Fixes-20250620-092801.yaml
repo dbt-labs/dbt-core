@@ -1,0 +1,3 @@
+kind: Fixes
+body: Fix missing 'materialized' property in snapshot config
+time: 2025-06-20T09:28:01.703727-07:00

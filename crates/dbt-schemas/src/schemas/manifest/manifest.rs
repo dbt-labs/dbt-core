@@ -441,6 +441,11 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             .snapshot_meta_column_names
                             .clone()
                             .unwrap_or_default(),
+                        materialized: snapshot
+                            .config
+                            .materialized
+                            .clone()
+                            .unwrap_or(DbtMaterialization::Table),
                         deprecated_config: snapshot.config,
                         other: snapshot.other,
                     }),
@@ -471,6 +476,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         meta: seed.config.meta.clone().unwrap_or_default(),
                         deprecated_config: seed.config,
                         root_path: seed.root_path,
+                        materialized: DbtMaterialization::Table,
                         other: seed.other,
                     }),
                 );

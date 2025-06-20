@@ -7,6 +7,7 @@ use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
 use crate::default_to;
+use crate::schemas::common::DbtMaterialization;
 use crate::schemas::common::DbtQuoting;
 use crate::schemas::common::DocsConfig;
 use crate::schemas::common::HardDeletes;
@@ -30,6 +31,8 @@ pub struct ProjectSnapshotConfig {
     pub schema: Option<String>,
     #[serde(rename = "+alias")]
     pub alias: Option<String>,
+    #[serde(rename = "+materialized")]
+    pub materialized: Option<DbtMaterialization>,
     #[serde(rename = "+strategy")]
     pub strategy: Option<String>,
     #[serde(rename = "+unique_key")]
@@ -92,6 +95,7 @@ pub struct SnapshotConfig {
     pub database: Option<String>,
     pub schema: Option<String>,
     pub alias: Option<String>,
+    pub materialized: Option<DbtMaterialization>,
     pub strategy: Option<String>,
     pub unique_key: Option<StringOrArrayOfStrings>,
     pub check_cols: Option<StringOrArrayOfStrings>,
@@ -170,6 +174,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
             database: config.database,
             schema: config.schema,
             alias: config.alias,
+            materialized: config.materialized,
             strategy: config.strategy,
             unique_key: config.unique_key,
             check_cols: config.check_cols,
@@ -200,6 +205,7 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             database: config.database,
             schema: config.schema,
             alias: config.alias,
+            materialized: config.materialized,
             strategy: config.strategy,
             unique_key: config.unique_key,
             check_cols: config.check_cols,
@@ -235,6 +241,7 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
             ref mut database,
             ref mut schema,
             ref mut alias,
+            ref mut materialized,
             ref mut strategy,
             ref mut unique_key,
             ref mut check_cols,
@@ -276,6 +283,7 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
                 alias,
                 schema,
                 database,
+                materialized,
                 group,
                 persist_docs,
                 unique_key,

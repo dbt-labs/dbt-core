@@ -278,7 +278,7 @@ impl InternalDbtNode for DbtSeed {
 
 impl InternalDbtNodeAttributes for DbtSeed {
     fn materialized(&self) -> DbtMaterialization {
-        DbtMaterialization::Seed
+        self.materialized.clone()
     }
     fn quoting(&self) -> ResolvedQuoting {
         self.quoting
@@ -542,7 +542,7 @@ impl InternalDbtNode for DbtSnapshot {
 
 impl InternalDbtNodeAttributes for DbtSnapshot {
     fn materialized(&self) -> DbtMaterialization {
-        DbtMaterialization::Snapshot
+        self.materialized.clone()
     }
     fn quoting(&self) -> ResolvedQuoting {
         self.quoting
@@ -1179,6 +1179,7 @@ pub struct DbtSeed {
     pub base_attr: NodeBaseAttributes,
 
     // [Start] Previously config fields
+    pub materialized: DbtMaterialization,
     pub quoting: ResolvedQuoting,
     pub tags: Vec<String>,
     pub meta: BTreeMap<String, Value>,
@@ -1272,6 +1273,7 @@ pub struct DbtSnapshot {
     pub base_attr: NodeBaseAttributes,
 
     // [Start] Previously config fields
+    pub materialized: DbtMaterialization,
     pub quoting: ResolvedQuoting,
     pub tags: Vec<String>,
     pub meta: BTreeMap<String, Value>,

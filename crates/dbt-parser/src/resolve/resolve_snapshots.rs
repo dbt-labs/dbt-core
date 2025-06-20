@@ -4,7 +4,7 @@ use dbt_common::{fs_err, show_error, show_warning, stdfs, unexpected_fs_err, Err
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
-use dbt_schemas::schemas::common::{DbtContract, DbtQuoting, NodeDependsOn};
+use dbt_schemas::schemas::common::{DbtContract, DbtMaterialization, DbtQuoting, NodeDependsOn};
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::macros::DbtMacro;
 use dbt_schemas::schemas::project::{DbtProject, SnapshotConfig};
@@ -202,6 +202,10 @@ pub async fn resolve_snapshots(
                 final_config.tags.clone().map(|tags| tags.into()),
             )?;
 
+            if final_config.materialized.is_none() {
+                final_config.materialized = Some(DbtMaterialization::Table);
+            }
+
             // Create initial snapshot with default values
             let mut dbt_snapshot = DbtSnapshot {
                 common_attr: CommonAttributes {
@@ -255,6 +259,10 @@ pub async fn resolve_snapshots(
                     extra_ctes: None,
                     contract: DbtContract::default(),
                 },
+                materialized: final_config
+                    .materialized
+                    .clone()
+                    .expect("materialized is required"),
                 quoting: final_config
                     .quoting
                     .expect("quoting is required")

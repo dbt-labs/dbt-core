@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::schemas::{
-    common::{DbtMaterialization, DbtQuoting, ResolvedQuoting},
+    common::{DbtQuoting, ResolvedQuoting},
     macros::{DbtDocsMacro, DbtMacro},
     manifest::DbtOperation,
     profiles::DbConfig,
@@ -265,14 +265,14 @@ impl ResolverState {
     // a few details is here https://github.com/dbt-labs/fs/pull/3967#discussion_r2153355927
     pub fn find_materialization_macro_name(
         &self,
-        materialization: DbtMaterialization,
+        materialization: impl fmt::Display,
         adapter: &str,
     ) -> FsResult<String> {
         let adapter_package = format!("dbt_{}", adapter);
         for package in [&adapter_package, "dbt"] {
             for adapter in [adapter, "default"] {
                 if let Some(macro_) = self.macros.macros.values().find(|m| {
-                    m.name == materialization_macro_name(materialization.clone(), adapter)
+                    m.name == materialization_macro_name(&materialization, adapter)
                         && m.package_name == package
                 }) {
                     return Ok(format!("{}.{}", package, macro_.name));

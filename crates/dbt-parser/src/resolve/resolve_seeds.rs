@@ -10,7 +10,7 @@ use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_schemas::dbt_utils::validate_delimeter;
-use dbt_schemas::schemas::common::{DbtChecksum, DbtQuoting, NodeDependsOn};
+use dbt_schemas::schemas::common::{DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn};
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::project::{DbtProject, SeedConfig};
@@ -218,6 +218,7 @@ pub fn resolve_seeds(
                 .map(|tags| tags.into())
                 .unwrap_or_default(),
             meta: properties_config.meta.clone().unwrap_or_default(),
+            materialized: DbtMaterialization::Table,
             deprecated_config: properties_config.clone(),
         };
 

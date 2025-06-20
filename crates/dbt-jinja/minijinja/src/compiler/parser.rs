@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::fmt::{self, Display};
+use std::fmt;
 use std::sync::LazyLock;
 
 use crate::compiler::ast::{self, Comment, MacroKind, Spanned};
@@ -1796,6 +1796,6 @@ pub fn parse_expr(source: &str) -> Result<ast::Expr<'_>, Error> {
     .parse_standalone_expr()
 }
 
-pub fn materialization_macro_name<N: Display>(name: N, adapter: &str) -> String {
+pub fn materialization_macro_name<N: fmt::Display>(name: N, adapter: &str) -> String {
     format!("materialization_{}_{}", name, adapter)
 }
