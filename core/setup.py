@@ -75,6 +75,7 @@ setup(
         "dbt-common>=1.22.0,<2.0",
         "dbt-adapters>=1.15.2,<2.0",
         "dbt-protos>=1.0.315,<2.0",
+        "pydantic<3",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
         "packaging>20.9",
@@ -82,7 +83,6 @@ setup(
         "pyyaml>=6.0",
         "daff>=1.3.46",
         "typing-extensions>=4.4",
-        "pydantic<2",
         # ----
     ],
     zip_safe=False,
