@@ -21,6 +21,8 @@ class SourceConfig(BaseConfig):
     enabled: bool = True
     event_time: Any = None
     freshness: Optional[FreshnessThreshold] = field(default_factory=FreshnessThreshold)
+    loaded_at_field: Optional[str] = None
+    loaded_at_query: Optional[str] = None
 
 
 @dataclass
