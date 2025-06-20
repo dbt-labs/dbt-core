@@ -62,7 +62,24 @@ impl<'source> CodeGenerator<'source> {
     /// Creates a new code generator.
     pub fn new(file: &'source str, source: &'source str) -> CodeGenerator<'source> {
         CodeGenerator {
-            instructions: Instructions::new(file, source),
+            instructions: Instructions::new(file, source, None),
+            blocks: BTreeMap::new(),
+            pending_block: Vec::with_capacity(32),
+            current_line: 0,
+            span_stack: Vec::with_capacity(32),
+            filter_local_ids: BTreeMap::new(),
+            test_local_ids: BTreeMap::new(),
+            raw_template_bytes: 0,
+        }
+    }
+
+    pub fn new_with_filename(
+        file: &'source str,
+        source: &'source str,
+        filename: Option<String>,
+    ) -> CodeGenerator<'source> {
+        CodeGenerator {
+            instructions: Instructions::new(file, source, filename),
             blocks: BTreeMap::new(),
             pending_block: Vec::with_capacity(32),
             current_line: 0,
@@ -117,7 +134,11 @@ impl<'source> CodeGenerator<'source> {
     /// Creates a sub generator.
     #[cfg(feature = "multi_template")]
     fn new_subgenerator(&self) -> CodeGenerator<'source> {
-        let mut sub = CodeGenerator::new(self.instructions.name(), self.instructions.source());
+        let mut sub = CodeGenerator::new_with_filename(
+            self.instructions.name(),
+            self.instructions.source(),
+            Some(self.instructions.filename()),
+        );
         sub.current_line = self.current_line;
         sub.span_stack = self.span_stack.last().cloned().into_iter().collect();
         sub

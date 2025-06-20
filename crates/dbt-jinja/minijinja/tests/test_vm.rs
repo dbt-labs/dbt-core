@@ -100,7 +100,7 @@ fn test_basic() {
     ctx.insert("a", Value::from(42));
     ctx.insert("b", Value::from(23));
 
-    let mut i = Instructions::new("", "");
+    let mut i = Instructions::new("", "", None);
     i.add(Instruction::EmitRaw("Hello "));
     i.add(Instruction::Lookup("user"));
     i.add(Instruction::GetAttr("name"));

@@ -1648,9 +1648,9 @@ fn process_err(err: &mut Error, pc: usize, state: &State) {
         };
         err.insert_filename_and_span(prev_filename, prev_span.with_delta(delta_line as i32, 0, 0));
     } else if let Some(span) = state.instructions.get_span(pc) {
-        err.insert_filename_and_span(state.instructions.name(), span);
+        err.insert_filename_and_span(&state.instructions.filename(), span);
     } else if let Some(line) = state.instructions.get_line(pc) {
-        err.insert_filename_and_line(state.instructions.name(), line);
+        err.insert_filename_and_line(&state.instructions.filename(), line);
     }
 
     // only attach debug info if we don't have one yet and we are in debug mode.

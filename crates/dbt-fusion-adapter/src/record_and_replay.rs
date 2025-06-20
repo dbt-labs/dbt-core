@@ -228,10 +228,14 @@ impl Statement for RecordEngineStatement {
                 Ok(reader)
             }
             Err(err) => {
-                fs::write(&err_path, format!("Internal: {}", err))
+                let err_msg = format!("{}", err);
+                fs::write(&err_path, err_msg.clone())
                     .map_err(|e| from_io_error(e, Some(&err_path)))?;
                 // do not create json or parquet, relay original error
-                Err(err)
+                Err(AdbcError::with_message_and_status(
+                    err_msg,
+                    AdbcStatus::Internal,
+                ))
             }
         }
     }

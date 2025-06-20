@@ -129,7 +129,11 @@ impl JinjaEnvironmentBuilder {
 
                 // Add to environment and template registry
                 self.env
-                    .add_template_owned(template_name.clone(), macro_unit.sql.clone())
+                    .add_template_owned(
+                        template_name.clone(),
+                        macro_unit.sql.clone(),
+                        Some(macro_unit.info.path.to_string_lossy().to_string()),
+                    )
                     .map_err(|e| FsError::from_jinja_err(e, "Failed to add template"))?;
 
                 macro_template_registry.insert(

@@ -79,13 +79,14 @@ impl<'source> LoaderStore<'source> {
     }
 
     pub fn insert(&mut self, name: &'source str, source: &'source str) -> Result<(), Error> {
-        self.insert_cow(Cow::Borrowed(name), Cow::Borrowed(source))
+        self.insert_cow(Cow::Borrowed(name), Cow::Borrowed(source), None)
     }
 
     pub fn insert_cow(
         &mut self,
         name: Cow<'source, str>,
         source: Cow<'source, str>,
+        filename: Option<String>,
     ) -> Result<(), Error> {
         match (source, name) {
             (Cow::Borrowed(source), Cow::Borrowed(name)) => {
@@ -95,7 +96,8 @@ impl<'source> LoaderStore<'source> {
                     Arc::new(ok!(CompiledTemplate::new(
                         name,
                         source,
-                        &self.template_config
+                        &self.template_config,
+                        filename,
                     ))),
                 );
             }
@@ -104,7 +106,7 @@ impl<'source> LoaderStore<'source> {
                 let name: Arc<str> = name.into();
                 self.owned_templates.replace(
                     name.clone(),
-                    ok!(self.make_owned_template(name, source.to_string())),
+                    ok!(self.make_owned_template(name, source.to_string(), filename)),
                 );
             }
         }
@@ -134,7 +136,7 @@ impl<'source> LoaderStore<'source> {
                         None => None,
                     }
                     .ok_or_else(|| Error::new_not_found(&name));
-                    self.make_owned_template(name, ok!(loader_result))
+                    self.make_owned_template(name, ok!(loader_result), None)
                 })
                 .map(|x| x.borrow_dependent())
         }
@@ -151,11 +153,12 @@ impl<'source> LoaderStore<'source> {
         &self,
         name: Arc<str>,
         source: String,
+        filename: Option<String>,
     ) -> Result<Arc<LoadedTemplate>, Error> {
         LoadedTemplate::try_new(
             (name, source.into_boxed_str()),
             |(name, source)| -> Result<_, Error> {
-                CompiledTemplate::new(name, source, &self.template_config)
+                CompiledTemplate::new(name, source, &self.template_config, filename)
             },
         )
         .map(Arc::new)

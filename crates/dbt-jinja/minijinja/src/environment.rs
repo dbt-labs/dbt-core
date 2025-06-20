@@ -177,12 +177,18 @@ impl<'source> Environment<'source> {
     /// the parameters are actually [`Cow`].  This method fails if the template has a syntax error.
     #[cfg(feature = "loader")]
     #[cfg_attr(docsrs, doc(cfg(feature = "loader")))]
-    pub fn add_template_owned<N, S>(&mut self, name: N, source: S) -> Result<(), Error>
+    pub fn add_template_owned<N, S>(
+        &mut self,
+        name: N,
+        source: S,
+        filename: Option<String>,
+    ) -> Result<(), Error>
     where
         N: Into<Cow<'source, str>>,
         S: Into<Cow<'source, str>>,
     {
-        self.templates.insert_cow(name.into(), source.into())
+        self.templates
+            .insert_cow(name.into(), source.into(), filename)
     }
 
     /// Register a template loader as source of templates.
@@ -416,6 +422,7 @@ impl<'source> Environment<'source> {
                 name,
                 source,
                 &self.templates.template_config,
+                None,
             )))),
         ))
     }

@@ -411,14 +411,16 @@ impl<'source> CompiledTemplate<'source> {
         name: &'source str,
         source: &'source str,
         config: &TemplateConfig,
+        filename: Option<String>,
     ) -> Result<CompiledTemplate<'source>, Error> {
-        attach_basic_debug_info(Self::_new_impl(name, source, config), source)
+        attach_basic_debug_info(Self::_new_impl(name, source, config, filename), source)
     }
 
     fn _new_impl(
         name: &'source str,
         source: &'source str,
         config: &TemplateConfig,
+        filename: Option<String>,
     ) -> Result<CompiledTemplate<'source>, Error> {
         // the parser/compiler combination can create constants in which case
         // we can probably benefit from the value optimization a bit.
@@ -429,7 +431,7 @@ impl<'source> CompiledTemplate<'source> {
             config.syntax_config.clone(),
             config.ws_config
         ));
-        let mut gen = CodeGenerator::new(name, source);
+        let mut gen = CodeGenerator::new_with_filename(name, source, filename);
         gen.compile_stmt(&ast);
         let buffer_size_hint = gen.buffer_size_hint();
         let (instructions, blocks) = gen.finish();
