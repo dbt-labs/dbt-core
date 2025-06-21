@@ -4,6 +4,7 @@ use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::sql_file_info::SqlFileInfo;
 use crate::utils::{get_node_fqn, register_duplicate_resource, trigger_duplicate_errors};
 use dbt_common::constants::PARSING;
+use dbt_common::io_args::IoArgs;
 use dbt_common::tokiofs::read_to_string;
 use dbt_common::{
     fs_err, show_error, show_progress, show_warning_soon_to_be_error, ErrorCode, FsError, FsResult,
@@ -18,12 +19,13 @@ use dbt_jinja_utils::refs_and_sources::RefsAndSources;
 use dbt_jinja_utils::serde::into_typed_with_jinja_error;
 use dbt_jinja_utils::silence_base_context;
 use dbt_jinja_utils::utils::render_sql;
-use dbt_schemas::schemas::common::{DbtChecksum, DbtQuoting};
+use dbt_schemas::schemas::common::{DbtChecksum, DbtQuoting, Hooks};
 use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::properties::GetConfig;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::{DbtModel, InternalDbtNode, IntrospectionKind, Nodes};
 use dbt_schemas::state::{DbtAsset, DbtRuntimeConfig, ModelStatus};
+
 use minijinja::constants::{TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID};
 use minijinja::{MacroSpans, Value as MinijinjaValue};
 use std::collections::{BTreeMap, HashMap};
@@ -32,7 +34,7 @@ use std::sync::atomic::{self, AtomicBool};
 use std::sync::{Arc, Mutex};
 
 use crate::args::ResolveArgs;
-use dbt_common::fsinfo;
+use dbt_common::{fsinfo, show_warning};
 
 /// Represents the result of rendering a single SQL file
 #[derive(Debug)]
@@ -226,7 +228,7 @@ pub async fn render_unresolved_sql_files_sequentially<
         match render_sql(
             &sql,
             jinja_env,
-            resolve_model_context,
+            &resolve_model_context,
             &listener_factory,
             &display_path,
         ) {
@@ -243,12 +245,33 @@ pub async fn render_unresolved_sql_files_sequentially<
                         .push(SqlResource::Config(Box::new(root_config.clone())));
                 }
 
+                // Get config from current resources to use for hook rendering
+                let temp_sql_file_info = {
+                    let sql_resources_locked = sql_resources_cloned.lock().unwrap();
+                    SqlFileInfo::from_sql_resources(
+                        sql_resources_locked.clone(),
+                        DbtChecksum::hash(sql.as_bytes()),
+                        execute_exists.load(atomic::Ordering::Relaxed),
+                    )
+                };
+
+                // Collect dependencies from pre and post hooks (adds to same sql_resources)
+                collect_hook_dependencies_from_config(
+                    &*temp_sql_file_info.config,
+                    jinja_env,
+                    &display_path, // path to sql file, might not be path to hooks
+                    arg.io.clone(),
+                    &resolve_model_context,
+                )?;
+
+                // Create final sql_file_info with all dependencies (main SQL + hooks)
                 let sql_resources_locked = sql_resources_cloned.lock().unwrap();
                 let sql_file_info = SqlFileInfo::from_sql_resources(
                     sql_resources_locked.clone(),
                     DbtChecksum::hash(sql.as_bytes()),
                     execute_exists.load(atomic::Ordering::Relaxed),
                 );
+
                 let status = if sql_file_info
                     .config
                     .get_enabled()
@@ -509,7 +532,7 @@ pub async fn render_unresolved_sql_files<T: DefaultTo<T> + 'static, S: GetConfig
                 match render_sql(
                     &sql,
                     &jinja_env,
-                    resolve_model_context,
+                    &resolve_model_context,
                     &listener_factory,
                     &display_path,
                 ) {
@@ -530,12 +553,34 @@ pub async fn render_unresolved_sql_files<T: DefaultTo<T> + 'static, S: GetConfig
                                 .insert(0, SqlResource::Config(Box::new(root_config.clone())));
                         }
 
+                        // Get config from current resources to use for hook rendering
+                        let temp_sql_file_info = {
+                            let sql_resources_locked = sql_resources_cloned.lock().unwrap().clone();
+                            SqlFileInfo::from_sql_resources(
+                                sql_resources_locked.clone(),
+                                DbtChecksum::hash(sql.as_bytes()),
+                                execute_exists.load(atomic::Ordering::Relaxed),
+                            )
+                        };
+
+                        // Collect dependencies from pre and post hooks (adds to same sql_resources)
+                        collect_hook_dependencies_from_config(
+                            &*temp_sql_file_info.config,
+                            &jinja_env,
+                            &display_path, // path to sql file, might not be path to hooks
+                            arg.io.clone(),
+                            &resolve_model_context,
+                        )
+                        .map_err(|e| *e)?;
+
+                        // Create final sql_file_info with all dependencies (main SQL + hooks)
                         let sql_resources_locked = sql_resources_cloned.lock().unwrap().clone();
                         let sql_file_info = SqlFileInfo::from_sql_resources(
                             sql_resources_locked.clone(),
                             DbtChecksum::hash(sql.as_bytes()),
                             execute_exists.load(atomic::Ordering::Relaxed),
                         );
+
                         // check the model config to see if it is enabled
                         let status = if sql_file_info
                             .config
@@ -760,6 +805,7 @@ async fn process_model_chunk_for_unsafe_detection(
         let (render_resolved_context, _, _) = build_compile_node_context(
             &MinijinjaValue::from_serialize(model.serialize()),
             model.common(),
+            &model.base(),
             model.base().alias.as_str(),
             &model.serialized_config(),
             quoting,
@@ -767,6 +813,9 @@ async fn process_model_chunk_for_unsafe_detection(
             &render_base_context,
             &root_project_name,
             runtime_config.dependencies.keys().cloned().collect(),
+            Arc::new(refs_and_sources.clone()),
+            runtime_config.clone(),
+            true,
         );
         let display_path = if arg
             .io
@@ -778,10 +827,11 @@ async fn process_model_chunk_for_unsafe_detection(
         } else {
             arg.io.in_dir.join(&model.common().original_file_path)
         };
+        // TODO: Potentially catch rendering warning on second pass and notify user / add file as unsafe by default
         let _res = render_sql(
             &sql,
             &jinja_env,
-            render_resolved_context,
+            &render_resolved_context,
             &DefaultListenerFactory::default(),
             &display_path,
         );
@@ -888,4 +938,100 @@ async fn collect_adapter_identifiers_parallel(
     }
 
     Ok(all_unsafe_ids)
+}
+
+/// Collect refs and sources from pre and post hooks in any resource config
+/// by rendering them into the existing sql_resources collection
+///
+/// This function works generically for all resource types (models, snapshots, seeds, etc.)
+/// and should only be called when the main resource has been successfully rendered to ensure
+/// we have a reliable config and context.
+///
+/// Uses the real file path for error reporting rather than virtual paths.
+#[allow(clippy::too_many_arguments)]
+pub fn collect_hook_dependencies_from_config<T: DefaultTo<T> + 'static>(
+    config: &T,
+    jinja_env: &JinjaEnvironment<'static>,
+    resource_path: &std::path::Path,
+    io: IoArgs,
+    hook_context: &BTreeMap<String, MinijinjaValue>,
+) -> FsResult<()> {
+    // Helper function to extract SQL strings from hooks
+    // Note: YAML span information is available in the original Verbatim<Option<Hooks>> wrapper
+    // but is not accessible once converted to DbtConfig. To preserve spans, we would need to:
+    // 1. Pass the original Verbatim wrappers to this function
+    // 2. Use dbt_serde_yaml APIs to extract span information from the Value objects
+    // 3. Update the schema definitions to expose span access methods
+    let extract_hook_sqls = |hooks: &Hooks| -> Vec<String> {
+        match hooks {
+            Hooks::String(sql) => vec![sql.clone()],
+            Hooks::ArrayOfStrings(sqls) => sqls.clone(),
+            Hooks::HookConfig(hook_config) => {
+                if let Some(sql) = &hook_config.sql {
+                    vec![sql.clone()]
+                } else {
+                    vec![]
+                }
+            }
+            Hooks::HookConfigArray(hook_configs) => hook_configs
+                .iter()
+                .filter_map(|config| config.sql.clone())
+                .collect(),
+        }
+    };
+
+    // Helper function to render hook SQL and collect dependencies into the shared sql_resources
+    let render_hook_for_deps = |sql: &str| -> FsResult<()> {
+        let listener_factory = DefaultListenerFactory::default();
+
+        match render_sql(
+            sql,
+            jinja_env,
+            hook_context,
+            &listener_factory,
+            resource_path,
+        ) {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                // Log hook rendering error with clear context but don't fail the build
+                // Question (Ani): What should we do if a hook fails to render?
+                show_warning!(
+                    io,
+                    fs_err!(
+                        ErrorCode::Generic,
+                        "Hook failed to render: {}",
+                        err.to_string()
+                    )
+                    .with_location(resource_path.to_path_buf())
+                );
+                Ok(()) // Return Ok to avoid breaking the build
+            }
+        }
+    };
+
+    // Process pre-hooks
+    if let Some(pre_hooks) = config.get_pre_hook() {
+        let hook_sqls = extract_hook_sqls(pre_hooks);
+        for sql in hook_sqls.iter() {
+            if sql.trim().is_empty() {
+                continue;
+            }
+
+            render_hook_for_deps(sql)?;
+        }
+    }
+
+    // Process post-hooks
+    if let Some(post_hooks) = config.get_post_hook() {
+        let hook_sqls = extract_hook_sqls(post_hooks);
+        for sql in hook_sqls.iter() {
+            if sql.trim().is_empty() {
+                continue;
+            }
+
+            render_hook_for_deps(sql)?;
+        }
+    }
+
+    Ok(())
 }

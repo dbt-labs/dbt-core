@@ -65,12 +65,12 @@ pub fn build_compile_and_run_base_context(
     // Create a BTreeMap for builtins
     let mut builtins = BTreeMap::new();
 
-    // Create ref function
-    let ref_function = RefFunction {
-        refs_and_sources: refs_and_sources.clone(),
-        package_name: package_name.to_owned(),
+    // Create base ref function for macros (without validation)
+    let ref_function = RefFunction::new_unvalidated(
+        refs_and_sources.clone(),
+        package_name.to_owned(),
         runtime_config,
-    };
+    );
     let ref_value = MinijinjaValue::from_object(ref_function);
     ctx.insert("ref".to_string(), ref_value.clone());
     builtins.insert("ref".to_string(), ref_value);
@@ -103,13 +103,56 @@ pub fn build_compile_and_run_base_context(
 }
 
 #[derive(Debug)]
-struct RefFunction {
+pub struct RefFunction {
     refs_and_sources: Arc<dyn RefsAndSourcesTracker>,
     package_name: String,
     runtime_config: Arc<DbtRuntimeConfig>,
+    /// Optional validation configuration - None means no validation
+    validation_config: Option<RefValidationConfig>,
+}
+
+#[derive(Debug)]
+pub struct RefValidationConfig {
+    /// The set of allowed node dependencies for this specific node
+    pub allowed_dependencies: Arc<BTreeSet<String>>,
+    /// Whether to skip dependency validation used for REPL and inline queries
+    pub skip_validation: bool,
 }
 
 impl RefFunction {
+    /// Create a new RefFunction without validation (for base context)
+    pub fn new_unvalidated(
+        refs_and_sources: Arc<dyn RefsAndSourcesTracker>,
+        package_name: String,
+        runtime_config: Arc<DbtRuntimeConfig>,
+    ) -> Self {
+        Self {
+            refs_and_sources,
+            package_name,
+            runtime_config,
+            validation_config: None,
+        }
+    }
+
+    /// Create a new RefFunction with validation (for node context)
+    pub fn new_with_validation(
+        refs_and_sources: Arc<dyn RefsAndSourcesTracker>,
+        package_name: String,
+        runtime_config: Arc<DbtRuntimeConfig>,
+        allowed_dependencies: Arc<BTreeSet<String>>,
+        skip_validation: bool,
+    ) -> Self {
+        Self {
+            refs_and_sources,
+            package_name,
+            runtime_config,
+            validation_config: Some(RefValidationConfig {
+                allowed_dependencies,
+                skip_validation,
+            }),
+        }
+    }
+
     fn resolve_args(
         &self,
         args: &[MinijinjaValue],
@@ -138,6 +181,44 @@ impl RefFunction {
             Ok((package_name, model_name, None))
         }
     }
+
+    /// Validate that the referenced model is in the allowed dependencies
+    fn validate_dependency(
+        &self,
+        unique_id: &str,
+        package_name: &Option<String>,
+        model_name: &str,
+    ) -> Result<(), MinijinjaError> {
+        let Some(validation_config) = &self.validation_config else {
+            // No validation config means no validation needed
+            return Ok(());
+        };
+
+        if validation_config.skip_validation {
+            return Ok(());
+        }
+
+        if validation_config.allowed_dependencies.contains(unique_id) {
+            Ok(())
+        } else {
+            // Construct the ref string for the error message
+            let ref_string = if let Some(pkg) = package_name {
+                format!("{{{{ ref('{}', '{}') }}}}", pkg, model_name)
+            } else {
+                format!("{{{{ ref('{}') }}}}", model_name)
+            };
+
+            Err(MinijinjaError::new(
+                MinijinjaErrorKind::InvalidOperation,
+                format!(
+                    "dbt was unable to infer all dependencies for the model \"{}\". This typically happens when ref() is placed within a conditional block.
+To fix this, add the following hint to the top of the model \"{}\": 
+-- depends_on: {}",
+                    model_name, model_name, ref_string
+                ),
+            ))
+        }
+    }
 }
 
 impl Object for RefFunction {
@@ -155,7 +236,11 @@ impl Object for RefFunction {
             &version,
             &Some(self.package_name.clone()),
         ) {
-            Ok((_, relation, _)) => Ok(relation),
+            Ok((unique_id, relation, _)) => {
+                // Validate that this ref is allowed (only if validation is configured)
+                self.validate_dependency(&unique_id, &package_name, &model_name)?;
+                Ok(relation)
+            }
             Err(_) => Err(MinijinjaError::new(
                 MinijinjaErrorKind::NonKey,
                 format!(
@@ -182,7 +267,11 @@ impl Object for RefFunction {
                     &version,
                     &Some(self.package_name.clone()),
                 ) {
-                    Ok((unique_id, _, _)) => Ok(MinijinjaValue::from(unique_id)),
+                    Ok((unique_id, _, _)) => {
+                        // Validate that this ref is allowed (only if validation is configured)
+                        self.validate_dependency(&unique_id, &package_name, &model_name)?;
+                        Ok(MinijinjaValue::from(unique_id))
+                    }
                     Err(_) => Err(MinijinjaError::new(
                         MinijinjaErrorKind::NonKey,
                         format!(

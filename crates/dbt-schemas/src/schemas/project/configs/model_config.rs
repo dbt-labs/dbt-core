@@ -663,6 +663,14 @@ impl DefaultTo<ModelConfig> for ModelConfig {
     fn alias(&self) -> Option<String> {
         self.alias.clone()
     }
+
+    fn get_pre_hook(&self) -> Option<&Hooks> {
+        self.pre_hook.as_ref()
+    }
+
+    fn get_post_hook(&self) -> Option<&Hooks> {
+        self.post_hook.as_ref()
+    }
 }
 
 // Implement default_to for the flattened configs

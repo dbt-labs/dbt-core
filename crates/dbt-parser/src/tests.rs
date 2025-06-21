@@ -114,7 +114,7 @@ mod tests {
             let rendered = render_sql(
                 sql,
                 &env,
-                resolve_model_context,
+                &resolve_model_context,
                 &DefaultListenerFactory::default(),
                 &PathBuf::from("test"),
             )
@@ -152,7 +152,7 @@ mod tests {
             let rendered = render_sql(
                 sql,
                 &env,
-                resolve_model_scope,
+                &resolve_model_scope,
                 &DefaultListenerFactory::default(),
                 &PathBuf::from("test"),
             )
@@ -189,7 +189,7 @@ mod tests {
             let rendered = render_sql(
                 sql,
                 &env,
-                resolve_model_scope,
+                &resolve_model_scope,
                 &DefaultListenerFactory::default(),
                 &PathBuf::from("test"),
             )
@@ -230,7 +230,7 @@ mod tests {
             let rendered = render_sql(
                 sql,
                 &env,
-                resolve_model_scope,
+                &resolve_model_scope,
                 &DefaultListenerFactory::default(),
                 &PathBuf::from("test"),
             )
@@ -310,7 +310,7 @@ mod tests {
         let rendered = render_sql(
             sql,
             &env,
-            BTreeMap::new(),
+            &BTreeMap::new(),
             &DefaultListenerFactory::default(),
             &PathBuf::from("test"),
         )
@@ -332,7 +332,7 @@ mod tests {
         let rendered = render_sql(
             sql,
             &env,
-            BTreeMap::new(),
+            &BTreeMap::new(),
             &DefaultListenerFactory::default(),
             &PathBuf::from("test"),
         )
@@ -355,7 +355,7 @@ mod tests {
         let rendered = render_sql(
             sql,
             &env,
-            BTreeMap::new(),
+            &BTreeMap::new(),
             &DefaultListenerFactory::default(),
             &PathBuf::from("test"),
         )
@@ -378,7 +378,7 @@ mod tests {
         let rendered = render_sql(
             sql,
             &env,
-            BTreeMap::new(),
+            &BTreeMap::new(),
             &DefaultListenerFactory::default(),
             &PathBuf::from("test"),
         )
@@ -404,7 +404,7 @@ mod tests {
         let rendered = render_sql(
             sql,
             &env,
-            BTreeMap::new(),
+            &BTreeMap::new(),
             &DefaultListenerFactory::default(),
             &PathBuf::from("test"),
         )
@@ -427,7 +427,7 @@ mod tests {
         let rendered = render_sql(
             sql,
             &env,
-            BTreeMap::new(),
+            &BTreeMap::new(),
             &DefaultListenerFactory::default(),
             &PathBuf::from("test"),
         )
@@ -451,7 +451,7 @@ mod tests {
         let rendered = render_sql(
             sql,
             &env,
-            BTreeMap::new(),
+            &BTreeMap::new(),
             &DefaultListenerFactory::default(),
             &PathBuf::from("test"),
         )
@@ -476,7 +476,7 @@ mod tests {
         let result = render_sql(
             sql_error,
             &env,
-            BTreeMap::new(),
+            &BTreeMap::new(),
             &DefaultListenerFactory::default(),
             &PathBuf::from("test"),
         );
@@ -496,7 +496,7 @@ mod tests {
         let rendered = render_sql(
             sql,
             &env,
-            BTreeMap::new(),
+            &BTreeMap::new(),
             &DefaultListenerFactory::default(),
             &PathBuf::from("test"),
         )
@@ -744,7 +744,7 @@ mod tests {
         let rendered = render_sql(
             sql,
             &env,
-            BTreeMap::new(),
+            &BTreeMap::new(),
             &DefaultListenerFactory::default(),
             &PathBuf::from("test"),
         )

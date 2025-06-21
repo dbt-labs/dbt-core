@@ -171,6 +171,14 @@ pub trait DefaultTo<T>:
     fn alias(&self) -> Option<String> {
         None
     }
+
+    fn get_pre_hook(&self) -> Option<&crate::schemas::common::Hooks> {
+        None
+    }
+
+    fn get_post_hook(&self) -> Option<&crate::schemas::common::Hooks> {
+        None
+    }
 }
 
 // Improved macro for simple field defaulting with mutable references

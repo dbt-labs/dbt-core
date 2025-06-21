@@ -273,7 +273,7 @@ pub async fn inject_and_persist_ephemeral_models(
 pub fn render_sql<'a, E>(
     sql: &str,
     env: E,
-    ctx: BTreeMap<String, Value>,
+    ctx: &BTreeMap<String, Value>,
     listener_factory: &dyn ListenerFactory,
     filename: &Path,
 ) -> FsResult<String>

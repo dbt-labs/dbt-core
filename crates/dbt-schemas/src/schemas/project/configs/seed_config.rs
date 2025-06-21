@@ -171,6 +171,14 @@ impl DefaultTo<SeedConfig> for SeedConfig {
         self.enabled
     }
 
+    fn get_pre_hook(&self) -> Option<&Hooks> {
+        self.pre_hook.as_ref()
+    }
+
+    fn get_post_hook(&self) -> Option<&Hooks> {
+        self.post_hook.as_ref()
+    }
+
     fn default_to(&mut self, parent: &SeedConfig) {
         // Handle simple fields - using a pattern that ensures all fields are covered
         let SeedConfig {
