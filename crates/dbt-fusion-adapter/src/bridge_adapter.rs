@@ -19,7 +19,7 @@ use crate::{BaseAdapter, SqlEngine};
 use dbt_agate::AgateTable;
 use dbt_common::adapter::SchemaRegistry;
 use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
-use dbt_common::current_function_name;
+use dbt_common::{current_function_name, FsError, FsResult};
 use dbt_schemas::schemas::columns::base::StdColumn;
 use dbt_schemas::schemas::common::DbtIncrementalStrategy;
 use dbt_schemas::schemas::dbt_column::DbtColumn;
@@ -154,7 +154,7 @@ impl Drop for ConnectionGuard<'_> {
 /// variable.
 #[derive(Clone)]
 pub struct BridgeAdapter {
-    typed_adapter: Arc<dyn TypedBaseAdapter>,
+    pub(crate) typed_adapter: Arc<dyn TypedBaseAdapter>,
     #[allow(dead_code)]
     db: Option<Arc<dyn SchemaRegistry>>,
 }
@@ -180,7 +180,7 @@ impl BridgeAdapter {
     /// the thread-local variable. If another connection became the thread-local
     /// in the mean time, that connection is dropped and the return proceeds as
     /// normal.
-    fn borrow_tlocal_connection(&self) -> Result<ConnectionGuard<'_>, MinijinjaError> {
+    pub(crate) fn borrow_tlocal_connection(&self) -> Result<ConnectionGuard<'_>, MinijinjaError> {
         let _span = span!("BridgeAdapter::borrow_thread_local_connection");
         let mut conn = CONNECTION.take();
         if conn.is_none() {
@@ -1359,6 +1359,30 @@ impl BaseAdapter for BridgeAdapter {
         let sql = parser.get::<String>("sql")?;
 
         Ok(Value::from(self.typed_adapter.clean_sql(&sql)?))
+    }
+
+    #[tracing::instrument(skip(self, warehouse, node_id))]
+    fn use_warehouse(&self, warehouse: Option<String>, node_id: &str) -> FsResult<bool> {
+        if warehouse.is_none() {
+            return Ok(false);
+        }
+
+        let mut conn = self
+            .borrow_tlocal_connection()
+            .map_err(|e| FsError::from_jinja_err(e, "Failed to create a connection"))?;
+        self.typed_adapter
+            .use_warehouse(conn.as_mut(), warehouse.unwrap(), node_id)?;
+        Ok(true)
+    }
+
+    #[tracing::instrument(skip(self, node_id))]
+    fn restore_warehouse(&self, node_id: &str) -> FsResult<()> {
+        let mut conn = self
+            .borrow_tlocal_connection()
+            .map_err(|e| FsError::from_jinja_err(e, "Failed to create a connection"))?;
+        self.typed_adapter
+            .restore_warehouse(conn.as_mut(), node_id)?;
+        Ok(())
     }
 }
 

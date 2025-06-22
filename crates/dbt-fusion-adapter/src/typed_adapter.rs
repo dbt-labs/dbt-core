@@ -13,6 +13,7 @@ use dbt_agate::AgateTable;
 use arrow::array::{RecordBatch, StringArray, TimestampMillisecondArray};
 use arrow_schema::{DataType, Schema};
 use dbt_common::behavior_flags::BehaviorFlag;
+use dbt_common::FsResult;
 use dbt_frontend_common::dialect::Dialect;
 use dbt_schemas::schemas::columns::base::{string_type, BaseColumn, StdColumn};
 use dbt_schemas::schemas::common::Constraint;
@@ -34,6 +35,28 @@ use std::sync::Arc;
 
 /// Adapter with typed functions.
 pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
+    /// Execute `use warehouse [name]` statement for SnowflakeAdapter
+    /// For other warehouses, this is noop
+    fn use_warehouse(
+        &self,
+        _conn: &'_ mut dyn Connection,
+        _warehouse: String,
+        _node_id: &str,
+    ) -> FsResult<()> {
+        Ok(())
+    }
+
+    /// Execute `use warehouse [name]` statement for SnowflakeAdapter
+    /// For other warehouses, this is noop
+    fn restore_warehouse(&self, _conn: &'_ mut dyn Connection, _node_id: &str) -> FsResult<()> {
+        Ok(())
+    }
+
+    /// Get DB config by key
+    fn get_db_config(&self, _key: &str) -> Option<String> {
+        unimplemented!()
+    }
+
     /// The set of standard builtin strategies which this adapter supports out-of-the-box.
     /// Not used to validate custom strategies defined by end users.
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1684-L1685

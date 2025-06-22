@@ -37,7 +37,7 @@ async fn extend_with_model_context<S: Serialize>(
     common_attr: &CommonAttributes,
     alias: &str,
     quoting: ResolvedQuoting,
-    config: &S,
+    deprecated_config: &S,
     adapter_type: &str,
     io_args: &IoArgs,
     resource_type: &str,
@@ -69,7 +69,7 @@ async fn extend_with_model_context<S: Serialize>(
         MinijinjaValue::from(common_attr.name.clone()),
     );
 
-    let config_json = serde_json::to_value(config).expect("Failed to serialize object");
+    let config_json = serde_json::to_value(deprecated_config).expect("Failed to serialize object");
 
     if let Some(pre_hook) = config_json.get("pre_hook") {
         let values: Vec<HookConfig> = match pre_hook {
@@ -198,7 +198,7 @@ pub async fn build_run_node_context<S: Serialize>(
     common_attr: &CommonAttributes,
     alias: &str,
     quoting: ResolvedQuoting,
-    config: &S,
+    deprecated_config: &S,
     adapter_type: &str,
     agate_table: Option<AgateTable>,
     base_context: &BTreeMap<String, MinijinjaValue>,
@@ -223,7 +223,7 @@ pub async fn build_run_node_context<S: Serialize>(
         common_attr,
         alias,
         quoting,
-        config,
+        deprecated_config,
         adapter_type,
         io_args,
         resource_type,

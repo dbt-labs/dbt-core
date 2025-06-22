@@ -1,7 +1,8 @@
-use super::metadata::MetadataAdapter;
+use crate::metadata::MetadataAdapter;
 use crate::sql_engine::SqlEngine;
 use crate::typed_adapter::TypedBaseAdapter;
 
+use dbt_common::FsResult;
 use dbt_frontend_common::dialect::Dialect;
 use dbt_xdbc::Connection;
 use minijinja::arg_utils::ArgParser;
@@ -435,4 +436,22 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
 
     /// This adapter as a Value
     fn as_value(&self) -> Value;
+
+    /// Used internally to attempt executing a Snowflake `use warehouse [name]` statement from BridgeAdapter
+    /// For other BaseAdapter types, this is noop
+    ///
+    /// # Returns
+    ///
+    /// Returns true if the warehouse was overridden, false otherwise
+    fn use_warehouse(&self, _warehouse: Option<String>, _node_id: &str) -> FsResult<bool> {
+        Ok(false)
+    }
+
+    /// Used internally to attempt executing a Snowflake `use warehouse [name]` statement from BridgeAdapter
+    ///
+    /// To restore to the warehouse configured in profiles.yml
+    /// For other BaseAdapter types, this is noop
+    fn restore_warehouse(&self, _node_id: &str) -> FsResult<()> {
+        Ok(())
+    }
 }
