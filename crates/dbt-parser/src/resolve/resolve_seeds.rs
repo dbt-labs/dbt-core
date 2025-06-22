@@ -116,8 +116,9 @@ pub fn resolve_seeds(
         } else {
             project_config.clone()
         };
+
         // normalize column_types to uppercase if it is snowflake
-        if adapter_type == "snowflake" {
+        if adapter_type == "snowflake" || adapter_type == "replay" {
             if let Some(column_types) = &properties_config.column_types {
                 let column_types = column_types
                     .iter()
