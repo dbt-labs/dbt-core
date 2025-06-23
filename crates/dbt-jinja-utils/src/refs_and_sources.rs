@@ -7,9 +7,8 @@ use std::{
 use dbt_common::{
     err, io_args::IoArgs, show_error, unexpected_err, CodeLocation, ErrorCode, FsResult,
 };
-use dbt_fusion_adapter::relation_object::create_relation_internal;
+use dbt_fusion_adapter::relation_object::create_relation_from_node;
 use dbt_schemas::{
-    dbt_types::RelationType,
     schemas::{
         common::DbtQuoting,
         ref_and_source::{DbtRef, DbtSourceWrapper},
@@ -113,15 +112,7 @@ impl RefsAndSourcesTracker for RefsAndSources {
         } else {
             (None, None)
         };
-        let relation = create_relation_internal(
-            adapter_type.to_string(),
-            node.common().database.clone(),
-            node.common().schema.clone(),
-            Some(node.base().alias),
-            Some(RelationType::from(node.materialized())),
-            node.quoting(),
-        )?
-        .as_value();
+        let relation = create_relation_from_node(adapter_type.to_string(), node)?.as_value();
         if maybe_version == maybe_latest_version {
             // Lookup by ref name
             let ref_entry = self.refs.entry(model_name.clone()).or_default();
@@ -207,15 +198,7 @@ impl RefsAndSourcesTracker for RefsAndSources {
         adapter_type: &str,
         status: ModelStatus,
     ) -> FsResult<()> {
-        let relation = create_relation_internal(
-            adapter_type.to_string(),
-            source.common_attr.database.clone(),
-            source.common_attr.schema.clone(),
-            Some(source.identifier.clone()),
-            None,
-            source.quoting(),
-        )?
-        .as_value();
+        let relation = create_relation_from_node(adapter_type.to_string(), source)?.as_value();
 
         self.sources
             .entry(format!(

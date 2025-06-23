@@ -7,6 +7,7 @@ use dbt_schemas::{
             base::{BaseRelation, TableFormat},
             DEFAULT_RESOLVED_QUOTING,
         },
+        InternalDbtNodeAttributes,
     },
 };
 use minijinja::{
@@ -211,6 +212,20 @@ pub fn create_relation_internal(
     )
     .map_err(|e| FsError::from_jinja_err(e, "Failed to create relation"))?;
     Ok(result)
+}
+
+pub fn create_relation_from_node(
+    adapter_type: String,
+    node: &dyn InternalDbtNodeAttributes,
+) -> FsResult<Arc<dyn BaseRelation>> {
+    create_relation_internal(
+        adapter_type,
+        node.common().database.clone(),
+        node.common().schema.clone(),
+        Some(node.base().alias), // all identifiers are consolidated to alias in InternalDbtNode
+        Some(RelationType::from(node.materialized())),
+        node.quoting(),
+    )
 }
 
 impl Object for &dyn StaticBaseRelation {
