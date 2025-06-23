@@ -231,17 +231,25 @@ impl VortexProducerClient {
             let mut vortex_messages: Vec<VortexMessage> = Vec::new();
             let mut bytes_buffered = 0;
 
-            loop {
+            let mut shutdown = false;
+            while !shutdown {
                 let should_flush = tokio::select! {
                     _ = tokio::time::sleep(flush_interval) => {
                         true
                     },
                     _ = shutdown_rx.changed() => {
-                        break;
+                        shutdown = true;
+                        // Drain the channel if shutdown is requested
+                        while let Ok(msg) = receiver.try_recv() {
+                            bytes_buffered += msg.encoded_len();
+                            vortex_messages.push(msg);
+                        }
+                        true
                     },
                     msg = receiver.recv() => {
                         match msg {
                             Some(msg) => {
+                                bytes_buffered += msg.encoded_len();
                                 vortex_messages.push(msg);
                                 bytes_buffered >= max_batch_size
                             }
