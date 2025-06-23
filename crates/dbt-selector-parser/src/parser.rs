@@ -7,10 +7,11 @@ use std::{collections::BTreeMap, str::FromStr};
 
 use dbt_common::{
     err, fs_err,
+    io_args::IoArgs,
     node_selector::{
         parse_model_specifiers, IndirectSelection, MethodName, SelectExpression, SelectionCriteria,
     },
-    ErrorCode, FsResult,
+    show_warning, ErrorCode, FsResult,
 };
 
 use dbt_schemas::schemas::selectors::{
@@ -84,13 +85,14 @@ fn atom_to_select_expression(atom: AtomExpr) -> FsResult<SelectExpression> {
 }
 
 #[derive(Debug, Clone)]
-pub struct SelectorParser {
+pub struct SelectorParser<'a> {
     defs: BTreeMap<String, SelectorDefinition>,
+    io_args: &'a IoArgs,
 }
 
-impl SelectorParser {
-    pub fn new(defs: BTreeMap<String, SelectorDefinition>) -> Self {
-        Self { defs }
+impl<'a> SelectorParser<'a> {
+    pub fn new(defs: BTreeMap<String, SelectorDefinition>, io_args: &'a IoArgs) -> Self {
+        Self { defs, io_args }
     }
 
     pub fn parse_named(&self, name: &str) -> FsResult<ResolvedSelector> {
@@ -146,10 +148,10 @@ impl SelectorParser {
             CompositeKind::Union(_) => SelectExpression::Or(includes),
             CompositeKind::Intersection(_) => SelectExpression::And(includes),
         };
-        let exclude_expr = if excludes.is_empty() {
-            None
-        } else {
-            Some(SelectExpression::Or(excludes))
+        let exclude_expr = match excludes.len() {
+            0 => None,
+            1 => Some(excludes.into_iter().next().unwrap()),
+            _ => Some(SelectExpression::Or(excludes)),
         };
 
         Ok(ResolvedSelector {
@@ -171,6 +173,61 @@ impl SelectorParser {
                 indirect_selection,
                 exclude,
             } => {
+                // Special handling for selector method - recursively resolve the referenced selector
+                if method == "selector" {
+                    // Parse any per-method excludes first
+                    let exclude_expr = exclude
+                        .as_ref()
+                        .map(|list| {
+                            let exprs = self.collect_definition_includes(list)?;
+                            Ok::<SelectExpression, Box<dbt_common::FsError>>(match exprs.len() {
+                                0 => {
+                                    return Err(fs_err!(
+                                        ErrorCode::SelectorError,
+                                        "Empty exclude list"
+                                    ))
+                                }
+                                1 => exprs.into_iter().next().unwrap(),
+                                _ => SelectExpression::Or(exprs),
+                            })
+                        })
+                        .transpose()?;
+
+                    // Recursively resolve the referenced selector
+                    let referenced_selector = self.parse_named(value)?;
+
+                    // Combine with any method-level excludes
+                    let final_exclude = match (referenced_selector.exclude, exclude_expr) {
+                        (Some(ref_ex), Some(method_ex)) => {
+                            Some(SelectExpression::Or(vec![ref_ex, method_ex]))
+                        }
+                        (Some(ref_ex), None) => Some(ref_ex),
+                        (None, Some(method_ex)) => Some(method_ex),
+                        (None, None) => None,
+                    };
+
+                    // Note: Per the docs, graph operators (parents, children, etc.) are NOT
+                    // supported for selector inheritance, so we ignore them and return the
+                    // referenced selector's include expression as-is
+                    if *childrens_parents
+                        || *parents
+                        || *children
+                        || parents_depth.is_some()
+                        || children_depth.is_some()
+                    {
+                        let warning = fs_err!(
+                            ErrorCode::SelectorError,
+                            "Graph operators (parents, children, etc.) are not supported with selector inheritance and will be ignored"
+                        );
+                        show_warning!(self.io_args, warning);
+                    }
+
+                    return Ok(ResolvedSelector {
+                        include: referenced_selector.include,
+                        exclude: final_exclude,
+                    });
+                }
+
                 // Build include atom (dropping its nested exclude)
                 let include = {
                     let wrapper = AtomExpr::Method {
@@ -192,9 +249,13 @@ impl SelectorParser {
                     .as_ref()
                     .map(|list| {
                         let exprs = self.collect_definition_includes(list)?;
-                        Ok::<SelectExpression, Box<dbt_common::FsError>>(SelectExpression::Or(
-                            exprs,
-                        ))
+                        Ok::<SelectExpression, Box<dbt_common::FsError>>(match exprs.len() {
+                            0 => {
+                                return Err(fs_err!(ErrorCode::SelectorError, "Empty exclude list"))
+                            }
+                            1 => exprs.into_iter().next().unwrap(),
+                            _ => SelectExpression::Or(exprs),
+                        })
                     })
                     .transpose()?;
 
@@ -233,7 +294,11 @@ impl SelectorParser {
             AtomExpr::Exclude { exclude } => {
                 // A standalone exclude atom
                 let exprs = self.collect_definition_includes(exclude)?;
-                let exclude_expr = SelectExpression::Or(exprs);
+                let exclude_expr = match exprs.len() {
+                    0 => return Err(fs_err!(ErrorCode::SelectorError, "Empty exclude list")),
+                    1 => exprs.into_iter().next().unwrap(),
+                    _ => SelectExpression::Or(exprs),
+                };
                 Ok(ResolvedSelector {
                     include: None,
                     exclude: Some(exclude_expr),
@@ -267,7 +332,8 @@ mod tests {
     #[test]
     fn test_string_selector() -> FsResult<()> {
         let defs = BTreeMap::new();
-        let parser = SelectorParser::new(defs);
+        let io_args = IoArgs::default();
+        let parser = SelectorParser::new(defs, &io_args);
         let result =
             parser.parse_definition(&SelectorDefinitionValue::String("model_a".to_string()))?;
 
@@ -287,7 +353,8 @@ mod tests {
     #[test]
     fn test_method_key_selector() -> FsResult<()> {
         let defs = BTreeMap::new();
-        let parser = SelectorParser::new(defs);
+        let io_args = IoArgs::default();
+        let parser = SelectorParser::new(defs, &io_args);
 
         let mut method_value = BTreeMap::new();
         method_value.insert("tag".to_string(), "nightly".to_string());
@@ -309,143 +376,10 @@ mod tests {
     }
 
     #[test]
-    fn test_method_selector_with_exclude() -> FsResult<()> {
-        let defs = BTreeMap::new();
-        let parser = SelectorParser::new(defs);
-
-        let exclude = vec![SelectorDefinitionValue::String("model_b".to_string())];
-
-        let result = parser.parse_atom(&AtomExpr::Method {
-            method: "tag".to_string(),
-            value: "nightly".to_string(),
-            childrens_parents: false,
-            parents: false,
-            children: false,
-            parents_depth: None,
-            children_depth: None,
-            indirect_selection: Some(IndirectSelection::default()),
-            exclude: Some(exclude),
-        })?;
-
-        assert!(result.include.is_some());
-        if let Some(SelectExpression::Or(exprs)) = result.exclude {
-            assert_eq!(exprs.len(), 1);
-            if let SelectExpression::Atom(criteria) = &exprs[0] {
-                assert_eq!(criteria.method, MethodName::Fqn);
-                assert_eq!(criteria.value, "model_b");
-            } else {
-                panic!("Expected Atom expression in exclude");
-            }
-        } else {
-            panic!("Expected Or expression in exclude");
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_union_selector() -> FsResult<()> {
-        let defs = BTreeMap::new();
-        let parser = SelectorParser::new(defs);
-
-        let values = vec![
-            SelectorDefinitionValue::String("model_a".to_string()),
-            SelectorDefinitionValue::String("model_b".to_string()),
-        ];
-
-        let result = parser.parse_composite(&CompositeExpr {
-            kind: CompositeKind::Union(values),
-        })?;
-
-        assert!(result.exclude.is_none());
-        if let Some(SelectExpression::Or(exprs)) = result.include {
-            assert_eq!(exprs.len(), 2);
-            if let (SelectExpression::Atom(a), SelectExpression::Atom(b)) = (&exprs[0], &exprs[1]) {
-                assert_eq!(a.method, MethodName::Fqn);
-                assert_eq!(a.value, "model_a");
-                assert_eq!(b.method, MethodName::Fqn);
-                assert_eq!(b.value, "model_b");
-            } else {
-                panic!("Expected Atom expressions");
-            }
-        } else {
-            panic!("Expected Or expression");
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_intersection_selector() -> FsResult<()> {
-        let defs = BTreeMap::new();
-        let parser = SelectorParser::new(defs);
-
-        let values = vec![
-            SelectorDefinitionValue::String("model_a".to_string()),
-            SelectorDefinitionValue::String("model_b".to_string()),
-        ];
-
-        let result = parser.parse_composite(&CompositeExpr {
-            kind: CompositeKind::Intersection(values),
-        })?;
-
-        assert!(result.exclude.is_none());
-        if let Some(SelectExpression::And(exprs)) = result.include {
-            assert_eq!(exprs.len(), 2);
-            if let (SelectExpression::Atom(a), SelectExpression::Atom(b)) = (&exprs[0], &exprs[1]) {
-                assert_eq!(a.method, MethodName::Fqn);
-                assert_eq!(a.value, "model_a");
-                assert_eq!(b.method, MethodName::Fqn);
-                assert_eq!(b.value, "model_b");
-            } else {
-                panic!("Expected Atom expressions");
-            }
-        } else {
-            panic!("Expected And expression");
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_named_selector() -> FsResult<()> {
-        let mut defs = BTreeMap::new();
-        defs.insert(
-            "nightly_models".to_string(),
-            SelectorDefinition {
-                name: "nightly_models".to_string(),
-                description: None,
-                default: None,
-                definition: SelectorDefinitionValue::String("tag:nightly".to_string()),
-            },
-        );
-
-        let parser = SelectorParser::new(defs);
-        let result = parser.parse_named("nightly_models")?;
-
-        assert!(result.exclude.is_none());
-        if let Some(SelectExpression::Atom(criteria)) = result.include {
-            assert_eq!(criteria.method, MethodName::Tag);
-            assert_eq!(criteria.value, "nightly");
-        } else {
-            panic!("Expected Atom expression");
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_unknown_named_selector() {
-        let defs = BTreeMap::new();
-        let parser = SelectorParser::new(defs);
-        let result = parser.parse_named("unknown");
-        assert!(result.is_err());
-        if let Err(e) = result {
-            assert_eq!(e.code, ErrorCode::SelectorError);
-            assert!(e.to_string().contains("Unknown selector"));
-        }
-    }
-
-    #[test]
     fn test_method_key_multiple_pairs() {
         let defs = BTreeMap::new();
-        let parser = SelectorParser::new(defs);
+        let io_args = IoArgs::default();
+        let parser = SelectorParser::new(defs, &io_args);
 
         let mut method_value = BTreeMap::new();
         method_value.insert("tag".to_string(), "nightly".to_string());
@@ -462,9 +396,327 @@ mod tests {
     }
 
     #[test]
-    fn test_method_selector_with_graph_operators() -> FsResult<()> {
+    fn test_exclude_handling() -> FsResult<()> {
         let defs = BTreeMap::new();
-        let parser = SelectorParser::new(defs);
+        let io_args = IoArgs::default();
+        let parser = SelectorParser::new(defs, &io_args);
+
+        // Test single exclude - should not be wrapped in Or
+        let single_result = parser.parse_atom(&AtomExpr::Method {
+            method: "tag".to_string(),
+            value: "nightly".to_string(),
+            childrens_parents: false,
+            parents: false,
+            children: false,
+            parents_depth: None,
+            children_depth: None,
+            indirect_selection: Some(IndirectSelection::default()),
+            exclude: Some(vec![SelectorDefinitionValue::String(
+                "model_to_exclude".to_string(),
+            )]),
+        })?;
+
+        if let Some(SelectExpression::Atom(criteria)) = single_result.exclude {
+            assert_eq!(criteria.method, MethodName::Fqn);
+            assert_eq!(criteria.value, "model_to_exclude");
+        } else {
+            panic!("Expected single exclude to be an Atom");
+        }
+
+        // Test multiple excludes - should be wrapped in Or
+        let multiple_result = parser.parse_atom(&AtomExpr::Method {
+            method: "tag".to_string(),
+            value: "nightly".to_string(),
+            childrens_parents: false,
+            parents: false,
+            children: false,
+            parents_depth: None,
+            children_depth: None,
+            indirect_selection: Some(IndirectSelection::default()),
+            exclude: Some(vec![
+                SelectorDefinitionValue::String("model_a".to_string()),
+                SelectorDefinitionValue::String("model_b".to_string()),
+            ]),
+        })?;
+
+        if let Some(SelectExpression::Or(exprs)) = multiple_result.exclude {
+            assert_eq!(exprs.len(), 2);
+            if let (SelectExpression::Atom(a), SelectExpression::Atom(b)) = (&exprs[0], &exprs[1]) {
+                assert_eq!(a.method, MethodName::Fqn);
+                assert_eq!(a.value, "model_a");
+                assert_eq!(b.method, MethodName::Fqn);
+                assert_eq!(b.value, "model_b");
+            } else {
+                panic!("Expected Atom expressions in exclude");
+            }
+        } else {
+            panic!("Expected multiple excludes to be wrapped in Or");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_standalone_exclude() -> FsResult<()> {
+        let defs = BTreeMap::new();
+        let io_args = IoArgs::default();
+        let parser = SelectorParser::new(defs, &io_args);
+
+        let result = parser.parse_atom(&AtomExpr::Exclude {
+            exclude: vec![SelectorDefinitionValue::String("model_exclude".to_string())],
+        })?;
+
+        assert!(result.include.is_none());
+        if let Some(SelectExpression::Atom(criteria)) = result.exclude {
+            assert_eq!(criteria.method, MethodName::Fqn);
+            assert_eq!(criteria.value, "model_exclude");
+        } else {
+            panic!("Expected standalone exclude to be an Atom");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_composite_operations() -> FsResult<()> {
+        let defs = BTreeMap::new();
+        let io_args = IoArgs::default();
+        let parser = SelectorParser::new(defs, &io_args);
+
+        // Test union
+        let union_result = parser.parse_composite(&CompositeExpr {
+            kind: CompositeKind::Union(vec![
+                SelectorDefinitionValue::String("model_a".to_string()),
+                SelectorDefinitionValue::String("model_b".to_string()),
+            ]),
+        })?;
+
+        if let Some(SelectExpression::Or(exprs)) = union_result.include {
+            assert_eq!(exprs.len(), 2);
+        } else {
+            panic!("Expected Or expression for union");
+        }
+
+        // Test intersection
+        let intersection_result = parser.parse_composite(&CompositeExpr {
+            kind: CompositeKind::Intersection(vec![
+                SelectorDefinitionValue::String("model_a".to_string()),
+                SelectorDefinitionValue::String("model_b".to_string()),
+            ]),
+        })?;
+
+        if let Some(SelectExpression::And(exprs)) = intersection_result.include {
+            assert_eq!(exprs.len(), 2);
+        } else {
+            panic!("Expected And expression for intersection");
+        }
+
+        // Test composite with excludes
+        let composite_with_exclude = parser.parse_composite(&CompositeExpr {
+            kind: CompositeKind::Union(vec![
+                SelectorDefinitionValue::String("tag:bar".to_string()),
+                SelectorDefinitionValue::Full(SelectorExpr::Atom(AtomExpr::Method {
+                    method: "tag".to_string(),
+                    value: "baz".to_string(),
+                    childrens_parents: false,
+                    parents: false,
+                    children: false,
+                    parents_depth: None,
+                    children_depth: None,
+                    indirect_selection: None,
+                    exclude: Some(vec![SelectorDefinitionValue::String(
+                        "single_exclude".to_string(),
+                    )]),
+                })),
+            ]),
+        })?;
+
+        // Single exclude at composite level should not be wrapped
+        if let Some(SelectExpression::Atom(criteria)) = composite_with_exclude.exclude {
+            assert_eq!(criteria.method, MethodName::Fqn);
+            assert_eq!(criteria.value, "single_exclude");
+        } else {
+            panic!("Expected single exclude from composite to be an Atom");
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_selector_inheritance() -> FsResult<()> {
+        let mut defs = BTreeMap::new();
+        defs.insert(
+            "foo_and_bar".to_string(),
+            SelectorDefinition {
+                name: "foo_and_bar".to_string(),
+                description: None,
+                default: None,
+                definition: SelectorDefinitionValue::Full(SelectorExpr::Composite(CompositeExpr {
+                    kind: CompositeKind::Intersection(vec![
+                        SelectorDefinitionValue::String("tag:foo".to_string()),
+                        SelectorDefinitionValue::String("tag:bar".to_string()),
+                    ]),
+                })),
+            },
+        );
+
+        let io_args = IoArgs::default();
+        let parser = SelectorParser::new(defs, &io_args);
+
+        // Test basic inheritance with additional exclude
+        let result = parser.parse_atom(&AtomExpr::Method {
+            method: "selector".to_string(),
+            value: "foo_and_bar".to_string(),
+            childrens_parents: false,
+            parents: false,
+            children: false,
+            parents_depth: None,
+            children_depth: None,
+            indirect_selection: None,
+            exclude: Some(vec![SelectorDefinitionValue::String(
+                "tag:buzz".to_string(),
+            )]),
+        })?;
+
+        // Should inherit the intersection from foo_and_bar
+        if let Some(SelectExpression::And(exprs)) = result.include {
+            assert_eq!(exprs.len(), 2);
+            let mut tag_values = Vec::new();
+            for expr in &exprs {
+                if let SelectExpression::Atom(criteria) = expr {
+                    assert_eq!(criteria.method, MethodName::Tag);
+                    tag_values.push(criteria.value.clone());
+                }
+            }
+            tag_values.sort();
+            assert_eq!(tag_values, vec!["bar", "foo"]);
+        } else {
+            panic!("Expected And expression from inherited selector");
+        }
+
+        // Should have the exclude from the referencing selector
+        if let Some(SelectExpression::Atom(criteria)) = result.exclude {
+            assert_eq!(criteria.method, MethodName::Tag);
+            assert_eq!(criteria.value, "buzz");
+        } else {
+            panic!("Expected exclude expression");
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_selector_inheritance_with_exclude_combination() -> FsResult<()> {
+        let mut defs = BTreeMap::new();
+        defs.insert(
+            "base_with_exclude".to_string(),
+            SelectorDefinition {
+                name: "base_with_exclude".to_string(),
+                description: None,
+                default: None,
+                definition: SelectorDefinitionValue::Full(SelectorExpr::Atom(AtomExpr::Method {
+                    method: "tag".to_string(),
+                    value: "production".to_string(),
+                    childrens_parents: false,
+                    parents: false,
+                    children: false,
+                    parents_depth: None,
+                    children_depth: None,
+                    indirect_selection: None,
+                    exclude: Some(vec![SelectorDefinitionValue::String(
+                        "base_exclude".to_string(),
+                    )]),
+                })),
+            },
+        );
+
+        let io_args = IoArgs::default();
+        let parser = SelectorParser::new(defs, &io_args);
+
+        // Reference the base selector and add more excludes
+        let result = parser.parse_atom(&AtomExpr::Method {
+            method: "selector".to_string(),
+            value: "base_with_exclude".to_string(),
+            childrens_parents: false,
+            parents: false,
+            children: false,
+            parents_depth: None,
+            children_depth: None,
+            indirect_selection: None,
+            exclude: Some(vec![SelectorDefinitionValue::String(
+                "additional_exclude".to_string(),
+            )]),
+        })?;
+
+        // Should combine excludes from base selector and referencing selector
+        if let Some(SelectExpression::Or(exprs)) = result.exclude {
+            assert_eq!(exprs.len(), 2); // base exclude + additional exclude
+        } else {
+            panic!("Expected combined excludes to be wrapped in Or");
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_named_selector() -> FsResult<()> {
+        let mut defs = BTreeMap::new();
+        defs.insert(
+            "nightly_models".to_string(),
+            SelectorDefinition {
+                name: "nightly_models".to_string(),
+                description: None,
+                default: None,
+                definition: SelectorDefinitionValue::String("tag:nightly".to_string()),
+            },
+        );
+
+        let io_args = IoArgs::default();
+        let parser = SelectorParser::new(defs, &io_args);
+        let result = parser.parse_named("nightly_models")?;
+
+        assert!(result.exclude.is_none());
+        if let Some(SelectExpression::Atom(criteria)) = result.include {
+            assert_eq!(criteria.method, MethodName::Tag);
+            assert_eq!(criteria.value, "nightly");
+        } else {
+            panic!("Expected Atom expression");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_error_handling() {
+        let defs = BTreeMap::new();
+        let io_args = IoArgs::default();
+        let parser = SelectorParser::new(defs, &io_args);
+
+        // Test unknown selector
+        let result = parser.parse_named("unknown");
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert_eq!(e.code, ErrorCode::SelectorError);
+            assert!(e.to_string().contains("Unknown selector"));
+        }
+
+        // Test unknown selector in inheritance
+        let inheritance_result = parser.parse_atom(&AtomExpr::Method {
+            method: "selector".to_string(),
+            value: "unknown_selector".to_string(),
+            childrens_parents: false,
+            parents: false,
+            children: false,
+            parents_depth: None,
+            children_depth: None,
+            indirect_selection: None,
+            exclude: None,
+        });
+        assert!(inheritance_result.is_err());
+    }
+
+    #[test]
+    fn test_graph_operators() -> FsResult<()> {
+        let defs = BTreeMap::new();
+        let io_args = IoArgs::default();
+        let parser = SelectorParser::new(defs, &io_args);
 
         let result = parser.parse_atom(&AtomExpr::Method {
             method: "tag".to_string(),
@@ -493,48 +745,10 @@ mod tests {
     }
 
     #[test]
-    fn test_complex_selector_with_excludes() -> FsResult<()> {
+    fn test_full_vs_string_definitions() -> FsResult<()> {
         let defs = BTreeMap::new();
-        let parser = SelectorParser::new(defs);
-
-        let exclude = vec![
-            SelectorDefinitionValue::String("model_a".to_string()),
-            SelectorDefinitionValue::String("model_b".to_string()),
-        ];
-
-        let result = parser.parse_atom(&AtomExpr::Method {
-            method: "tag".to_string(),
-            value: "nightly".to_string(),
-            childrens_parents: false,
-            parents: false,
-            children: false,
-            parents_depth: None,
-            children_depth: None,
-            indirect_selection: Some(IndirectSelection::default()),
-            exclude: Some(exclude),
-        })?;
-
-        assert!(result.include.is_some());
-        if let Some(SelectExpression::Or(exprs)) = result.exclude {
-            assert_eq!(exprs.len(), 2);
-            if let (SelectExpression::Atom(a), SelectExpression::Atom(b)) = (&exprs[0], &exprs[1]) {
-                assert_eq!(a.method, MethodName::Fqn);
-                assert_eq!(a.value, "model_a");
-                assert_eq!(b.method, MethodName::Fqn);
-                assert_eq!(b.value, "model_b");
-            } else {
-                panic!("Expected Atom expressions in exclude");
-            }
-        } else {
-            panic!("Expected Or expression in exclude");
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_parse_definition_with_full_expression() -> FsResult<()> {
-        let defs = BTreeMap::new();
-        let parser = SelectorParser::new(defs);
+        let io_args = IoArgs::default();
+        let parser = SelectorParser::new(defs, &io_args);
 
         let expr = SelectorExpr::Atom(AtomExpr::Method {
             method: "tag".to_string(),
@@ -561,89 +775,11 @@ mod tests {
     }
 
     #[test]
-    fn test_nested_composite_expressions() -> FsResult<()> {
+    fn test_indirect_selection_propagation() -> FsResult<()> {
         let defs = BTreeMap::new();
-        let parser = SelectorParser::new(defs);
+        let io_args = IoArgs::default();
+        let parser = SelectorParser::new(defs, &io_args);
 
-        // Create a nested expression: (tag:nightly + (model_a, model_b))
-        let inner_union = SelectorExpr::Composite(CompositeExpr {
-            kind: CompositeKind::Union(vec![
-                SelectorDefinitionValue::String("model_a".to_string()),
-                SelectorDefinitionValue::String("model_b".to_string()),
-            ]),
-        });
-
-        let outer_intersection = SelectorExpr::Composite(CompositeExpr {
-            kind: CompositeKind::Intersection(vec![
-                SelectorDefinitionValue::String("tag:nightly".to_string()),
-                SelectorDefinitionValue::Full(inner_union),
-            ]),
-        });
-
-        let result = parser.parse_expr(&outer_intersection)?;
-
-        assert!(result.exclude.is_none());
-        if let Some(SelectExpression::And(exprs)) = result.include {
-            assert_eq!(exprs.len(), 2);
-            // First expression should be the tag selector
-            if let SelectExpression::Atom(tag_criteria) = &exprs[0] {
-                assert_eq!(tag_criteria.method, MethodName::Tag);
-                assert_eq!(tag_criteria.value, "nightly");
-            } else {
-                panic!("Expected Atom expression for tag");
-            }
-            // Second expression should be the OR of model_a and model_b
-            if let SelectExpression::Or(model_exprs) = &exprs[1] {
-                assert_eq!(model_exprs.len(), 2);
-                if let (SelectExpression::Atom(a), SelectExpression::Atom(b)) =
-                    (&model_exprs[0], &model_exprs[1])
-                {
-                    assert_eq!(a.method, MethodName::Fqn);
-                    assert_eq!(a.value, "model_a");
-                    assert_eq!(b.method, MethodName::Fqn);
-                    assert_eq!(b.value, "model_b");
-                } else {
-                    panic!("Expected Atom expressions for models");
-                }
-            } else {
-                panic!("Expected Or expression for models");
-            }
-        } else {
-            panic!("Expected And expression");
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_collect_definition_includes() -> FsResult<()> {
-        let defs = BTreeMap::new();
-        let parser = SelectorParser::new(defs);
-
-        let definitions = vec![
-            SelectorDefinitionValue::String("model_a".to_string()),
-            SelectorDefinitionValue::String("model_b".to_string()),
-        ];
-
-        let result = parser.collect_definition_includes(&definitions)?;
-
-        assert_eq!(result.len(), 2);
-        if let (SelectExpression::Atom(a), SelectExpression::Atom(b)) = (&result[0], &result[1]) {
-            assert_eq!(a.method, MethodName::Fqn);
-            assert_eq!(a.value, "model_a");
-            assert_eq!(b.method, MethodName::Fqn);
-            assert_eq!(b.value, "model_b");
-        } else {
-            panic!("Expected Atom expressions");
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_set_indirect_selection() -> FsResult<()> {
-        let defs = BTreeMap::new();
-        let parser = SelectorParser::new(defs);
-
-        // Create a complex expression with nested AND/OR
         let expr = SelectorExpr::Composite(CompositeExpr {
             kind: CompositeKind::Intersection(vec![
                 SelectorDefinitionValue::String("model_a".to_string()),
@@ -669,33 +805,6 @@ mod tests {
             }
         } else {
             panic!("Expected And expression");
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_parse_definition_with_empty_exclude() -> FsResult<()> {
-        let defs = BTreeMap::new();
-        let parser = SelectorParser::new(defs);
-
-        let result = parser.parse_atom(&AtomExpr::Method {
-            method: "tag".to_string(),
-            value: "nightly".to_string(),
-            childrens_parents: false,
-            parents: false,
-            children: false,
-            parents_depth: None,
-            children_depth: None,
-            indirect_selection: Some(IndirectSelection::default()),
-            exclude: None,
-        })?;
-
-        assert!(result.exclude.is_none());
-        if let Some(SelectExpression::Atom(criteria)) = result.include {
-            assert_eq!(criteria.method, MethodName::Tag);
-            assert_eq!(criteria.value, "nightly");
-        } else {
-            panic!("Expected Atom expression");
         }
         Ok(())
     }

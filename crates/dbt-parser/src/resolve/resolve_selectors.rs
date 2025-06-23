@@ -84,7 +84,7 @@ pub fn resolve_final_selectors(
         .iter()
         .map(|d| (d.name.clone(), d.clone()))
         .collect::<BTreeMap<_, _>>();
-    let parser = SelectorParser::new(defs);
+    let parser = SelectorParser::new(defs, &arg.io);
     let mut resolved_selectors = HashMap::new();
     for def in yaml.selectors {
         let resolved = parser.parse_definition(&def.definition)?;

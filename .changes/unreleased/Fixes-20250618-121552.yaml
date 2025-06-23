@@ -1,0 +1,3 @@
+kind: Fixes
+body: correctly resolve selector inheritence
+time: 2025-06-18T12:15:52.530032+10:00
