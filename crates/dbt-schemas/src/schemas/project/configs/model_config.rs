@@ -152,13 +152,15 @@ pub struct ProjectModelConfig {
     )]
     pub labels_from_meta: Option<bool>,
     #[serde(rename = "+liquid_clustered_by")]
-    pub liquid_clustered_by: Option<String>,
+    pub liquid_clustered_by: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+location")]
     pub location: Option<String>,
     #[serde(rename = "+location_root")]
     pub location_root: Option<String>,
     #[serde(rename = "+lookback")]
     pub lookback: Option<i32>,
+    #[serde(rename = "+matched_condition")]
+    pub matched_condition: Option<String>,
     #[serde(rename = "+materialized")]
     pub materialized: Option<DbtMaterialization>,
     #[serde(rename = "+max_staleness")]
@@ -167,8 +169,20 @@ pub struct ProjectModelConfig {
     pub merge_exclude_columns: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+merge_update_columns")]
     pub merge_update_columns: Option<StringOrArrayOfStrings>,
+    #[serde(rename = "+merge_with_schema_evolution")]
+    pub merge_with_schema_evolution: Option<bool>,
     #[serde(rename = "+meta")]
     pub meta: Option<BTreeMap<String, Value>>,
+    #[serde(rename = "+not_matched_by_source_action")]
+    pub not_matched_by_source_action: Option<String>,
+    #[serde(rename = "+not_matched_by_source_condition")]
+    pub not_matched_by_source_condition: Option<String>,
+    #[serde(rename = "+not_matched_condition")]
+    pub not_matched_condition: Option<String>,
+    #[serde(rename = "+source_alias")]
+    pub source_alias: Option<String>,
+    #[serde(rename = "+target_alias")]
+    pub target_alias: Option<String>,
     #[serde(rename = "+on_configuration_change")]
     pub on_configuration_change: Option<OnConfigurationChange>,
     #[serde(rename = "+on_schema_change")]
@@ -213,6 +227,10 @@ pub struct ProjectModelConfig {
     pub require_partition_filter: Option<bool>,
     #[serde(rename = "+schema")]
     pub schema: Option<String>,
+    #[serde(rename = "+skip_matched_step")]
+    pub skip_matched_step: Option<bool>,
+    #[serde(rename = "+skip_not_matched_step")]
+    pub skip_not_matched_step: Option<bool>,
     #[serde(rename = "+secure")]
     pub secure: Option<bool>,
     #[serde(rename = "+sort")]
@@ -407,6 +425,15 @@ impl From<ProjectModelConfig> for ModelConfig {
                 databricks_tags: config.databricks_tags,
                 compression: config.compression,
                 databricks_compute: config.databricks_compute,
+                target_alias: config.target_alias,
+                source_alias: config.source_alias,
+                matched_condition: config.matched_condition,
+                not_matched_condition: config.not_matched_condition,
+                not_matched_by_source_condition: config.not_matched_by_source_condition,
+                not_matched_by_source_action: config.not_matched_by_source_action,
+                merge_with_schema_evolution: config.merge_with_schema_evolution,
+                skip_matched_step: config.skip_matched_step,
+                skip_not_matched_step: config.skip_not_matched_step,
             },
             redshift_model_config: RedshiftModelConfig {
                 auto_refresh: config.auto_refresh,
@@ -506,6 +533,19 @@ impl From<ModelConfig> for ProjectModelConfig {
             dist: config.redshift_model_config.dist,
             sort: config.redshift_model_config.sort,
             sort_type: config.redshift_model_config.sort_type,
+            matched_condition: config.databricks_model_config.matched_condition,
+            merge_with_schema_evolution: config.databricks_model_config.merge_with_schema_evolution,
+            not_matched_by_source_action: config
+                .databricks_model_config
+                .not_matched_by_source_action,
+            not_matched_by_source_condition: config
+                .databricks_model_config
+                .not_matched_by_source_condition,
+            not_matched_condition: config.databricks_model_config.not_matched_condition,
+            source_alias: config.databricks_model_config.source_alias,
+            target_alias: config.databricks_model_config.target_alias,
+            skip_matched_step: config.databricks_model_config.skip_matched_step,
+            skip_not_matched_step: config.databricks_model_config.skip_not_matched_step,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -770,6 +810,15 @@ impl DefaultTo<DatabricksModelConfig> for DatabricksModelConfig {
             ref mut databricks_tags,
             ref mut compression,
             ref mut databricks_compute,
+            ref mut target_alias,
+            ref mut source_alias,
+            ref mut matched_condition,
+            ref mut not_matched_condition,
+            ref mut not_matched_by_source_condition,
+            ref mut not_matched_by_source_action,
+            ref mut merge_with_schema_evolution,
+            ref mut skip_matched_step,
+            ref mut skip_not_matched_step,
         } = self;
 
         default_to!(
@@ -786,7 +835,16 @@ impl DefaultTo<DatabricksModelConfig> for DatabricksModelConfig {
                 catalog,
                 databricks_tags,
                 compression,
-                databricks_compute
+                databricks_compute,
+                target_alias,
+                source_alias,
+                matched_condition,
+                not_matched_condition,
+                not_matched_by_source_condition,
+                not_matched_by_source_action,
+                merge_with_schema_evolution,
+                skip_matched_step,
+                skip_not_matched_step,
             ]
         );
     }
@@ -816,7 +874,7 @@ pub struct DatabricksModelConfig {
     // this config is introduced here https://github.com/databricks/dbt-databricks/pull/823
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub include_full_name_in_path: Option<bool>,
-    pub liquid_clustered_by: Option<String>,
+    pub liquid_clustered_by: Option<StringOrArrayOfStrings>,
     pub auto_liquid_cluster: Option<bool>,
     pub clustered_by: Option<String>,
     pub buckets: Option<i64>,
@@ -824,6 +882,15 @@ pub struct DatabricksModelConfig {
     pub databricks_tags: Option<BTreeMap<String, Value>>,
     pub compression: Option<String>,
     pub databricks_compute: Option<String>,
+    pub target_alias: Option<String>,
+    pub source_alias: Option<String>,
+    pub matched_condition: Option<String>,
+    pub not_matched_condition: Option<String>,
+    pub not_matched_by_source_condition: Option<String>,
+    pub not_matched_by_source_action: Option<String>,
+    pub merge_with_schema_evolution: Option<bool>,
+    pub skip_matched_step: Option<bool>,
+    pub skip_not_matched_step: Option<bool>,
 }
 
 #[skip_serializing_none]
