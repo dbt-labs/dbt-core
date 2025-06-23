@@ -571,6 +571,17 @@ sources:
           loaded_at_query: 'select 1'
 """
 
+source_table_config_loaded_at_query_not_set_if_field_present = """
+sources:
+  - name: test_source
+    config:
+      loaded_at_query: 'select 1'
+    tables:
+      - name: test_table
+        config:
+          loaded_at_field: 'id'
+"""
+
 # Legacy top-level support
 source_config_loaded_at_field_top_level = """
 sources:
@@ -603,4 +614,13 @@ sources:
     tables:
       - name: test_table
         loaded_at_query: 'select 1'
+"""
+
+source_table_config_loaded_at_query_not_set_if_field_present_top_level = """
+sources:
+  - name: test_source
+    loaded_at_query: 'select 1'
+    tables:
+      - name: test_table
+        loaded_at_field: 'id'
 """
