@@ -644,6 +644,8 @@ class TestList:
                     },
                     "meta": {"test": 1},
                     "tags": ["tag"],
+                    "loaded_at_query": None,
+                    "loaded_at_field": "column_name",
                 },
                 "unique_id": "source.test.my_source.my_table",
                 "original_file_path": normalize("models/schema.yml"),
