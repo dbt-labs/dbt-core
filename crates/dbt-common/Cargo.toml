@@ -48,6 +48,7 @@ strum_macros = { workspace = true }
 term_size = { workspace = true }
 
 
+arc-swap = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 
 pathdiff = { workspace = true }

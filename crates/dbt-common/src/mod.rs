@@ -2,6 +2,7 @@
 pub mod macros;
 
 pub mod adapter;
+pub mod atomic;
 pub mod clap_cli;
 pub mod constants;
 pub mod error;
