@@ -1,3 +1,0 @@
-kind: Fixes
-body: No longer create empty schema on DataFrame collect error
-time: 2025-06-20T17:49:31.043552671-07:00

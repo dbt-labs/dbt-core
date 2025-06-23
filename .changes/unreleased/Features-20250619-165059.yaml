@@ -1,4 +1,0 @@
-kind: Features
-body: Collect refs and sources in pre/post hooks and provide better error message
-  for unrecognized refs at compile time
-time: 2025-06-19T16:50:59.587658381-07:00
