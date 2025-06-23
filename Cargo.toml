@@ -49,20 +49,20 @@ datafusion = { git = "https://github.com/sdf-labs/arrow-datafusion", rev = "fba7
 #datafusion = { path = "../arrow-datafusion/datafusion/core" }
 
 # All arrow dependencies (run `cargo tree --prefix none | grep ^arrow | cut -d ' ' -f1 | sort -u` to get this list)
-arrow = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
-arrow-arith = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
-arrow-array = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
-arrow-buffer = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
-arrow-cast = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
-arrow-csv = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
-arrow-data = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
-arrow-ipc = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
-arrow-json = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
-arrow-ord = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
-arrow-row = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
-arrow-schema = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
-arrow-select = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
-arrow-string = { git = "https://github.com/sdf-labs/arrow-rs", rev = "00824409af2607cd6dbea571f70304e2ecc6c55d" } # @ sdf/54.2.1
+arrow = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e733b03ae96aa275bf98318738e5544a9be4b21b" } # @ sdf/54.2.1
+arrow-arith = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e733b03ae96aa275bf98318738e5544a9be4b21b" } # @ sdf/54.2.1
+arrow-array = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e733b03ae96aa275bf98318738e5544a9be4b21b" } # @ sdf/54.2.1
+arrow-buffer = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e733b03ae96aa275bf98318738e5544a9be4b21b" } # @ sdf/54.2.1
+arrow-cast = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e733b03ae96aa275bf98318738e5544a9be4b21b" } # @ sdf/54.2.1
+arrow-csv = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e733b03ae96aa275bf98318738e5544a9be4b21b" } # @ sdf/54.2.1
+arrow-data = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e733b03ae96aa275bf98318738e5544a9be4b21b" } # @ sdf/54.2.1
+arrow-ipc = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e733b03ae96aa275bf98318738e5544a9be4b21b" } # @ sdf/54.2.1
+arrow-json = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e733b03ae96aa275bf98318738e5544a9be4b21b" } # @ sdf/54.2.1
+arrow-ord = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e733b03ae96aa275bf98318738e5544a9be4b21b" } # @ sdf/54.2.1
+arrow-row = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e733b03ae96aa275bf98318738e5544a9be4b21b" } # @ sdf/54.2.1
+arrow-schema = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e733b03ae96aa275bf98318738e5544a9be4b21b" } # @ sdf/54.2.1
+arrow-select = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e733b03ae96aa275bf98318738e5544a9be4b21b" } # @ sdf/54.2.1
+arrow-string = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e733b03ae96aa275bf98318738e5544a9be4b21b" } # @ sdf/54.2.1
 # OR, when working locally
 #arrow = { path = "../arrow-rs/arrow" }
 #arrow-arith = { path = "../arrow-rs/arrow-arith" }
