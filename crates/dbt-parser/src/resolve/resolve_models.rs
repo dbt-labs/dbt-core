@@ -302,7 +302,9 @@ pub async fn resolve_models(
                 .unwrap_or_default(),
             meta: model_config.meta.clone().unwrap_or_default(),
             enabled: model_config.enabled.unwrap_or(true),
-            static_analysis: StaticAnalysisKind::On,
+            static_analysis: model_config
+                .static_analysis
+                .unwrap_or(StaticAnalysisKind::On),
             contract: model_config.contract.clone(),
             incremental_strategy: model_config.incremental_strategy.clone(),
             freshness: model_config.freshness.clone(),
