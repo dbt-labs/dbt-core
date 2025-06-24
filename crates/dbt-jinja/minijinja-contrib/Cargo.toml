@@ -31,7 +31,7 @@ unicode_wordwrap = [
 
 [dependencies]
 chrono = { version = "0.4.26", features = ["serde"] }
-chrono-tz = { version = "0.10.1" }
+chrono-tz = { workspace = true }
 fancy-regex = { workspace = true }
 iana-time-zone = { workspace = true }
 minijinja = { workspace = true }

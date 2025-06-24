@@ -3,7 +3,6 @@ use chrono_tz::Tz;
 use minijinja::{Error, ErrorKind, Value};
 use std::collections::BTreeMap;
 use std::fmt;
-use std::str::FromStr;
 use std::sync::Arc;
 
 /// A Python-like "pytz" timezone object that wraps a `chrono_tz::Tz`.
@@ -81,7 +80,7 @@ fn timezone(args: &[Value]) -> Result<Value, Error> {
     })?;
 
     // Try to parse it as a Chrono Tz.
-    match Tz::from_str(tz_name) {
+    match Tz::from_str_insensitive(tz_name) {
         Ok(tz) => Ok(Value::from_object(PytzTimezone::new(tz))),
         Err(_) => Err(Error::new(
             ErrorKind::InvalidArgument,
@@ -114,5 +113,44 @@ impl minijinja::value::Object for PytzTimezone {
     fn render(self: &Arc<Self>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // If you do {{ tz_obj }} in Jinja, it prints out the name
         write!(f, "{}", self.tz)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::modules::pytz::{timezone, PytzTimezone};
+    use chrono_tz::Tz;
+    use minijinja::Value;
+
+    #[test]
+    fn test_valid_timezone_utc() {
+        let args = vec![Value::from("UTC")];
+        let result = timezone(&args);
+        assert!(result.is_ok());
+
+        let actual = result.unwrap();
+        let expected = Value::from_object(PytzTimezone::new(chrono_tz::UTC));
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_valid_timezone_case_insensitive() {
+        let args = vec![Value::from("asia/ho_chi_minh")];
+        let result = timezone(&args);
+        assert!(result.is_ok());
+
+        let actual = result.unwrap();
+        let expected = Value::from_object(PytzTimezone::new(Tz::Asia__Ho_Chi_Minh));
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_invalid_timezone() {
+        let args = vec![Value::from("Invalid/Zone")];
+        let result = timezone(&args);
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Invalid timezone name"));
     }
 }
