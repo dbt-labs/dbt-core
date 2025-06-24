@@ -107,17 +107,21 @@ impl IoArgs {
     /// This function takes an artifact path, which may either be a workspace
     /// resource, or some generated temp location, and returns a path to its
     /// corresponding location in the workspace
-    ///
-    /// FIXME: this is really a hack, the proper thing to do is to have a
-    /// semantic representation for each artifact that can generate workspace or
-    /// temporary paths
-    pub fn map_to_workspace_path(&self, path: &Path) -> PathBuf {
-        let special_component_idx = path.components().position(|c| {
-            c.as_os_str() == DBT_GENERIC_TESTS_DIR_NAME || c.as_os_str() == DBT_SNAPSHOTS_DIR_NAME
-        });
-        if let Some(idx) = special_component_idx {
-            self.out_dir
-                .join(path.components().skip(idx).collect::<PathBuf>())
+    pub fn map_to_workspace_path(&self, path: &Path, resource_type: &str) -> PathBuf {
+        if resource_type == "unit_test" || resource_type == "snapshot" {
+            let special_component_idx = path.components().position(|c| {
+                c.as_os_str() == DBT_GENERIC_TESTS_DIR_NAME
+                    || c.as_os_str() == DBT_SNAPSHOTS_DIR_NAME
+            });
+            if let Some(idx) = special_component_idx {
+                // FIXME: this is really a hack, the proper thing to do is to have a
+                // semantic representation for each artifact that can generate workspace or
+                // temporary paths
+                self.out_dir
+                    .join(path.components().skip(idx).collect::<PathBuf>())
+            } else {
+                self.out_dir.join(path)
+            }
         } else {
             self.in_dir.join(path)
         }
