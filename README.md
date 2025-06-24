@@ -10,7 +10,7 @@ This repo hosts components of the dbt Fusion engine, the foundation for future i
 
 > [!IMPORTANT]  
 > **Note: the dbt Fusion Engine is in Beta!**
-Bugs and missing functionality compared to dbt Core will be resolved continuously in the leadup to a final release (see [this post](https://docs.getdbt.com/blog/fusion-path-to-ga) for more details). 
+Bugs and missing functionality compared to dbt Core will be resolved continuously in the leadup to a final release (see [this post](https://docs.getdbt.com/blog/dbt-fusion-engine-path-to-ga) for more details). 
 
 The dbt Fusion engine is a ground up, first principles rewrite of the dbt Core execution engine, built to be interoperable with the standard dbt authoring layer. Fusion enforces some ambiguous areas of the authoring spec more strictly than dbt Core to ensure correctness (for example, dbt Core does not proactively validate most YAML configurations). Many of these discrepancies can be fixed automatically with the [dbt Autofix](https://github.com/dbt-labs/dbt-autofix) tool.
 
