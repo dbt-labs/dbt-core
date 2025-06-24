@@ -8,7 +8,7 @@ use serde_with::skip_serializing_none;
 
 use crate::schemas::serde::StringOrArrayOfStrings;
 
-use super::{common::Constraint, data_tests::DataTests, serde::BooleanOrJinjaString};
+use super::{common::Constraint, data_tests::DataTests};
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -33,11 +33,11 @@ pub struct ColumnProperties {
     pub data_type: Option<String>,
     pub description: Option<String>,
     pub constraints: Option<Vec<Constraint>>,
+    pub tests: Verbatim<Option<Vec<DataTests>>>,
     pub data_tests: Verbatim<Option<Vec<DataTests>>>,
     pub granularity: Option<ColumnPropertiesGranularity>,
     pub policy_tags: Option<Vec<String>>,
-    pub quote: Option<BooleanOrJinjaString>,
-    pub tests: Verbatim<Option<Vec<DataTests>>>,
+    pub quote: Option<bool>,
     pub config: Option<ColumnConfig>,
 }
 
@@ -95,7 +95,7 @@ pub fn process_columns(
                             .map(|t| t.into())
                             .unwrap_or(tags.clone().unwrap_or_default()),
                         policy_tags: cp.policy_tags.clone(),
-                        quote: cp.quote.clone().map(bool::from),
+                        quote: cp.quote,
                         deprecated_config: cp.config.clone().unwrap_or_default(),
                     })
                 })

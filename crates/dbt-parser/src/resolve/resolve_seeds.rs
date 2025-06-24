@@ -256,8 +256,12 @@ pub fn resolve_seeds(
         match status {
             ModelStatus::Enabled => {
                 seeds.insert(unique_id, Arc::new(dbt_seed));
-                seed.as_testable()
-                    .persist(package_name, &io_args.out_dir, collected_tests)?;
+                seed.as_testable().persist(
+                    package_name,
+                    &io_args.out_dir,
+                    collected_tests,
+                    adapter_type,
+                )?;
             }
             ModelStatus::Disabled => {
                 disabled_seeds.insert(unique_id, Arc::new(dbt_seed));

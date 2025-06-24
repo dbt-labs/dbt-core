@@ -5,13 +5,16 @@ use dbt_common::FsError;
 use dbt_common::FsResult;
 use dbt_common::{err, ErrorCode};
 use dbt_common::{fs_err, stdfs};
+use dbt_frontend_common::Dialect;
 use dbt_jinja_utils::serde::check_single_expression_without_whitepsace_control;
+use dbt_schemas::schemas::common::normalize_quote;
 use dbt_schemas::schemas::common::Versions;
 use dbt_schemas::schemas::data_tests::{
     AcceptedValuesTestProperties, DataTests, NotNullTestProperties, RelationshipsTestProperties,
     UniqueTestProperties,
 };
 
+use dbt_schemas::schemas::dbt_column::ColumnProperties;
 use dbt_schemas::schemas::project::DataTestConfig;
 use dbt_schemas::schemas::properties::Tables;
 use dbt_schemas::schemas::properties::{ModelProperties, SeedProperties, SnapshotProperties};
@@ -25,6 +28,7 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::path::Path;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::LazyLock;
 
 const CONFIG_ARGS: &[&str] = &[
@@ -54,9 +58,12 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
         project_name: &str,
         out_dir: &Path,
         collected_tests: &mut Vec<DbtAsset>,
+        adapter_type: &str,
     ) -> FsResult<()> {
         let test_configs: Vec<GenericTestConfig> = self.try_into()?;
         // Process tests for each version (or single resource)
+        let dialect = Dialect::from_str(adapter_type)
+            .map_err(|e| fs_err!(ErrorCode::Unexpected, "Failed to parse adapter type: {}", e))?;
         for test_config in test_configs {
             // Handle model-level tests
             if let Some(tests) = &test_config.model_tests {
@@ -68,13 +75,26 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
 
             // Handle column-level tests
             if let Some(column_tests) = &test_config.column_tests {
-                for (column_name, tests) in column_tests {
+                for (column_name, (should_quote, tests)) in column_tests {
                     for test in tests {
+                        // Need dialect to quote properly
+                        let (column_name, should_quote) =
+                            normalize_quote(*should_quote, adapter_type, column_name);
+                        let quoted_column_name = if should_quote {
+                            format!(
+                                "{}{}{}",
+                                dialect.quote_char(),
+                                column_name,
+                                dialect.quote_char()
+                            )
+                        } else {
+                            column_name.to_string()
+                        };
                         let dbt_asset = persist_inner(
                             project_name,
                             out_dir,
                             &test_config,
-                            Some(column_name),
+                            Some(&quoted_column_name),
                             test,
                         )?;
                         collected_tests.push(dbt_asset);
@@ -507,7 +527,7 @@ struct GenericTestConfig {
     resource_name: String,
     version_num: Option<String>,
     model_tests: Option<Vec<DataTests>>,
-    column_tests: Option<BTreeMap<String, Vec<DataTests>>>,
+    column_tests: Option<BTreeMap<String, (bool, Vec<DataTests>)>>,
     source_name: Option<String>,
 }
 
@@ -767,11 +787,14 @@ fn collect_versioned_model_tests(
             };
 
             // Then handle any explicit column test definitions
-            if let Ok(column_map) = serde_json::from_value::<Vec<ModelProperties>>(columns.clone())
+            if let Ok(column_map) = serde_json::from_value::<Vec<ColumnProperties>>(columns.clone())
             {
                 for col in column_map {
                     if let Some(tests) = col.tests.as_ref() {
-                        column_tests.insert(col.name.clone(), tests.clone());
+                        column_tests.insert(
+                            col.name.clone(),
+                            (col.quote.unwrap_or(false), tests.clone()),
+                        );
                     }
                 }
             }
@@ -834,7 +857,8 @@ pub trait TestableNodeTrait {
     fn base_tests(&self) -> FsResult<Option<Vec<DataTests>>>;
 
     /// Columns, each with optional tests.
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, Vec<DataTests>>>>;
+    #[allow(clippy::type_complexity)]
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>>;
 
     /// Versions for models, or None for everything else.
     fn versions(&self) -> Option<&[Versions]> {
@@ -862,7 +886,7 @@ impl TestableNodeTrait for ModelProperties {
         base_tests_inner(self.tests.as_deref(), self.data_tests.as_deref())
     }
 
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, Vec<DataTests>>>> {
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>> {
         column_tests_inner(&self.columns)
     }
 
@@ -884,7 +908,7 @@ impl TestableNodeTrait for SeedProperties {
         base_tests_inner(self.tests.as_deref(), self.data_tests.as_deref())
     }
 
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, Vec<DataTests>>>> {
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>> {
         column_tests_inner(&self.columns)
     }
 }
@@ -902,7 +926,7 @@ impl TestableNodeTrait for SnapshotProperties {
         base_tests_inner(self.tests.as_deref(), self.data_tests.as_deref())
     }
 
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, Vec<DataTests>>>> {
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>> {
         column_tests_inner(&self.columns)
     }
 }
@@ -933,7 +957,7 @@ impl TestableNodeTrait for TestableTable<'_> {
         )
     }
 
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, Vec<DataTests>>>> {
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>> {
         column_tests_inner(&self.table.columns)
     }
 }

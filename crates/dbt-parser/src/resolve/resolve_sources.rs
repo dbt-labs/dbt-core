@@ -248,7 +248,12 @@ pub fn resolve_sources(
                     table: &table.clone(),
                 }
                 .as_testable()
-                .persist(package_name, &io_args.out_dir, collected_tests)?;
+                .persist(
+                    package_name,
+                    &io_args.out_dir,
+                    collected_tests,
+                    adapter_type,
+                )?;
             }
             ModelStatus::Disabled => {
                 disabled_sources.insert(unique_id, Arc::new(dbt_source));

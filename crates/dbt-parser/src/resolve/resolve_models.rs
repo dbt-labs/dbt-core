@@ -345,9 +345,12 @@ pub async fn resolve_models(
                 node_names.insert(model_name.to_owned());
                 rendering_results.insert(unique_id, (rendered_sql.clone(), macro_spans.clone()));
 
-                properties
-                    .as_testable()
-                    .persist(package_name, &arg.io.out_dir, collected_tests)?;
+                properties.as_testable().persist(
+                    package_name,
+                    &arg.io.out_dir,
+                    collected_tests,
+                    adapter_type,
+                )?;
             }
             ModelStatus::Disabled => {
                 disabled_models.insert(unique_id.to_owned(), model.clone());
