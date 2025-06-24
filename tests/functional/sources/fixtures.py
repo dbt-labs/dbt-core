@@ -534,3 +534,93 @@ sources:
       - name: source_a
         loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
 """
+
+source_config_loaded_at_query_config_level = """
+sources:
+  - name: test_source
+    config:
+      loaded_at_query: 'select 1'
+    tables:
+      - name: test_table
+"""
+
+source_config_loaded_at_field_config_level = """
+sources:
+  - name: test_source
+    config:
+      loaded_at_field: 'id'
+    tables:
+      - name: test_table
+"""
+
+source_table_config_loaded_at_field_config_level = """
+sources:
+  - name: test_source
+    tables:
+      - name: test_table
+        config:
+          loaded_at_field: 'id'
+"""
+
+source_table_config_loaded_at_query_config_level = """
+sources:
+  - name: test_source
+    tables:
+      - name: test_table
+        config:
+          loaded_at_query: 'select 1'
+"""
+
+source_table_config_loaded_at_query_not_set_if_field_present = """
+sources:
+  - name: test_source
+    config:
+      loaded_at_query: 'select 1'
+    tables:
+      - name: test_table
+        config:
+          loaded_at_field: 'id'
+"""
+
+# Legacy top-level support
+source_config_loaded_at_field_top_level = """
+sources:
+  - name: test_source
+    loaded_at_field: 'id'
+    tables:
+      - name: test_table
+"""
+
+source_config_loaded_at_query_top_level = """
+sources:
+  - name: test_source
+    loaded_at_query: 'select 1'
+    tables:
+      - name: test_table
+"""
+
+table_config_loaded_at_field_top_level = """
+sources:
+  - name: test_source
+    tables:
+      - name: test_table
+        loaded_at_field: 'id'
+"""
+
+table_config_loaded_at_query_top_level = """
+sources:
+  - name: test_source
+    loaded_at_query: 'select 1'
+    tables:
+      - name: test_table
+        loaded_at_query: 'select 1'
+"""
+
+source_table_config_loaded_at_query_not_set_if_field_present_top_level = """
+sources:
+  - name: test_source
+    loaded_at_query: 'select 1'
+    tables:
+      - name: test_table
+        loaded_at_field: 'id'
+"""

@@ -141,17 +141,21 @@ class BaseContextConfigGenerator(Generic[T]):
 
     def calculate_node_config(
         self,
+        # this is the config from the sql file
         config_call_dict: Dict[str, Any],
         fqn: List[str],
         resource_type: NodeType,
         project_name: str,
         base: bool,
+        # this is the config from the schema file
         patch_config_dict: Optional[Dict[str, Any]] = None,
     ) -> BaseConfig:
         own_config = self.get_node_project(project_name)
 
         result = self.initial_result(resource_type=resource_type, base=base)
 
+        # builds the config from what was specified in the runtime_config, which generally
+        # comes from the project's dbt_project.yml file.
         project_configs = self._project_configs(own_config, fqn, resource_type)
         for fqn_config in project_configs:
             result = self._update_from_config(result, fqn_config)

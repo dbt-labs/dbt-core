@@ -1,7 +1,7 @@
 import itertools
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Set
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from dbt import deprecations
 from dbt.adapters.capability import Capability
@@ -131,32 +131,6 @@ class SourcePatcher:
         description = table.description or ""
         source_description = source.description or ""
 
-        # We need to be able to tell the difference between explicitly setting the loaded_at_field to None/null
-        # and when it's simply not set.  This allows a user to override the source level loaded_at_field so that
-        # specific table can default to metadata-based freshness.
-        if table.loaded_at_field_present and table.loaded_at_query:
-            raise ParsingError(
-                "Cannot specify both loaded_at_field and loaded_at_query at table level."
-            )
-        if source.loaded_at_field and source.loaded_at_query:
-            raise ParsingError(
-                "Cannot specify both loaded_at_field and loaded_at_query at source level."
-            )
-
-        if table.loaded_at_field_present or table.loaded_at_field is not None:
-            loaded_at_field = table.loaded_at_field
-        else:
-            loaded_at_field = source.loaded_at_field  # may be None, that's okay
-
-        loaded_at_query: Optional[str]
-        if table.loaded_at_query is not None:
-            loaded_at_query = table.loaded_at_query
-        else:
-            if table.loaded_at_field_present:
-                loaded_at_query = None
-            else:
-                loaded_at_query = source.loaded_at_query
-
         quoting = source.quoting.merged(table.quoting)
         # path = block.path.original_file_path
         table_meta = table.meta or {}
@@ -204,8 +178,8 @@ class SourcePatcher:
             source_meta=source_meta,
             meta=meta,
             loader=source.loader,
-            loaded_at_field=loaded_at_field,
-            loaded_at_query=loaded_at_query,
+            loaded_at_field=config.loaded_at_field,
+            loaded_at_query=config.loaded_at_query,
             freshness=config.freshness,
             quoting=quoting,
             resource_type=NodeType.Source,
@@ -333,6 +307,12 @@ class SourcePatcher:
             # there should be no freshness precedence
             precedence_configs.pop("freshness", None)
 
+        precedence_loaded_at_field, precedence_loaded_at_query = (
+            self.calculate_loaded_at_field_query_from_raw_target(target)
+        )
+        precedence_configs["loaded_at_field"] = precedence_loaded_at_field
+        precedence_configs["loaded_at_query"] = precedence_loaded_at_query
+
         # Because freshness is a "object" config, the freshness from the dbt_project.yml and the freshness
         # from the schema file _won't_ get merged by this process. The result will be that the freshness will
         # come from the schema file if provided, and if not, it'll fall back to the dbt_project.yml freshness.
@@ -439,6 +419,58 @@ class SourcePatcher:
             table_freshness,
             table_config_freshness,
         )
+
+    def calculate_loaded_at_field_query_from_raw_target(
+        self, target: UnpatchedSourceDefinition
+    ) -> Tuple[Optional[str], Optional[str]]:
+        # We need to be able to tell the difference between explicitly setting the loaded_at_field to None/null
+        # and when it's simply not set.  This allows a user to override the source level loaded_at_field so that
+        # specific table can default to metadata-based freshness.
+
+        # loaded_at_field and loaded_at_query are supported both at top-level (deprecated) and config-level (preferred) on sources and tables.
+        if target.table.loaded_at_field_present and (
+            target.table.loaded_at_query or target.table.config.get("loaded_at_query")
+        ):
+            raise ParsingError(
+                "Cannot specify both loaded_at_field and loaded_at_query at table level."
+            )
+        if (target.source.loaded_at_field or target.source.config.get("loaded_at_field")) and (
+            target.source.loaded_at_query or target.source.config.get("loaded_at_query")
+        ):
+            raise ParsingError(
+                "Cannot specify both loaded_at_field and loaded_at_query at source level."
+            )
+
+        if (
+            target.table.loaded_at_field_present
+            or target.table.loaded_at_field is not None
+            or target.table.config.get("loaded_at_field") is not None
+        ):
+            loaded_at_field = target.table.loaded_at_field or target.table.config.get(
+                "loaded_at_field"
+            )
+        else:
+            loaded_at_field = target.source.loaded_at_field or target.source.config.get(
+                "loaded_at_field"
+            )  # may be None, that's okay
+
+        loaded_at_query: Optional[str]
+        if (
+            target.table.loaded_at_query is not None
+            or target.table.config.get("loaded_at_query") is not None
+        ):
+            loaded_at_query = target.table.loaded_at_query or target.table.config.get(
+                "loaded_at_query"
+            )
+        else:
+            if target.table.loaded_at_field_present:
+                loaded_at_query = None
+            else:
+                loaded_at_query = target.source.loaded_at_query or target.source.config.get(
+                    "loaded_at_query"
+                )
+
+        return loaded_at_field, loaded_at_query
 
 
 def merge_freshness_time_thresholds(

@@ -148,7 +148,50 @@
         "accepted_values"
       ],
       "properties": {
-        "accepted_values": true
+        "accepted_values": {
+          "$ref": "#/definitions/AcceptedValuesTestProperties"
+        }
+      },
+      "additionalProperties": false
+    },
+    "AcceptedValuesTestProperties": {
+      "type": "object",
+      "required": [
+        "values"
+      ],
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TestPropertiesConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "quote": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "values": {
+          "type": "array",
+          "items": true
+        }
       },
       "additionalProperties": false
     },
@@ -1972,6 +2015,12 @@
             "null"
           ]
         },
+        "auto_liquid_cluster": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "auto_refresh": {
           "type": [
             "boolean",
@@ -2014,6 +2063,25 @@
             "null"
           ]
         },
+        "bind": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "buckets": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "catalog": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "cluster_by": {
           "anyOf": [
             {
@@ -2022,6 +2090,18 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "clustered_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "compression": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "concurrent_batches": {
@@ -2052,6 +2132,25 @@
             "null"
           ]
         },
+        "databricks_compute": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "databricks_tags": true,
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dist": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "docs": {
           "anyOf": [
             {
@@ -2060,6 +2159,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "enable_refresh": {
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "enabled": {
@@ -2150,6 +2255,12 @@
           ]
         },
         "labels": true,
+        "liquid_clustered_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "location": {
           "type": [
             "string",
@@ -2170,6 +2281,12 @@
           "format": "float"
         },
         "materialized": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_staleness": {
           "type": [
             "string",
             "null"
@@ -2197,6 +2314,15 @@
               "type": "null"
             }
           ]
+        },
+        "partitions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         },
         "persist_docs": {
           "anyOf": [
@@ -2234,6 +2360,14 @@
             "null"
           ]
         },
+        "refresh_interval_minutes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "refresh_mode": {
           "type": [
             "string",
@@ -2258,10 +2392,36 @@
             "null"
           ]
         },
+        "sort": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sort_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "sql_header": {
           "type": [
             "string",
             "null"
+          ]
+        },
+        "static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "table_format": {
@@ -2373,7 +2533,43 @@
         "not_null"
       ],
       "properties": {
-        "not_null": true
+        "not_null": {
+          "$ref": "#/definitions/NotNullTestProperties"
+        }
+      },
+      "additionalProperties": false
+    },
+    "NotNullTestProperties": {
+      "type": "object",
+      "properties": {
+        "column": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TestPropertiesConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       },
       "additionalProperties": false
     },
@@ -2447,7 +2643,47 @@
         "relationships"
       ],
       "properties": {
-        "relationships": true
+        "relationships": {
+          "$ref": "#/definitions/RelationshipsTestProperties"
+        }
+      },
+      "additionalProperties": false
+    },
+    "RelationshipsTestProperties": {
+      "type": "object",
+      "required": [
+        "field",
+        "to"
+      ],
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TestPropertiesConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "field": {
+          "type": "string"
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "to": {
+          "type": "string"
+        }
       },
       "additionalProperties": false
     },
@@ -3154,6 +3390,12 @@
         "name"
       ],
       "properties": {
+        "catalog": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "config": {
           "anyOf": [
             {
@@ -3275,6 +3517,22 @@
         }
       },
       "additionalProperties": false
+    },
+    "StaticAnalysisKind": {
+      "type": "string",
+      "enum": [
+        "unsafe",
+        "off",
+        "on"
+      ]
+    },
+    "StoreFailuresAs": {
+      "type": "string",
+      "enum": [
+        "ephemeral",
+        "table",
+        "view"
+      ]
     },
     "StringOrArrayOfStrings": {
       "anyOf": [
@@ -3537,6 +3795,16 @@
             "null"
           ]
         },
+        "store_failures_as": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StoreFailuresAs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tags": {
           "anyOf": [
             {
@@ -3548,6 +3816,12 @@
           ]
         },
         "warn_if": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "where": {
           "type": [
             "string",
             "null"
@@ -3588,7 +3862,37 @@
         "unique"
       ],
       "properties": {
-        "unique": true
+        "unique": {
+          "$ref": "#/definitions/UniqueTestProperties"
+        }
+      },
+      "additionalProperties": false
+    },
+    "UniqueTestProperties": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/TestPropertiesConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       },
       "additionalProperties": false
     },
