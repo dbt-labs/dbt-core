@@ -1,0 +1,6 @@
+kind: Fixes
+body: Bump dbt-common to 1.25.0 to access WarnErrorOptionsV2
+time: 2025-06-24T09:12:58.904713-04:00
+custom:
+  Author: michelleark
+  Issue: "11755"
