@@ -241,7 +241,9 @@ class ModelParser(SimpleSQLParser[ModelNode]):
                 verify_python_model_code(node)
                 context = self._context_for(node, config)
                 self.parse_python_model(node, config, context)
-                self.update_parsed_node_config(node, config, context=context)
+                self.update_parsed_node_config(
+                    node, config, context=context, validate_config_call_dict=True
+                )
 
             except ValidationError as exc:
                 # we got a ValidationError - probably bad types in config()
@@ -438,7 +440,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
 
         # if there are hooks present this, it WILL render jinja. Will need to change
         # when the experimental parser supports hooks
-        self.update_parsed_node_config(node, config)
+        self.update_parsed_node_config(node, config, validate_config_call_dict=True)
 
         # update the unrendered config with values from the file.
         # values from yaml files are in there already

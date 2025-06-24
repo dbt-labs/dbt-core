@@ -317,6 +317,7 @@ class ConfiguredParser(
         context=None,
         patch_config_dict=None,
         patch_file_id=None,
+        validate_config_call_dict: bool = False,
     ) -> None:
         """Given the ContextConfig used for parsing and the parsed node,
         generate and set the true values to use, overriding the temporary parse
@@ -409,7 +410,7 @@ class ConfiguredParser(
         # one way that the _config_call_dict can be set and also, later it gets
         # read multiple times. Doing the validation here ensures that the config
         # is only validated once.
-        if parsed_node.resource_type == NodeType.Model:
+        if parsed_node.resource_type == NodeType.Model and validate_config_call_dict:
             validate_model_config(config._config_call_dict, parsed_node.original_file_path)
 
         parsed_node.config_call_dict = config._config_call_dict
