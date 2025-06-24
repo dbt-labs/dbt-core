@@ -32,6 +32,7 @@ pub async fn execute_clean_command(arg: &EvalArgs, files: &[String]) -> FsResult
         &dbt_state.dbt_profile.db_config,
         dbt_state.run_started_at,
         &flags,
+        arg.io.clone(),
     )?;
 
     let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);

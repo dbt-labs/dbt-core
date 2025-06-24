@@ -1,5 +1,5 @@
 use crate::{functions::register_base_functions, jinja_environment::JinjaEnvironment};
-use dbt_common::{unexpected_fs_err, FsError, FsResult};
+use dbt_common::{io_args::IoArgs, unexpected_fs_err, FsError, FsResult};
 use dbt_fusion_adapter::BaseAdapter;
 use minijinja::{
     constants::{
@@ -39,6 +39,7 @@ pub struct JinjaEnvironmentBuilder {
     adapter: Option<Arc<dyn BaseAdapter>>,
     globals: BTreeMap<String, Value>,
     root_package: Option<String>,
+    io_args: IoArgs,
 }
 
 impl JinjaEnvironmentBuilder {
@@ -49,6 +50,7 @@ impl JinjaEnvironmentBuilder {
             adapter: None,
             globals: BTreeMap::new(),
             root_package: None,
+            io_args: IoArgs::default(),
         }
     }
 
@@ -71,6 +73,12 @@ impl JinjaEnvironmentBuilder {
     /// TODO: create a typed struct to validate we recieve all the globals we need
     pub fn with_globals(mut self, globals: BTreeMap<String, Value>) -> Self {
         self.globals = globals;
+        self
+    }
+
+    /// Add IoArgs
+    pub fn with_io_args(mut self, io_args: IoArgs) -> Self {
+        self.io_args = io_args;
         self
     }
 
@@ -202,7 +210,7 @@ impl JinjaEnvironmentBuilder {
         self.register_tests();
 
         // Register "base" dbt style functions.
-        register_base_functions(&mut self.env);
+        register_base_functions(&mut self.env, self.io_args);
 
         // Register all configured global values.
         // TODO (Ani) type the globals struct to validate we recieve all the globals we need

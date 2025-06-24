@@ -4,7 +4,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use chrono::DateTime;
 use chrono_tz::Tz;
-use dbt_common::{fs_err, ErrorCode, FsResult};
+use dbt_common::{fs_err, io_args::IoArgs, ErrorCode, FsResult};
 use dbt_fusion_adapter::parse::adapter::create_parse_adapter;
 use dbt_schemas::{
     dbt_utils::resolve_package_quoting,
@@ -33,6 +33,7 @@ pub fn initialize_load_jinja_environment(
     db_config: &DbConfig,
     run_started_at: DateTime<Tz>,
     flags: &BTreeMap<String, minijinja::Value>,
+    io_args: IoArgs,
 ) -> FsResult<JinjaEnvironment<'static>> {
     let target_context = TargetContext::try_from(db_config.clone())
         .map_err(|e| fs_err!(ErrorCode::InvalidConfig, "{}", &e))?;
@@ -57,6 +58,7 @@ pub fn initialize_load_jinja_environment(
     Ok(JinjaEnvironmentBuilder::new()
         .with_adapter(create_parse_adapter(adapter_type, package_quoting)?)
         .with_root_package("dbt".to_string())
+        .with_io_args(io_args)
         .with_globals(globals)
         .build())
 }

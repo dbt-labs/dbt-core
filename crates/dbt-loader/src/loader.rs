@@ -155,6 +155,7 @@ pub async fn load(
         &dbt_state.dbt_profile.db_config,
         dbt_state.run_started_at,
         &flags,
+        arg.io.clone(),
     )?;
 
     let (packages_lock, upstream_projects) = get_or_install_packages(

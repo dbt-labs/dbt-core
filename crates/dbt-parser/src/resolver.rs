@@ -115,6 +115,7 @@ pub async fn resolve(
             .iter()
             .map(|p| p.dbt_project.name.clone())
             .collect(),
+        arg.io.clone(),
     )?;
 
     // Compute final selectors

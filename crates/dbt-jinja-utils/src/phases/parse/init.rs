@@ -7,7 +7,7 @@ use std::{
 
 use chrono::DateTime;
 use chrono_tz::Tz;
-use dbt_common::{fs_err, ErrorCode, FsResult};
+use dbt_common::{fs_err, io_args::IoArgs, ErrorCode, FsResult};
 use dbt_fusion_adapter::parse::adapter::create_parse_adapter;
 use dbt_schemas::{
     schemas::{
@@ -47,6 +47,7 @@ pub fn initialize_parse_jinja_environment(
     run_started_at: DateTime<Tz>,
     invocation_args: &InvocationArgs,
     all_package_names: BTreeSet<String>,
+    io_args: IoArgs,
 ) -> FsResult<JinjaEnvironment<'static>> {
     // Set the thread local dependencies
     if THREAD_LOCAL_DEPENDENCIES.get().is_none() {
@@ -114,6 +115,7 @@ pub fn initialize_parse_jinja_environment(
         .with_adapter(create_parse_adapter(adapter_type, package_quoting)?)
         .with_root_package(project_name.to_string())
         .with_globals(globals)
+        .with_io_args(io_args)
         .try_with_macros(MacroUnitsWrapper::new(macro_units))?
         .build();
     env.set_undefined_behavior(UndefinedBehavior::Dbt);

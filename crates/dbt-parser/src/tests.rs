@@ -3,7 +3,7 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod tests {
-    use dbt_common::FsResult;
+    use dbt_common::{io_args::IoArgs, FsResult};
     use dbt_frontend_common::error::CodeLocation;
     use dbt_fusion_adapter::parse::adapter::create_parse_adapter;
     use dbt_jinja_utils::invocation_args::InvocationArgs;
@@ -95,6 +95,7 @@ mod tests {
             tz_now,
             &invocation_args,
             BTreeSet::from(["common".to_string()]),
+            IoArgs::default(),
         )
         .unwrap();
 

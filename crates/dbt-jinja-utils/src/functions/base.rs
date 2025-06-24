@@ -6,6 +6,7 @@ use std::{
     sync::Arc,
 };
 
+use dbt_common::{fs_err, io_args::IoArgs, show_warning, ErrorCode};
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 use minijinja::value::{mutable_map::MutableMap, ValueMap};
 
@@ -24,9 +25,12 @@ use crate::utils::{
 pub const DEFAULT_ENV_PLACEHOLDER: &str = "__dbt_placeholder__";
 
 /// Registers all the functions shared across all contexts
-pub fn register_base_functions(env: &mut Environment) {
+pub fn register_base_functions(env: &mut Environment, io_args: IoArgs) {
     env.add_global("dbt_version", Value::from(crate::utils::DBT_VERSION));
-    env.add_global("exceptions".to_owned(), Value::from_object(Exceptions {}));
+    env.add_global(
+        "exceptions".to_owned(),
+        Value::from_object(Exceptions { io_args }),
+    );
 
     env.add_function("return", return_macro);
     env.add_function("fromjson", fromjson_fn());
@@ -914,7 +918,9 @@ fn parse_dict_of_lists(dict: &Value) -> Result<BTreeMap<String, Vec<String>>, Er
 
 /// A struct that represents the 'exceptions' object, which makes exceptions.warn() and...
 #[derive(Debug)]
-pub struct Exceptions {}
+pub struct Exceptions {
+    io_args: IoArgs,
+}
 
 impl Object for Exceptions {
     fn call_method(
@@ -924,14 +930,22 @@ impl Object for Exceptions {
         args: &[Value],
         _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
-        // TODO: Implement below
-        // reference: https://github.com/dbt-labs/dbt-core/blob/c28cb92af51d7f2cb27618aeb43705ba951aa3ef/core/dbt/context/exceptions_jinja.py#L130
-        // so far, stubs are only provided for methods seen used from dbt_macro_assets
+        // reference: core/dbt/context/exceptions_jinja.py
+        // We are only implementing methods actually used in the supported adapters.
         match method {
-            "warn" => Ok(Value::UNDEFINED),
+            "warn" => {
+                let mut args = ArgParser::new(args, None);
+                let warn_string = args.get::<String>("").unwrap_or_else(|_| "".to_string());
+                show_warning!(
+                    self.io_args,
+                    fs_err!(ErrorCode::Generic, "{}", warn_string.as_str(),)
+                );
+                Ok(Value::UNDEFINED)
+            }
+            // (msg, node=None)
             "raise_compiler_error" => {
                 let mut args = ArgParser::new(args, None);
-                let message = args.get::<String>("message")?;
+                let message = args.get::<String>("msg")?;
                 if let Some((node_id, file_path)) = node_metadata_from_state(state) {
                     Err(Error::new(
                         ErrorKind::InvalidOperation,
@@ -943,19 +957,138 @@ impl Object for Exceptions {
                         ),
                     ))
                 } else {
-                    // TODO: error on None?
                     Err(Error::new(
                         ErrorKind::InvalidOperation,
                         format!("Compilation Error: {}", message),
                     ))
                 }
             }
-            "raise_not_implemented" => Ok(Value::UNDEFINED),
-            "relation_wrong_type" => Ok(Value::UNDEFINED),
+            // (msg) String
+            "raise_not_implemented" => {
+                let mut args = ArgParser::new(args, None);
+                let message = args.get::<String>("msg")?;
+                Err(Error::new(
+                    ErrorKind::InvalidOperation,
+                    format!("Not implemented: {}", message),
+                ))
+            }
+            // (relation, expected_type, model=None)
+            //   Relation,  String
+            "relation_wrong_type" => {
+                let mut args = ArgParser::new(args, None);
+                let relation = args.get::<Value>("relation").unwrap_or(Value::UNDEFINED);
+                let expected_type = args
+                    .get::<String>("expected_type")
+                    .unwrap_or("".to_string());
+
+                // Get the relation type from the relation value
+                let relation_type = if relation.is_undefined() {
+                    "unknown".to_string()
+                } else {
+                    match relation.get_item(&Value::from("type")) {
+                        Ok(type_value) => type_value.to_string(),
+                        Err(_) => "unknown".to_string(),
+                    }
+                };
+
+                let message = format!("Trying to create {} {}, but it currently exists as a {}. Either drop {} manually, or run dbt with `--full-refresh` and dbt will drop it for you.", expected_type, relation, relation_type, relation);
+                if let Some((node_id, file_path)) = node_metadata_from_state(state) {
+                    Err(Error::new(
+                        ErrorKind::InvalidOperation,
+                        format!(
+                            "Compilation Error for {} from {}: {}",
+                            node_id,
+                            file_path.display(),
+                            message
+                        ),
+                    ))
+                } else {
+                    Err(Error::new(
+                        ErrorKind::InvalidOperation,
+                        format!("Compilation Error: {}", message),
+                    ))
+                }
+            }
+            // (yaml_columns, sql_columns)
+            // [{"name": ..., "data_type": ..., "formatted": ...},...]
             "raise_contract_error" => Ok(Value::UNDEFINED),
-            "column_type_missing" => Ok(Value::UNDEFINED),
-            "raise_fail_fast_error" => Ok(Value::UNDEFINED),
-            "warn_snapshot_timestamp_data_types" => Ok(Value::UNDEFINED),
+            // (column_names)
+            // ["column1", "column2"]
+            "column_type_missing" => {
+                let mut args = ArgParser::new(args, None);
+                // column_names should be a list of strings
+                let column_names = args
+                    .get::<Value>("column_names")
+                    .unwrap_or(Value::UNDEFINED);
+
+                // Convert column_names to a vector of strings
+                let column_names_string = if column_names.is_undefined() {
+                    "".to_string()
+                } else {
+                    match column_names.try_iter() {
+                        Ok(iter) => {
+                            let strings: Vec<String> = iter.map(|v| v.to_string()).collect();
+                            strings.join(", ")
+                        }
+                        Err(_) => "".to_string(),
+                    }
+                };
+
+                let message = format!("Contracted models require data_type to be defined for each column.  Please ensure that the column name and data_type are defined within the YAML configuration for the {} column(s).", column_names_string);
+                if let Some((node_id, file_path)) = node_metadata_from_state(state) {
+                    Err(Error::new(
+                        ErrorKind::InvalidOperation,
+                        format!(
+                            "Contract Error for {} from {}: {}",
+                            node_id,
+                            file_path.display(),
+                            message
+                        ),
+                    ))
+                } else {
+                    Err(Error::new(
+                        ErrorKind::InvalidOperation,
+                        format!("Contract Error: {}", message),
+                    ))
+                }
+            }
+            // (msg, node=None)
+            "raise_fail_fast_error" => {
+                let mut args = ArgParser::new(args, None);
+                let message = args.get::<String>("msg")?;
+                if let Some((node_id, file_path)) = node_metadata_from_state(state) {
+                    Err(Error::new(
+                        ErrorKind::InvalidOperation,
+                        format!(
+                            "FailFast Error for {} from {}: {}",
+                            node_id,
+                            file_path.display(),
+                            message
+                        ),
+                    ))
+                } else {
+                    Err(Error::new(
+                        ErrorKind::InvalidOperation,
+                        format!("FailFast Error: {}", message),
+                    ))
+                }
+            }
+            // (snapshot_time_data_type: str, updated_at_data_type: str)
+            "warn_snapshot_timestamp_data_types" => {
+                let mut args = ArgParser::new(args, None);
+                let snapshot_time_data_type = args
+                    .get::<String>("snapshot_time_data_type")
+                    .unwrap_or_else(|_| "".to_string());
+                let updated_at_data_type = args
+                    .get::<String>("updated_at_data_type")
+                    .unwrap_or_else(|_| "".to_string());
+                let warning = format!("Data type of snapshot table timestamp columns ({}) doesn't match derived column 'updated_at' ({}). Please update snapshot config 'updated_at'.", snapshot_time_data_type, updated_at_data_type);
+                show_warning!(
+                    self.io_args,
+                    fs_err!(ErrorCode::Generic, "{}", warning.as_str())
+                );
+                Ok(Value::UNDEFINED)
+            }
             _ => Err(Error::new(
                 ErrorKind::UnknownMethod("Exceptions".to_string(), method.to_string()),
                 format!("Unknown method on Exceptions: {}", method),
