@@ -357,7 +357,7 @@ class TestRunner(CompileRunner):
 
     def _get_unit_test_agate_table(self, result_table, actual_or_expected: str):
         # lower case the column names as platforms like snowflake can sometimes return columns in uppercase
-        result_table = result_table.select([col.lower() for col in result_table.columns])
+        result_table = result_table.select([col.lower() for col in result_table.column_names])
         unit_test_table = result_table.where(
             lambda row: row["actual_or_expected"] == actual_or_expected
         )
