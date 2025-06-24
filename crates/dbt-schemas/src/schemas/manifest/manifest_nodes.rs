@@ -213,9 +213,9 @@ pub struct ManifestModel {
     pub config: ModelConfig,
     pub version: Option<StringOrInteger>,
     pub latest_version: Option<StringOrInteger>,
-    pub constraints: Vec<ModelConstraint>,
+    pub constraints: Option<Vec<ModelConstraint>>,
     pub deprecation_date: Option<String>,
-    pub primary_key: Vec<String>,
+    pub primary_key: Option<Vec<String>>,
     pub time_spine: Option<Value>,
 
     #[serde(flatten)]
@@ -230,9 +230,9 @@ impl From<DbtModel> for ManifestModel {
             config: model.deprecated_config,
             version: model.version,
             latest_version: model.latest_version,
-            constraints: model.constraints,
+            constraints: Some(model.constraints),
             deprecation_date: model.deprecation_date,
-            primary_key: model.primary_key,
+            primary_key: Some(model.primary_key),
             time_spine: model.time_spine,
             other: model.other,
         }

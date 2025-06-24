@@ -32,6 +32,7 @@ pub enum DbtNode {
     Snapshot(ManifestSnapshot),
     Seed(ManifestSeed),
     Operation(DbtOperation),
+    Analysis(ManifestModel),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -372,9 +373,9 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         introspection: None,
                         version: model.version,
                         latest_version: model.latest_version,
-                        constraints: model.constraints,
+                        constraints: model.constraints.unwrap_or_default(),
                         deprecation_date: model.deprecation_date,
-                        primary_key: model.primary_key,
+                        primary_key: model.primary_key.unwrap_or_default(),
                         time_spine: model.time_spine,
                         is_extended_model: false,
                         other: model.other,
@@ -482,6 +483,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 );
             }
             DbtNode::Operation(_) => {}
+            DbtNode::Analysis(_) => {}
         }
     }
     for (unique_id, source) in manifest.sources {

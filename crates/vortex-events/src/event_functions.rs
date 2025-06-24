@@ -246,6 +246,7 @@ pub async fn resource_counts_event(args: InvocationArgs, manifest: &DbtManifest)
     let mut data_test_count = 0;
     let mut snapshot_count = 0;
     let mut operation_count = 0;
+    let mut analysis_count = 0;
     for (_, node) in manifest.nodes.iter() {
         match node {
             DbtNode::Model(_) => model_count += 1,
@@ -253,6 +254,7 @@ pub async fn resource_counts_event(args: InvocationArgs, manifest: &DbtManifest)
             DbtNode::Test(_) => data_test_count += 1,
             DbtNode::Snapshot(_) => snapshot_count += 1,
             DbtNode::Operation(_) => operation_count += 1,
+            DbtNode::Analysis(_) => analysis_count += 1,
         }
     }
 
@@ -262,7 +264,6 @@ pub async fn resource_counts_event(args: InvocationArgs, manifest: &DbtManifest)
     let unit_test_count = manifest.unit_tests.len() as i32;
 
     // to-be-implemented
-    let analysis_count = 0;
     let exposure_count = 0;
     let metric_count = 0;
     let semantic_model_count = 0;
