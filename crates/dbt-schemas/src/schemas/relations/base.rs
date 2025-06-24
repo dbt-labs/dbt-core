@@ -470,13 +470,13 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
                     let identifier = obj.get_value(&Value::from("identifier".to_string()));
                     (
                         database
-                            .map(|v| v.as_str().unwrap().to_string())
+                            .map(|v| v.as_str().unwrap_or("dummy").to_string())
                             .unwrap_or_else(|| self.database_as_str().unwrap()),
                         schema
-                            .map(|v| v.as_str().unwrap().to_string())
+                            .map(|v| v.as_str().unwrap_or("dummy").to_string())
                             .unwrap_or_else(|| self.schema_as_str().unwrap()),
                         identifier
-                            .map(|v| v.as_str().unwrap().to_string())
+                            .map(|v| v.as_str().unwrap_or("dummy").to_string())
                             .unwrap_or_else(|| self.identifier_as_str().unwrap()),
                     )
                 }
