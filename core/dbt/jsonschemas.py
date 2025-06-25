@@ -78,14 +78,19 @@ def _additional_properties_violation_keys(error: ValidationError) -> List[str]:
     return [key.strip("'") for key in found_keys]
 
 
+def _validate_with_schema(
+    schema: Dict[str, Any], json: Dict[str, Any]
+) -> Iterator[ValidationError]:
+    validator = CustomDraft7Validator(schema)
+    return validator.iter_errors(json)
+
+
 def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path: str) -> None:
 
     if not os.environ.get("DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS"):
         return
 
-    validator = CustomDraft7Validator(schema)
-    errors: Iterator[ValidationError] = validator.iter_errors(json)  # get all validation errors
-
+    errors = _validate_with_schema(schema, json)
     for error in errors:
         # Listify the error path to make it easier to work with (it's a deque in the ValidationError object)
         error_path = list(error.path)
@@ -135,6 +140,9 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
 
 
 def validate_model_config(config: Dict[str, Any], file_path: str) -> None:
+    if not os.environ.get("DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS"):
+        return
+
     resources_jsonschema = resources_schema()
     nested_definition_name = "ModelPropertiesConfigs"
 
@@ -148,4 +156,36 @@ def validate_model_config(config: Dict[str, Any], file_path: str) -> None:
             if k != nested_definition_name
         },
     }
-    jsonschema_validate(model_config_schema, config, file_path)
+
+    errors = _validate_with_schema(model_config_schema, config)
+    for error in errors:
+        if error.validator == "additionalProperties":
+            keys = _additional_properties_violation_keys(error)
+            if len(error.path) == 0:
+                key_path = error_path_to_string(error)
+                for key in keys:
+                    deprecations.warn(
+                        "custom-key-in-config-deprecation",
+                        key=key,
+                        file=file_path,
+                        key_path=key_path,
+                    )
+            else:
+                key_path = error_path_to_string(error)
+                for key in keys:
+                    deprecations.warn(
+                        "custom-key-in-object-deprecation",
+                        key=key,
+                        file=file_path,
+                        key_path=key_path,
+                    )
+        elif error.validator == "type":
+            # Not deprecating invalid types yet, except for pre-existing deprecation_date deprecation
+            pass
+        else:
+            deprecations.warn(
+                "generic-json-schema-validation-deprecation",
+                violation=error.message,
+                file=file_path,
+                key_path=error_path_to_string(error),
+            )
