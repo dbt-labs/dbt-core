@@ -172,6 +172,7 @@ def validate_model_config(config: Dict[str, Any], file_path: str) -> None:
                         key_path=key_path,
                     )
             else:
+                error.path.appendleft("config")
                 key_path = error_path_to_string(error)
                 for key in keys:
                     deprecations.warn(
@@ -189,6 +190,7 @@ def validate_model_config(config: Dict[str, Any], file_path: str) -> None:
                     isinstance(sub_error, ValidationError)
                     and sub_error.validator == "additionalProperties"
                 ):
+                    error.path.appendleft("config")
                     keys = _additional_properties_violation_keys(sub_error)
                     key_path = error_path_to_string(error)
                     for key in keys:
