@@ -301,7 +301,7 @@ base64 = "0.22.1"
 bigdecimal = "0.4.7"
 blake3 = "1.5.0"
 chrono = { version = "0.4.31", features = ["std", "clock", "serde"] }
-chrono-tz = { version = "0.10", features = ["case-insensitive"] }
+chrono-tz = { version = "0.10" }
 clap = { version = "4.4.4", features = ["derive"] }
 counter = "0.6.0"
 dashmap = "6.1.0"
@@ -345,8 +345,8 @@ tonic-build = "0.11.0"
 jsonschema-valid = "0.5.2"
 
 # phf
-phf = { version = "0.11", features = ["uncased"] }
-phf_shared = { version = "0.11", features = ["uncased"] }
+phf = { version = "0.11" }
+phf_shared = { version = "0.11" }
 
 # error handling
 anyhow = { version = "1.0.74" }

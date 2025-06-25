@@ -1,0 +1,3 @@
+kind: Fixes
+body: Reverted timezone compatibility change due to 'chrono-tz' crate having an issue referencing 'uncased' crate
+time: 2025-06-25T13:57:38.676795-07:00
