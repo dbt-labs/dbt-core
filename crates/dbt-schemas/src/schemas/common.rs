@@ -316,9 +316,16 @@ pub enum DbtBatchSize {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, JsonSchema)]
 pub struct DbtContract {
-    pub alias_types: Option<bool>,
-    pub enforced: Option<bool>,
+    #[serde(default = "default_alias_types")]
+    pub alias_types: bool,
+    #[serde(default)]
+    pub enforced: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub checksum: Option<Value>,
+}
+
+fn default_alias_types() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumString, Display, JsonSchema)]

@@ -1,7 +1,7 @@
 //! Core functions that are shared across all contexts
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     rc::Rc,
     sync::Arc,
 };
@@ -582,7 +582,7 @@ pub fn set_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
 
         match value.try_iter() {
             Ok(iter) => {
-                let set: HashSet<_> = iter.map(|v| v.to_string()).collect();
+                let set: BTreeSet<_> = iter.map(|v| v.to_string()).collect();
                 Ok(Value::from_iter(set))
             }
             Err(_) => match default {

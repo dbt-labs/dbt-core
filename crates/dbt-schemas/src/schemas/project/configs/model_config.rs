@@ -271,12 +271,6 @@ impl IterChildren<ProjectModelConfig> for ProjectModelConfig {
     }
 }
 
-#[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
-pub struct Contract {
-    pub alias_types: Option<bool>,
-    pub enforced: bool,
-}
 #[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, Eq, JsonSchema)]
 pub struct ModelConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
