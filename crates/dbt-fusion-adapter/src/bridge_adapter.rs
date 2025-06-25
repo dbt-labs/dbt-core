@@ -30,7 +30,7 @@ use dbt_schemas::schemas::manifest::{
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
-use dbt_schemas::schemas::{CommonAttributes, CommonAttributesWrapper, DbtModel};
+use dbt_schemas::schemas::InternalDbtNodeWrapper;
 use dbt_xdbc::Connection;
 use minijinja::arg_utils::{check_num_args, ArgParser};
 use minijinja::dispatch_object::DispatchObject;
@@ -927,18 +927,17 @@ impl BaseAdapter for BridgeAdapter {
             )
         })?;
 
-        let common_attr = CommonAttributes::deserialize(node).map_err(|e| {
+        let node_wrapper = InternalDbtNodeWrapper::deserialize(node).map_err(|e| {
             MinijinjaError::new(
                 MinijinjaErrorKind::SerdeDeserializeError,
-                format!("get_table_options: Failed to deserialize common attributes: {e}"),
+                format!("get_table_options: Failed to deserialize InternalDbtNodeWrapper: {e}"),
             )
         })?;
+        let node = node_wrapper.as_internal_node();
 
-        let options = self.typed_adapter.get_table_options(
-            config,
-            CommonAttributesWrapper(common_attr),
-            temporary,
-        )?;
+        let options = self
+            .typed_adapter
+            .get_table_options(config, node.common(), temporary)?;
         Ok(Value::from_serialize(options))
     }
 
@@ -957,16 +956,15 @@ impl BaseAdapter for BridgeAdapter {
             )
         })?;
 
-        let common_attr = CommonAttributes::deserialize(node).map_err(|e| {
+        let node_wrapper = InternalDbtNodeWrapper::deserialize(node).map_err(|e| {
             MinijinjaError::new(
                 MinijinjaErrorKind::SerdeDeserializeError,
-                format!("get_view_options: Failed to deserialize common attributes: {e}"),
+                format!("get_table_options: Failed to deserialize InternalDbtNodeWrapper: {e}"),
             )
         })?;
+        let node = node_wrapper.as_internal_node();
 
-        let options = self
-            .typed_adapter
-            .get_view_options(config, CommonAttributesWrapper(common_attr))?;
+        let options = self.typed_adapter.get_view_options(config, node.common())?;
         Ok(Value::from_serialize(options))
     }
 
@@ -1181,13 +1179,22 @@ impl BaseAdapter for BridgeAdapter {
         let config = ModelConfig::deserialize(config).map_err(|e| {
             MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
         })?;
-        let model = DbtModel::deserialize(model).map_err(|e| {
-            MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+
+        let node = InternalDbtNodeWrapper::deserialize(model).map_err(|e| {
+            MinijinjaError::new(
+                MinijinjaErrorKind::SerdeDeserializeError,
+                format!(
+                    "adapter.compute_external_path expected an InternalDbtNodeWrapper: {}",
+                    e
+                ),
+            )
         })?;
 
-        let result = self
-            .typed_adapter
-            .compute_external_path(config, model, is_incremental)?;
+        let result = self.typed_adapter.compute_external_path(
+            config,
+            node.as_internal_node(),
+            is_incremental,
+        )?;
         Ok(Value::from(result))
     }
 
@@ -1348,12 +1355,27 @@ impl BaseAdapter for BridgeAdapter {
         check_num_args(current_function_name!(), &parser, 1, 1)?;
 
         let model = parser.get::<Value>("model")?;
-        let model = DbtModel::deserialize(model).map_err(|e| {
+
+        let deserialized_node = InternalDbtNodeWrapper::deserialize(model).map_err(|e| {
             MinijinjaError::new(
                 MinijinjaErrorKind::SerdeDeserializeError,
-                format!("adapter.get_config_from_model expected a DbtModel: {}", e),
+                format!(
+                    "adapter.get_config_from_model expected an InternalDbtNodeWrapper: {}",
+                    e
+                ),
             )
         })?;
+
+        let model = match deserialized_node {
+            InternalDbtNodeWrapper::Model(model) => model,
+            _ => {
+                return Err(MinijinjaError::new(
+                    MinijinjaErrorKind::InvalidOperation,
+                    "adapter.get_config_from_model expected a DbtModel node".to_string(),
+                ))
+            }
+        };
+
         Ok(self.typed_adapter.get_config_from_model(&model)?)
     }
 

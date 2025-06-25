@@ -44,6 +44,63 @@ impl Display for IntrospectionKind {
     }
 }
 
+/// A wrapper enum that represents different types of dbt nodes.
+///
+/// This enum uses serde's tag-based deserialization to automatically determine
+/// the correct variant based on the "resource_type" field in the JSON.
+/// The resource_type values are converted to snake_case for matching.
+///
+/// # Example
+///
+/// ```rust
+///
+/// // Deserialize a node from Jinja
+/// let node = InternalDbtNodeWrapper::deserialize(value).unwrap();
+///
+/// // Access the underlying node attributes
+/// let attributes = node.as_internal_node();
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "resource_type")]
+#[serde(rename_all = "snake_case")]
+pub enum InternalDbtNodeWrapper {
+    Model(DbtModel),
+    Seed(DbtSeed),
+    Test(DbtTest),
+    UnitTest(DbtUnitTest),
+    Source(DbtSource),
+    Snapshot(DbtSnapshot),
+}
+
+impl InternalDbtNodeWrapper {
+    /// Returns a reference to the underlying node as a trait object.
+    ///
+    /// This method allows accessing common functionality across all node types
+    /// through the `InternalDbtNodeAttributes` trait.
+    ///
+    /// # Returns
+    ///
+    /// A reference to the node implementing `InternalDbtNodeAttributes`
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let node = InternalDbtNodeWrapper::Model(some_model);
+    /// let attributes = node.as_internal_node();
+    /// println!("Node name: {}", attributes.name());
+    /// ```
+    pub fn as_internal_node(&self) -> &dyn InternalDbtNodeAttributes {
+        match self {
+            InternalDbtNodeWrapper::Model(model) => model,
+            InternalDbtNodeWrapper::Seed(seed) => seed,
+            InternalDbtNodeWrapper::Test(test) => test,
+            InternalDbtNodeWrapper::UnitTest(unit_test) => unit_test,
+            InternalDbtNodeWrapper::Source(source) => source,
+            InternalDbtNodeWrapper::Snapshot(snapshot) => snapshot,
+        }
+    }
+}
+
 pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     fn common(&self) -> &CommonAttributes;
     fn base(&self) -> NodeBaseAttributes;
@@ -1198,12 +1255,6 @@ pub struct CommonAttributes {
     // Meta
     pub description: Option<String>,
 }
-
-// Workaround to larger issue: https://github.com/dbt-labs/fs/issues/4068
-// We need to serialize configs from Jinja flexibly to access type attributes
-// without a wrapper type or enum.
-#[derive(Debug, Clone)]
-pub struct CommonAttributesWrapper(pub CommonAttributes);
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

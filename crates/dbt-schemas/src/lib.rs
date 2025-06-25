@@ -26,8 +26,8 @@ pub mod schemas {
 
     mod nodes;
     pub use nodes::{
-        CommonAttributes, CommonAttributesWrapper, DbtModel, DbtSeed, DbtSnapshot, DbtSource,
-        DbtTest, DbtUnitTest, InternalDbtNode, InternalDbtNodeAttributes, IntrospectionKind,
+        CommonAttributes, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest,
+        InternalDbtNode, InternalDbtNodeAttributes, InternalDbtNodeWrapper, IntrospectionKind,
         NodeBaseAttributes, Nodes,
     };
 

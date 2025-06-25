@@ -25,7 +25,7 @@ use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfig};
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
-use dbt_schemas::schemas::{CommonAttributesWrapper, DbtModel};
+use dbt_schemas::schemas::{CommonAttributes, DbtModel, InternalDbtNodeAttributes};
 use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::{args, State, Value};
 
@@ -623,7 +623,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn get_table_options(
         &self,
         _config: ModelConfig,
-        _node: CommonAttributesWrapper,
+        _node: &CommonAttributes,
         _temporary: bool,
     ) -> AdapterResult<BTreeMap<String, Value>> {
         unimplemented!("only available with BigQuery adapter")
@@ -633,7 +633,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn get_view_options(
         &self,
         _config: ModelConfig,
-        _node: CommonAttributesWrapper,
+        _node: &CommonAttributes,
     ) -> AdapterResult<BTreeMap<String, Value>> {
         unimplemented!("only available with BigQuery adapter")
     }
@@ -680,7 +680,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn compute_external_path(
         &self,
         _config: ModelConfig,
-        _model: DbtModel,
+        _node: &dyn InternalDbtNodeAttributes,
         _is_incremental: bool,
     ) -> AdapterResult<String> {
         unimplemented!("only available with Databricks adapter")
