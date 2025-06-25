@@ -98,6 +98,7 @@ fn deny_additional_properties(schema: &mut Schema, path: &mut Vec<String>) {
             if types.contains(&InstanceType::Object)
                 && !path.contains(&"meta".to_string())
                 && !path.contains(&"column_types".to_string())
+                && !path.contains(&"grants".to_string())
             {
                 validation.additional_properties = Some(Box::new(Schema::Bool(false)));
             }

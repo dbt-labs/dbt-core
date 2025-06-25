@@ -29,7 +29,7 @@ pub struct SemanticModelsDefaults {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct Entity {
-    pub config: EntityConfig,
+    pub config: Option<EntityConfig>,
     pub description: Option<String>,
     pub expr: Option<EntityExpr>,
     pub label: Option<String>,
