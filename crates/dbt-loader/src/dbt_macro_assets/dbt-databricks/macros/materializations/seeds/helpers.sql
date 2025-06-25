@@ -77,7 +77,7 @@
             {%- set type = column_override.get(col_name, inferred_type) -%}
             {%- set column_name = (col_name | string) -%}
             {%- set column_comment_clause = "" -%}
-            {%- if column_comment and col_name in model.columns.keys() -%}   
+            {%- if column_comment and col_name in model.columns.keys() -%}
               {%- set comment = model.columns[col_name]['description'] | replace("'", "\\'") -%}
               {%- if comment and comment != "" -%}
                 {%- set column_comment_clause = "comment '" ~ comment ~ "'" -%}

@@ -25,7 +25,7 @@ use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfig};
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
-use dbt_schemas::schemas::DbtModel;
+use dbt_schemas::schemas::{CommonAttributesWrapper, DbtModel};
 use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::{args, State, Value};
 
@@ -526,6 +526,15 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         unimplemented!("only available with BigQuery adapter")
     }
 
+    /// load dataframe only used by bigquery adapter
+    fn load_dataframe(
+        &self,
+        _conn: &'_ mut dyn Connection,
+        _args: &[Value],
+    ) -> AdapterResult<Value> {
+        unimplemented!("only available with BigQuery adapter")
+    }
+
     /// alter_table_add_columns
     fn alter_table_add_columns(
         &self,
@@ -614,7 +623,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn get_table_options(
         &self,
         _config: ModelConfig,
-        _node: DbtModel,
+        _node: CommonAttributesWrapper,
         _temporary: bool,
     ) -> AdapterResult<BTreeMap<String, Value>> {
         unimplemented!("only available with BigQuery adapter")
@@ -624,7 +633,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn get_view_options(
         &self,
         _config: ModelConfig,
-        _node: DbtModel,
+        _node: CommonAttributesWrapper,
     ) -> AdapterResult<BTreeMap<String, Value>> {
         unimplemented!("only available with BigQuery adapter")
     }

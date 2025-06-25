@@ -30,7 +30,7 @@ use dbt_schemas::schemas::manifest::{
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
-use dbt_schemas::schemas::DbtModel;
+use dbt_schemas::schemas::{CommonAttributes, CommonAttributesWrapper, DbtModel};
 use dbt_xdbc::Connection;
 use minijinja::arg_utils::{check_num_args, ArgParser};
 use minijinja::dispatch_object::DispatchObject;
@@ -913,7 +913,6 @@ impl BaseAdapter for BridgeAdapter {
     fn get_table_options(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         parser.check_num_args(current_function_name!(), 2, 3)?;
-
         let config = parser.get::<Value>("config")?;
         let node = parser.get::<Value>("node")?;
         let temporary = parser
@@ -922,15 +921,24 @@ impl BaseAdapter for BridgeAdapter {
             .is_true();
 
         let config = ModelConfig::deserialize(config).map_err(|e| {
-            MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
-        })?;
-        let node = DbtModel::deserialize(node).map_err(|e| {
-            MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+            MinijinjaError::new(
+                MinijinjaErrorKind::SerdeDeserializeError,
+                format!("get_table_options: Failed to deserialize config: {e}"),
+            )
         })?;
 
-        let options = self
-            .typed_adapter
-            .get_table_options(config, node, temporary)?;
+        let common_attr = CommonAttributes::deserialize(node).map_err(|e| {
+            MinijinjaError::new(
+                MinijinjaErrorKind::SerdeDeserializeError,
+                format!("get_table_options: Failed to deserialize common attributes: {e}"),
+            )
+        })?;
+
+        let options = self.typed_adapter.get_table_options(
+            config,
+            CommonAttributesWrapper(common_attr),
+            temporary,
+        )?;
         Ok(Value::from_serialize(options))
     }
 
@@ -943,14 +951,22 @@ impl BaseAdapter for BridgeAdapter {
         let node = parser.get::<Value>("node")?;
 
         let config = ModelConfig::deserialize(config).map_err(|e| {
-            MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+            MinijinjaError::new(
+                MinijinjaErrorKind::SerdeDeserializeError,
+                format!("get_view_options: Failed to deserialize config: {e}"),
+            )
         })?;
 
-        let node = DbtModel::deserialize(node).map_err(|e| {
-            MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+        let common_attr = CommonAttributes::deserialize(node).map_err(|e| {
+            MinijinjaError::new(
+                MinijinjaErrorKind::SerdeDeserializeError,
+                format!("get_view_options: Failed to deserialize common attributes: {e}"),
+            )
         })?;
 
-        let options = self.typed_adapter.get_view_options(config, node)?;
+        let options = self
+            .typed_adapter
+            .get_view_options(config, CommonAttributesWrapper(common_attr))?;
         Ok(Value::from_serialize(options))
     }
 
@@ -1387,6 +1403,12 @@ impl BaseAdapter for BridgeAdapter {
         self.typed_adapter
             .restore_warehouse(conn.as_mut(), node_id)?;
         Ok(())
+    }
+
+    fn load_dataframe(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
+        let mut conn = self.borrow_tlocal_connection()?;
+        let result = self.typed_adapter.load_dataframe(conn.as_mut(), args)?;
+        Ok(result)
     }
 }
 

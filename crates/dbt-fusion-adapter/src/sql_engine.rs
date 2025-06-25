@@ -226,6 +226,29 @@ impl SqlEngine {
         Ok(total_batch)
     }
 
+    /// Execute an ingestion operation with given configuration
+    pub fn execute_ingest(
+        &self,
+        conn: &'_ mut dyn Connection,
+        job_config: &HashMap<String, String>,
+    ) -> AdapterResult<()> {
+        let mut stmt = conn.new_statement()?;
+
+        for (key, value) in job_config {
+            stmt.set_option(
+                adbc_core::options::OptionStatement::Other(key.clone()),
+                adbc_core::options::OptionValue::String(value.clone()),
+            )?;
+        }
+
+        let mut reader = stmt.execute()?;
+        if cfg!(debug_assertions) {
+            let batches: Vec<RecordBatch> = reader.by_ref().collect::<Result<_, _>>()?;
+            assert!(batches[0].num_rows() == 0);
+        }
+        Ok(())
+    }
+
     /// Get the configured database name. Used by
     /// adapter.verify_database to check if the database is valid.
     pub fn get_configured_database_name(&self) -> AdapterResult<Option<String>> {

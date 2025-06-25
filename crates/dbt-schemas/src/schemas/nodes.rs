@@ -1174,6 +1174,12 @@ pub struct CommonAttributes {
     pub description: Option<String>,
 }
 
+// Workaround to larger issue: https://github.com/dbt-labs/fs/issues/4068
+// We need to serialize configs from Jinja flexibly to access type attributes
+// without a wrapper type or enum.
+#[derive(Debug, Clone)]
+pub struct CommonAttributesWrapper(pub CommonAttributes);
+
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
