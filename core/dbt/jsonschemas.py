@@ -159,6 +159,7 @@ def validate_model_config(config: Dict[str, Any], file_path: str) -> None:
 
     errors = _validate_with_schema(model_config_schema, config)
     for error in errors:
+        error_path = list(error.path)
         if error.validator == "additionalProperties":
             keys = _additional_properties_violation_keys(error)
             if len(error.path) == 0:
@@ -182,6 +183,21 @@ def validate_model_config(config: Dict[str, Any], file_path: str) -> None:
         elif error.validator == "type":
             # Not deprecating invalid types yet, except for pre-existing deprecation_date deprecation
             pass
+        elif error.validator == "anyOf" and len(error_path) > 0:
+            for sub_error in error.context or []:
+                if (
+                    isinstance(sub_error, ValidationError)
+                    and sub_error.validator == "additionalProperties"
+                ):
+                    keys = _additional_properties_violation_keys(sub_error)
+                    key_path = error_path_to_string(error)
+                    for key in keys:
+                        deprecations.warn(
+                            "custom-key-in-object-deprecation",
+                            key=key,
+                            file=file_path,
+                            key_path=key_path,
+                        )
         else:
             deprecations.warn(
                 "generic-json-schema-validation-deprecation",
