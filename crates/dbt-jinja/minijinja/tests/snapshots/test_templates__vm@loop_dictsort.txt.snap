@@ -1,6 +1,6 @@
 ---
 source: minijinja/tests/test_templates.rs
-description: "key implied:\n{%- for key, value in map|dictsort %}\n* {{ key }}: {{ value }}\n{%- endfor %}\nkey explicit:\n{%- for key, value in map|dictsort(by=\"key\") %}\n* {{ key }}: {{ value }}\n{%- endfor %}\nvalue:\n{%- for key, value in map|dictsort(by=\"value\") %}\n* {{ key }}: {{ value }}\n{%- endfor %}\nreverse:\n{%- for key, value in map|dictsort(reverse=true) %}\n* {{ key }}: {{ value }}\n{%- endfor %}\ncase_sensitive:\n{%- for key, value in map|dictsort(case_sensitive=true) %}\n* {{ key }}: {{ value }}\n{%- endfor %}"
+description: "key implied:\n{%- for key, value in map|dictsort %}\n* {{ key }}: {{ value }}\n{%- endfor %}\nkey explicit:\n{%- for key, value in map|dictsort(by=\"key\") %}\n* {{ key }}: {{ value }}\n{%- endfor %}\nvalue:\n{%- for key, value in map|dictsort(by=\"value\") %}\n* {{ key }}: {{ value }}\n{%- endfor %}\nreverse:\n{%- for key, value in map|dictsort(reverse=true) %}\n* {{ key }}: {{ value }}\n{%- endfor %}\ncase_sensitive:\n{%- for key, value in map|dictsort(case_sensitive=true) %}\n* {{ key }}: {{ value }}\n{%- endfor %}\ncase_sensitive_positional:\n{%- for key, value in map|dictsort(true) %}\n* {{ key }}: {{ value }}\n{%- endfor %}\ncase_sensitive_by_value_positional:\n{%- for key, value in map|dictsort(true, 'value') %}\n* {{ key }}: {{ value }}\n{%- endfor %}"
 info:
   map:
     Blafasel: aha
@@ -34,4 +34,13 @@ case_sensitive:
 * bar: 2
 * baz: 100
 * foo: 1
-
+case_sensitive_positional:
+* Blafasel: aha
+* bar: 2
+* baz: 100
+* foo: 1
+case_sensitive_by_value_positional:
+* foo: 1
+* bar: 2
+* baz: 100
+* Blafasel: aha

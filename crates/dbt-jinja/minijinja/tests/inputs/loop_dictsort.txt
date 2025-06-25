@@ -27,3 +27,11 @@ case_sensitive:
 {%- for key, value in map|dictsort(case_sensitive=true) %}
 * {{ key }}: {{ value }}
 {%- endfor %}
+case_sensitive_positional:
+{%- for key, value in map|dictsort(true) %}
+* {{ key }}: {{ value }}
+{%- endfor %}
+case_sensitive_by_value_positional:
+{%- for key, value in map|dictsort(true, 'value') %}
+* {{ key }}: {{ value }}
+{%- endfor %}
