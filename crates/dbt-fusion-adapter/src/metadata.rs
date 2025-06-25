@@ -4,7 +4,7 @@ use crate::typed_adapter::TypedBaseAdapter;
 use crate::AdapterType;
 
 use arrow_schema::Schema;
-use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
+use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, RelationPattern};
 use dbt_schemas::schemas::relations::DEFAULT_DATABRICKS_DATABASE;
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 
@@ -72,12 +72,11 @@ pub fn create_catalogs_schema_if_not_exists(
     type Acc = Vec<(String, Option<String>, AdapterResult<()>)>;
     let adapter_clone = adapter.clone();
     let new_connection_f = move || adapter_clone.new_connection();
-    let adapter_clone = adapter.clone();
     let map_f = move |conn: &'_ mut dyn Connection,
                       (catalog, schema): &(String, Option<String>)|
           -> AdapterResult<AdapterResult<()>> {
         let (sql, _) = match schema {
-            Some(schema) => (create_schema_sql(adapter_type, catalog, schema), false),
+            Some(schema) => (create_schema_sql(&adapter, catalog, schema), false),
             None => {
                 match adapter_type {
                     // skip creating a database if this is to target default catalog in databricks
@@ -87,7 +86,7 @@ pub fn create_catalogs_schema_if_not_exists(
                     }
                     _ => {}
                 }
-                (create_catalog_sql(adapter_type, catalog), true)
+                (create_catalog_sql(&adapter, catalog), true)
             }
         };
         let query_ctx = QueryCtx::new(adapter.adapter_type().to_string())
@@ -96,6 +95,7 @@ pub fn create_catalogs_schema_if_not_exists(
         // TODO: see if we can execute this DDL only when we can be certain that the database doesn't exist, only then emit a info log
         // use SHOW DATABASES but this query doesn't return the databases a user doesn't have access to
         // https://github.com/dbt-labs/fs/issues/2789
+        let adapter_clone = adapter.clone();
         match adapter_clone.execute(conn, &query_ctx, None, None, None) {
             Ok(_) => Ok(Ok(())),
             Err(e) => {
@@ -159,7 +159,9 @@ pub fn transform_catalog_schemas(
 ///
 /// catalog here refers to database entity - that'll be project for BigQuery, catalog for Databricks, database for Snowflake etc
 /// TODO: revisit this to reuse an existing macro
-fn create_catalog_sql(adapter_type: AdapterType, catalog: &str) -> String {
+fn create_catalog_sql(adapter: &Arc<dyn MetadataAdapter>, catalog: &str) -> String {
+    let catalog = adapter.quote_component(catalog, ComponentName::Database);
+    let adapter_type = adapter.adapter_type();
     match adapter_type {
         AdapterType::Snowflake => format!("CREATE DATABASE IF NOT EXISTS {}", catalog),
         AdapterType::Databricks => format!("CREATE CATALOG IF NOT EXISTS {}", catalog),
@@ -171,7 +173,10 @@ fn create_catalog_sql(adapter_type: AdapterType, catalog: &str) -> String {
 ///
 /// catalog here refers to database entity - that'll be dataset for BigQuery, schema for Databricks, database for Snowflake etc
 /// TODO: revisit this to reuse an existing macro
-fn create_schema_sql(adapter_type: AdapterType, catalog: &str, schema: &str) -> String {
+fn create_schema_sql(adapter: &Arc<dyn MetadataAdapter>, catalog: &str, schema: &str) -> String {
+    let catalog = adapter.quote_component(catalog, ComponentName::Database);
+    let schema = adapter.quote_component(schema, ComponentName::Schema);
+    let adapter_type = adapter.adapter_type();
     match adapter_type {
         AdapterType::Snowflake => format!("CREATE SCHEMA IF NOT EXISTS {}.{}", catalog, schema),
         AdapterType::Databricks => format!("CREATE SCHEMA IF NOT EXISTS {}.{}", catalog, schema),

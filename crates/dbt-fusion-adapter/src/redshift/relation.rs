@@ -18,7 +18,7 @@ const MAX_CHARACTERS_IN_IDENTIFIER: u32 = 127;
 
 /// A struct representing the relation type for use with static methods
 #[derive(Clone, Debug)]
-pub struct RedshiftRelationType;
+pub struct RedshiftRelationType(pub ResolvedQuoting);
 
 impl StaticBaseRelation for RedshiftRelationType {
     fn try_new(
@@ -27,7 +27,7 @@ impl StaticBaseRelation for RedshiftRelationType {
         schema: Option<String>,
         identifier: Option<String>,
         relation_type: Option<RelationType>,
-        custom_quoting: ResolvedQuoting,
+        custom_quoting: Option<ResolvedQuoting>,
     ) -> Result<Value, MinijinjaError> {
         Ok(RelationObject::new(Arc::new(RedshiftRelation::new(
             database,
@@ -35,7 +35,7 @@ impl StaticBaseRelation for RedshiftRelationType {
             identifier,
             relation_type,
             None,
-            custom_quoting,
+            custom_quoting.unwrap_or(self.0),
         )))
         .into_value())
     }
@@ -224,13 +224,13 @@ mod tests {
 
     #[test]
     fn test_try_new_via_static_base_relation() {
-        let relation = RedshiftRelationType
+        let relation = RedshiftRelationType(DEFAULT_RESOLVED_QUOTING)
             .try_new(
                 Some("d".to_string()),
                 Some("s".to_string()),
                 Some("i".to_string()),
                 Some(RelationType::Table),
-                DEFAULT_RESOLVED_QUOTING,
+                Some(DEFAULT_RESOLVED_QUOTING),
             )
             .unwrap();
 

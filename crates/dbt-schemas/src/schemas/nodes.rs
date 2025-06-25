@@ -143,36 +143,45 @@ impl InternalDbtNode for DbtModel {
     fn common(&self) -> &CommonAttributes {
         &self.common_attr
     }
+
     fn base(&self) -> NodeBaseAttributes {
         self.base_attr.clone()
     }
+
     fn version(&self) -> Option<StringOrInteger> {
         self.version.clone()
     }
+
     fn latest_version(&self) -> Option<StringOrInteger> {
         self.latest_version.clone()
     }
     fn is_versioned(&self) -> bool {
         self.version.is_some()
     }
+
     fn is_extended_model(&self) -> bool {
         self.is_extended_model
     }
+
     fn resource_type(&self) -> &str {
         "model"
     }
+
     fn base_mut(&mut self) -> Option<&mut NodeBaseAttributes> {
         Some(&mut self.base_attr)
     }
+
     fn common_mut(&mut self) -> &mut CommonAttributes {
         &mut self.common_attr
     }
     fn as_any(&self) -> &dyn Any {
         self
     }
+
     fn serialize_inner(&self) -> Value {
         serde_json::to_value(self).expect("Failed to serialize DbtModel")
     }
+
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtModel>() {
             self.deprecated_config == other_model.deprecated_config
@@ -180,6 +189,7 @@ impl InternalDbtNode for DbtModel {
             false
         }
     }
+
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtModel>() {
             self.base_attr.checksum == other_model.base_attr.checksum
@@ -187,12 +197,15 @@ impl InternalDbtNode for DbtModel {
             false
         }
     }
+
     fn set_detected_introspection(&mut self, introspection: Option<IntrospectionKind>) {
         self.introspection = introspection;
     }
+
     fn introspection(&self) -> Option<IntrospectionKind> {
         self.introspection
     }
+
     fn warn_on_microbatch(&self) -> FsResult<()> {
         if let Some(DbtIncrementalStrategy::Microbatch) = self.incremental_strategy {
             return err!(
@@ -239,24 +252,30 @@ impl InternalDbtNode for DbtSeed {
     fn resource_type(&self) -> &str {
         "seed"
     }
+
     fn common(&self) -> &CommonAttributes {
         &self.common_attr
     }
+
     fn common_mut(&mut self) -> &mut CommonAttributes {
         &mut self.common_attr
     }
+
     fn base(&self) -> NodeBaseAttributes {
         self.base_attr.clone()
     }
     fn base_mut(&mut self) -> Option<&mut NodeBaseAttributes> {
         Some(&mut self.base_attr)
     }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
+
     fn serialize_inner(&self) -> Value {
         serde_json::to_value(self).expect("Failed to serialize DbtSeed")
     }
+
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtSeed>() {
             self.deprecated_config == other_model.deprecated_config
@@ -264,6 +283,7 @@ impl InternalDbtNode for DbtSeed {
             false
         }
     }
+
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtSeed>() {
             self.base_attr.checksum == other_model.base_attr.checksum
@@ -271,6 +291,7 @@ impl InternalDbtNode for DbtSeed {
             false
         }
     }
+
     fn set_detected_introspection(&mut self, _introspection: Option<IntrospectionKind>) {
         panic!("DbtSeed does not support setting detected_unsafe");
     }
@@ -301,24 +322,31 @@ impl InternalDbtNode for DbtTest {
     fn common(&self) -> &CommonAttributes {
         &self.common_attr
     }
+
     fn base(&self) -> NodeBaseAttributes {
         self.base_attr.clone()
     }
+
     fn resource_type(&self) -> &str {
         "test"
     }
+
     fn base_mut(&mut self) -> Option<&mut NodeBaseAttributes> {
         Some(&mut self.base_attr)
     }
+
     fn common_mut(&mut self) -> &mut CommonAttributes {
         &mut self.common_attr
     }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
+
     fn serialize_inner(&self) -> Value {
         serde_json::to_value(self).expect("Failed to serialize DbtTest")
     }
+
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other) = other.as_any().downcast_ref::<DbtTest>() {
             // these fields are what dbt compares for test nodes
@@ -334,6 +362,7 @@ impl InternalDbtNode for DbtTest {
             false
         }
     }
+
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other) = other.as_any().downcast_ref::<DbtTest>() {
             self.common().fqn == other.common().fqn
@@ -341,6 +370,7 @@ impl InternalDbtNode for DbtTest {
             false
         }
     }
+
     fn set_detected_introspection(&mut self, _introspection: Option<IntrospectionKind>) {
         panic!("DbtTest does not support setting detected_unsafe");
     }
@@ -371,24 +401,31 @@ impl InternalDbtNode for DbtUnitTest {
     fn common(&self) -> &CommonAttributes {
         &self.common_attr
     }
+
     fn base(&self) -> NodeBaseAttributes {
         self.base_attr.clone()
     }
+
     fn resource_type(&self) -> &str {
         "unit_test"
     }
+
     fn base_mut(&mut self) -> Option<&mut NodeBaseAttributes> {
         Some(&mut self.base_attr)
     }
+
     fn common_mut(&mut self) -> &mut CommonAttributes {
         &mut self.common_attr
     }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
+
     fn serialize_inner(&self) -> Value {
         serde_json::to_value(self).expect("Failed to serialize DbtUnitTest")
     }
+
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other) = other.as_any().downcast_ref::<DbtUnitTest>() {
             self.deprecated_config == other.deprecated_config
@@ -396,6 +433,7 @@ impl InternalDbtNode for DbtUnitTest {
             false
         }
     }
+
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other) = other.as_any().downcast_ref::<DbtUnitTest>() {
             self.common().fqn == other.common().fqn
@@ -403,6 +441,7 @@ impl InternalDbtNode for DbtUnitTest {
             false
         }
     }
+
     fn set_detected_introspection(&mut self, _introspection: Option<IntrospectionKind>) {
         panic!("DbtUnitTest does not support setting detected_unsafe");
     }
@@ -433,24 +472,31 @@ impl InternalDbtNode for DbtSource {
     fn common(&self) -> &CommonAttributes {
         &self.common_attr
     }
+
     fn base(&self) -> NodeBaseAttributes {
         self.get_base_attr()
     }
+
     fn resource_type(&self) -> &str {
         "source"
     }
+
     fn base_mut(&mut self) -> Option<&mut NodeBaseAttributes> {
         None
     }
+
     fn common_mut(&mut self) -> &mut CommonAttributes {
         &mut self.common_attr
     }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
+
     fn serialize_inner(&self) -> Value {
         serde_json::to_value(self).expect("Failed to serialize DbtSource")
     }
+
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_source) = other.as_any().downcast_ref::<DbtSource>() {
             self.deprecated_config == other_source.deprecated_config
@@ -458,6 +504,7 @@ impl InternalDbtNode for DbtSource {
             false
         }
     }
+
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_source) = other.as_any().downcast_ref::<DbtSource>() {
             self.common_attr.database == other_source.common_attr.database
@@ -473,6 +520,7 @@ impl InternalDbtNode for DbtSource {
             false
         }
     }
+
     fn set_detected_introspection(&mut self, _introspection: Option<IntrospectionKind>) {
         panic!("DbtSource does not support setting detected_unsafe");
     }

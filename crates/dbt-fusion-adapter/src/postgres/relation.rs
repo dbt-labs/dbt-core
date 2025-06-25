@@ -17,7 +17,7 @@ const MAX_CHARACTERS_IN_IDENTIFIER: usize = 63;
 
 /// A struct representing the Postgres relation type for use with static methods
 #[derive(Clone, Debug)]
-pub struct PostgresRelationType;
+pub struct PostgresRelationType(pub ResolvedQuoting);
 
 impl StaticBaseRelation for PostgresRelationType {
     fn try_new(
@@ -26,14 +26,14 @@ impl StaticBaseRelation for PostgresRelationType {
         schema: Option<String>,
         identifier: Option<String>,
         relation_type: Option<RelationType>,
-        custom_quoting: ResolvedQuoting,
+        custom_quoting: Option<ResolvedQuoting>,
     ) -> Result<Value, MinijinjaError> {
         Ok(RelationObject::new(Arc::new(PostgresRelation::try_new(
             database,
             schema,
             identifier,
             relation_type,
-            custom_quoting,
+            custom_quoting.unwrap_or(self.0),
         )?))
         .into_value())
     }
@@ -235,13 +235,13 @@ mod tests {
 
     #[test]
     fn test_try_new_via_static_base_relation() {
-        let relation = PostgresRelationType
+        let relation = PostgresRelationType(DEFAULT_RESOLVED_QUOTING)
             .try_new(
                 Some("d".to_string()),
                 Some("s".to_string()),
                 Some("i".to_string()),
                 Some(RelationType::Table),
-                DEFAULT_RESOLVED_QUOTING,
+                Some(DEFAULT_RESOLVED_QUOTING),
             )
             .unwrap();
 

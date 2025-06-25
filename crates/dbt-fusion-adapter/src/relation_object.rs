@@ -1,21 +1,13 @@
 use dbt_common::{FsError, FsResult};
-use dbt_schemas::{
-    dbt_types::RelationType,
-    schemas::{
-        common::ResolvedQuoting,
-        relations::{
-            base::{BaseRelation, TableFormat},
-            DEFAULT_RESOLVED_QUOTING,
-        },
-        InternalDbtNodeAttributes,
-    },
-};
-use minijinja::{
-    arg_utils::ArgParser,
-    value::{Enumerator, Object, ValueKind},
-};
+use dbt_schemas::dbt_types::RelationType;
+use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
+use dbt_schemas::schemas::relations::base::{BaseRelation, TableFormat};
+use dbt_schemas::schemas::InternalDbtNodeAttributes;
+use minijinja::arg_utils::ArgParser;
+use minijinja::value::{Enumerator, Object, ValueKind};
 use minijinja::{listener::RenderingEventListener, Value};
 use minijinja::{Error as MinijinjaError, State};
+use serde::Deserialize;
 
 use crate::bigquery::relation::BigqueryRelation;
 use crate::databricks::relation::DatabricksRelation;
@@ -26,6 +18,8 @@ use crate::snowflake::relation::SnowflakeRelation;
 use std::sync::Arc;
 use std::{fmt, ops::Deref};
 
+/// A Wrapper type for BaseRelation
+/// for any concrete Relation type to be used as Object in Jinja
 #[derive(Debug, Clone)]
 pub struct RelationObject(Arc<dyn BaseRelation>);
 
@@ -228,7 +222,27 @@ pub fn create_relation_from_node(
     )
 }
 
-impl Object for &dyn StaticBaseRelation {
+/// A Wrapper type for StaticBaseRelation
+/// for any concrete StaticBaseRelation type to be used as Object in Jinja
+/// to expose static methods via api.Relation
+#[derive(Debug, Clone)]
+pub struct StaticBaseRelationObject(Arc<dyn StaticBaseRelation>);
+
+impl StaticBaseRelationObject {
+    pub fn new(relation: Arc<dyn StaticBaseRelation>) -> Self {
+        Self(relation)
+    }
+}
+
+impl Deref for StaticBaseRelationObject {
+    type Target = dyn StaticBaseRelation;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref()
+    }
+}
+
+impl Object for StaticBaseRelationObject {
     fn call_method(
         self: &Arc<Self>,
         _state: &State,
@@ -256,7 +270,7 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
         schema: Option<String>,
         identifier: Option<String>,
         relation_type: Option<RelationType>,
-        custom_quoting: ResolvedQuoting,
+        custom_quoting: Option<ResolvedQuoting>,
     ) -> Result<Value, MinijinjaError>;
 
     fn get_adapter_type(&self) -> String;
@@ -269,13 +283,24 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
         let schema: Option<String> = args.get("schema").ok();
         let identifier: Option<String> = args.get("identifier").ok();
         let relation_type: Option<String> = args.get("type").ok();
+        let custom_quoting: Option<Value> = args.get("quote_policy").ok();
+
+        // error is intentionally silenced
+        let custom_quoting = custom_quoting
+            .and_then(|v| DbtQuoting::deserialize(v).ok())
+            // when missing, defaults to be non-quoted
+            .map(|v| ResolvedQuoting {
+                database: v.database.unwrap_or_default(),
+                identifier: v.identifier.unwrap_or_default(),
+                schema: v.schema.unwrap_or_default(),
+            });
 
         self.try_new(
             database,
             schema,
             identifier,
-            relation_type.map(|s| RelationType::from(s.as_str())),
-            DEFAULT_RESOLVED_QUOTING,
+            relation_type.map(|s: String| RelationType::from(s.as_str())),
+            custom_quoting,
         )
     }
 

@@ -7,7 +7,6 @@ use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath, TableFormat,
 };
-use dbt_schemas::schemas::relations::SNOWFLAKE_RESOLVED_QUOTING;
 use minijinja::arg_utils::check_num_args;
 use minijinja::{
     arg_utils::ArgParser, Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value,
@@ -17,8 +16,8 @@ use std::any::Any;
 use std::sync::Arc;
 
 /// A struct representing the Snowflake relation type for use with static methods
-#[derive(Clone, Debug)]
-pub struct SnowflakeRelationType;
+#[derive(Clone, Debug, Copy)]
+pub struct SnowflakeRelationType(pub ResolvedQuoting);
 
 impl StaticBaseRelation for SnowflakeRelationType {
     fn try_new(
@@ -27,7 +26,7 @@ impl StaticBaseRelation for SnowflakeRelationType {
         schema: Option<String>,
         identifier: Option<String>,
         relation_type: Option<RelationType>,
-        custom_quoting: ResolvedQuoting,
+        custom_quoting: Option<ResolvedQuoting>,
     ) -> Result<Value, MinijinjaError> {
         Ok(RelationObject::new(Arc::new(SnowflakeRelation::new(
             database,
@@ -35,25 +34,9 @@ impl StaticBaseRelation for SnowflakeRelationType {
             identifier,
             relation_type,
             TableFormat::Default,
-            custom_quoting,
+            custom_quoting.unwrap_or(self.0),
         )))
         .into_value())
-    }
-
-    fn create(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut args = ArgParser::new(args, None);
-        let database: Option<String> = args.get("database").ok();
-        let schema: Option<String> = args.get("schema").ok();
-        let identifier: Option<String> = args.get("identifier").ok();
-        let relation_type: Option<String> = args.get("type").ok();
-
-        self.try_new(
-            database,
-            schema,
-            identifier,
-            relation_type.map(|s| RelationType::from(s.as_str())),
-            SNOWFLAKE_RESOLVED_QUOTING,
-        )
     }
 
     fn get_adapter_type(&self) -> String {
@@ -379,21 +362,17 @@ impl BaseRelation for SnowflakeRelation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dbt_schemas::dbt_types::RelationType;
+    use dbt_schemas::{dbt_types::RelationType, schemas::relations::DEFAULT_RESOLVED_QUOTING};
 
     #[test]
     fn test_try_new_via_static_base_relation() {
-        let relation = SnowflakeRelationType
+        let relation = SnowflakeRelationType(DEFAULT_RESOLVED_QUOTING)
             .try_new(
                 Some("d".to_string()),
                 Some("s".to_string()),
                 Some("i".to_string()),
                 Some(RelationType::Table),
-                ResolvedQuoting {
-                    database: true,
-                    schema: true,
-                    identifier: true,
-                },
+                Some(DEFAULT_RESOLVED_QUOTING),
             )
             .unwrap();
 

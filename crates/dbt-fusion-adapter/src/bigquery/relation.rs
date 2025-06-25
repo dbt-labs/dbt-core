@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 /// A struct representing the relation type for use with static methods
 #[derive(Clone, Debug)]
-pub struct BigqueryRelationType;
+pub struct BigqueryRelationType(pub ResolvedQuoting);
 
 impl StaticBaseRelation for BigqueryRelationType {
     fn try_new(
@@ -23,7 +23,7 @@ impl StaticBaseRelation for BigqueryRelationType {
         schema: Option<String>,
         identifier: Option<String>,
         relation_type: Option<RelationType>,
-        custom_quoting: ResolvedQuoting,
+        custom_quoting: Option<ResolvedQuoting>,
     ) -> Result<Value, MinijinjaError> {
         Ok(RelationObject::new(Arc::new(BigqueryRelation::new(
             database,
@@ -31,7 +31,7 @@ impl StaticBaseRelation for BigqueryRelationType {
             identifier,
             relation_type,
             None,
-            custom_quoting,
+            custom_quoting.unwrap_or(self.0),
         )))
         .into_value())
     }
@@ -230,13 +230,13 @@ mod tests {
 
     #[test]
     fn test_try_new_via_static_base_relation() {
-        let relation = BigqueryRelationType
+        let relation = BigqueryRelationType(DEFAULT_RESOLVED_QUOTING)
             .try_new(
                 Some("d".to_string()),
                 Some("s".to_string()),
                 Some("i".to_string()),
                 Some(RelationType::Table),
-                DEFAULT_RESOLVED_QUOTING,
+                Some(DEFAULT_RESOLVED_QUOTING),
             )
             .unwrap();
 

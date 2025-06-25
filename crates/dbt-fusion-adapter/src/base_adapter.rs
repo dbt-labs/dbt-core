@@ -4,6 +4,8 @@ use crate::typed_adapter::TypedBaseAdapter;
 
 use dbt_common::FsResult;
 use dbt_frontend_common::dialect::Dialect;
+use dbt_schemas::schemas::common::ResolvedQuoting;
+use dbt_schemas::schemas::relations::base::ComponentName;
 use dbt_xdbc::Connection;
 use minijinja::arg_utils::ArgParser;
 use minijinja::dispatch_object::DispatchObject;
@@ -60,6 +62,24 @@ pub trait AdapterTyping {
 
     /// Get the [SqlEngine], if available
     fn engine(&self) -> Option<&Arc<SqlEngine>>;
+
+    /// Get the [ResolvedQuoting]
+    fn quoting(&self) -> ResolvedQuoting;
+
+    /// Quote a component of a relation
+    fn quote_component(&self, identifier: &str, component: ComponentName) -> String {
+        let quoted = match component {
+            ComponentName::Database => self.quoting().database,
+            ComponentName::Schema => self.quoting().schema,
+            ComponentName::Identifier => self.quoting().identifier,
+        };
+        if quoted {
+            let adapter = self.as_typed_base_adapter();
+            adapter.quote(identifier)
+        } else {
+            identifier.to_string()
+        }
+    }
 }
 
 /// Base adapter

@@ -1,0 +1,6 @@
+kind: Fixes
+body:
+  Fix quoting config not respected in various places
+  - Automatic catalog/schema creation
+  - api.Relation.create Jinja function
+time: 2025-06-24T15:35:12.950825144-07:00

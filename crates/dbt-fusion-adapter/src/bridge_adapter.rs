@@ -21,7 +21,7 @@ use dbt_common::adapter::SchemaRegistry;
 use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::{current_function_name, FsError, FsResult};
 use dbt_schemas::schemas::columns::base::StdColumn;
-use dbt_schemas::schemas::common::DbtIncrementalStrategy;
+use dbt_schemas::schemas::common::{DbtIncrementalStrategy, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::manifest::{
     BigqueryClusterConfig, BigqueryPartitionConfig, BigqueryPartitionConfigLegacy,
@@ -216,6 +216,10 @@ impl AdapterTyping for BridgeAdapter {
 
     fn engine(&self) -> Option<&Arc<SqlEngine>> {
         self.typed_adapter.engine()
+    }
+
+    fn quoting(&self) -> ResolvedQuoting {
+        self.typed_adapter.quoting()
     }
 }
 

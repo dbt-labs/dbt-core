@@ -139,6 +139,10 @@ impl AdapterTyping for ParseAdapter {
     fn engine(&self) -> Option<&Arc<SqlEngine>> {
         None
     }
+
+    fn quoting(&self) -> ResolvedQuoting {
+        self.quoting
+    }
 }
 
 impl BaseAdapter for ParseAdapter {

@@ -166,7 +166,7 @@ impl<'source> JinjaEnvironment<'source> {
         let mut api_map = BTreeMap::new();
         api_map.insert(
             "Relation".to_string(),
-            create_static_relation(adapter.adapter_type()),
+            create_static_relation(adapter.adapter_type(), adapter.quoting()),
         );
         api_map.insert("Column".to_string(), adapter.column_type());
         self.env.add_global("api", Value::from_object(api_map));
