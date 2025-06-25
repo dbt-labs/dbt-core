@@ -202,68 +202,18 @@ pub async fn inject_and_persist_ephemeral_models(
         all_ctes.pop();
     }
 
-    // Find first non-whitespace/comment content
-    let sql_lower = final_sql.to_lowercase();
-    let mut content_start = 0;
-    let mut in_comment = false;
-    let mut in_multiline = false;
-    let mut chars = sql_lower.chars().enumerate().peekable();
-    while let Some((i, c)) = chars.next() {
-        if in_multiline {
-            if c == '*' && chars.next_if(|(_, c)| *c == '/').is_some() {
-                in_multiline = false;
-            }
-            continue;
-        }
-        if in_comment {
-            if c == '\n' {
-                in_comment = false;
-            }
-            continue;
-        }
-        if c == '/' {
-            if let Some((_, _)) = chars.next_if(|(_, c)| *c == '/') {
-                in_comment = true;
-                continue;
-            }
-            if let Some((_, _)) = chars.next_if(|(_, c)| *c == '*') {
-                in_multiline = true;
-                continue;
-            }
-        }
-        if !c.is_whitespace() {
-            content_start = i;
-            break;
-        }
-    }
-
-    // Check if SQL already has a WITH statement
-    let with_prefix = "with";
-    let mut insert_pos = content_start;
-    let has_with = sql_lower[content_start..].starts_with(with_prefix);
-
-    // handle recursive CTEs
-    if has_with {
-        insert_pos += with_prefix.len();
-        let after_with = &sql_lower[insert_pos..];
-        let has_recursive = after_with.trim_start().starts_with("recursive");
-        if has_recursive {
-            insert_pos += "recursive".len();
-        }
-    }
+    // Wrap the current SQL in a subquery and prepend CTEs
     let ctes = all_ctes.join(", ");
-    if has_with {
-        // SQL already has WITH - insert CTEs after WITH keyword
-        final_sql.insert_str(insert_pos, &format!(" {}, ", ctes));
-    } else {
-        // No WITH - add one at start with the CTEs
-        final_sql.insert_str(0, &format!("with {} ", ctes));
-    }
-    // Shift expanded macro spans down by number of added lines
-    let added_lines = ctes.lines().count();
+    final_sql = format!("with {}\n\nselect * from (\n{}\n)", ctes, final_sql);
+    // Shift expanded macro spans down by number of added lines and added offet
+    // for the "with ... select * from (" line, and the CTEs
+    let added_lines = ctes.lines().count() + 2;
+    let added_offset = ctes.len() + 23;
     for span in macro_spans.items.iter_mut() {
         span.1.start_line += added_lines as u32;
         span.1.end_line += added_lines as u32;
+        span.1.start_offset += added_offset as u32;
+        span.1.end_offset += added_offset as u32;
     }
     Ok(final_sql)
 }
