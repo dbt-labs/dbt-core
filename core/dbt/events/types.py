@@ -632,7 +632,11 @@ class CustomKeyInConfigDeprecation(WarnLevel):
         return "D026"
 
     def message(self) -> str:
-        description = f"Custom key `{self.key}` found in `config` at path `{self.key_path}` in file `{self.file}`. Custom config keys should move into the `config.meta`."
+        path_specification = ""
+        if self.key_path != "":
+            path_specification = f" at path `{self.key_path}`"
+
+        description = f"Custom key `{self.key}` found in `config`{path_specification} in file `{self.file}`. Custom config keys should move into the `config.meta`."
         return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
