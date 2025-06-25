@@ -11,6 +11,7 @@ use crate::utils::update_node_relation_components;
 use crate::utils::RelationComponents;
 use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use dbt_common::error::AbstractLocation;
+use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_utils::try_read_yml_to_str;
 use dbt_common::stdfs;
 use dbt_common::FsResult;
@@ -236,6 +237,9 @@ pub async fn resolve_data_tests(
                 .expect("quoting is required")
                 .try_into()
                 .expect("quoting is required"),
+            static_analysis: test_config
+                .static_analysis
+                .unwrap_or(StaticAnalysisKind::On),
             tags: test_config
                 .tags
                 .clone()

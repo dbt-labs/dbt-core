@@ -126,6 +126,7 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
     }
     // Setters
     fn set_quoting(&mut self, quoting: ResolvedQuoting);
+    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind);
 
     // Optional Fields
     fn get_access(&self) -> Option<Access> {
@@ -231,6 +232,9 @@ impl InternalDbtNodeAttributes for DbtModel {
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
         self.quoting = quoting;
     }
+    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
+        self.static_analysis = static_analysis;
+    }
     fn tags(&self) -> Vec<String> {
         self.tags.clone()
     }
@@ -306,6 +310,9 @@ impl InternalDbtNodeAttributes for DbtSeed {
     }
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
         self.quoting = quoting;
+    }
+    fn set_static_analysis(&mut self, _static_analysis: StaticAnalysisKind) {
+        unimplemented!()
     }
     fn tags(&self) -> Vec<String> {
         self.tags.clone()
@@ -386,6 +393,9 @@ impl InternalDbtNodeAttributes for DbtTest {
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
         self.quoting = quoting;
     }
+    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
+        self.static_analysis = static_analysis;
+    }
     fn tags(&self) -> Vec<String> {
         self.tags.clone()
     }
@@ -456,6 +466,9 @@ impl InternalDbtNodeAttributes for DbtUnitTest {
     }
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
         self.quoting = quoting;
+    }
+    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
+        self.static_analysis = static_analysis;
     }
     fn tags(&self) -> Vec<String> {
         self.tags.clone()
@@ -530,11 +543,17 @@ impl InternalDbtNodeAttributes for DbtSource {
     fn materialized(&self) -> DbtMaterialization {
         DbtMaterialization::External
     }
+    fn static_analysis(&self) -> StaticAnalysisKind {
+        self.static_analysis
+    }
     fn quoting(&self) -> ResolvedQuoting {
         self.quoting
     }
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
         self.quoting = quoting;
+    }
+    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
+        self.static_analysis = static_analysis;
     }
     fn tags(&self) -> Vec<String> {
         self.tags.clone()
@@ -592,11 +611,17 @@ impl InternalDbtNodeAttributes for DbtSnapshot {
     fn materialized(&self) -> DbtMaterialization {
         self.materialized.clone()
     }
+    fn static_analysis(&self) -> StaticAnalysisKind {
+        self.static_analysis
+    }
     fn quoting(&self) -> ResolvedQuoting {
         self.quoting
     }
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
         self.quoting = quoting;
+    }
+    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
+        self.static_analysis = static_analysis;
     }
     fn tags(&self) -> Vec<String> {
         self.tags.clone()
@@ -1262,6 +1287,7 @@ pub struct DbtUnitTest {
 
     // [Start] Previously config fields
     pub quoting: ResolvedQuoting,
+    pub static_analysis: StaticAnalysisKind,
     pub tags: Vec<String>,
     pub meta: BTreeMap<String, Value>,
     // [End]
@@ -1290,6 +1316,7 @@ pub struct DbtTest {
 
     // [Start] Previously config fields
     pub quoting: ResolvedQuoting,
+    pub static_analysis: StaticAnalysisKind,
     pub tags: Vec<String>,
     pub meta: BTreeMap<String, Value>,
     // [End]
@@ -1329,6 +1356,7 @@ pub struct DbtSnapshot {
     // [Start] Previously config fields
     pub materialized: DbtMaterialization,
     pub quoting: ResolvedQuoting,
+    pub static_analysis: StaticAnalysisKind,
     pub tags: Vec<String>,
     pub meta: BTreeMap<String, Value>,
     pub snapshot_meta_column_names: SnapshotMetaColumnNames,
@@ -1350,6 +1378,7 @@ pub struct DbtSource {
 
     // [Start] Previously config fields
     pub quoting: ResolvedQuoting,
+    pub static_analysis: StaticAnalysisKind,
     pub tags: Vec<String>,
     pub meta: BTreeMap<String, Value>,
     // [End]

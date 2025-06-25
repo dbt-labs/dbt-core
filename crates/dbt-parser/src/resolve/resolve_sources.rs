@@ -2,7 +2,7 @@
 use crate::dbt_project_config::{init_project_config, RootProjectConfigs};
 use crate::utils::get_node_fqn;
 
-use dbt_common::io_args::IoArgs;
+use dbt_common::io_args::{IoArgs, StaticAnalysisKind};
 use dbt_common::{err, show_error, ErrorCode, FsResult};
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
@@ -223,6 +223,9 @@ pub fn resolve_sources(
             freshness: merged_freshness.clone(),
             loaded_at_field: merged_loaded_at_field.clone(),
             loaded_at_query: merged_loaded_at_query.clone(),
+            static_analysis: source_properties_config
+                .static_analysis
+                .unwrap_or(StaticAnalysisKind::On),
             meta: merged_meta.unwrap_or_default(),
             tags: merged_tags.unwrap_or_default(),
         };

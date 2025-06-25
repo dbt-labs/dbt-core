@@ -1,0 +1,3 @@
+kind: Features
+body: Add 'static_analysis' property to all analyzeable nodes, ensure sources adapt static_analysis to failures
+time: 2025-06-23T23:35:05.987702-07:00

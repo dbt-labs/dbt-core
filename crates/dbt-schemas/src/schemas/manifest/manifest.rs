@@ -365,6 +365,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             .unwrap_or_default(),
                         meta: model.config.meta.clone().unwrap_or_default(),
                         enabled: model.config.enabled.unwrap_or(true),
+                        // TODO: The resolved static analysis should be serialized to / from the manifest
                         static_analysis: StaticAnalysisKind::On,
                         contract: model.config.contract.clone(),
                         incremental_strategy: model.config.incremental_strategy.clone(),
@@ -398,6 +399,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             .unwrap_or(dbt_quoting)
                             .try_into()
                             .expect("DbtQuoting should be set"),
+                        static_analysis: StaticAnalysisKind::On,
                         tags: test
                             .config
                             .tags
@@ -430,6 +432,10 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             .unwrap_or(dbt_quoting)
                             .try_into()
                             .expect("DbtQuoting should be set"),
+                        static_analysis: snapshot
+                            .config
+                            .static_analysis
+                            .unwrap_or(StaticAnalysisKind::On),
                         tags: snapshot
                             .config
                             .tags
@@ -512,6 +518,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 loaded_at_field: source.loaded_at_field,
                 loaded_at_query: source.loaded_at_query,
                 freshness: source.freshness,
+                static_analysis: StaticAnalysisKind::On,
                 tags: source
                     .config
                     .tags
@@ -531,6 +538,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 common_attr: unit_test.common_attr,
                 base_attr: unit_test.base_attr,
                 quoting: dbt_quoting.try_into().expect("DbtQuoting should be set"),
+                static_analysis: StaticAnalysisKind::On,
                 tags: unit_test
                     .config
                     .tags

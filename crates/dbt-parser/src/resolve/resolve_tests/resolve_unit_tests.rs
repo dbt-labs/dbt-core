@@ -7,6 +7,7 @@ use dbt_common::err;
 use dbt_common::error::AbstractLocation;
 use dbt_common::fs_err;
 use dbt_common::io_args::IoArgs;
+use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::CodeLocation;
 use dbt_common::ErrorCode;
 use dbt_common::FsResult;
@@ -217,6 +218,9 @@ pub fn resolve_unit_tests(
                 .unwrap_or_default(),
             meta: properties_config.meta.clone().unwrap_or_default(),
             quoting: package_quoting.try_into()?,
+            static_analysis: properties_config
+                .static_analysis
+                .unwrap_or(StaticAnalysisKind::On),
             deprecated_config: properties_config,
         };
 

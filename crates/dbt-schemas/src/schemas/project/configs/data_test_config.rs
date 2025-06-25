@@ -1,3 +1,4 @@
+use dbt_common::io_args::StaticAnalysisKind;
 use dbt_serde_yaml::{JsonSchema, ShouldBe};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -49,6 +50,8 @@ pub struct ProjectDataTestConfig {
     pub where_: Option<String>,
     #[serde(rename = "+quoting")]
     pub quoting: Option<DbtQuoting>,
+    #[serde(rename = "+static_analysis")]
+    pub static_analysis: Option<StaticAnalysisKind>,
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectDataTestConfig>>,
 }
 
@@ -78,6 +81,7 @@ pub struct DataTestConfig {
     pub tags: Option<StringOrArrayOfStrings>,
     pub warn_if: Option<String>,
     pub quoting: Option<DbtQuoting>,
+    pub static_analysis: Option<StaticAnalysisKind>,
     #[serde(rename = "where")]
     pub where_: Option<String>,
 }
@@ -101,6 +105,7 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
             warn_if: config.warn_if,
             quoting: config.quoting,
             where_: config.where_,
+            static_analysis: config.static_analysis,
         }
     }
 }
@@ -124,6 +129,7 @@ impl From<DataTestConfig> for ProjectDataTestConfig {
             warn_if: config.warn_if,
             quoting: config.quoting,
             where_: config.where_,
+            static_analysis: config.static_analysis,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -152,6 +158,7 @@ impl DefaultTo<DataTestConfig> for DataTestConfig {
             ref mut warn_if,
             ref mut quoting,
             ref mut where_,
+            ref mut static_analysis,
         } = self;
 
         // Protect the mutable refs from being used in the default_to macro
@@ -178,6 +185,7 @@ impl DefaultTo<DataTestConfig> for DataTestConfig {
                 schema,
                 group,
                 where_,
+                static_analysis,
             ]
         );
     }

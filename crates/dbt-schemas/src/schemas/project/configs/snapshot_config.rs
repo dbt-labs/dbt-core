@@ -1,3 +1,4 @@
+use dbt_common::io_args::StaticAnalysisKind;
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::ShouldBe;
 use dbt_serde_yaml::Verbatim;
@@ -64,6 +65,8 @@ pub struct ProjectSnapshotConfig {
     pub event_time: Option<String>,
     #[serde(rename = "+quoting")]
     pub quoting: Option<DbtQuoting>,
+    #[serde(rename = "+static_analysis")]
+    pub static_analysis: Option<StaticAnalysisKind>,
     #[serde(rename = "+meta")]
     pub meta: Option<BTreeMap<String, serde_json::Value>>,
     #[serde(rename = "+group")]
@@ -113,6 +116,7 @@ pub struct SnapshotConfig {
     pub grants: Option<serde_json::Value>,
     pub event_time: Option<String>,
     pub quoting: Option<DbtQuoting>,
+    pub static_analysis: Option<StaticAnalysisKind>,
     pub meta: Option<BTreeMap<String, serde_json::Value>>,
     pub group: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -190,6 +194,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
             grants: config.grants,
             event_time: config.event_time,
             quoting: config.quoting,
+            static_analysis: config.static_analysis,
             meta: config.meta,
             group: config.group,
             quote_columns: config.quote_columns,
@@ -221,6 +226,7 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             grants: config.grants,
             event_time: config.event_time,
             quoting: config.quoting,
+            static_analysis: config.static_analysis,
             meta: config.meta,
             group: config.group,
             quote_columns: config.quote_columns,
@@ -270,6 +276,7 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
             ref mut quote_columns,
             ref mut invalidate_hard_deletes,
             ref mut docs,
+            ref mut static_analysis,
         } = self;
 
         #[allow(unused, clippy::let_unit_value)]
@@ -306,6 +313,7 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
                 snapshot_meta_column_names,
                 hard_deletes,
                 check_cols,
+                static_analysis,
             ]
         );
     }

@@ -1,5 +1,6 @@
 use dbt_common::constants::DBT_SNAPSHOTS_DIR_NAME;
 use dbt_common::error::AbstractLocation;
+use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::{fs_err, show_error, show_warning, stdfs, unexpected_fs_err, ErrorCode, FsResult};
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
@@ -268,6 +269,9 @@ pub async fn resolve_snapshots(
                     .expect("quoting is required")
                     .try_into()
                     .expect("quoting is required"),
+                static_analysis: final_config
+                    .static_analysis
+                    .unwrap_or(StaticAnalysisKind::On),
                 tags: final_config
                     .tags
                     .clone()
