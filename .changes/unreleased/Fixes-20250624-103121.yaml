@@ -1,0 +1,3 @@
+kind: Fixes
+body: Add store_result and load_result macros to run-operation jinja context
+time: 2025-06-24T10:31:21.938719692-07:00

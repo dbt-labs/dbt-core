@@ -6,6 +6,7 @@ use std::sync::Arc;
 use crate::functions::build_flat_graph;
 use crate::jinja_environment::JinjaEnvironment;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
+use dbt_fusion_adapter::load_store::ResultStore;
 use dbt_fusion_adapter::BaseAdapter;
 use dbt_schemas::schemas::Nodes;
 use dbt_schemas::state::{DbtRuntimeConfig, RefsAndSourcesTracker};
@@ -98,6 +99,15 @@ pub fn build_compile_and_run_base_context(
     ctx.insert(
         "graph".to_string(),
         MinijinjaValue::from(build_flat_graph(nodes)),
+    );
+    let result_store = ResultStore::default();
+    ctx.insert(
+        "store_result".to_owned(),
+        MinijinjaValue::from_function(result_store.store_result()),
+    );
+    ctx.insert(
+        "load_result".to_owned(),
+        MinijinjaValue::from_function(result_store.load_result()),
     );
     ctx
 }
