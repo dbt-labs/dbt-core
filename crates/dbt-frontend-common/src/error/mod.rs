@@ -47,14 +47,21 @@ pub type InternalResult<T, E = Box<InternalError>> = Result<T, E>;
 
 #[macro_export]
 macro_rules! internal_err {
+    ($($arg:tt)*) => {
+        Err($crate::make_internal_err!($($arg)*))
+    }
+}
+
+#[macro_export]
+macro_rules! make_internal_err {
     (loc => $location:expr, $($arg:tt)*) => {
-        Err(Box::new($crate::error::InternalError::new_with_location(
+        Box::new($crate::error::InternalError::new_with_location(
             format!($($arg)*),
             $location,
-        )))
+        ))
     };
     ($($arg:tt)*) => {
-        Err(Box::new($crate::error::InternalError::new(format!($($arg)*))))
+        Box::new($crate::error::InternalError::new(format!($($arg)*)))
     }
 }
 
@@ -194,6 +201,7 @@ macro_rules! ectx {
 
 pub use frontend_err;
 pub use internal_err;
+pub use make_internal_err;
 pub use notimplemented_err;
 pub use unexpected_err;
 

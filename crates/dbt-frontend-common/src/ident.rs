@@ -1,7 +1,7 @@
 use crate::dialect::Dialect;
 use crate::error::InternalError;
-use crate::internal_err;
 use crate::utils::{get_version_hash, strip_version_hash};
+use crate::{internal_err, make_internal_err};
 use datafusion::sql::{ResolvedTableReference, TableReference};
 use itertools::Itertools;
 use serde::{de, Deserialize, Deserializer};
@@ -810,7 +810,7 @@ impl TryFrom<datafusion::common::Column> for ColumnRef {
         Ok(Self {
             table_name: value
                 .relation
-                .ok_or_else(|| InternalError::new("Invalid column ref: missing relation"))?
+                .ok_or_else(|| make_internal_err!("Invalid column ref: missing relation"))?
                 .try_into()?,
             column: value.name.into(),
         })

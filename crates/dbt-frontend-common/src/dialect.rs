@@ -4,6 +4,7 @@ use crate::ident::{
 
 use super::error::{internal_err, InternalError, InternalResult};
 use super::ident::Identifier;
+use crate::make_internal_err;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, str::FromStr};
 
@@ -311,9 +312,9 @@ impl Dialect {
 
     /// Parse the given string as a qualified name.
     pub fn parse_qualified_name(&self, sql: &str) -> InternalResult<QualifiedName> {
-        let idents = self.parse_dot_separated_identifiers(sql).map_err(|e| {
-            InternalError::new(format!("Failed to parse {sql} as qualified name: {e}"))
-        })?;
+        let idents = self
+            .parse_dot_separated_identifiers(sql)
+            .map_err(|e| make_internal_err!("Failed to parse {sql} as qualified name: {e}"))?;
         QualifiedName::try_from(idents)
     }
 
@@ -325,9 +326,9 @@ impl Dialect {
 
     /// Parse the given string as a column reference.
     pub fn parse_column_ref(&self, sql: &str) -> InternalResult<ColumnRef> {
-        let idvec = self.parse_dot_separated_identifiers(sql).map_err(|e| {
-            InternalError::new(format!("Failed to parse {sql} as column reference: {e}"))
-        })?;
+        let idvec = self
+            .parse_dot_separated_identifiers(sql)
+            .map_err(|e| make_internal_err!("Failed to parse {sql} as column reference: {e}"))?;
         if idvec.len() != 4 {
             return internal_err!(
                 "Failed to parse {sql} as column reference:
