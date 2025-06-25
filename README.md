@@ -39,12 +39,12 @@ Fusion & associated drivers are compiled for each CPU microarchitecture and oper
 
 Legend:
 * 🟢 - Supported today
-* 🟡 - Unsupported today, in progress & will be supported by 2025-07-18
+* 🟡 - Unsupported today
 
 | Operating System    | X86-64 | ARM  |
 |-------------------|----------|------|
 | MacOS             |   🟢     |  🟢  |
-| Linux             |   🟢     |  🟡  |
+| Linux             |   🟢     |  🟢  |
 | Windows           |   🟡     |  🟡  |
 
 
@@ -55,9 +55,9 @@ Legend:
 |-------------|-----------------------------|----------------------------------------------|
 | 2025-05-28  | Initial release of Fusion   | Published source code of parser, schemas, dbt-jinja, and Snowflake ADBC driver. |
 | 2025-06-09  | Databricks Adapter release  | Databricks ADBC driver, and adapter for Fusion |
-| 2025-06-25  | BigQuery Adapter release    | BigQuery ADBC driver, and adapter for Fusion |
-| 2025-07-09  | Redshift Adapter release    | Redshift ADBC driver, and adapter for Fusion |
-| 2025-07-18  | ANTLR Grammars release + SQL Parser  | The SQL grammar used by the ANTLR parser generator.  |
+| 2025-06-30  | BigQuery Adapter release    | BigQuery ADBC driver, and adapter for Fusion |
+| 2025-07-31  | Redshift Adapter release    | Redshift ADBC driver, and adapter for Fusion |
+| 2025-08-30  | ANTLR Grammars release + SQL Parser  | The SQL grammar used by the ANTLR parser generator.  |
 
 ### Top Level Components Released to Date
 Releases of various Fusion components will be iterative as each component reaches maturity & readiness for contribution.
