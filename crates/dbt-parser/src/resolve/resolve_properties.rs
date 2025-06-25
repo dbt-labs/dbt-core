@@ -105,6 +105,7 @@ impl MinimalProperties {
                         );
                     }
 
+                    validate_resource_name(&source.name)?;
                     for table in tables.iter() {
                         let minimum_table_value = into_typed_with_jinja::<MinimalTableValue, _>(
                             Some(io_args),
@@ -136,10 +137,7 @@ impl MinimalProperties {
                             self.source_tables.insert(
                                 key,
                                 MinimalPropertiesEntry {
-                                    name: validate_resource_name(&format!(
-                                        "{}.{}",
-                                        source.name, minimum_table_value.name
-                                    ))?,
+                                    name: minimum_table_value.name,
                                     relative_path: properties_path.to_path_buf(),
                                     schema_value: schema_value.clone(),
                                     table_value: Some(table.clone()), // Store table separately

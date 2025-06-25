@@ -17,6 +17,7 @@ use dbt_schemas::schemas::properties::{SourceProperties, Tables};
 use dbt_schemas::schemas::{CommonAttributes, DbtSource};
 use dbt_schemas::state::{DbtAsset, DbtPackage, ModelStatus, RefsAndSourcesTracker};
 use minijinja::Value as MinijinjaValue;
+use regex::Regex;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -44,6 +45,8 @@ pub fn resolve_sources(
     let mut sources: HashMap<String, Arc<DbtSource>> = HashMap::new();
     let mut disabled_sources: HashMap<String, Arc<DbtSource>> = HashMap::new();
     let package_name = package.dbt_project.name.as_ref();
+
+    let special_chars = Regex::new(r"[^a-zA-Z0-9_]").unwrap();
 
     let local_project_config = init_project_config(
         io_args,
@@ -104,7 +107,11 @@ pub fn resolve_sources(
             .enabled
             .unwrap_or(source_properties_config.get_enabled().unwrap_or(true));
 
-        let unique_id = format!("source.{}.{}.{}", &package_name, source_name, &table_name);
+        let normalized_table_name = special_chars.replace_all(&table_name, "__");
+        let unique_id = format!(
+            "source.{}.{}.{}",
+            &package_name, source_name, &normalized_table_name
+        );
         let fqn = get_node_fqn(
             package_name,
             mpe.relative_path.clone(),
