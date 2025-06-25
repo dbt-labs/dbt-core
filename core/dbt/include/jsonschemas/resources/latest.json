@@ -774,6 +774,16 @@
             "null"
           ]
         },
+        "static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "store_failures": {
           "type": [
             "boolean",
@@ -876,17 +886,13 @@
       "type": "object",
       "properties": {
         "alias_types": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "default": true,
+          "type": "boolean"
         },
         "checksum": true,
         "enforced": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "default": false,
+          "type": "boolean"
         }
       },
       "additionalProperties": false
@@ -1125,13 +1131,19 @@
     "Entity": {
       "type": "object",
       "required": [
-        "config",
         "name",
         "type"
       ],
       "properties": {
         "config": {
-          "$ref": "#/definitions/EntityConfig"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/EntityConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "description": {
           "type": [
@@ -2344,7 +2356,7 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": true
         },
         "group": {
           "type": [
@@ -3443,7 +3455,7 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": true
         },
         "group": {
           "type": [
@@ -3873,6 +3885,16 @@
             }
           ]
         },
+        "static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "strategy": {
           "type": [
             "string",
@@ -4058,6 +4080,16 @@
           "anyOf": [
             {
               "$ref": "#/definitions/DbtQuoting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
             },
             {
               "type": "null"
@@ -4409,6 +4441,16 @@
             "null"
           ],
           "additionalProperties": true
+        },
+        "static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "tags": {
           "anyOf": [
