@@ -20,6 +20,7 @@ mod vec_of_rows;
 
 pub use column::Column;
 pub use columns::Columns;
+pub use print_table::print_table;
 pub use row::Row;
 pub use rows::Rows;
 pub use table::AgateTable;

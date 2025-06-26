@@ -6,6 +6,7 @@ use std::{
     sync::Arc,
 };
 
+use dbt_agate::{print_table, AgateTable};
 use dbt_common::{fs_err, io_args::IoArgs, show_warning, ErrorCode};
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 use minijinja::value::{mutable_map::MutableMap, ValueMap};
@@ -20,6 +21,8 @@ use minijinja::{
 use crate::utils::{
     node_metadata_from_state, DBT_INTERNAL_ENV_VAR_PREFIX, ENV_VARS, SECRET_ENV_VAR_PREFIX,
 };
+
+use crate::functions::contract_error::get_contract_mismatches;
 
 /// The default placeholder for environment variables when the default value is used
 pub const DEFAULT_ENV_PLACEHOLDER: &str = "__dbt_placeholder__";
@@ -1011,7 +1014,34 @@ impl Object for Exceptions {
             }
             // (yaml_columns, sql_columns)
             // [{"name": ..., "data_type": ..., "formatted": ...},...]
-            "raise_contract_error" => Ok(Value::UNDEFINED),
+            "raise_contract_error" => {
+                let mut args = ArgParser::new(args, None);
+                let yaml_columns = args
+                    .get::<Value>("yaml_columns")
+                    .unwrap_or(Value::UNDEFINED);
+                let sql_columns = args.get::<Value>("sql_columns").unwrap_or(Value::UNDEFINED);
+                let column_diff_table: &Arc<AgateTable> =
+                    get_contract_mismatches(yaml_columns, sql_columns)?;
+                //  print_table(table, max_rows, max_columns, max_column_width)
+                let column_diff_string = print_table(column_diff_table, 50, 50, 50)?;
+                let message = format!("This model has an enforced contract that failed.\n Please ensure the name, data_type, and number of columns in your contract match the columns in your model's definition.\n\n {}", column_diff_string);
+                if let Some((node_id, file_path)) = node_metadata_from_state(state) {
+                    Err(Error::new(
+                        ErrorKind::InvalidOperation,
+                        format!(
+                            "Compilation Error for {} from {}: {}",
+                            node_id,
+                            file_path.display(),
+                            message
+                        ),
+                    ))
+                } else {
+                    Err(Error::new(
+                        ErrorKind::InvalidOperation,
+                        format!("Compilation Error: {}", message),
+                    ))
+                }
+            }
             // (column_names)
             // ["column1", "column2"]
             "column_type_missing" => {
