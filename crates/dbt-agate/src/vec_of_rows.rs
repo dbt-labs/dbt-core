@@ -130,4 +130,18 @@ impl VecOfRows {
     pub fn num_columns(&self) -> usize {
         self.schema.len()
     }
+
+    pub(crate) fn with_renamed_columns(&self, renamed_columns: Vec<String>) -> Self {
+        debug_assert!(renamed_columns.len() == self.schema.len());
+        // rename at the source as well if it exists
+        let source = self
+            .source
+            .as_ref()
+            .map(|flat| flat.with_renamed_columns(&renamed_columns));
+        VecOfRows {
+            schema: renamed_columns,
+            rows: self.rows.clone(),
+            source,
+        }
+    }
 }

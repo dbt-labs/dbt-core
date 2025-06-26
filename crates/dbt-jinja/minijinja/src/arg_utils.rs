@@ -496,9 +496,7 @@ were consumed from the iterator. You are misusing the ArgsIter API.",
         if num_pos_args < self.min_pos_args {
             let msg = format!(
                 "{}() requires at least {} positional arguments but only {} were given",
-                self.fn_name,
-                self.min_pos_args,
-                num_pos_args
+                self.fn_name, self.min_pos_args, num_pos_args
             );
             let err = MinijinjaError::new(MinijinjaErrorKind::MissingArgument, msg);
             Err(err)

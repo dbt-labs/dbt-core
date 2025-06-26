@@ -327,7 +327,7 @@ impl FlattenRecordBatchState {
 /// than if we were storing a single batch.
 #[derive(Clone)]
 pub(crate) struct FlatRecordBatch {
-    /// The original record batch after flattening of nested columns.
+    /// Flat record batch.
     flat: Arc<RecordBatch>,
     /// The original record batch before the flattening of nested columns.
     _original: Option<Arc<RecordBatch>>,
@@ -350,6 +350,26 @@ impl FlatRecordBatch {
         let column_batch = single_column_batch(&self.flat, idx);
         Self {
             flat: Arc::new(column_batch),
+            _original: None,
+        }
+    }
+
+    pub(crate) fn with_renamed_columns(&self, renamed_columns: &[String]) -> FlatRecordBatch {
+        debug_assert!(renamed_columns.len() == self.flat.num_columns());
+        let new_schema = {
+            let mut renamed_columns = renamed_columns.iter();
+            let mut new_fields = Vec::with_capacity(self.flat.num_columns());
+            for field in self.flat.schema().fields().iter() {
+                let new_name = renamed_columns.next().unwrap(); // pre-condition ensures this is safe
+                let new_field = (**field).clone().with_name(new_name.clone());
+                new_fields.push(new_field);
+            }
+            Arc::new(Schema::new(new_fields))
+        };
+        // only column names changed, so .unwrap() is safe
+        let new_flat = RecordBatch::try_new(new_schema, self.flat.columns().to_vec()).unwrap();
+        FlatRecordBatch {
+            flat: Arc::new(new_flat),
             _original: None,
         }
     }
