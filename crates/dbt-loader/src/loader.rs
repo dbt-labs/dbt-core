@@ -376,14 +376,14 @@ pub async fn load_inner(
         package_path,
         &dbt_project.name,
         &ResourcePathKind::MacroPaths,
-        &["sql", "jinja"],
+        &["sql"],
         &all_files,
     );
     let test_files = find_files_by_kind_and_extension(
         package_path,
         &dbt_project.name,
         &ResourcePathKind::TestPaths,
-        &["sql", "jinja"],
+        &["sql"],
         &all_files,
     );
     let seed_files = find_files_by_kind_and_extension(
