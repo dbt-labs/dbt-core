@@ -306,23 +306,6 @@ pub fn generate_component_name(
     let template_name =
         find_generate_macro_template(env, component, root_project_name, current_project_name)?;
 
-    // Optimization: If the template starts with "default__", use the native Rust implementation
-    if template_name == format!("dbt.generate_{}_name", component) {
-        // technically this would call adapter.dispatch and the user could overwrite the default
-        // but this isn't a a behavior we should support cause the user can already overrride without the default prefix
-        // Determine which default implementation to use based on component type
-        return match component {
-            "database" => default_generate_database_name(env, custom_name, node),
-            "schema" => default_generate_schema_name(env, custom_name, node),
-            "alias" => default_generate_alias_name(custom_name, node),
-            _ => Err(fs_err!(
-                ErrorCode::JinjaError,
-                "No default implementation for component: {}",
-                component
-            )),
-        };
-    }
-
     // Create a state object for rendering
     let template = env.get_template(&template_name)?;
 
@@ -353,94 +336,6 @@ pub fn generate_component_name(
     .to_string();
     // Return the result
     Ok(result)
-}
-
-/// Rust implementation of default__generate_database_name
-fn default_generate_database_name(
-    env: &JinjaEnvironment,
-    custom_database_name: Option<String>,
-    _node: Option<&dyn InternalDbtNode>,
-) -> FsResult<String> {
-    // Get target.database from context
-
-    let target = env
-        .get_global("target")
-        .ok_or_else(|| fs_err!(ErrorCode::JinjaError, "Target not found in context"))?;
-
-    let default_database = target
-        .get_attr("database")
-        .map_err(|_| fs_err!(ErrorCode::JinjaError, "database not found in target"))?
-        .to_string();
-
-    // Return either the custom name or default database
-    Ok(match custom_database_name {
-        None => default_database,
-        Some(name) if name.is_empty() => default_database,
-        Some(name) => name,
-    })
-}
-
-/// Rust implementation of default__generate_schema_name
-fn default_generate_schema_name(
-    env: &JinjaEnvironment,
-    custom_schema_name: Option<String>,
-    _node: Option<&dyn InternalDbtNode>,
-) -> FsResult<String> {
-    // Get target.schema from context
-
-    let target = env
-        .get_global("target")
-        .ok_or_else(|| fs_err!(ErrorCode::JinjaError, "Target not found in context"))?;
-
-    let default_schema = target
-        .get_attr("schema")
-        .map_err(|_| fs_err!(ErrorCode::JinjaError, "schema not found in target"))?
-        .to_string();
-
-    // Return either the default schema or a combination with custom schema
-    Ok(match custom_schema_name {
-        None => default_schema,
-        Some(name) if name.is_empty() => default_schema,
-        Some(name) => format!("{}_{}", default_schema, name.trim()),
-    })
-}
-
-/// Rust implementation of default__generate_alias_name
-fn default_generate_alias_name(
-    custom_alias_name: Option<String>,
-    node: Option<&dyn InternalDbtNode>,
-) -> FsResult<String> {
-    if let Some(name) = custom_alias_name {
-        if !name.is_empty() {
-            return Ok(name.trim().to_string());
-        }
-    }
-
-    // Get the node name and version if available
-    if let Some(node) = node {
-        // Get node common attributes for name
-        let common = node.common();
-
-        // For the version, we need to check the specific type
-        match node.resource_type() {
-            "model" => {
-                if let Some(version) = &node.version() {
-                    // Replace dots with underscores in version
-                    let formatted_version = version.to_string().replace('.', "_");
-                    return Ok(format!("{}_v{}", common.name, formatted_version));
-                }
-            }
-            // Other node types don't have versions
-            _ => {}
-        }
-
-        return Ok(common.name.clone());
-    }
-
-    Err(fs_err!(
-        ErrorCode::JinjaError,
-        "Cannot generate alias: no custom name or node provided"
-    ))
 }
 
 /// Clear template cache (primarily for testing purposes)
