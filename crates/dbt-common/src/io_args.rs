@@ -165,8 +165,8 @@ pub struct EvalArgs {
     pub phase: Phases,
     // Display rows in different formats, this is .to_string on DisplayFormat; we use a string here to break dep. cycle
     pub format: String,
-    /// Limiting number of shown rows. Run with --limit 0 to remove limit
-    pub limit: usize,
+    /// Limiting number of shown rows. None means no limit, run with --limit -1 to remove limit
+    pub limit: Option<usize>,
     /// called as bin or as library
     pub from_main: bool,
     /// The number of threads to use

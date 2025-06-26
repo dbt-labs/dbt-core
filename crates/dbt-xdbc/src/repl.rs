@@ -348,7 +348,7 @@ pub async fn run_repl(backend_str: &str) -> Result<()> {
                         &column_names,
                         &[batch.clone()],
                         &DisplayFormat::Table,
-                        10,
+                        Some(10),
                         true,
                         Some(batch.num_rows()),
                     ) {

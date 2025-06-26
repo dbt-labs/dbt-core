@@ -15,13 +15,14 @@ use dbt_common::io_args::{
     check_selector, check_var, ClapResourceType, DisplayFormat, EvalArgs, IoArgs, JsonSchemaTypes,
     Phases, ShowOptions, SystemArgs,
 };
+use dbt_common::row_limit::RowLimit;
 
 use clap::arg;
 use clap::{Parser, Subcommand};
 
 use dbt_common::node_selector::{parse_model_specifiers, IndirectSelection};
 
-const DEFAULT_LIMIT: usize = 10;
+const DEFAULT_LIMIT: &str = "10";
 static DEFAULT_FORMAT: LazyLock<String> = LazyLock::new(|| DisplayFormat::Table.to_string());
 
 // defined in pretty string, but copied here to avoid cycle...
@@ -122,10 +123,9 @@ pub struct ListArgs {
     #[clap(flatten)]
     pub common_args: CommonArgs,
 
-    /// Limiting number of shown rows. Run with --limit 0 to remove limit [default: 10]
-    // todo: still left to be implemented
-    #[arg(long, hide = true)]
-    pub limit: Option<usize>,
+    /// Limiting number of shown rows. Run with --limit -1 to remove limit [default: 10]
+    #[arg(long, default_value=DEFAULT_LIMIT, allow_hyphen_values = true, hide = true)]
+    pub limit: RowLimit,
 
     /// Display rows in different formats, only table and json supported...
     #[arg(global = true, long, aliases = ["format"])]
@@ -357,7 +357,7 @@ impl ListArgs {
         if let Some(resource_type) = self.resource_type {
             eval_args.resource_types = vec![resource_type];
         }
-        eval_args.limit = self.limit.unwrap_or(DEFAULT_LIMIT);
+        eval_args.limit = self.limit.into();
         if let Some(output) = &self.output {
             eval_args.format = output.to_string();
         } else {
@@ -488,7 +488,7 @@ impl CommonArgs {
             vars: self.vars.clone().unwrap_or_default(),
             phase: Phases::All,
             format: DEFAULT_FORMAT.clone(),
-            limit: 10,
+            limit: Some(10),
             debug: self.debug,
             num_threads: if self.single_threaded {
                 Some(1)

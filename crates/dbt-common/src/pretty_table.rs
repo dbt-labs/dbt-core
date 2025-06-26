@@ -108,7 +108,7 @@ pub fn pretty_data_table(
     column_names: &[String],
     record_batches: &[RecordBatch],
     display_format: &DisplayFormat,
-    limit: usize,
+    limit: Option<usize>,
     show_footer: bool,
     actual_rows: Option<usize>,
 ) -> FsResult<String> {
@@ -212,7 +212,7 @@ pub fn pretty_data_table(
                     if include_ellipsis {
                         cells.push(Cell::new(ELLIPSIS));
                     }
-                    if limit != 0 && num_rows >= limit {
+                    if limit.is_some() && num_rows >= limit.expect("is some") {
                         break;
                     }
                     table.add_row(cells);
@@ -225,20 +225,21 @@ pub fn pretty_data_table(
             out.push('\n');
 
             // print footer
-            if limit != 0 && row_count > limit {
+            if limit.is_some_and(|l| row_count >= l) {
                 if include_ellipsis {
                     out.push_str(&format!(
                         "{} rows, {} columns, showing only {} rows and only {} columns. Run with --limit 0 to show all rows. Run with a terminal width of at least {} to show all columns.",
                         row_count,
                         column_names.len(),
-                        limit,
+                        limit.expect("is some"),
                         indices_to_include.len(),
                         total_width
                     ));
                 } else {
                     out.push_str(&format!(
                         "{} rows, showing only {} rows. Run with --limit 0 to show all rows.",
-                        row_count, limit
+                        row_count,
+                        limit.expect("is some")
                     ));
                 }
             } else if include_ellipsis {
@@ -410,7 +411,7 @@ pub fn pretty_schema_table(
     display_format: &DisplayFormat,
     table_schema: &Schema,
     _dialect: &Dialect,
-    limit: usize,
+    limit: Option<usize>,
     show_footer: bool,
 ) -> FsResult<String> {
     // Define column names for the schema table
@@ -479,7 +480,7 @@ pub fn pretty_vec_table(
     column_names: &[String],
     rows: &[Vec<String>],
     display_format: &DisplayFormat,
-    limit: usize,
+    limit: Option<usize>,
     show_footer: bool,
     show_index: bool,
 ) -> FsResult<String> {
