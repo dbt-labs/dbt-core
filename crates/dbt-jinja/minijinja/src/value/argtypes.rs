@@ -906,6 +906,12 @@ impl Kwargs {
     }
 }
 
+impl Default for Kwargs {
+    fn default() -> Self {
+        Kwargs::new(Default::default())
+    }
+}
+
 impl FromIterator<(String, Value)> for Kwargs {
     fn from_iter<T>(iter: T) -> Self
     where

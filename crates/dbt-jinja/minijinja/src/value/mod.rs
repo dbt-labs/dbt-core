@@ -225,7 +225,7 @@ pub use crate::value::object::{
 
 #[macro_use]
 mod type_erase;
-mod argtypes;
+pub(crate) mod argtypes;
 #[cfg(feature = "deserialization")]
 mod deserialize;
 pub(crate) mod merge_object;

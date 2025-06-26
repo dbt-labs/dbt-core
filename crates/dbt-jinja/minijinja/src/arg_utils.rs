@@ -357,10 +357,181 @@ impl ArgParser {
     }
 }
 
+/// A zero-copy, streaming parser of arguments from a `&[Value]` slice.
+///
+/// NOTE(felipecrv): this is experimental and not part of the original minijinja
+/// codebase. It may change in the future.
+pub struct ArgsIter<'a> {
+    fn_name: &'a str,
+    min_pos_args: usize,
+    args: &'a [Value],
+    index: usize,
+    kwargs: Option<&'a Value>,
+}
+
+impl<'a> ArgsIter<'a> {
+    /// Create a new `ArgsIter` from a slice of `Value`s.
+    ///
+    /// PRECONDITION: if one of the args `.is_kwargs()`, it must be the last argument in the slice.
+    pub fn new(fn_name: &'a str, min_pos_args: usize, args: &'a [Value]) -> ArgsIter<'a> {
+        ArgsIter {
+            fn_name,
+            min_pos_args,
+            args,
+            index: 0,
+            kwargs: None,
+        }
+    }
+
+    /// Number of positional arguments provided to the iterator.
+    pub fn num_pos_args(&self) -> usize {
+        let has_kwargs = self.kwargs.is_some() || self.args.last().map_or(false, |v| v.is_kwargs());
+        self.args.len() - if has_kwargs { 1 } else { 0 }
+    }
+
+    /// Ensure all positional arguments have been consumed and return any trailing kwargs.
+    ///
+    /// Call this instead of `finish()` if you expect trailing kwargs.
+    pub fn trailing_kwargs(&mut self) -> Result<Kwargs, MinijinjaError> {
+        if let Some(value) = self.kwargs {
+            // If kwargs is set, all positional arguments have been consumed.
+            // .unwrap() is safe here because we know `value.is_kwargs()` is true.
+            return Ok(Kwargs::extract(value).unwrap());
+        }
+        if let Some(arg) = self._peek() {
+            if let Some(kwargs) = Kwargs::extract(arg) {
+                self._next(); // consume the peeked() kwargs argument
+                self.kwargs.replace(arg);
+                Ok(kwargs)
+            } else {
+                let max_pos_args = self.index;
+                Err(self._unexpected_positional_arg(max_pos_args))
+            }
+        } else {
+            Ok(Kwargs::default())
+        }
+    }
+
+    /// Ensure all positional arguments have been consumed when no kwargs are expected.
+    pub fn finish(&self) -> Result<(), MinijinjaError> {
+        if let Some(arg) = self._peek() {
+            let err = if arg.is_kwargs() {
+                self._unexpected_kwargs(arg)
+            } else {
+                // The user called finish() now, so the current iterator position
+                // is the expected maximum number of positional arguments.
+                let max_pos_args = self.index;
+                self._unexpected_positional_arg(max_pos_args)
+            };
+            Err(err)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Handle unexpected kwargs.
+    ///
+    /// PRECONDITION: arg.is_kwargs()
+    #[inline(never)]
+    fn _unexpected_kwargs(&self, arg: &Value) -> MinijinjaError {
+        // Like Python, we produce a message that lets the user
+        // easily identify the unexpected keyword argument.
+        let kwargs = arg.as_object().unwrap(); // arg.is_kwargs()
+        let mut iter = kwargs.try_iter().unwrap(); // Kwargs is iterable
+        let key = iter.next().unwrap(); // Kwargs must have at least one key
+        let msg = format!(
+            "{}() got an unexpected keyword argument '{}'",
+            self.fn_name,
+            key.as_str().unwrap()
+        );
+        MinijinjaError::new(MinijinjaErrorKind::TooManyArguments, msg)
+    }
+
+    #[inline(never)]
+    fn _unexpected_positional_arg(&self, max_pos_args: usize) -> MinijinjaError {
+        // handle the unexpected positional argument case
+        debug_assert!(
+            max_pos_args >= self.min_pos_args,
+            "trailing_kwargs() or finish() called before min_pos_args={} arguments \
+were consumed from the iterator. You are misusing the ArgsIter API.",
+            self.min_pos_args
+        );
+
+        let num_pos_args = self.num_pos_args();
+        let msg = if self.min_pos_args == max_pos_args {
+            format!(
+                "{}() takes {} positional argument but {} were given",
+                self.fn_name, self.min_pos_args, num_pos_args
+            )
+        } else {
+            format!(
+                "{}() takes from {} to {} positional arguments but {} were given",
+                self.fn_name, self.min_pos_args, max_pos_args, num_pos_args
+            )
+        };
+        MinijinjaError::new(MinijinjaErrorKind::TooManyArguments, msg)
+    }
+
+    fn _peek(&self) -> Option<&'a Value> {
+        if self.index < self.args.len() {
+            Some(&self.args[self.index])
+        } else {
+            None
+        }
+    }
+
+    fn _next(&mut self) -> Option<&'a Value> {
+        if self.index < self.args.len() {
+            let arg = &self.args[self.index];
+            self.index += 1;
+            Some(arg)
+        } else {
+            None
+        }
+    }
+
+    #[inline(never)]
+    fn _did_consume_all_positional_args(&self) -> Result<(), MinijinjaError> {
+        let num_pos_args = self.num_pos_args();
+        if num_pos_args < self.min_pos_args {
+            let msg = format!(
+                "{}() requires at least {} positional arguments but only {} were given",
+                self.fn_name,
+                self.min_pos_args,
+                num_pos_args
+            );
+            let err = MinijinjaError::new(MinijinjaErrorKind::MissingArgument, msg);
+            Err(err)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl<'a> Iterator for ArgsIter<'a> {
+    type Item = Result<&'a Value, MinijinjaError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self._next() {
+            Some(arg) => {
+                if arg.is_kwargs() {
+                    self.kwargs.replace(arg);
+                    // fallthrough
+                } else {
+                    return Some(Ok(arg));
+                }
+            }
+            None => (), // fallthrough
+        };
+        match self._did_consume_all_positional_args() {
+            Ok(()) => None,             // finish iteration
+            Err(err) => Some(Err(err)), // generate errors infinitely
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::value::Kwargs;
-
     use super::*;
     use std::collections::BTreeMap;
 

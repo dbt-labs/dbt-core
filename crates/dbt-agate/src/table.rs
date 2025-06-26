@@ -11,7 +11,9 @@ use crate::Tuple;
 
 use arrow::record_batch::RecordBatch;
 use arrow_schema::{ArrowError, Schema};
+use minijinja::arg_utils::ArgsIter;
 use minijinja::listener::RenderingEventListener;
+use minijinja::value::Kwargs;
 use minijinja::value::{Enumerator, Object};
 use minijinja::Value;
 use minijinja::{Error as MinijinjaError, State};
@@ -409,11 +411,49 @@ impl Object for AgateTable {
                 //         max_precision=3):
                 //
                 // TODO: implement output, locale and max_precision
-                #[allow(clippy::get_first)]
-                let max_rows = args.get(0).and_then(|v| v.as_i64()).unwrap_or(20) as usize;
-                let max_columns = args.get(1).and_then(|v| v.as_i64()).unwrap_or(6) as usize;
+                let mut iter = ArgsIter::new("Table.print_table", 0, args);
+                let mut max_rows: Option<&Value> = None;
+                let mut max_columns: Option<&Value> = None;
                 // output is not implemented yet
-                let max_column_width = args.get(3).and_then(|v| v.as_i64()).unwrap_or(20) as usize;
+                let mut max_column_width: Option<&Value> = None;
+                // locale is not implemented yet
+                // max_precision is not implemented yet
+                if let Some(arg) = iter.next() {
+                    max_rows.replace(arg?);
+                    if let Some(arg) = iter.next() {
+                        max_columns.replace(arg?);
+                        if let Some(_) = iter.next() {
+                            // output is not implemented yet
+                            if let Some(arg) = iter.next() {
+                                max_column_width.replace(arg?);
+                                if let Some(_) = iter.next() {
+                                    // locale is not implemented yet
+                                    if let Some(_) = iter.next() {
+                                        // max_precision is not implemented yet
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                let kwargs = iter.trailing_kwargs()?;
+
+                let max_rows = max_rows
+                    .and_then(|v| v.as_i64()) // XXX: silently falling back to 20 rows on conversion error
+                    .or(kwargs.get::<Option<i64>>("max_rows")?)
+                    .unwrap_or(20) as usize;
+                let max_columns = max_columns
+                    .and_then(|v| v.as_i64())
+                    .or(kwargs.get::<Option<i64>>("max_columns")?)
+                    .unwrap_or(6) as usize;
+                let _output = kwargs.get::<Option<&Value>>("output")?;
+                let max_column_width = max_column_width
+                    .and_then(|v| v.as_i64())
+                    .or(kwargs.get::<Option<i64>>("max_column_width")?)
+                    .unwrap_or(20) as usize;
+                let _locale = kwargs.get::<Option<&Value>>("locale")?;
+                let _max_precision = kwargs.get::<Option<&Value>>("max_precision")?;
+                kwargs.assert_all_used()?;
 
                 print_table(self, max_rows, max_columns, max_column_width)
             }
