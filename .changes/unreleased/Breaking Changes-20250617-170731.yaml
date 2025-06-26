@@ -1,0 +1,4 @@
+kind: Breaking Changes
+body: Support loaded_at_field and loaded_at_query in sources and tables config, not
+  as properties
+time: 2025-06-17T17:07:31.618305-04:00

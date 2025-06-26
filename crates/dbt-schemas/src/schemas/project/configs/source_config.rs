@@ -26,6 +26,10 @@ pub struct ProjectSourceConfig {
     pub tags: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+quoting")]
     pub quoting: Option<DbtQuoting>,
+    #[serde(rename = "+loaded_at_query")]
+    pub loaded_at_query: Option<String>,
+    #[serde(rename = "+loaded_at_field")]
+    pub loaded_at_field: Option<String>,
     #[serde(rename = "+static_analysis")]
     pub static_analysis: Option<StaticAnalysisKind>,
     // Flattened fields
@@ -48,6 +52,8 @@ pub struct SourceConfig {
     pub freshness: Option<FreshnessDefinition>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub quoting: Option<DbtQuoting>,
+    pub loaded_at_field: Option<String>,
+    pub loaded_at_query: Option<String>,
     pub static_analysis: Option<StaticAnalysisKind>,
 }
 
@@ -60,6 +66,8 @@ impl From<ProjectSourceConfig> for SourceConfig {
             freshness: config.freshness,
             tags: config.tags,
             quoting: config.quoting,
+            loaded_at_field: config.loaded_at_field,
+            loaded_at_query: config.loaded_at_query,
             static_analysis: config.static_analysis,
         }
     }
@@ -74,6 +82,8 @@ impl From<SourceConfig> for ProjectSourceConfig {
             freshness: config.freshness,
             tags: config.tags,
             quoting: config.quoting,
+            loaded_at_field: config.loaded_at_field,
+            loaded_at_query: config.loaded_at_query,
             static_analysis: config.static_analysis,
             __additional_properties__: BTreeMap::new(),
         }
@@ -93,6 +103,8 @@ impl DefaultTo<SourceConfig> for SourceConfig {
             ref mut freshness,
             ref mut tags,
             ref mut quoting,
+            ref mut loaded_at_field,
+            ref mut loaded_at_query,
             ref mut static_analysis,
         } = self;
 
@@ -103,6 +115,16 @@ impl DefaultTo<SourceConfig> for SourceConfig {
         #[allow(unused, clippy::let_unit_value)]
         let tags = ();
 
-        default_to!(parent, [enabled, event_time, freshness, static_analysis]);
+        default_to!(
+            parent,
+            [
+                enabled,
+                event_time,
+                freshness,
+                loaded_at_field,
+                loaded_at_query,
+                static_analysis
+            ]
+        );
     }
 }

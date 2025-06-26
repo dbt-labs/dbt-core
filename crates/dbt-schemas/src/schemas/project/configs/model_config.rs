@@ -125,7 +125,7 @@ pub struct ProjectModelConfig {
     pub group: Option<String>,
     #[serde(
         default,
-        rename = "hours_to_expiration",
+        rename = "+hours_to_expiration",
         deserialize_with = "u64_or_string_u64"
     )]
     pub hours_to_expiration: Option<u64>,

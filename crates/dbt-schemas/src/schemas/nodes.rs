@@ -584,7 +584,6 @@ impl InternalDbtNode for DbtSource {
                 && self.common_attr.fqn == other_source.common_attr.fqn
                 && self.deprecated_config == other_source.deprecated_config
                 && self.quoting == other_source.quoting
-                && self.loaded_at_field == other_source.loaded_at_field
                 && self.loader == other_source.loader
         } else {
             false
@@ -1432,6 +1431,8 @@ pub struct DbtSource {
     pub static_analysis: StaticAnalysisKind,
     pub tags: Vec<String>,
     pub meta: BTreeMap<String, Value>,
+    pub loaded_at_field: Option<String>,
+    pub loaded_at_query: Option<String>,
     // [End]
 
     // Source Specific Attributes
@@ -1450,8 +1451,6 @@ pub struct DbtSource {
     pub unrendered_schema: Option<String>,
     #[serde(default)]
     pub loader: String,
-    pub loaded_at_field: Option<String>,
-    pub loaded_at_query: Option<String>,
     pub freshness: Option<FreshnessDefinition>,
 
     #[serde(flatten)]

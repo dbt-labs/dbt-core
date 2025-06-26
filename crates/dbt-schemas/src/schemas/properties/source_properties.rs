@@ -23,8 +23,6 @@ pub struct SourceProperties {
     // TODO: support alias then we can remove this field and use #[serde[alias = "catalog"]] on database
     pub catalog: Option<String>,
     pub description: Option<String>,
-    pub loaded_at_field: Option<String>,
-    pub loaded_at_query: Option<String>,
     pub loader: Option<String>,
     pub name: String,
     pub overrides: Spanned<Option<String>>,
@@ -55,8 +53,6 @@ pub struct Tables {
     pub description: Option<String>,
     pub external: Option<serde_json::Value>,
     pub identifier: Option<String>,
-    pub loaded_at_field: Option<String>,
-    pub loaded_at_query: Option<String>,
     pub loader: Option<String>,
     pub name: String,
     pub quoting: Option<DbtQuoting>,
@@ -74,4 +70,6 @@ pub struct TablesConfig {
     pub meta: Option<BTreeMap<String, serde_json::Value>>,
     pub freshness: Omissible<Option<FreshnessDefinition>>,
     pub tags: Option<StringOrArrayOfStrings>,
+    pub loaded_at_field: Option<String>,
+    pub loaded_at_query: Option<String>,
 }

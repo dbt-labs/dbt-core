@@ -119,16 +119,20 @@ pub fn resolve_sources(
         );
 
         let merged_loaded_at_field = Some(
-            table
-                .loaded_at_field
-                .clone()
-                .unwrap_or(source.loaded_at_field.clone().unwrap_or("".to_string())),
+            table_config.loaded_at_field.clone().unwrap_or(
+                source_properties_config
+                    .loaded_at_field
+                    .clone()
+                    .unwrap_or("".to_string()),
+            ),
         );
         let merged_loaded_at_query = Some(
-            table
-                .loaded_at_query
-                .clone()
-                .unwrap_or(source.loaded_at_query.clone().unwrap_or("".to_string())),
+            table_config.loaded_at_query.clone().unwrap_or(
+                source_properties_config
+                    .loaded_at_query
+                    .clone()
+                    .unwrap_or("".to_string()),
+            ),
         );
         if !merged_loaded_at_field.as_ref().unwrap().is_empty()
             && !merged_loaded_at_query.as_ref().unwrap().is_empty()
