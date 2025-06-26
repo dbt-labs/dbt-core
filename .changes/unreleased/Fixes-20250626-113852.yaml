@@ -1,3 +1,0 @@
-kind: Fixes
-body: Ignore .jinja files in macro and test paths for conformance with dbt-core
-time: 2025-06-26T11:38:52.41711+12:00
