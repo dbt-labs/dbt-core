@@ -38,13 +38,25 @@ pub struct ProjectModelConfig {
     pub access: Option<Access>,
     #[serde(rename = "+alias")]
     pub alias: Option<String>,
-    #[serde(rename = "+automatic_clustering")]
+    #[serde(
+        default,
+        rename = "+automatic_clustering",
+        deserialize_with = "bool_or_string_bool"
+    )]
     pub automatic_clustering: Option<bool>,
-    #[serde(rename = "+auto_refresh")]
+    #[serde(
+        default,
+        rename = "+auto_refresh",
+        deserialize_with = "bool_or_string_bool"
+    )]
     pub auto_refresh: Option<bool>,
-    #[serde(rename = "+auto_liquid_cluster")]
+    #[serde(
+        default,
+        rename = "+auto_liquid_cluster",
+        deserialize_with = "bool_or_string_bool"
+    )]
     pub auto_liquid_cluster: Option<bool>,
-    #[serde(rename = "+backup")]
+    #[serde(default, rename = "+backup", deserialize_with = "bool_or_string_bool")]
     pub backup: Option<bool>,
     #[serde(rename = "+base_location_root")]
     pub base_location_root: Option<String>,
@@ -54,7 +66,7 @@ pub struct ProjectModelConfig {
     pub batch_size: Option<DbtBatchSize>,
     #[serde(rename = "+begin")]
     pub begin: Option<String>,
-    #[serde(rename = "+bind")]
+    #[serde(default, rename = "+bind", deserialize_with = "bool_or_string_bool")]
     pub bind: Option<bool>,
     #[serde(rename = "+buckets")]
     pub buckets: Option<i64>,
@@ -170,7 +182,11 @@ pub struct ProjectModelConfig {
     pub merge_exclude_columns: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+merge_update_columns")]
     pub merge_update_columns: Option<StringOrArrayOfStrings>,
-    #[serde(rename = "+merge_with_schema_evolution")]
+    #[serde(
+        default,
+        rename = "+merge_with_schema_evolution",
+        deserialize_with = "bool_or_string_bool"
+    )]
     pub merge_with_schema_evolution: Option<bool>,
     #[serde(rename = "+meta")]
     pub meta: Option<BTreeMap<String, Value>>,
@@ -228,11 +244,19 @@ pub struct ProjectModelConfig {
     pub require_partition_filter: Option<bool>,
     #[serde(rename = "+schema")]
     pub schema: Option<String>,
-    #[serde(rename = "+skip_matched_step")]
+    #[serde(
+        default,
+        rename = "+skip_matched_step",
+        deserialize_with = "bool_or_string_bool"
+    )]
     pub skip_matched_step: Option<bool>,
-    #[serde(rename = "+skip_not_matched_step")]
+    #[serde(
+        default,
+        rename = "+skip_not_matched_step",
+        deserialize_with = "bool_or_string_bool"
+    )]
     pub skip_not_matched_step: Option<bool>,
-    #[serde(rename = "+secure")]
+    #[serde(default, rename = "+secure", deserialize_with = "bool_or_string_bool")]
     pub secure: Option<bool>,
     #[serde(rename = "+sort")]
     pub sort: Option<StringOrArrayOfStrings>,
@@ -323,8 +347,11 @@ pub struct ModelConfig {
     pub static_analysis: Option<StaticAnalysisKind>,
     pub freshness: Option<ModelFreshness>,
     pub sql_header: Option<String>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub auto_refresh: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub backup: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub bind: Option<bool>,
     pub location: Option<String>,
     pub predicates: Option<Vec<String>>,
@@ -870,6 +897,7 @@ pub struct DatabricksModelConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub include_full_name_in_path: Option<bool>,
     pub liquid_clustered_by: Option<StringOrArrayOfStrings>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub auto_liquid_cluster: Option<bool>,
     pub clustered_by: Option<String>,
     pub buckets: Option<i64>,
@@ -883,8 +911,11 @@ pub struct DatabricksModelConfig {
     pub not_matched_condition: Option<String>,
     pub not_matched_by_source_condition: Option<String>,
     pub not_matched_by_source_action: Option<String>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub merge_with_schema_evolution: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub skip_matched_step: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub skip_not_matched_step: Option<bool>,
 }
 
@@ -900,17 +931,22 @@ pub struct SnowflakeModelConfig {
     pub initialize: Option<String>,
     pub tmp_relation_type: Option<String>,
     pub query_tag: Option<String>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub automatic_clustering: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub copy_grants: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub secure: Option<bool>,
 }
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, JsonSchema)]
 pub struct RedshiftModelConfig {
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub auto_refresh: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub backup: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub bind: Option<bool>,
     pub dist: Option<String>,
     pub sort: Option<StringOrArrayOfStrings>,

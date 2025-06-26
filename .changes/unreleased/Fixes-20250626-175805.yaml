@@ -1,0 +1,3 @@
+kind: Fixes
+body: fix string bool manifest deserialization
+time: 2025-06-26T17:58:05.71726+10:00
