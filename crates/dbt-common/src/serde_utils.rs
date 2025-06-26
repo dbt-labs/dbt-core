@@ -291,11 +291,28 @@ impl<T> Omissible<T> {
             Omissible::Omitted => f(),
         }
     }
+
+    /// Converts the `Omissible` value into an `Option<T>`.
+    pub fn into_inner(self) -> Option<T> {
+        match self {
+            Omissible::Present(value) => Some(value),
+            Omissible::Omitted => None,
+        }
+    }
 }
 
 impl<T> From<T> for Omissible<T> {
     fn from(value: T) -> Self {
         Omissible::Present(value)
+    }
+}
+
+impl<T> From<Option<T>> for Omissible<T> {
+    fn from(value: Option<T>) -> Self {
+        match value {
+            Some(v) => Omissible::Present(v),
+            None => Omissible::Omitted,
+        }
     }
 }
 

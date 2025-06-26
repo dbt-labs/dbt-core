@@ -1,4 +1,5 @@
 use dbt_common::io_args::StaticAnalysisKind;
+use dbt_common::serde_utils::Omissible;
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
@@ -246,7 +247,7 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+table_format")]
     pub table_format: Option<String>,
     #[serde(rename = "+tags")]
-    pub tags: Option<StringOrArrayOfStrings>,
+    pub tags: Omissible<StringOrArrayOfStrings>,
     #[serde(rename = "+target_lag")]
     pub target_lag: Option<String>,
     #[serde(rename = "+tblproperties")]
@@ -373,7 +374,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             sql_header: config.sql_header,
             static_analysis: config.static_analysis,
             table_format: config.table_format,
-            tags: config.tags,
+            tags: config.tags.into_inner(),
             transient: config.transient,
             unique_key: config.unique_key,
             snowflake_model_config: SnowflakeModelConfig {
@@ -483,7 +484,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             sql_header: config.sql_header,
             static_analysis: config.static_analysis,
             table_format: config.table_format,
-            tags: config.tags,
+            tags: config.tags.into(),
             transient: config.transient,
             unique_key: config.unique_key,
             external_volume: config.snowflake_model_config.external_volume,
