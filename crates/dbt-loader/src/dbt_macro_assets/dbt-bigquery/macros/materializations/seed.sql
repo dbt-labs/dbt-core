@@ -9,13 +9,16 @@
 
 {% macro bigquery__load_csv_rows(model, agate_table) %}
 
+  {# -- already layered into the schema of the agate table upstream #}
+  {%- set table_after_schema_override = agate_table -%}
+
   {%- set delimiter = model['config'].get('delimiter', ',') -%}
   {{ adapter.load_dataframe(
       model['database'],
       model['schema'],
       model['alias'],
       model['project_root'] | string ~ model['original_file_path'] | string,
-      None,
+      agate_table,
       delimiter,
   ) }}
 

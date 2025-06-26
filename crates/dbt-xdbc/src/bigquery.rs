@@ -60,3 +60,4 @@ pub const DEFAULT_CCESS_TOKEN_ENDPOINT: &str = "https://accounts.google.com/o/oa
 pub const DEFAULT_ACCESS_TOKEN_SERVER_NAME: &str = "google.com";
 pub const INGEST_FILE_DELIMITER: &str = "adbc.bigquery.ingest.csv_delimiter";
 pub const INGEST_PATH: &str = "adbc.bigquery.ingest.csv_filepath";
+pub const INGEST_SCHEMA: &str = "adbc.bigquery.ingest.csv_schema";
