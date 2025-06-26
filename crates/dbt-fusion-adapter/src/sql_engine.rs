@@ -208,12 +208,29 @@ impl SqlEngine {
         conn: &'_ mut dyn Connection,
         query_ctx: &QueryCtx,
     ) -> AdapterResult<RecordBatch> {
-        assert!(query_ctx.sql().is_some());
+        self.execute_with_options(query_ctx, conn, &HashMap::new())
+    }
+
+    /// Execute the given SQL query or statement.
+    pub fn execute_with_options(
+        &self,
+        query_ctx: &QueryCtx,
+        conn: &'_ mut dyn Connection,
+        options: &HashMap<String, String>,
+    ) -> AdapterResult<RecordBatch> {
+        assert!(query_ctx.sql().is_some() || !options.is_empty());
         log_query(query_ctx);
 
         let do_execute = |conn: &'_ mut dyn Connection| -> adbc_core::error::Result<(Arc<Schema>, Vec<RecordBatch>)> {
             let mut stmt = conn.new_statement()?;
             stmt.set_sql_query(query_ctx)?;
+
+            for (key, value) in options {
+                stmt.set_option(
+                    adbc_core::options::OptionStatement::Other(key.clone()),
+                    adbc_core::options::OptionValue::String(value.clone()),
+                )?;
+            }
 
             let mut reader = stmt.execute()?;
             let schema = reader.schema();
@@ -224,29 +241,6 @@ impl SqlEngine {
         let (schema, batches) = do_execute(conn)?;
         let total_batch = concat_batches(&schema, &batches)?;
         Ok(total_batch)
-    }
-
-    /// Execute an ingestion operation with given configuration
-    pub fn execute_ingest(
-        &self,
-        conn: &'_ mut dyn Connection,
-        job_config: &HashMap<String, String>,
-    ) -> AdapterResult<()> {
-        let mut stmt = conn.new_statement()?;
-
-        for (key, value) in job_config {
-            stmt.set_option(
-                adbc_core::options::OptionStatement::Other(key.clone()),
-                adbc_core::options::OptionValue::String(value.clone()),
-            )?;
-        }
-
-        let mut reader = stmt.execute()?;
-        if cfg!(debug_assertions) {
-            let batches: Vec<RecordBatch> = reader.by_ref().collect::<Result<_, _>>()?;
-            assert!(batches[0].num_rows() == 0);
-        }
-        Ok(())
     }
 
     /// Get the configured database name. Used by
@@ -316,12 +310,13 @@ fn log_query(query_ctx: &QueryCtx) {
         None => writeln!(&mut buf, "-- desc: not provided").unwrap(),
     }
 
-    // We already know this is not None
-    let sql = query_ctx.sql().unwrap();
-    write!(&mut buf, "{}", sql).unwrap();
-    if !sql.ends_with(";") {
-        write!(&mut buf, ";").unwrap();
+    if let Some(sql) = query_ctx.sql() {
+        write!(&mut buf, "{}", sql).unwrap();
+        if !sql.ends_with(";") {
+            write!(&mut buf, ";").unwrap();
+        }
     }
+
     if node_id != "not available" {
         log::debug!(target: EXECUTING, name = "SQLQuery", data:serde = json!({ "node_info": { "unique_id": node_id } }); "{}", buf);
     } else {

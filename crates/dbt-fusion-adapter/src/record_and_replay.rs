@@ -3,6 +3,7 @@ use crate::errors::AdapterResult;
 use crate::sql_engine::SqlEngine;
 
 use adbc_core::error::{Error as AdbcError, Result as AdbcResult, Status as AdbcStatus};
+use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::{RecordBatch, RecordBatchIterator, RecordBatchReader};
 use arrow_json::writer::LineDelimitedWriter;
 use arrow_schema::{ArrowError, Field, Schema};
@@ -177,9 +178,11 @@ impl Statement for RecordEngineStatement {
             .query_ctx
             .clone()
             .expect("query has to be set before executing a statement");
-        let sql = query_ctx
-            .sql()
-            .expect("sql has to be set before executing a statement");
+
+        let sql = match query_ctx.sql() {
+            Some(sql) => sql,
+            None => "none".to_string(),
+        };
 
         // Execute on the actual engine's Statement
         let result = self.inner_stmt.execute();
@@ -272,6 +275,11 @@ impl Statement for RecordEngineStatement {
 
     fn cancel(&mut self) -> AdbcResult<()> {
         self.inner_stmt.cancel()
+    }
+
+    fn set_option(&mut self, key: OptionStatement, value: OptionValue) -> AdbcResult<()> {
+        // TODO: Record options and then use those values when finding the file name
+        self.inner_stmt.set_option(key, value)
     }
 }
 
@@ -387,9 +395,11 @@ impl Statement for ReplayEngineStatement {
             .query_ctx
             .clone()
             .expect("query has to be set before executing a statement");
-        let replay_sql = query_ctx
-            .sql()
-            .expect("sql has to be set before executing a statement");
+
+        let replay_sql = match query_ctx.sql() {
+            Some(sql) => sql,
+            None => "none".to_string(),
+        };
 
         let path = self.replay_engine.full_path();
         let file_name = compute_file_name(&query_ctx)?;
@@ -482,6 +492,11 @@ impl Statement for ReplayEngineStatement {
 
     fn cancel(&mut self) -> AdbcResult<()> {
         todo!("ReplayEngineStatement::cancel")
+    }
+
+    fn set_option(&mut self, _key: OptionStatement, _value: OptionValue) -> AdbcResult<()> {
+        // TODO: Record options and then use those values when finding the file name
+        Ok(())
     }
 }
 

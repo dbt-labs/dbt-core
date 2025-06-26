@@ -529,6 +529,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// load dataframe only used by bigquery adapter
     fn load_dataframe(
         &self,
+        _query_ctx: &QueryCtx,
         _conn: &'_ mut dyn Connection,
         _args: &[Value],
     ) -> AdapterResult<Value> {
