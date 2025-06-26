@@ -136,10 +136,10 @@ sources:
     database: raw
     schema: jaffle_shop
     loader: test
-    loaded_at_field: column_name
     config:
       enabled: true
       event_time: column_name
+      loaded_at_field: column_name
       meta:
         test: 1
       freshness:
@@ -162,7 +162,6 @@ sources:
       - name: my_table
         description: description
         identifier: table_identifier
-        loaded_at_field: column_name
         tests: []
         quoting:
           database: true
@@ -192,6 +191,7 @@ sources:
         config:
           enabled: true
           event_time: column_name
+          loaded_at_field: column_name
           meta:
             test: 1
           tags: ["tag"]
