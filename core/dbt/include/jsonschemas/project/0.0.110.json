@@ -407,17 +407,13 @@
       "type": "object",
       "properties": {
         "alias_types": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "default": true,
+          "type": "boolean"
         },
         "checksum": true,
         "enforced": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "default": false,
+          "type": "boolean"
         }
       },
       "additionalProperties": false
@@ -810,6 +806,16 @@
             "null"
           ]
         },
+        "+static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+store_failures": {
           "type": [
             "boolean",
@@ -1170,6 +1176,14 @@
             "string",
             "null"
           ]
+        },
+        "+hours_to_expiration": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         },
         "+include_full_name_in_path": {
           "type": [
@@ -1579,14 +1593,6 @@
               "type": "null"
             }
           ]
-        },
-        "hours_to_expiration": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "minimum": 0.0
         }
       },
       "additionalProperties": false
@@ -2001,6 +2007,16 @@
             }
           ]
         },
+        "+static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+strategy": {
           "type": [
             "string",
@@ -2090,6 +2106,16 @@
             }
           ]
         },
+        "+static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+tags": {
           "anyOf": [
             {
@@ -2118,6 +2144,16 @@
             "null"
           ],
           "additionalProperties": false
+        },
+        "+static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "+tags": {
           "anyOf": [
