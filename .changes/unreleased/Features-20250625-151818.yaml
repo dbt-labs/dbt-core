@@ -1,0 +1,6 @@
+kind: Features
+body: Begin validating configs from model sql files
+time: 2025-06-25T15:18:18.164-05:00
+custom:
+  Author: QMalcolm
+  Issue: "11727"

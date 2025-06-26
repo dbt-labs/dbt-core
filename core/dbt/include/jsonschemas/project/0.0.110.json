@@ -198,7 +198,7 @@
     "saved-queries": {
       "anyOf": [
         {
-          "$ref": "#/definitions/SavedQueriesConfig"
+          "$ref": "#/definitions/ProjectSavedQueriesConfig"
         },
         {
           "type": "null"
@@ -227,7 +227,7 @@
     "semantic-models": {
       "anyOf": [
         {
-          "$ref": "#/definitions/ProjectModelConfig"
+          "$ref": "#/definitions/ProjectSemanticModelConfig"
         },
         {
           "type": "null"
@@ -394,23 +394,88 @@
         }
       ]
     },
-    "Contract": {
+    "DbtBatchSize": {
+      "type": "string",
+      "enum": [
+        "hour",
+        "day",
+        "month",
+        "year"
+      ]
+    },
+    "DbtContract": {
       "type": "object",
-      "required": [
-        "enforced"
-      ],
       "properties": {
         "alias_types": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "default": true,
+          "type": "boolean"
         },
+        "checksum": true,
         "enforced": {
+          "default": false,
           "type": "boolean"
         }
       },
       "additionalProperties": false
+    },
+    "DbtIncrementalStrategy": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "append",
+            "merge",
+            "delete+insert",
+            "insert_overwrite",
+            "microbatch",
+            "unknown"
+          ]
+        },
+        {
+          "description": "replace_where (Databricks only) see https://docs.getdbt.com/reference/resource-configs/databricks-configs",
+          "type": "string",
+          "enum": [
+            "replace_where"
+          ]
+        }
+      ]
+    },
+    "DbtMaterialization": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "view",
+            "table",
+            "incremental",
+            "materialized_view",
+            "external",
+            "test",
+            "ephemeral",
+            "unit",
+            "analysis"
+          ]
+        },
+        {
+          "description": "only for databricks",
+          "type": "string",
+          "enum": [
+            "streaming_table"
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "unknown"
+          ],
+          "properties": {
+            "unknown": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
     },
     "DbtQuoting": {
       "type": "object",
@@ -436,6 +501,19 @@
       },
       "additionalProperties": false
     },
+    "DbtUniqueKey": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
     "DocsConfig": {
       "type": "object",
       "properties": {
@@ -452,6 +530,14 @@
       },
       "additionalProperties": false
     },
+    "ExportConfigExportAs": {
+      "type": "string",
+      "enum": [
+        "table",
+        "view",
+        "cache"
+      ]
+    },
     "FloatOrString": {
       "anyOf": [
         {
@@ -462,6 +548,38 @@
           "type": "string"
         }
       ]
+    },
+    "FreshnessDefinition": {
+      "type": "object",
+      "properties": {
+        "error_after": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessRules"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "filter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "warn_after": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessRules"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "FreshnessPeriod": {
       "type": "string",
@@ -493,6 +611,32 @@
         }
       },
       "additionalProperties": false
+    },
+    "GrantAccessToTarget": {
+      "type": "object",
+      "properties": {
+        "dataset": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "project": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "HardDeletes": {
+      "type": "string",
+      "enum": [
+        "ignore",
+        "invalidate",
+        "new_record"
+      ]
     },
     "HookConfig": {
       "type": "object",
@@ -633,7 +777,13 @@
           ],
           "format": "int32"
         },
-        "+meta": true,
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
         "+quoting": {
           "anyOf": [
             {
@@ -656,10 +806,30 @@
             "null"
           ]
         },
+        "+static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+store_failures": {
           "type": [
             "boolean",
             "null"
+          ]
+        },
+        "+store_failures_as": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StoreFailuresAs"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "+tags": {
@@ -677,6 +847,12 @@
             "string",
             "null"
           ]
+        },
+        "+where": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
@@ -690,7 +866,13 @@
             "null"
           ]
         },
-        "+meta": true,
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
         "+tags": {
           "anyOf": [
             {
@@ -707,11 +889,33 @@
     "ProjectMetricConfigs": {
       "type": "object",
       "properties": {
-        "+meta": true,
-        "enabled": {
+        "+enabled": {
           "type": [
             "boolean",
             "null"
+          ]
+        },
+        "+group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         }
       },
@@ -773,9 +977,13 @@
           ]
         },
         "+batch_size": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtBatchSize"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "+begin": {
@@ -803,6 +1011,12 @@
             "null"
           ]
         },
+        "+catalog_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+cluster_by": {
           "anyOf": [
             {
@@ -819,6 +1033,13 @@
             "null"
           ]
         },
+        "+column_types": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
         "+compression": {
           "type": [
             "string",
@@ -834,7 +1055,7 @@
         "+contract": {
           "anyOf": [
             {
-              "$ref": "#/definitions/Contract"
+              "$ref": "#/definitions/DbtContract"
             },
             {
               "type": "null"
@@ -859,7 +1080,13 @@
             "null"
           ]
         },
-        "+databricks_tags": true,
+        "+databricks_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
         "+description": {
           "type": [
             "string",
@@ -933,9 +1160,17 @@
             "array",
             "null"
           ],
-          "items": true
+          "items": {
+            "$ref": "#/definitions/GrantAccessToTarget"
+          }
         },
-        "+grants": true,
+        "+grants": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
         "+group": {
           "type": [
             "string",
@@ -944,10 +1179,11 @@
         },
         "+hours_to_expiration": {
           "type": [
-            "number",
+            "integer",
             "null"
           ],
-          "format": "float"
+          "format": "uint64",
+          "minimum": 0.0
         },
         "+include_full_name_in_path": {
           "type": [
@@ -965,9 +1201,13 @@
           }
         },
         "+incremental_strategy": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtIncrementalStrategy"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "+initialize": {
@@ -982,11 +1222,27 @@
             "null"
           ]
         },
-        "+labels": true,
-        "+liquid_clustered_by": {
+        "+labels": {
           "type": [
-            "string",
+            "object",
             "null"
+          ],
+          "additionalProperties": false
+        },
+        "+labels_from_meta": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+liquid_clustered_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "+location": {
@@ -1003,15 +1259,25 @@
         },
         "+lookback": {
           "type": [
-            "number",
+            "integer",
             "null"
           ],
-          "format": "float"
+          "format": "int32"
         },
-        "+materialized": {
+        "+matched_condition": {
           "type": [
             "string",
             "null"
+          ]
+        },
+        "+materialized": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtMaterialization"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "+max_staleness": {
@@ -1040,7 +1306,37 @@
             }
           ]
         },
-        "+meta": true,
+        "+merge_with_schema_evolution": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+not_matched_by_source_action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+not_matched_by_source_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+not_matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+on_configuration_change": {
           "anyOf": [
             {
@@ -1061,6 +1357,16 @@
             }
           ]
         },
+        "+packages": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+partition_by": {
           "anyOf": [
             {
@@ -1070,6 +1376,14 @@
               "type": "null"
             }
           ]
+        },
+        "+partition_expiration_days": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         },
         "+partitions": {
           "type": [
@@ -1149,6 +1463,12 @@
             "null"
           ]
         },
+        "+require_partition_filter": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+schema": {
           "type": [
             "string",
@@ -1156,6 +1476,18 @@
           ]
         },
         "+secure": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+skip_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+skip_not_matched_step": {
           "type": [
             "boolean",
             "null"
@@ -1183,10 +1515,26 @@
             "null"
           ]
         },
+        "+source_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+sql_header": {
           "type": [
             "string",
             "null"
+          ]
+        },
+        "+static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "+table_format": {
@@ -1205,13 +1553,25 @@
             }
           ]
         },
+        "+target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+target_lag": {
           "type": [
             "string",
             "null"
           ]
         },
-        "+tblproperties": true,
+        "+tblproperties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
         "+tmp_relation_type": {
           "type": [
             "string",
@@ -1225,6 +1585,67 @@
           ]
         },
         "+unique_key": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtUniqueKey"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ProjectSavedQueriesConfig": {
+      "type": "object",
+      "properties": {
+        "+cache": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SavedQueriesConfigCache"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+export_as": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ExportConfigExportAs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+schema": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+tags": {
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -1287,20 +1708,38 @@
             "null"
           ]
         },
+        "+event_time": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+full_refresh": {
           "type": [
             "boolean",
             "null"
           ]
         },
-        "+grants": true,
+        "+grants": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
         "+group": {
           "type": [
             "string",
             "null"
           ]
         },
-        "+meta": true,
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
         "+persist_docs": {
           "anyOf": [
             {
@@ -1378,6 +1817,41 @@
       },
       "additionalProperties": false
     },
+    "ProjectSemanticModelConfig": {
+      "type": "object",
+      "properties": {
+        "+tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
     "ProjectSnapshotConfig": {
       "type": "object",
       "properties": {
@@ -1409,6 +1883,16 @@
             "null"
           ]
         },
+        "+docs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DocsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+enabled": {
           "type": [
             "boolean",
@@ -1422,11 +1906,44 @@
           ]
         },
         "+grants": true,
-        "+hard_deletes": {
+        "+group": {
           "type": [
             "string",
             "null"
           ]
+        },
+        "+hard_deletes": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/HardDeletes"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+invalidate_hard_deletes": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+materialized": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtMaterialization"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
         },
         "+persist_docs": {
           "anyOf": [
@@ -1458,6 +1975,12 @@
             }
           ]
         },
+        "+quote_columns": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+quoting": {
           "anyOf": [
             {
@@ -1475,11 +1998,24 @@
           ]
         },
         "+snapshot_meta_column_names": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": false
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SnapshotMetaColumnNames"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "+strategy": {
           "type": [
@@ -1495,12 +2031,6 @@
             {
               "type": "null"
             }
-          ]
-        },
-        "+target_schema": {
-          "type": [
-            "string",
-            "null"
           ]
         },
         "+unique_key": {
@@ -1537,11 +2067,49 @@
             "null"
           ]
         },
-        "+meta": true,
+        "+freshness": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessDefinition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+loaded_at_field": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+loaded_at_query": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
         "+quoting": {
           "anyOf": [
             {
               "$ref": "#/definitions/DbtQuoting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
             },
             {
               "type": "null"
@@ -1570,7 +2138,23 @@
             "null"
           ]
         },
-        "+meta": true,
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+tags": {
           "anyOf": [
             {
@@ -1630,10 +2214,51 @@
       },
       "additionalProperties": false
     },
-    "SavedQueriesConfig": {
+    "SavedQueriesConfigCache": {
       "type": "object",
       "properties": {
-        "+schema": {
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "SnapshotMetaColumnNames": {
+      "type": "object",
+      "properties": {
+        "dbt_is_deleted": {
+          "default": "DBT_IS_DELETED",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dbt_scd_id": {
+          "default": "DBT_SCD_ID",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dbt_updated_at": {
+          "default": "DBT_UPDATED_AT",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dbt_valid_from": {
+          "default": "DBT_VALID_FROM",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dbt_valid_to": {
+          "default": "DBT_VALID_TO",
           "type": [
             "string",
             "null"
@@ -1641,6 +2266,22 @@
         }
       },
       "additionalProperties": false
+    },
+    "StaticAnalysisKind": {
+      "type": "string",
+      "enum": [
+        "unsafe",
+        "off",
+        "on"
+      ]
+    },
+    "StoreFailuresAs": {
+      "type": "string",
+      "enum": [
+        "ephemeral",
+        "table",
+        "view"
+      ]
     },
     "StringOrArrayOfStrings": {
       "anyOf": [

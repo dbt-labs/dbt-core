@@ -3,9 +3,6 @@ version: 2
 data_tests:
   - name: t
     description: "Single Data Test in happy path fixture"
-    docs:
-      show: true
-      node_color: "blue"
     config:
       alias: "test_alias"
       database: "dbt"

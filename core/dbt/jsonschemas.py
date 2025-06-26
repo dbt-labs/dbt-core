@@ -3,7 +3,7 @@ import os
 import re
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, Iterator, List
+from typing import Any, Dict, Iterator, List, Optional
 
 import jsonschema
 from jsonschema import ValidationError
@@ -12,6 +12,9 @@ from jsonschema.validators import Draft7Validator, extend
 
 from dbt import deprecations
 from dbt.include.jsonschemas import JSONSCHEMAS_PATH
+
+_PROJECT_SCHEMA: Optional[Dict[str, Any]] = None
+_RESOURCES_SCHEMA: Optional[Dict[str, Any]] = None
 
 
 def load_json_from_package(jsonschema_type: str, filename: str) -> Dict[str, Any]:
@@ -23,11 +26,24 @@ def load_json_from_package(jsonschema_type: str, filename: str) -> Dict[str, Any
 
 
 def project_schema() -> Dict[str, Any]:
-    return load_json_from_package(jsonschema_type="project", filename="0.0.110.json")
+    global _PROJECT_SCHEMA
+
+    if _PROJECT_SCHEMA is None:
+        _PROJECT_SCHEMA = load_json_from_package(
+            jsonschema_type="project", filename="0.0.110.json"
+        )
+    return _PROJECT_SCHEMA
 
 
 def resources_schema() -> Dict[str, Any]:
-    return load_json_from_package(jsonschema_type="resources", filename="latest.json")
+    global _RESOURCES_SCHEMA
+
+    if _RESOURCES_SCHEMA is None:
+        _RESOURCES_SCHEMA = load_json_from_package(
+            jsonschema_type="resources", filename="latest.json"
+        )
+
+    return _RESOURCES_SCHEMA
 
 
 def custom_type_rule(validator, types, instance, schema):
@@ -62,14 +78,19 @@ def _additional_properties_violation_keys(error: ValidationError) -> List[str]:
     return [key.strip("'") for key in found_keys]
 
 
+def _validate_with_schema(
+    schema: Dict[str, Any], json: Dict[str, Any]
+) -> Iterator[ValidationError]:
+    validator = CustomDraft7Validator(schema)
+    return validator.iter_errors(json)
+
+
 def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path: str) -> None:
 
     if not os.environ.get("DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS"):
         return
 
-    validator = CustomDraft7Validator(schema)
-    errors: Iterator[ValidationError] = validator.iter_errors(json)  # get all validation errors
-
+    errors = _validate_with_schema(schema, json)
     for error in errors:
         # Listify the error path to make it easier to work with (it's a deque in the ValidationError object)
         error_path = list(error.path)
@@ -105,6 +126,76 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                     for key in keys:
                         deprecations.warn(
                             "custom-key-in-config-deprecation",
+                            key=key,
+                            file=file_path,
+                            key_path=key_path,
+                        )
+        else:
+            deprecations.warn(
+                "generic-json-schema-validation-deprecation",
+                violation=error.message,
+                file=file_path,
+                key_path=error_path_to_string(error),
+            )
+
+
+def validate_model_config(config: Dict[str, Any], file_path: str) -> None:
+    if not os.environ.get("DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS"):
+        return
+
+    resources_jsonschema = resources_schema()
+    nested_definition_name = "ModelConfig"
+
+    model_config_schema = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": nested_definition_name,
+        **resources_jsonschema["definitions"][nested_definition_name],
+        "definitions": {
+            k: v
+            for k, v in resources_jsonschema["definitions"].items()
+            if k != nested_definition_name
+        },
+    }
+
+    errors = _validate_with_schema(model_config_schema, config)
+    for error in errors:
+        error_path = list(error.path)
+        if error.validator == "additionalProperties":
+            keys = _additional_properties_violation_keys(error)
+            if len(error.path) == 0:
+                key_path = error_path_to_string(error)
+                for key in keys:
+                    deprecations.warn(
+                        "custom-key-in-config-deprecation",
+                        key=key,
+                        file=file_path,
+                        key_path=key_path,
+                    )
+            else:
+                error.path.appendleft("config")
+                key_path = error_path_to_string(error)
+                for key in keys:
+                    deprecations.warn(
+                        "custom-key-in-object-deprecation",
+                        key=key,
+                        file=file_path,
+                        key_path=key_path,
+                    )
+        elif error.validator == "type":
+            # Not deprecating invalid types yet, except for pre-existing deprecation_date deprecation
+            pass
+        elif error.validator == "anyOf" and len(error_path) > 0:
+            for sub_error in error.context or []:
+                if (
+                    isinstance(sub_error, ValidationError)
+                    and sub_error.validator == "additionalProperties"
+                ):
+                    error.path.appendleft("config")
+                    keys = _additional_properties_violation_keys(sub_error)
+                    key_path = error_path_to_string(error)
+                    for key in keys:
+                        deprecations.warn(
+                            "custom-key-in-object-deprecation",
                             key=key,
                             file=file_path,
                             key_path=key_path,

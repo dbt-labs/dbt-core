@@ -435,9 +435,6 @@ class TestCustomOutputPathInSourceFreshnessDeprecation:
         assert len(event_catcher.caught_events) == 1
 
 
-@pytest.mark.skip(
-    reason="Skip until we have have regenerated the json schemas to account for all happy path failures"
-)
 class TestHappyPathProjectHasNoDeprecations:
     @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_happy_path_project_has_no_deprecations(self, happy_path_project):
