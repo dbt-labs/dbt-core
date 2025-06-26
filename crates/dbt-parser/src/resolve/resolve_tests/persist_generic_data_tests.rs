@@ -449,8 +449,8 @@ fn generate_test_name(
         }
     };
 
-    // linux has 255 bytes limit on filename (251 for file name + 4 for extension)
-    if result.len() >= 251 {
+    // linux has 255 bytes limit on filename (255- 16 = 239 for file name extension .sql or .macro_spans.json)
+    if result.len() >= 239 {
         let mut hasher = DefaultHasher::new();
         result.as_str().hash(&mut hasher);
         let hash = hasher.finish();
