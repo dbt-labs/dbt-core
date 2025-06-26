@@ -109,4 +109,47 @@ fn test_list_methods() {
 
     // Test union with string elements
     assert!(eval_expr("['a', 'b'].union(['b', 'c']) | sort == ['a', 'b', 'c']").is_true());
+
+    // Test index method - basic usage
+    assert_eq!(eval_expr("[1, 2, 3, 4].index(3)").as_i64(), Some(2));
+    assert_eq!(eval_expr("['a', 'b', 'c'].index('b')").as_i64(), Some(1));
+
+    // Test index with start parameter
+    assert_eq!(eval_expr("[1, 2, 3, 2, 4].index(2, 2)").as_i64(), Some(3));
+
+    // Test index with start and end parameters
+    assert_eq!(
+        eval_expr("[1, 2, 3, 2, 4].index(2, 1, 3)").as_i64(),
+        Some(1)
+    );
+
+    // Test index with negative start
+    assert_eq!(eval_expr("[1, 2, 3, 4].index(3, -3)").as_i64(), Some(2));
+
+    // Test index with negative end
+    assert_eq!(eval_expr("[1, 2, 3, 4].index(2, 0, -1)").as_i64(), Some(1));
+}
+
+#[test]
+fn test_list_index_errors() {
+    let mut env = Environment::new();
+    env.set_unknown_method_callback(unknown_method_callback);
+
+    // Test index method error when item not found
+    let result = env
+        .compile_expression("[1, 2, 3].index(5)")
+        .unwrap()
+        .eval((), &[]);
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert!(error.to_string().contains("5 is not in list"));
+
+    // Test index method error when item not in range
+    let result = env
+        .compile_expression("[1, 2, 3, 4].index(1, 2)")
+        .unwrap()
+        .eval((), &[]);
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert!(error.to_string().contains("1 is not in list"));
 }
