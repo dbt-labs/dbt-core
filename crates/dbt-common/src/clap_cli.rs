@@ -438,6 +438,7 @@ impl SourceArgs {
             None,
             None,
             Some(IndirectSelection::default()),
+            None,
         );
         eval_args.phase = Phases::Freshness;
         eval_args.with_refined_node_selectors(Some(predicate))

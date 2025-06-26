@@ -120,6 +120,7 @@ pub async fn resolve(
 
     // Compute final selectors
     let resolved_selectors = resolve_final_selectors(root_project_name, &jinja_env, arg)?;
+    // dbg!(&resolved_selectors);
 
     // Create a map to store full runtime configs for ALL packages
     let mut all_runtime_configs: BTreeMap<String, Arc<DbtRuntimeConfig>> = BTreeMap::new();

@@ -116,9 +116,13 @@ pub struct SelectionCriteria {
     pub children_depth: Option<u32>, // `foo+` or `foo+N` - None means no children, Some(u32::MAX) means unlimited depth
 
     pub indirect: Option<IndirectSelection>,
+
+    // nested excludes
+    pub exclude: Option<Box<SelectExpression>>,
 }
 
 impl SelectionCriteria {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         method: MethodName,
         method_args: Vec<String>,
@@ -127,6 +131,7 @@ impl SelectionCriteria {
         parents_depth: Option<u32>,
         children_depth: Option<u32>,
         indirect: Option<IndirectSelection>,
+        exclude: Option<Box<SelectExpression>>,
     ) -> Self {
         Self {
             method,
@@ -136,6 +141,7 @@ impl SelectionCriteria {
             parents_depth,
             children_depth,
             indirect,
+            exclude,
         }
     }
 }
@@ -177,11 +183,12 @@ impl fmt::Display for SelectionCriteria {
 }
 
 /// Represents the AST for model specifiers, which can be combined using logical AND and OR operations.
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize)]
 pub enum SelectExpression {
-    Atom(SelectionCriteria),    // a single model specifier
-    And(Vec<SelectExpression>), // a list of model specifiers, joined by commas
-    Or(Vec<SelectExpression>),  // a list of model specifiers, joined by spaces
+    Atom(SelectionCriteria),        // a single model specifier
+    And(Vec<SelectExpression>),     // a list of model specifiers, joined by commas
+    Or(Vec<SelectExpression>),      // a list of model specifiers, joined by spaces
+    Exclude(Box<SelectExpression>), // For nested excludes
 }
 
 impl fmt::Display for SelectExpression {
@@ -204,6 +211,7 @@ impl fmt::Display for SelectExpression {
                 write!(f, "{}", expressions_str)
             }
             SelectExpression::Atom(criteria) => write!(f, "{}", criteria),
+            SelectExpression::Exclude(expr) => write!(f, "exclude({})", expr),
         }
     }
 }
@@ -219,6 +227,9 @@ impl SelectExpression {
             }
             SelectExpression::Atom(criteria) => {
                 criteria.indirect = Some(mode);
+            }
+            SelectExpression::Exclude(expr) => {
+                expr.set_indirect_selection(mode);
             }
         }
     }
@@ -237,6 +248,9 @@ impl SelectExpression {
                 if criteria.indirect.is_none() {
                     criteria.indirect = Some(default_mode);
                 }
+            }
+            SelectExpression::Exclude(expr) => {
+                expr.apply_default_indirect_selection(default_mode);
             }
         }
     }
@@ -340,6 +354,7 @@ pub fn parse_single_selector(raw: &str) -> FsResult<SelectionCriteria> {
         parents_depth,
         children_depth,
         Some(IndirectSelection::default()), // CLI flag can override later
+        None,
     );
 
     //---------------------------------------------------------------
@@ -490,6 +505,7 @@ mod tests {
                 parents_depth: None,
                 children_depth: None,
                 indirect: Some(IndirectSelection::default()),
+                exclude: None,
             }
         );
         Ok(())
@@ -508,6 +524,7 @@ mod tests {
                 parents_depth: None,
                 children_depth: None,
                 indirect: Some(IndirectSelection::default()),
+                exclude: None,
             }
         );
         Ok(())
@@ -526,6 +543,7 @@ mod tests {
                 parents_depth: Some(2),
                 children_depth: None,
                 indirect: Some(IndirectSelection::default()),
+                exclude: None,
             }
         );
         Ok(())
@@ -544,6 +562,7 @@ mod tests {
                 parents_depth: None,
                 children_depth: Some(u32::MAX),
                 indirect: Some(IndirectSelection::default()),
+                exclude: None,
             }
         );
         Ok(())
@@ -563,6 +582,7 @@ mod tests {
                 None,
                 Some(8),
                 Some(IndirectSelection::default()),
+                None,
             ))
         );
         Ok(())
@@ -582,6 +602,7 @@ mod tests {
                 parents_depth: Some(u32::MAX),
                 children_depth: Some(u32::MAX),
                 indirect: Some(IndirectSelection::default()),
+                exclude: None,
             }
         );
         Ok(())
@@ -601,6 +622,7 @@ mod tests {
                 parents_depth: Some(u32::MAX),
                 children_depth: Some(u32::MAX),
                 indirect: Some(IndirectSelection::default()),
+                exclude: None,
             }
         );
         Ok(())
@@ -620,6 +642,7 @@ mod tests {
                 parents_depth: Some(5),
                 children_depth: Some(u32::MAX),
                 indirect: Some(IndirectSelection::default()),
+                exclude: None,
             }
         );
         Ok(())
@@ -639,6 +662,7 @@ mod tests {
                 parents_depth: Some(u32::MAX),
                 children_depth: Some(6),
                 indirect: Some(IndirectSelection::default()),
+                exclude: None,
             }
         );
         Ok(())
@@ -707,6 +731,7 @@ mod tests {
                             parents_depth: None,
                             children_depth: None,
                             indirect: Some(IndirectSelection::default()),
+                            exclude: None,
                         }
                     );
                     assert_eq!(
@@ -719,6 +744,7 @@ mod tests {
                             parents_depth: None,
                             children_depth: None,
                             indirect: Some(IndirectSelection::default()),
+                            exclude: None,
                         }
                     );
                 }
@@ -747,6 +773,7 @@ mod tests {
                             parents_depth: None,
                             children_depth: None,
                             indirect: Some(IndirectSelection::default()),
+                            exclude: None,
                         }
                     );
                     assert_eq!(
@@ -759,6 +786,7 @@ mod tests {
                             parents_depth: None,
                             children_depth: None,
                             indirect: Some(IndirectSelection::default()),
+                            exclude: None,
                         }
                     );
                 }
@@ -784,6 +812,7 @@ mod tests {
                 parents_depth: None,
                 children_depth: None,
                 indirect: Some(IndirectSelection::default()),
+                exclude: None,
             }
         );
         Ok(())
@@ -803,6 +832,7 @@ mod tests {
                 parents_depth: Some(u32::MAX),
                 children_depth: None,
                 indirect: Some(IndirectSelection::default()),
+                exclude: None,
             }
         );
         Ok(())
@@ -822,6 +852,7 @@ mod tests {
                 parents_depth: None,
                 children_depth: Some(u32::MAX),
                 indirect: Some(IndirectSelection::default()),
+                exclude: None,
             }
         );
         Ok(())
@@ -842,6 +873,7 @@ mod tests {
                 parents_depth: Some(u32::MAX),
                 children_depth: Some(u32::MAX),
                 indirect: Some(IndirectSelection::default()),
+                exclude: None,
             }
         );
         Ok(())
@@ -881,6 +913,7 @@ mod tests {
                             parents_depth: None,
                             children_depth: Some(u32::MAX),
                             indirect: Some(IndirectSelection::default()),
+                            exclude: None,
                         }
                     );
                     assert_eq!(
@@ -893,6 +926,7 @@ mod tests {
                             parents_depth: None,
                             children_depth: Some(u32::MAX),
                             indirect: Some(IndirectSelection::default()),
+                            exclude: None,
                         }
                     );
                 }

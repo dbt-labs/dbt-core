@@ -1069,3 +1069,56 @@ pub mod log_adapter {
         });
     }
 }
+
+#[macro_export]
+macro_rules! show_selected_nodes_summary {
+    ($io:expr, $schedule:expr, $nodes:expr) => {{
+        use $crate::io_args::ShowOptions;
+        use std::collections::BTreeMap;
+
+        if $io.should_show(ShowOptions::Progress) {
+            // Count nodes by resource type
+            let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
+
+            for node_id in &$schedule.selected_nodes {
+                if let Some(node) = $nodes.get_node(node_id) {
+                    let resource_type = node.resource_type();
+                    *counts.entry(resource_type).or_insert(0) += 1;
+                }
+            }
+
+            // Build the summary string
+            let mut parts = Vec::new();
+            for (resource_type, count) in counts {
+                let resource_name = match resource_type {
+                    "model" => "models",
+                    "test" => "data tests",
+                    "unit_test" => "unit tests",
+                    "source" => "sources",
+                    "seed" => "seeds",
+                    "snapshot" => "snapshots",
+                    "analysis" => "analyses",
+                    "operation" => "operations",
+                    "exposure" => "exposures",
+                    "metric" => "metrics",
+                    "macro" => "macros",
+                    "group" => "groups",
+                    "semantic_model" => "semantic models",
+                    "saved_query" => "saved queries",
+                    _ => resource_type,
+                };
+                parts.push(format!("{} {}", count, resource_name));
+            }
+
+            if !parts.is_empty() {
+                let summary = format!("Found {}", parts.join(", "));
+                $crate::_log!(
+                    $crate::macros::log_adapter::log::Level::Info,
+                    _INVOCATION_ID_ = $io.invocation_id.as_u128();
+                    "{}",
+                    summary
+                );
+            }
+        }
+    }};
+}

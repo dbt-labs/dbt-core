@@ -1,4 +1,4 @@
-use dbt_common::node_selector::{IndirectSelection, SelectExpression};
+use dbt_common::node_selector::IndirectSelection;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::{err, fs_err, ErrorCode, FsResult};
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
@@ -91,7 +91,7 @@ pub fn resolve_final_selectors(
         resolved_selectors.insert(
             def.name.clone(),
             SelectorEntry {
-                resolved,
+                include: resolved,
                 is_default: def.default.unwrap_or(false),
                 description: def.description,
             },
@@ -127,23 +127,21 @@ pub fn resolve_final_selectors(
         })?;
 
         // Use selector's include and apply CLI indirect selection as fallback
-        let mut include = entry.resolved.include.clone();
-        if let (Some(cli_mode), Some(inc)) = (arg.indirect_selection, include.as_mut()) {
-            inc.set_indirect_selection(cli_mode);
+        let mut include = entry.include.clone();
+        if let Some(cli_mode) = arg.indirect_selection {
+            include.set_indirect_selection(cli_mode);
         }
 
-        // Combine selector's exclude with CLI exclude and apply CLI indirect selection as fallback
-        let mut exclude = match (entry.resolved.exclude.clone(), arg.exclude.clone()) {
-            (Some(e1), Some(e2)) => Some(SelectExpression::Or(vec![e1, e2])),
-            (Some(e1), None) => Some(e1),
-            (None, Some(e2)) => Some(e2),
-            (None, None) => None,
-        };
+        // Set exclude to CLI exclude and apply CLI indirect selection as fallback
+        let mut exclude = arg.exclude.clone();
         if let (Some(cli_mode), Some(exc)) = (arg.indirect_selection, exclude.as_mut()) {
             exc.set_indirect_selection(cli_mode);
         }
 
-        Ok(ResolvedSelector { include, exclude })
+        Ok(ResolvedSelector {
+            include: Some(include),
+            exclude,
+        })
     } else {
         // No selector chosen → use CLI flags and apply CLI indirect selection
         let mut resolved = ResolvedSelector {

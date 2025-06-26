@@ -138,7 +138,7 @@ pub struct ResolvedSelector {
 /// What we really need at runtime for each selector.
 #[derive(Debug, Clone)]
 pub struct SelectorEntry {
-    pub resolved: ResolvedSelector,  // the include / exclude tree
-    pub is_default: bool,            // original `default: true`
+    pub include: SelectExpression, // the include expression (which may contain nested excludes)
+    pub is_default: bool,          // original `default: true`
     pub description: Option<String>, // docs string from YAML
 }
