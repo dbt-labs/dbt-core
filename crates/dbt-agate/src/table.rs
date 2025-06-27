@@ -13,6 +13,7 @@ use arrow::record_batch::RecordBatch;
 use arrow_schema::{ArrowError, Schema};
 use minijinja::arg_utils::ArgsIter;
 use minijinja::listener::RenderingEventListener;
+use minijinja::value::mutable_map::MutableMap;
 use minijinja::value::Kwargs;
 use minijinja::value::ValueMap;
 use minijinja::value::{Enumerator, Object};
@@ -386,6 +387,17 @@ impl AgateTable {
                     }
                 }
                 renamed
+            } else if let Some(map) = v.downcast_object_ref::<MutableMap>() {
+                let map: ValueMap = map.clone().into();
+                let mut renamed = old.clone();
+                for (key, value) in map {
+                    for (i, col) in old.iter().enumerate() {
+                        if key.as_str().is_some_and(|k| k == col) {
+                            renamed[i] = value.to_string();
+                        }
+                    }
+                }
+                renamed
             } else if let Some(array) = v.downcast_object_ref::<Vec<String>>() {
                 let mut renamed = old;
                 for (i, col) in array.iter().enumerate() {
@@ -590,6 +602,7 @@ mod tests {
     use arrow::datatypes::{DataType, Field, Schema};
     use arrow::record_batch::RecordBatch;
     use arrow_schema::Fields;
+    use minijinja::value::mutable_map::MutableMap;
     use minijinja::value::ValueMap;
     use minijinja::Environment;
     use std::sync::Arc;
@@ -883,6 +896,22 @@ mod tests {
             ("groups.3".into(), "fourth_group".into()),
             ("nonexistent".into(), "should_not_exist".into()),
         ]);
+        let new_names = rename(&table, &[Value::from_object(map.clone())])
+            .unwrap()
+            .downcast_object::<AgateTable>()
+            .unwrap()
+            .column_names();
+        assert_eq!(
+            new_names[0..new_names.len() - 4],
+            col_names[0..col_names.len() - 4]
+        );
+        assert_eq!(
+            new_names[new_names.len() - 4..],
+            ["first_group", "second_group", "third_group", "fourth_group",]
+        );
+
+        // Renaming with a mutable map
+        let map: MutableMap = map.into();
         let new_names = rename(&table, &[Value::from_object(map)])
             .unwrap()
             .downcast_object::<AgateTable>()
