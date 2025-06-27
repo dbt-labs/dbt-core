@@ -39,9 +39,12 @@ class dbtRunnerResult:
     ] = None
 
 
-def get_equivalent_cli_flag(config_name: str) -> str:
+def get_equivalent_cli_flag(config_name: str, positive_config: bool = True) -> str:
     """Convert a config name to its equivalent CLI flag"""
-    return f"--{config_name.replace('_', '-')}"
+    if positive_config:
+        return f"--{config_name.replace('_', '-')}"
+    else:
+        return f"--no-{config_name.replace('_', '-')}"
 
 
 def get_equivalent_cli_command(args: List[str], **kwargs) -> str:
@@ -50,23 +53,20 @@ def get_equivalent_cli_command(args: List[str], **kwargs) -> str:
     # Convert all values in `args` to strings
     cli_args = [str(arg) for arg in args]
 
+    # Convert each keyword arg to its CLI flag equivalent
     for key, value in kwargs.items():
-        # Convert all keyword args to their CLI flag equivalent
-        cli_key = get_equivalent_cli_flag(key)
-
         if type(value) is bool:
-            # Add just the flag (without the value) for booleans (and only if True)
-            if value:
-                cli_args.append(cli_key)
+            # Add just the flag (without the value) for booleans
+            cli_args.append(get_equivalent_cli_flag(key, value))
         elif type(value) in {list, tuple}:
             # Add both the flag and its values for lists/tuples
-            cli_args.append(cli_key)
+            cli_args.append(get_equivalent_cli_flag(key))
             cli_args.extend(map(str, value))
         else:
             # Add both the flag and its value for other types
             # This is a best-effort conversion, so we ignore exceptions
             try:
-                cli_args.extend([cli_key, str(value)])
+                cli_args.extend([get_equivalent_cli_flag(key), str(value)])
             except Exception as e:
                 pass
 
