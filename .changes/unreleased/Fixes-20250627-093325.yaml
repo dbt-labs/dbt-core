@@ -1,0 +1,6 @@
+kind: Fixes
+body: Set `flags.INVOCATION_COMMAND` for programmatic invocations on a best-effort basis
+time: 2025-06-27T09:33:25.560217-06:00
+custom:
+    Author: dbeatty10
+    Issue: "10313"
