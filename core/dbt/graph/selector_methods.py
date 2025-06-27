@@ -22,7 +22,6 @@ from dbt.contracts.graph.nodes import (
     ManifestNode,
     Metric,
     ModelNode,
-    ResultNode,
     SavedQuery,
     SemanticModel,
     SingularTestNode,
