@@ -570,7 +570,6 @@ fn generate_test_macro(
     } else {
         format!("test_{test_macro_name}")
     };
-
     // Format all kwargs, handling ref calls specially
     let formatted_args: Vec<String> = kwargs
         .iter()
@@ -580,7 +579,6 @@ fn generate_test_macro(
                 if s.starts_with("get_where_subquery(")
                     || s.starts_with("ref(")
                     || s.starts_with("source(")
-                    || (s.starts_with('"') && s.ends_with('"'))
                     || jinja_set_vars.iter().any(|(var_name, _)| var_name == s)
                 // Check if this is a reference to one of our Jinja set variables
                 {
@@ -600,7 +598,6 @@ fn generate_test_macro(
             format!("{k}={value_str}")
         })
         .collect();
-
     sql.push_str(&format!(
         "{{{{ {}({}) }}}}",
         qualified_name,
@@ -1147,7 +1144,7 @@ mod tests {
         // Verify results - note that BTreeMap sorts keys alphabetically, so arg1 comes before model
         assert_eq!(
             result1,
-            "{{ test_unique(arg1=\"already quoted\", model=ref('my_model')) }}"
+            "{{ test_unique(arg1=\"\\\"already quoted\\\"\", model=ref('my_model')) }}"
         );
         assert_eq!(
             result2,
