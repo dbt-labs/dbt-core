@@ -67,7 +67,7 @@ def get_equivalent_cli_command(args: List[str], **kwargs) -> str:
             # This is a best-effort conversion, so we ignore exceptions
             try:
                 cli_args.extend([get_equivalent_cli_flag(key), str(value)])
-            except Exception as e:
+            except Exception:
                 pass
 
     # Ensure all CLI arguments are quoted as needed
