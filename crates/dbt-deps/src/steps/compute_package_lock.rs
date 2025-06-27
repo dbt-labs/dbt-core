@@ -143,6 +143,7 @@ async fn resolve_packages(
                     &git_unpinned_package.revisions,
                     &git_unpinned_package.subdirectory,
                     git_unpinned_package.warn_unpinned.unwrap_or_default(),
+                    None,
                 )?;
                 git_unpinned_package.revisions = vec![commit_sha];
                 let dbt_project = read_and_validate_dbt_project(&checkout_path)?;
@@ -165,6 +166,7 @@ async fn resolve_packages(
                     &private_unpinned_package.revisions,
                     &private_unpinned_package.subdirectory,
                     private_unpinned_package.warn_unpinned.unwrap_or_default(),
+                    None,
                 )?;
                 private_unpinned_package.revisions = vec![commit_sha];
                 let dbt_project = read_and_validate_dbt_project(&checkout_path)?;

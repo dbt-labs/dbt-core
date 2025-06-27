@@ -113,6 +113,7 @@ pub async fn install_packages(
                     &git_unpinned_package.revisions,
                     &git_unpinned_package.subdirectory,
                     git_unpinned_package.warn_unpinned.unwrap_or_default(),
+                    Some(packages_install_path),
                 )?;
                 let dbt_project = read_and_validate_dbt_project(&checkout_path)?;
                 let project_name = dbt_project.name;
@@ -153,6 +154,7 @@ pub async fn install_packages(
                     &private_unpinned_package.revisions,
                     &private_unpinned_package.subdirectory,
                     private_unpinned_package.warn_unpinned.unwrap_or_default(),
+                    Some(packages_install_path),
                 )?;
                 let dbt_project = read_and_validate_dbt_project(&checkout_path)?;
                 let project_name = dbt_project.name;

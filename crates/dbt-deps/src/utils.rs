@@ -36,8 +36,10 @@ pub fn handle_git_like_package(
     revisions: &[String],
     subdirectory: &Option<String>,
     warn_unpinned: bool,
+    packages_install_path: Option<&Path>,
 ) -> FsResult<(tempfile::TempDir, PathBuf, String)> {
-    let tmp_dir = tempfile::tempdir()
+    let tmp_dir = packages_install_path
+        .map_or_else(tempfile::tempdir, tempfile::tempdir_in)
         .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create temp dir: {}", e))?;
     let revision = revisions.last().unwrap_or(&"HEAD".to_string()).clone();
     let (checkout_path, commit_sha) = clone_and_checkout(

@@ -1,0 +1,3 @@
+kind: Fixes
+body: Create temporary directories in the project path so the rename does not fail
+time: 2025-06-27T09:39:51.788243426-07:00
