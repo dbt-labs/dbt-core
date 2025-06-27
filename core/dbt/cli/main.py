@@ -66,7 +66,7 @@ def get_equivalent_cli_command(args: List[str], **kwargs) -> str:
             # Add both the flag and its value for other types
             # This is a best-effort conversion, so we ignore exceptions
             try:
-                cli_command.extend([cli_key, str(value)])
+                cli_args.extend([cli_key, str(value)])
             except Exception as e:
                 pass
 
