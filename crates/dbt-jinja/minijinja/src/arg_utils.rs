@@ -385,7 +385,7 @@ impl<'a> ArgsIter<'a> {
 
     /// Number of positional arguments provided to the iterator.
     pub fn num_pos_args(&self) -> usize {
-        let has_kwargs = self.kwargs.is_some() || self.args.last().map_or(false, |v| v.is_kwargs());
+        let has_kwargs = self.kwargs.is_some() || self.args.last().is_some_and(|v| v.is_kwargs());
         self.args.len() - if has_kwargs { 1 } else { 0 }
     }
 
@@ -510,16 +510,13 @@ impl<'a> Iterator for ArgsIter<'a> {
     type Item = Result<&'a Value, MinijinjaError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self._next() {
-            Some(arg) => {
-                if arg.is_kwargs() {
-                    self.kwargs.replace(arg);
-                    // fallthrough
-                } else {
-                    return Some(Ok(arg));
-                }
+        if let Some(arg) = self._next() {
+            if arg.is_kwargs() {
+                self.kwargs.replace(arg);
+                // fallthrough
+            } else {
+                return Some(Ok(arg));
             }
-            None => (), // fallthrough
         };
         match self._did_consume_all_positional_args() {
             Ok(()) => None,             // finish iteration
