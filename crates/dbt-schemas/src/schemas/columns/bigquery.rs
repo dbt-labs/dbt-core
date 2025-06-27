@@ -27,9 +27,16 @@ impl StaticBaseColumn for BigqueryColumnType {
     }
 
     // Translate the column type to a Bigquery type
+    // https://github.com/dbt-labs/dbt-adapters/blob/6f2aae13e39c5df1c93e5d514678914142d71768/dbt-bigquery/src/dbt/adapters/bigquery/column.py#L16
     fn translate_type(args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut args = ArgParser::new(args, None);
         let column_type: String = args.get("dtype")?;
+        let column_type = match column_type.to_uppercase().as_str() {
+            "TEXT" => "STRING",
+            "FLOAT" => "FLOAT64",
+            "INTEGER" => "INT64",
+            _ => &column_type,
+        };
         Ok(Value::from(column_type))
     }
 }

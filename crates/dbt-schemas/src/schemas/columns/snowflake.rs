@@ -32,6 +32,17 @@ impl StaticBaseColumn for SnowflakeColumnType {
             numeric_scale,
         }))
     }
+
+    /// Translate the column type to a Snowflake type
+    fn translate_type(args: &[Value]) -> Result<Value, MinijinjaError> {
+        let mut args = ArgParser::new(args, None);
+        let column_type: String = args.get("dtype")?;
+        let column_type = match column_type.to_uppercase().as_str() {
+            "STRING" => "TEXT",
+            _ => &column_type,
+        };
+        Ok(Value::from(column_type))
+    }
 }
 
 impl BaseColumn for SnowflakeColumn {

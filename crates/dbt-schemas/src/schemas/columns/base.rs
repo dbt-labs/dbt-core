@@ -40,15 +40,13 @@ pub trait StaticBaseColumn {
         Self::try_new(name, dtype, char_size, numeric_precision, numeric_scale)
     }
 
-    /// Translate the column type to a Snowflake type
+    /// Translate the column type
     fn translate_type(args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut args = ArgParser::new(args, None);
         let column_type: String = args.get("dtype")?;
-        match column_type.to_lowercase().as_str() {
-            "string" => Ok(Value::from("TEXT")),
-            _ => Ok(Value::from(column_type)),
-        }
+        Ok(Value::from(column_type))
     }
+
     /// Whether the column is a numeric type
     fn numeric_type(args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut args: ArgParser = ArgParser::new(args, None);

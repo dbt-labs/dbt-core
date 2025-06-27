@@ -32,9 +32,14 @@ impl StaticBaseColumn for DatabricksColumnType {
     }
 
     /// Translate the column type to a Databricks type
+    // https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/column.py#L14
     fn translate_type(args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut args = ArgParser::new(args, None);
         let column_type: String = args.get("dtype")?;
+        let column_type = match column_type.to_uppercase().as_str() {
+            "LONG" => "BIGINT",
+            _ => &column_type,
+        };
         Ok(Value::from(column_type))
     }
 
