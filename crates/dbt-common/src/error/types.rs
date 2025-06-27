@@ -78,7 +78,7 @@ impl Display for FsError {
                     message.to_string()
                 };
 
-                write!(f, "{}", message)?
+                write!(f, "{message}")?
             }
             _ if self.code.is_frontend() => {
                 // FrontendErrors have their cause already formatted into the
@@ -91,7 +91,7 @@ impl Display for FsError {
                     if !self.context.is_empty() {
                         write!(f, ": ")?;
                     }
-                    write!(f, "{}", cause)?
+                    write!(f, "{cause}")?
                 }
             }
         }
@@ -190,8 +190,7 @@ impl FsError {
             minijinja::ErrorKind::DisabledModel => ErrorCode::DisabledModel,
             _ => ErrorCode::JinjaError,
         };
-        FsError::new(err_code, format!("{} {}", context, err))
-            .with_location(MiniJinjaErrorWrapper(err))
+        FsError::new(err_code, format!("{context} {err}")).with_location(MiniJinjaErrorWrapper(err))
     }
 
     /// True if this error contains a backtrace.
@@ -213,7 +212,7 @@ impl FsError {
     pub fn pretty(&self) -> String {
         let mut s = format!("dbt{}: {}", self.code, self);
         if let Some(location) = &self.location {
-            s.push_str(&format!("\n  --> {}", location));
+            s.push_str(&format!("\n  --> {location}"));
         }
         if is_sdf_debug() && self.cause.is_some() {
             s.push_str(&format!("\n{:#?}", self.cause.as_ref().unwrap()));
@@ -534,7 +533,7 @@ impl Display for NameError {
                 Some(MAX_DISPLAY_TOKENS),
             ),
         };
-        write!(f, "{}", msg)
+        write!(f, "{msg}")
     }
 }
 
@@ -573,23 +572,23 @@ pub enum WrappedError {
 impl Display for WrappedError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            WrappedError::Antlr(e) => write!(f, "{}", e),
-            WrappedError::Datafusion(e) => write!(f, "{}", e),
-            WrappedError::Generic(e) => write!(f, "{}", e),
-            WrappedError::Arrow(e) => write!(f, "{}", e),
-            WrappedError::Frontend(e) => write!(f, "{}", e),
-            WrappedError::Io(e) => write!(f, "{}", e),
-            WrappedError::FrontendInternal(e) => write!(f, "{}", e),
-            WrappedError::Cli(e) => write!(f, "{}", e),
-            WrappedError::SerdeYml(e) => write!(f, "{}", e),
-            WrappedError::Jinja(e) => write!(f, "{}", e),
+            WrappedError::Antlr(e) => write!(f, "{e}"),
+            WrappedError::Datafusion(e) => write!(f, "{e}"),
+            WrappedError::Generic(e) => write!(f, "{e}"),
+            WrappedError::Arrow(e) => write!(f, "{e}"),
+            WrappedError::Frontend(e) => write!(f, "{e}"),
+            WrappedError::Io(e) => write!(f, "{e}"),
+            WrappedError::FrontendInternal(e) => write!(f, "{e}"),
+            WrappedError::Cli(e) => write!(f, "{e}"),
+            WrappedError::SerdeYml(e) => write!(f, "{e}"),
+            WrappedError::Jinja(e) => write!(f, "{e}"),
             // WrappedError::Preprocessor(e) => write!(f, "{}", e),
-            WrappedError::SerdeJson(e) => write!(f, "{}", e),
-            WrappedError::Parquet(e) => write!(f, "{}", e),
+            WrappedError::SerdeJson(e) => write!(f, "{e}"),
+            WrappedError::Parquet(e) => write!(f, "{e}"),
             // WrappedError::ObjectStore(e) => write!(f, "{}", e),
-            WrappedError::NameError(e) => write!(f, "{}", e),
+            WrappedError::NameError(e) => write!(f, "{e}"),
             // WrappedError::RemoteExecution(e) => write!(f, "{}", e),
-            WrappedError::Fmt(e) => write!(f, "{}", e),
+            WrappedError::Fmt(e) => write!(f, "{e}"),
         }
     }
 }
@@ -689,7 +688,7 @@ impl From<Box<dyn std::error::Error>> for Box<FsError> {
 }
 impl From<io::Error> for Box<FsError> {
     fn from(e: io::Error) -> Self {
-        Box::new(FsError::new(ErrorCode::IoError, format!("{}", e)).with_cause(WrappedError::Io(e)))
+        Box::new(FsError::new(ErrorCode::IoError, format!("{e}")).with_cause(WrappedError::Io(e)))
     }
 }
 
@@ -700,7 +699,7 @@ impl<T> LiftableResult<T> for Result<T, io::Error> {
         self.map_err(|e| {
             FsError::new_with_forced_backtrace(
                 ErrorCode::Unexpected,
-                format!("Unexpected IO error: {}", e),
+                format!("Unexpected IO error: {e}"),
             )
             .with_cause(WrappedError::Io(e))
             .into()
@@ -710,7 +709,7 @@ impl<T> LiftableResult<T> for Result<T, io::Error> {
     fn lift(self, f: impl FnOnce() -> ErrContext) -> FsResult<T> {
         self.map_err(|e| {
             let e =
-                FsError::new(ErrorCode::IoError, format!("{}", e)).with_cause(WrappedError::Io(e));
+                FsError::new(ErrorCode::IoError, format!("{e}")).with_cause(WrappedError::Io(e));
             let ctx = f();
             let e = if let Some(code) = ctx.code {
                 e.with_code(code)
@@ -965,7 +964,7 @@ where
             let e = e.into();
             FsError::new_with_forced_backtrace(
                 ErrorCode::Unexpected,
-                format!("Unexpected error: {}", e),
+                format!("Unexpected error: {e}"),
             )
             .with_cause(WrappedError::Cli(Box::new(e)))
             .into()

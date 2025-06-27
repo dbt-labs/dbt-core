@@ -561,7 +561,7 @@ impl BaseAdapter for BridgeAdapter {
         }
 
         let strategy = strategy.replace("+", "_");
-        let macro_name = format!("get_incremental_{}_sql", strategy);
+        let macro_name = format!("get_incremental_{strategy}_sql");
 
         // Return the macro
         Ok(Value::from_object(DispatchObject {
@@ -1183,10 +1183,7 @@ impl BaseAdapter for BridgeAdapter {
         let node = InternalDbtNodeWrapper::deserialize(model).map_err(|e| {
             MinijinjaError::new(
                 MinijinjaErrorKind::SerdeDeserializeError,
-                format!(
-                    "adapter.compute_external_path expected an InternalDbtNodeWrapper: {}",
-                    e
-                ),
+                format!("adapter.compute_external_path expected an InternalDbtNodeWrapper: {e}"),
             )
         })?;
 
@@ -1359,10 +1356,7 @@ impl BaseAdapter for BridgeAdapter {
         let deserialized_node = InternalDbtNodeWrapper::deserialize(model).map_err(|e| {
             MinijinjaError::new(
                 MinijinjaErrorKind::SerdeDeserializeError,
-                format!(
-                    "adapter.get_config_from_model expected an InternalDbtNodeWrapper: {}",
-                    e
-                ),
+                format!("adapter.get_config_from_model expected an InternalDbtNodeWrapper: {e}"),
             )
         })?;
 

@@ -197,7 +197,7 @@ pub fn var_fn(
         } else {
             return Err(Error::new(
                 ErrorKind::InvalidOperation,
-                format!("'var': variable '{}' not found", var_name),
+                format!("'var': variable '{var_name}' not found"),
             ));
         };
         Ok(value)
@@ -225,16 +225,14 @@ pub fn env_var_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
             return Err(Error::new(
                 ErrorKind::InvalidOperation,
                 format!(
-                    "Secret environment variables (starting with {}) cannot be accessed here",
-                    SECRET_ENV_VAR_PREFIX
+                    "Secret environment variables (starting with {SECRET_ENV_VAR_PREFIX}) cannot be accessed here"
                 ),
             ));
         } else if var_name.starts_with(DBT_INTERNAL_ENV_VAR_PREFIX) {
             return Err(Error::new(
                 ErrorKind::InvalidOperation,
                 format!(
-                    "Environment variables (starting with {}) cannot be accessed here",
-                    DBT_INTERNAL_ENV_VAR_PREFIX
+                    "Environment variables (starting with {DBT_INTERNAL_ENV_VAR_PREFIX}) cannot be accessed here"
                 ),
             ));
         }
@@ -259,7 +257,7 @@ pub fn env_var_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
             }
             None => Err(Error::new(
                 ErrorKind::InvalidOperation,
-                format!("'env_var': environment variable '{}' not found", var_name),
+                format!("'env_var': environment variable '{var_name}' not found"),
             )),
         }
     }
@@ -308,7 +306,7 @@ pub fn fromjson_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
                 Some(default_value) => Ok(default_value),
                 None => Err(Error::new(
                     ErrorKind::InvalidOperation,
-                    format!("Failed to parse JSON: {}", err),
+                    format!("Failed to parse JSON: {err}"),
                 )),
             },
         }
@@ -377,7 +375,7 @@ pub fn tojson_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
                 Some(default_value) => Ok(default_value),
                 None => Err(Error::new(
                     ErrorKind::InvalidOperation,
-                    format!("Failed to convert value to JSON: {}", err),
+                    format!("Failed to convert value to JSON: {err}"),
                 )),
             },
         }
@@ -414,7 +412,7 @@ pub fn fromyaml_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
                 Some(default_value) => Ok(default_value),
                 None => Err(Error::new(
                     ErrorKind::InvalidOperation,
-                    format!("Failed to parse YAML: {}", err),
+                    format!("Failed to parse YAML: {err}"),
                 )),
             },
         }
@@ -465,7 +463,7 @@ pub fn toyaml_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
             Err(err) => {
                 return Err(Error::new(
                     ErrorKind::InvalidOperation,
-                    format!("Failed to convert value to YAML: {}", err),
+                    format!("Failed to convert value to YAML: {err}"),
                 ));
             }
         };
@@ -483,7 +481,7 @@ pub fn toyaml_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
             Ok(yaml_str) => Ok(Value::from(yaml_str)),
             Err(err) => Err(Error::new(
                 ErrorKind::InvalidOperation,
-                format!("Failed to convert value to YAML: {}", err),
+                format!("Failed to convert value to YAML: {err}"),
             )),
         }
     }
@@ -807,7 +805,7 @@ pub fn zip_strict_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
 pub fn thread_id_fn() -> impl Fn() -> Result<Value, Error> {
     move || -> Result<Value, Error> {
         let thread_id = std::thread::current().id();
-        Ok(Value::from(format!("{:?}", thread_id)))
+        Ok(Value::from(format!("{thread_id:?}")))
     }
 }
 
@@ -861,7 +859,7 @@ pub fn log_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
         let info = args.get::<Value>("info").ok();
         // todo: print should go to log, or not?
         if info.is_some() && info.unwrap().is_true() {
-            log::info!("{}", msg);
+            log::info!("{msg}");
         }
         Ok(Value::from(""))
     }
@@ -962,7 +960,7 @@ impl Object for Exceptions {
                 } else {
                     Err(Error::new(
                         ErrorKind::InvalidOperation,
-                        format!("Compilation Error: {}", message),
+                        format!("Compilation Error: {message}"),
                     ))
                 }
             }
@@ -972,7 +970,7 @@ impl Object for Exceptions {
                 let message = args.get::<String>("msg")?;
                 Err(Error::new(
                     ErrorKind::InvalidOperation,
-                    format!("Not implemented: {}", message),
+                    format!("Not implemented: {message}"),
                 ))
             }
             // (relation, expected_type, model=None)
@@ -994,7 +992,7 @@ impl Object for Exceptions {
                     }
                 };
 
-                let message = format!("Trying to create {} {}, but it currently exists as a {}. Either drop {} manually, or run dbt with `--full-refresh` and dbt will drop it for you.", expected_type, relation, relation_type, relation);
+                let message = format!("Trying to create {expected_type} {relation}, but it currently exists as a {relation_type}. Either drop {relation} manually, or run dbt with `--full-refresh` and dbt will drop it for you.");
                 if let Some((node_id, file_path)) = node_metadata_from_state(state) {
                     Err(Error::new(
                         ErrorKind::InvalidOperation,
@@ -1008,7 +1006,7 @@ impl Object for Exceptions {
                 } else {
                     Err(Error::new(
                         ErrorKind::InvalidOperation,
-                        format!("Compilation Error: {}", message),
+                        format!("Compilation Error: {message}"),
                     ))
                 }
             }
@@ -1024,7 +1022,7 @@ impl Object for Exceptions {
                     get_contract_mismatches(yaml_columns, sql_columns)?;
                 //  print_table(table, max_rows, max_columns, max_column_width)
                 let column_diff_string = print_table(column_diff_table, 50, 50, 50)?;
-                let message = format!("This model has an enforced contract that failed.\n Please ensure the name, data_type, and number of columns in your contract match the columns in your model's definition.\n\n {}", column_diff_string);
+                let message = format!("This model has an enforced contract that failed.\n Please ensure the name, data_type, and number of columns in your contract match the columns in your model's definition.\n\n {column_diff_string}");
                 if let Some((node_id, file_path)) = node_metadata_from_state(state) {
                     Err(Error::new(
                         ErrorKind::InvalidOperation,
@@ -1038,7 +1036,7 @@ impl Object for Exceptions {
                 } else {
                     Err(Error::new(
                         ErrorKind::InvalidOperation,
-                        format!("Compilation Error: {}", message),
+                        format!("Compilation Error: {message}"),
                     ))
                 }
             }
@@ -1064,7 +1062,7 @@ impl Object for Exceptions {
                     }
                 };
 
-                let message = format!("Contracted models require data_type to be defined for each column.  Please ensure that the column name and data_type are defined within the YAML configuration for the {} column(s).", column_names_string);
+                let message = format!("Contracted models require data_type to be defined for each column.  Please ensure that the column name and data_type are defined within the YAML configuration for the {column_names_string} column(s).");
                 if let Some((node_id, file_path)) = node_metadata_from_state(state) {
                     Err(Error::new(
                         ErrorKind::InvalidOperation,
@@ -1078,7 +1076,7 @@ impl Object for Exceptions {
                 } else {
                     Err(Error::new(
                         ErrorKind::InvalidOperation,
-                        format!("Contract Error: {}", message),
+                        format!("Contract Error: {message}"),
                     ))
                 }
             }
@@ -1099,7 +1097,7 @@ impl Object for Exceptions {
                 } else {
                     Err(Error::new(
                         ErrorKind::InvalidOperation,
-                        format!("FailFast Error: {}", message),
+                        format!("FailFast Error: {message}"),
                     ))
                 }
             }
@@ -1112,7 +1110,7 @@ impl Object for Exceptions {
                 let updated_at_data_type = args
                     .get::<String>("updated_at_data_type")
                     .unwrap_or_else(|_| "".to_string());
-                let warning = format!("Data type of snapshot table timestamp columns ({}) doesn't match derived column 'updated_at' ({}). Please update snapshot config 'updated_at'.", snapshot_time_data_type, updated_at_data_type);
+                let warning = format!("Data type of snapshot table timestamp columns ({snapshot_time_data_type}) doesn't match derived column 'updated_at' ({updated_at_data_type}). Please update snapshot config 'updated_at'.");
                 show_warning!(
                     self.io_args,
                     fs_err!(ErrorCode::Generic, "{}", warning.as_str())
@@ -1121,7 +1119,7 @@ impl Object for Exceptions {
             }
             _ => Err(Error::new(
                 ErrorKind::UnknownMethod("Exceptions".to_string(), method.to_string()),
-                format!("Unknown method on Exceptions: {}", method),
+                format!("Unknown method on Exceptions: {method}"),
             )),
         }
     }

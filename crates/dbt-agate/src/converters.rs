@@ -196,8 +196,7 @@ impl ArrayConverter for PrimitiveArrayConverter<Date32Type> {
             let naive_date_opt = NaiveDate::from_num_days_from_ce_opt(num_days_from_ce);
             debug_assert!(
                 naive_date_opt.is_some(),
-                "out-of-range date32 value: {}",
-                num_days_from_epoch
+                "out-of-range date32 value: {num_days_from_epoch}"
             );
             match naive_date_opt {
                 Some(naive_date) => Value::from_object(PyDate::new(naive_date)),
@@ -223,8 +222,7 @@ impl ArrayConverter for PrimitiveArrayConverter<Date64Type> {
             let naive_date_opt = NaiveDate::from_num_days_from_ce_opt(num_days_from_ce);
             debug_assert!(
                 naive_date_opt.is_some(),
-                "out-of-range date64 value: {}",
-                num_millis_from_epoch
+                "out-of-range date64 value: {num_millis_from_epoch}"
             );
             match naive_date_opt {
                 Some(naive_date) => Value::from_object(PyDate::new(naive_date)),
@@ -243,8 +241,7 @@ impl ArrayConverter for PrimitiveArrayConverter<Time32SecondType> {
                 let naive_time_opt = NaiveTime::from_num_seconds_from_midnight_opt(seconds, 0);
                 debug_assert!(
                     naive_time_opt.is_some(),
-                    "out-of-range time32 (seconds) value: {}",
-                    seconds
+                    "out-of-range time32 (seconds) value: {seconds}"
                 );
                 naive_time_opt
             });
@@ -267,8 +264,7 @@ impl ArrayConverter for PrimitiveArrayConverter<Time32MillisecondType> {
                 let naive_time_opt = NaiveTime::from_num_seconds_from_midnight_opt(secs, nano);
                 debug_assert!(
                     naive_time_opt.is_some(),
-                    "out-of-range time32 (milliseconds) value: {}",
-                    millis
+                    "out-of-range time32 (milliseconds) value: {millis}"
                 );
                 naive_time_opt
             });
@@ -291,8 +287,7 @@ impl ArrayConverter for PrimitiveArrayConverter<Time64MicrosecondType> {
                 let naive_time_opt = NaiveTime::from_num_seconds_from_midnight_opt(secs, nano);
                 debug_assert!(
                     naive_time_opt.is_some(),
-                    "out-of-range time64 (microseconds) value: {}",
-                    micros
+                    "out-of-range time64 (microseconds) value: {micros}"
                 );
                 naive_time_opt
             });
@@ -315,8 +310,7 @@ impl ArrayConverter for PrimitiveArrayConverter<Time64NanosecondType> {
                 let naive_time_opt = NaiveTime::from_num_seconds_from_midnight_opt(secs, nano_frac);
                 debug_assert!(
                     naive_time_opt.is_some(),
-                    "out-of-range time64 (nanoseconds) value: {}",
-                    nanos
+                    "out-of-range time64 (nanoseconds) value: {nanos}"
                 );
                 naive_time_opt
             });
@@ -342,9 +336,7 @@ impl<T: ArrowPrimitiveType<Native = i64>> TimestampArrayConverter<T> {
             let parse_result = Tz::from_str(tz_str);
             debug_assert!(
                 parse_result.is_ok(),
-                "unexpected timezone string from Arrow {}: {:?}",
-                tz_str,
-                parse_result
+                "unexpected timezone string from Arrow {tz_str}: {parse_result:?}"
             );
             parse_result.ok()
         });
@@ -386,8 +378,7 @@ impl<T: ArrowPrimitiveType<Native = i64>> TimestampArrayConverter<T> {
                     // warehouses also have a limit that lets the number of days fit
                     // in 32-bits.
                     panic!(
-                        "Timestamp conversion overflow: {}{:?} is out of the valid range.",
-                        raw, time_unit
+                        "Timestamp conversion overflow: {raw}{time_unit:?} is out of the valid range."
                     )
                 }
             };

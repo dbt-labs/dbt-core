@@ -102,7 +102,7 @@ pub fn dispatch_adapter_calls(
         "clean_sql" => adapter.clean_sql(args),
         _ => Err(MinijinjaError::new(
             MinijinjaErrorKind::InvalidOperation,
-            format!("Unknown method on adapter object: '{}'", name),
+            format!("Unknown method on adapter object: '{name}'"),
         )),
     }
 }
@@ -166,7 +166,7 @@ pub fn execute_macro_wrapper_with_package(
     } else {
         return Err(AdapterError::new(
             AdapterErrorKind::UnexpectedResult,
-            format!("Unexpected result type {}", result),
+            format!("Unexpected result type {result}"),
         ));
     };
 
@@ -186,13 +186,13 @@ pub fn execute_macro_with_package(
     macro_name: &str,
     package: &str,
 ) -> Result<Value, AdapterError> {
-    let template_name = format!("{}.{}", package, macro_name);
+    let template_name = format!("{package}.{macro_name}");
     let template = state.env().get_template(&template_name)?;
     let base_ctx = state.get_base_context();
     let state = template.eval_to_state(base_ctx, &[])?;
     let func = state
         .lookup(macro_name)
-        .unwrap_or_else(|| panic!("{} exists", macro_name));
+        .unwrap_or_else(|| panic!("{macro_name} exists"));
     let rv = match func.call(&state, args, &[]) {
         Ok(rv) => rv,
         Err(err) => {

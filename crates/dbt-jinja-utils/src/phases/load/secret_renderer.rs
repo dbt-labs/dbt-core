@@ -27,7 +27,7 @@ pub fn secret_context_env_var_fn(
                 } else if var_name.starts_with(DBT_INTERNAL_ENV_VAR_PREFIX) {
                     return Err(minijinja::Error::new(
                         minijinja::ErrorKind::InvalidOperation,
-                        format!("'env_var': environment variable '{}' is reserved", var_name),
+                        format!("'env_var': environment variable '{var_name}' is reserved"),
                     ));
                 }
                 // Otherwise store and return the actual value
@@ -41,7 +41,7 @@ pub fn secret_context_env_var_fn(
                 } else {
                     Err(minijinja::Error::new(
                         minijinja::ErrorKind::InvalidOperation,
-                        format!("'env_var': environment variable '{}' not found", var_name),
+                        format!("'env_var': environment variable '{var_name}' not found"),
                     ))
                 }
             }

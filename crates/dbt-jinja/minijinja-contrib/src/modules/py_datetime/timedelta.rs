@@ -218,7 +218,7 @@ impl Object for PyTimeDelta {
             "__sub__" => self.sub(args),
             _ => Err(Error::new(
                 ErrorKind::UnknownMethod("PyTimeDelta".to_string(), method.to_string()),
-                format!("timedelta has no method named '{}'", method),
+                format!("timedelta has no method named '{method}'"),
             )),
         }
     }
@@ -254,8 +254,7 @@ impl Object for PyTimeDelta {
         } else {
             write!(
                 f,
-                "{}{:02}:{:02}:{:02}.{:06}",
-                sign, hours, minutes, seconds, microseconds
+                "{sign}{hours:02}:{minutes:02}:{seconds:02}.{microseconds:06}"
             )
         }
     }

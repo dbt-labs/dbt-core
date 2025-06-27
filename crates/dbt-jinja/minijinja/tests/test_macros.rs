@@ -348,21 +348,14 @@ fn ref_function(args: &[Value]) -> Result<Value, minijinja::Error> {
     let version = parser.get_optional::<String>("version").unwrap_or_default();
 
     // Log the parsed arguments
-    println!(
-        "Parsed arguments: model_name = {}, version = {}",
-        model_name, version
-    );
+    println!("Parsed arguments: model_name = {model_name}, version = {version}");
 
     if !packagename.is_empty() {
         Ok(Value::from(format!(
-            "ref({}, package={}, version={})",
-            model_name, packagename, version
+            "ref({model_name}, package={packagename}, version={version})"
         )))
     } else {
-        Ok(Value::from(format!(
-            "ref({}, version={})",
-            model_name, version
-        )))
+        Ok(Value::from(format!("ref({model_name}, version={version})")))
     }
 }
 

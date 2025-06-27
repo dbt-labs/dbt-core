@@ -539,7 +539,7 @@ impl ContextualProgressBar {
                 break;
             };
 
-            if write!(writer, "{}: {}", item, count).is_err() {
+            if write!(writer, "{item}: {count}").is_err() {
                 // If we can't write to the writer, just stop
                 break;
             }
@@ -657,7 +657,7 @@ fn format_duration_short(duration: Duration) -> String {
     if duration > 60.0 {
         format!("{}m {:.0}s", duration as u32 / 60, duration % 60.0)
     } else {
-        format!("{:.1}s", duration)
+        format!("{duration:.1}s")
     }
 }
 

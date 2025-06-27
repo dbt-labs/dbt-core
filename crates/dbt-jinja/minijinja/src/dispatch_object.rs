@@ -129,7 +129,7 @@ impl Object for DispatchObject {
                         // For dbt package, check dbt_and_adapters namespace
                         let search_name_value = Value::from(&search_name);
                         if let Some(pkg) = dbt_and_adapters_namespace.get(&search_name_value) {
-                            let template_name = format!("{}.{}", pkg, search_name);
+                            let template_name = format!("{pkg}.{search_name}");
                             attempts.push(template_name.clone());
                             let rv =
                                 self.execute_template(state, &template_name, args, listeners)?;
@@ -137,7 +137,7 @@ impl Object for DispatchObject {
                         }
                     } else if non_internal_namespace.contains_key(&Value::from(package_name)) {
                         // For non-internal packages
-                        let template_name = format!("{}.{}", package_name, search_name);
+                        let template_name = format!("{package_name}.{search_name}");
                         attempts.push(template_name.clone());
                         if template_exists(state, &template_name) {
                             let rv =
@@ -164,7 +164,7 @@ impl Object for DispatchObject {
         // Format error message
         let searched = attempts
             .iter()
-            .map(|a| format!("'{}'", a))
+            .map(|a| format!("'{a}'"))
             .collect::<Vec<_>>()
             .join(", ");
 
@@ -254,8 +254,7 @@ impl DispatchObject {
                 return Err(Error::new(
                     ErrorKind::TemplateNotFound,
                     format!(
-                        "Template '{}' was found in namespace but cannot be loaded: {}",
-                        template_name, err
+                        "Template '{template_name}' was found in namespace but cannot be loaded: {err}"
                     ),
                 ));
             }
@@ -313,7 +312,7 @@ pub fn get_adapter_prefixes(dialect: &str) -> Vec<String> {
 pub fn get_internal_packages(dialect: &str) -> Vec<String> {
     let mut internal_packages = Vec::new();
 
-    internal_packages.push(format!("dbt_{}", dialect));
+    internal_packages.push(format!("dbt_{dialect}"));
 
     // Add parent packages
     match dialect {
@@ -371,14 +370,14 @@ pub fn macro_namespace_template_resolver(
     let dbt_and_adapters = state.env().get_dbt_and_adapters_namespace();
 
     // 1. Local namespace (current package)
-    let template_name = format!("{}.{}", current_package_name, search_name);
+    let template_name = format!("{current_package_name}.{search_name}");
     attempts.push(template_name.clone());
     if template_exists(state, &template_name) {
         return Some(template_name);
     }
 
     // 2. Root package namespace
-    let template_name = format!("{}.{}", root_package, search_name);
+    let template_name = format!("{root_package}.{search_name}");
     attempts.push(template_name.clone());
     if template_exists(state, &template_name) {
         return Some(template_name);
@@ -387,7 +386,7 @@ pub fn macro_namespace_template_resolver(
     // 3. Internal packages
     let search_name_value = Value::from(search_name);
     if let Some(pkg) = dbt_and_adapters.get(&search_name_value) {
-        let template_name = format!("{}.{}", pkg, search_name);
+        let template_name = format!("{pkg}.{search_name}");
         attempts.push(template_name.clone());
         if template_exists(state, &template_name) {
             return Some(template_name);

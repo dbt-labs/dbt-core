@@ -353,7 +353,7 @@ impl Object for Capture {
         } else {
             Err(Error::new(
                 ErrorKind::InvalidOperation,
-                format!("Method '{}' not found", method),
+                format!("Method '{method}' not found"),
             ))
         }
     }

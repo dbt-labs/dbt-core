@@ -348,7 +348,7 @@ impl Display for ClapResourceType {
             ClapResourceType::Test => "test",
             ClapResourceType::UnitTest => "unit_test",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -506,7 +506,7 @@ impl FromStr for RunCacheMode {
             "noop" => Ok(RunCacheMode::Noop),
             "read-write" => Ok(RunCacheMode::ReadWrite),
             "write-only" => Ok(RunCacheMode::WriteOnly),
-            _ => Err(format!("Invalid RunCacheMode: {}", s)),
+            _ => Err(format!("Invalid RunCacheMode: {s}")),
         }
     }
 }
@@ -576,8 +576,7 @@ pub fn check_selector(selector: &str) -> Result<String, String> {
 pub fn check_target(filename: &str) -> Result<String, String> {
     let path = Path::new(filename);
     let err = Err(format!(
-        "Input file '{}' must have .sql, or .yml extension",
-        filename
+        "Input file '{filename}' must have .sql, or .yml extension"
     ));
     // TODO check that this test is universal for all inputs...
     if path.is_dir() {
@@ -609,8 +608,7 @@ pub fn check_var(vars: &str) -> Result<BTreeMap<String, Value>, String> {
         // Handle single key-value pair separated by a colon
         if vars.trim().matches(':').count() != 1 {
             return Err(format!(
-                "Invalid key-value pair: '{}'. Expected format: 'key: value'.",
-                vars
+                "Invalid key-value pair: '{vars}'. Expected format: 'key: value'."
             ));
         }
         vars.to_string()
@@ -624,8 +622,7 @@ pub fn check_var(vars: &str) -> Result<BTreeMap<String, Value>, String> {
             for key in btree.keys() {
                 if key.contains(':') {
                     return Err(format!(
-                        "Invalid key-value pair: '{}'. Value must start with a space after colon.",
-                        key
+                        "Invalid key-value pair: '{key}'. Value must start with a space after colon."
                     ));
                 }
             }
@@ -732,7 +729,7 @@ mod tests {
         ];
 
         for var in invalid_vars {
-            assert!(check_var(var).is_err(), "Should have failed: {}", var);
+            assert!(check_var(var).is_err(), "Should have failed: {var}");
         }
     }
 }

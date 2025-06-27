@@ -242,7 +242,7 @@ impl TableRepr {
                 make_array_converter(column)
                     .map(|converter| converter.to_value(row_idx))
                     .map_err(|e| {
-                        debug_assert!(false, "Unexpected Arrow error: {}", e);
+                        debug_assert!(false, "Unexpected Arrow error: {e}");
                         e
                     })
                     .ok()
@@ -252,7 +252,7 @@ impl TableRepr {
                 match row.get_item_by_index(col_idx) {
                     Ok(value) => Some(value),
                     Err(e) => {
-                        debug_assert!(false, "Unexpected error: {}", e);
+                        debug_assert!(false, "Unexpected error: {e}");
                         None
                     }
                 }

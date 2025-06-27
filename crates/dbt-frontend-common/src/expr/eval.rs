@@ -54,7 +54,7 @@ fn eval_expr(expr: &Expr, bindings: &impl Bindings) -> Result<Value, String> {
     match expr {
         Integer(val) => Ok(Int(*val)),
         Variable(var) => bindings.get_variable(var).map_or_else(
-            || Err(format!("Variable not found: {}", var)),
+            || Err(format!("Variable not found: {var}")),
             |val| Ok(Int(val)),
         ),
         ArithmeticBinary(lhs, op, rhs) => {
@@ -87,7 +87,7 @@ fn eval_arithmetic(lhs: Value, op: &ArithmeticOp, rhs: Value) -> Result<Value, S
             return Ok(Int(result));
         }
     }
-    Err(format!("Cannot evaluate: {:?} {:?} {:?}", lhs, op, rhs))
+    Err(format!("Cannot evaluate: {lhs:?} {op:?} {rhs:?}"))
 }
 
 fn eval_comparison(lhs: Value, op: &ComparisonOp, rhs: Value) -> Result<Value, String> {
@@ -104,7 +104,7 @@ fn eval_comparison(lhs: Value, op: &ComparisonOp, rhs: Value) -> Result<Value, S
         };
         return Ok(Bool(result));
     }
-    Err(format!("Cannot evaluate: {:?} {:?} {:?}", lhs, op, rhs))
+    Err(format!("Cannot evaluate: {lhs:?} {op:?} {rhs:?}"))
 }
 
 fn eval_function(f: &Function, args: Vec<Value>) -> Result<Value, String> {
@@ -130,10 +130,7 @@ fn eval_max(args: Vec<Value>) -> Result<Value, String> {
 
 fn eval_if(args: Vec<Value>) -> Result<Value, String> {
     let [Value::Bool(cond), Value::Int(then), Value::Int(else_)] = args[..] else {
-        return Err(format!(
-            "Expected (bool, int, int) arguments, got {:?}",
-            args
-        ));
+        return Err(format!("Expected (bool, int, int) arguments, got {args:?}"));
     };
     Ok(Value::Int(if cond { then } else { else_ }))
 }
@@ -142,7 +139,7 @@ fn args_to_numbers(args: Vec<Value>) -> Result<Vec<i64>, String> {
     args.into_iter()
         .map(|v| match v {
             Value::Int(i) => Ok(i),
-            Value::Bool(b) => Err(format!("Unexpected bool argument: {}", b)),
+            Value::Bool(b) => Err(format!("Unexpected bool argument: {b}")),
         })
         .collect::<Result<Vec<_>, _>>()
 }

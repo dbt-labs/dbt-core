@@ -109,7 +109,7 @@ pub fn recur_build_dbt_project_config<T: DefaultTo<T>, S: Into<T> + IterChildren
         let key_path = if key_path.is_empty() {
             key.clone()
         } else {
-            format!("{}.{}", key_path, key)
+            format!("{key_path}.{key}")
         };
         let child_config_variant = match maybe_child_config_variant {
             ShouldBe::AndIs(config) => config,

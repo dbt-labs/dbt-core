@@ -64,12 +64,12 @@ impl Display for IntrospectionKind {
 #[serde(tag = "resource_type")]
 #[serde(rename_all = "snake_case")]
 pub enum InternalDbtNodeWrapper {
-    Model(DbtModel),
-    Seed(DbtSeed),
-    Test(DbtTest),
-    UnitTest(DbtUnitTest),
-    Source(DbtSource),
-    Snapshot(DbtSnapshot),
+    Model(Box<DbtModel>),
+    Seed(Box<DbtSeed>),
+    Test(Box<DbtTest>),
+    UnitTest(Box<DbtUnitTest>),
+    Source(Box<DbtSource>),
+    Snapshot(Box<DbtSnapshot>),
 }
 
 impl InternalDbtNodeWrapper {
@@ -91,12 +91,12 @@ impl InternalDbtNodeWrapper {
     /// ```
     pub fn as_internal_node(&self) -> &dyn InternalDbtNodeAttributes {
         match self {
-            InternalDbtNodeWrapper::Model(model) => model,
-            InternalDbtNodeWrapper::Seed(seed) => seed,
-            InternalDbtNodeWrapper::Test(test) => test,
-            InternalDbtNodeWrapper::UnitTest(unit_test) => unit_test,
-            InternalDbtNodeWrapper::Source(source) => source,
-            InternalDbtNodeWrapper::Snapshot(snapshot) => snapshot,
+            InternalDbtNodeWrapper::Model(model) => model.as_ref(),
+            InternalDbtNodeWrapper::Seed(seed) => seed.as_ref(),
+            InternalDbtNodeWrapper::Test(test) => test.as_ref(),
+            InternalDbtNodeWrapper::UnitTest(unit_test) => unit_test.as_ref(),
+            InternalDbtNodeWrapper::Source(source) => source.as_ref(),
+            InternalDbtNodeWrapper::Snapshot(snapshot) => snapshot.as_ref(),
         }
     }
 }
@@ -1209,8 +1209,7 @@ impl Nodes {
             let mut message = "Custom materialization macros are not supported. Found custom materializations in the following nodes:\n".to_string();
             for (unique_id, materialization) in &custom_materializations {
                 message.push_str(&format!(
-                    "  - {} (materialization: {})\n",
-                    unique_id, materialization
+                    "  - {unique_id} (materialization: {materialization})\n"
                 ));
             }
 
@@ -1544,10 +1543,7 @@ mod tests {
 
         let config = ModelConfig::deserialize(config);
         if let Err(err) = config {
-            panic!(
-                "Could not deserialize and failed with the following error: {}",
-                err
-            );
+            panic!("Could not deserialize and failed with the following error: {err}");
         }
     }
 }

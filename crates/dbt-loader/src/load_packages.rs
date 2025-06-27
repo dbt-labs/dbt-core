@@ -84,7 +84,7 @@ pub fn persist_internal_packages(
     // to prevent user from modifying them
     let _ = std::fs::remove_dir_all(internal_packages_install_path);
     // Copy the dbt-adapters and dbt-{adapter_type} to the packages_install_path
-    let adapter_package = format!("dbt-{}", adapter_type);
+    let adapter_package = format!("dbt-{adapter_type}");
     let mut internal_packages = vec!["dbt-adapters", &adapter_package];
     if adapter_type == "redshift" {
         internal_packages.push("dbt-postgres");

@@ -144,7 +144,7 @@ fn get_timezone(
             || {
                 Error::new(
                     ErrorKind::InvalidOperation,
-                    format!("unknown timezone '{}'", tzname),
+                    format!("unknown timezone '{tzname}'"),
                 )
             },
         )?))

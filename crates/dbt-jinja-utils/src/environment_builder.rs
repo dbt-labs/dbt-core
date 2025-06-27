@@ -133,7 +133,7 @@ impl JinjaEnvironmentBuilder {
 
             for macro_unit in macro_units {
                 let macro_name = macro_unit.info.name.clone();
-                let template_name = format!("{}.{}", package_name, macro_name);
+                let template_name = format!("{package_name}.{macro_name}");
 
                 // Add to environment and template registry
                 self.env
@@ -240,9 +240,9 @@ impl JinjaEnvironmentBuilder {
         self.env.add_filter("as_native", |value: Value| Ok(value));
         self.env
             .add_filter("as_text", |value: Value| match value.kind() {
-                ValueKind::Bool => Ok(Value::from(format!("{}", value))),
+                ValueKind::Bool => Ok(Value::from(format!("{value}"))),
                 ValueKind::String => Ok(value),
-                ValueKind::Number => Ok(Value::from(format!("{}", value))),
+                ValueKind::Number => Ok(Value::from(format!("{value}"))),
                 ValueKind::None => Ok(Value::from("")),
                 _ => Err(MinijinjaError::new(
                     MinijinjaErrorKind::InvalidOperation,
@@ -282,8 +282,7 @@ impl JinjaEnvironmentBuilder {
                         MinijinjaError::new(
                             MinijinjaErrorKind::InvalidOperation,
                             format!(
-                                "Failed applying 'as_number' filter to bytes string '{}'",
-                                string_from_bytes
+                                "Failed applying 'as_number' filter to bytes string '{string_from_bytes}'"
                             ),
                         )
                     })?;
@@ -334,8 +333,7 @@ impl JinjaEnvironmentBuilder {
                         MinijinjaError::new(
                             MinijinjaErrorKind::InvalidOperation,
                             format!(
-                                "Failed applying 'as_number' filter to bytes string '{}'",
-                                string_from_bytes
+                                "Failed applying 'as_number' filter to bytes string '{string_from_bytes}'"
                             ),
                         )
                     })?;

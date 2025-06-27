@@ -138,5 +138,5 @@ impl BaseColumnProperties for DatabricksColumn {
 }
 
 fn quote(name: &str) -> String {
-    format!("`{}`", name)
+    format!("`{name}`")
 }

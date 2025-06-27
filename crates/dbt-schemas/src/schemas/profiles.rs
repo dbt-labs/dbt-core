@@ -293,7 +293,7 @@ impl DbConfig {
                 let json = serde_json::to_value(config).unwrap();
                 serde_json::from_value(json).expect("Failed to deserialize Databricks config")
             }
-            _ => panic!("Unsupported database type: {:?}", self),
+            _ => panic!("Unsupported database type: {self:?}"),
         }
     }
 
@@ -360,7 +360,7 @@ impl std::str::FromStr for Execute {
         match s {
             "remote" => Ok(Execute::Remote),
             "local" => Ok(Execute::Local),
-            _ => Err(format!("Invalid execute mode: {}", s)),
+            _ => Err(format!("Invalid execute mode: {s}")),
         }
     }
 }
@@ -685,7 +685,7 @@ pub struct RedshiftTargetEnv {
 }
 
 fn missing(field: &str) -> String {
-    format!("In file `profiles.yml`, field `{}` is required.", field)
+    format!("In file `profiles.yml`, field `{field}` is required.")
 }
 
 // This target context is only to be used in rendering yml's

@@ -267,7 +267,7 @@ pub fn resolve_unit_tests(
                     .expect("Version should exist in lookup");
 
                 let mut versioned_test = base_unit_test.clone();
-                versioned_test.common_attr.unique_id = format!("{}.v{}", base_unique_id, version);
+                versioned_test.common_attr.unique_id = format!("{base_unique_id}.v{version}");
                 versioned_test.version = Some(version.clone().into());
                 versioned_test.base_attr.depends_on.nodes = vec![versioned_model_id.clone()];
                 versioned_test.base_attr.depends_on.nodes_with_ref_location =

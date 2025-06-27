@@ -125,9 +125,9 @@ impl fmt::Display for AdapterError {
         write!(f, "{}: {}", self.kind, self.message)?;
         let sqlstate: &str = self.sqlstate();
         if sqlstate != "00000" || self.vendor_code.is_some() {
-            write!(f, " (SQLSTATE: {}", sqlstate)?;
+            write!(f, " (SQLSTATE: {sqlstate}")?;
             if let Some(vendor_code) = self.vendor_code {
-                write!(f, ", Vendor code: {}", vendor_code)?;
+                write!(f, ", Vendor code: {vendor_code}")?;
             }
             write!(f, ")")?;
         }
@@ -143,7 +143,7 @@ impl From<AdapterError> for MinijinjaError {
     fn from(err: AdapterError) -> Self {
         MinijinjaError::new(
             MinijinjaErrorKind::InvalidOperation,
-            format!("AdapterError: {}", err),
+            format!("AdapterError: {err}"),
         )
     }
 }

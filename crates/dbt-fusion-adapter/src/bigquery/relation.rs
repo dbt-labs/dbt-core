@@ -161,7 +161,7 @@ impl BaseRelation for BigqueryRelation {
     }
 
     fn quoted(&self, s: &str) -> String {
-        format!("`{}`", s)
+        format!("`{s}`")
     }
 
     fn relation_type(&self) -> Option<RelationType> {

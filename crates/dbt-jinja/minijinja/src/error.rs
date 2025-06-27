@@ -183,7 +183,7 @@ impl ErrorKind {
             ErrorKind::UnknownFunction => "unknown function".to_string(),
             ErrorKind::UnknownTest => "unknown test".to_string(),
             ErrorKind::UnknownMethod(caller, name) => {
-                format!("No method named '{}' for '{}'", name, caller)
+                format!("No method named '{name}' for '{caller}'")
             }
             ErrorKind::BadEscape => "bad string escape".to_string(),
             ErrorKind::UndefinedError => "undefined value".to_string(),

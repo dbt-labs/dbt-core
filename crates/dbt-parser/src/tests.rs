@@ -669,7 +669,7 @@ mod tests {
         "#;
 
         let result = parse_macro_statements(sql, &PathBuf::from("test.sql"), &["macro"]);
-        println!("result: {:?}", result);
+        println!("result: {result:?}");
         assert!(result.is_err());
     }
 
@@ -850,7 +850,7 @@ mod tests {
     "#;
 
         let res = parse_macro_statements(sql, Path::new("test.sql"), &["docs"]);
-        println!("res: {:?}", res);
+        println!("res: {res:?}");
         assert!(res.is_err());
     }
 }

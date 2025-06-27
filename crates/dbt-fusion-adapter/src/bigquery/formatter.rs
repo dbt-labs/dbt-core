@@ -6,7 +6,7 @@ impl SqlLiteralFormatter for BigquerySqlLiteralFormatter {
     // bigquery uses \ for string escapes
     fn format_str(&self, l: &str) -> String {
         let escaped_str = l.replace("'", "\\'");
-        format!("'{}'", escaped_str)
+        format!("'{escaped_str}'")
     }
 }
 

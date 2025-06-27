@@ -128,7 +128,7 @@ impl<T: DecimalType> fmt::Debug for DecimalValue<T> {
         // TODO: use default context to align with Python's decimal module formatting
         let _ = &DEFAULT_CONTEXT;
         let text = T::format_decimal(self.value, self.precision, self.scale);
-        write!(f, "{}", text)
+        write!(f, "{text}")
     }
 }
 

@@ -213,18 +213,17 @@ impl RefFunction {
         } else {
             // Construct the ref string for the error message
             let ref_string = if let Some(pkg) = package_name {
-                format!("{{{{ ref('{}', '{}') }}}}", pkg, model_name)
+                format!("{{{{ ref('{pkg}', '{model_name}') }}}}")
             } else {
-                format!("{{{{ ref('{}') }}}}", model_name)
+                format!("{{{{ ref('{model_name}') }}}}")
             };
 
             Err(MinijinjaError::new(
                 MinijinjaErrorKind::InvalidOperation,
                 format!(
-                    "dbt was unable to infer all dependencies for the model \"{}\". This typically happens when ref() is placed within a conditional block.
-To fix this, add the following hint to the top of the model \"{}\": 
--- depends_on: {}",
-                    model_name, model_name, ref_string
+                    "dbt was unable to infer all dependencies for the model \"{model_name}\". This typically happens when ref() is placed within a conditional block.
+To fix this, add the following hint to the top of the model \"{model_name}\": 
+-- depends_on: {ref_string}"
                 ),
             ))
         }
@@ -346,8 +345,7 @@ impl Object for SourceFunction {
             Err(_) => Err(MinijinjaError::new(
                 MinijinjaErrorKind::NonKey,
                 format!(
-                    "Source not found for source name: {}, table name: {}",
-                    source_name, table_name
+                    "Source not found for source name: {source_name}, table name: {table_name}"
                 ),
             )),
         }

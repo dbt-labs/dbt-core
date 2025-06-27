@@ -115,7 +115,7 @@ pub fn filesizeformat(value: f64, binary: Option<bool>) -> String {
     };
 
     if value < base {
-        format!("{}{} Bytes", sign, value)
+        format!("{sign}{value} Bytes")
     } else {
         for (idx, prefix) in prefixes.iter().enumerate() {
             let unit = base.powf(idx as f64 + 2.0);
@@ -195,7 +195,7 @@ pub fn truncate(state: &State, value: &Value, kwargs: Kwargs) -> Result<String, 
     if length < end_len {
         return Err(Error::new(
             ErrorKind::InvalidOperation,
-            format!("expected length >= {}, got {}", end_len, length),
+            format!("expected length >= {end_len}, got {length}"),
         ));
     }
 

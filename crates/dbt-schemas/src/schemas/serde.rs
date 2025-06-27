@@ -92,7 +92,7 @@ pub fn try_string_to_type<T: DeserializeOwned>(
 ) -> Result<Option<T>, Box<dyn std::error::Error>> {
     if let Some(value) = value {
         Ok(Some(
-            serde_json::from_str(&format!("\"{}\"", value))
+            serde_json::from_str(&format!("\"{value}\""))
                 .map_err(|e| format!("Error parsing from_str '{value}': {e}"))?,
         ))
     } else {
@@ -116,8 +116,8 @@ impl Default for StringOrInteger {
 impl std::fmt::Display for StringOrInteger {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            StringOrInteger::String(s) => write!(f, "{}", s),
-            StringOrInteger::Integer(i) => write!(f, "{}", i),
+            StringOrInteger::String(s) => write!(f, "{s}"),
+            StringOrInteger::Integer(i) => write!(f, "{i}"),
         }
     }
 }
@@ -208,8 +208,8 @@ pub enum FloatOrString {
 impl std::fmt::Display for FloatOrString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FloatOrString::Number(n) => write!(f, "{}", n),
-            FloatOrString::String(s) => write!(f, "{}", s),
+            FloatOrString::Number(n) => write!(f, "{n}"),
+            FloatOrString::String(s) => write!(f, "{s}"),
         }
     }
 }

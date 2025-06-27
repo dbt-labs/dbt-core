@@ -45,7 +45,7 @@ fn checksum8(input: &str) -> String {
     let mut hasher = DefaultHasher::new();
     input.hash(&mut hasher);
     let hash = hasher.finish();
-    format!("{:x}", hash)[..8.min(format!("{:x}", hash).len())].to_string()
+    format!("{hash:x}")[..8.min(format!("{hash:x}").len())].to_string()
 }
 
 // Build a file name from the query context. In most cases this should
@@ -191,10 +191,10 @@ impl Statement for RecordEngineStatement {
         create_dir_all(&path).map_err(|e| from_io_error(e, Some(&path)))?;
 
         let file_name = compute_file_name(&query_ctx)?;
-        let json_path = path.join(format!("{}.json", file_name));
-        let sql_path = path.join(format!("{}.sql", file_name));
-        let err_path = path.join(format!("{}.err", file_name));
-        let parquet_path = path.join(format!("{}.parquet", file_name));
+        let json_path = path.join(format!("{file_name}.json"));
+        let sql_path = path.join(format!("{file_name}.sql"));
+        let err_path = path.join(format!("{file_name}.err"));
+        let parquet_path = path.join(format!("{file_name}.parquet"));
 
         // store the query content (i.e., sql)
         fs::write(&sql_path, sql).map_err(|e| from_io_error(e, Some(&sql_path)))?;
@@ -231,7 +231,7 @@ impl Statement for RecordEngineStatement {
                 Ok(reader)
             }
             Err(err) => {
-                let err_msg = format!("{}", err);
+                let err_msg = format!("{err}");
                 fs::write(&err_path, err_msg.clone())
                     .map_err(|e| from_io_error(e, Some(&err_path)))?;
                 // do not create json or parquet, relay original error
@@ -367,7 +367,7 @@ impl ReplayEngineStatement {
 
 fn from_parquet_error(e: parquet::errors::ParquetError) -> adbc_core::error::Error {
     adbc_core::error::Error::with_message_and_status(
-        format!("Parquet error: {:?}", e),
+        format!("Parquet error: {e:?}"),
         adbc_core::error::Status::IO,
     )
 }
@@ -376,7 +376,7 @@ fn from_io_error(e: std::io::Error, path: Option<&Path>) -> adbc_core::error::Er
     let message = if let Some(path) = path {
         format!("IO error: {:?} ({:?})", e, path.display())
     } else {
-        format!("IO error: {:?}", e)
+        format!("IO error: {e:?}")
     };
     adbc_core::error::Error::with_message_and_status(message, adbc_core::error::Status::IO)
 }
@@ -403,10 +403,10 @@ impl Statement for ReplayEngineStatement {
 
         let path = self.replay_engine.full_path();
         let file_name = compute_file_name(&query_ctx)?;
-        let json_path = path.join(format!("{}.json", file_name));
-        let parquet_path = path.join(format!("{}.parquet", file_name));
-        let sql_path = path.join(format!("{}.sql", file_name));
-        let err_path = path.join(format!("{}.err", file_name));
+        let json_path = path.join(format!("{file_name}.json"));
+        let parquet_path = path.join(format!("{file_name}.parquet"));
+        let sql_path = path.join(format!("{file_name}.sql"));
+        let err_path = path.join(format!("{file_name}.err"));
 
         // Query has to match to the recorded one, otherwise we
         // have issues with ordering or recording
@@ -418,8 +418,7 @@ impl Statement for ReplayEngineStatement {
             fs::read_to_string(&sql_path).map_err(|e| from_io_error(e, Some(&sql_path)))?;
         if normalize_dbt_tmp_name(&record_sql) != normalize_dbt_tmp_name(&replay_sql) {
             panic!(
-                "Recorded query ({}) and actual query ({}) do not match ({:?})",
-                record_sql, replay_sql, sql_path
+                "Recorded query ({record_sql}) and actual query ({replay_sql}) do not match ({sql_path:?})"
             );
         }
 
@@ -436,7 +435,7 @@ impl Statement for ReplayEngineStatement {
         }
 
         if !json_path.exists() {
-            panic!("{:?} does not exist during replay", json_path);
+            panic!("{json_path:?} does not exist during replay");
         }
 
         // If parquet file is empty, then there was no schema during

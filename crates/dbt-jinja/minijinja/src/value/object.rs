@@ -1304,7 +1304,7 @@ pub mod mutable_vec {
                 ))?
             }
         } else {
-            args.get(0).map_or(false, |v| v.is_true())
+            args.get(0).is_some_and(|v| v.is_true())
         };
 
         vec.inner.write().expect("lock poisoned").sort_by(|a, b| {

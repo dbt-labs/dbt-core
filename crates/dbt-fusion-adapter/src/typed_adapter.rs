@@ -397,16 +397,16 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
 
         let rendered = match constraint.type_ {
             ConstraintType::Check if !constraint_expression.is_empty() => {
-                Some(format!("check ({})", constraint_expression))
+                Some(format!("check ({constraint_expression})"))
             }
-            ConstraintType::NotNull => Some(format!("not null {}", constraint_expression)),
-            ConstraintType::Unique => Some(format!("unique {}", constraint_expression)),
-            ConstraintType::PrimaryKey => Some(format!("primary key {}", constraint_expression)),
+            ConstraintType::NotNull => Some(format!("not null {constraint_expression}")),
+            ConstraintType::Unique => Some(format!("unique {constraint_expression}")),
+            ConstraintType::PrimaryKey => Some(format!("primary key {constraint_expression}")),
             ConstraintType::ForeignKey => {
                 if let (Some(to), Some(to_columns)) = (constraint.to, constraint.to_columns) {
                     Some(format!("references {} ({})", to, to_columns.join(", ")))
                 } else if !constraint_expression.is_empty() {
-                    Some(format!("references {}", constraint_expression))
+                    Some(format!("references {constraint_expression}"))
                 } else {
                     None
                 }
@@ -421,7 +421,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 && (constraint.type_ == ConstraintType::PrimaryKey
                     || constraint.type_ == ConstraintType::ForeignKey)
             {
-                Some(format!("{} not enforced", r))
+                Some(format!("{r} not enforced"))
             } else if self.adapter_type() == AdapterType::Bigquery {
                 None
             } else {
@@ -783,7 +783,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                     None => {
                         return Err(AdapterError::new(
                             AdapterErrorKind::Configuration,
-                            format!("Could not find key {}", column),
+                            format!("Could not find key {column}"),
                         ))
                     }
                 },
@@ -798,7 +798,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         if !missing.is_empty() {
             return Err(AdapterError::new(
                 AdapterErrorKind::Configuration,
-                format!("There are missing columns: {:?}", missing),
+                format!("There are missing columns: {missing:?}"),
             ));
         }
 

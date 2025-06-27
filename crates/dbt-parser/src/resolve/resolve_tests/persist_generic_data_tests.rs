@@ -133,7 +133,7 @@ fn persist_inner(
         namespace.as_ref(),
         &jinja_set_vars,
     );
-    let path = PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join(format!("{}.sql", full_name));
+    let path = PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join(format!("{full_name}.sql"));
     let test_file = out_dir.join(&path);
     let generated_test_sql = generate_test_macro(
         test_macro_name.as_str(),
@@ -196,7 +196,7 @@ fn get_test_details(
 
     kwargs.insert(
         "model".to_string(),
-        Value::String(format!("get_where_subquery({})", model_string)),
+        Value::String(format!("get_where_subquery({model_string})")),
     );
     if let Some(col) = column_name {
         kwargs.insert("column_name".to_string(), Value::String(col.to_string()));
@@ -426,7 +426,7 @@ fn generate_test_name(
     let (prefix, resource_name) = match &test_config.source_name {
         Some(source_name) => (
             // handles the test from a source model
-            format!("source_{}", test_macro_name),
+            format!("source_{test_macro_name}"),
             format!("{}_{}", source_name, &test_config.resource_name),
         ),
         None => (
@@ -436,16 +436,16 @@ fn generate_test_name(
     };
 
     let test_identifier = match &test_config.version_num {
-        Some(version_num) => format!("{}_{}_v{}", prefix, resource_name, version_num),
-        None => format!("{}_{}", prefix, resource_name),
+        Some(version_num) => format!("{prefix}_{resource_name}_v{version_num}"),
+        None => format!("{prefix}_{resource_name}"),
     };
 
     let result = match package_name {
         Some(pkg_name) if pkg_name != project_name => {
-            format!("{}_{}_{}", pkg_name, test_identifier, suffix)
+            format!("{pkg_name}_{test_identifier}_{suffix}")
         }
         _ => {
-            format!("{}_{}", test_identifier, suffix)
+            format!("{test_identifier}_{suffix}")
         }
     };
 
@@ -454,7 +454,7 @@ fn generate_test_name(
         let mut hasher = DefaultHasher::new();
         result.as_str().hash(&mut hasher);
         let hash = hasher.finish();
-        format!("t_{:X}", hash) // Uppercase hex format is alphanumeric
+        format!("t_{hash:X}") // Uppercase hex format is alphanumeric
     } else {
         result
     }
@@ -550,10 +550,7 @@ fn generate_test_macro(
                 &var_value[2..var_value.len() - 2].trim()
             )
         } else {
-            format!(
-                "{{% set {} %}}\n{}\n{{% endset %}}\n\n",
-                var_name, var_value
-            )
+            format!("{{% set {var_name} %}}\n{var_value}\n{{% endset %}}\n\n")
         };
         sql.push_str(&set_val);
     }
@@ -562,16 +559,16 @@ fn generate_test_macro(
     if !config.is_empty() {
         // Convert config to a DataTestConfig and use its to_string method
         let config_str = render_config_to_kwargs(config);
-        sql.push_str(&format!("{{{{ config({}) }}}}\n", config_str));
+        sql.push_str(&format!("{{{{ config({config_str}) }}}}\n"));
     }
 
     // Build test macro call with namespace
     // dbt allows referencing a macro of test_<name> using just <name> in data_tests
     // via the qualified_name prefix using 'test_'
     let qualified_name = if let Some(ns) = namespace {
-        format!("{}.test_{}", ns, test_macro_name)
+        format!("{ns}.test_{test_macro_name}")
     } else {
-        format!("test_{}", test_macro_name)
+        format!("test_{test_macro_name}")
     };
 
     // Format all kwargs, handling ref calls specially
@@ -595,12 +592,12 @@ fn generate_test_macro(
                         .replace('{', "\\{") // Escape curly braces
                         .replace('}', "\\}"); // Escape closing curly braces
 
-                    format!("\"{}\"", escaped) // Do NOT add extra quotes
+                    format!("\"{escaped}\"") // Do NOT add extra quotes
                 }
             } else {
                 v.to_string()
             };
-            format!("{}={}", k, value_str)
+            format!("{k}={value_str}")
         })
         .collect();
 
@@ -1028,7 +1025,7 @@ fn process_kwarg(
         if needs_jinja_set_block(s) {
             // Generate a unique var name based on the key with a prefix to avoid collisions
             // Add a random suffix to ensure uniqueness even with the same key name
-            let var_name = format!("dbt_custom_arg_{}", key);
+            let var_name = format!("dbt_custom_arg_{key}");
             jinja_set_vars.insert(var_name.clone(), s.clone());
             kwargs.insert(key.to_string(), Value::String(var_name));
         } else {
@@ -1239,8 +1236,7 @@ mod tests {
         let var_name = extracted_var_name.unwrap();
         assert!(
             jinja_set_vars.contains_key(var_name),
-            "upstream_model_cte variable {} not found in set vars",
-            var_name
+            "upstream_model_cte variable {var_name} not found in set vars"
         );
 
         let extracted_sql = jinja_set_vars.get(var_name).unwrap();
@@ -1382,10 +1378,9 @@ mod tests {
             match normalize_test_name(input) {
                 Ok(result) => assert_eq!(
                     result, expected,
-                    "Input '{}' should normalize to '{}', got '{}'",
-                    input, expected, result
+                    "Input '{input}' should normalize to '{expected}', got '{result}'"
                 ),
-                Err(e) => panic!("Expected success for input '{}', got error: {:?}", input, e),
+                Err(e) => panic!("Expected success for input '{input}', got error: {e:?}"),
             }
         }
     }

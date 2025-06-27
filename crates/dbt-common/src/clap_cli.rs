@@ -618,7 +618,7 @@ impl FromStr for Layout {
                 _ => return Err("Invalid value for commas".into()),
             })),
             "line-length" => Ok(Layout::LineLength(parts.get(1).unwrap().parse().unwrap())),
-            _ => Err(format!("Unknown layout option: {}", s)),
+            _ => Err(format!("Unknown layout option: {s}")),
         }
     }
 }
@@ -788,7 +788,7 @@ impl FromStr for LintWarning {
                         .map(|s| match s.trim().to_lowercase().as_str() {
                             "from" => Ok(SubQueryScope::From),
                             "join" => Ok(SubQueryScope::Join),
-                            _ => Err(format!("Unknown subquery scope: {}", s)),
+                            _ => Err(format!("Unknown subquery scope: {s}")),
                         })
                         .collect::<Result<_, Self::Err>>()?;
 
@@ -802,7 +802,7 @@ impl FromStr for LintWarning {
             }
             "structure-join-condition-order" => Ok(LintWarning::StructureJoinConditionOrder),
             "structure-column-order" => Ok(LintWarning::StructureColumnOrder),
-            _ => Err(format!("Unknown warning option: {}", s)),
+            _ => Err(format!("Unknown warning option: {s}")),
         }
     }
 }
@@ -997,14 +997,14 @@ impl Capitalization {
                 let mut chars = text.chars();
                 let first = chars.next().unwrap().to_uppercase();
                 let rest = chars.collect::<String>().to_lowercase();
-                format!("{}{}", first, rest)
+                format!("{first}{rest}")
             }
             Capitalization::Snake => text.to_lowercase(),
             Capitalization::Camel => {
                 let mut chars = text.chars();
                 let first = chars.next().unwrap().to_lowercase();
                 let rest = chars.collect::<String>().to_lowercase();
-                format!("{}{}", first, rest)
+                format!("{first}{rest}")
             }
             Capitalization::Consistent => unreachable!(),
             Capitalization::Off => text.to_owned(),
@@ -1290,7 +1290,7 @@ impl From<&BTreeMap<String, Value>> for LinterConfig {
                         .map(|s| match s.trim().to_lowercase().as_str() {
                             "from" => Ok(SubQueryScope::From),
                             "join" => Ok(SubQueryScope::Join),
-                            _ => Err(format!("Unknown subquery scope: {}", s)),
+                            _ => Err(format!("Unknown subquery scope: {s}")),
                         })
                         .collect::<Result<_, _>>()
                         .unwrap();
@@ -1359,7 +1359,7 @@ impl From<&BTreeMap<String, Value>> for LinterConfig {
                         .map(|s| match s.trim().to_lowercase().as_str() {
                             "eq" => Ok(ImplicitConversionOperators::Eq),
                             "in" => Ok(ImplicitConversionOperators::In),
-                            _ => Err(format!("Unknown implicit conversion operator: {}", s)),
+                            _ => Err(format!("Unknown implicit conversion operator: {s}")),
                         })
                         .collect::<Result<_, _>>()
                         .unwrap();

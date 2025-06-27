@@ -108,12 +108,12 @@ pub struct VersionSpecifier {
 impl VersionSpecifier {
     pub fn to_version_string(&self, skip_matcher: bool) -> String {
         let prerelease = if let Some(prerelease) = &self.prerelease {
-            format!("-{}", prerelease)
+            format!("-{prerelease}")
         } else {
             String::new()
         };
         let build = if let Some(build) = &self.build {
-            format!("+{}", build)
+            format!("+{build}")
         } else {
             String::new()
         };
@@ -720,8 +720,7 @@ mod tests {
         for v in valid_versions {
             assert!(
                 VersionSpecifier::from_str(v).is_ok(),
-                "{} should be a valid semver, but failed to parse.",
-                v
+                "{v} should be a valid semver, but failed to parse."
             )
         }
     }

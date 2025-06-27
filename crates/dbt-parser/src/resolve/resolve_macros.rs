@@ -44,7 +44,7 @@ pub fn resolve_docs_macros(
                 for resource in resources {
                     match resource {
                         SqlResource::Doc(name, span) => {
-                            let unique_id = format!("doc.{}.{}", package_name, name);
+                            let unique_id = format!("doc.{package_name}.{name}");
                             let part =
                                 &docs_macro[span.start_offset as usize..span.end_offset as usize];
                             if let Some(existing_doc) = docs_map.get(&unique_id) {
@@ -123,7 +123,7 @@ pub fn resolve_macros(
             for resource in resources {
                 match resource {
                     SqlResource::Test(name, span) => {
-                        let unique_id = format!("macro.{}.{}", package_name, name);
+                        let unique_id = format!("macro.{package_name}.{name}");
                         let split_macro_sql =
                             &macro_sql[span.start_offset as usize..span.end_offset as usize];
 
@@ -145,7 +145,7 @@ pub fn resolve_macros(
                         nodes.insert(unique_id, dbt_macro);
                     }
                     SqlResource::Macro(name, span) => {
-                        let unique_id = format!("macro.{}.{}", package_name, name);
+                        let unique_id = format!("macro.{package_name}.{name}");
                         let split_macro_sql =
                             &macro_sql[span.start_offset as usize..span.end_offset as usize];
 
@@ -170,7 +170,7 @@ pub fn resolve_macros(
                         let split_macro_sql =
                             &macro_sql[span.start_offset as usize..span.end_offset as usize];
                         // TODO: Return the adapter type with the SqlResource (for now, default always)
-                        let unique_id = format!("macro.{}.{}", package_name, name);
+                        let unique_id = format!("macro.{package_name}.{name}");
                         let dbt_macro = DbtMacro {
                             name: name.clone(),
                             package_name: package_name.clone(),
@@ -189,7 +189,7 @@ pub fn resolve_macros(
                         nodes.insert(unique_id, dbt_macro);
                     }
                     SqlResource::Snapshot(name, span) => {
-                        let unique_id = format!("snapshot.{}.{}", package_name, name);
+                        let unique_id = format!("snapshot.{package_name}.{name}");
                         let split_macro_sql =
                             &macro_sql[span.start_offset as usize..span.end_offset as usize];
 

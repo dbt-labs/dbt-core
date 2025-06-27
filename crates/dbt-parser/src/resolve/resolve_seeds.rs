@@ -75,7 +75,7 @@ pub fn resolve_seeds(
         } else {
             path.file_stem().unwrap().to_str().unwrap()
         };
-        let unique_id = format!("seed.{}.{}", package_name, seed_name);
+        let unique_id = format!("seed.{package_name}.{seed_name}");
 
         let fqn = get_node_fqn(package_name, path.to_owned(), vec![seed_name.to_owned()]);
 

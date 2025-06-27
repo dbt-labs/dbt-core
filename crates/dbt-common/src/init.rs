@@ -130,7 +130,7 @@ pub fn get_profiles_dir() -> String {
     // Try environment variable first, then fall back to default
     env::var("DBT_PROFILES_DIR").unwrap_or_else(|_| {
         let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        format!("{}/.dbt", home)
+        format!("{home}/.dbt")
     })
 }
 
@@ -276,7 +276,7 @@ pub fn run_init_workflow(
 fn next_available_dir_name(base: &str) -> String {
     let mut counter = 1;
     loop {
-        let candidate = format!("{}_{}", base, counter);
+        let candidate = format!("{base}_{counter}");
         if !Path::new(&candidate).exists() {
             return candidate;
         }

@@ -140,7 +140,7 @@ fn tracker_visit_expr<'a>(expr: &ast::Expr<'a>, state: &mut AssignmentTracker<'a
                             if !state.is_assigned(var.id) {
                                 let mut rv = var.id.to_string();
                                 for attr in attrs.iter().rev() {
-                                    write!(rv, ".{}", attr).ok();
+                                    write!(rv, ".{attr}").ok();
                                 }
                                 state.assign_nested(rv);
                                 return;

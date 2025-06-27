@@ -224,7 +224,7 @@ impl std::fmt::Display for FrontendError {
         write!(f, "{}", self.context)?;
         if self.code == ErrorCode::Unknown {
             if let Some(cause) = self.cause.as_ref() {
-                write!(f, ": {:?}", cause)?;
+                write!(f, ": {cause:?}")?;
             }
         }
         Ok(())
@@ -309,7 +309,7 @@ impl FrontendError {
 
     pub fn with_context(self, context: impl std::fmt::Display) -> Self {
         FrontendError {
-            context: format!("{}", context),
+            context: format!("{context}"),
             ..self
         }
     }
@@ -499,21 +499,21 @@ pub enum WrappedError {
 impl std::fmt::Display for WrappedError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            WrappedError::Antlr(e) => write!(f, "{}", e),
+            WrappedError::Antlr(e) => write!(f, "{e}"),
             WrappedError::Datafusion(e) => match e {
-                DataFusionError::Plan(e) => write!(f, "{}", e),
-                DataFusionError::SchemaError(e, _) => write!(f, "{}", e),
-                DataFusionError::ArrowError(e, _) => write!(f, "{}", e),
-                _ => write!(f, "{}", e),
+                DataFusionError::Plan(e) => write!(f, "{e}"),
+                DataFusionError::SchemaError(e, _) => write!(f, "{e}"),
+                DataFusionError::ArrowError(e, _) => write!(f, "{e}"),
+                _ => write!(f, "{e}"),
             },
-            WrappedError::Generic(e) => write!(f, "{}", e),
-            WrappedError::Arrow(e) => write!(f, "{}", e),
-            WrappedError::ParseFloat(e) => write!(f, "{}", e),
-            WrappedError::ParseInt(e) => write!(f, "{}", e),
-            WrappedError::Frontend(e) => write!(f, "{}", e),
-            WrappedError::SerdeJson(e) => write!(f, "{}", e),
-            WrappedError::Schema(e) => write!(f, "{}", e),
-            WrappedError::AliasedExprs(e) => write!(f, "{}", e),
+            WrappedError::Generic(e) => write!(f, "{e}"),
+            WrappedError::Arrow(e) => write!(f, "{e}"),
+            WrappedError::ParseFloat(e) => write!(f, "{e}"),
+            WrappedError::ParseInt(e) => write!(f, "{e}"),
+            WrappedError::Frontend(e) => write!(f, "{e}"),
+            WrappedError::SerdeJson(e) => write!(f, "{e}"),
+            WrappedError::Schema(e) => write!(f, "{e}"),
+            WrappedError::AliasedExprs(e) => write!(f, "{e}"),
         }
     }
 }
@@ -544,15 +544,15 @@ impl std::fmt::Display for InternalError {
         #[allow(unreachable_patterns)] // Note: this shouldn't be necessary because of
         // the #[non_exhaustive] attribute
         match &self.error {
-            WrappedError::Frontend(e) => write!(f, "{}", e),
-            WrappedError::Antlr(e) => write!(f, "ANTLR error: {}", e),
-            WrappedError::Datafusion(e) => write!(f, "DataFusion error: {}", e),
-            WrappedError::Generic(e) => write!(f, "{}", e),
-            WrappedError::Arrow(e) => write!(f, "Arrow error: {}", e),
-            WrappedError::ParseFloat(e) => write!(f, "ParseFloat error: {}", e),
-            WrappedError::ParseInt(e) => write!(f, "ParseInt error: {}", e),
-            WrappedError::SerdeJson(e) => write!(f, "SerdeJson error: {}", e),
-            WrappedError::Schema(e) => write!(f, "Schema error: {}", e),
+            WrappedError::Frontend(e) => write!(f, "{e}"),
+            WrappedError::Antlr(e) => write!(f, "ANTLR error: {e}"),
+            WrappedError::Datafusion(e) => write!(f, "DataFusion error: {e}"),
+            WrappedError::Generic(e) => write!(f, "{e}"),
+            WrappedError::Arrow(e) => write!(f, "Arrow error: {e}"),
+            WrappedError::ParseFloat(e) => write!(f, "ParseFloat error: {e}"),
+            WrappedError::ParseInt(e) => write!(f, "ParseInt error: {e}"),
+            WrappedError::SerdeJson(e) => write!(f, "SerdeJson error: {e}"),
+            WrappedError::Schema(e) => write!(f, "Schema error: {e}"),
             _ => write!(f, "Unknown error"),
         }
     }

@@ -7,6 +7,7 @@ use crate::utils::load_raw_yml;
 
 const DOWNLOAD_INTERVAL: u64 = 3600; // 1 hour
 
+#[allow(clippy::cognitive_complexity)]
 /// Downloads publication artifacts for each upstream project
 ///
 /// This function checks if the environment variable `DBT_CLOUD_PUBLICATIONS_DIR` is set.
@@ -175,7 +176,7 @@ pub(crate) async fn download_publication_artifacts(
         let response = client
             .get(&url)
             .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {}", token))
+            .header("Authorization", format!("Bearer {token}"))
             .send()
             .await
             .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to execute HTTP request: {}", e))?;

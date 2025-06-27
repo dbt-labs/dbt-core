@@ -27,25 +27,25 @@ impl PyTimeClass {
         if !(0..=23).contains(&hour) {
             return Err(Error::new(
                 ErrorKind::InvalidArgument,
-                format!("hour must be in 0..=23, got {}", hour),
+                format!("hour must be in 0..=23, got {hour}"),
             ));
         }
         if !(0..=59).contains(&minute) {
             return Err(Error::new(
                 ErrorKind::InvalidArgument,
-                format!("minute must be in 0..=59, got {}", minute),
+                format!("minute must be in 0..=59, got {minute}"),
             ));
         }
         if !(0..=59).contains(&second) {
             return Err(Error::new(
                 ErrorKind::InvalidArgument,
-                format!("second must be in 0..=59, got {}", second),
+                format!("second must be in 0..=59, got {second}"),
             ));
         }
         if !(0..1_000_000).contains(&microsecond) {
             return Err(Error::new(
                 ErrorKind::InvalidArgument,
-                format!("microsecond must be in 0..1_000_000, got {}", microsecond),
+                format!("microsecond must be in 0..1_000_000, got {microsecond}"),
             ));
         }
 
@@ -91,7 +91,7 @@ impl PyTimeClass {
             Err(e) => {
                 return Err(Error::new(
                     ErrorKind::InvalidArgument,
-                    format!("Invalid iso time format: {}: {}", iso_str, e),
+                    format!("Invalid iso time format: {iso_str}: {e}"),
                 ))
             }
         };
@@ -125,7 +125,7 @@ impl Object for PyTimeClass {
             "fromisoformat" => Self::fromisoformat(args).map(Value::from_object),
             _ => Err(Error::new(
                 ErrorKind::UnknownMethod("PyTimeClass".to_string(), method.to_string()),
-                format!("time has no method named '{}'", method),
+                format!("time has no method named '{method}'"),
             )),
         }
     }
@@ -165,7 +165,7 @@ impl PyTime {
 
                 // Add microseconds (6 digits)
                 let microseconds = self.time.nanosecond() / 1000;
-                result.push_str(&format!("{:06}", microseconds));
+                result.push_str(&format!("{microseconds:06}"));
 
                 // Continue with the rest of the string
                 remaining = &remaining[pos + 2..]; // +2 to skip "%f"
@@ -297,7 +297,7 @@ impl Object for PyTime {
             "__sub__" => self.add_op(args, false),
             _ => Err(Error::new(
                 ErrorKind::UnknownMethod("PyTime".to_string(), method.to_string()),
-                format!("time object has no method '{}'", method),
+                format!("time object has no method '{method}'"),
             )),
         }
     }

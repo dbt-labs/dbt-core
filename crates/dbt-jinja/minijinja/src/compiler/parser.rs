@@ -1527,7 +1527,7 @@ impl<'a> Parser<'a> {
     fn parse_test(&mut self) -> Result<ast::Macro<'a>, Error> {
         let (name, _) = expect_token!(self, Token::Ident(name) => name, "identifier");
         // Assuming self has access to an arena or string interner
-        let macro_name = self.intern_string(&format!("test_{}", name));
+        let macro_name = self.intern_string(&format!("test_{name}"));
         expect_token!(self, Token::ParenOpen, "`(`");
         let mut args = Vec::new();
         let mut defaults = Vec::new();
@@ -1539,7 +1539,7 @@ impl<'a> Parser<'a> {
     fn parse_snapshot(&mut self) -> Result<ast::Macro<'a>, Error> {
         let (name, _) = expect_token!(self, Token::Ident(name) => name, "identifier");
         // Assuming self has access to an arena or string interner
-        let macro_name = self.intern_string(&format!("snapshot_{}", name));
+        let macro_name = self.intern_string(&format!("snapshot_{name}"));
         self.parse_snapshot_or_call_block_body(Some(macro_name))
     }
 
@@ -1797,5 +1797,5 @@ pub fn parse_expr(source: &str) -> Result<ast::Expr<'_>, Error> {
 }
 
 pub fn materialization_macro_name<N: fmt::Display>(name: N, adapter: &str) -> String {
-    format!("materialization_{}_{}", name, adapter)
+    format!("materialization_{name}_{adapter}")
 }

@@ -505,7 +505,7 @@ pub fn init_logger(log_config: FsLogConfig) -> FsResult<()> {
     // Create parent directories if they don't exist
     if let Some(parent) = log_config.file_log_path.parent() {
         std::fs::create_dir_all(parent)
-            .unwrap_or_else(|_| panic!("Failed to create log directory {:?}", parent));
+            .unwrap_or_else(|_| panic!("Failed to create log directory {parent:?}"));
     }
     let file = Arc::new(Mutex::new(Box::new(
         std::fs::OpenOptions::new()
@@ -542,7 +542,7 @@ pub fn init_logger(log_config: FsLogConfig) -> FsResult<()> {
             .truncate(true)
             .write(true)
             .open(&query_log_path)
-            .unwrap_or_else(|_| panic!("Failed to open log file {:?}", query_log_path)),
+            .unwrap_or_else(|_| panic!("Failed to open log file {query_log_path:?}")),
     ) as Box<dyn Write + Send>));
     builder = builder.add_logger("queries", file, query_file_config);
 

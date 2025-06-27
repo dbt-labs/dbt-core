@@ -10,9 +10,9 @@ pub fn strip_version_hash(
 ) -> String {
     if let Some(version) = version {
         let suffix = if let Some(hash) = hash {
-            format!("_{}_{}", version, hash)
+            format!("_{version}_{hash}")
         } else {
-            format!("_{}", version)
+            format!("_{version}")
         };
 
         table_name

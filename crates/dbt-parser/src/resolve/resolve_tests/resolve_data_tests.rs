@@ -159,7 +159,7 @@ pub async fn resolve_data_tests(
             &DataTestProperties::empty(model_name.to_owned())
         };
 
-        let unique_id = format!("test.{}.{}", package_name, model_name);
+        let unique_id = format!("test.{package_name}.{model_name}");
         let fqn = get_node_fqn(
             package_name,
             dbt_asset.path.to_owned(),

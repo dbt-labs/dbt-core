@@ -79,11 +79,11 @@ pub enum ProducerError {
 impl std::fmt::Display for ProducerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ProducerError::ValidationError(msg) => write!(f, "Validation error: {}", msg),
-            ProducerError::SendError(msg) => write!(f, "Send error: {}", msg),
-            ProducerError::BadRequestError(msg) => write!(f, "Bad request error: {}", msg),
-            ProducerError::ShutdownError(msg) => write!(f, "Shutdown error: {}", msg),
-            ProducerError::UnknownError(msg) => write!(f, "Unknown error: {}", msg),
+            ProducerError::ValidationError(msg) => write!(f, "Validation error: {msg}"),
+            ProducerError::SendError(msg) => write!(f, "Send error: {msg}"),
+            ProducerError::BadRequestError(msg) => write!(f, "Bad request error: {msg}"),
+            ProducerError::ShutdownError(msg) => write!(f, "Shutdown error: {msg}"),
+            ProducerError::UnknownError(msg) => write!(f, "Unknown error: {msg}"),
         }
     }
 }
@@ -92,32 +92,32 @@ impl std::error::Error for ProducerError {}
 
 impl From<reqwest::Error> for ProducerError {
     fn from(e: reqwest::Error) -> Self {
-        ProducerError::SendError(format!("Failed to send message: {}", e))
+        ProducerError::SendError(format!("Failed to send message: {e}"))
     }
 }
 
 impl From<std::time::SystemTimeError> for ProducerError {
     fn from(e: std::time::SystemTimeError) -> Self {
-        ProducerError::UnknownError(format!("Failed to generate a timestamp! {}", e))
+        ProducerError::UnknownError(format!("Failed to generate a timestamp! {e}"))
     }
 }
 
 #[cfg(test)]
 impl From<mock_instant::SystemTimeError> for ProducerError {
     fn from(e: mock_instant::SystemTimeError) -> Self {
-        ProducerError::UnknownError(format!("Failed to generate a timestamp! {}", e))
+        ProducerError::UnknownError(format!("Failed to generate a timestamp! {e}"))
     }
 }
 
 impl From<JoinError> for ProducerError {
     fn from(e: JoinError) -> Self {
-        ProducerError::ShutdownError(format!("Failed to join worker task! {}", e))
+        ProducerError::ShutdownError(format!("Failed to join worker task! {e}"))
     }
 }
 
 impl From<io::Error> for ProducerError {
     fn from(e: io::Error) -> Self {
-        ProducerError::UnknownError(format!("IO error occurred: {}", e))
+        ProducerError::UnknownError(format!("IO error occurred: {e}"))
     }
 }
 
@@ -146,7 +146,7 @@ impl Default for VortexProducerClient {
         let endpoint = {
             let base_url = vortex_config.base_url.clone();
             let ingest_endpoint = vortex_config.ingest_endpoint.clone();
-            let full_url = format!("{}{}", base_url, ingest_endpoint);
+            let full_url = format!("{base_url}{ingest_endpoint}");
             url::Url::parse(&full_url).expect("Failed to parse Vortex endpoint URL")
         };
         let vortex_client_platform = {
@@ -275,13 +275,13 @@ impl VortexProducerClient {
                             bytes_buffered = 0;
                         }
                         Err(ProducerError::BadRequestError(e)) => {
-                            debug!("Failed to send telemetry batch: {}", e);
+                            debug!("Failed to send telemetry batch: {e}");
                             vortex_messages.clear();
                             bytes_buffered = 0;
                         }
                         Err(e) => {
                             // Skip clearing the messages so they can be included in the next batch.
-                            debug!("Failed to send telemetry batch: {}", e);
+                            debug!("Failed to send telemetry batch: {e}");
                         }
                     }
                 }
@@ -337,12 +337,12 @@ impl VortexProducerClient {
             debug!("Successfully sent telemetry batch.");
             Ok(())
         } else {
-            debug!("Failed to send message: {} {}", status, text);
+            debug!("Failed to send message: {status} {text}");
             let err = if status == StatusCode::BAD_REQUEST {
-                let message = format!("Failed to send message: {} {}", status, text);
+                let message = format!("Failed to send message: {status} {text}");
                 ProducerError::BadRequestError(message)
             } else {
-                ProducerError::SendError(format!("Failed to send message: {} {}", status, text))
+                ProducerError::SendError(format!("Failed to send message: {status} {text}"))
             };
             Err(err)
         }
@@ -404,7 +404,7 @@ impl VortexProducerClient {
         }
 
         let dev_mode_msg = VortexDevModeMessage {
-            type_url: format!("/{}.{}", package, name),
+            type_url: format!("/{package}.{name}"),
             message: json_message,
         };
         let json_payload = serde_json::to_string(&dev_mode_msg).unwrap_or_default();
@@ -435,7 +435,7 @@ impl VortexProducerClient {
         error_mode: ErrorMode,
     ) -> Result<()> {
         let any = pbjson_types::Any {
-            type_url: format!("/{}.{}", package, name),
+            type_url: format!("/{package}.{name}"),
             value: serialized_value.into(),
         };
         let vortex_msg = VortexMessage {
@@ -449,10 +449,10 @@ impl VortexProducerClient {
         match self.sender.send(vortex_msg).await {
             Ok(_) => Ok(()),
             Err(e) => {
-                let err = ProducerError::SendError(format!("Failed to send message: {}", e));
+                let err = ProducerError::SendError(format!("Failed to send message: {e}"));
                 match error_mode {
                     ErrorMode::LogAndContinue => {
-                        debug!("{}", err);
+                        debug!("{err}");
                         Ok(())
                     }
                     ErrorMode::LogAndRaise => Err(err),

@@ -64,7 +64,7 @@ impl Display for Backend {
             Backend::Databricks => write!(f, "Databricks"),
             Backend::DatabricksODBC => write!(f, "Databricks"),
             Backend::RedshiftODBC => write!(f, "Redshift"),
-            Backend::Generic { library_name, .. } => write!(f, "Generic({})", library_name),
+            Backend::Generic { library_name, .. } => write!(f, "Generic({library_name})"),
         }
     }
 }
@@ -256,8 +256,7 @@ impl AdbcDriver {
             // ODBC drivers.
             Backend::DatabricksODBC | Backend::RedshiftODBC => Err(Error::with_message_and_status(
                 format!(
-                    "Can not load ADBC driver for {:?} because ODBC should be used instead.",
-                    backend
+                    "Can not load ADBC driver for {backend:?} because ODBC should be used instead."
                 ),
                 Status::InvalidArguments,
             )),
@@ -342,7 +341,7 @@ impl OdbcDriver {
     pub(crate) fn try_load_dynamic(backend: Backend) -> Result<Self> {
         match backend.ffi_protocol() {
             FFIProtocol::Adbc => Err(Error::with_message_and_status(
-                format!("The {:?} backend uses ADBC instead of ODBC", backend),
+                format!("The {backend:?} backend uses ADBC instead of ODBC"),
                 Status::InvalidArguments,
             )),
             FFIProtocol::Odbc => {

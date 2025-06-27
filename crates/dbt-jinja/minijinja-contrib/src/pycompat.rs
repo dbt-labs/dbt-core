@@ -285,7 +285,7 @@ fn string_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, 
                 if idx > 0 {
                     rv.push_str(s);
                 }
-                write!(rv, "{}", value).ok();
+                write!(rv, "{value}").ok();
             }
             Ok(Value::from(rv))
         }
@@ -304,7 +304,7 @@ fn string_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, 
                     ));
                 }
                 for (idx, value) in args.iter().enumerate() {
-                    result = result.replace(&format!("{{{}}}", idx), &value.to_string());
+                    result = result.replace(&format!("{{{idx}}}"), &value.to_string());
                 }
             }
             // Handle simple {} placeholders
@@ -330,7 +330,7 @@ fn string_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, 
                 if let Some(obj) = args[0].as_object() {
                     if let Some(iter) = obj.try_iter_pairs() {
                         for (key, value) in iter {
-                            result = result.replace(&format!("{{{}}}", key), &value.to_string());
+                            result = result.replace(&format!("{{{key}}}"), &value.to_string());
                         }
                     }
                 }
@@ -339,7 +339,7 @@ fn string_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, 
         }
         "zfill" => {
             let (width,): (usize,) = from_args(args)?;
-            Ok(Value::from(format!("{:0>width$}", s, width = width)))
+            Ok(Value::from(format!("{s:0>width$}")))
         }
         "removesuffix" => {
             let (suffix,): (&str,) = from_args(args)?;
@@ -508,7 +508,7 @@ fn seq_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, Err
                 // Item not found - raise ValueError equivalent
                 Err(Error::new(
                     ErrorKind::InvalidOperation,
-                    format!("{} is not in list", what),
+                    format!("{what} is not in list"),
                 ))
             } else {
                 Err(Error::new(

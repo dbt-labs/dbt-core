@@ -178,7 +178,7 @@ impl fmt::Display for SelectionCriteria {
             }
         }
 
-        write!(f, "{}", result)
+        write!(f, "{result}")
     }
 }
 
@@ -197,21 +197,21 @@ impl fmt::Display for SelectExpression {
             SelectExpression::And(expressions) => {
                 let expressions_str = expressions
                     .iter()
-                    .map(|expr| format!("{}", expr))
+                    .map(|expr| format!("{expr}"))
                     .collect::<Vec<_>>()
                     .join(",");
-                write!(f, "{}", expressions_str)
+                write!(f, "{expressions_str}")
             }
             SelectExpression::Or(expressions) => {
                 let expressions_str = expressions
                     .iter()
-                    .map(|expr| format!("{}", expr))
+                    .map(|expr| format!("{expr}"))
                     .collect::<Vec<_>>()
                     .join(" ");
-                write!(f, "{}", expressions_str)
+                write!(f, "{expressions_str}")
             }
-            SelectExpression::Atom(criteria) => write!(f, "{}", criteria),
-            SelectExpression::Exclude(expr) => write!(f, "exclude({})", expr),
+            SelectExpression::Atom(criteria) => write!(f, "{criteria}"),
+            SelectExpression::Exclude(expr) => write!(f, "exclude({expr})"),
         }
     }
 }

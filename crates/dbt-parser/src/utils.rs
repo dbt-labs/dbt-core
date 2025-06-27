@@ -37,9 +37,9 @@ pub fn get_unique_id(
     node_type: &str,
 ) -> String {
     if let Some(version) = version {
-        format!("{}.{}.{}.v{}", node_type, package_name, model_name, version)
+        format!("{node_type}.{package_name}.{model_name}.v{version}")
     } else {
-        format!("{}.{}.{}", node_type, package_name, model_name)
+        format!("{node_type}.{package_name}.{model_name}")
     }
 }
 

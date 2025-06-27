@@ -122,7 +122,7 @@ impl std::fmt::Display for DbtMaterialization {
             DbtMaterialization::Analysis => "analysis",
             DbtMaterialization::Unknown(s) => s.as_str(),
         };
-        write!(f, "{}", materialized_str)
+        write!(f, "{materialized_str}")
     }
 }
 
@@ -297,8 +297,7 @@ impl<'de> Deserialize<'de> for DbtCheckColsSpec {
                 }
             }
             _ => Err(serde::de::Error::custom(format!(
-                "Expected a string or array of strings for check_cols, got {:?}",
-                value
+                "Expected a string or array of strings for check_cols, got {value:?}"
             ))),
         }
     }

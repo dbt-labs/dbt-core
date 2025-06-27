@@ -38,7 +38,7 @@ pub fn retcode_to_result(retcode: SqlReturn) -> Result<()> {
             Status::NotFound,
         )),
         SqlReturn(code) => Err(Error::with_message_and_status(
-            format!("ODBC error: {}", code),
+            format!("ODBC error: {code}"),
             Status::Internal,
         )),
     }
@@ -389,8 +389,7 @@ pub fn sql_describe_col(
     if retcode == SqlReturn::SUCCESS_WITH_INFO {
         if col_name_len < 0 {
             panic!(
-                "SQLDescribeColW() returned SUCCESS_WITH_INFO, but col_name_len < 0: {}",
-                col_name_len
+                "SQLDescribeColW() returned SUCCESS_WITH_INFO, but col_name_len < 0: {col_name_len}"
             );
         }
         if (col_name_len as usize) + 1 > col_name_buffer.len() {
@@ -592,17 +591,13 @@ pub fn sql_get_data_bytes(
             } else {
                 panic!(
                     "after the first SQL_NO_TOTAL, SQLGetData should produce a \
-positive text_len value or the SQL_NO_TOTAL indicator, but it produced {}",
-                    text_len_or_ind
+positive text_len value or the SQL_NO_TOTAL indicator, but it produced {text_len_or_ind}"
                 );
             }
         }
         out.resize(total_bytes_read, 0);
         Ok(Some(()))
     } else {
-        panic!(
-            "expected SQL_NO_TOTAL, but SQLGetData() produced {}",
-            text_len_or_ind
-        );
+        panic!("expected SQL_NO_TOTAL, but SQLGetData() produced {text_len_or_ind}");
     }
 }

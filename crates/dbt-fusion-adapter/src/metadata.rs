@@ -163,8 +163,8 @@ fn create_catalog_sql(adapter: &Arc<dyn MetadataAdapter>, catalog: &str) -> Stri
     let catalog = adapter.quote_component(catalog, ComponentName::Database);
     let adapter_type = adapter.adapter_type();
     match adapter_type {
-        AdapterType::Snowflake => format!("CREATE DATABASE IF NOT EXISTS {}", catalog),
-        AdapterType::Databricks => format!("CREATE CATALOG IF NOT EXISTS {}", catalog),
+        AdapterType::Snowflake => format!("CREATE DATABASE IF NOT EXISTS {catalog}"),
+        AdapterType::Databricks => format!("CREATE CATALOG IF NOT EXISTS {catalog}"),
         _ => unimplemented!("create_catalog_sql for adapter type: {}", adapter_type),
     }
 }
@@ -178,8 +178,8 @@ fn create_schema_sql(adapter: &Arc<dyn MetadataAdapter>, catalog: &str, schema: 
     let schema = adapter.quote_component(schema, ComponentName::Schema);
     let adapter_type = adapter.adapter_type();
     match adapter_type {
-        AdapterType::Snowflake => format!("CREATE SCHEMA IF NOT EXISTS {}.{}", catalog, schema),
-        AdapterType::Databricks => format!("CREATE SCHEMA IF NOT EXISTS {}.{}", catalog, schema),
+        AdapterType::Snowflake => format!("CREATE SCHEMA IF NOT EXISTS {catalog}.{schema}"),
+        AdapterType::Databricks => format!("CREATE SCHEMA IF NOT EXISTS {catalog}.{schema}"),
         _ => unimplemented!("create_schema_sql for adapter type: {}", adapter_type),
     }
 }

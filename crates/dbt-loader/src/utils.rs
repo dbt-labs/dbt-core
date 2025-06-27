@@ -57,7 +57,7 @@ pub fn collect_file_info<P: AsRef<Path>>(
 pub fn indent(data: &str, spaces: usize) -> String {
     let indent = " ".repeat(spaces);
     data.lines()
-        .map(|line| format!("{}{}", indent, line))
+        .map(|line| format!("{indent}{line}"))
         .collect::<Vec<String>>()
         .join("\n")
 }
@@ -98,7 +98,7 @@ pub fn get_db_config(
                 db_config
                     .ignored_properties()
                     .keys()
-                    .map(|k| format!("'{}'", k))
+                    .map(|k| format!("'{k}'"))
                     .collect::<Vec<String>>()
                     .join(", ")
             )

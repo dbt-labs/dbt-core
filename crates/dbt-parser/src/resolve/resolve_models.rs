@@ -48,6 +48,7 @@ use std::sync::Arc;
 use super::resolve_properties::MinimalPropertiesEntry;
 use super::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
 
+#[allow(clippy::cognitive_complexity)]
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_models(
     arg: &ResolveArgs,
@@ -383,12 +384,9 @@ pub async fn resolve_models(
         let mut errs = Vec::new();
         for (_, model_name, maybe_version, path) in duplicates {
             let msg = if let Some(version) = maybe_version {
-                format!(
-                    "Found duplicate model '{}' with version '{}'",
-                    model_name, version
-                )
+                format!("Found duplicate model '{model_name}' with version '{version}'")
             } else {
-                format!("Found duplicate model '{}'", model_name)
+                format!("Found duplicate model '{model_name}'")
             };
             let err = fs_err!(
                 code => ErrorCode::InvalidConfig,

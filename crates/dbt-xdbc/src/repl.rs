@@ -166,7 +166,7 @@ impl ReplState {
         if let Some(idx) = new_idx {
             if idx >= self.current_batches.len() {
                 Err(Error::with_message_and_status(
-                    format!("Out of range {}", idx),
+                    format!("Out of range {idx}"),
                     adbc_core::error::Status::InvalidArguments,
                 ))
             } else {
@@ -244,7 +244,7 @@ fn visualize_schema(schema: Arc<Schema>) {
                 } else {
                     "├─"
                 };
-                println!("│  │     {} {}: {}", prefix, key, value);
+                println!("│  │     {prefix} {key}: {value}");
             }
         }
     }
@@ -253,7 +253,7 @@ fn visualize_schema(schema: Arc<Schema>) {
     if !&schema.metadata.is_empty() {
         println!("└─ Metadata");
         for (key, value) in &schema.metadata {
-            println!("   └─ {}: {}", key, value);
+            println!("   └─ {key}: {value}");
         }
     }
 }
@@ -267,7 +267,7 @@ pub async fn run_repl(backend_str: &str) -> Result<()> {
         "redshift" => Backend::RedshiftODBC,
         _ => {
             return Err(Error::with_message_and_status(
-                format!("Unsupported backend: {}", backend_str),
+                format!("Unsupported backend: {backend_str}"),
                 adbc_core::error::Status::InvalidArguments,
             ))
         }
@@ -283,7 +283,7 @@ pub async fn run_repl(backend_str: &str) -> Result<()> {
 
     loop {
         let input: String = Input::with_theme(&theme)
-            .with_prompt(format!("dbt-xdbc | {}>", backend_str))
+            .with_prompt(format!("dbt-xdbc | {backend_str}>"))
             .history_with(&mut history)
             .interact_text()
             .map_err(|e| {
@@ -296,19 +296,19 @@ pub async fn run_repl(backend_str: &str) -> Result<()> {
                 match state.execute_query(&query) {
                     Ok((batches, cols)) => {
                         println!("Successfully executed query.");
-                        println!("{} batches with {} columns returned.", batches, cols);
+                        println!("{batches} batches with {cols} columns returned.");
                         println!("  :show-schema    - Show schema");
                         println!("  :show-batch     - Show current batch");
                     }
                     Err(e) => {
-                        eprintln!("Error executing query: {}", e);
+                        eprintln!("Error executing query: {e}");
                         continue;
                     }
                 }
             }
             Some(Command::Move { delta }) => {
                 if let Err(e) = state.move_pointer(delta) {
-                    eprintln!("Error moving pointer: {}", e);
+                    eprintln!("Error moving pointer: {e}");
                     continue;
                 }
             }
@@ -352,11 +352,11 @@ pub async fn run_repl(backend_str: &str) -> Result<()> {
                         true,
                         Some(batch.num_rows()),
                     ) {
-                        println!("{}", table);
+                        println!("{table}");
                     } else {
                         eprintln!("Failed to pretty print as table.");
                         // fallback: dump as a debug print
-                        println!("{:#?}", batch);
+                        println!("{batch:#?}");
                     }
                 } else {
                     println!("No batch found!");

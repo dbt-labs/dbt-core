@@ -34,10 +34,10 @@ impl Schedule<String> {
     pub fn show_nodes(&self) -> String {
         let mut res = "".to_string();
         if let Some(select) = &self.select {
-            res.push_str(&format!("    [--select: {}]\n", select));
+            res.push_str(&format!("    [--select: {select}]\n"));
         }
         if let Some(exclude) = &self.exclude {
-            res.push_str(&format!("    [--exclude: {}]\n", exclude));
+            res.push_str(&format!("    [--exclude: {exclude}]\n"));
         }
         res.push_str(
             &self
@@ -141,14 +141,10 @@ impl fmt::Display for Schedule<String> {
                     };
                     writeln!(
                         f,
-                        "{:<width$} | {:<8} | {}",
-                        key,
-                        frontier_marker,
-                        values_str,
-                        width = max_key_len
+                        "{key:<max_key_len$} | {frontier_marker:<8} | {values_str}"
                     )?;
                 } else {
-                    writeln!(f, "{:<width$} | {}", key, values_str, width = max_key_len)?;
+                    writeln!(f, "{key:<max_key_len$} | {values_str}")?;
                 }
             }
         }

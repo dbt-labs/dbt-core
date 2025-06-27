@@ -138,5 +138,5 @@ fn print_trimmed_error(e: Error) {
     }
 
     // Always print this footer
-    let _ = writeln!(stderr, "\nFor more information, try '{} --help'.", command);
+    let _ = writeln!(stderr, "\nFor more information, try '{command} --help'.");
 }

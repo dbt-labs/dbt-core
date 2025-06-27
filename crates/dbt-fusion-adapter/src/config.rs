@@ -33,10 +33,7 @@ impl AdapterConfig {
             } else {
                 Err(AdapterError::new(
                     AdapterErrorKind::Configuration,
-                    format!(
-                        "{} value: {} is not a string, integer, float, or boolean",
-                        key, value
-                    ),
+                    format!("{key} value: {value} is not a string, integer, float, or boolean"),
                 ))
             }
         } else {
@@ -51,7 +48,7 @@ impl AdapterConfig {
         } else {
             Err(AdapterError::new(
                 AdapterErrorKind::Configuration,
-                format!("{} missing", key),
+                format!("{key} missing"),
             ))
         }
     }

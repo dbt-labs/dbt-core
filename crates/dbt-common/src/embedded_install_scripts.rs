@@ -20,7 +20,7 @@ use crate::FsResult;
 pub fn load_script(filename: &str) -> FsResult<String> {
     match assets::Asset::load_file(filename) {
         Some(content) => Ok(String::from_utf8(content.data.into_owned())
-            .unwrap_or_else(|_| panic!("{}:: corrupted asset: non UTF-8", filename))),
-        None => panic!("{}:: missing asset", filename),
+            .unwrap_or_else(|_| panic!("{filename}:: corrupted asset: non UTF-8"))),
+        None => panic!("{filename}:: missing asset"),
     }
 }

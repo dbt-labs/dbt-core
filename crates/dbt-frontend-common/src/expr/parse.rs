@@ -69,7 +69,7 @@ fn parse_atom<'src>(
             }
         }
         Token::Int(value) => value.parse::<i64>().map_or_else(
-            |e| Err(format!("Invalid integer: {}", e)),
+            |e| Err(format!("Invalid integer: {e}")),
             |n| Ok(Expr::Integer(n)),
         ),
         Token::Ident(ident) => {
@@ -98,7 +98,7 @@ fn parse_atom<'src>(
                         "min" => Function::Min,
                         "max" => Function::Max,
                         "if" => Function::If,
-                        other => return Err(format!("Unknown function: {}", other)),
+                        other => return Err(format!("Unknown function: {other}")),
                     },
                     args,
                 ))
@@ -140,7 +140,7 @@ fn unexpected<'a, V>(
         unexpected.borrow(),
         expected
             .iter()
-            .map(|t| format!("{:?}", t))
+            .map(|t| format!("{t:?}"))
             .collect::<Vec<_>>()
             .join(", ")
     ))

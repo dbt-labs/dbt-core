@@ -109,7 +109,7 @@ impl Object for RunConfig {
             }
             _ => Err(MinijinjaError::new(
                 MinijinjaErrorKind::UnknownMethod("RunConfig".to_string(), name.to_string()),
-                format!("Unknown method on parse: {}", name),
+                format!("Unknown method on parse: {name}"),
             )),
         }
     }

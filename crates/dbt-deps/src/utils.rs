@@ -52,8 +52,7 @@ pub fn handle_git_like_package(
     )?;
     if ["HEAD", "main", "master"].contains(&revision.as_str()) && warn_unpinned {
         println!(
-            "\nWARNING: The package {} is pinned to the default branch, which is not recommended. Consider pinning to a specific commit SHA instead.",
-            repo_url
+            "\nWARNING: The package {repo_url} is pinned to the default branch, which is not recommended. Consider pinning to a specific commit SHA instead."
         );
     }
     Ok((tmp_dir, checkout_path, commit_sha))

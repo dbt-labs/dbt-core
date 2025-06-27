@@ -142,7 +142,7 @@ impl ArgParser {
             return T::try_from(value).map_err(|e| {
                 MinijinjaError::new(
                     MinijinjaErrorKind::InvalidOperation,
-                    format!("Failed to convert argument '{}': {}", name, e),
+                    format!("Failed to convert argument '{name}': {e}"),
                 )
             });
         }
@@ -156,14 +156,14 @@ impl ArgParser {
             return T::try_from(value).map_err(|e| {
                 MinijinjaError::new(
                     MinijinjaErrorKind::InvalidOperation,
-                    format!("Failed to convert next positional argument: {}", e),
+                    format!("Failed to convert next positional argument: {e}"),
                 )
             });
         }
 
         Err(MinijinjaError::new(
             MinijinjaErrorKind::InvalidOperation,
-            format!("Required argument '{}' not provided", name),
+            format!("Required argument '{name}' not provided"),
         ))
     }
 
@@ -178,7 +178,7 @@ impl ArgParser {
             return T::try_from(value).map_err(|e| {
                 MinijinjaError::new(
                     MinijinjaErrorKind::InvalidOperation,
-                    format!("Failed to convert next positional argument: {}", e),
+                    format!("Failed to convert next positional argument: {e}"),
                 )
             });
         }
@@ -208,7 +208,7 @@ impl ArgParser {
             return T::try_from(value).map_err(|e| {
                 MinijinjaError::new(
                     MinijinjaErrorKind::InvalidOperation,
-                    format!("Failed to convert argument '{}': {}", name1, e),
+                    format!("Failed to convert argument '{name1}': {e}"),
                 )
             });
         }
@@ -218,7 +218,7 @@ impl ArgParser {
             return T::try_from(value).map_err(|e| {
                 MinijinjaError::new(
                     MinijinjaErrorKind::InvalidOperation,
-                    format!("Failed to convert argument '{}': {}", name2, e),
+                    format!("Failed to convert argument '{name2}': {e}"),
                 )
             });
         }
@@ -229,14 +229,14 @@ impl ArgParser {
             return T::try_from(value).map_err(|e| {
                 MinijinjaError::new(
                     MinijinjaErrorKind::InvalidOperation,
-                    format!("Failed to convert next positional argument: {}", e),
+                    format!("Failed to convert next positional argument: {e}"),
                 )
             });
         }
 
         Err(MinijinjaError::new(
             MinijinjaErrorKind::InvalidOperation,
-            format!("Required argument '{}' or '{}' not provided", name1, name2),
+            format!("Required argument '{name1}' or '{name2}' not provided"),
         ))
     }
 

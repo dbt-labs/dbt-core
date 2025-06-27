@@ -1225,7 +1225,7 @@ fn test_downcast_arg() {
     struct B;
 
     fn my_func(a: &A, b: Arc<B>) -> String {
-        format!("{:?}|{:?}", a, b)
+        format!("{a:?}|{b:?}")
     }
 
     impl Object for A {}

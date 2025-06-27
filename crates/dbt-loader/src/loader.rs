@@ -84,12 +84,12 @@ pub async fn load(
     let gitignore_path = arg.io.in_dir.join(".gitignore");
     if gitignore_path.exists() {
         let gitignore_content = fs::read_to_string(&gitignore_path)?;
-        if !gitignore_content.contains(format!("{}/", DBT_INTERNAL_PACKAGES_DIR_NAME).as_str()) {
+        if !gitignore_content.contains(format!("{DBT_INTERNAL_PACKAGES_DIR_NAME}/").as_str()) {
             let mut updated_content = gitignore_content;
             if !updated_content.ends_with('\n') {
                 updated_content.push('\n');
             }
-            updated_content.push_str(format!("{}/\n", DBT_INTERNAL_PACKAGES_DIR_NAME).as_str());
+            updated_content.push_str(format!("{DBT_INTERNAL_PACKAGES_DIR_NAME}/\n").as_str());
             fs::write(&gitignore_path, updated_content)?;
         }
     }

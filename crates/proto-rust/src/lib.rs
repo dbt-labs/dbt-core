@@ -20,12 +20,12 @@ mod tests {
                 .unwrap(),
         );
 
-        println!("file_descriptor = {:?}", file_descriptor);
+        println!("file_descriptor = {file_descriptor:?}");
 
         if let Some(file_descriptor) = file_descriptor {
             let extensions = file_descriptor.extensions();
             for extension in extensions {
-                println!("extension = {:?}", extension);
+                println!("extension = {extension:?}");
             }
         }
     }

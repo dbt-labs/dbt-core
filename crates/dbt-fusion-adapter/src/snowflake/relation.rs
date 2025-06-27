@@ -170,7 +170,7 @@ impl BaseRelation for SnowflakeRelation {
     }
 
     fn quoted(&self, s: &str) -> String {
-        format!("\"{}\"", s)
+        format!("\"{s}\"")
     }
 
     /// Returns the relation type
@@ -305,8 +305,7 @@ impl BaseRelation for SnowflakeRelation {
             .to_string();
 
         let iceberg_ddl_predicates = format!(
-            "\nexternal_volume = '{}'\ncatalog = 'snowflake'\nbase_location = '{}'\n",
-            external_volume, base_location
+            "\nexternal_volume = '{external_volume}'\ncatalog = 'snowflake'\nbase_location = '{base_location}'\n"
         );
 
         // Indent each line by 10 spaces

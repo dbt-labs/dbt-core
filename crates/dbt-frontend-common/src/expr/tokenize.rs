@@ -141,9 +141,7 @@ fn char_at(s: &str, offset: usize) -> char {
     );
     assert!(
         s.is_char_boundary(offset),
-        "Invalid character offset, not a string boundary: {} in '{}'",
-        offset,
-        s
+        "Invalid character offset, not a string boundary: {offset} in '{s}'"
     );
     s[offset..].chars().next().unwrap()
 }

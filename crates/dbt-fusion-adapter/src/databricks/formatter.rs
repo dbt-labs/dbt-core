@@ -6,7 +6,7 @@ impl SqlLiteralFormatter for DatabricksSqlLiteralFormatter {
     // https://docs.databricks.com/aws/en/sql/language-manual/data-types/string-type
     fn format_str(&self, l: &str) -> String {
         let escaped_str = l.replace("'", "\\'");
-        format!("'{}'", escaped_str)
+        format!("'{escaped_str}'")
     }
 }
 

@@ -85,7 +85,7 @@ fn timezone(args: &[Value]) -> Result<Value, Error> {
         Ok(tz) => Ok(Value::from_object(PytzTimezone::new(tz))),
         Err(_) => Err(Error::new(
             ErrorKind::InvalidArgument,
-            format!("Invalid timezone name: {}", tz_name),
+            format!("Invalid timezone name: {tz_name}"),
         )),
     }
 }
@@ -106,7 +106,7 @@ impl minijinja::value::Object for PytzTimezone {
             "localize" => Ok(Value::from("TODO: implement localize()")),
             _ => Err(Error::new(
                 ErrorKind::UnknownMethod("PytzTimeZone".to_string(), method.to_string()),
-                format!("Timezone object has no method named '{}'", method),
+                format!("Timezone object has no method named '{method}'"),
             )),
         }
     }

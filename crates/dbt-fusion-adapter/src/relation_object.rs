@@ -74,7 +74,7 @@ impl Object for RelationObject {
             "is_hive_metastore" => Ok(self.is_hive_metastore()),
             _ => Err(minijinja::Error::new(
                 minijinja::ErrorKind::InvalidOperation,
-                format!("Unknown method on BaseRelationObject: '{}'", name),
+                format!("Unknown method on BaseRelationObject: '{name}'"),
             )),
         }
     }
@@ -121,7 +121,7 @@ impl Object for RelationObject {
         Self: Sized + 'static,
     {
         let text = self.render_self().expect("could not render self");
-        write!(f, "{}", text)
+        write!(f, "{text}")
     }
 }
 
@@ -255,7 +255,7 @@ impl Object for StaticBaseRelationObject {
             "scd_args" => Ok(Value::from(self.scd_args(args))),
             _ => Err(minijinja::Error::new(
                 minijinja::ErrorKind::InvalidOperation,
-                format!("Unknown method on StaticBaseRelationObject: '{}'", name),
+                format!("Unknown method on StaticBaseRelationObject: '{name}'"),
             )),
         }
     }

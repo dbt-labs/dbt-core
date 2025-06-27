@@ -49,10 +49,9 @@ impl FromStr for RowLimit {
             Ok(-1) => Ok(RowLimit(None)),
             Ok(n) if n >= 0 => Ok(RowLimit(Some(n as u32))),
             Ok(n) => Err(format!(
-                "Row limit must be -1 (unlimited) or a non-negative number, got: {}",
-                n
+                "Row limit must be -1 (unlimited) or a non-negative number, got: {n}"
             )),
-            Err(_) => Err(format!("Invalid number: {}", s)),
+            Err(_) => Err(format!("Invalid number: {s}")),
         }
     }
 }

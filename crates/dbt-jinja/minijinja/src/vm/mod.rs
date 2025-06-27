@@ -760,7 +760,7 @@ impl<'env> Vm<'env> {
                 Instruction::CallFunction(name, arg_count) => {
                     let path_and_span_and_deltaline = if let Some((Some(path), Some(span))) =
                         template_registry
-                            .get(&Value::from(&format!("{}.{}", root_package_name, name)))
+                            .get(&Value::from(&format!("{root_package_name}.{name}")))
                             .map(|value| (value.get_attr_fast("path"), value.get_attr_fast("span")))
                     {
                         let path = deserialize_path(&path);
@@ -984,7 +984,7 @@ impl<'env> Vm<'env> {
                         let args = &args[1..];
                         // if not found, attempt to lookup the template and function using name stripped of test_
                         // see generate_test_macro in resolve_generic_tests.rs -> a subset of generated macro names are prefixed with test_
-                        let Ok(template) = self.env.get_template(&format!("{}.{}", ns_name, name))
+                        let Ok(template) = self.env.get_template(&format!("{ns_name}.{name}"))
                         else {
                             bail!(Error::new(
                                 ErrorKind::UnknownFunction,
@@ -994,7 +994,7 @@ impl<'env> Vm<'env> {
 
                         let path_and_span_and_deltaline = if let Some((Some(path), Some(span))) =
                             template_registry
-                                .get(&Value::from(&format!("{}.{}", ns_name, name)))
+                                .get(&Value::from(&format!("{ns_name}.{name}")))
                                 .map(|value| {
                                     (value.get_attr_fast("path"), value.get_attr_fast("span"))
                                 }) {
@@ -1486,7 +1486,7 @@ impl<'env> Vm<'env> {
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Option<Value>, Error> {
         if let Some((name, block_stack)) = state.blocks.get_key_value(name) {
-            let old_block = mem::replace(&mut state.current_block, Some(name));
+            let old_block = state.current_block.replace(name);
             let old_instructions =
                 mem::replace(&mut state.instructions, block_stack.instructions());
             state.ctx.push_frame(Frame::default())?;
@@ -1498,7 +1498,7 @@ impl<'env> Vm<'env> {
         } else {
             Err(Error::new(
                 ErrorKind::UnknownBlock,
-                format!("block '{}' not found", name),
+                format!("block '{name}' not found"),
             ))
         }
     }
@@ -1588,7 +1588,7 @@ impl<'env> Vm<'env> {
         } else {
             Err(Error::new(
                 ErrorKind::CannotUnpack,
-                format!("sequence of wrong length (expected {}, got {})", count, n,),
+                format!("sequence of wrong length (expected {count}, got {n})",),
             ))
         }
     }

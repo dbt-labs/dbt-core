@@ -80,7 +80,7 @@ pub async fn resolve_snapshots(
                 .expect("All snapshot macros should start with 'snapshot_'")
                 .to_string();
             let target_path =
-                PathBuf::from(DBT_SNAPSHOTS_DIR_NAME).join(format!("{}.sql", snapshot_name));
+                PathBuf::from(DBT_SNAPSHOTS_DIR_NAME).join(format!("{snapshot_name}.sql"));
             let snapshot_path = arg.io.out_dir.join(&target_path);
             stdfs::write(snapshot_path, macro_call)?;
             snapshot_files.push(DbtAsset {
@@ -108,15 +108,15 @@ pub async fn resolve_snapshots(
             if let Some(relation) = &snapshot.relation {
                 // check if the relation matches the pattern of ref(...)
                 let relation = if relation.starts_with("ref(") || relation.starts_with("source(") {
-                    format!("{{{{ {} }}}}", relation)
+                    format!("{{{{ {relation} }}}}")
                 } else {
                     relation.to_owned()
                 };
                 // Write SQL for relation to the `snapshots` directory
-                let sql = format!("select * from {}", relation);
+                let sql = format!("select * from {relation}");
 
                 let target_path =
-                    PathBuf::from(DBT_SNAPSHOTS_DIR_NAME).join(format!("{}.sql", snapshot_name));
+                    PathBuf::from(DBT_SNAPSHOTS_DIR_NAME).join(format!("{snapshot_name}.sql"));
                 let snapshot_path = arg.io.out_dir.join(&target_path);
                 stdfs::write(&snapshot_path, &sql)?;
                 let asset = DbtAsset {
@@ -193,7 +193,7 @@ pub async fn resolve_snapshots(
                 SnapshotProperties::empty(snapshot_name.to_owned())
             };
 
-            let unique_id = format!("snapshot.{}.{}", package_name, snapshot_name);
+            let unique_id = format!("snapshot.{package_name}.{snapshot_name}");
 
             final_config.enabled = Some(!(status == ModelStatus::Disabled));
 

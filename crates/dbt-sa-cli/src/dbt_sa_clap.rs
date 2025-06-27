@@ -410,8 +410,7 @@ impl InitArgs {
 pub fn check_target(filename: &str) -> Result<String, String> {
     let path = Path::new(filename);
     let err = Err(format!(
-        "Input file '{}' must have .sql, or .yml extension",
-        filename
+        "Input file '{filename}' must have .sql, or .yml extension"
     ));
     // TODO check that this test is universal for all inputs...
     if path.is_dir() {

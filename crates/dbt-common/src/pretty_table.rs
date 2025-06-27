@@ -182,7 +182,7 @@ pub fn pretty_data_table(
             // print title and subtitle
             out.push_str(&format!("{}\n", &title));
             if !subtitle.is_empty() {
-                out.push_str(&format!("{}\n", subtitle));
+                out.push_str(&format!("{subtitle}\n"));
             }
 
             // define table and table width
@@ -251,7 +251,7 @@ pub fn pretty_data_table(
                     total_width
                 ));
             } else if show_footer {
-                out.push_str(&format!("{} rows.", row_count));
+                out.push_str(&format!("{row_count} rows."));
             }
         }
     };

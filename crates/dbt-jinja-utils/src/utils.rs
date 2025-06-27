@@ -145,11 +145,11 @@ pub async fn inject_and_persist_ephemeral_models(
     if !sql.contains(DBT_CTE_PREFIX) {
         // Write the ephemeral model to the ephemeral directory
         if is_current_model_ephemeral {
-            let ephemeral_path = ephemeral_dir.join(format!("{}.sql", model_name));
+            let ephemeral_path = ephemeral_dir.join(format!("{model_name}.sql"));
             tokiofs::create_dir_all(ephemeral_path.parent().unwrap()).await?;
             tokiofs::write(
                 ephemeral_path,
-                format!("{}{} as (\n{}\n)", DBT_CTE_PREFIX, model_name, sql),
+                format!("{DBT_CTE_PREFIX}{model_name} as (\n{sql}\n)"),
             )
             .await?;
         }
@@ -194,9 +194,9 @@ pub async fn inject_and_persist_ephemeral_models(
     // Write all CTEs up to this point for this model for next use.
     // this avoid graph walk for ephemeral models
     if is_current_model_ephemeral {
-        let ephemeral_path = ephemeral_dir.join(format!("{}.sql", model_name));
+        let ephemeral_path = ephemeral_dir.join(format!("{model_name}.sql"));
         tokiofs::create_dir_all(ephemeral_path.parent().unwrap()).await?;
-        let cte_line = format!("{}{} as (\n{}\n)", DBT_CTE_PREFIX, model_name, final_sql);
+        let cte_line = format!("{DBT_CTE_PREFIX}{model_name} as (\n{final_sql}\n)");
         all_ctes.push(cte_line.clone());
         tokiofs::write(ephemeral_path, &all_ctes.join(sep)).await?;
         all_ctes.pop();
@@ -204,7 +204,7 @@ pub async fn inject_and_persist_ephemeral_models(
 
     // Wrap the current SQL in a subquery and prepend CTEs
     let ctes = all_ctes.join(", ");
-    final_sql = format!("with {}\n\nselect * from (\n{}\n)", ctes, final_sql);
+    final_sql = format!("with {ctes}\n\nselect * from (\n{final_sql}\n)");
     // Shift expanded macro spans down by number of added lines and added offet
     // for the "with ... select * from (" line, and the CTEs
     let added_lines = ctes.lines().count() + 2;
@@ -301,7 +301,7 @@ pub fn generate_component_name(
     custom_name: Option<String>,
     node: Option<&dyn InternalDbtNode>,
 ) -> FsResult<String> {
-    let macro_name = format!("generate_{}_name", component);
+    let macro_name = format!("generate_{component}_name");
     // find the macro template - this is now cached for performance
     let template_name =
         find_generate_macro_template(env, component, root_project_name, current_project_name)?;
@@ -352,7 +352,7 @@ pub fn find_generate_macro_template(
     root_project_name: &str,
     current_project_name: &str,
 ) -> FsResult<String> {
-    let macro_name = format!("generate_{}_name", component);
+    let macro_name = format!("generate_{component}_name");
     let cache_key = (current_project_name.to_string(), component.to_string());
 
     // Check cache first - return early if found
@@ -362,7 +362,7 @@ pub fn find_generate_macro_template(
         }
     }
     // First try - check the current project
-    let template_name = format!("{}.{}", current_project_name, macro_name);
+    let template_name = format!("{current_project_name}.{macro_name}");
     if env.has_template(&template_name) {
         // Cache and return
         if let Ok(mut cache) = TEMPLATE_CACHE.lock() {
@@ -372,7 +372,7 @@ pub fn find_generate_macro_template(
     }
 
     // Second try - check the root project
-    let template_name = format!("{}.{}", root_project_name, macro_name);
+    let template_name = format!("{root_project_name}.{macro_name}");
     if env.has_template(&template_name) {
         // Cache and return
         if let Ok(mut cache) = TEMPLATE_CACHE.lock() {
@@ -384,7 +384,7 @@ pub fn find_generate_macro_template(
     // Last attempt - check dbt internal package
     let dbt_and_adapters = env.get_dbt_and_adapters_namespace();
     if let Some(package) = dbt_and_adapters.get(&Value::from(macro_name.as_str())) {
-        let template_name = format!("{}.{}", package, macro_name);
+        let template_name = format!("{package}.{macro_name}");
         if env.has_template(&template_name) {
             // Cache and return
             if let Ok(mut cache) = TEMPLATE_CACHE.lock() {

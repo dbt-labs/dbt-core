@@ -1251,7 +1251,7 @@ mod builtins {
                     output.push_str(&indent_with);
                 }
             } else {
-                write!(output, "{}{}", indent_with, line).ok();
+                write!(output, "{indent_with}{line}").ok();
             }
             output.push('\n');
         }
@@ -1693,7 +1693,7 @@ mod builtins {
     /// This is useful for debugging as it better shows what's inside an object.
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     pub fn pprint(value: &Value) -> String {
-        format!("{:#?}", value)
+        format!("{value:#?}")
     }
 
     /// Formats a string using printf-style formatting.

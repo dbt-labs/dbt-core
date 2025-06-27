@@ -303,23 +303,23 @@ fn log_query(query_ctx: &QueryCtx) {
         Some(id) => id,
         None => "not available".to_string(),
     };
-    writeln!(&mut buf, "-- node_id: {}", node_id).unwrap();
+    writeln!(&mut buf, "-- node_id: {node_id}").unwrap();
 
     match query_ctx.desc() {
-        Some(desc) => writeln!(&mut buf, "-- desc: {}", desc).unwrap(),
+        Some(desc) => writeln!(&mut buf, "-- desc: {desc}").unwrap(),
         None => writeln!(&mut buf, "-- desc: not provided").unwrap(),
     }
 
     if let Some(sql) = query_ctx.sql() {
-        write!(&mut buf, "{}", sql).unwrap();
+        write!(&mut buf, "{sql}").unwrap();
         if !sql.ends_with(";") {
             write!(&mut buf, ";").unwrap();
         }
     }
 
     if node_id != "not available" {
-        log::debug!(target: EXECUTING, name = "SQLQuery", data:serde = json!({ "node_info": { "unique_id": node_id } }); "{}", buf);
+        log::debug!(target: EXECUTING, name = "SQLQuery", data:serde = json!({ "node_info": { "unique_id": node_id } }); "{buf}");
     } else {
-        log::debug!(target: EXECUTING, name = "SQLQuery"; "{}", buf);
+        log::debug!(target: EXECUTING, name = "SQLQuery"; "{buf}");
     }
 }

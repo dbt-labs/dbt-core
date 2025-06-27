@@ -190,7 +190,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
             path: PathBuf::from(""),
             original_file_path: PathBuf::from(""),
             patch_path: None,
-            unique_id: format!("{}.{}", package_name, model_name),
+            unique_id: format!("{package_name}.{model_name}"),
             fqn,
             description: None,
         },
@@ -258,7 +258,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
 
     context.insert(
         TARGET_UNIQUE_ID.to_string(),
-        MinijinjaValue::from(format!("{}.{}", package_name, model_name)),
+        MinijinjaValue::from(format!("{package_name}.{model_name}")),
     );
 
     // Result Store
@@ -575,13 +575,13 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
         let value = serde_json::to_value(result).map_err(|e| {
             MinijinjaError::new(
                 MinijinjaErrorKind::InvalidOperation,
-                format!("Failed to serialize config into json: {}", e),
+                format!("Failed to serialize config into json: {e}"),
             )
         })?;
         let config: T = serde_json::from_value(value).map_err(|e| {
             MinijinjaError::new(
                 MinijinjaErrorKind::InvalidOperation,
-                format!("Failed to parse node configuration: {}", e),
+                format!("Failed to parse node configuration: {e}"),
             )
         })?;
         self.sql_resources
@@ -626,7 +626,7 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
             }
             _ => Err(MinijinjaError::new(
                 MinijinjaErrorKind::UnknownMethod("ParseConfig".to_string(), name.to_string()),
-                format!("Unknown method on parse: {}", name),
+                format!("Unknown method on parse: {name}"),
             )),
         }
     }

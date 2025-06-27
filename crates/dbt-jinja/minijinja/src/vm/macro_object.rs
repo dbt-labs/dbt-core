@@ -159,7 +159,7 @@ pub fn parse_macro_arguments_with_spec(
         if parser.has_kwarg(name) && parser.positional_len() > 0 {
             return Err(Error::new(
                 ErrorKind::TooManyArguments,
-                format!("duplicate argument `{}`", name),
+                format!("duplicate argument `{name}`"),
             ));
         }
 
@@ -167,7 +167,7 @@ pub fn parse_macro_arguments_with_spec(
             if !used_params.insert(name) {
                 return Err(Error::new(
                     ErrorKind::TooManyArguments,
-                    format!("duplicate argument `{}`", name),
+                    format!("duplicate argument `{name}`"),
                 ));
             }
             arg_values.push(value);

@@ -301,7 +301,7 @@ fn parse_hook_item(item: &Value) -> Option<HookConfig> {
             Some(HookConfig { sql, transaction })
         }
         _ => {
-            eprintln!("Pre hook unknown type: {:?}", item);
+            eprintln!("Pre hook unknown type: {item:?}");
             None
         }
     }
@@ -377,7 +377,7 @@ impl Object for WriteConfig {
             Err(e) => {
                 return Err(Error::new(
                     ErrorKind::InvalidOperation,
-                    format!("Failed to write file: {}", e),
+                    format!("Failed to write file: {e}"),
                 ));
             }
         }
@@ -406,7 +406,7 @@ fn write_file(
     // Construct build path - simple implementation
     let build_path = target_path
         .join(DBT_RUN_DIR_NAME)
-        .join(format!("{}.sql", model_name));
+        .join(format!("{model_name}.sql"));
     let full_path = if build_path.is_absolute() {
         build_path
     } else {

@@ -494,7 +494,7 @@ pub fn show_deps<T: std::fmt::Display + Ord>(deps: &BTreeMap<T, BTreeSet<T>>) ->
             .map(|x| x.to_string())
             .collect::<Vec<_>>()
             .join(", ");
-        result.push_str(&format!("{} -> {}\n", k, v));
+        result.push_str(&format!("{k} -> {v}\n"));
     }
     result
 }
@@ -579,7 +579,7 @@ where
             return Some(lvl);
         }
         if stack.contains(node) {
-            eprintln!("Cycle detected at node: {:?}", node);
+            eprintln!("Cycle detected at node: {node:?}");
             cycle_nodes.insert(node.clone());
             return None;
         }

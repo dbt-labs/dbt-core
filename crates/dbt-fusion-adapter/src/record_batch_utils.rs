@@ -55,7 +55,7 @@ where
 {
     let res = record_batch
         .column_by_name(column_name)
-        .unwrap_or_else(|| panic!("expected column {} not found", column_name))
+        .unwrap_or_else(|| panic!("expected column {column_name} not found"))
         .as_any()
         .downcast_ref::<T>()
         .unwrap_or_else(|| panic!("expected column of type: {}", std::any::type_name::<T>()));

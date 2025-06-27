@@ -315,7 +315,7 @@ impl PyDateTimeClass {
         let naive = Self::parse_datetime_with_fallback(&date_str, &fmt_str).map_err(|e| {
             Error::new(
                 ErrorKind::InvalidArgument,
-                format!("strptime parsing error: {}", e),
+                format!("strptime parsing error: {e}"),
             )
         })?;
 
@@ -363,7 +363,7 @@ impl PyDateTimeClass {
 
         Err(Error::new(
             ErrorKind::InvalidArgument,
-            format!("fromisoformat parsing error: {}: {}", date_str, error),
+            format!("fromisoformat parsing error: {date_str}: {error}"),
         ))
     }
 
@@ -446,7 +446,7 @@ impl Object for PyDateTimeClass {
             }
             _ => Err(Error::new(
                 ErrorKind::UnknownMethod("PyDateTimeClass".to_string(), method.to_string()),
-                format!("datetime has no method named '{}'", method),
+                format!("datetime has no method named '{method}'"),
             )),
         }
     }
@@ -887,7 +887,7 @@ impl Object for PyDateTime {
 
             _ => Err(Error::new(
                 ErrorKind::UnknownMethod("PyDateTime".to_string(), method.to_string()),
-                format!("datetime has no method named '{}'", method),
+                format!("datetime has no method named '{method}'"),
             )),
         }
     }

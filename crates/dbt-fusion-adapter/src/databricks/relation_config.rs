@@ -39,7 +39,7 @@ impl Object for DatabricksRelationConfig {
             }
             _ => Err(MinijinjaError::new(
                 MinijinjaErrorKind::InvalidOperation,
-                format!("Method {} not found ", method),
+                format!("Method {method} not found "),
             )),
         }
     }

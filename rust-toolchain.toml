@@ -1,5 +1,5 @@
 [toolchain]
-channel = "1.86"
+channel = "1.88"
 targets = [
   "x86_64-unknown-linux-gnu",
   "x86_64-apple-darwin",
@@ -8,3 +8,4 @@ targets = [
   "arm-unknown-linux-gnueabihf",
   "aarch64-apple-darwin",
 ]
+components = ["rustfmt", "clippy"]

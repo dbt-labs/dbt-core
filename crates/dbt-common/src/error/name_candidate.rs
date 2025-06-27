@@ -109,9 +109,9 @@ pub fn format_candidates(
     };
 
     if let Some(truncated) = truncated {
-        format!("Available are {} ..(and {} more)", candidates, truncated)
+        format!("Available are {candidates} ..(and {truncated} more)")
     } else {
-        format!("Available are {}", candidates)
+        format!("Available are {candidates}")
     }
 }
 

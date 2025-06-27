@@ -63,7 +63,7 @@ impl PyDateClass {
         let naive = NaiveDate::from_num_days_from_ce_opt(ordinal as i32).ok_or_else(|| {
             Error::new(
                 ErrorKind::InvalidArgument,
-                format!("Invalid ordinal: {}", ordinal),
+                format!("Invalid ordinal: {ordinal}"),
             )
         })?;
 
@@ -115,7 +115,7 @@ impl PyDateClass {
         let naive_date = NaiveDate::parse_from_str(iso_str, "%Y-%m-%d").map_err(|e| {
             Error::new(
                 ErrorKind::InvalidArgument,
-                format!("Invalid ISO date format: {}: {}", iso_str, e),
+                format!("Invalid ISO date format: {iso_str}: {e}"),
             )
         })?;
 
@@ -150,7 +150,7 @@ impl Object for PyDateClass {
             "fromisoformat" => Self::fromisoformat(args).map(Value::from_object),
             _ => Err(Error::new(
                 ErrorKind::UnknownMethod("PyDateClass".to_string(), method.to_string()),
-                format!("date has no method named '{}'", method),
+                format!("date has no method named '{method}'"),
             )),
         }
     }
@@ -245,7 +245,7 @@ impl PyDate {
             Some(new_date) => Ok(PyDate::new(new_date)),
             None => Err(Error::new(
                 ErrorKind::InvalidArgument,
-                format!("Invalid date: year={}, month={}, day={}", year, month, day),
+                format!("Invalid date: year={year}, month={month}, day={day}"),
             )),
         }
     }
@@ -320,7 +320,7 @@ impl Object for PyDate {
 
             _ => Err(Error::new(
                 ErrorKind::UnknownMethod("PyDate".to_string(), method.to_string()),
-                format!("date has no method named '{}'", method),
+                format!("date has no method named '{method}'"),
             )),
         }
     }
@@ -501,7 +501,7 @@ mod tests {
     fn test_date_replace() {
         let date = PyDate::new(NaiveDate::from_ymd_opt(2023, 5, 15).unwrap());
         let date_arc = Arc::new(date);
-        println!("date_arc: {:?}", date_arc);
+        println!("date_arc: {date_arc:?}");
         // Test replacing year
         let result = date_arc.replace(args!(year => 2024)).unwrap();
         assert_eq!(result.date.year(), 2024);

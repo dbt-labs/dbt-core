@@ -22,6 +22,7 @@ use steps::{
     compute_package_lock, install_packages, load_dbt_packages, try_load_valid_dbt_packages_lock,
 };
 
+#[allow(clippy::cognitive_complexity)]
 /// Loads and installs packages, and returns the packages lock and the dependencies map
 pub async fn get_or_install_packages(
     io: &IoArgs,

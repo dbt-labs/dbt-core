@@ -35,23 +35,23 @@ impl<T: DefaultTo<T>> std::fmt::Display for SqlResource<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SqlResource::Source((a, b, location)) => {
-                write!(f, "Source({}, {}, {:?})", a, b, location)
+                write!(f, "Source({a}, {b}, {location:?})")
             }
             SqlResource::Ref((a, b, c, location)) => {
-                write!(f, "Ref({}, {:?}, {:?}, {:?})", a, b, c, location)
+                write!(f, "Ref({a}, {b:?}, {c:?}, {location:?})")
             }
             SqlResource::Metric((a, b)) => {
-                write!(f, "Metric({}, {:?})", a, b)
+                write!(f, "Metric({a}, {b:?})")
             }
-            SqlResource::Config(config) => write!(f, "Config({:?})", config),
-            SqlResource::Test(name, span) => write!(f, "Test({} {:#?})", name, span),
-            SqlResource::Macro(name, span) => write!(f, "Macro({} {:#?})", name, span),
-            SqlResource::Doc(name, span) => write!(f, "Docs({} {:#?})", name, span),
+            SqlResource::Config(config) => write!(f, "Config({config:?})"),
+            SqlResource::Test(name, span) => write!(f, "Test({name} {span:#?})"),
+            SqlResource::Macro(name, span) => write!(f, "Macro({name} {span:#?})"),
+            SqlResource::Doc(name, span) => write!(f, "Docs({name} {span:#?})"),
             SqlResource::Materialization(name, adapter, span) => {
-                write!(f, "Materialization({} {} {:#?})", name, adapter, span)
+                write!(f, "Materialization({name} {adapter} {span:#?})")
             }
             SqlResource::Snapshot(name, span) => {
-                write!(f, "Snapshot({} {:#?})", name, span)
+                write!(f, "Snapshot({name} {span:#?})")
             }
         }
     }

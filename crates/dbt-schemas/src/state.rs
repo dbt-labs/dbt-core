@@ -56,7 +56,7 @@ impl fmt::Display for ResourcePathKind {
             ResourcePathKind::ProjectPaths => "project paths",
             ResourcePathKind::ProfilePaths => "profile paths",
         };
-        write!(f, "{}", kind_str)
+        write!(f, "{kind_str}")
     }
 }
 
@@ -181,7 +181,7 @@ impl fmt::Display for DbtState {
 
             for (path_kind, paths) in sorted_paths {
                 if !paths.is_empty() {
-                    writeln!(f, "  {}:", path_kind)?;
+                    writeln!(f, "  {path_kind}:")?;
                     for (path, system_time) in paths {
                         let datetime: DateTime<Local> = DateTime::from(*system_time);
                         writeln!(
@@ -268,7 +268,7 @@ impl ResolverState {
         materialization: impl fmt::Display,
         adapter: &str,
     ) -> FsResult<String> {
-        let adapter_package = format!("dbt_{}", adapter);
+        let adapter_package = format!("dbt_{adapter}");
         for package in [&adapter_package, "dbt"] {
             for adapter in [adapter, "default"] {
                 if let Some(macro_) = self.macros.macros.values().find(|m| {

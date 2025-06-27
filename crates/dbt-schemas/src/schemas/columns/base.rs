@@ -57,7 +57,7 @@ pub trait StaticBaseColumn {
         let scale: Option<i64> = args.get("scale").ok();
 
         match (precision, scale) {
-            (Some(p), Some(s)) => Ok(Value::from(format!("{}({},{})", dtype, p, s))),
+            (Some(p), Some(s)) => Ok(Value::from(format!("{dtype}({p},{s})"))),
             _ => Ok(Value::from(dtype)),
         }
     }
@@ -207,7 +207,7 @@ pub trait BaseColumn: BaseColumnProperties + Any + Send + Sync {
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/column.py#L104-L105
     fn string_type(&self, size: u32) -> String {
-        format!("character varying({})", size)
+        format!("character varying({size})")
     }
 
     fn quoted(&self) -> Value {
@@ -322,7 +322,7 @@ impl BaseColumnProperties for StdColumn {
 
 /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/column.py#L104-L105
 pub fn string_type(size: u32) -> String {
-    format!("character varying({})", size)
+    format!("character varying({size})")
 }
 
 pub struct SnowflakeColumnTypeParsed {
@@ -371,8 +371,7 @@ pub fn parse_snowflake_raw_data_type(
         MinijinjaError::new(
             ErrorKind::InvalidArgument,
             format!(
-                "Could not interpret data_type \"{}\": could not convert \"{}\" to an integer",
-                raw_data_type, name
+                "Could not interpret data_type \"{raw_data_type}\": could not convert \"{name}\" to an integer"
             ),
         )
     };

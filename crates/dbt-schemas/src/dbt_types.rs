@@ -37,7 +37,7 @@ impl RelationType {
             "VIEW" => RelationType::View,
             "MATERIALIZED VIEW" => RelationType::MaterializedView,
             "EXTERNAL" => RelationType::External,
-            _ => panic!("unknown table type: {}", table_type),
+            _ => panic!("unknown table type: {table_type}"),
         }
     }
 }
@@ -56,7 +56,7 @@ impl fmt::Display for RelationType {
             RelationType::DynamicTable => "dynamic_table",
             RelationType::StreamingTable => "streaming_table",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -71,7 +71,7 @@ impl From<&str> for RelationType {
             "external" => RelationType::External,
             "dynamic_table" => RelationType::DynamicTable,
             "streaming_table" => RelationType::StreamingTable,
-            _ => panic!("Invalid relation type: {}", s),
+            _ => panic!("Invalid relation type: {s}"),
         }
     }
 }

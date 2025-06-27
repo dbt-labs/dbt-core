@@ -183,7 +183,7 @@ impl BigqueryPartitionConfig {
         };
 
         let column = if let Some(alias) = &alias {
-            format!("{}.{}", alias, column)
+            format!("{alias}.{column}")
         } else {
             column
         };
@@ -254,7 +254,7 @@ impl Object for BigqueryPartitionConfig {
             "render_wrapped" => self.render_wrapped(args),
             _ => Err(MinijinjaError::new(
                 MinijinjaErrorKind::InvalidOperation,
-                format!("Unknown method on PartitionConfig object: '{}'", name),
+                format!("Unknown method on PartitionConfig object: '{name}'"),
             )),
         }
     }

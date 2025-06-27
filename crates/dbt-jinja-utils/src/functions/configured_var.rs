@@ -54,10 +54,7 @@ impl Object for ConfiguredVar {
             } else {
                 return Err(Error::new(
                     ErrorKind::InvalidOperation,
-                    format!(
-                        "Missing default value for var in dbt_project.yml: {}",
-                        var_name
-                    ),
+                    format!("Missing default value for var in dbt_project.yml: {var_name}"),
                 ));
             }
         }
@@ -70,17 +67,13 @@ impl Object for ConfiguredVar {
             return Err(Error::new(
                     ErrorKind::InvalidOperation,
                     format!(
-                        "'TARGET_PACKAGE_NAME' should be set. Missing in configured var context while looking up var: {}",
-                        var_name
+                        "'TARGET_PACKAGE_NAME' should be set. Missing in configured var context while looking up var: {var_name}"
                     ),
                 ));
         };
         let vars_lookup = self.vars.get(&package_name).ok_or(Error::new(
             ErrorKind::InvalidOperation,
-            format!(
-                "Package vars should be initialized for package: {}",
-                package_name
-            ),
+            format!("Package vars should be initialized for package: {package_name}"),
         ))?;
         if let Some(var) = vars_lookup.get(&var_name) {
             Ok(Value::from_serialize(var))
@@ -92,8 +85,7 @@ impl Object for ConfiguredVar {
             Err(Error::new(
                 ErrorKind::InvalidOperation,
                 format!(
-                    "Missing context variable 'this'. Var should be initialized for package: {}",
-                    package_name
+                    "Missing context variable 'this'. Var should be initialized for package: {package_name}"
                 ),
             ))
         // if the var isn't found, if parse, return none, if compile, return error
@@ -137,17 +129,13 @@ impl Object for ConfiguredVar {
                 return Err(Error::new(
                         ErrorKind::InvalidOperation,
                         format!(
-                            "'TARGET_PACKAGE_NAME' should be set. Missing in configured var context while looking up var: {}",
-                            var_name
+                            "'TARGET_PACKAGE_NAME' should be set. Missing in configured var context while looking up var: {var_name}"
                         ),
                     ));
             };
             let vars_lookup = self.vars.get(&package_name).ok_or(Error::new(
                 ErrorKind::InvalidOperation,
-                format!(
-                    "Package vars should be initialized for package: {}",
-                    package_name
-                ),
+                format!("Package vars should be initialized for package: {package_name}"),
             ))?;
             if vars_lookup.contains_key(&var_name) {
                 Ok(Value::from(true))
@@ -157,7 +145,7 @@ impl Object for ConfiguredVar {
         } else {
             Err(Error::new(
                 ErrorKind::InvalidOperation,
-                format!("Method {} not found", method),
+                format!("Method {method} not found"),
             ))
         }
     }

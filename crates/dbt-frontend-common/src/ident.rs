@@ -62,13 +62,13 @@ impl std::fmt::Display for Qualified<'_> {
     /// specific [Dialect].
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Qualified::Bare { table } => write!(f, "{}", table),
-            Qualified::Partial { schema, table } => write!(f, "{}.{}", schema, table),
+            Qualified::Bare { table } => write!(f, "{table}"),
+            Qualified::Partial { schema, table } => write!(f, "{schema}.{table}"),
             Qualified::Full {
                 catalog,
                 schema,
                 table,
-            } => write!(f, "{}.{}.{}", catalog, schema, table),
+            } => write!(f, "{catalog}.{schema}.{table}"),
         }
     }
 }
@@ -76,13 +76,13 @@ impl std::fmt::Display for Qualified<'_> {
 impl std::fmt::Debug for Qualified<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Qualified::Bare { table } => write!(f, "{:?}", table),
-            Qualified::Partial { schema, table } => write!(f, "{:?}.{:?}", schema, table),
+            Qualified::Bare { table } => write!(f, "{table:?}"),
+            Qualified::Partial { schema, table } => write!(f, "{schema:?}.{table:?}"),
             Qualified::Full {
                 catalog,
                 schema,
                 table,
-            } => write!(f, "{:?}.{:?}.{:?}", catalog, schema, table),
+            } => write!(f, "{catalog:?}.{schema:?}.{table:?}"),
         }
     }
 }
@@ -556,7 +556,7 @@ impl FullyQualifiedName {
         let unhashed = strip_version_hash(table.as_ref(), &maybe_version, &hash);
         if let Some(version) = maybe_version {
             Self {
-                table: format!("{}_{}", unhashed, version).into(),
+                table: format!("{unhashed}_{version}").into(),
                 ..self.clone()
             }
         } else {

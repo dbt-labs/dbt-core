@@ -408,7 +408,7 @@ mod tests {
         }
         let schema = schema_for!(TestStruct);
         let schema_str = dbt_serde_yaml::to_string(&schema).unwrap();
-        println!("{}", schema_str);
+        println!("{schema_str}");
         assert_eq!(
             schema_str,
             indoc! {"

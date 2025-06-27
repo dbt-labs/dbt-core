@@ -278,7 +278,7 @@ mod builtins {
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     pub fn is_odd(v: Value) -> bool {
-        i128::try_from(v).ok().map_or(false, |x| x % 2 != 0)
+        i128::try_from(v).ok().is_some_and(|x| x % 2 != 0)
     }
 
     /// Checks if a value is even.
@@ -288,7 +288,7 @@ mod builtins {
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     pub fn is_even(v: Value) -> bool {
-        i128::try_from(v).ok().map_or(false, |x| x % 2 == 0)
+        i128::try_from(v).ok().is_some_and(|x| x % 2 == 0)
     }
 
     /// Return true if the value is divisible by another one.

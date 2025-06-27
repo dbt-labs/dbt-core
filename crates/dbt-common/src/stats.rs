@@ -34,7 +34,7 @@ impl fmt::Display for NodeStatus {
             NodeStatus::ReusedNoChanges | NodeStatus::ReusedStillFresh => "reused",
             NodeStatus::NoOp => "noop",
         };
-        write!(f, "{}", status_str)
+        write!(f, "{status_str}")
     }
 }
 

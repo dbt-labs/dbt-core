@@ -11,7 +11,7 @@ pub fn render_model_constraint(
     constraint: ModelConstraint,
 ) -> Option<String> {
     let constraint_prefix = if let Some(name) = constraint.name {
-        format!("constraint {} ", name)
+        format!("constraint {name} ")
     } else {
         String::new()
     };
@@ -20,23 +20,19 @@ pub fn render_model_constraint(
     let rendered = match constraint.type_ {
         ConstraintType::Check => constraint
             .expression
-            .map(|expr| format!("{}check ({})", constraint_prefix, expr)),
+            .map(|expr| format!("{constraint_prefix}check ({expr})")),
         ConstraintType::Unique => {
             let expr = constraint
                 .expression
-                .map_or(String::new(), |e| format!(" {}", e));
-            Some(format!(
-                "{}unique{} ({})",
-                constraint_prefix, expr, column_list
-            ))
+                .map_or(String::new(), |e| format!(" {e}"));
+            Some(format!("{constraint_prefix}unique{expr} ({column_list})"))
         }
         ConstraintType::PrimaryKey => {
             let expr = constraint
                 .expression
-                .map_or(String::new(), |e| format!(" {}", e));
+                .map_or(String::new(), |e| format!(" {e}"));
             Some(format!(
-                "{}primary key{} ({})",
-                constraint_prefix, expr, column_list
+                "{constraint_prefix}primary key{expr} ({column_list})"
             ))
         }
         ConstraintType::ForeignKey => {
@@ -50,16 +46,13 @@ pub fn render_model_constraint(
                 ))
             } else {
                 constraint.expression.map(|expr| {
-                    format!(
-                        "{}foreign key ({}) references {}",
-                        constraint_prefix, column_list, expr
-                    )
+                    format!("{constraint_prefix}foreign key ({column_list}) references {expr}")
                 })
             }
         }
         ConstraintType::Custom => constraint
             .expression
-            .map(|expr| format!("{}{}", constraint_prefix, expr)),
+            .map(|expr| format!("{constraint_prefix}{expr}")),
         ConstraintType::NotNull => None,
     };
 
@@ -68,7 +61,7 @@ pub fn render_model_constraint(
             && (constraint.type_ == ConstraintType::PrimaryKey
                 || constraint.type_ == ConstraintType::ForeignKey)
         {
-            Some(format!("{} not enforced", rendered))
+            Some(format!("{rendered} not enforced"))
         } else if adapter_type == AdapterType::Bigquery {
             None
         } else {
@@ -88,16 +81,16 @@ pub fn render_column_constraint(
 
     let rendered = match constraint.type_ {
         ConstraintType::Check if !constraint_expression.is_empty() => {
-            Some(format!("check ({})", constraint_expression))
+            Some(format!("check ({constraint_expression})"))
         }
-        ConstraintType::NotNull => Some(format!("not null {}", constraint_expression)),
-        ConstraintType::Unique => Some(format!("unique {}", constraint_expression)),
-        ConstraintType::PrimaryKey => Some(format!("primary key {}", constraint_expression)),
+        ConstraintType::NotNull => Some(format!("not null {constraint_expression}")),
+        ConstraintType::Unique => Some(format!("unique {constraint_expression}")),
+        ConstraintType::PrimaryKey => Some(format!("primary key {constraint_expression}")),
         ConstraintType::ForeignKey => {
             if let (Some(to), Some(to_columns)) = (constraint.to, constraint.to_columns) {
                 Some(format!("references {} ({})", to, to_columns.join(", ")))
             } else if !constraint_expression.is_empty() {
-                Some(format!("references {}", constraint_expression))
+                Some(format!("references {constraint_expression}"))
             } else {
                 None
             }
@@ -111,7 +104,7 @@ pub fn render_column_constraint(
             && (constraint.type_ == ConstraintType::PrimaryKey
                 || constraint.type_ == ConstraintType::ForeignKey)
         {
-            Some(format!("{} not enforced", r))
+            Some(format!("{r} not enforced"))
         } else if adapter_type == AdapterType::Bigquery {
             None
         } else {

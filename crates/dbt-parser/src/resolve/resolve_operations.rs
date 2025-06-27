@@ -51,8 +51,8 @@ fn new_operation(
         .iter()
         .enumerate()
         .map(|(index, operation_sql)| {
-            let name = format!("{}-{}-{}", project_name, operation_type, index);
-            let unique_id = format!("operation.{}.{}", project_name, name);
+            let name = format!("{project_name}-{operation_type}-{index}");
+            let unique_id = format!("operation.{project_name}.{name}");
             DbtOperation {
                 common_attr: CommonAttributes {
                     database: database.to_string(),

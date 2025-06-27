@@ -129,7 +129,7 @@ impl RefsAndSourcesTracker for RefsAndSources {
             // Lookup by package and ref name
             let package_ref_entry = self
                 .refs
-                .entry(format!("{}.{}", package_name, model_name))
+                .entry(format!("{package_name}.{model_name}"))
                 .or_default();
             if override_existing {
                 if let Some(existing) = package_ref_entry
@@ -147,7 +147,7 @@ impl RefsAndSourcesTracker for RefsAndSources {
 
         // All other entries are versioned, if one exists
         if let Some(version) = maybe_version {
-            let model_name_with_version = format!("{}.v{}", model_name, version);
+            let model_name_with_version = format!("{model_name}.v{version}");
 
             // Lookup by ref name (optional version)
             let versioned_ref_entry = self
@@ -169,7 +169,7 @@ impl RefsAndSourcesTracker for RefsAndSources {
 
             let package_versioned_ref_entry = self
                 .refs
-                .entry(format!("{}.{}", package_name, model_name_with_version))
+                .entry(format!("{package_name}.{model_name_with_version}"))
                 .or_default();
             if override_existing {
                 if let Some(existing) = package_versioned_ref_entry
@@ -254,7 +254,7 @@ impl RefsAndSourcesTracker for RefsAndSources {
             name,
             version
                 .as_ref()
-                .map(|v| format!(".v{}", v))
+                .map(|v| format!(".v{v}"))
                 .unwrap_or_default()
         );
         let mut enabled_ref: Option<(String, MinijinjaValue, ModelStatus)> = None;
@@ -290,7 +290,7 @@ impl RefsAndSourcesTracker for RefsAndSources {
                             "Found ambiguous ref('{}') pointing to multiple nodes: [{}]",
                             ref_name,
                             res.iter()
-                                .map(|(r, _, _)| format!("'{}'", r))
+                                .map(|(r, _, _)| format!("'{r}'"))
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         );
@@ -330,8 +330,8 @@ impl RefsAndSourcesTracker for RefsAndSources {
         table_name: &str,
     ) -> FsResult<(String, MinijinjaValue, ModelStatus)> {
         // This might not be correct if there is overlap in source names amongst projects
-        let source_table_name = format!("{}.{}", source_name, table_name);
-        let project_source_name = format!("{}.{}", package_name, source_table_name);
+        let source_table_name = format!("{source_name}.{table_name}");
+        let project_source_name = format!("{package_name}.{source_table_name}");
         if let Some(res) = self.sources.get(&project_source_name) {
             if res.len() != 1 {
                 return unexpected_err!("There should only be one entry for {project_source_name}");
@@ -365,7 +365,7 @@ impl RefsAndSourcesTracker for RefsAndSources {
                     "Found ambiguous source('{}') pointing to multiple nodes: [{}]",
                     source_table_name,
                     res.iter()
-                        .map(|(r, _, _)| format!("'{}'", r))
+                        .map(|(r, _, _)| format!("'{r}'"))
                         .collect::<Vec<_>>()
                         .join(", ")
                 )

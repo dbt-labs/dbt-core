@@ -131,7 +131,7 @@ mod tests {
             let result = translated
                 .as_str()
                 .expect("Failed to convert type to string");
-            assert_eq!(result, expected, "Failed to translate type: {}", input);
+            assert_eq!(result, expected, "Failed to translate type: {input}");
         }
     }
 }

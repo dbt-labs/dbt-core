@@ -88,8 +88,7 @@ pub async fn download_manifest_from_cloud(
 
     // Construct API URL to get presigned link
     let url = format!(
-        "https://{}/api/private/accounts/{}/projects/{}/manifest/latest/",
-        account_host, account_id, project_id
+        "https://{account_host}/api/private/accounts/{account_id}/projects/{project_id}/manifest/latest/"
     );
 
     // Log download attempt
@@ -103,7 +102,7 @@ pub async fn download_manifest_from_cloud(
     let response = client
         .get(&url)
         .header("Content-Type", "application/json")
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Authorization", format!("Bearer {token}"))
         .send()
         .await
         .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to execute HTTP request: {}", e))?;

@@ -118,7 +118,7 @@ pub fn slice(value: Value, start: Value, stop: Value, step: Value) -> Result<Val
     let kind = value.kind();
     let error = Err(Error::new(
         ErrorKind::InvalidOperation,
-        format!("value of type {} cannot be sliced", kind),
+        format!("value of type {kind} cannot be sliced"),
     ));
 
     match value.0 {
@@ -219,7 +219,7 @@ pub fn format_string(fmt: &str, args: &[Value]) -> Result<Value, Error> {
     vsprintf(fmt, &printfs).map(Value::from).map_err(|e| {
         Error::new(
             ErrorKind::InvalidOperation,
-            format!("Failed to format string: {}", e),
+            format!("Failed to format string: {e}"),
         )
     })
 }
@@ -464,7 +464,7 @@ pub fn rem(lhs: &Value, rhs: &Value) -> Result<Value, Error> {
                     .map_err(|e| {
                         Error::new(
                             ErrorKind::InvalidOperation,
-                            format!("Expected sequence: {}", e),
+                            format!("Expected sequence: {e}"),
                         )
                     })?
                     .collect::<Vec<_>>();

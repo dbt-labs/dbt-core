@@ -62,8 +62,7 @@ pub fn populate_constraint_map(
             (_, Value::Int(value)) => {
                 let value: u8 = value.try_into().map_err(|_err| {
                     format!(
-                        "Processing of [{}] => [{}] produced result out of range: {:?}",
-                        key, expression, value
+                        "Processing of [{key}] => [{expression}] produced result out of range: {value:?}"
                     )
                 })?;
                 bindings.insert(key, value);

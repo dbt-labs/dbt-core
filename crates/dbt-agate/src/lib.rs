@@ -84,7 +84,7 @@ impl fmt::Display for Tuple {
         write!(f, "(")?;
         for i in 0..self.len() {
             let value = self.get(i as isize).unwrap();
-            write!(f, "{}, ", value)?;
+            write!(f, "{value}, ")?;
         }
         write!(f, ")")
     }
@@ -298,7 +298,7 @@ impl fmt::Display for OrderedDict {
         for i in 0..len {
             let key = self.keys.get(i as isize).unwrap();
             let value = self.values.get(i as isize).unwrap();
-            write!(f, "{}: {}", key, value)?;
+            write!(f, "{key}: {value}")?;
             if i < len - 1 {
                 write!(f, ", ")?;
             }
@@ -471,7 +471,7 @@ pub trait MappedSequence {
         write!(f, "<agate.{}: (", self.type_name())?;
         for i in 0..len.min(5) {
             if let Some(value) = values.get(i as isize) {
-                write!(f, "{}", value)?;
+                write!(f, "{value}")?;
                 if i < len - 1 {
                     write!(f, ", ")?;
                 }

@@ -169,7 +169,7 @@ impl std::fmt::Display for CodeLocation {
             write!(f, "{}:{}:{}", relative_path.display(), self.line, self.col)?;
         }
         if let Some(expanded) = &self.expanded {
-            write!(f, " ({})", expanded)?;
+            write!(f, " ({expanded})")?;
         }
         Ok(())
     }

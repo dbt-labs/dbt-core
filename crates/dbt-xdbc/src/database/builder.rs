@@ -153,7 +153,7 @@ impl fmt::Debug for Builder {
                     }
                 }
                 let safe_uri = Url::parse(&s);
-                debug_assert!(safe_uri.is_ok(), "failed to parse safe URI: {}", s);
+                debug_assert!(safe_uri.is_ok(), "failed to parse safe URI: {s}");
                 safe_uri.unwrap_or(uri)
             }),
         )
@@ -204,7 +204,7 @@ impl Builder {
         let get_field = |key: &str| {
             map["connections"][key].clone().ok_or_else(|| {
                 Error::with_message_and_status(
-                    format!("missing connections.{} in .snowsql/config", key),
+                    format!("missing connections.{key} in .snowsql/config"),
                     Status::Internal,
                 )
             })
