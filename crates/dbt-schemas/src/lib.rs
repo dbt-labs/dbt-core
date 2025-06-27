@@ -84,13 +84,11 @@ pub mod schemas {
             pub mod unit_test_config;
         }
 
+        pub use configs::common::{BigQueryNodeConfig, DatabricksNodeConfig, SnowflakeNodeConfig};
         pub use configs::data_test_config::{DataTestConfig, ProjectDataTestConfig};
         pub use configs::exposure_config::{ExposureConfig, ProjectExposureConfig};
         pub use configs::metric_config::{MetricConfig, ProjectMetricConfigs};
-        pub use configs::model_config::{
-            BigQueryModelConfig, DatabricksModelConfig, ModelConfig, ProjectModelConfig,
-            SnowflakeModelConfig,
-        };
+        pub use configs::model_config::{ModelConfig, ProjectModelConfig};
         pub use configs::saved_queries_config::{
             ExportConfigExportAs, SavedQueriesConfig, SavedQueriesConfigCache,
         };
