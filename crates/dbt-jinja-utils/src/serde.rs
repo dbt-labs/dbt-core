@@ -71,7 +71,7 @@ use std::{
 };
 
 use dbt_common::{
-    fs_err, io_args::IoArgs, io_utils::try_read_yml_to_str, show_warning,
+    fs_err, io_args::IoArgs, io_utils::try_read_yml_to_str, show_error,
     show_warning_soon_to_be_error, CodeLocation, ErrorCode, FsError, FsResult,
 };
 use dbt_serde_yaml::Value;
@@ -155,19 +155,22 @@ fn value_from_str(
     let mut value = Value::from_str(&input, |path, key, existing_key| {
         let key_repr = dbt_serde_yaml::to_string(&key).unwrap_or_else(|_| "<opaque>".to_string());
         if let Some(io_args) = io_args {
-            show_warning!(
-                io_args,
-                fs_err!(
-                    code => ErrorCode::DuplicateConfigKey,
-                    loc => key.span(),
-                    "Duplicate key `{}`. This key overwrites a previous definition of the same key \
-                     at line {} column {}. YAML path: `{}`.",
-                    key_repr.trim(),
-                    existing_key.span().start.line,
-                    existing_key.span().start.column,
-                    path
-                )
+            let duplicate_key_error = fs_err!(
+                code => ErrorCode::DuplicateConfigKey,
+                loc => key.span(),
+                "Duplicate key `{}`. This key overwrites a previous definition of the same key \
+                 at line {} column {}. YAML path: `{}`.",
+                key_repr.trim(),
+                existing_key.span().start.line,
+                existing_key.span().start.column,
+                path
             );
+
+            if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+                show_error!(io_args, duplicate_key_error);
+            } else {
+                show_warning_soon_to_be_error!(io_args, duplicate_key_error);
+            }
         }
         // last key wins:
         dbt_serde_yaml::mapping::DuplicateKey::Overwrite
@@ -199,7 +202,11 @@ where
 
     if let Some(io_args) = io_args {
         for error in errors {
-            show_warning_soon_to_be_error!(io_args, error);
+            if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+                show_error!(io_args, error);
+            } else {
+                show_warning_soon_to_be_error!(io_args, error);
+            }
         }
     }
 
@@ -243,7 +250,11 @@ where
 
     if let Some(io_args) = io_args {
         for error in errors {
-            show_warning_soon_to_be_error!(io_args, error);
+            if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+                show_error!(io_args, error);
+            } else {
+                show_warning_soon_to_be_error!(io_args, error);
+            }
         }
     }
 

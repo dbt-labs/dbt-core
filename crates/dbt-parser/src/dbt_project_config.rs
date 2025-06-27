@@ -7,7 +7,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use dbt_common::{fs_err, io_args::IoArgs, show_warning, ErrorCode, FsResult};
+use dbt_common::{
+    fs_err, io_args::IoArgs, show_error, show_warning_soon_to_be_error, ErrorCode, FsResult,
+};
 use dbt_schemas::schemas::project::{
     DataTestConfig, DefaultTo, IterChildren, ModelConfig, SeedConfig, SnapshotConfig, SourceConfig,
     UnitTestConfig,
@@ -114,14 +116,16 @@ pub fn recur_build_dbt_project_config<T: DefaultTo<T>, S: Into<T> + IterChildren
         let child_config_variant = match maybe_child_config_variant {
             ShouldBe::AndIs(config) => config,
             ShouldBe::ButIsnt { raw, .. } => {
-                show_warning!(
-                    io,
-                    fs_err!(
-                        code => ErrorCode::UnusedConfigKey,
-                        loc => raw.as_ref().map(|r| r.span()).unwrap_or_default(),
-                        "Ignored unexpected key `{:?}`. YAML path: `{}`.", key.trim(), key_path
-                    )
+                let err = fs_err!(
+                    code => ErrorCode::UnusedConfigKey,
+                    loc => raw.as_ref().map(|r| r.span()).unwrap_or_default(),
+                    "Ignored unexpected key `{:?}`. YAML path: `{}`.", key.trim(), key_path
                 );
+                if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+                    show_error!(io, err);
+                } else {
+                    show_warning_soon_to_be_error!(io, err);
+                }
                 continue;
             }
         };

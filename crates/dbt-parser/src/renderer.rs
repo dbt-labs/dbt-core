@@ -82,7 +82,11 @@ fn extract_model_and_version_config<T: DefaultTo<T>, S: GetConfig<T>>(
     for error in errors {
         let context = format!("While parsing config: {}", error.context);
         let error = error.with_context(context);
-        show_warning_soon_to_be_error!(arg.io, error);
+        if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+            show_error!(arg.io, error);
+        } else {
+            show_warning_soon_to_be_error!(arg.io, error);
+        }
     }
     let maybe_version_config = if let Some(version_info) = mpe.version_info.as_ref() {
         if let Some(version_config) = version_info.version_config.as_ref() {
@@ -97,7 +101,11 @@ fn extract_model_and_version_config<T: DefaultTo<T>, S: GetConfig<T>>(
             for error in errors {
                 let context = format!("While parsing version config: {}", error.context);
                 let error = error.with_context(context);
-                show_warning_soon_to_be_error!(arg.io, error);
+                if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+                    show_error!(arg.io, error);
+                } else {
+                    show_warning_soon_to_be_error!(arg.io, error);
+                }
             }
 
             Some(version_config)

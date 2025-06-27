@@ -1,8 +1,10 @@
 use crate::args::ResolveArgs;
-use dbt_common::fs_err;
 use dbt_common::io_args::IoArgs;
 use dbt_common::show_warning_soon_to_be_error;
-use dbt_common::{constants::PARSING, fsinfo, show_progress, show_warning, ErrorCode, FsResult};
+use dbt_common::{
+    constants::PARSING, fs_err, fsinfo, show_error, show_progress, show_warning, ErrorCode,
+    FsResult,
+};
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::serde::{into_typed_raw, into_typed_with_jinja, value_from_file};
 use dbt_schemas::schemas::properties::{
@@ -357,7 +359,11 @@ pub fn resolve_minimal_properties(
                 )?;
             }
             Err(e) => {
-                show_warning_soon_to_be_error!(arg.io, e);
+                if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+                    show_error!(arg.io, e);
+                } else {
+                    show_warning_soon_to_be_error!(arg.io, e);
+                }
                 continue; // processing other files
             }
         }
