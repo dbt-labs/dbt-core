@@ -399,13 +399,10 @@ pub async fn render_unresolved_sql_files<T: DefaultTo<T> + 'static, S: GetConfig
         )
         .await;
     }
-    // this code is io bound. So split the work between min(4, max_cpus) threads
     let max_concurrency = arg
         .num_threads
-        .unwrap_or(4)
-        .min(16)
-        .min(model_sql_files.len())
-        .max(1);
+        .filter(|&n| n != 0)
+        .unwrap_or_else(|| std::cmp::max(1, num_cpus::get()));
 
     let chunk_size = model_sql_files.len().div_ceil(max_concurrency);
     // Partition the workload and node_properties into chunks
@@ -718,10 +715,8 @@ pub async fn collect_adapter_identifiers_detect_unsafe(
 
     let max_concurrency = arg
         .num_threads
-        .unwrap_or(4)
-        .min(16)
-        .min(model_vec.len())
-        .max(1);
+        .filter(|&n| n != 0)
+        .unwrap_or_else(|| std::cmp::max(1, num_cpus::get()));
     let chunk_size = model_vec.len().div_ceil(max_concurrency);
 
     let parse_adapter = jinja_env

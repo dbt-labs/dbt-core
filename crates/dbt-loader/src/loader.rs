@@ -119,7 +119,15 @@ pub async fn load(
         .set_threads(Some(StringOrInteger::Integer(
             final_threads.unwrap_or(0) as i64
         )));
-    let iarg = iarg.set_num_threads(final_threads);
+
+    let iarg = InvocationArgs {
+        num_threads: final_threads,
+        ..iarg.clone()
+    };
+    let arg = LoadArgs {
+        threads: final_threads,
+        ..arg.clone()
+    };
 
     let mut dbt_state = DbtState {
         dbt_profile,
@@ -179,7 +187,7 @@ pub async fn load(
         let _pb = with_progress!( arg.io, spinner => LOADING, item => "packages" );
 
         let packages = load_packages(
-            arg,
+            &arg,
             &mut env,
             &mut collected_vars,
             &lookup_map,
@@ -193,7 +201,7 @@ pub async fn load(
         let _pb = with_progress!( arg.io, spinner => LOADING, item => "internal packages" );
 
         let packages = load_internal_packages(
-            arg,
+            &arg,
             &mut env,
             &mut collected_vars,
             &internal_packages_install_path,

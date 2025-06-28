@@ -168,7 +168,7 @@ pub struct ManArgs {
 pub struct CommonArgs {
     /// The target to execute
     //  has no ENV_VAR euivalent
-    #[arg(global = true, long)]
+    #[arg(global = true, long, short = 't')]
     pub target: Option<String>,
 
     /// The directory to load the dbt project from
@@ -218,9 +218,9 @@ pub struct CommonArgs {
     #[arg(global = true, long, env = "DBT_QUIET", short = 'q')]
     pub quiet: bool,
 
-    /// The number of threads to use [Run with --threads 0 to use max_cpu [default: 1]]
-    // has no ENV_VAR
-    #[arg(global = true, long, short = 't')]
+    /// The number of threads to use [Run with --threads 0 to use max_cpu [default: max_cpu]]
+    // has no ENV_VAR, but can be set in profiles.yml
+    #[arg(global = true, long)]
     pub threads: Option<usize>,
 
     /// Overrides threads.

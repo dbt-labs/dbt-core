@@ -2226,8 +2226,8 @@ pub struct CommonArgs {
     pub quiet: bool,
 
     /// The number of threads to use [Run with --threads 0 to use max_cpu [default: 1]]
-    // has no ENV_VAR
-    #[arg(global = true, long, short = 't')]
+    // has no ENV_VAR, but can be set in profiles.yml
+    #[arg(global = true, long)]
     pub threads: Option<usize>,
 
     /// Overrides threads.
