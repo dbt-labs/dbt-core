@@ -4,6 +4,7 @@ use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::phases::load::init::initialize_load_jinja_environment;
+use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
 use dbt_jinja_utils::serde::from_yaml_error;
 use dbt_schemas::schemas::serde::StringOrInteger;
 use fs_deps::get_or_install_packages;
@@ -31,11 +32,15 @@ use dbt_schemas::state::{DbtAsset, DbtPackage, DbtState, DbtVars, ResourcePathKi
 use crate::args::LoadArgs;
 use crate::dbt_project_yml_loader::load_project_yml;
 use crate::download_publication::download_publication_artifacts;
-use crate::utils::{collect_file_info, identify_package_dependencies, load_raw_yml};
+use crate::utils::{collect_file_info, identify_package_dependencies};
 use crate::{
     load_internal_packages, load_packages, load_profiles, load_vars, persist_internal_packages,
 };
+
 use dbt_common::fsinfo;
+use dbt_jinja_utils::phases::load::secret_renderer::secret_context_env_var_fn;
+use dbt_jinja_utils::serde::{into_typed_with_jinja, value_from_file};
+use dbt_jinja_utils::var_fn;
 
 pub async fn load(
     arg: &LoadArgs,
@@ -45,20 +50,36 @@ pub async fn load(
 
     // Read the input file
     let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);
-    let raw_dbt_project: DbtProjectSimplified = load_raw_yml(&dbt_project_path)?;
-    if raw_dbt_project.data_paths.is_some() {
+
+    let raw_dbt_project_in_val = value_from_file(None, &dbt_project_path)?;
+    let env = initialize_load_profile_jinja_environment(iarg)?;
+    let ctx: BTreeMap<String, minijinja::Value> = BTreeMap::from([
+        (
+            "env_var".to_owned(),
+            minijinja::Value::from_function(secret_context_env_var_fn()),
+        ),
+        (
+            "var".to_owned(),
+            minijinja::Value::from_function(var_fn(arg.vars.clone())),
+        ),
+    ]);
+
+    let simplified_dbt_project: DbtProjectSimplified =
+        into_typed_with_jinja(None, raw_dbt_project_in_val, true, &env, &ctx, &[])?;
+
+    if simplified_dbt_project.data_paths.is_some() {
         return err!(
             ErrorCode::InvalidConfig,
             "'data-paths' cannot be specified in dbt_project.yml",
         );
     }
-    if raw_dbt_project.source_paths.is_some() {
+    if simplified_dbt_project.source_paths.is_some() {
         return err!(
             ErrorCode::InvalidConfig,
             "'source-paths' cannot be specified in dbt_project.yml",
         );
     }
-    if raw_dbt_project
+    if simplified_dbt_project
         .log_path
         .as_ref()
         .is_some_and(|path| path != "logs")
@@ -68,7 +89,7 @@ pub async fn load(
             "'log-path' cannot be specified in dbt_project.yml",
         );
     }
-    if raw_dbt_project
+    if simplified_dbt_project
         .target_path
         .as_ref()
         .is_some_and(|path| path != "target")
@@ -79,7 +100,7 @@ pub async fn load(
         );
     }
 
-    let mut dbt_profile = load_profiles(arg, iarg, &raw_dbt_project)?;
+    let mut dbt_profile = load_profiles(arg, &simplified_dbt_project, &env, &ctx)?;
     // Check if .gitignore exists and add dbt_internal_packages/ if not present
     let gitignore_path = arg.io.in_dir.join(".gitignore");
     if gitignore_path.exists() {
@@ -139,7 +160,7 @@ pub async fn load(
 
     // If we are running `dbt debug` we don't need to collect dbt_project.yml files
     if arg.debug_profile {
-        return Ok((dbt_state, final_threads, raw_dbt_project.dbt_cloud));
+        return Ok((dbt_state, final_threads, simplified_dbt_project.dbt_cloud));
     }
 
     // Load the packages.yml file, if it exists and install the packages if arg.install_deps is true
@@ -147,7 +168,7 @@ pub async fn load(
         &arg.io.in_dir,
         &arg.packages_install_path,
         &arg.internal_packages_install_path,
-        &raw_dbt_project,
+        &simplified_dbt_project,
     );
 
     persist_internal_packages(
@@ -175,10 +196,15 @@ pub async fn load(
     )
     .await?;
     // get publication artifact for each upstream project
-    download_publication_artifacts(&upstream_projects, &raw_dbt_project.dbt_cloud, &arg.io).await?;
+    download_publication_artifacts(
+        &upstream_projects,
+        &simplified_dbt_project.dbt_cloud,
+        &arg.io,
+    )
+    .await?;
     // If we are running `dbt deps` we don't need to collect files
     if arg.install_deps {
-        return Ok((dbt_state, final_threads, raw_dbt_project.dbt_cloud));
+        return Ok((dbt_state, final_threads, simplified_dbt_project.dbt_cloud));
     }
 
     let lookup_map = packages_lock.lookup_map();
@@ -210,7 +236,7 @@ pub async fn load(
         dbt_state.packages.extend(packages);
         dbt_state.vars = collected_vars.into_iter().collect();
     }
-    Ok((dbt_state, final_threads, raw_dbt_project.dbt_cloud))
+    Ok((dbt_state, final_threads, simplified_dbt_project.dbt_cloud))
 }
 
 pub async fn load_inner(

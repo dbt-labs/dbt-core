@@ -19,7 +19,7 @@ use dbt_schemas::schemas::{
     profiles::{DbConfig, DbTargets, DbtProfilesIntermediate},
 };
 use fs_deps::utils::get_local_package_full_path;
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Serialize};
 use std::{fs::metadata, io, time::SystemTime};
 
 use walkdir::WalkDir;
@@ -107,10 +107,11 @@ pub fn get_db_config(
     Ok(db_config)
 }
 
-pub fn read_profiles_and_extract_db_config(
+pub fn read_profiles_and_extract_db_config<S: Serialize>(
     io_args: &IoArgs,
     dbt_target_override: &Option<String>,
     jinja_env: &JinjaEnvironment<'static>,
+    ctx: &S,
     profile_str: &str,
     profile_path: PathBuf,
 ) -> Result<(String, DbConfig), Box<dbt_common::FsError>> {
@@ -133,7 +134,7 @@ pub fn read_profiles_and_extract_db_config(
         profile_val.clone(),
         true,
         jinja_env,
-        &(),
+        &ctx,
         &[],
     )?;
     let target = match dbt_target_override {

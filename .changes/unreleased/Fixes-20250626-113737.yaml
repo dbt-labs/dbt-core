@@ -1,0 +1,3 @@
+kind: Fixes
+body: Fixes a bug that prevented rendering of jinja in the profile value in the dbt_project.yml file.
+time: 2025-06-26T11:37:37.935183942-07:00

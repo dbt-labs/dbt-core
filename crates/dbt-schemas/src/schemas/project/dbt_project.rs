@@ -32,6 +32,16 @@ use super::ProjectUnitTestConfig;
 pub struct ProjectDbtCloudConfig {
     #[serde(rename = "project-id")]
     pub project_id: Option<StringOrInteger>,
+    pub account_id: Option<StringOrInteger>,
+    #[serde(rename = "job-id")]
+    pub job_id: Option<StringOrInteger>,
+    #[serde(rename = "run-id")]
+    pub run_id: Option<StringOrInteger>,
+    #[serde(rename = "defer-env-id")]
+    pub defer_env_id: Option<StringOrInteger>,
+    pub api_key: Option<StringOrInteger>,
+    pub application: Option<StringOrInteger>,
+    pub environment: Option<StringOrInteger>,
 }
 
 #[skip_serializing_none]
@@ -46,13 +56,13 @@ pub struct DbtProjectSimplified {
     // Deprecated paths
     // When present in the db_project.yml file we will raise an error
     #[serde(rename = "data-paths")]
-    pub data_paths: Option<Vec<String>>,
+    pub data_paths: Verbatim<Option<Vec<String>>>,
     #[serde(rename = "source-paths")]
-    pub source_paths: Option<Vec<String>>,
+    pub source_paths: Verbatim<Option<Vec<String>>>,
     #[serde(rename = "log-path")]
-    pub log_path: Option<String>,
+    pub log_path: Verbatim<Option<String>>,
     #[serde(rename = "target-path")]
-    pub target_path: Option<String>,
+    pub target_path: Verbatim<Option<String>>,
 
     pub __ignored__: Verbatim<HashMap<String, dbt_serde_yaml::Value>>,
 }
@@ -106,7 +116,7 @@ pub struct DbtProject {
     #[serde(rename = "config-version")]
     pub config_version: Option<i32>,
     #[serde(rename = "dbt-cloud")]
-    pub dbt_cloud: Option<serde_json::Value>,
+    pub dbt_cloud: Option<ProjectDbtCloudConfig>,
     pub dispatch: Option<Vec<_Dispatch>>,
     pub flags: Option<serde_json::Value>,
     #[serde(rename = "on-run-end")]

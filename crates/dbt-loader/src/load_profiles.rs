@@ -1,14 +1,10 @@
-use dbt_jinja_utils::invocation_args::InvocationArgs;
-use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
-use dbt_jinja_utils::phases::load::RenderSecretScope;
+use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 
 use dbt_common::constants::{DBT_PROFILES_YML, LOADING};
 use dbt_common::stdfs::canonicalize;
 use dbt_common::{err, fs_err, fsinfo, show_progress, show_warning, ErrorCode, FsResult};
 
-use dbt_jinja_utils::serde::from_yaml_jinja;
 use pathdiff::diff_paths;
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use dbt_schemas::schemas::project::DbtProjectSimplified;
@@ -16,15 +12,15 @@ use dbt_schemas::state::DbtProfile;
 
 use dirs::home_dir;
 
-use minijinja::Value;
-
 use crate::args::LoadArgs;
 use crate::utils::{coalesce, read_profiles_and_extract_db_config};
+use serde::Serialize;
 
-pub fn load_profiles(
+pub fn load_profiles<S: Serialize>(
     arg: &LoadArgs,
-    iarg: &InvocationArgs,
     raw_dbt_project: &DbtProjectSimplified,
+    jinja_env: &JinjaEnvironment<'static>,
+    ctx: &S,
 ) -> FsResult<DbtProfile> {
     // The profile name comes either from dbt_project.yml or the --profile arg.
     // If the profile is not specified in dbt_project, it's a warning, if --profile
@@ -33,17 +29,6 @@ pub fn load_profiles(
         get_profile_string(arg, arg.profile.as_ref(), raw_dbt_project.profile.as_ref())?;
 
     // TODO: Add Secret Renderer logic to profile renderer
-    let mut env = initialize_load_profile_jinja_environment(iarg)?;
-    let profile_render_scope = RenderSecretScope::new(&mut env, arg.vars.clone());
-    let profile_str: String = from_yaml_jinja(
-        Some(&arg.io),
-        &profile_str,
-        true,
-        profile_render_scope.jinja_env,
-        &BTreeMap::<String, Value>::new(),
-        &[],
-        None,
-    )?;
 
     // Load Profiles From ~/.dbt/profiles.yml and the dbt_project_dir
     let profile_path = get_profile_path(arg, &arg.profiles_dir)?;
@@ -78,7 +63,8 @@ pub fn load_profiles(
     let (target, db_config) = read_profiles_and_extract_db_config(
         &arg.io,
         dbt_target_override,
-        profile_render_scope.jinja_env,
+        jinja_env,
+        ctx,
         &profile_str,
         profile_path,
     )?;
