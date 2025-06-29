@@ -776,3 +776,11 @@ upload_artifacts = click.option(
     help="Whether or not to upload the artifacts to the dbt Cloud API",
     default=False,
 )
+
+keep_connections_alive = click.option(
+    "--keep-connections-alive/--no-keep-connections-alive",
+    envvar=None,
+    help="Experimental: Keep connections alive between dbt invocations. Useful when using dbt as an API.",
+    default=False,
+    is_flag=True,
+)
