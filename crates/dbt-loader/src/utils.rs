@@ -124,31 +124,21 @@ pub fn read_profiles_and_extract_db_config<S: Serialize>(
             "Unexpected 'config' key in dbt profiles.yml"
         );
     }
-
-    // get the profile value
-    let profile_val: &dbt_serde_yaml::Value =
-        dbt_profiles.profiles.get(profile_str).ok_or(fs_err!(
-            ErrorCode::IoError,
-            "Profile '{}' not found in dbt profiles.yml",
-            profile_str
-        ))?;
-
-    // extract just the db_targets value before rendering jinja to avoid rendering unused outputs
-    let db_targets_unrendered = dbt_serde_yaml::from_value::<DbTargets>(profile_val.clone())
-        .map_err(|e| from_yaml_error(e, Some(&profile_path)))?;
-
-    // render the jinja to get the target name in case the user uses an an env_var jinja expression here
-    let profile_target = into_typed_with_jinja(
+    let profile_val = dbt_profiles.profiles.get(profile_str).ok_or(fs_err!(
+        ErrorCode::IoError,
+        "Profile '{}' not found in dbt profiles.yml",
+        profile_str
+    ))?;
+    let db_targets: DbTargets = into_typed_with_jinja(
         Some(io_args),
-        db_targets_unrendered.default_target.clone().into(),
+        profile_val.clone(),
         true,
         jinja_env,
         &ctx,
         &[],
     )?;
-
     let target = match dbt_target_override {
-        Some(target) => db_targets_unrendered
+        Some(target) => db_targets
             .outputs
             .keys()
             .any(|t| t == target)
@@ -158,33 +148,9 @@ pub fn read_profiles_and_extract_db_config<S: Serialize>(
                 "Target '{}' not found in dbt profiles.yml",
                 target
             ))?,
-        None => profile_target,
+        None => db_targets.default_target.clone(),
     };
-
-    // filter the db_targets to only include the target we want to use
-    let db_targets_filtered = DbTargets {
-        default_target: db_targets_unrendered.default_target.clone(),
-        outputs: db_targets_unrendered
-            .outputs
-            .iter()
-            .filter(|(k, _)| *k == &target)
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect(),
-    };
-
-    // render just the target output we want to use
-    let db_targets_rendered = into_typed_with_jinja(
-        Some(io_args),
-        dbt_serde_yaml::to_value(&db_targets_filtered)
-            .map_err(|e| from_yaml_error(e, Some(&profile_path)))?,
-        true,
-        jinja_env,
-        &(),
-        &[],
-    )?;
-
-    let db_config = get_db_config(io_args, db_targets_rendered, Some(target.clone()))?;
-
+    let db_config = get_db_config(io_args, db_targets, Some(target.clone()))?;
     Ok((target, db_config))
 }
 
