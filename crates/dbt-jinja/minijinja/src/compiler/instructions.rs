@@ -243,7 +243,7 @@ pub enum Instruction<'source> {
     #[cfg(feature = "macros")]
     GetClosure,
 
-    MacroStart(u32, u32, u32),
+    MacroStart(u32, u32, u32, u32, u32, u32),
     MacroStop(u32, u32, u32),
 
     ModelReference(String, u32, u32, u32, u32, u32, u32),

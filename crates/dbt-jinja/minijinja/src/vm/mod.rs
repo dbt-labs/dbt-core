@@ -148,8 +148,16 @@ impl<'env> Vm<'env> {
             instructions,
             prepare_blocks(blocks),
         );
-        self.eval_state(&mut state, out, current_location, listeners)
-            .map(|x| (x, state))
+        listeners.iter().for_each(|listener| {
+            listener.on_enter_func_body();
+        });
+        let result = self
+            .eval_state(&mut state, out, current_location, listeners)
+            .map(|x| (x, state));
+        listeners.iter().for_each(|listener| {
+            listener.on_exit_func_body();
+        });
+        result
     }
 
     /// Evaluate a macro in a state.
@@ -784,9 +792,18 @@ impl<'env> Vm<'env> {
                             .file_stack
                             .push((path.clone(), *span, *delta_line));
                     }
-                    listeners
-                        .iter()
-                        .for_each(|listener| listener.on_reference(name));
+                    listeners.iter().for_each(|listener| {
+                        if *name == "return" {
+                            listener.on_return(
+                                state.ctx.file_stack.last().map(|x| x.0.as_path()),
+                                &current_location.line(),
+                                &current_location.col(),
+                                &current_location.index(),
+                            );
+                        } else {
+                            listener.on_reference(name);
+                        }
+                    });
                     let args = stack.get_call_args(*arg_count);
                     // super is a special function reserved for super-ing into blocks.
                     let rv = if *name == "super" {
@@ -837,6 +854,9 @@ impl<'env> Vm<'env> {
                                 state.ctx.depth() + INCLUDE_RECURSION_COST,
                             )?;
                         let func = inner_state.lookup(name).unwrap();
+                        listeners.iter().for_each(|listener| {
+                            listener.on_enter_func_body();
+                        });
                         let rv = match func.call(&inner_state, args, listeners) {
                             Ok(rv) => rv,
                             Err(err) => match err.try_abrupt_return() {
@@ -844,6 +864,9 @@ impl<'env> Vm<'env> {
                                 None => bail!(err),
                             },
                         };
+                        listeners.iter().for_each(|listener| {
+                            listener.on_exit_func_body();
+                        });
                         rv
                     } else if let Some(func) =
                         state.lookup(name).filter(|func| !func.is_undefined())
@@ -865,6 +888,12 @@ impl<'env> Vm<'env> {
                                 args.to_vec()
                             };
 
+                        if *name != "return" {
+                            listeners.iter().for_each(|listener| {
+                                listener.on_enter_func_body();
+                            });
+                        }
+
                         let rv = match func.call(state, &args, listeners) {
                             Ok(rv) => {
                                 // return implements  https://docs.getdbt.com/reference/dbt-jinja-functions/return
@@ -879,6 +908,11 @@ impl<'env> Vm<'env> {
                                 None => bail!(err),
                             },
                         };
+                        if *name != "return" {
+                            listeners.iter().for_each(|listener| {
+                                listener.on_exit_func_body();
+                            });
+                        }
                         rv
                     // Resolve the template using the dbt macro namespace resolution logic
                     } else if let Some(template_name) =
@@ -926,6 +960,9 @@ impl<'env> Vm<'env> {
 
                         // look up and evaluate the macro
                         let func = new_state.lookup(name).unwrap();
+                        listeners.iter().for_each(|listener| {
+                            listener.on_enter_func_body();
+                        });
                         let rv = match func.call(&new_state, &args, listeners) {
                             Ok(rv) => {
                                 // return implements  https://docs.getdbt.com/reference/dbt-jinja-functions/return
@@ -940,6 +977,9 @@ impl<'env> Vm<'env> {
                                 None => bail!(err),
                             },
                         };
+                        listeners.iter().for_each(|listener| {
+                            listener.on_exit_func_body();
+                        });
                         rv
                     } else if *name == "render" {
                         let raw = args[0].as_str().unwrap_or_default();
@@ -1024,6 +1064,9 @@ impl<'env> Vm<'env> {
                             state.ctx.depth() + MACRO_RECURSION_COST,
                         )?;
                         let func = macro_state.lookup(name).unwrap();
+                        listeners.iter().for_each(|listener| {
+                            listener.on_enter_func_body();
+                        });
                         let rv = match func.call(&macro_state, args, listeners) {
                             Ok(rv) => {
                                 // return implements  https://docs.getdbt.com/reference/dbt-jinja-functions/return
@@ -1039,6 +1082,9 @@ impl<'env> Vm<'env> {
                                 None => bail!(err),
                             },
                         };
+                        listeners.iter().for_each(|listener| {
+                            listener.on_exit_func_body();
+                        });
                         if path_and_span_and_deltaline.is_some() {
                             state.ctx.file_stack.pop();
                         }
@@ -1186,7 +1232,7 @@ impl<'env> Vm<'env> {
                             .map_or(Value::UNDEFINED, |x| Value::from_dyn_object(x.clone())),
                     );
                 }
-                Instruction::MacroStart(line, col, index) => {
+                Instruction::MacroStart(line, col, index, stop_line, stop_col, stop_offset) => {
                     if let Some((path, span, _)) = state.ctx.file_stack.last() {
                         let line = span.start_line + *line - 1;
                         let col = *col
@@ -1205,6 +1251,9 @@ impl<'env> Vm<'env> {
                                 &current_location.line(),
                                 &current_location.col(),
                                 &current_location.index(),
+                                stop_line,
+                                stop_col,
+                                stop_offset,
                             )
                         });
                     } else {
@@ -1217,6 +1266,9 @@ impl<'env> Vm<'env> {
                                 &current_location.line(),
                                 &current_location.col(),
                                 &current_location.index(),
+                                stop_line,
+                                stop_col,
+                                stop_offset,
                             )
                         });
                     }

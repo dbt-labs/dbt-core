@@ -311,6 +311,9 @@ impl<'source> CodeGenerator<'source> {
                     span.start_line,
                     span.start_col,
                     span.start_offset,
+                    span.end_line,
+                    span.end_col,
+                    span.end_offset,
                 ));
 
                 self.compile_expr(&set.expr);
@@ -434,6 +437,9 @@ impl<'source> CodeGenerator<'source> {
                     span.start_line,
                     span.start_col,
                     span.start_offset,
+                    span.end_line,
+                    span.end_col,
+                    span.end_offset,
                 ));
                 self.compile_do(do_tag);
                 self.add(Instruction::MacroStop(
@@ -448,6 +454,9 @@ impl<'source> CodeGenerator<'source> {
                     span.start_line,
                     span.start_col,
                     span.start_offset,
+                    span.end_line,
+                    span.end_col,
+                    span.end_offset,
                 ));
                 self.add(Instruction::MacroStop(
                     span.end_line,
@@ -523,6 +532,9 @@ impl<'source> CodeGenerator<'source> {
             span.start_line,
             span.start_col,
             span.start_offset,
+            span.end_line,
+            span.end_col,
+            span.end_offset,
         ));
 
         self.add(Instruction::BuildMacro(macro_decl.name, instr + 1, flags));
@@ -557,6 +569,15 @@ impl<'source> CodeGenerator<'source> {
 
     fn compile_if_stmt(&mut self, if_cond: &ast::Spanned<ast::IfCond<'source>>) {
         self.set_line_from_span(if_cond.span());
+        let span = if_cond.span();
+        self.add(Instruction::MacroStart(
+            span.start_line,
+            span.start_col,
+            span.start_offset,
+            span.end_line,
+            span.end_col,
+            span.end_offset,
+        ));
         self.compile_expr(&if_cond.expr);
         self.start_if();
         for node in &if_cond.true_body {
@@ -569,6 +590,11 @@ impl<'source> CodeGenerator<'source> {
             }
         }
         self.end_if();
+        self.add(Instruction::MacroStop(
+            span.end_line,
+            span.end_col,
+            span.end_offset,
+        ));
     }
 
     fn compile_emit_expr(&mut self, expr: &ast::Spanned<ast::EmitExpr<'source>>) {
@@ -578,6 +604,9 @@ impl<'source> CodeGenerator<'source> {
             span.start_line,
             span.start_col,
             span.start_offset,
+            span.end_line,
+            span.end_col,
+            span.end_offset,
         ));
 
         if let ast::Expr::Call(call) = &expr.expr {
@@ -616,6 +645,9 @@ impl<'source> CodeGenerator<'source> {
             span.start_line,
             span.start_col,
             span.start_offset,
+            span.end_line,
+            span.end_col,
+            span.end_offset,
         ));
 
         // filter expressions work like a nested for loop without
