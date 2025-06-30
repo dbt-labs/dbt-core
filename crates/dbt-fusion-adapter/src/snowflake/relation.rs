@@ -191,7 +191,8 @@ impl BaseRelation for SnowflakeRelation {
         let mut parser = ArgParser::new(args, None);
         let value = parser.get::<Value>("old_relation").unwrap();
 
-        if let Some(old_relation) = value.downcast_object_ref::<SnowflakeRelation>() {
+        if let Some(old_relation) = value.downcast_object_ref::<RelationObject>() {
+            let old_relation = old_relation.inner();
             if old_relation.is_table() {
                 // TODO: iceberg-related code
                 Ok(Value::from(false))

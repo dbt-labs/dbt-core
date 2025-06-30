@@ -38,7 +38,6 @@ macro_rules! try_downcast_columns {
 pub fn downcast_value_to_dyn_base_relation(
     value: MinijinjaValue,
 ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
-    // Check if Arc<dyn BaseRelation> is Arc<SnowflakeRelation>
     if let Some(relation_object) = value.downcast_object::<RelationObject>() {
         Ok(relation_object.inner())
     } else {
