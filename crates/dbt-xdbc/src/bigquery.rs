@@ -32,7 +32,7 @@ pub const QUERY_PARAMETER_MODE_NAMED: &str = "adbc.bigquery.sql.query.parameter_
 pub const QUERY_PARAMETER_MODE_POSITIONAL: &str =
     "adbc.bigquery.sql.query.parameter_mode_positional";
 
-pub const QUERY_DESTINATION: &str = "adbc.bigquery.sql.query.destination";
+pub const QUERY_DESTINATION_TABLE: &str = "adbc.bigquery.sql.query.destination_table";
 pub const QUERY_DEFAULT_PROJECT_ID: &str = "adbc.bigquery.sql.query.default_project_id";
 pub const QUERY_DEFAULT_DATASET_ID: &str = "adbc.bigquery.sql.query.default_dataset_id";
 pub const QUERY_CREATE_DISPOSITION: &str = "adbc.bigquery.sql.query.create_disposition";
@@ -61,3 +61,4 @@ pub const DEFAULT_ACCESS_TOKEN_SERVER_NAME: &str = "google.com";
 pub const INGEST_FILE_DELIMITER: &str = "adbc.bigquery.ingest.csv_delimiter";
 pub const INGEST_PATH: &str = "adbc.bigquery.ingest.csv_filepath";
 pub const INGEST_SCHEMA: &str = "adbc.bigquery.ingest.csv_schema";
+pub const UPDATE_TABLE_COLUMNS_DESCRIPTION: &str = "adbc.bigquery.table.update.columns_description";
