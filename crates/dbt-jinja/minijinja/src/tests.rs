@@ -368,6 +368,9 @@ mod builtins {
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     pub fn is_iterable(v: &Value) -> bool {
+        if v.is_none() {
+            return false;
+        }
         v.try_iter().is_ok()
     }
 

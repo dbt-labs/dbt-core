@@ -88,15 +88,9 @@ impl Object for DispatchObject {
                 // Try to execute the template, but catch any errors and convert to a strict mode error
                 match self.execute_template(state, &template_name, args, listeners) {
                     Ok(rv) => return Ok(rv),
-                    Err(_) => {
+                    Err(err) => {
                         // In strict mode, we want a specific error message
-                        return Err(Error::new(
-                            ErrorKind::UnknownFunction,
-                            format!(
-                                "In strict mode: No macro named '{}' found in package '{}'",
-                                self.macro_name, pkg
-                            ),
-                        ));
+                        return Err(err);
                     }
                 }
             }
