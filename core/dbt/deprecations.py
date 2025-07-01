@@ -189,6 +189,11 @@ class CustomOutputPathInSourceFreshnessDeprecation(DBTDeprecation):
     _event = "CustomOutputPathInSourceFreshnessDeprecation"
 
 
+class SourceOverrideDeprecation(DBTDeprecation):
+    _name = "source-override-deprecation"
+    _event = "SourceOverrideDeprecation"
+
+
 class PropertyMovedToConfigDeprecation(DBTDeprecation):
     _name = "property-moved-to-config-deprecation"
     _event = "PropertyMovedToConfigDeprecation"
@@ -279,6 +284,7 @@ deprecations_list: List[DBTDeprecation] = [
     PropertyMovedToConfigDeprecation(),
     ModelParamUsageDeprecation(),
     WEOInlcudeExcludeDeprecation(),
+    SourceOverrideDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}
