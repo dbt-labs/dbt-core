@@ -25,7 +25,7 @@ with open(os.path.join(this_directory, "README.md")) as f:
 
 
 package_name = "dbt-core"
-package_version = "1.10.0b3"
+package_version = "1.11.0a1"
 description = """With dbt, data analysts and engineers can build analytics \
 the way engineers build applications."""
 
@@ -56,6 +56,7 @@ setup(
         # dbt-core uses these packages in standard ways. Pin to the major version, and check compatibility
         # with major versions in each new minor version of dbt-core.
         "click>=8.0.2,<9.0",
+        "jsonschema>=4.19.1,<5.0",
         "networkx>=2.3,<4.0",
         "protobuf>=5.0,<6.0",
         "requests<3.0.0",  # should match dbt-common
@@ -71,8 +72,10 @@ setup(
         "dbt-extractor>=0.5.0,<=0.6",
         "dbt-semantic-interfaces>=0.8.3,<0.9",
         # Minor versions for these are expected to be backwards-compatible
-        "dbt-common>=1.22.0,<2.0",
-        "dbt-adapters>=1.13.0,<2.0",
+        "dbt-common>=1.25.0,<2.0",
+        "dbt-adapters>=1.15.2,<2.0",
+        "dbt-protos>=1.0.315,<2.0",
+        "pydantic<3",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
         "packaging>20.9",
@@ -80,7 +83,6 @@ setup(
         "pyyaml>=6.0",
         "daff>=1.3.46",
         "typing-extensions>=4.4",
-        "pydantic<2",
         # ----
     ],
     zip_safe=False,

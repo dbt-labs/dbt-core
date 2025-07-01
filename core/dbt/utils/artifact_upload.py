@@ -3,9 +3,9 @@ import uuid
 import zipfile
 
 import requests
-from pydantic import BaseSettings
 
 import dbt.tracking
+from dbt._pydantic_shim import BaseSettings  # type: ignore
 from dbt.config.runtime import UnsetProfile, load_project
 from dbt.constants import MANIFEST_FILE_NAME, RUN_RESULTS_FILE_NAME
 from dbt.events.types import ArtifactUploadSkipped, ArtifactUploadSuccess

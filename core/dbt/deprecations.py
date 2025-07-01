@@ -40,7 +40,6 @@ class DBTDeprecation:
         raise NotImplementedError("event not implemented for {}".format(self._event))
 
     def preview(self, base_event: abc.ABCMeta) -> None:
-        # breakpoint()
         note_event = Note(msg=base_event.message())  # type: ignore
         fire_event(note_event)
 
@@ -180,6 +179,11 @@ class CustomKeyInObjectDeprecation(DBTDeprecation):
     _event = "CustomKeyInObjectDeprecation"
 
 
+class WEOInlcudeExcludeDeprecation(DBTDeprecation):
+    _name = "weo-include-exclude-deprecation"
+    _event = "WEOIncludeExcludeDeprecation"
+
+
 class CustomOutputPathInSourceFreshnessDeprecation(DBTDeprecation):
     _name = "custom-output-path-in-source-freshness-deprecation"
     _event = "CustomOutputPathInSourceFreshnessDeprecation"
@@ -188,6 +192,16 @@ class CustomOutputPathInSourceFreshnessDeprecation(DBTDeprecation):
 class SourceOverrideDeprecation(DBTDeprecation):
     _name = "source-override-deprecation"
     _event = "SourceOverrideDeprecation"
+
+
+class PropertyMovedToConfigDeprecation(DBTDeprecation):
+    _name = "property-moved-to-config-deprecation"
+    _event = "PropertyMovedToConfigDeprecation"
+
+
+class ModelParamUsageDeprecation(DBTDeprecation):
+    _name = "model-param-usage-deprecation"
+    _event = "ModelParamUsageDeprecation"
 
 
 def renamed_env_var(old_name: str, new_name: str):
@@ -267,6 +281,9 @@ deprecations_list: List[DBTDeprecation] = [
     CustomKeyInConfigDeprecation(),
     CustomKeyInObjectDeprecation(),
     CustomOutputPathInSourceFreshnessDeprecation(),
+    PropertyMovedToConfigDeprecation(),
+    ModelParamUsageDeprecation(),
+    WEOInlcudeExcludeDeprecation(),
     SourceOverrideDeprecation(),
 ]
 

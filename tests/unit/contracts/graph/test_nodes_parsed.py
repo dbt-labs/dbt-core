@@ -317,6 +317,7 @@ def complex_parsed_model_dict():
                 "tags": [],
                 "constraints": [],
                 "doc_blocks": [],
+                "config": {"meta": {}, "tags": []},
             },
         },
         "checksum": {
@@ -637,6 +638,7 @@ def complex_parsed_seed_dict():
                 "tags": [],
                 "constraints": [],
                 "doc_blocks": [],
+                "config": {"meta": {}, "tags": []},
             }
         },
         "meta": {"foo": 1000},
@@ -933,6 +935,10 @@ def complex_parsed_hook_dict():
                 "tags": [],
                 "constraints": [],
                 "doc_blocks": [],
+                "config": {
+                    "meta": {},
+                    "tags": [],
+                },
             },
         },
         "index": 13,
@@ -1169,6 +1175,7 @@ def complex_parsed_schema_test_dict():
                 "tags": [],
                 "constraints": [],
                 "doc_blocks": [],
+                "config": {"meta": {}, "tags": []},
             },
         },
         "column_name": "id",
@@ -1893,6 +1900,10 @@ def basic_parsed_source_definition_dict():
         "tags": [],
         "config": {
             "enabled": True,
+            "freshness": {
+                "warn_after": {},
+                "error_after": {},
+            },
         },
         "unrendered_config": {},
         "doc_blocks": [],
@@ -1924,6 +1935,10 @@ def complex_parsed_source_definition_dict():
         "tags": ["my_tag"],
         "config": {
             "enabled": True,
+            "freshness": {
+                "warn_after": {},
+                "error_after": {},
+            },
         },
         "freshness": {"warn_after": {"period": "hour", "count": 1}, "error_after": {}},
         "loaded_at_field": "loaded_at",

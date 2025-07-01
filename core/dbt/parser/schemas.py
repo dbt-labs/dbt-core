@@ -19,12 +19,7 @@ from typing import (
 
 import dbt.deprecations as deprecations
 from dbt.artifacts.resources import RefArgs
-from dbt.artifacts.resources.v1.model import (
-    CustomGranularity,
-    ModelBuildAfter,
-    ModelFreshness,
-    TimeSpine,
-)
+from dbt.artifacts.resources.v1.model import CustomGranularity, TimeSpine
 from dbt.clients.checked_load import (
     checked_load,
     issue_deprecation_warnings_for_failures,
@@ -163,12 +158,16 @@ def yaml_from_file(
                 f"Contents of file '{source_file.original_file_path}' are not valid. Dictionary expected."
             )
 
-        # When loaded_loaded_at_field is defined as None or null, it shows up in
+        # When loaded_at_field is defined as None or null, it shows up in
         # the dict but when it is not defined, it does not show up in the dict
         # We need to capture this to be able to override source level settings later.
         for source in contents.get("sources", []):
             for table in source.get("tables", []):
-                if "loaded_at_field" in table:
+                if "loaded_at_field" in table or (
+                    "config" in table
+                    and table["config"] is not None
+                    and table["config"].get("loaded_at_field")
+                ):
                     table["loaded_at_field_present"] = True
 
         return contents
@@ -769,7 +768,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         # code consistency.
         deprecation_date: Optional[datetime.datetime] = None
         time_spine: Optional[TimeSpine] = None
-        freshness: Optional[ModelFreshness] = None
+
         if isinstance(block.target, UnparsedModelUpdate):
             deprecation_date = block.target.deprecation_date
             time_spine = (
@@ -786,17 +785,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                 if block.target.time_spine
                 else None
             )
-            freshness = (
-                ModelFreshness(
-                    build_after=ModelBuildAfter(
-                        count=block.target.freshness.build_after.count,
-                        period=block.target.freshness.build_after.period,
-                        depends_on=block.target.freshness.build_after.depends_on,
-                    ),
-                )
-                if block.target.freshness
-                else None
-            )
+
         patch = ParsedNodePatch(
             name=block.target.name,
             original_file_path=block.target.original_file_path,
@@ -813,7 +802,6 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             constraints=block.target.constraints,
             deprecation_date=deprecation_date,
             time_spine=time_spine,
-            freshness=freshness,
         )
         assert isinstance(self.yaml.file, SchemaSourceFile)
         source_file: SchemaSourceFile = self.yaml.file
@@ -1103,7 +1091,6 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
         # These two will have to be reapplied after config is built for versioned models
         self.patch_constraints(node, patch.constraints)
         self.patch_time_spine(node, patch.time_spine)
-        node.freshness = patch.freshness
         node.build_contract_checksum()
 
     def patch_constraints(self, node: ModelNode, constraints: List[Dict[str, Any]]) -> None:

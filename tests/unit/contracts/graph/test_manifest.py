@@ -98,7 +98,6 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "defer_relation",
         "time_spine",
         "batch",
-        "freshness",
     }
 )
 
@@ -410,6 +409,7 @@ class ManifestTest(unittest.TestCase):
                     "invocation_started_at": str(invocation_started_at).replace(" ", "T") + "Z",
                     "send_anonymous_usage_stats": False,
                     "user_id": "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
+                    "quoting": {},
                 },
                 "docs": {},
                 "disabled": {},
@@ -591,6 +591,7 @@ class ManifestTest(unittest.TestCase):
                     "invocation_id": "01234567-0123-0123-0123-0123456789ab",
                     "invocation_started_at": invocation_started_at,
                     "env": {ENV_KEY_NAME: "value"},
+                    "quoting": {},
                 },
                 "disabled": {},
                 "semantic_models": {},
@@ -939,6 +940,7 @@ class MixedManifestTest(unittest.TestCase):
                     "env": {ENV_KEY_NAME: "value"},
                     "send_anonymous_usage_stats": False,
                     "user_id": "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
+                    "quoting": {},
                 },
                 "docs": {},
                 "disabled": {},
@@ -1088,9 +1090,9 @@ class MixedManifestTest(unittest.TestCase):
 
 
 class TestManifestSearch(unittest.TestCase):
-    _macros = []
-    _nodes = []
-    _docs = []
+    _macros: list = []
+    _nodes: list = []
+    _docs: list = []
 
     @property
     def macros(self):

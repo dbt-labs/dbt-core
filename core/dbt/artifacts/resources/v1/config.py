@@ -181,7 +181,7 @@ class TestConfig(NodeAndTestConfig):
     warn_if: str = "!= 0"
     error_if: str = "!= 0"
 
-    def __post_init__(self):
+    def finalize_and_validate(self):
         """
         The presence of a setting for `store_failures_as` overrides any existing setting for `store_failures`,
         regardless of level of granularity. If `store_failures_as` is not set, then `store_failures` takes effect.
@@ -207,6 +207,7 @@ class TestConfig(NodeAndTestConfig):
         but still allow for backwards compatibility for `store_failures`.
         See https://github.com/dbt-labs/dbt-core/issues/6914 for more information.
         """
+        super().finalize_and_validate()
 
         # if `store_failures_as` is not set, it gets set by `store_failures`
         # the settings below mimic existing behavior prior to `store_failures_as`
@@ -228,6 +229,8 @@ class TestConfig(NodeAndTestConfig):
             self.store_failures_as = get_store_failures_as_map[self.store_failures]
         else:
             self.store_failures = get_store_failures_map.get(self.store_failures_as, True)
+
+        return self
 
     @classmethod
     def same_contents(cls, unrendered: Dict[str, Any], other: Dict[str, Any]) -> bool:

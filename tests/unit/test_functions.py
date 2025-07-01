@@ -13,12 +13,12 @@ from dbt_common.exceptions import EventCompilationError
 @pytest.mark.parametrize(
     "warn_error_options,expect_compilation_exception",
     [
-        ({"include": "all"}, True),
-        ({"include": ["NoNodesForSelectionCriteria"]}, True),
-        ({"include": []}, False),
+        ({"error": "all"}, True),
+        ({"error": ["NoNodesForSelectionCriteria"]}, True),
+        ({"error": []}, False),
         ({}, False),
-        ({"include": ["MainTrackingUserState"]}, False),
-        ({"include": "all", "exclude": ["NoNodesForSelectionCriteria"]}, False),
+        ({"error": ["MainTrackingUserState"]}, False),
+        ({"error": "all", "warn": ["NoNodesForSelectionCriteria"]}, False),
     ],
 )
 def test_warn_or_error_warn_error_options(warn_error_options, expect_compilation_exception):
@@ -40,12 +40,12 @@ def test_warn_or_error_warn_error_options(warn_error_options, expect_compilation
     ],
 )
 def test_warn_error_options_captures_all_events(error_cls):
-    args = Namespace(warn_error_options={"include": [error_cls.__name__]})
+    args = Namespace(warn_error_options={"error": [error_cls.__name__]})
     flags.set_from_args(args, {})
     with pytest.raises(EventCompilationError):
         warn_or_error(error_cls())
 
-    args = Namespace(warn_error_options={"include": "*", "exclude": [error_cls.__name__]})
+    args = Namespace(warn_error_options={"error": "*", "warn": [error_cls.__name__]})
     flags.set_from_args(args, {})
     warn_or_error(error_cls())
 

@@ -18,7 +18,6 @@ from dbt.artifacts.resources import (
     MacroArgument,
     MaturityType,
     MeasureAggregationParameters,
-    ModelFreshness,
     NodeVersion,
     Owner,
     Quoting,
@@ -103,6 +102,7 @@ class HasColumnProps(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     data_type: Optional[str] = None
     constraints: List[Dict[str, Any]] = field(default_factory=list)
     docs: Docs = field(default_factory=Docs)
+    config: Dict[str, Any] = field(default_factory=dict)
     _extra: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -118,20 +118,8 @@ class HasColumnAndTestProps(HasColumnProps):
 
 
 @dataclass
-class UnparsedColumn(HasColumnAndTestProps):
-    quote: Optional[bool] = None
-    tags: List[str] = field(default_factory=list)
-    granularity: Optional[str] = None  # str is really a TimeGranularity Enum
-
-
-@dataclass
 class HasColumnDocs(dbtClassMixin):
     columns: Sequence[HasColumnProps] = field(default_factory=list)
-
-
-@dataclass
-class HasColumnTests(dbtClassMixin):
-    columns: Sequence[UnparsedColumn] = field(default_factory=list)
 
 
 @dataclass
@@ -148,6 +136,18 @@ class HasYamlMetadata(dbtClassMixin):
 @dataclass
 class HasConfig:
     config: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class UnparsedColumn(HasConfig, HasColumnAndTestProps):
+    quote: Optional[bool] = None
+    tags: List[str] = field(default_factory=list)
+    granularity: Optional[str] = None  # str is really a TimeGranularity Enum
+
+
+@dataclass
+class HasColumnTests(dbtClassMixin):
+    columns: Sequence[UnparsedColumn] = field(default_factory=list)
 
 
 @dataclass
@@ -225,7 +225,6 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
     versions: Sequence[UnparsedVersion] = field(default_factory=list)
     deprecation_date: Optional[datetime.datetime] = None
     time_spine: Optional[TimeSpine] = None
-    freshness: Optional[ModelFreshness] = None
 
     def __post_init__(self) -> None:
         if self.latest_version:
@@ -649,6 +648,8 @@ class UnparsedMetric(dbtClassMixin):
 class UnparsedGroup(dbtClassMixin):
     name: str
     owner: Owner
+    description: Optional[str] = None
+    config: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def validate(cls, data):

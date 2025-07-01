@@ -43,7 +43,7 @@
     "data_tests": {
       "anyOf": [
         {
-          "$ref": "#/definitions/DataTestConfigs"
+          "$ref": "#/definitions/ProjectDataTestConfig"
         },
         {
           "type": "null"
@@ -69,6 +69,16 @@
         "type": "string"
       }
     },
+    "exposures": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ProjectExposureConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "flags": true,
     "log-path": {
       "type": [
@@ -88,7 +98,7 @@
     "metrics": {
       "anyOf": [
         {
-          "$ref": "#/definitions/MetricConfigs"
+          "$ref": "#/definitions/ProjectMetricConfigs"
         },
         {
           "type": "null"
@@ -107,7 +117,7 @@
     "models": {
       "anyOf": [
         {
-          "$ref": "#/definitions/ModelConfigs"
+          "$ref": "#/definitions/ProjectModelConfig"
         },
         {
           "type": "null"
@@ -120,7 +130,7 @@
     "on-run-end": {
       "anyOf": [
         {
-          "$ref": "#/definitions/StringOrVecString"
+          "$ref": "#/definitions/StringOrArrayOfStrings"
         },
         {
           "type": "null"
@@ -130,7 +140,7 @@
     "on-run-start": {
       "anyOf": [
         {
-          "$ref": "#/definitions/StringOrVecString"
+          "$ref": "#/definitions/StringOrArrayOfStrings"
         },
         {
           "type": "null"
@@ -159,7 +169,16 @@
         }
       ]
     },
-    "quoting": true,
+    "quoting": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/DbtQuoting"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "require-dbt-version": {
       "anyOf": [
         {
@@ -179,7 +198,7 @@
     "saved-queries": {
       "anyOf": [
         {
-          "$ref": "#/definitions/SavedQueriesConfigs"
+          "$ref": "#/definitions/ProjectSavedQueriesConfig"
         },
         {
           "type": "null"
@@ -198,7 +217,7 @@
     "seeds": {
       "anyOf": [
         {
-          "$ref": "#/definitions/SeedConfigs"
+          "$ref": "#/definitions/ProjectSeedConfig"
         },
         {
           "type": "null"
@@ -208,7 +227,7 @@
     "semantic-models": {
       "anyOf": [
         {
-          "$ref": "#/definitions/ModelConfigs"
+          "$ref": "#/definitions/ProjectSemanticModelConfig"
         },
         {
           "type": "null"
@@ -227,7 +246,7 @@
     "snapshots": {
       "anyOf": [
         {
-          "$ref": "#/definitions/SnapshotConfigs"
+          "$ref": "#/definitions/ProjectSnapshotConfig"
         },
         {
           "type": "null"
@@ -237,7 +256,7 @@
     "sources": {
       "anyOf": [
         {
-          "$ref": "#/definitions/SourceConfigs"
+          "$ref": "#/definitions/ProjectSourceConfig"
         },
         {
           "type": "null"
@@ -262,7 +281,7 @@
     "tests": {
       "anyOf": [
         {
-          "$ref": "#/definitions/DataTestConfigs"
+          "$ref": "#/definitions/ProjectDataTestConfig"
         },
         {
           "type": "null"
@@ -272,7 +291,7 @@
     "unit_tests": {
       "anyOf": [
         {
-          "$ref": "#/definitions/UnitTestConfigs"
+          "$ref": "#/definitions/ProjectUnitTestConfig"
         },
         {
           "type": "null"
@@ -300,6 +319,7 @@
       ]
     }
   },
+  "additionalProperties": false,
   "definitions": {
     "Access": {
       "type": "string",
@@ -310,38 +330,408 @@
       ]
     },
     "AnyValue": true,
-    "BooleanOrJinjaString": {
+    "BigqueryClusterConfig": {
+      "description": "dbt-core allows either of the variants for the `cluster_by` to allow cluster on a single column or on multiple columns",
       "anyOf": [
         {
           "type": "string"
         },
         {
-          "type": "boolean"
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       ]
     },
-    "Contract": {
+    "BigqueryPartitionConfig": {
+      "description": "reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/relation_configs/_partition.py#L12-L13",
       "type": "object",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RangeConfig"
+        },
+        {
+          "$ref": "#/definitions/TimeConfig"
+        }
+      ],
       "required": [
-        "enforced"
+        "field"
       ],
       "properties": {
+        "copy_partitions": {
+          "default": false,
+          "type": "boolean"
+        },
+        "data_type": {
+          "default": "date",
+          "type": "string"
+        },
+        "field": {
+          "type": "string"
+        },
+        "time_ingestion_partitioning": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "BigqueryPartitionConfigLegacy": {
+      "description": "dbt-core allows either of the variants for the `partition_by` in the model config but the bigquery-adapter throws RunTime error the behaviors are tested from the latest dbt-core + bigquery-adapter as this is written we're conformant to this behavior via here and via the `validate` method",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "$ref": "#/definitions/BigqueryPartitionConfig"
+        }
+      ]
+    },
+    "DbtBatchSize": {
+      "type": "string",
+      "enum": [
+        "hour",
+        "day",
+        "month",
+        "year"
+      ]
+    },
+    "DbtContract": {
+      "type": "object",
+      "properties": {
         "alias_types": {
+          "default": true,
+          "type": "boolean"
+        },
+        "checksum": true,
+        "enforced": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DbtIncrementalStrategy": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "append",
+            "merge",
+            "delete+insert",
+            "insert_overwrite",
+            "microbatch",
+            "unknown"
+          ]
+        },
+        {
+          "description": "replace_where (Databricks only) see https://docs.getdbt.com/reference/resource-configs/databricks-configs",
+          "type": "string",
+          "enum": [
+            "replace_where"
+          ]
+        }
+      ]
+    },
+    "DbtMaterialization": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "view",
+            "table",
+            "incremental",
+            "materialized_view",
+            "external",
+            "test",
+            "ephemeral",
+            "unit",
+            "analysis"
+          ]
+        },
+        {
+          "description": "only for databricks",
+          "type": "string",
+          "enum": [
+            "streaming_table"
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "unknown"
+          ],
+          "properties": {
+            "unknown": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "DbtQuoting": {
+      "type": "object",
+      "properties": {
+        "database": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "identifier": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "schema": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DbtUniqueKey": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "DocsConfig": {
+      "type": "object",
+      "properties": {
+        "node_color": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "show": {
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ExportConfigExportAs": {
+      "type": "string",
+      "enum": [
+        "table",
+        "view",
+        "cache"
+      ]
+    },
+    "FloatOrString": {
+      "anyOf": [
+        {
+          "type": "number",
+          "format": "float"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "FreshnessDefinition": {
+      "type": "object",
+      "properties": {
+        "error_after": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BooleanOrJinjaString"
+              "$ref": "#/definitions/FreshnessRules"
             },
             {
               "type": "null"
             }
           ]
         },
-        "enforced": {
-          "$ref": "#/definitions/BooleanOrJinjaString"
+        "filter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "warn_after": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessRules"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
-      }
+      },
+      "additionalProperties": false
     },
-    "DataTestConfigs": {
+    "FreshnessPeriod": {
+      "type": "string",
+      "enum": [
+        "minute",
+        "hour",
+        "day"
+      ]
+    },
+    "FreshnessRules": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "period": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessPeriod"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "GrantAccessToTarget": {
+      "type": "object",
+      "properties": {
+        "dataset": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "project": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "HardDeletes": {
+      "type": "string",
+      "enum": [
+        "ignore",
+        "invalidate",
+        "new_record"
+      ]
+    },
+    "HookConfig": {
+      "type": "object",
+      "properties": {
+        "sql": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "transaction": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Hooks": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "$ref": "#/definitions/HookConfig"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HookConfig"
+          }
+        }
+      ]
+    },
+    "ModelFreshness": {
+      "type": "object",
+      "properties": {
+        "build_after": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessRules"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "OnConfigurationChange": {
+      "type": "string",
+      "enum": [
+        "apply",
+        "continue",
+        "fail",
+        "unknown"
+      ]
+    },
+    "OnSchemaChange": {
+      "type": "string",
+      "enum": [
+        "ignore",
+        "append_new_columns",
+        "fail",
+        "sync_all_columns",
+        "unknown"
+      ]
+    },
+    "PersistDocsConfig": {
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "relation": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ProjectDataTestConfig": {
       "type": "object",
       "properties": {
         "+alias": {
@@ -357,13 +747,9 @@
           ]
         },
         "+enabled": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "+error_if": {
@@ -391,7 +777,23 @@
           ],
           "format": "int32"
         },
-        "+meta": true,
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+quoting": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtQuoting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+schema": {
           "type": [
             "string",
@@ -399,9 +801,15 @@
           ]
         },
         "+severity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+static_analysis": {
           "anyOf": [
             {
-              "$ref": "#/definitions/Severity"
+              "$ref": "#/definitions/StaticAnalysisKind"
             },
             {
               "type": "null"
@@ -409,9 +817,15 @@
           ]
         },
         "+store_failures": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+store_failures_as": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BooleanOrJinjaString"
+              "$ref": "#/definitions/StoreFailuresAs"
             },
             {
               "type": "null"
@@ -434,81 +848,32 @@
             "null"
           ]
         },
-        "alias": {
+        "+where": {
           "type": [
             "string",
             "null"
           ]
-        },
-        "database": {
+        }
+      },
+      "additionalProperties": false
+    },
+    "ProjectExposureConfig": {
+      "type": "object",
+      "properties": {
+        "+enabled": {
           "type": [
-            "string",
+            "boolean",
             "null"
           ]
         },
-        "enabled": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "error_if": {
+        "+meta": {
           "type": [
-            "string",
-            "null"
-          ]
-        },
-        "fail_calc": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "group": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "limit": {
-          "type": [
-            "integer",
+            "object",
             "null"
           ],
-          "format": "int32"
+          "additionalProperties": false
         },
-        "meta": true,
-        "schema": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "severity": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Severity"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "store_failures": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "tags": {
+        "+tags": {
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -517,88 +882,36 @@
               "type": "null"
             }
           ]
-        },
-        "warn_if": {
-          "type": [
-            "string",
-            "null"
-          ]
         }
-      }
+      },
+      "additionalProperties": false
     },
-    "DocsConfig": {
+    "ProjectMetricConfigs": {
       "type": "object",
       "properties": {
-        "node_color": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "show": {
+        "+enabled": {
           "type": [
             "boolean",
             "null"
           ]
-        }
-      }
-    },
-    "FloatOrString": {
-      "anyOf": [
-        {
-          "type": "number",
-          "format": "float"
         },
-        {
-          "type": "string"
-        }
-      ]
-    },
-    "HookConfig": {
-      "type": "object",
-      "properties": {
-        "sql": {
+        "+group": {
           "type": [
             "string",
             "null"
           ]
         },
-        "transaction": {
+        "+meta": {
           "type": [
-            "boolean",
+            "object",
             "null"
-          ]
-        }
-      }
-    },
-    "Hooks": {
-      "anyOf": [
-        {
-          "type": "string"
+          ],
+          "additionalProperties": false
         },
-        {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        {
-          "$ref": "#/definitions/HookConfig"
-        },
-        {
-          "type": "array",
-          "items": true
-        }
-      ]
-    },
-    "MetricConfigs": {
-      "type": "object",
-      "properties": {
-        "+meta": true,
-        "enabled": {
+        "+tags": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BooleanOrJinjaString"
+              "$ref": "#/definitions/StringOrArrayOfStrings"
             },
             {
               "type": "null"
@@ -606,9 +919,9 @@
           ]
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     },
-    "ModelConfigs": {
+    "ProjectModelConfig": {
       "type": "object",
       "properties": {
         "+access": {
@@ -627,40 +940,122 @@
             "null"
           ]
         },
+        "+auto_liquid_cluster": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+auto_refresh": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+automatic_clustering": {
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "+backup": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+base_location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+base_location_subpath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+batch_size": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BooleanOrJinjaString"
+              "$ref": "#/definitions/DbtBatchSize"
             },
             {
               "type": "null"
             }
           ]
         },
+        "+begin": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+bind": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+buckets": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "+catalog": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+catalog_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+cluster_by": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BooleanOrJinjaString"
+              "$ref": "#/definitions/BigqueryClusterConfig"
             },
             {
               "type": "null"
             }
+          ]
+        },
+        "+clustered_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+column_types": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+compression": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+concurrent_batches": {
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "+contract": {
           "anyOf": [
             {
-              "$ref": "#/definitions/Contract"
+              "$ref": "#/definitions/DbtContract"
             },
             {
               "type": "null"
@@ -668,16 +1063,37 @@
           ]
         },
         "+copy_grants": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "+database": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+databricks_compute": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+databricks_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+dist": {
           "type": [
             "string",
             "null"
@@ -693,14 +1109,28 @@
             }
           ]
         },
+        "+enable_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+enabled": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+event_time": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+external_volume": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+file_format": {
@@ -709,14 +1139,20 @@
             "null"
           ]
         },
-        "+full_refresh": {
+        "+freshness": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BooleanOrJinjaString"
+              "$ref": "#/definitions/ModelFreshness"
             },
             {
               "type": "null"
             }
+          ]
+        },
+        "+full_refresh": {
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "+grant_access_to": {
@@ -724,9 +1160,17 @@
             "array",
             "null"
           ],
-          "items": true
+          "items": {
+            "$ref": "#/definitions/GrantAccessToTarget"
+          }
         },
-        "+grants": true,
+        "+grants": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
         "+group": {
           "type": [
             "string",
@@ -735,19 +1179,16 @@
         },
         "+hours_to_expiration": {
           "type": [
-            "number",
+            "integer",
             "null"
           ],
-          "format": "float"
+          "format": "uint64",
+          "minimum": 0.0
         },
         "+include_full_name_in_path": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "+incremental_predicates": {
@@ -760,6 +1201,16 @@
           }
         },
         "+incremental_strategy": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtIncrementalStrategy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+initialize": {
           "type": [
             "string",
             "null"
@@ -771,7 +1222,29 @@
             "null"
           ]
         },
-        "+labels": true,
+        "+labels": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+labels_from_meta": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+liquid_clustered_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+location": {
           "type": [
             "string",
@@ -784,7 +1257,30 @@
             "null"
           ]
         },
+        "+lookback": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "+matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+materialized": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtMaterialization"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+max_staleness": {
           "type": [
             "string",
             "null"
@@ -810,7 +1306,37 @@
             }
           ]
         },
-        "+meta": true,
+        "+merge_with_schema_evolution": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+not_matched_by_source_action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+not_matched_by_source_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+not_matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+on_configuration_change": {
           "anyOf": [
             {
@@ -830,6 +1356,43 @@
               "type": "null"
             }
           ]
+        },
+        "+packages": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+partition_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryPartitionConfigLegacy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+partition_expiration_days": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "+partitions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         },
         "+persist_docs": {
           "anyOf": [
@@ -876,6 +1439,36 @@
             "null"
           ]
         },
+        "+quoting": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtQuoting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+refresh_interval_minutes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "+refresh_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+require_partition_filter": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+schema": {
           "type": [
             "string",
@@ -883,16 +1476,46 @@
           ]
         },
         "+secure": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+skip_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+skip_not_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+snowflake_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+sort": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BooleanOrJinjaString"
+              "$ref": "#/definitions/StringOrArrayOfStrings"
             },
             {
               "type": "null"
             }
           ]
         },
-        "+snowflake_warehouse": {
+        "+sort_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+source_alias": {
           "type": [
             "string",
             "null"
@@ -902,6 +1525,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "+static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "+table_format": {
@@ -920,417 +1553,140 @@
             }
           ]
         },
+        "+target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+target_lag": {
           "type": [
             "string",
             "null"
           ]
         },
-        "+tblproperties": true,
+        "+tblproperties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+tmp_relation_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+transient": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "access": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Access"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "alias": {
           "type": [
-            "string",
+            "boolean",
             "null"
           ]
         },
-        "auto_refresh": {
+        "+unique_key": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "backup": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "bind": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "contract": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Contract"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "copy_grants": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "database": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "docs": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/DocsConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "enabled": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "file_format": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "full_refresh": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "grant_access_to": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": true
-        },
-        "grants": true,
-        "group": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "hours_to_expiration": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "float"
-        },
-        "include_full_name_in_path": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "incremental_strategy": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "kms_key_name": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "labels": true,
-        "location": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "location_root": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "materialized": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "merge_exclude_columns": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "merge_update_columns": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "meta": true,
-        "on_configuration_change": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/OnConfigurationChange"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "on_schema_change": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/OnSchemaChange"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "persist_docs": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/PersistDocsConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "post-hook": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Hooks"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "pre-hook": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Hooks"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "query_tag": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "schema": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "secure": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "snowflake_warehouse": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "sql_header": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "table_format": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "tags": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "target_lag": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "tblproperties": true,
-        "transient": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
+              "$ref": "#/definitions/DbtUniqueKey"
             },
             {
               "type": "null"
             }
           ]
         }
-      }
+      },
+      "additionalProperties": false
     },
-    "OnConfigurationChange": {
-      "type": "string",
-      "enum": [
-        "apply",
-        "continue",
-        "fail"
-      ]
-    },
-    "OnSchemaChange": {
-      "type": "string",
-      "enum": [
-        "append_new_columns",
-        "fail",
-        "ignore",
-        "sync_all_columns"
-      ]
-    },
-    "PersistDocsConfig": {
+    "ProjectSavedQueriesConfig": {
       "type": "object",
       "properties": {
-        "columns": {
+        "+cache": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BooleanOrJinjaString"
+              "$ref": "#/definitions/SavedQueriesConfigCache"
             },
             {
               "type": "null"
             }
           ]
         },
-        "relation": {
+        "+enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+export_as": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BooleanOrJinjaString"
+              "$ref": "#/definitions/ExportConfigExportAs"
             },
             {
               "type": "null"
             }
           ]
-        }
-      }
-    },
-    "QueryComment": {
-      "anyOf": [
-        {
-          "type": "string"
         },
-        true
-      ]
-    },
-    "SavedQueriesConfigs": {
-      "type": "object",
-      "properties": {
+        "+group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
         "+schema": {
           "type": [
             "string",
             "null"
           ]
-        }
-      }
-    },
-    "SeedConfigs": {
-      "type": "object",
-      "properties": {
-        "+column_types": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "type": "string"
-          }
         },
-        "+copy_grants": {
+        "+tags": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BooleanOrJinjaString"
+              "$ref": "#/definitions/StringOrArrayOfStrings"
             },
             {
               "type": "null"
             }
           ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ProjectSeedConfig": {
+      "type": "object",
+      "properties": {
+        "+alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+column_types": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+copy_grants": {
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "+database": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+delimiter": {
           "type": [
             "string",
             "null"
@@ -1347,33 +1703,43 @@
           ]
         },
         "+enabled": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+event_time": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+full_refresh": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
+          "type": [
+            "boolean",
+            "null"
           ]
         },
-        "+grants": true,
+        "+grants": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
         "+group": {
           "type": [
             "string",
             "null"
           ]
         },
-        "+meta": true,
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
         "+persist_docs": {
           "anyOf": [
             {
@@ -1405,9 +1771,15 @@
           ]
         },
         "+quote_columns": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+quoting": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BooleanOrJinjaString"
+              "$ref": "#/definitions/DbtQuoting"
             },
             {
               "type": "null"
@@ -1437,137 +1809,18 @@
           ]
         },
         "+transient": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "column_types": {
           "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "copy_grants": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "database": {
-          "type": [
-            "string",
+            "boolean",
             "null"
           ]
-        },
-        "delimiter": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "docs": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/DocsConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "enabled": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "full_refresh": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "grants": true,
-        "group": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "meta": true,
-        "persist_docs": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/PersistDocsConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "post-hook": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Hooks"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "pre-hook": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Hooks"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "quote_columns": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "schema": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "snowflake_warehouse": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "tags": {
+        }
+      },
+      "additionalProperties": false
+    },
+    "ProjectSemanticModelConfig": {
+      "type": "object",
+      "properties": {
+        "+tags": {
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -1577,29 +1830,29 @@
             }
           ]
         },
-        "transient": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
           ]
-        }
-      }
-    },
-    "Severity": {
-      "anyOf": [
-        {
-          "type": "string"
         },
-        {
-          "type": "string"
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
         }
-      ]
+      },
+      "additionalProperties": false
     },
-    "SnapshotConfigs": {
+    "ProjectSnapshotConfig": {
       "type": "object",
       "properties": {
         "+alias": {
@@ -1630,14 +1883,20 @@
             "null"
           ]
         },
-        "+enabled": {
+        "+docs": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BooleanOrJinjaString"
+              "$ref": "#/definitions/DocsConfig"
             },
             {
               "type": "null"
             }
+          ]
+        },
+        "+enabled": {
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "+event_time": {
@@ -1647,11 +1906,44 @@
           ]
         },
         "+grants": true,
-        "+hard_deletes": {
+        "+group": {
           "type": [
             "string",
             "null"
           ]
+        },
+        "+hard_deletes": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/HardDeletes"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+invalidate_hard_deletes": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+materialized": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtMaterialization"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
         },
         "+persist_docs": {
           "anyOf": [
@@ -1683,6 +1975,22 @@
             }
           ]
         },
+        "+quote_columns": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+quoting": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtQuoting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+schema": {
           "type": [
             "string",
@@ -1690,16 +1998,24 @@
           ]
         },
         "+snapshot_meta_column_names": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SnapshotMetaColumnNames"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "+strategy": {
           "type": [
@@ -1717,12 +2033,6 @@
             }
           ]
         },
-        "+target_schema": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "+unique_key": {
           "anyOf": [
             {
@@ -1738,151 +2048,17 @@
             "string",
             "null"
           ]
-        },
-        "alias": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "check_cols": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "database": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "dbt_valid_to_current": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "enabled": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "grants": true,
-        "hard_deletes": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "persist_docs": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/PersistDocsConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "post-hook": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Hooks"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "pre-hook": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Hooks"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "schema": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "snapshot_meta_column_names": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "strategy": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "tags": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "target_schema": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "unique_key": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "updated_at": {
-          "type": [
-            "string",
-            "null"
-          ]
         }
-      }
+      },
+      "additionalProperties": false
     },
-    "SourceConfigs": {
+    "ProjectSourceConfig": {
       "type": "object",
       "properties": {
         "+enabled": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "+event_time": {
@@ -1891,7 +2067,55 @@
             "null"
           ]
         },
-        "+meta": true,
+        "+freshness": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessDefinition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+loaded_at_field": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+loaded_at_query": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+quoting": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtQuoting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+tags": {
           "anyOf": [
             {
@@ -1901,25 +2125,37 @@
               "type": "null"
             }
           ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ProjectUnitTestConfig": {
+      "type": "object",
+      "properties": {
+        "+enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
-        "enabled": {
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+static_analysis": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BooleanOrJinjaString"
+              "$ref": "#/definitions/StaticAnalysisKind"
             },
             {
               "type": "null"
             }
           ]
         },
-        "event_time": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "meta": true,
-        "tags": {
+        "+tags": {
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -1929,7 +2165,123 @@
             }
           ]
         }
-      }
+      },
+      "additionalProperties": false
+    },
+    "QueryComment": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        true
+      ]
+    },
+    "Range": {
+      "type": "object",
+      "required": [
+        "end",
+        "interval",
+        "start"
+      ],
+      "properties": {
+        "end": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "interval": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "start": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "RangeConfig": {
+      "type": "object",
+      "required": [
+        "range"
+      ],
+      "properties": {
+        "range": {
+          "$ref": "#/definitions/Range"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SavedQueriesConfigCache": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "SnapshotMetaColumnNames": {
+      "type": "object",
+      "properties": {
+        "dbt_is_deleted": {
+          "default": "DBT_IS_DELETED",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dbt_scd_id": {
+          "default": "DBT_SCD_ID",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dbt_updated_at": {
+          "default": "DBT_UPDATED_AT",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dbt_valid_from": {
+          "default": "DBT_VALID_FROM",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dbt_valid_to": {
+          "default": "DBT_VALID_TO",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "StaticAnalysisKind": {
+      "type": "string",
+      "enum": [
+        "unsafe",
+        "off",
+        "on"
+      ]
+    },
+    "StoreFailuresAs": {
+      "type": "string",
+      "enum": [
+        "ephemeral",
+        "table",
+        "view"
+      ]
     },
     "StringOrArrayOfStrings": {
       "anyOf": [
@@ -1944,65 +2296,15 @@
         }
       ]
     },
-    "StringOrVecString": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      ]
-    },
-    "UnitTestConfigs": {
+    "TimeConfig": {
       "type": "object",
       "properties": {
-        "+enabled": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "+meta": true,
-        "+tags": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "enabled": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/BooleanOrJinjaString"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "meta": true,
-        "tags": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
-            },
-            {
-              "type": "null"
-            }
-          ]
+        "granularity": {
+          "default": "day",
+          "type": "string"
         }
-      }
+      },
+      "additionalProperties": false
     },
     "_Dispatch": {
       "type": "object",
@@ -2020,7 +2322,8 @@
             "type": "string"
           }
         }
-      }
+      },
+      "additionalProperties": false
     }
   }
 }

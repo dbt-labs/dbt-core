@@ -56,6 +56,7 @@ class dbtRunner:
             dbt_ctx.obj = {
                 "manifest": self.manifest,
                 "callbacks": self.callbacks,
+                "dbt_runner_command_args": args,
             }
 
             for key, value in kwargs.items():

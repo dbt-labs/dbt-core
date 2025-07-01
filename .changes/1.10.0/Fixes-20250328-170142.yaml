@@ -1,7 +1,0 @@
-kind: Fixes
-body: Fix microbatch models couting as success when only having one batch (and that
-  batch failing)
-time: 2025-03-28T17:01:42.342741-05:00
-custom:
-  Author: QMalcolm
-  Issue: "11390"

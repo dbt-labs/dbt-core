@@ -34,7 +34,7 @@ env:
 jobs:
   check-reviews:
     name: "Validate Additional Reviews"
-    runs-on: ${{ vars.UBUNTU_LATEST }}
+    runs-on: ubuntu-latest
     steps:
       - name: "Get list of changed files"
         id: changed_files

@@ -6,7 +6,6 @@ Most of the python code in the repository is within the `core/dbt` directory.
 - [`single python files`](core/dbt/README.md): A number of individual files, such as 'compilation.py' and 'exceptions.py'
 
 The main subdirectories of core/dbt:
-- [`adapters`](core/dbt/adapters/README.md): Define base classes for behavior that is likely to differ across databases
 - [`clients`](core/dbt/clients/README.md): Interface with dependencies (agate, jinja) or across operating systems
 - [`config`](core/dbt/config/README.md): Reconcile user-supplied configuration from connection profiles, project files, and Jinja macros
 - [`context`](core/dbt/context/README.md): Build and expose dbt-specific Jinja functionality

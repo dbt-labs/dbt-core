@@ -19,9 +19,12 @@ override_freshness_models_schema_yml = """version: 2
 sources:
   - name: test_source
     loader: custom
-    freshness: # default freshness
-      warn_after: {count: 12, period: hour}
+    freshness:
+      warn_after: {count: 18, period: hour}
       error_after: {count: 24, period: hour}
+    config:
+      freshness: # default freshness, takes precedence over top-level key above
+        warn_after: {count: 12, period: hour}
     schema: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}"
     loaded_at_field: loaded_at
     quoting:
@@ -32,9 +35,12 @@ sources:
       - name: source_a
         identifier: source
         loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
+        config:
+          freshness:
+            warn_after: {count: 6, period: hour}
+            # use default error_after, takes precedence over top-level key above
         freshness:
-          warn_after: {count: 6, period: hour}
-          # use the default error_after defined above
+          warn_after: {count: 9, period: hour}
       - name: source_b
         identifier: source
         loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
@@ -52,7 +58,10 @@ sources:
         loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
         freshness:
           warn_after: {count: 6, period: hour}
-          error_after: {count: 72, period: hour} # override: use this new behavior instead of error_after defined above
+          error_after: {count: 144, period: hour}
+        config:
+          freshness:
+            error_after: {count: 72, period: hour} # override: use this new behavior instead of error_after defined above
       - name: source_e
         identifier: source
         loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
@@ -494,4 +503,124 @@ sources:
         identifier: source
         loaded_at_query: "select {{current_timestamp()}}"
 
+"""
+
+freshness_with_explicit_null_in_table_schema_yml = """version: 2
+sources:
+  - name: test_source
+    schema: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}"
+    freshness:
+        warn_after:
+          count: 24
+          period: hour
+    quoting:
+      identifier: True
+    tables:
+      - name: source_a
+        loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
+        config:
+          freshness: null
+"""
+
+freshness_with_explicit_null_in_source_schema_yml = """version: 2
+sources:
+  - name: test_source
+    schema: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}"
+    config:
+      freshness: null
+    quoting:
+      identifier: True
+    tables:
+      - name: source_a
+        loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
+"""
+
+source_config_loaded_at_query_config_level = """
+sources:
+  - name: test_source
+    config:
+      loaded_at_query: 'select 1'
+    tables:
+      - name: test_table
+"""
+
+source_config_loaded_at_field_config_level = """
+sources:
+  - name: test_source
+    config:
+      loaded_at_field: 'id'
+    tables:
+      - name: test_table
+"""
+
+source_table_config_loaded_at_field_config_level = """
+sources:
+  - name: test_source
+    tables:
+      - name: test_table
+        config:
+          loaded_at_field: 'id'
+"""
+
+source_table_config_loaded_at_query_config_level = """
+sources:
+  - name: test_source
+    tables:
+      - name: test_table
+        config:
+          loaded_at_query: 'select 1'
+"""
+
+source_table_config_loaded_at_query_not_set_if_field_present = """
+sources:
+  - name: test_source
+    config:
+      loaded_at_query: 'select 1'
+    tables:
+      - name: test_table
+        config:
+          loaded_at_field: 'id'
+"""
+
+# Legacy top-level support
+source_config_loaded_at_field_top_level = """
+sources:
+  - name: test_source
+    loaded_at_field: 'id'
+    tables:
+      - name: test_table
+"""
+
+source_config_loaded_at_query_top_level = """
+sources:
+  - name: test_source
+    loaded_at_query: 'select 1'
+    tables:
+      - name: test_table
+"""
+
+table_config_loaded_at_field_top_level = """
+sources:
+  - name: test_source
+    tables:
+      - name: test_table
+        loaded_at_field: 'id'
+"""
+
+table_config_loaded_at_query_top_level = """
+sources:
+  - name: test_source
+    loaded_at_query: 'select 1'
+    tables:
+      - name: test_table
+        loaded_at_query: 'select 1'
+"""
+
+source_table_config_loaded_at_query_not_set_if_field_present_top_level = """
+sources:
+  - name: test_source
+    loaded_at_query: 'select 1'
+    tables:
+      - name: test_table
+        loaded_at_field: 'id'
 """

@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix duplicate macro error message with multiple macros and multiple patches
-time: 2025-04-22T12:28:35.642843-04:00
-custom:
-  Author: gshank
-  Issue: "4233"
