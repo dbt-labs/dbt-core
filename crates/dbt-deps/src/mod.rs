@@ -1,5 +1,6 @@
 mod steps;
 
+mod add_package;
 mod github_client;
 mod hub_client;
 pub mod package_listing;
@@ -29,11 +30,18 @@ pub async fn get_or_install_packages(
     env: &mut JinjaEnvironment<'static>,
     packages_install_path: &Path,
     install_deps: bool,
+    add_package: Option<String>,
     vars: BTreeMap<String, dbt_serde_yaml::Value>,
 ) -> FsResult<(DbtPackagesLock, Vec<UpstreamProject>)> {
     let mut hub_registry = HubClient::new(DBT_HUB_URL);
 
     let package_render_scope = RenderSecretScope::new(env, vars);
+
+    // Add package first if specified, then load the package definition
+    if let Some(add_package) = add_package {
+        add_package::add_package(&add_package, &io.in_dir)?;
+    }
+
     let (package_def, package_yml_name) = load_dbt_packages(io, &io.in_dir)?;
 
     // Store projects for later use if package_def exists

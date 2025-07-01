@@ -192,6 +192,7 @@ pub async fn load(
         &mut env,
         &packages_install_path,
         arg.install_deps,
+        arg.add_package.clone(),
         arg.vars.clone(),
     )
     .await?;

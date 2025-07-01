@@ -105,6 +105,9 @@ pub struct InitArgs {
 
 #[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
 pub struct DepsArgs {
+    #[arg(long)]
+    pub add_package: Option<String>,
+
     // Flattened Common args
     #[clap(flatten)]
     pub common_args: CommonArgs,

@@ -27,6 +27,8 @@ pub struct LoadArgs {
     pub threads: Option<usize>,
     /// Install dependencies
     pub install_deps: bool,
+    /// add_package cli option
+    pub add_package: Option<String>,
     // Whether to load only profiles
     pub debug_profile: bool,
 }
@@ -42,6 +44,7 @@ impl LoadArgs {
             internal_packages_install_path: arg.internal_packages_install_path.clone(),
             target: arg.target.clone(),
             update_deps: arg.update_deps,
+            add_package: arg.add_package.clone(),
             vars: arg.vars.clone(),
             from_main: arg.from_main,
             threads: arg.num_threads,

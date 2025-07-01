@@ -155,6 +155,8 @@ pub struct EvalArgs {
     pub profiles_dir: Option<PathBuf>,
     // The directory to install packages
     pub packages_install_path: Option<PathBuf>,
+    // A package to add to deps
+    pub add_package: Option<String>,
     // The profile to use
     pub profile: Option<String>,
     // The target within the profile to use for the dbt run
