@@ -1,7 +1,7 @@
-use std::collections::BTreeMap;
+use std::{cell::Cell, collections::BTreeMap};
 
 use crate::{
-    value::{value_map_with_capacity, Kwargs, ValueMap},
+    value::{value_map_with_capacity, ArgType, Kwargs, ValueMap},
     Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, Value,
 };
 
@@ -357,172 +357,393 @@ impl ArgParser {
     }
 }
 
+enum PosParams<'a> {
+    Named(&'a [&'a str]),
+    Unnamed(usize),
+}
+
+impl PosParams<'_> {
+    pub fn get(&self, idx: usize) -> Option<&str> {
+        match self {
+            PosParams::Named(params) => Some(params[idx]),
+            PosParams::Unnamed(num_pos_params) => {
+                debug_assert!(idx < *num_pos_params);
+                None
+            }
+        }
+    }
+
+    /// Get the number of positional parameters.
+    pub fn len(&self) -> usize {
+        match self {
+            PosParams::Named(params) => params.len(),
+            PosParams::Unnamed(len) => *len,
+        }
+    }
+
+    pub fn are_named(&self) -> bool {
+        matches!(self, PosParams::Named(_))
+    }
+}
+
 /// A zero-copy, streaming parser of arguments from a `&[Value]` slice.
 ///
 /// NOTE(felipecrv): this is experimental and not part of the original minijinja
 /// codebase. It may change in the future.
 pub struct ArgsIter<'a> {
     fn_name: &'a str,
-    min_pos_args: usize,
+    /// The required positional parameters of the function.
+    pos_params: PosParams<'a>,
     args: &'a [Value],
-    index: usize,
-    kwargs: Option<&'a Value>,
+    /// The number of provided positional arguments.
+    num_pos_args: usize,
+    index: Cell<usize>,
+    kwargs: Kwargs,
 }
 
 impl<'a> ArgsIter<'a> {
     /// Create a new `ArgsIter` from a slice of `Value`s.
     ///
     /// PRECONDITION: if one of the args `.is_kwargs()`, it must be the last argument in the slice.
-    pub fn new(fn_name: &'a str, min_pos_args: usize, args: &'a [Value]) -> ArgsIter<'a> {
+    pub fn new(fn_name: &'a str, pos_params: &'a [&'a str], args: &'a [Value]) -> ArgsIter<'a> {
+        Self::_new(fn_name, PosParams::Named(pos_params), args)
+    }
+
+    /// Create a parser for functions with unnamed positional parameters.
+    ///
+    /// This is the case for built-in functions like `len`, `sum`, etc. The error messages
+    /// for these will not include the parameter names, but will still indicate the number of
+    /// positional parameters expected. For example, when you call `len()` with no arguments:
+    ///
+    ///     len() takes exactly one argument (0 given)
+    pub fn for_unnamed_pos_args(
+        fn_name: &'a str,
+        num_pos_params: usize,
+        args: &'a [Value],
+    ) -> ArgsIter<'a> {
+        Self::_new(fn_name, PosParams::Unnamed(num_pos_params), args)
+    }
+
+    /// Create a parser for functions with no positional parameters.
+    ///
+    /// Calling `finish()?` will return an error if any arguments are provided.
+    pub fn nullary(fn_name: &'a str, args: &'a [Value]) -> ArgsIter<'a> {
+        Self::_new(fn_name, PosParams::Unnamed(0), args)
+    }
+
+    fn _new(fn_name: &'a str, pos_params: PosParams<'a>, args: &'a [Value]) -> ArgsIter<'a> {
+        let (num_pos_args, kwargs) = Self::_extract_kwargs(args);
         ArgsIter {
             fn_name,
-            min_pos_args,
+            pos_params,
             args,
-            index: 0,
-            kwargs: None,
+            num_pos_args,
+            index: Cell::new(0),
+            kwargs,
         }
     }
 
-    /// Number of positional arguments provided to the iterator.
-    pub fn num_pos_args(&self) -> usize {
-        let has_kwargs = self.kwargs.is_some() || self.args.last().is_some_and(|v| v.is_kwargs());
-        self.args.len() - if has_kwargs { 1 } else { 0 }
+    #[inline(never)]
+    fn _extract_kwargs(args: &'a [Value]) -> (usize, Kwargs) {
+        let kwargs = args.last().and_then(Kwargs::extract);
+        let num_pos_args = args.len()
+            - match kwargs {
+                Some(_) => 1,
+                None => 0,
+            };
+        (num_pos_args, kwargs.unwrap_or_default())
+    }
+
+    /// Get the next (required) positional argument.
+    pub fn next_arg<T>(&'a self) -> Result<T, MinijinjaError>
+    where
+        T: ArgType<'a, Output = T>,
+    {
+        if self.index.get() >= self.pos_params.len() {
+            unreachable!(
+                "next_arg() called more than the number of positional parameters: {}",
+                self.pos_params.len()
+            )
+        }
+
+        let arg = self._next();
+        let idx = self.index.get() - 1;
+        if arg.is_some() {
+            let rv = T::from_value(arg)?;
+            self._ensure_pos_arg_not_in_kwargs(idx)?;
+            Ok(rv)
+        } else {
+            // positional arguments have been consumed,
+            // so we check if it was passed as a kwarg
+            self._get_pos_arg_from_kwargs::<T>(idx)
+        }
+    }
+
+    fn _get_pos_arg_from_kwargs<T>(&'a self, idx: usize) -> Result<T, MinijinjaError>
+    where
+        T: ArgType<'a, Output = T>,
+    {
+        let name = match self.pos_params.get(idx) {
+            Some(name) => name,
+            None => return Err(self._missing_pos_arg(idx)),
+        };
+        self.kwargs.get::<'a, T>(name).map_err(|err| {
+            if err.kind() == MinijinjaErrorKind::MissingArgument {
+                // Missing kwarg would be the wrong diagnostic here,
+                // so we produce a better one.
+                self._missing_pos_arg(idx)
+            } else {
+                err
+            }
+        })
+    }
+
+    /// Get the next kwarg at the current iterator position.
+    ///
+    ///     def f(x, y, alpha=None, beta=None)
+    ///
+    /// ```rust
+    /// fn f(args: &[Value]) -> Result<(), Error> {
+    ///     let iter = ArgsIter::new("f", &["x", "y"], args);
+    ///     let x = iter.next_arg()?;
+    ///     let y = iter.next_arg()?;
+    ///     let alpha = iter.next_kwarg("alpha")?;
+    ///     let beta = iter.next_kwarg("beta")?;
+    ///     iter.finish()?;
+    ///     // ...use x, y, alpha, beta here...
+    ///     # drop(x);
+    ///     # drop(y);
+    ///     # drop(alpha);
+    ///     # drop(beta);
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn next_kwarg<T>(&'a self, name: &'a str) -> Result<T, MinijinjaError>
+    where
+        T: ArgType<'a, Output = T>,
+    {
+        if let Some(arg) = self._next() {
+            let rv = T::from_value(Some(arg))?;
+            self._ensure_not_in_kwargs(Some(name))?;
+            return Ok(rv);
+        }
+
+        self.kwargs.get::<T>(name)
+    }
+
+    /// Ensure all positional arguments have been consumed when no kwargs are expected.
+    #[inline(never)]
+    pub fn finish(&self) -> Result<(), MinijinjaError> {
+        if self.index.get() < self.num_pos_args {
+            // The user called finish() now, so the current iterator position
+            // is the expected maximum number of positional arguments.
+            let max_pos_args = self.index.get();
+            if self.pos_params.are_named() || self.kwargs.values.is_empty() {
+                Err(self._unexpected_positional_arg(max_pos_args))
+            } else {
+                Err(self._didnt_expect_any_kwarg())
+            }
+        } else {
+            #[allow(clippy::collapsible_else_if)]
+            if self.pos_params.are_named() {
+                self.kwargs.assert_all_used()
+            } else if self.kwargs.values.is_empty() {
+                Ok(())
+            } else {
+                Err(self._didnt_expect_any_kwarg())
+            }
+        }
     }
 
     /// Ensure all positional arguments have been consumed and return any trailing kwargs.
     ///
-    /// Call this instead of `finish()` if you expect trailing kwargs.
-    pub fn trailing_kwargs(&mut self) -> Result<Kwargs, MinijinjaError> {
-        if let Some(value) = self.kwargs {
-            // If kwargs is set, all positional arguments have been consumed.
-            // .unwrap() is safe here because we know `value.is_kwargs()` is true.
-            return Ok(Kwargs::extract(value).unwrap());
-        }
-        if let Some(arg) = self._peek() {
-            if let Some(kwargs) = Kwargs::extract(arg) {
-                self._next(); // consume the peeked() kwargs argument
-                self.kwargs.replace(arg);
-                Ok(kwargs)
-            } else {
-                let max_pos_args = self.index;
-                Err(self._unexpected_positional_arg(max_pos_args))
-            }
-        } else {
-            Ok(Kwargs::default())
-        }
-    }
-
-    /// Ensure all positional arguments have been consumed when no kwargs are expected.
-    pub fn finish(&self) -> Result<(), MinijinjaError> {
-        if let Some(arg) = self._peek() {
-            let err = if arg.is_kwargs() {
-                self._unexpected_kwargs(arg)
-            } else {
-                // The user called finish() now, so the current iterator position
-                // is the expected maximum number of positional arguments.
-                let max_pos_args = self.index;
-                self._unexpected_positional_arg(max_pos_args)
-            };
-            Err(err)
-        } else {
-            Ok(())
-        }
-    }
-
-    /// Handle unexpected kwargs.
+    /// Call this instead of `finish()` if you expect trailing kwargs. Example:
     ///
-    /// PRECONDITION: arg.is_kwargs()
-    #[inline(never)]
-    fn _unexpected_kwargs(&self, arg: &Value) -> MinijinjaError {
-        // Like Python, we produce a message that lets the user
-        // easily identify the unexpected keyword argument.
-        let kwargs = arg.as_object().unwrap(); // arg.is_kwargs()
-        let mut iter = kwargs.try_iter().unwrap(); // Kwargs is iterable
-        let key = iter.next().unwrap(); // Kwargs must have at least one key
-        let msg = format!(
-            "{}() got an unexpected keyword argument '{}'",
-            self.fn_name,
-            key.as_str().unwrap()
+    ///     def f(x, y=20, **kwargs)
+    pub fn trailing_kwargs(&'a self) -> Result<&'a Kwargs, MinijinjaError> {
+        if self.index.get() < self.num_pos_args {
+            // The user called trailing_kwargs() now, so the current iterator
+            // position is the expected maximum number of positional arguments.
+            let max_pos_args = self.index.get();
+            Err(self._unexpected_positional_arg(max_pos_args))
+        } else {
+            Ok(&self.kwargs)
+        }
+    }
+
+    fn _didnt_expect_any_kwarg(&self) -> MinijinjaError {
+        let err = MinijinjaError::new(
+            MinijinjaErrorKind::TooManyArguments,
+            format!("{}() takes no keyword arguments", self.fn_name),
         );
-        MinijinjaError::new(MinijinjaErrorKind::TooManyArguments, msg)
+        err
     }
 
     #[inline(never)]
     fn _unexpected_positional_arg(&self, max_pos_args: usize) -> MinijinjaError {
         // handle the unexpected positional argument case
         debug_assert!(
-            max_pos_args >= self.min_pos_args,
-            "trailing_kwargs() or finish() called before min_pos_args={} arguments \
+            max_pos_args >= self.pos_params.len(),
+            "trailing_kwargs() or finish() called before {} arguments \
 were consumed from the iterator. You are misusing the ArgsIter API.",
-            self.min_pos_args
+            self.pos_params.len()
         );
 
-        let num_pos_args = self.num_pos_args();
-        let msg = if self.min_pos_args == max_pos_args {
+        let msg = if self.pos_params.len() == max_pos_args {
+            let num_pos_params = self.pos_params.len();
             format!(
-                "{}() takes {} positional argument but {} were given",
-                self.fn_name, self.min_pos_args, num_pos_args
+                "{}() takes exactly {} positional argument{} ({} given)",
+                self.fn_name,
+                if num_pos_params == 0 {
+                    "zero".to_string()
+                } else {
+                    format!("{num_pos_params}")
+                },
+                if num_pos_params == 1 { "" } else { "s" },
+                self.num_pos_args
             )
         } else {
             format!(
                 "{}() takes from {} to {} positional arguments but {} were given",
-                self.fn_name, self.min_pos_args, max_pos_args, num_pos_args
+                self.fn_name,
+                self.pos_params.len(),
+                max_pos_args,
+                self.num_pos_args
             )
         };
         MinijinjaError::new(MinijinjaErrorKind::TooManyArguments, msg)
     }
 
-    fn _peek(&self) -> Option<&'a Value> {
-        if self.index < self.args.len() {
-            Some(&self.args[self.index])
-        } else {
-            None
-        }
+    #[inline(never)]
+    fn _missing_pos_arg(&self, idx: usize) -> MinijinjaError {
+        let msg = match self.pos_params {
+            PosParams::Named(param_names) => {
+                use std::fmt::Write as _;
+                let missing = {
+                    let mut missing: Vec<&'a str> = vec![];
+                    for name in &param_names[idx..] {
+                        let peek = match self.kwargs.peek::<Option<&Value>>(name) {
+                            Ok(Some(_)) => true,
+                            Ok(None) => false,
+                            Err(e) => return e,
+                        };
+                        if !peek {
+                            missing.push(name);
+                        }
+                    }
+                    missing
+                };
+                debug_assert!(
+                    !missing.is_empty(),
+                    "_missing_pos_arg() must be called after checking kwargs for the next pos argument");
+
+                let mut msg = String::new();
+                (if missing.len() == 1 {
+                    write!(
+                        &mut msg,
+                        "{}() missing 1 required positional argument: '{}'",
+                        self.fn_name, missing[0]
+                    )
+                } else {
+                    write!(
+                        &mut msg,
+                        "{}() missing {} required positional arguments: ",
+                        self.fn_name,
+                        missing.len()
+                    )
+                    .and_then(|_| {
+                        for a in missing.iter().take(missing.len().saturating_sub(1)) {
+                            write!(&mut msg, "'{a}', ")?;
+                        }
+                        let last = missing.last().unwrap_or(&"");
+                        write!(
+                            &mut msg,
+                            "{}'{last}'",
+                            if missing.len() > 1 { "and " } else { "" },
+                        )
+                    })
+                })
+                .unwrap_or_default();
+                msg
+            }
+            PosParams::Unnamed(arity) => {
+                if self.kwargs.values.is_empty() {
+                    format!(
+                        "{}() takes exactly {} positional argument{} ({} given)",
+                        self.fn_name,
+                        arity,
+                        if arity == 1 { "" } else { "s" },
+                        self.num_pos_args
+                    )
+                } else {
+                    return self._didnt_expect_any_kwarg();
+                }
+            }
+        };
+        MinijinjaError::new(MinijinjaErrorKind::MissingArgument, msg)
     }
 
-    fn _next(&mut self) -> Option<&'a Value> {
-        if self.index < self.args.len() {
-            let arg = &self.args[self.index];
-            self.index += 1;
-            Some(arg)
-        } else {
-            None
-        }
+    fn _ensure_pos_arg_not_in_kwargs(&'a self, idx: usize) -> Result<(), MinijinjaError> {
+        let name = self.pos_params.get(idx);
+        self._ensure_not_in_kwargs(name)
     }
 
     #[inline(never)]
-    fn _did_consume_all_positional_args(&self) -> Result<(), MinijinjaError> {
-        let num_pos_args = self.num_pos_args();
-        if num_pos_args < self.min_pos_args {
-            let msg = format!(
-                "{}() requires at least {} positional arguments but only {} were given",
-                self.fn_name, self.min_pos_args, num_pos_args
+    fn _ensure_not_in_kwargs(&'a self, name: Option<&'a str>) -> Result<(), MinijinjaError> {
+        if self.kwargs.values.is_empty() {
+            return Ok(());
+        }
+        let name = match name {
+            Some(name) => name,
+            None => return Err(self._didnt_expect_any_kwarg()),
+        };
+        // Jinja has no way of knowing how a function implemented in Rust
+        // is defined, so if we got a param from the positional arguments,
+        // we should ensure it is not present in the kwargs as well.
+        let kwarg = self.kwargs.peek::<Option<&'a Value>>(name)?;
+        if kwarg.is_some() {
+            let err = MinijinjaError::new(
+                MinijinjaErrorKind::TooManyArguments,
+                format!(
+                    "{}() got multiple values for argument '{}'",
+                    self.fn_name, name
+                ),
             );
-            let err = MinijinjaError::new(MinijinjaErrorKind::MissingArgument, msg);
             Err(err)
         } else {
             Ok(())
         }
     }
+
+    fn _next(&self) -> Option<&'a Value> {
+        let rv = if self.index.get() < self.num_pos_args {
+            let arg = &self.args[self.index.get()];
+            Some(arg)
+        } else {
+            None
+        };
+        // Always increment the index, even if we return None.
+        // This allows us to track how many positional parameters
+        // have been matched even if they were passed as kwargs.
+        self.index.set(self.index.get() + 1);
+        rv
+    }
 }
 
 impl<'a> Iterator for ArgsIter<'a> {
-    type Item = Result<&'a Value, MinijinjaError>;
+    type Item = &'a Value;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(arg) = self._next() {
-            if arg.is_kwargs() {
-                self.kwargs.replace(arg);
-                // fallthrough
-            } else {
-                return Some(Ok(arg));
-            }
-        };
-        match self._did_consume_all_positional_args() {
-            Ok(()) => None,             // finish iteration
-            Err(err) => Some(Err(err)), // generate errors infinitely
-        }
+        self._next()
     }
+}
+
+/// Assert that not arguments are provided for a nullary function.
+#[macro_export]
+macro_rules! assert_nullary_args {
+    ($fn_name:expr, $args:expr) => {
+        ArgsIter::nullary($fn_name, $args).finish()
+    };
 }
 
 #[cfg(test)]
@@ -726,5 +947,440 @@ mod tests {
         assert!(parser
             .get_optional_either::<String>("missing1", "missing2")
             .is_none());
+    }
+
+    // ArgsIter tests ---------------------------------------------------------
+
+    // def f(x, y, alpha=None, beta=None)
+    fn f(args: &[Value]) -> Result<(i64, i64, Option<Value>, Option<Value>), MinijinjaError> {
+        let iter = ArgsIter::new("f", &["x", "y"], args);
+        let x = iter.next_arg::<i64>()?;
+        let y = iter.next_arg::<i64>()?;
+        let alpha = iter.next_kwarg::<Option<&Value>>("alpha")?;
+        let beta = iter.next_kwarg::<Option<&Value>>("beta")?;
+        iter.finish()?;
+        // ...use x, y, alpha, beta here...
+        Ok((x, y, alpha.cloned(), beta.cloned()))
+    }
+
+    #[test]
+    fn test_args_iter() {
+        use crate::ErrorKind;
+
+        let x = Value::from(42);
+        let y = Value::from(1337);
+        let alpha = Value::from("Alpha");
+        let beta = Value::from("Beta");
+        let all_vars = (42, 1337, Some(alpha.clone()), Some(beta.clone()));
+
+        // 1) Passing all arguments as positional arguments:
+        //
+        // f()
+        // f(x)
+        // f(x, y)
+        // f(x, y, alpha)
+        // f(x, y, alpha, beta)
+
+        // f()
+        let args: [Value; 0] = [];
+        let e = f(&args).unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::MissingArgument);
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "f() missing 2 required positional arguments: 'x', and 'y'"
+        );
+
+        // f(x)
+        let args = [x.clone()];
+        let e = f(&args).unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::MissingArgument);
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "f() missing 1 required positional argument: 'y'"
+        );
+
+        // f(x, y)
+        let args = [x.clone(), y.clone()];
+        let vars = f(&args).unwrap();
+        assert_eq!(vars, (42, 1337, None, None));
+
+        // f(x, y, alpha)
+        let args = [x.clone(), y.clone(), alpha.clone()];
+        let vars = f(&args).unwrap();
+        assert_eq!(vars, (42, 1337, Some(Value::from("Alpha")), None));
+
+        // f(x, y, alpha, beta)
+        let args = [x.clone(), y.clone(), alpha.clone(), beta.clone()];
+        let vars = f(&args).unwrap();
+        assert_eq!(vars, all_vars);
+
+        // 2) Passing all arguments as kwargs:
+        //
+        // f(x=x)
+        // f(x=x, y=y)
+        // f(x=x, y=y, alpha=alpha)
+        // f(x=x, y=y, alpha=alpha, beta=beta)
+
+        // f(x=x)
+        let args = [Value::from(Kwargs::from_iter([(
+            "x".to_string(),
+            x.clone(),
+        )]))];
+        let e = f(&args).unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::MissingArgument);
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "f() missing 1 required positional argument: 'y'"
+        );
+
+        // f(x=x, y=y)
+        let args = [Value::from(Kwargs::from_iter([
+            ("x".to_string(), x.clone()),
+            ("y".to_string(), y.clone()),
+        ]))];
+        let vars = f(&args).unwrap();
+        assert_eq!(vars, (42, 1337, None, None));
+
+        // f(x=x, y=y, alpha=alpha)
+        let args = [Value::from(Kwargs::from_iter([
+            ("x".to_string(), x.clone()),
+            ("y".to_string(), y.clone()),
+            ("alpha".to_string(), alpha.clone()),
+        ]))];
+        let vars = f(&args).unwrap();
+        assert_eq!(vars, (42, 1337, Some(alpha.clone()), None));
+
+        // f(x=x, y=y, alpha=alpha, beta=beta)
+        let args = [Value::from(Kwargs::from_iter([
+            ("x".to_string(), x.clone()),
+            ("y".to_string(), y.clone()),
+            ("alpha".to_string(), alpha.clone()),
+            ("beta".to_string(), beta.clone()),
+        ]))];
+        let vars = f(&args).unwrap();
+        assert_eq!(vars, (42, 1337, Some(alpha.clone()), Some(beta.clone())));
+
+        // 3) Passing all arguments as kwargs but in an order that doesn't match the function
+        //    signature:
+        //
+        // f(y=y)
+        // f(y=y, x=x)
+        // f(y=y, x=x, beta=beta)
+        // f(y=y, x=x, beta=beta, alpha=alpha)
+
+        // f(y=y)
+        let args = [Value::from(Kwargs::from_iter([(
+            "y".to_string(),
+            y.clone(),
+        )]))];
+        let e = f(&args).unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::MissingArgument);
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "f() missing 1 required positional argument: 'x'"
+        );
+
+        // f(y=y, x=x)
+        let args = [Value::from(Kwargs::from_iter([
+            ("y".to_string(), y.clone()),
+            ("x".to_string(), x.clone()),
+        ]))];
+        let vars = f(&args).unwrap();
+        assert_eq!(vars, (42, 1337, None, None));
+
+        // f(y=y, x=x, beta=beta)
+        let args = [Value::from(Kwargs::from_iter([
+            ("y".to_string(), y.clone()),
+            ("x".to_string(), x.clone()),
+            ("beta".to_string(), beta.clone()),
+        ]))];
+        let vars = f(&args).unwrap();
+        assert_eq!(vars, (42, 1337, None, Some(beta.clone())));
+
+        // f(y=y, x=x, beta=beta, alpha=alpha)
+        let args = [Value::from(Kwargs::from_iter([
+            ("y".to_string(), y.clone()),
+            ("x".to_string(), x.clone()),
+            ("beta".to_string(), beta.clone()),
+            ("alpha".to_string(), alpha.clone()),
+        ]))];
+        let vars = f(&args).unwrap();
+        assert_eq!(vars, (42, 1337, Some(alpha.clone()), Some(beta.clone())));
+
+        // 4) Passing some arguments as positional and some as kwargs:
+        // f(x, y=y, beta=beta)
+        // f(x, x=x)
+        // f(x, y, alpha, alpha="Alpha 2")
+
+        // f(x, y=y, beta="Beta")
+        let args = [
+            x.clone(),
+            Value::from(Kwargs::from_iter([
+                ("y".to_string(), y.clone()),
+                ("beta".to_string(), beta.clone()),
+            ])),
+        ];
+        let vars = f(&args).unwrap();
+        assert_eq!(vars, (42, 1337, None, Some(beta.clone())));
+
+        // f(x, x=x)  [can't pass x twice]
+        let args = [
+            x.clone(),
+            Value::from(Kwargs::from_iter([("x".to_string(), x.clone())])),
+        ];
+        let e = f(&args).unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::TooManyArguments);
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "f() got multiple values for argument 'x'"
+        );
+
+        // f(x, y, alpha, alpha="Alpha 2")  [can't pass alpha twice]
+        let args = [
+            x.clone(),
+            y.clone(),
+            alpha.clone(),
+            Value::from(Kwargs::from_iter([(
+                "alpha".to_string(),
+                Value::from("Alpha 2"),
+            )])),
+        ];
+        let e = f(&args).unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::TooManyArguments);
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "f() got multiple values for argument 'alpha'"
+        );
+
+        // 5) More arguments than expected:
+        //
+        // f(x, y, alpha, beta, "Gamma")
+        // f(x, y, alpha, beta, gamma="Gamma")
+
+        // f(x, y, alpha, beta, "Gamma")  [unexpected positional arg]
+        let args = [
+            x.clone(),
+            y.clone(),
+            alpha.clone(),
+            beta.clone(),
+            Value::from("Gamma"),
+        ];
+        let e = f(&args).unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::TooManyArguments);
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "f() takes from 2 to 4 positional arguments but 5 were given"
+        );
+
+        // f(x, y, alpha, beta, gamma="Gamma")  [unexpected kwarg]
+        let args = [
+            x,
+            y,
+            alpha,
+            beta,
+            Value::from(Kwargs::from_iter([(
+                "gamma".to_string(),
+                Value::from("Gamma"),
+            )])),
+        ];
+        let e = f(&args).unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::TooManyArguments);
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "unknown keyword argument 'gamma'"
+        );
+    }
+
+    // def now()
+    fn now(args: &[Value]) -> Result<(), MinijinjaError> {
+        let iter = ArgsIter::for_unnamed_pos_args("now", 0, args);
+        iter.finish()
+    }
+
+    // def tuple.count()
+    fn count(args: &[Value]) -> Result<String, MinijinjaError> {
+        let iter = ArgsIter::for_unnamed_pos_args("tuple.count", 1, args);
+        let arg = iter.next_arg::<&str>()?;
+        iter.finish()?;
+        Ok(arg.to_string())
+    }
+
+    #[test]
+    fn test_args_iter_for_unnamed_args() {
+        use crate::ErrorKind;
+
+        // now()
+        // now("test")
+        // now("test", "another")
+        // now(x="test")
+        // now("test", x="another")
+
+        let args = [];
+        now(&args).unwrap();
+        let args = [Value::from("test")];
+        let e = now(&args).unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::TooManyArguments);
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "now() takes exactly zero positional arguments (1 given)"
+        );
+
+        let args = [Value::from("test"), Value::from("another")];
+        let e = now(&args).unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::TooManyArguments);
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "now() takes exactly zero positional arguments (2 given)"
+        );
+
+        let args = [Value::from(Kwargs::from_iter([(
+            "x".to_string(),
+            Value::from("test"),
+        )]))];
+        let e = now(&args).unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::TooManyArguments);
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "now() takes no keyword arguments"
+        );
+
+        let args = [
+            Value::from("test"),
+            Value::from(Kwargs::from_iter([("x".to_string(), Value::from("test"))])),
+        ];
+        let e = now(&args).unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::TooManyArguments);
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "now() takes no keyword arguments"
+        );
+
+        // count()
+        // count("test")
+        // count("test", "another")
+        // count(x="test")
+        // count("test", x="another")
+
+        let args = [];
+        let e = count(&args).unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::MissingArgument);
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "tuple.count() takes exactly 1 positional argument (0 given)"
+        );
+
+        let args = [Value::from("test")];
+        let result = count(&args).unwrap();
+        assert_eq!(result, "test");
+
+        let args = [Value::from("test"), Value::from("another")];
+        let e = count(&args).unwrap_err();
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "tuple.count() takes exactly 1 positional argument (2 given)"
+        );
+        assert_eq!(e.kind(), ErrorKind::TooManyArguments);
+
+        let args = [Value::from(Kwargs::from_iter([(
+            "x".to_string(),
+            Value::from("test"),
+        )]))];
+        let e = count(&args).unwrap_err();
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "tuple.count() takes no keyword arguments"
+        );
+        assert_eq!(e.kind(), ErrorKind::TooManyArguments);
+
+        let args = [
+            Value::from("test"),
+            Value::from(Kwargs::from_iter([(
+                "x".to_string(),
+                Value::from("another"),
+            )])),
+        ];
+        let e = count(&args).unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::TooManyArguments);
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "tuple.count() takes no keyword arguments"
+        );
+    }
+
+    // def print_table(max_columns=20, max_rows=6, **kwargs)
+    fn print_table(args: &[Value]) -> Result<(i64, i64, Kwargs), MinijinjaError> {
+        let iter = ArgsIter::new("print_table", &[], args);
+        let max_columns = iter.next_kwarg::<Option<i64>>("max_columns")?.unwrap_or(20);
+        let max_rows = iter.next_kwarg::<Option<i64>>("max_rows")?.unwrap_or(6);
+        let kwargs = iter.trailing_kwargs()?;
+        Ok((max_columns, max_rows, kwargs.clone()))
+    }
+
+    #[test]
+    fn test_args_iter_with_trailing_kwargs() {
+        use crate::ErrorKind;
+        // print_table()
+        // print_table(10)
+        // print_table(10, 3)
+        // print_table(10, 3, 0)
+
+        let args = [];
+        let (max_columns, max_rows, kwargs) = print_table(&args).unwrap();
+        assert_eq!(max_columns, 20);
+        assert_eq!(max_rows, 6);
+        assert!(kwargs.values.is_empty());
+
+        let args = [Value::from(10)];
+        let (max_columns, max_rows, kwargs) = print_table(&args).unwrap();
+        assert_eq!(max_columns, 10);
+        assert_eq!(max_rows, 6);
+        assert!(kwargs.values.is_empty());
+
+        let args = [Value::from(10), Value::from(3)];
+        let (max_columns, max_rows, kwargs) = print_table(&args).unwrap();
+        assert_eq!(max_columns, 10);
+        assert_eq!(max_rows, 3);
+        assert!(kwargs.values.is_empty());
+
+        let args = [Value::from(10), Value::from(3), Value::from(0)];
+        let e = print_table(&args).unwrap_err();
+        assert_eq!(e.kind(), ErrorKind::TooManyArguments);
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "print_table() takes from 0 to 2 positional arguments but 3 were given"
+        );
+
+        // print_table(max_rows=3)
+        // print_table(max_rows=3, max_columns=10)
+        // print_table(max_rows=3, max_columns=10, x=1337)
+
+        let args = [Value::from(Kwargs::from_iter([(
+            "max_rows".to_string(),
+            Value::from(3),
+        )]))];
+        let (max_columns, max_rows, kwargs) = print_table(&args).unwrap();
+        assert_eq!(max_columns, 20);
+        assert_eq!(max_rows, 3);
+        assert!(kwargs.assert_all_used().is_ok());
+
+        let args = [Value::from(Kwargs::from_iter([
+            ("max_rows".to_string(), Value::from(3)),
+            ("max_columns".to_string(), Value::from(10)),
+        ]))];
+        let (max_columns, max_rows, kwargs) = print_table(&args).unwrap();
+        assert_eq!(max_columns, 10);
+        assert_eq!(max_rows, 3);
+        assert!(kwargs.assert_all_used().is_ok());
+
+        let args = [Value::from(Kwargs::from_iter([
+            ("max_rows".to_string(), Value::from(3)),
+            ("max_columns".to_string(), Value::from(10)),
+            ("x".to_string(), Value::from(1337)),
+        ]))];
+        let (max_columns, max_rows, kwargs) = print_table(&args).unwrap();
+        assert_eq!(max_columns, 10);
+        assert_eq!(max_rows, 3);
+        assert_eq!(kwargs.get::<i64>("x").unwrap(), 1337);
+        assert!(kwargs.assert_all_used().is_ok());
     }
 }

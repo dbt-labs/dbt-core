@@ -2,9 +2,10 @@ use core::fmt;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use minijinja::arg_utils::ArgsIter;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Object, ObjectRepr};
-use minijinja::{Error as MinijinjaError, ErrorKind, State, Value};
+use minijinja::{assert_nullary_args, Error as MinijinjaError, ErrorKind, State, Value};
 
 mod column;
 mod columns;
@@ -121,36 +122,18 @@ impl Object for Tuple {
     ) -> Result<Value, MinijinjaError> {
         match name {
             "count" => {
-                if args.len() != 1 {
-                    Err(MinijinjaError::new(
-                        if args.len() > 1 {
-                            ErrorKind::TooManyArguments
-                        } else {
-                            ErrorKind::MissingArgument
-                        },
-                        "tuple.count() takes exactly 1 argument",
-                    ))
-                } else {
-                    let value = &args[0];
-                    let count = self.0.count_occurrences_of(value);
-                    Ok(Value::from(count))
-                }
+                let iter = ArgsIter::for_unnamed_pos_args("tuple.count", 0, args);
+                let value = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+                let count = self.0.count_occurrences_of(value);
+                Ok(Value::from(count))
             }
             "index" => {
-                if args.len() != 1 {
-                    Err(MinijinjaError::new(
-                        if args.len() > 1 {
-                            ErrorKind::TooManyArguments
-                        } else {
-                            ErrorKind::MissingArgument
-                        },
-                        "tuple.index() takes exactly 1 argument",
-                    ))
-                } else {
-                    let value = &args[0];
-                    let idx = self.0.index_of(value);
-                    Ok(Value::from(idx))
-                }
+                let iter = ArgsIter::for_unnamed_pos_args("tuple.index", 0, args);
+                let value = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+                let idx = self.0.index_of(value);
+                Ok(Value::from(idx))
             }
             _ => Object::call_method(self, state, name, args, listeners),
         }
@@ -344,11 +327,11 @@ pub trait MappedSequence {
 
     /// Retrieve the value for a given key, or a default value if the key is not
     /// present.
-    fn get(self: &Arc<Self>, key: &Value, default: Option<Value>) -> Value {
+    fn get(self: &Arc<Self>, key: &Value, default: Option<&Value>) -> Value {
         let value = self.get_value(key);
         match value {
             Some(value) => value,
-            None => default.unwrap_or(Value::from(())),
+            None => default.cloned().unwrap_or(Value::from(())),
         }
     }
 
@@ -395,10 +378,12 @@ pub trait MappedSequence {
         match name {
             // MappedSequence methods
             "values" => {
+                assert_nullary_args!("MappedSequence.values", args)?;
                 let values = self.values();
                 Ok(Value::from_object(values))
             }
             "keys" => {
+                assert_nullary_args!("MappedSequence.keys", args)?;
                 let keys = self
                     .keys()
                     .map(Value::from_object)
@@ -406,6 +391,7 @@ pub trait MappedSequence {
                 Ok(keys)
             }
             "items" => {
+                assert_nullary_args!("MappedSequence.items", args)?;
                 if let Some(items) = self.items() {
                     Ok(Value::from_object(items))
                 } else {
@@ -417,24 +403,16 @@ pub trait MappedSequence {
                 }
             }
             "get" => {
-                if args.len() > 2 {
-                    Err(MinijinjaError::new(
-                        ErrorKind::TooManyArguments,
-                        format!("{}::get() takes at most 2 arguments", self.type_name()),
-                    ))
-                } else if args.is_empty() {
-                    Err(MinijinjaError::new(
-                        ErrorKind::TooManyArguments,
-                        format!("{}::get() takes at least 1 argument", self.type_name()),
-                    ))
-                } else {
-                    let key = &args[0];
-                    let default = args.get(1).cloned();
-                    let value = self.get(key, default);
-                    Ok(value)
-                }
+                // def get(self, key, default=None)
+                let iter = ArgsIter::new("MappedSequence.get", &["key"], args);
+                let key = iter.next_arg::<&Value>()?;
+                let default = iter.next_kwarg::<Option<&Value>>("default")?;
+                iter.finish()?;
+                let value = self.get(key, default);
+                Ok(value)
             }
             "dict" => {
+                assert_nullary_args!("MappedSequence.items", args)?;
                 if let Some(dict) = self.dict() {
                     Ok(Value::from_object(dict))
                 } else {

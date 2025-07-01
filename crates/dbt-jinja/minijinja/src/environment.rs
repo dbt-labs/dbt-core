@@ -929,7 +929,8 @@ mod basic_store {
                 Arc::new(ok!(CompiledTemplate::new(
                     name,
                     source,
-                    &self.template_config
+                    &self.template_config,
+                    None
                 ))),
             );
             Ok(())

@@ -491,49 +491,17 @@ impl Object for AgateTable {
                 //         max_precision=3):
                 //
                 // TODO: implement output, locale and max_precision
-                let mut iter = ArgsIter::new("Table.print_table", 0, args);
-                let mut max_rows: Option<&Value> = None;
-                let mut max_columns: Option<&Value> = None;
-                // output is not implemented yet
-                let mut max_column_width: Option<&Value> = None;
-                // locale is not implemented yet
-                // max_precision is not implemented yet
-                if let Some(arg) = iter.next() {
-                    max_rows.replace(arg?);
-                    if let Some(arg) = iter.next() {
-                        max_columns.replace(arg?);
-                        if iter.next().is_some() {
-                            // output is not implemented yet
-                            if let Some(arg) = iter.next() {
-                                max_column_width.replace(arg?);
-                                if iter.next().is_some() {
-                                    // locale is not implemented yet
-                                    if iter.next().is_some() {
-                                        // max_precision is not implemented yet
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                let kwargs = iter.trailing_kwargs()?;
-
-                let max_rows = max_rows
-                    .and_then(|v| v.as_i64()) // XXX: silently falling back to 20 rows on conversion error
-                    .or(kwargs.get::<Option<i64>>("max_rows")?)
+                let iter = ArgsIter::new("Table.print_table", &[], args);
+                let max_rows = iter.next_kwarg::<Option<i64>>("max_rows")?.unwrap_or(20) as usize;
+                let max_columns =
+                    iter.next_kwarg::<Option<i64>>("max_columns")?.unwrap_or(6) as usize;
+                let _output = iter.next_kwarg::<Option<&Value>>("output")?;
+                let max_column_width = iter
+                    .next_kwarg::<Option<i64>>("max_column_width")?
                     .unwrap_or(20) as usize;
-                let max_columns = max_columns
-                    .and_then(|v| v.as_i64())
-                    .or(kwargs.get::<Option<i64>>("max_columns")?)
-                    .unwrap_or(6) as usize;
-                let _output = kwargs.get::<Option<&Value>>("output")?;
-                let max_column_width = max_column_width
-                    .and_then(|v| v.as_i64())
-                    .or(kwargs.get::<Option<i64>>("max_column_width")?)
-                    .unwrap_or(20) as usize;
-                let _locale = kwargs.get::<Option<&Value>>("locale")?;
-                let _max_precision = kwargs.get::<Option<&Value>>("max_precision")?;
-                kwargs.assert_all_used()?;
+                let _locale = iter.next_kwarg::<Option<&Value>>("locale")?;
+                let _max_precision = iter.next_kwarg::<Option<&Value>>("max_precision")?;
+                iter.finish()?;
 
                 print_table(self, max_rows, max_columns, max_column_width)
             }
@@ -546,42 +514,23 @@ impl Object for AgateTable {
                 //     row_names:    array | dict | None
                 //     slug_columns: bool
                 //     slug_rows:    bool
-                let mut iter = ArgsIter::new("Table.rename", 0, args);
-                let mut column_names: Option<&Value> = None;
-                let mut row_names: Option<&Value> = None;
-                let mut slug_columns: Option<bool> = None;
-                let mut slug_rows: Option<bool> = None;
-                if let Some(arg) = iter.next() {
-                    column_names.replace(arg?);
-                    if let Some(arg) = iter.next() {
-                        row_names.replace(arg?);
-                        if let Some(arg) = iter.next() {
-                            slug_columns.replace(arg?.is_true());
-                            if let Some(arg) = iter.next() {
-                                slug_rows.replace(arg?.is_true());
-                            }
-                        }
-                    }
-                }
+                let iter = ArgsIter::new("Table.rename", &[], args);
+                let column_names = iter.next_kwarg::<Option<&Value>>("column_names")?;
+                let row_names = iter.next_kwarg::<Option<&Value>>("row_names")?;
+                let slug_columns = iter
+                    .next_kwarg::<Option<bool>>("slug_columns")?
+                    .unwrap_or(false);
+                let slug_rows = iter
+                    .next_kwarg::<Option<bool>>("slug_rows")?
+                    .unwrap_or(false);
                 let kwargs = iter.trailing_kwargs()?;
-
-                // kwargs.get() should always be eval'd because to marks the kwargs
-                // as used, so we use .or() instead of .unwrap_or_else().
-                let column_names = column_names.or(kwargs.get::<Option<&Value>>("column_names")?);
-                let row_names = row_names.or(kwargs.get::<Option<&Value>>("row_names")?);
-                let slug_columns = slug_columns
-                    .or(kwargs.get::<Option<bool>>("slug_columns")?)
-                    .unwrap_or(false);
-                let slug_rows = slug_rows
-                    .or(kwargs.get::<Option<bool>>("slug_rows")?)
-                    .unwrap_or(false);
 
                 let table = self.as_ref().rename(
                     column_names,
                     row_names,
                     slug_columns,
                     slug_rows,
-                    &kwargs,
+                    kwargs,
                 )?;
                 Ok(Value::from_object(table))
             }
