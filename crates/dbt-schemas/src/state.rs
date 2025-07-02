@@ -434,7 +434,12 @@ impl DbtRuntimeConfig {
                 .unwrap_or_default(),
             docs_paths: package.dbt_project.docs_paths.clone().unwrap_or_default(),
             asset_paths: package.dbt_project.asset_paths.clone().unwrap_or_default(),
-            target_path: package.dbt_project.target_path.clone().unwrap_or_default(),
+            target_path: package
+                .dbt_project
+                .target_path
+                .clone()
+                .unwrap_or_default()
+                .to_string(),
             snapshot_paths: package
                 .dbt_project
                 .snapshot_paths
@@ -445,7 +450,12 @@ impl DbtRuntimeConfig {
                 .clean_targets
                 .clone()
                 .unwrap_or_default(),
-            log_path: package.dbt_project.log_path.clone().unwrap_or_default(),
+            log_path: package
+                .dbt_project
+                .log_path
+                .clone()
+                .unwrap_or_default()
+                .to_string(),
             packages_install_path: package
                 .dbt_project
                 .packages_install_path

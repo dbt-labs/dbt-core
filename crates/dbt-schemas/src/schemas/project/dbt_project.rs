@@ -11,6 +11,7 @@ use dbt_serde_yaml::Verbatim;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
+use strum::{Display, EnumString};
 
 use crate::schemas::common::DbtQuoting;
 use crate::schemas::project::configs::saved_queries_config::ProjectSavedQueriesConfig;
@@ -67,6 +68,26 @@ pub struct DbtProjectSimplified {
     pub __ignored__: Verbatim<HashMap<String, dbt_serde_yaml::Value>>,
 }
 
+#[derive(
+    Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumString, Display, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum LogPath {
+    #[default]
+    Logs,
+}
+
+#[derive(
+    Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumString, Display, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum TargetPath {
+    #[default]
+    Target,
+}
+
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct DbtProject {
@@ -91,9 +112,9 @@ pub struct DbtProject {
     #[serde(rename = "docs-paths")]
     pub docs_paths: Option<Vec<String>>,
     #[serde(rename = "target-path")]
-    pub target_path: Option<String>,
+    pub target_path: Option<TargetPath>,
     #[serde(rename = "log-path")]
-    pub log_path: Option<String>,
+    pub log_path: Option<LogPath>,
     #[serde(rename = "packages-install-path")]
     pub packages_install_path: Option<String>,
     // Configs
@@ -225,8 +246,8 @@ mod tests {
             snapshot_paths: Some(vec![]),
             test_paths: Some(vec![]),
             docs_paths: Some(vec![]),
-            target_path: Some("target".to_string()),
-            log_path: Some("logs".to_string()),
+            target_path: Some(TargetPath::Target),
+            log_path: Some(LogPath::Logs),
             packages_install_path: Some("packages".to_string()),
             metrics: None,
             models: None,

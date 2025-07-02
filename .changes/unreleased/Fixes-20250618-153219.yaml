@@ -1,0 +1,3 @@
+kind: Fixes
+body: Restrict `log-path` to `logs` and `target-path` to `target`
+time: 2025-06-18T15:32:19.236816-05:00
