@@ -6,6 +6,7 @@ from unittest import mock
 
 import yaml
 
+import dbt_common.events.functions
 from dbt import tracking
 from dbt.artifacts.resources import ModelConfig, RefArgs
 from dbt.artifacts.resources.v1.model import (
@@ -715,6 +716,11 @@ class SchemaParserSourceTest(SchemaParserTest):
         self.assertEqual(self.parser.manifest.files[file_id].source_patches, [])
 
     def test__read_source_patch(self):
+
+        # TODO: There needs to be a better way to disable warnings being fired
+        # during unit tests, but all we have today is this global variable.
+        dbt_common.events.functions.WARN_ERROR = False
+
         block = self.yaml_block_for(SINGLE_TABLE_SOURCE_PATCH, "test_one.yml")
         analysis_tests = AnalysisPatchParser(self.parser, block, "analyses").parse().test_blocks
         model_tests = TestablePatchParser(self.parser, block, "models").parse().test_blocks

@@ -167,6 +167,7 @@ sample_values = [
     core_types.CustomKeyInObjectDeprecation(key="", key_path="", file=""),
     core_types.DeprecationsSummary(summaries=[], show_all_hint=True),
     core_types.CustomOutputPathInSourceFreshnessDeprecation(path=""),
+    core_types.SourceOverrideDeprecation(file="", source_name=""),
     core_types.PropertyMovedToConfigDeprecation(key="", key_path="", file=""),
     core_types.WEOIncludeExcludeDeprecation(found_include=True, found_exclude=True),
     core_types.ModelParamUsageDeprecation(),

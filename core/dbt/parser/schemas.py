@@ -17,6 +17,7 @@ from typing import (
     TypeVar,
 )
 
+import dbt.deprecations as deprecations
 from dbt.artifacts.resources import RefArgs
 from dbt.artifacts.resources.v1.model import CustomGranularity, TimeSpine
 from dbt.clients.checked_load import (
@@ -537,6 +538,9 @@ class SourceParser(YamlReader):
                     raise DuplicateSourcePatchNameError(patch, self.manifest.source_patches[key])
                 self.manifest.source_patches[key] = patch
                 source_file.source_patches.append(key)
+                deprecations.warn(
+                    "source-override-deprecation", source_name=patch.name, file=str(patch.path)
+                )
             else:
                 source = self._target_from_dict(UnparsedSourceDefinition, data)
                 # Store unrendered_database and unrendered_schema for state:modified comparisons
