@@ -141,6 +141,10 @@ pub struct ListArgs {
     /// Select nodes of a specific type;
     #[arg(long)]
     pub resource_type: Option<ClapResourceType>,
+
+    /// Exclude nodes of a specific type;
+    #[arg(long)]
+    pub exclude_resource_type: Option<ClapResourceType>,
 }
 
 #[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
@@ -359,6 +363,9 @@ impl ListArgs {
         eval_args.output_keys = self.output_keys.clone();
         if let Some(resource_type) = self.resource_type {
             eval_args.resource_types = vec![resource_type];
+        }
+        if let Some(exclude_resource_type) = self.exclude_resource_type {
+            eval_args.exclude_resource_types = vec![exclude_resource_type];
         }
         eval_args.limit = self.limit.into();
         if let Some(output) = &self.output {

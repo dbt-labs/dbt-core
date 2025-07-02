@@ -185,6 +185,8 @@ pub struct EvalArgs {
     pub output_keys: Vec<String>,
     /// Resource types to filter by
     pub resource_types: Vec<ClapResourceType>,
+    /// Exclude nodes of a specific type
+    pub exclude_resource_types: Vec<ClapResourceType>,
     /// Debug flag
     pub debug: bool,
     /// Set log file format, overriding the default and --log-format setting.
@@ -328,8 +330,8 @@ impl EvalArgs {
 #[derive(
     Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Default, ValueEnum, Serialize, Deserialize,
 )]
-#[serde(rename_all = "lowercase")]
-#[clap(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
+#[clap(rename_all = "snake_case")]
 pub enum ClapResourceType {
     #[default]
     Model,
