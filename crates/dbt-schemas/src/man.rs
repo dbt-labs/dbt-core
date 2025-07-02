@@ -100,7 +100,16 @@ fn deny_additional_properties(schema: &mut Schema, path: &mut Vec<String>) {
                 && !path.contains(&"column_types".to_string())
                 && !path.contains(&"grants".to_string())
             {
-                validation.additional_properties = Some(Box::new(Schema::Bool(false)));
+                match validation
+                    .additional_properties
+                    .as_ref()
+                    .map(|s| *s.clone())
+                {
+                    Some(Schema::Object(_)) => {}
+                    _ => {
+                        validation.additional_properties = Some(Box::new(Schema::Bool(false)));
+                    }
+                }
             }
 
             for (key, subschema) in validation.properties.iter_mut() {

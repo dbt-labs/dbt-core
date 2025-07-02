@@ -1,0 +1,3 @@
+kind: Fixes
+body: Add support for recursive JsonSchema types with `__additional_properties`
+time: 2025-07-01T18:53:45.613512679-07:00

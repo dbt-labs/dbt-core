@@ -19,7 +19,7 @@ pub struct MetricsProperties {
     pub filter: Option<String>,
     pub time_granularity: Option<TimeGranularity>,
     // Flattened field:
-    pub __additional_properties__: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
+    pub __unused__: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]

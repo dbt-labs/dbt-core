@@ -1,14 +1,20 @@
 use dbt_common::io_args::IoArgs;
 use dbt_common::{fs_err, fsinfo, show_progress, ErrorCode, FsResult};
 use dbt_schemas::schemas::project::ProjectDbtCloudConfig;
+use reqwest_middleware::ClientBuilder;
+use reqwest_retry::{
+    policies::ExponentialBackoff as RetryExponentialBackoff, RetryTransientMiddleware,
+};
 use std::path::PathBuf;
 use std::time::SystemTime;
 
 use crate::utils::load_raw_yml;
 
 const DOWNLOAD_INTERVAL: u64 = 3600; // 1 hour
+const MAX_CLIENT_RETRIES: u32 = 3;
 
 /// Downloads manifest from dbt Cloud if available and not recently cached
+#[allow(clippy::cognitive_complexity)]
 pub async fn download_manifest_from_cloud(
     dbt_cloud_config: &Option<ProjectDbtCloudConfig>,
     io: &IoArgs,
@@ -98,7 +104,11 @@ pub async fn download_manifest_from_cloud(
     );
 
     // First request to get presigned URL
-    let client = reqwest::Client::new();
+    let retry_policy =
+        RetryExponentialBackoff::builder().build_with_max_retries(MAX_CLIENT_RETRIES);
+    let client = ClientBuilder::new(reqwest::Client::new())
+        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+        .build();
     let response = client
         .get(&url)
         .header("Content-Type", "application/json")
@@ -110,8 +120,13 @@ pub async fn download_manifest_from_cloud(
     if !response.status().is_success() {
         return Err(fs_err!(
             ErrorCode::IoError,
-            "Failed to get manifest presigned URL: HTTP status {}",
-            response.status()
+            "Failed to get manifest presigned URL, HTTP status {}{}",
+            response.status(),
+            if let Ok(text) = response.text().await {
+                format!(" - {text}")
+            } else {
+                "".to_string()
+            }
         ));
     }
 
