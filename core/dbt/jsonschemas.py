@@ -144,7 +144,7 @@ def validate_model_config(config: Dict[str, Any], file_path: str) -> None:
         return
 
     resources_jsonschema = resources_schema()
-    nested_definition_name = "ModelPropertiesConfigs"
+    nested_definition_name = "ModelConfig"
 
     model_config_schema = {
         "$schema": "http://json-schema.org/draft-07/schema#",

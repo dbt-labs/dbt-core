@@ -939,7 +939,6 @@ class TestList:
                     "config": {
                         "alias": "test_alias",
                         "database": "dbt",
-                        "docs": {"node_color": "blue", "show": True},
                         "enabled": True,
                         "error_if": "!= 0",
                         "fail_calc": "count(*)",
