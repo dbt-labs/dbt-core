@@ -1,5 +1,5 @@
 use dbt_common::io_args::IoArgs;
-use dbt_common::{fs_err, fsinfo, show_progress, ErrorCode, FsResult};
+use dbt_common::{fs_err, fsinfo, show_progress, show_warning, ErrorCode, FsResult};
 use dbt_schemas::schemas::project::ProjectDbtCloudConfig;
 use reqwest_middleware::ClientBuilder;
 use reqwest_retry::{
@@ -118,16 +118,21 @@ pub async fn download_manifest_from_cloud(
         .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to execute HTTP request: {}", e))?;
 
     if !response.status().is_success() {
-        return Err(fs_err!(
-            ErrorCode::IoError,
-            "Failed to get manifest presigned URL, HTTP status {}{}",
-            response.status(),
-            if let Ok(text) = response.text().await {
-                format!(" - {text}")
-            } else {
-                "".to_string()
-            }
-        ));
+        show_warning!(
+            io,
+            fs_err!(
+                ErrorCode::Generic,
+                "Failed to request deferral manifest from the dbt platform for project {}, continuing without deferral. HTTP status {}{}",
+                project_id,
+                response.status(),
+                if let Ok(text) = response.text().await {
+                    format!(" - {text}")
+                } else {
+                    "".to_string()
+                }
+            )
+        );
+        return Ok(None);
     }
 
     // Parse response to get presigned URL
@@ -156,11 +161,21 @@ pub async fn download_manifest_from_cloud(
         .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to download manifest: {}", e))?;
 
     if !manifest_response.status().is_success() {
-        return Err(fs_err!(
-            ErrorCode::IoError,
-            "Failed to download manifest from presigned URL: HTTP status {}",
-            manifest_response.status()
-        ));
+        show_warning!(
+            io,
+            fs_err!(
+                ErrorCode::Generic,
+                "Failed to download deferral manifest from the dbt platform for project {}, continuing without deferral. HTTP status {}{}",
+                project_id,
+                manifest_response.status(),
+                if let Ok(text) = manifest_response.text().await {
+                    format!(" - {text}")
+                } else {
+                    "".to_string()
+                }
+            )
+        );
+        return Ok(None);
     }
 
     // Save manifest to file
