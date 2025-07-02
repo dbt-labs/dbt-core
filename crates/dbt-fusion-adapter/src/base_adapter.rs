@@ -3,48 +3,20 @@ use crate::sql_engine::SqlEngine;
 use crate::typed_adapter::TypedBaseAdapter;
 
 use dbt_common::FsResult;
-use dbt_frontend_common::dialect::Dialect;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::ComponentName;
 use dbt_xdbc::Connection;
 use minijinja::arg_utils::ArgParser;
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
-use strum::{AsRefStr, Display, EnumString};
 
 use std::fmt;
 use std::sync::Arc;
 
-/// The type of the adapter
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, AsRefStr, EnumString)]
-#[strum(serialize_all = "lowercase", ascii_case_insensitive)]
-pub enum AdapterType {
-    /// Adapter used in parse phase
-    Parse,
-    /// Postgres
-    Postgres,
-    /// Snowflake
-    Snowflake,
-    /// Bigquery
-    Bigquery,
-    /// Databricks
-    Databricks,
-    /// Redshift
-    Redshift,
-}
-
-impl From<AdapterType> for Dialect {
-    fn from(value: AdapterType) -> Self {
-        match value {
-            AdapterType::Postgres => Dialect::Postgresql,
-            AdapterType::Snowflake => Dialect::Snowflake,
-            AdapterType::Bigquery => Dialect::Bigquery,
-            AdapterType::Databricks => Dialect::Databricks,
-            AdapterType::Redshift => Dialect::Redshift,
-            AdapterType::Parse => unimplemented!("Parse adapter type is not supported"),
-        }
-    }
-}
+/// The type of the adapter.
+///
+/// Used to identify the specific database adapter being used.
+pub type AdapterType = dbt_common::adapter::AdapterType;
 
 /// Type queries to be implemented for every [BaseAdapter]
 pub trait AdapterTyping {
