@@ -51,6 +51,60 @@ impl Schedule<String> {
         res
     }
 
+    /// Generate JSON output for a single node based on the specified keys
+    fn generate_json_output(node_value: &Value, output_keys: &[String]) -> String {
+        let mut json_map = Map::new();
+
+        // If output_keys is empty, use a default set
+        // https://github.com/dbt-labs/dbt-core/blob/65d428004a76071d58d6234841bf8b18f9cd3100/core/dbt/task/list.py#L42
+        let keys_to_use = if output_keys.is_empty() {
+            vec![
+                "alias",
+                "name",
+                "package_name",
+                "depends_on",
+                "tags",
+                "config",
+                "resource_type",
+                "source_name",
+                "original_file_path",
+                "unique_id",
+            ]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>()
+        } else {
+            output_keys.to_vec()
+        };
+
+        // Convert the serialized node to a map for easier manipulation
+        let node_map = node_value
+            .as_object()
+            .expect("Failed to convert node to map, should not happen");
+
+        // Handle depends_on field specially (remove nodes_with_ref_location)
+        if keys_to_use.contains(&"depends_on".to_string()) {
+            if let Some(depends_on_value) = node_map.get("depends_on") {
+                if let Some(depends_on_obj) = depends_on_value.as_object() {
+                    let mut cleaned_depends_on = depends_on_obj.clone();
+                    cleaned_depends_on.remove("nodes_with_ref_location");
+                    json_map.insert("depends_on".to_string(), Value::Object(cleaned_depends_on));
+                } else {
+                    json_map.insert("depends_on".to_string(), depends_on_value.clone());
+                }
+            }
+        }
+
+        // Add all other requested keys that exist in the node
+        for key in &keys_to_use {
+            if key != "depends_on" && node_map.contains_key(key) {
+                json_map.insert(key.clone(), node_map[key].clone());
+            }
+        }
+
+        serde_json::to_string(&json_map).unwrap()
+    }
+
     /// Show the selected nodes in the specified format.
     /// For JSON output, each node is a separate JSON object on a new line,
     /// containing keys specified in `output_keys`.
@@ -69,24 +123,7 @@ impl Schedule<String> {
             let node_value = node.serialize();
             match output_format {
                 DisplayFormat::Json => {
-                    let mut json_map = Map::new();
-                    // If output_keys is empty, use a default set
-                    let keys_to_use = if output_keys.is_empty() {
-                        vec!["unique_id", "name", "resource_type", "package_name", "path"]
-                            .into_iter()
-                            .map(String::from)
-                            .collect::<Vec<_>>()
-                    } else {
-                        output_keys.to_vec()
-                    };
-
-                    for key in &keys_to_use {
-                        if let Some(value) = get_value(&node_value, key) {
-                            json_map.insert(key.clone(), value);
-                        }
-                    }
-
-                    let json_string = serde_json::to_string(&json_map).unwrap();
+                    let json_string = Self::generate_json_output(&node_value, output_keys);
                     res.push(json_string);
                 }
                 // Handle other DisplayFormat variants if necessary (Csv, Markdown, Html, Table)
@@ -149,23 +186,6 @@ impl fmt::Display for Schedule<String> {
             }
         }
         Ok(())
-    }
-}
-
-// Helper function to get a specific value from a Value based on a key
-fn get_value(node: &Value, key: &str) -> Option<Value> {
-    match key {
-        "unique_id" | "name" | "resource_type" | "package_name" | "path" | "original_file_path"
-        | "fqn" | "description" | "source_name" | "version" | "group" | "access" => {
-            node.get(key).cloned()
-        }
-        "depends_on" => node.get("depends_on").cloned().map(|mut depends_on_value| {
-            if let Some(obj) = depends_on_value.as_object_mut() {
-                obj.remove("nodes_with_ref_location");
-            }
-            depends_on_value
-        }),
-        _ => None, // Key not supported or not applicable
     }
 }
 
