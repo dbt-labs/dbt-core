@@ -709,7 +709,7 @@ class ModelParamUsageDeprecation(WarnLevel):
         return "D032"
 
     def message(self) -> str:
-        description = "Usage of `--models`, `--model`, and `-m` is deprecated in favor of `--resource-type model --select`"
+        description = "Usage of `--models`, `--model`, and `-m` is deprecated in favor of `--select` or `-s`."
         return line_wrap_message(deprecation_tag(description))
 
 
