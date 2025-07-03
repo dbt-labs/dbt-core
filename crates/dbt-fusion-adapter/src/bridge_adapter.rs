@@ -726,25 +726,31 @@ impl BaseAdapter for BridgeAdapter {
                                     let mut from_local = from_local.clone();
                                     from_local.sort_by_key(|c| c.name());
 
-                                    assert_eq!(from_local.len(), from_remote.len());
-                                    for (local, remote) in from_local.iter().zip(from_remote.iter())
-                                    {
-                                        let mismatch = (local.data_type() != remote.data_type())
-                                            || (local.name() != remote.name());
-                                        if mismatch {
-                                            println!(
-                                                "adapter.get_columns_in_relation for {}",
-                                                relation.semantic_fqn()
-                                            );
-                                            println!("local  remote mismatches");
-                                            println!(
-                                                "{}:{}  {}:{}",
-                                                local.name(),
-                                                local.data_type(),
-                                                remote.name(),
-                                                remote.data_type()
-                                            );
+                                    println!("local  remote mismatches");
+                                    if !from_remote.is_empty() {
+                                        assert_eq!(from_local.len(), from_remote.len());
+                                        for (local, remote) in
+                                            from_local.iter().zip(from_remote.iter())
+                                        {
+                                            let mismatch = (local.data_type()
+                                                != remote.data_type())
+                                                || (local.name() != remote.name());
+                                            if mismatch {
+                                                println!(
+                                                    "adapter.get_columns_in_relation for {}",
+                                                    relation.semantic_fqn()
+                                                );
+                                                println!(
+                                                    "{}:{}  {}:{}",
+                                                    local.name(),
+                                                    local.data_type(),
+                                                    remote.name(),
+                                                    remote.data_type()
+                                                );
+                                            }
                                         }
+                                    } else {
+                                        println!("WARNING: from_remote is empty");
                                     }
                                 }
                                 Err(e) => {

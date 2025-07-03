@@ -97,6 +97,10 @@ impl AdapterError {
         self.kind
     }
 
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
     /// Get SQLSTATE as an ASCII string.
     ///
     /// Error codes defined by the SQL standard and vendor implementations [1][2].
