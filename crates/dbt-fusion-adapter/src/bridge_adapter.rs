@@ -705,10 +705,14 @@ impl BaseAdapter for BridgeAdapter {
         let relation = downcast_value_to_dyn_base_relation(relation)?;
 
         if let Some(db) = &self.db {
-            // see example at crates/dbt-adapter-tests/tests/data/repros/incremental_simple
-            // if a model is incremental, always query the remote state
-            // since the compiled sql in incremental run may represent a schema of which the model that will have when the run is done
-            if !state.is_run_incremental() {
+            // skip local compilation results if it's invoked upon a snapshot
+            // as we considered risk is too high to trust the types to be consistent with the remote
+            if !state.is_relation_snapshot(&relation.render_self_as_str())
+                // see example at crates/dbt-adapter-tests/tests/data/repros/incremental_simple
+                // if a model is incremental, always query the remote state
+                // since the compiled sql in incremental run may represent a schema of which the model that will have when the run is done
+                && !state.is_run_incremental()
+            {
                 let schema = db.get_schema_by_fqn(&relation.semantic_fqn());
                 if let Some(schema) = schema {
                     let from_local = self.typed_adapter.arrow_schema_to_dbt_columns(schema)?;
