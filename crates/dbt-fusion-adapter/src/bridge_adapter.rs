@@ -1380,7 +1380,11 @@ impl BaseAdapter for BridgeAdapter {
         let relation = parser.get::<Value>("relation")?;
         let relation = downcast_value_to_dyn_base_relation(relation)?;
 
-        Ok(self.typed_adapter.get_relation_config(state, relation)?)
+        let config = self
+            .typed_adapter
+            .get_relation_config(state, relation.clone())?;
+        let value = config.to_value();
+        Ok(value)
     }
 
     #[tracing::instrument(skip(self, _state, args))]
@@ -1401,17 +1405,9 @@ impl BaseAdapter for BridgeAdapter {
             )
         })?;
 
-        let model = match deserialized_node {
-            InternalDbtNodeWrapper::Model(model) => model,
-            _ => {
-                return Err(MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
-                    "adapter.get_config_from_model expected a DbtModel node".to_string(),
-                ))
-            }
-        };
-
-        Ok(self.typed_adapter.get_config_from_model(&model)?)
+        Ok(self
+            .typed_adapter
+            .get_config_from_model(deserialized_node.as_internal_node())?)
     }
 
     #[tracing::instrument(skip(self, _state, _args))]

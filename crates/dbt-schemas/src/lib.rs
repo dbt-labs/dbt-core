@@ -24,6 +24,12 @@ pub mod schemas {
         RunResult, RunResultsArgs, RunResultsArtifact, RunResultsMetadata, TimingInfo,
     };
 
+    // Add re-exports from relation_configs
+    pub use relations::relation_configs::{
+        BaseRelationChangeSet, BaseRelationConfig, ComponentConfig, RelationChangeSet,
+        RelationConfigFactory,
+    };
+
     mod nodes;
     pub use nodes::{
         CommonAttributes, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest,

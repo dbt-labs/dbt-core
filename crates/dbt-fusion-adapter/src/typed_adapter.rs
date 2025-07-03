@@ -25,7 +25,8 @@ use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfig};
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
-use dbt_schemas::schemas::{CommonAttributes, DbtModel, InternalDbtNodeAttributes};
+use dbt_schemas::schemas::relations::relation_configs::BaseRelationConfig;
+use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes};
 use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::{args, State, Value};
 
@@ -706,12 +707,15 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         _state: &State,
         _relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Value> {
+    ) -> AdapterResult<Arc<dyn BaseRelationConfig>> {
         unimplemented!("only available with Databricks adapter")
     }
 
     /// get_config_from_model
-    fn get_config_from_model(&self, _model: &DbtModel) -> AdapterResult<Value> {
+    fn get_config_from_model(
+        &self,
+        _model: &dyn InternalDbtNodeAttributes,
+    ) -> AdapterResult<Value> {
         unimplemented!("only available with Databricks adapter")
     }
 
