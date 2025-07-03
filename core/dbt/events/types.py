@@ -790,7 +790,7 @@ class PartialParsingError(DebugLevel):
         return f"PP exception info: {self.exc_info}"
 
 
-class PartialParsingSkipParsing(DebugLevel):
+class PartialParsingSkipParsing(InfoLevel):
     def code(self) -> str:
         return "I017"
 
@@ -820,7 +820,7 @@ class StateCheckVarsHash(DebugLevel):
 # Skipped I025, I026, I026, I027
 
 
-class PartialParsingNotEnabled(DebugLevel):
+class PartialParsingNotEnabled(InfoLevel):
     def code(self) -> str:
         return "I028"
 
@@ -839,7 +839,7 @@ class ParsedFileLoadFailed(DebugLevel):
 # Skipped I030-I039
 
 
-class PartialParsingEnabled(DebugLevel):
+class PartialParsingEnabled(InfoLevel):
     def code(self) -> str:
         return "I040"
 
