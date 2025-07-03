@@ -257,7 +257,10 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     ) -> AdapterResult<Vec<Box<dyn BaseColumn>>>;
 
     /// Convert a Schema of Arrow to be represented via BaseColumn
-    fn arrow_schema_to_dbt_columns(&self, schema: Arc<Schema>) -> AdapterResult<Vec<Value>>;
+    fn arrow_schema_to_dbt_columns(
+        &self,
+        schema: Arc<Schema>,
+    ) -> AdapterResult<Vec<Arc<dyn BaseColumn>>>;
 
     /// Truncate relation
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L147

@@ -711,16 +711,57 @@ impl BaseAdapter for BridgeAdapter {
             if !state.is_run_incremental() {
                 let schema = db.get_schema_by_fqn(&relation.semantic_fqn());
                 if let Some(schema) = schema {
-                    let result = self.typed_adapter.arrow_schema_to_dbt_columns(schema)?;
-                    return Ok(Value::from_iter(result));
+                    let from_local = self.typed_adapter.arrow_schema_to_dbt_columns(schema)?;
+
+                    #[cfg(debug_assertions)]
+                    {
+                        if std::env::var("DEBUG_COMPARE_LOCAL_REMOTE_COLUMNS_TYPES").is_ok() {
+                            match self
+                                .typed_adapter
+                                .get_columns_in_relation(state, relation.clone())
+                            {
+                                Ok(mut from_remote) => {
+                                    from_remote.sort_by_key(|c| c.name());
+
+                                    let mut from_local = from_local.clone();
+                                    from_local.sort_by_key(|c| c.name());
+
+                                    assert_eq!(from_local.len(), from_remote.len());
+                                    for (local, remote) in from_local.iter().zip(from_remote.iter())
+                                    {
+                                        let mismatch = (local.data_type() != remote.data_type())
+                                            || (local.name() != remote.name());
+                                        if mismatch {
+                                            println!(
+                                                "adapter.get_columns_in_relation for {}",
+                                                relation.semantic_fqn()
+                                            );
+                                            println!("local  remote mismatches");
+                                            println!(
+                                                "{}:{}  {}:{}",
+                                                local.name(),
+                                                local.data_type(),
+                                                remote.name(),
+                                                remote.data_type()
+                                            );
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    println!("Error getting columns in relation from remote: {e}");
+                                }
+                            }
+                        }
+                    }
+                    return Ok(Value::from_iter(from_local.iter().map(|c| c.as_value())));
                 }
             }
         }
 
-        let result = self
+        let from_remote = self
             .typed_adapter
             .get_columns_in_relation(state, relation)?;
-        let result = dyn_base_columns_to_value(result)?;
+        let result = dyn_base_columns_to_value(from_remote)?;
         Ok(result)
     }
 
