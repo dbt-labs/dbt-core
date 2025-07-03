@@ -19,6 +19,7 @@ use crate::schemas::project::configs::common::default_column_types;
 use crate::schemas::project::configs::common::default_hooks;
 use crate::schemas::project::configs::common::default_meta_and_tags;
 use crate::schemas::project::configs::common::default_quoting;
+use crate::schemas::project::configs::common::default_to_grants;
 use crate::schemas::project::configs::common::BigQueryNodeConfig;
 use crate::schemas::project::configs::common::DatabricksNodeConfig;
 use crate::schemas::project::configs::common::RedshiftNodeConfig;
@@ -49,7 +50,7 @@ pub struct ProjectSeedConfig {
     #[serde(rename = "+full_refresh")]
     pub full_refresh: Option<bool>,
     #[serde(rename = "+grants")]
-    pub grants: Option<BTreeMap<String, Value>>,
+    pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
     #[serde(rename = "+group")]
     pub group: Option<String>,
     #[serde(rename = "+meta")]
@@ -251,7 +252,7 @@ pub struct SeedConfig {
     pub docs: Option<DocsConfig>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    pub grants: Option<BTreeMap<String, Value>>,
+    pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub quote_columns: Option<bool>,
     pub delimiter: Option<Spanned<String>>,
@@ -513,6 +514,8 @@ impl DefaultTo<SeedConfig> for SeedConfig {
         let tags = ();
         #[allow(unused, clippy::let_unit_value)]
         let column_types = default_column_types(column_types, &parent.column_types);
+        #[allow(unused, clippy::let_unit_value)]
+        let grants = default_to_grants(grants, &parent.grants);
 
         default_to!(
             parent,
@@ -522,7 +525,6 @@ impl DefaultTo<SeedConfig> for SeedConfig {
                 alias,
                 docs,
                 enabled,
-                grants,
                 quote_columns,
                 delimiter,
                 event_time,

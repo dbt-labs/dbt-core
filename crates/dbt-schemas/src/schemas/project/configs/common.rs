@@ -85,6 +85,58 @@ pub fn default_column_types(
     }
 }
 
+/// helper function to handle default_to for grants
+/// if the key of a grant starts with a + append the child grant to the parents, otherwise replace the parent grant
+pub fn default_to_grants(
+    child_grants: &mut Option<BTreeMap<String, StringOrArrayOfStrings>>,
+    parent_grants: &Option<BTreeMap<String, StringOrArrayOfStrings>>,
+) {
+    match (child_grants, parent_grants) {
+        (Some(child_grants_map), Some(parent_grants_map)) => {
+            // Collect keys that need to be processed to avoid borrow conflicts
+            let keys_to_process: Vec<String> = child_grants_map
+                .keys()
+                .filter(|key| key.starts_with('+'))
+                .cloned()
+                .collect();
+
+            // Process each + prefixed key
+            // Can you ever have more than one key in a grant?
+            // TODO: Validate above assumption
+            for child_key in keys_to_process {
+                // Remove the + prefix to get the actual key
+                let actual_key = child_key.trim_start_matches('+');
+
+                // Get the value and remove the + prefixed key
+                if let Some(value) = child_grants_map.remove(&child_key) {
+                    // Append parent value to child value if parent has this key
+                    if let Some(parent_value) = parent_grants_map.get(actual_key) {
+                        let mut child_array: Vec<String> = value.clone().into();
+                        let parent_array: Vec<String> = parent_value.clone().into();
+
+                        child_array.extend(parent_array.iter().cloned());
+                        child_grants_map.insert(
+                            actual_key.to_string(),
+                            StringOrArrayOfStrings::ArrayOfStrings(child_array),
+                        );
+                    } else {
+                        // If parent doesn't have this key, just insert the child value
+                        child_grants_map.insert(actual_key.to_string(), value);
+                    }
+                }
+            }
+        }
+        // no child, set child to parent
+        (child_grants, Some(parent_grants_map)) => {
+            // If only parent exists, set child to parent
+            *child_grants = Some(parent_grants_map.clone());
+        }
+        (_, None) => {
+            // no parent, leave child as is
+        }
+    }
+}
+
 // Implement default_to for the flattened configs
 impl DefaultTo<SnowflakeNodeConfig> for SnowflakeNodeConfig {
     fn default_to(&mut self, parent: &SnowflakeNodeConfig) {

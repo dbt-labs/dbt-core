@@ -19,6 +19,7 @@ use crate::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfigLeg
 use crate::schemas::project::configs::common::default_hooks;
 use crate::schemas::project::configs::common::default_meta_and_tags;
 use crate::schemas::project::configs::common::default_quoting;
+use crate::schemas::project::configs::common::default_to_grants;
 use crate::schemas::project::configs::common::RedshiftNodeConfig;
 use crate::schemas::project::BigQueryNodeConfig;
 use crate::schemas::project::DatabricksNodeConfig;
@@ -67,7 +68,7 @@ pub struct ProjectSnapshotConfig {
     #[serde(rename = "+persist_docs")]
     pub persist_docs: Option<PersistDocsConfig>,
     #[serde(rename = "+grants")]
-    pub grants: Option<serde_json::Value>,
+    pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
     #[serde(rename = "+event_time")]
     pub event_time: Option<String>,
     #[serde(rename = "+quoting")]
@@ -292,7 +293,7 @@ pub struct SnapshotConfig {
     pub pre_hook: Verbatim<Option<Hooks>>,
     pub post_hook: Verbatim<Option<Hooks>>,
     pub persist_docs: Option<PersistDocsConfig>,
-    pub grants: Option<serde_json::Value>,
+    pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
     pub event_time: Option<String>,
     pub quoting: Option<DbtQuoting>,
     pub static_analysis: Option<StaticAnalysisKind>,
@@ -618,6 +619,8 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
         let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
         #[allow(unused, clippy::let_unit_value)]
         let tags = ();
+        #[allow(unused, clippy::let_unit_value)]
+        let grants = default_to_grants(grants, &parent.grants);
 
         // Use the improved default_to macro for simple fields
         default_to!(
@@ -631,7 +634,6 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
                 group,
                 persist_docs,
                 unique_key,
-                grants,
                 docs,
                 event_time,
                 quote_columns,

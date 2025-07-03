@@ -24,6 +24,7 @@ use crate::schemas::project::configs::common::default_column_types;
 use crate::schemas::project::configs::common::default_hooks;
 use crate::schemas::project::configs::common::default_meta_and_tags;
 use crate::schemas::project::configs::common::default_quoting;
+use crate::schemas::project::configs::common::default_to_grants;
 use crate::schemas::project::configs::common::BigQueryNodeConfig;
 use crate::schemas::project::configs::common::DatabricksNodeConfig;
 use crate::schemas::project::configs::common::RedshiftNodeConfig;
@@ -137,7 +138,7 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+grant_access_to")]
     pub grant_access_to: Option<Vec<GrantAccessToTarget>>,
     #[serde(rename = "+grants")]
-    pub grants: Option<BTreeMap<String, Value>>,
+    pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
     #[serde(rename = "+group")]
     pub group: Option<String>,
     #[serde(
@@ -329,7 +330,7 @@ pub struct ModelConfig {
     pub unique_key: Option<DbtUniqueKey>,
     pub on_schema_change: Option<OnSchemaChange>,
     pub on_configuration_change: Option<OnConfigurationChange>,
-    pub grants: Option<BTreeMap<String, Value>>,
+    pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
     pub packages: Option<StringOrArrayOfStrings>,
     pub docs: Option<DocsConfig>,
     pub contract: Option<DbtContract>,
@@ -664,6 +665,8 @@ impl DefaultTo<ModelConfig> for ModelConfig {
         let tags = ();
         #[allow(unused, clippy::let_unit_value)]
         let column_types = default_column_types(column_types, &parent.column_types);
+        #[allow(unused, clippy::let_unit_value)]
+        let grants = default_to_grants(grants, &parent.grants);
 
         default_to!(
             parent,
@@ -685,7 +688,6 @@ impl DefaultTo<ModelConfig> for ModelConfig {
                 unique_key,
                 on_schema_change,
                 on_configuration_change,
-                grants,
                 packages,
                 docs,
                 contract,
