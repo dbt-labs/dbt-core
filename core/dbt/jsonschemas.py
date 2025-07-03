@@ -106,12 +106,20 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
             else:
                 key_path = error_path_to_string(error)
                 for key in keys:
-                    deprecations.warn(
-                        "custom-key-in-object-deprecation",
-                        key=key,
-                        file=file_path,
-                        key_path=key_path,
-                    )
+                    if key == "overrides" and key_path.startswith("sources"):
+
+                        deprecations.warn(
+                            "source-override-deprecation",
+                            source_name=key_path.split(".")[-1],
+                            file=file_path,
+                        )
+                    else:
+                        deprecations.warn(
+                            "custom-key-in-object-deprecation",
+                            key=key,
+                            file=file_path,
+                            key_path=key_path,
+                        )
         elif error.validator == "type" and "deprecation_date" not in error_path:
             # Not deprecating invalid types yet, except for pre-existing deprecation_date deprecation
             pass
