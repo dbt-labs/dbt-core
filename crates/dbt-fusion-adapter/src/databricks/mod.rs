@@ -4,3 +4,5 @@ pub(crate) mod formatter;
 pub mod relation;
 /// Databricks relation config
 pub mod relation_config;
+/// serde schemas for Databricks
+pub mod schemas;

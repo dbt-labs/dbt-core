@@ -3,6 +3,7 @@ use crate::errors::{AdapterResult, AsyncAdapterResult};
 use crate::typed_adapter::TypedBaseAdapter;
 use crate::AdapterType;
 
+use arrow::array::RecordBatch;
 use arrow_schema::Schema;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, RelationPattern};
 use dbt_schemas::schemas::relations::DEFAULT_DATABRICKS_DATABASE;
@@ -16,6 +17,19 @@ pub const MAX_CONNECTIONS: usize = 128;
 
 /// The two ways of representing a relation in a pair.
 pub type RelationSchemaPair = (Arc<dyn BaseRelation>, Arc<Schema>);
+
+/// Allows serializing record batches into maps and Arrow schemas
+pub trait MetadataProcessor {
+    // Implementers can choose the map key/value
+    type Key: Ord + Clone;
+    type Value: Clone;
+
+    fn into_metadata(self) -> BTreeMap<Self::Key, Self::Value>;
+    fn from_record_batch(batch: Arc<RecordBatch>) -> AdapterResult<Self>
+    where
+        Self: Sized;
+    fn to_arrow_schema(&self) -> AdapterResult<Arc<Schema>>;
+}
 
 // XXX: we should unify relation representaion as Arrow schemas across the codebase
 
