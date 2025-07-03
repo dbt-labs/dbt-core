@@ -1,0 +1,6 @@
+kind: Features
+body: Create constrained namespace for dbt engine env vars
+time: 2025-07-03T17:53:41.406701-05:00
+custom:
+  Author: QMalcolm
+  Issue: "11340"
