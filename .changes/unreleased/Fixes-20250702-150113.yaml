@@ -1,0 +1,3 @@
+kind: Fixes
+body: '[Adapter][BigQuery] Support execution_project in profiles.yml'
+time: 2025-07-02T15:01:13.484801711-07:00

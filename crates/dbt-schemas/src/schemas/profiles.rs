@@ -4,6 +4,7 @@ use crate::schemas::relations::DEFAULT_DATABRICKS_DATABASE;
 use crate::schemas::serde::{StringOrInteger, StringOrMap};
 
 use dbt_serde_yaml::JsonSchema;
+use merge::Merge;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 
@@ -383,8 +384,22 @@ fn default_target() -> String {
     "default".to_string()
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema)]
+/// Extend merge_strategies from `merge` crate
+mod merge_strategies_extend {
+    pub fn overwrite_always<T>(left: &mut T, right: T) {
+        *left = right;
+    }
+
+    pub fn overwrite_option<T>(left: &mut Option<T>, right: Option<T>) {
+        if left.is_none() {
+            *left = right;
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, Merge)]
 #[serde(rename_all = "snake_case")]
+#[merge(strategy = merge_strategies_extend::overwrite_option)]
 pub struct RedshiftDbConfig {
     // Configuration Parameters
     pub port: Option<StringOrInteger>, // Setting as Option but required as of dbt 1.7.1
@@ -410,10 +425,12 @@ pub struct RedshiftDbConfig {
     pub region: Option<String>,
     pub threads: Option<StringOrInteger>,
     #[serde(flatten)]
+    #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub ignored_properties: HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, Merge)]
+#[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct SnowflakeDbConfig {
     // Configuration Parameters
@@ -461,6 +478,7 @@ pub struct SnowflakeDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub auth_type: Option<String>,
     #[serde(default, skip_serializing_if = "Execute::is_default")]
+    #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub execute: Execute,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub oauth_client_id: Option<String>,
@@ -469,10 +487,12 @@ pub struct SnowflakeDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
     #[serde(flatten)]
+    #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub ignored_properties: HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, Merge)]
+#[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct PostgresDbConfig {
     // Configuration Parameters
@@ -511,10 +531,12 @@ pub struct PostgresDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
     #[serde(flatten)]
+    #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub ignored_properties: HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Merge)]
+#[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct BigqueryDbConfig {
     pub threads: Option<StringOrInteger>,
@@ -540,11 +562,14 @@ pub struct BigqueryDbConfig {
     pub scopes: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub keyfile_json: Option<StringOrMap>,
+    pub execution_project: Option<String>,
     #[serde(flatten)]
+    #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub ignored_properties: HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Merge)]
+#[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct TrinoDbConfig {
     // Configuration Parameters
@@ -557,20 +582,25 @@ pub struct TrinoDbConfig {
     pub password: Option<String>,
     pub role: Option<String>,
     #[serde(flatten)]
+    #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub ignored_properties: HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Merge)]
+#[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct DatafusionDbConfig {
     pub database: Option<String>,
     pub schema: Option<String>,
+    #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub execute: Execute,
     #[serde(flatten)]
+    #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub ignored_properties: HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, Merge)]
+#[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct DatabricksDbConfig {
     #[serde(alias = "catalog", default = "default_databricks_database")]
@@ -583,9 +613,12 @@ pub struct DatabricksDbConfig {
     pub client_secret: Option<String>,
     pub oauth_redirect_url: Option<String>,
     pub oauth_scopes: Option<Vec<String>>,
+    #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub session_properties: Option<HashMap<String, serde_json::Value>>,
+    #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub connection_parameters: Option<HashMap<String, serde_json::Value>>,
     pub auth_type: Option<String>,
+    #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub compute: Option<HashMap<String, serde_json::Value>>,
     pub connect_retries: Option<i32>,
     pub connect_timeout: Option<i32>,
@@ -593,6 +626,7 @@ pub struct DatabricksDbConfig {
     pub connect_max_idle: Option<i32>,
     pub threads: Option<StringOrInteger>,
     #[serde(flatten)]
+    #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub ignored_properties: HashMap<String, serde_json::Value>,
 }
 

@@ -21,6 +21,7 @@ dbt-frontend-common = { workspace = true }
 dbt-serde_yaml = { workspace = true }
 hex = { workspace = true }
 md5 = { workspace = true }
+merge = { workspace = true }
 minijinja = { workspace = true }
 regex = { workspace = true }
 schemars = { workspace = true }
