@@ -200,15 +200,15 @@ pub fn generate_relation_components(
     components: &RelationComponents,
     node: &dyn InternalDbtNodeAttributes,
     adapter_type: &str,
-) -> FsResult<(String, String, String, Option<String>, ResolvedQuoting)> {
+) -> FsResult<(String, String, String, String, ResolvedQuoting)> {
     // Determine node type
     let is_snapshot = node.resource_type() == "snapshot";
     // TODO handle jinja rendering errors on each component name rendering
     // Get default values from the node
     let (default_database, default_schema, default_alias) = (
-        node.common().database.clone(),
-        node.common().schema.clone(),
-        node.base().alias,
+        node.base().database.clone(),
+        node.base().schema.clone(),
+        node.base().alias.clone(),
     );
     // Generate database name
     let database = if is_snapshot && components.database.is_some() {
@@ -258,21 +258,31 @@ pub fn generate_relation_components(
         normalize_quoting(&node.quoting(), adapter_type, &database, &schema, &alias);
 
     // Only generate relation_name if not ephemeral
-    let relation_name = if !matches!(node.materialized(), DbtMaterialization::Ephemeral) {
-        let parse_adapter = env
-            .get_parse_adapter()
-            .expect("Failed to get parse adapter");
-        generate_relation_name(
-            parse_adapter,
-            database.as_str(),
-            schema.as_str(),
-            alias.as_str(),
-            quoting,
-        )
-        .ok()
+    let parse_adapter = env
+        .get_parse_adapter()
+        .expect("Failed to get parse adapter");
+    let database_name = if !matches!(node.materialized(), DbtMaterialization::Ephemeral) {
+        database.as_str()
     } else {
-        None
+        &format!("{database}_ephemeral")
     };
+    let schema_name = if !matches!(node.materialized(), DbtMaterialization::Ephemeral) {
+        schema.as_str()
+    } else {
+        &format!("{schema}_ephemeral")
+    };
+    let alias_name = if !matches!(node.materialized(), DbtMaterialization::Ephemeral) {
+        alias.as_str()
+    } else {
+        &format!("{alias}_ephemeral")
+    };
+    let relation_name = generate_relation_name(
+        parse_adapter,
+        database_name,
+        schema_name,
+        alias_name,
+        quoting,
+    )?;
 
     Ok((database, schema, alias, relation_name, quoting))
 }
@@ -315,10 +325,10 @@ pub fn update_node_relation_components(
         adapter_type,
     )?;
     {
-        let common_attr = node.common_mut();
+        let base_attr = node.base_mut();
 
-        common_attr.database = database;
-        common_attr.schema = schema;
+        base_attr.database = database;
+        base_attr.schema = schema;
         node.set_quoting(quoting);
     }
 
@@ -328,26 +338,20 @@ pub fn update_node_relation_components(
     if node.resource_type() == "test" {
         if let Some(store_failures) = components.store_failures {
             if store_failures {
-                let Some(base_attr) = node.base_mut() else {
-                    panic!("Test node has no base attributes");
-                };
-                base_attr.relation_name = relation_name;
+                let base_attr = node.base_mut();
+                base_attr.relation_name = Some(relation_name);
             }
         }
     } else {
         // Check if node is relational and not ephemeral
         let is_ephemeral = matches!(node.materialized(), DbtMaterialization::Ephemeral);
         if !is_ephemeral {
-            let Some(base_attr) = node.base_mut() else {
-                panic!("Model node has no base attributes");
-            };
-            base_attr.relation_name = relation_name;
+            let base_attr = node.base_mut();
+            base_attr.relation_name = Some(relation_name);
         }
     }
 
-    let Some(base_attr) = node.base_mut() else {
-        panic!("Updating node has no base attributes");
-    };
+    let base_attr = node.base_mut();
     base_attr.alias = alias;
     Ok(())
 }

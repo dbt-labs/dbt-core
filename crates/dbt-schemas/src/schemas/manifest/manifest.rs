@@ -7,13 +7,16 @@ use std::{collections::BTreeMap, sync::Arc};
 use crate::{
     dbt_utils::get_dbt_schema_version,
     schemas::{
-        common::{DbtMaterialization, DbtQuoting},
+        common::{DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn},
         macros::{DbtDocsMacro, DbtMacro},
         manifest::manifest_nodes::{
             ManifestDataTest, ManifestModel, ManifestSeed, ManifestSnapshot, ManifestSource,
             ManifestUnitTest,
         },
-        DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest, InternalDbtNode, Nodes,
+        nodes::{DbtSeedAttr, DbtSnapshotAttr, DbtSourceAttr, DbtTestAttr},
+        CommonAttributes, DbtModel, DbtModelAttr, DbtSeed, DbtSnapshot, DbtSource, DbtTest,
+        DbtUnitTest, DbtUnitTestAttr, InternalDbtNode, IntrospectionKind, NodeBaseAttributes,
+        Nodes,
     },
     state::ResolverState,
 };
@@ -338,47 +341,71 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 nodes.models.insert(
                     unique_id,
                     Arc::new(DbtModel {
-                        common_attr: model.common_attr,
-                        base_attr: model.base_attr,
-                        materialized: model
-                            .config
-                            .materialized
-                            .clone()
-                            .unwrap_or(DbtMaterialization::View),
-                        quoting: model
-                            .config
-                            .quoting
-                            .map(|mut quoting| {
-                                quoting.default_to(&dbt_quoting);
-                                quoting
-                            })
-                            .unwrap_or(dbt_quoting)
-                            .try_into()
-                            .expect("DbtQuoting should be set"),
-                        access: model.config.access.clone().unwrap_or_default(),
-                        group: model.config.group.clone(),
-                        tags: model
-                            .config
-                            .tags
-                            .clone()
-                            .map(|tags| tags.into())
-                            .unwrap_or_default(),
-                        meta: model.config.meta.clone().unwrap_or_default(),
-                        enabled: model.config.enabled.unwrap_or(true),
-                        // TODO: The resolved static analysis should be serialized to / from the manifest
-                        static_analysis: StaticAnalysisKind::On,
-                        contract: model.config.contract.clone(),
-                        incremental_strategy: model.config.incremental_strategy.clone(),
-                        freshness: model.config.freshness.clone(),
+                        common_attr: CommonAttributes {
+                            unique_id: model.common_attr.unique_id,
+                            name: model.common_attr.name,
+                            package_name: model.common_attr.package_name,
+                            path: model.common_attr.path,
+                            original_file_path: model.common_attr.original_file_path,
+                            patch_path: model.common_attr.patch_path,
+                            fqn: model.common_attr.fqn,
+                            description: model.common_attr.description,
+                            raw_code: model.base_attr.raw_code,
+                            checksum: model.base_attr.checksum,
+                            language: model.base_attr.language,
+                            tags: model
+                                .config
+                                .tags
+                                .clone()
+                                .map(|tags| tags.into())
+                                .unwrap_or_default(),
+                            meta: model.config.meta.clone().unwrap_or_default(),
+                        },
+                        base_attr: NodeBaseAttributes {
+                            database: model.common_attr.database,
+                            schema: model.common_attr.schema,
+                            alias: model.base_attr.alias,
+                            relation_name: model.base_attr.relation_name,
+                            materialized: model
+                                .config
+                                .materialized
+                                .clone()
+                                .unwrap_or(DbtMaterialization::View),
+                            static_analysis: StaticAnalysisKind::On,
+                            enabled: model.config.enabled.unwrap_or(true),
+                            extended_model: false,
+                            quoting: model
+                                .config
+                                .quoting
+                                .map(|mut quoting| {
+                                    quoting.default_to(&dbt_quoting);
+                                    quoting
+                                })
+                                .unwrap_or(dbt_quoting)
+                                .try_into()
+                                .expect("DbtQuoting should be set"),
+                            columns: model.base_attr.columns,
+                            depends_on: model.base_attr.depends_on,
+                            refs: model.base_attr.refs,
+                            sources: model.base_attr.sources,
+                            metrics: model.base_attr.metrics,
+                        },
+                        model_attr: DbtModelAttr {
+                            access: model.config.access.clone().unwrap_or_default(),
+                            group: model.config.group.clone(),
+                            contract: model.config.contract.clone(),
+                            incremental_strategy: model.config.incremental_strategy.clone(),
+                            freshness: model.config.freshness.clone(),
+                            introspection: IntrospectionKind::None,
+                            version: model.version,
+                            latest_version: model.latest_version,
+                            constraints: model.constraints.unwrap_or_default(),
+                            deprecation_date: model.deprecation_date,
+                            primary_key: model.primary_key.unwrap_or_default(),
+                            time_spine: model.time_spine,
+                            event_time: model.config.event_time.clone(),
+                        },
                         deprecated_config: model.config,
-                        introspection: None,
-                        version: model.version,
-                        latest_version: model.latest_version,
-                        constraints: model.constraints.unwrap_or_default(),
-                        deprecation_date: model.deprecation_date,
-                        primary_key: model.primary_key.unwrap_or_default(),
-                        time_spine: model.time_spine,
-                        is_extended_model: false,
                         other: model.other,
                     }),
                 );
@@ -387,31 +414,58 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 nodes.tests.insert(
                     unique_id,
                     Arc::new(DbtTest {
-                        common_attr: test.common_attr,
-                        base_attr: test.base_attr,
-                        quoting: test
-                            .config
-                            .quoting
-                            .map(|mut quoting| {
-                                quoting.default_to(&dbt_quoting);
-                                quoting
-                            })
-                            .unwrap_or(dbt_quoting)
-                            .try_into()
-                            .expect("DbtQuoting should be set"),
-                        static_analysis: StaticAnalysisKind::On,
-                        tags: test
-                            .config
-                            .tags
-                            .clone()
-                            .map(|tags| tags.into())
-                            .unwrap_or_default(),
-                        meta: test.config.meta.clone().unwrap_or_default(),
+                        common_attr: CommonAttributes {
+                            unique_id: test.common_attr.unique_id,
+                            name: test.common_attr.name,
+                            package_name: test.common_attr.package_name,
+                            path: test.common_attr.path,
+                            original_file_path: test.common_attr.original_file_path,
+                            patch_path: test.common_attr.patch_path,
+                            fqn: test.common_attr.fqn,
+                            description: test.common_attr.description,
+                            raw_code: test.base_attr.raw_code,
+                            checksum: test.base_attr.checksum,
+                            language: test.base_attr.language,
+                            tags: test
+                                .config
+                                .tags
+                                .clone()
+                                .map(|tags| tags.into())
+                                .unwrap_or_default(),
+                            meta: test.config.meta.clone().unwrap_or_default(),
+                        },
+                        base_attr: NodeBaseAttributes {
+                            database: test.common_attr.database,
+                            schema: test.common_attr.schema,
+                            alias: test.base_attr.alias,
+                            relation_name: test.base_attr.relation_name,
+                            materialized: DbtMaterialization::Test,
+                            static_analysis: StaticAnalysisKind::On,
+                            enabled: test.config.enabled.unwrap_or(true),
+                            extended_model: false,
+                            quoting: test
+                                .config
+                                .quoting
+                                .map(|mut quoting| {
+                                    quoting.default_to(&dbt_quoting);
+                                    quoting
+                                })
+                                .unwrap_or(dbt_quoting)
+                                .try_into()
+                                .expect("DbtQuoting should be set"),
+                            columns: test.base_attr.columns,
+                            depends_on: test.base_attr.depends_on,
+                            refs: test.base_attr.refs,
+                            sources: test.base_attr.sources,
+                            metrics: test.base_attr.metrics,
+                        },
+                        test_attr: DbtTestAttr {
+                            column_name: test.column_name,
+                            attached_node: test.attached_node,
+                            test_metadata: test.test_metadata,
+                            file_key_name: test.file_key_name,
+                        },
                         deprecated_config: test.config,
-                        column_name: test.column_name,
-                        attached_node: test.attached_node,
-                        test_metadata: test.test_metadata,
-                        file_key_name: test.file_key_name,
                         other: test.other,
                     }),
                 );
@@ -420,40 +474,65 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 nodes.snapshots.insert(
                     unique_id,
                     Arc::new(DbtSnapshot {
-                        common_attr: snapshot.common_attr,
-                        base_attr: snapshot.base_attr,
-                        quoting: snapshot
-                            .config
-                            .quoting
-                            .map(|mut quoting| {
-                                quoting.default_to(&dbt_quoting);
-                                quoting
-                            })
-                            .unwrap_or(dbt_quoting)
-                            .try_into()
-                            .expect("DbtQuoting should be set"),
-                        static_analysis: snapshot
-                            .config
-                            .static_analysis
-                            .unwrap_or(StaticAnalysisKind::On),
-                        tags: snapshot
-                            .config
-                            .tags
-                            .clone()
-                            .map(|tags| tags.into())
-                            .unwrap_or_default(),
-                        meta: snapshot.config.meta.clone().unwrap_or_default(),
-                        snapshot_meta_column_names: snapshot
-                            .config
-                            .snapshot_meta_column_names
-                            .clone()
-                            .unwrap_or_default(),
-                        materialized: snapshot
-                            .config
-                            .materialized
-                            .clone()
-                            .unwrap_or(DbtMaterialization::Table),
+                        common_attr: CommonAttributes {
+                            unique_id: snapshot.common_attr.unique_id,
+                            name: snapshot.common_attr.name,
+                            package_name: snapshot.common_attr.package_name,
+                            path: snapshot.common_attr.path,
+                            original_file_path: snapshot.common_attr.original_file_path,
+                            patch_path: snapshot.common_attr.patch_path,
+                            fqn: snapshot.common_attr.fqn,
+                            description: snapshot.common_attr.description,
+                            raw_code: snapshot.base_attr.raw_code,
+                            checksum: snapshot.base_attr.checksum,
+                            language: snapshot.base_attr.language,
+                            tags: snapshot
+                                .config
+                                .tags
+                                .clone()
+                                .map(|tags| tags.into())
+                                .unwrap_or_default(),
+                            meta: snapshot.config.meta.clone().unwrap_or_default(),
+                        },
+                        base_attr: NodeBaseAttributes {
+                            database: snapshot.common_attr.database,
+                            schema: snapshot.common_attr.schema,
+                            alias: snapshot.base_attr.alias,
+                            relation_name: snapshot.base_attr.relation_name,
+                            enabled: snapshot.config.enabled.unwrap_or(true),
+                            extended_model: false,
+                            materialized: snapshot
+                                .config
+                                .materialized
+                                .clone()
+                                .unwrap_or(DbtMaterialization::Table),
+                            static_analysis: StaticAnalysisKind::On,
+                            quoting: snapshot
+                                .config
+                                .quoting
+                                .map(|mut quoting| {
+                                    quoting.default_to(&dbt_quoting);
+                                    quoting
+                                })
+                                .unwrap_or(dbt_quoting)
+                                .try_into()
+                                .expect("DbtQuoting should be set"),
+                            columns: snapshot.base_attr.columns,
+                            depends_on: snapshot.base_attr.depends_on,
+                            refs: snapshot.base_attr.refs,
+                            sources: snapshot.base_attr.sources,
+                            metrics: snapshot.base_attr.metrics,
+                        },
+                        snapshot_attr: DbtSnapshotAttr {
+                            snapshot_meta_column_names: snapshot
+                                .config
+                                .snapshot_meta_column_names
+                                .clone()
+                                .unwrap_or_default(),
+                        },
                         deprecated_config: snapshot.config,
+                        compiled: snapshot.base_attr.compiled,
+                        compiled_code: snapshot.base_attr.compiled_code,
                         other: snapshot.other,
                     }),
                 );
@@ -462,28 +541,58 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 nodes.seeds.insert(
                     unique_id,
                     Arc::new(DbtSeed {
-                        common_attr: seed.common_attr,
-                        base_attr: seed.base_attr,
-                        quoting: seed
-                            .config
-                            .quoting
-                            .map(|mut quoting| {
-                                quoting.default_to(&dbt_quoting);
-                                quoting
-                            })
-                            .unwrap_or(dbt_quoting)
-                            .try_into()
-                            .expect("DbtQuoting should be set"),
-                        tags: seed
-                            .config
-                            .tags
-                            .clone()
-                            .map(|tags| tags.into())
-                            .unwrap_or_default(),
-                        meta: seed.config.meta.clone().unwrap_or_default(),
+                        common_attr: CommonAttributes {
+                            unique_id: seed.common_attr.unique_id,
+                            name: seed.common_attr.name,
+                            package_name: seed.common_attr.package_name,
+                            path: seed.common_attr.path,
+                            original_file_path: seed.common_attr.original_file_path,
+                            patch_path: seed.common_attr.patch_path,
+                            fqn: seed.common_attr.fqn,
+                            description: seed.common_attr.description,
+                            raw_code: seed.base_attr.raw_code,
+                            checksum: seed.base_attr.checksum,
+                            language: seed.base_attr.language,
+                            tags: seed
+                                .config
+                                .tags
+                                .clone()
+                                .map(|tags| tags.into())
+                                .unwrap_or_default(),
+                            meta: seed.config.meta.clone().unwrap_or_default(),
+                        },
+                        base_attr: NodeBaseAttributes {
+                            database: seed.common_attr.database,
+                            schema: seed.common_attr.schema,
+                            alias: seed.base_attr.alias,
+                            relation_name: seed.base_attr.relation_name,
+                            materialized: DbtMaterialization::Table,
+                            static_analysis: StaticAnalysisKind::On,
+                            enabled: seed.config.enabled.unwrap_or(true),
+                            quoting: seed
+                                .config
+                                .quoting
+                                .map(|mut quoting| {
+                                    quoting.default_to(&dbt_quoting);
+                                    quoting
+                                })
+                                .unwrap_or(dbt_quoting)
+                                .try_into()
+                                .expect("DbtQuoting should be set"),
+                            extended_model: false,
+                            columns: seed.base_attr.columns,
+                            depends_on: seed.base_attr.depends_on,
+                            refs: seed.base_attr.refs,
+                            sources: seed.base_attr.sources,
+                            metrics: seed.base_attr.metrics,
+                        },
+                        seed_attr: DbtSeedAttr {
+                            quote_columns: seed.config.quote_columns.unwrap_or_default(),
+                            column_types: seed.config.column_types.clone(),
+                            delimiter: seed.config.delimiter.clone().map(|d| d.into_inner()),
+                            root_path: seed.root_path,
+                        },
                         deprecated_config: seed.config,
-                        root_path: seed.root_path,
-                        materialized: DbtMaterialization::Table,
                         other: seed.other,
                     }),
                 );
@@ -496,36 +605,59 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
         nodes.sources.insert(
             unique_id,
             Arc::new(DbtSource {
-                common_attr: source.common_attr,
-                quoting: source
-                    .quoting
-                    .map(|mut quoting| {
-                        quoting.default_to(&dbt_quoting);
-                        quoting
-                    })
-                    .unwrap_or(dbt_quoting)
-                    .try_into()
-                    .expect("DbtQuoting should be set"),
-                relation_name: source.relation_name,
-                identifier: source.identifier,
-                source_name: source.source_name,
-                columns: source.columns,
-                source_description: source.source_description,
-                unrendered_config: source.unrendered_config,
-                unrendered_database: source.unrendered_database,
-                unrendered_schema: source.unrendered_schema,
-                loader: source.loader,
-                loaded_at_field: source.loaded_at_field,
-                loaded_at_query: source.loaded_at_query,
-                freshness: source.freshness,
-                static_analysis: StaticAnalysisKind::On,
-                tags: source
-                    .config
-                    .tags
-                    .clone()
-                    .map(|tags| tags.into())
-                    .unwrap_or_default(),
-                meta: source.config.meta.clone().unwrap_or_default(),
+                common_attr: CommonAttributes {
+                    unique_id: source.common_attr.unique_id,
+                    name: source.common_attr.name,
+                    package_name: source.common_attr.package_name,
+                    path: source.common_attr.path,
+                    original_file_path: source.common_attr.original_file_path,
+                    patch_path: source.common_attr.patch_path,
+                    fqn: source.common_attr.fqn,
+                    description: source.common_attr.description,
+                    raw_code: None,
+                    checksum: DbtChecksum::default(),
+                    language: None,
+                    tags: source
+                        .config
+                        .tags
+                        .clone()
+                        .map(|tags| tags.into())
+                        .unwrap_or_default(),
+                    meta: source.config.meta.clone().unwrap_or_default(),
+                },
+                base_attr: NodeBaseAttributes {
+                    database: source.common_attr.database,
+                    schema: source.common_attr.schema,
+                    alias: source.identifier.clone(),
+                    relation_name: source.relation_name,
+                    materialized: DbtMaterialization::Table,
+                    static_analysis: StaticAnalysisKind::On,
+                    enabled: source.config.enabled.unwrap_or(true),
+                    extended_model: false,
+                    quoting: source
+                        .quoting
+                        .map(|mut quoting| {
+                            quoting.default_to(&dbt_quoting);
+                            quoting
+                        })
+                        .unwrap_or(dbt_quoting)
+                        .try_into()
+                        .expect("DbtQuoting should be set"),
+                    columns: source.columns,
+                    depends_on: NodeDependsOn::default(),
+                    refs: vec![],
+                    sources: vec![],
+                    metrics: vec![],
+                },
+                source_attr: DbtSourceAttr {
+                    identifier: source.identifier,
+                    source_name: source.source_name,
+                    source_description: source.source_description,
+                    loader: source.loader,
+                    loaded_at_field: source.loaded_at_field,
+                    loaded_at_query: source.loaded_at_query,
+                    freshness: source.freshness,
+                },
                 deprecated_config: source.config,
                 other: source.other,
             }),
@@ -535,24 +667,51 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
         nodes.unit_tests.insert(
             unique_id,
             Arc::new(DbtUnitTest {
-                common_attr: unit_test.common_attr,
-                base_attr: unit_test.base_attr,
-                quoting: dbt_quoting.try_into().expect("DbtQuoting should be set"),
-                static_analysis: StaticAnalysisKind::On,
-                tags: unit_test
-                    .config
-                    .tags
-                    .clone()
-                    .map(|tags| tags.into())
-                    .unwrap_or_default(),
-                meta: unit_test.config.meta.clone().unwrap_or_default(),
+                common_attr: CommonAttributes {
+                    unique_id: unit_test.common_attr.unique_id,
+                    name: unit_test.common_attr.name,
+                    package_name: unit_test.common_attr.package_name,
+                    path: unit_test.common_attr.path,
+                    original_file_path: unit_test.common_attr.original_file_path,
+                    patch_path: unit_test.common_attr.patch_path,
+                    fqn: unit_test.common_attr.fqn,
+                    description: unit_test.common_attr.description,
+                    raw_code: unit_test.base_attr.raw_code,
+                    checksum: unit_test.base_attr.checksum,
+                    language: unit_test.base_attr.language,
+                    tags: unit_test
+                        .config
+                        .tags
+                        .clone()
+                        .map(|tags| tags.into())
+                        .unwrap_or_default(),
+                    meta: unit_test.config.meta.clone().unwrap_or_default(),
+                },
+                base_attr: NodeBaseAttributes {
+                    database: unit_test.common_attr.database,
+                    schema: unit_test.common_attr.schema,
+                    alias: unit_test.base_attr.alias,
+                    relation_name: unit_test.base_attr.relation_name,
+                    materialized: DbtMaterialization::Table,
+                    static_analysis: StaticAnalysisKind::On,
+                    quoting: dbt_quoting.try_into().expect("DbtQuoting should be set"),
+                    enabled: unit_test.config.enabled.unwrap_or(true),
+                    extended_model: false,
+                    columns: unit_test.base_attr.columns,
+                    depends_on: unit_test.base_attr.depends_on,
+                    refs: unit_test.base_attr.refs,
+                    sources: unit_test.base_attr.sources,
+                    metrics: unit_test.base_attr.metrics,
+                },
+                unit_test_attr: DbtUnitTestAttr {
+                    model: unit_test.model,
+                    given: unit_test.given,
+                    expect: unit_test.expect,
+                    versions: unit_test.versions,
+                    version: unit_test.version,
+                    overrides: unit_test.overrides,
+                },
                 deprecated_config: unit_test.config,
-                model: unit_test.model,
-                given: unit_test.given,
-                expect: unit_test.expect,
-                versions: unit_test.versions,
-                version: unit_test.version,
-                overrides: unit_test.overrides,
             }),
         );
     }

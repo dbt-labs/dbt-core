@@ -18,7 +18,8 @@ use dbt_common::tokiofs;
 use dbt_common::ErrorCode;
 use dbt_fusion_adapter::load_store::ResultStore;
 use dbt_fusion_adapter::relation_object::create_relation;
-use dbt_schemas::schemas::{common::ResolvedQuoting, CommonAttributes};
+use dbt_schemas::schemas::CommonAttributes;
+use dbt_schemas::schemas::NodeBaseAttributes;
 use minijinja::listener::RenderingEventListener;
 use minijinja::State;
 use minijinja::{value::Object, Error, ErrorKind, Value as MinijinjaValue};
@@ -35,8 +36,7 @@ async fn extend_with_model_context<S: Serialize>(
     base_context: &mut BTreeMap<String, MinijinjaValue>,
     model: Value,
     common_attr: &CommonAttributes,
-    alias: &str,
-    quoting: ResolvedQuoting,
+    base_attr: &NodeBaseAttributes,
     deprecated_config: &S,
     adapter_type: &str,
     io_args: &IoArgs,
@@ -46,11 +46,11 @@ async fn extend_with_model_context<S: Serialize>(
     // Create a relation for 'this' using config values
     let this_relation = create_relation(
         adapter_type.to_string(),
-        common_attr.database.clone(),
-        common_attr.schema.clone(),
-        Some(alias.to_string()),
+        base_attr.database.clone(),
+        base_attr.schema.clone(),
+        Some(base_attr.alias.clone()),
         None,
-        quoting,
+        base_attr.quoting,
     )
     .unwrap()
     .as_value();
@@ -58,11 +58,11 @@ async fn extend_with_model_context<S: Serialize>(
     base_context.insert("this".to_owned(), this_relation);
     base_context.insert(
         "database".to_owned(),
-        MinijinjaValue::from(common_attr.database.clone()),
+        MinijinjaValue::from(base_attr.database.clone()),
     );
     base_context.insert(
         "schema".to_owned(),
-        MinijinjaValue::from(common_attr.schema.clone()),
+        MinijinjaValue::from(base_attr.schema.clone()),
     );
     base_context.insert(
         "identifier".to_owned(),
@@ -196,8 +196,7 @@ pub fn extend_base_context_stateful_fn(
 pub async fn build_run_node_context<S: Serialize>(
     model: Value,
     common_attr: &CommonAttributes,
-    alias: &str,
-    quoting: ResolvedQuoting,
+    base_attr: &NodeBaseAttributes,
     deprecated_config: &S,
     adapter_type: &str,
     agate_table: Option<AgateTable>,
@@ -221,8 +220,7 @@ pub async fn build_run_node_context<S: Serialize>(
         &mut context,
         model,
         common_attr,
-        alias,
-        quoting,
+        base_attr,
         deprecated_config,
         adapter_type,
         io_args,

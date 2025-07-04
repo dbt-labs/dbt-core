@@ -203,7 +203,7 @@ impl RefsAndSourcesTracker for RefsAndSources {
         self.sources
             .entry(format!(
                 "{}.{}.{}",
-                package_name, source.source_name, source.common_attr.name
+                package_name, source.source_attr.source_name, source.common_attr.name
             ))
             .or_default()
             .push((
@@ -214,7 +214,7 @@ impl RefsAndSourcesTracker for RefsAndSources {
         self.sources
             .entry(format!(
                 "{}.{}",
-                source.source_name, source.common_attr.name
+                source.source_attr.source_name, source.common_attr.name
             ))
             .or_default()
             .push((source.common_attr.unique_id.clone(), relation, status));
@@ -399,82 +399,80 @@ pub fn resolve_dependencies(
         let is_test = node.is_test();
 
         let node_base = node.base_mut();
-        if let Some(node_base) = node_base {
-            let mut has_disabled_dependency = false;
 
-            // Check refs
-            let node_package_name_value = &Some(node_package_name.clone());
-            for DbtRef {
-                name,
+        let mut has_disabled_dependency = false;
+
+        // Check refs
+        let node_package_name_value = &Some(node_package_name.clone());
+        for DbtRef {
+            name,
+            package,
+            version,
+            location,
+        } in node_base.refs.iter()
+        {
+            let location = if let Some(location) = location {
+                location.clone().with_file(&node_path)
+            } else {
+                CodeLocation::default()
+            };
+            match refs_and_sources.lookup_ref(
                 package,
-                version,
-                location,
-            } in node_base.refs.iter()
-            {
-                let location = if let Some(location) = location {
-                    location.clone().with_file(&node_path)
-                } else {
-                    CodeLocation::default()
-                };
-                match refs_and_sources.lookup_ref(
-                    package,
-                    name,
-                    &version.as_ref().map(|v| v.to_string()),
-                    node_package_name_value,
-                ) {
-                    Ok((dependency_id, _, _)) => {
-                        node_base.depends_on.nodes.push(dependency_id.clone());
-                        node_base
-                            .depends_on
-                            .nodes_with_ref_location
-                            .push((dependency_id, location));
+                name,
+                &version.as_ref().map(|v| v.to_string()),
+                node_package_name_value,
+            ) {
+                Ok((dependency_id, _, _)) => {
+                    node_base.depends_on.nodes.push(dependency_id.clone());
+                    node_base
+                        .depends_on
+                        .nodes_with_ref_location
+                        .push((dependency_id, location));
+                }
+                Err(e) => {
+                    // Check if this is a disabled dependency error
+                    if is_test && e.code == ErrorCode::DisabledDependency {
+                        has_disabled_dependency = true;
+                    } else {
+                        show_error!(io, e.with_location(location));
                     }
-                    Err(e) => {
-                        // Check if this is a disabled dependency error
-                        if is_test && e.code == ErrorCode::DisabledDependency {
-                            has_disabled_dependency = true;
-                        } else {
-                            show_error!(io, e.with_location(location));
-                        }
+                }
+            };
+        }
+
+        // Check sources
+        for DbtSourceWrapper { source, location } in node_base.sources.iter() {
+            // Source is &Vec<String> (first two elements are source and table)
+            let source_name = source[0].clone();
+            let table_name = source[1].clone();
+
+            let location = if let Some(location) = location {
+                location.clone().with_file(&node_path)
+            } else {
+                CodeLocation::default()
+            };
+
+            match refs_and_sources.lookup_source(&node_package_name, &source_name, &table_name) {
+                Ok((dependency_id, _, _)) => {
+                    node_base.depends_on.nodes.push(dependency_id.clone());
+                    node_base
+                        .depends_on
+                        .nodes_with_ref_location
+                        .push((dependency_id, location));
+                }
+                Err(e) => {
+                    // Check if this is a disabled dependency error
+                    if is_test && e.code == ErrorCode::DisabledDependency {
+                        has_disabled_dependency = true;
+                    } else {
+                        show_error!(io, e.with_location(location));
                     }
-                };
-            }
+                }
+            };
+        }
 
-            // Check sources
-            for DbtSourceWrapper { source, location } in node_base.sources.iter() {
-                // Source is &Vec<String> (first two elements are source and table)
-                let source_name = source[0].clone();
-                let table_name = source[1].clone();
-
-                let location = if let Some(location) = location {
-                    location.clone().with_file(&node_path)
-                } else {
-                    CodeLocation::default()
-                };
-
-                match refs_and_sources.lookup_source(&node_package_name, &source_name, &table_name)
-                {
-                    Ok((dependency_id, _, _)) => {
-                        node_base.depends_on.nodes.push(dependency_id.clone());
-                        node_base
-                            .depends_on
-                            .nodes_with_ref_location
-                            .push((dependency_id, location));
-                    }
-                    Err(e) => {
-                        // Check if this is a disabled dependency error
-                        if is_test && e.code == ErrorCode::DisabledDependency {
-                            has_disabled_dependency = true;
-                        } else {
-                            show_error!(io, e.with_location(location));
-                        }
-                    }
-                };
-            }
-
-            if is_test && has_disabled_dependency {
-                tests_to_disable.push(node_unique_id);
-            }
+        if is_test && has_disabled_dependency {
+            tests_to_disable.push(node_unique_id);
         }
     }
 

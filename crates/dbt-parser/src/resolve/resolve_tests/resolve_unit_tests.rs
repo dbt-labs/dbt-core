@@ -29,6 +29,7 @@ use dbt_schemas::schemas::project::UnitTestConfig;
 use dbt_schemas::schemas::properties::UnitTestProperties;
 use dbt_schemas::schemas::ref_and_source::DbtRef;
 use dbt_schemas::schemas::ref_and_source::DbtSourceWrapper;
+use dbt_schemas::schemas::DbtUnitTestAttr;
 use dbt_schemas::schemas::{CommonAttributes, DbtUnitTest, NodeBaseAttributes};
 use dbt_schemas::state::DbtPackage;
 use dbt_schemas::state::DbtRuntimeConfig;
@@ -186,8 +187,6 @@ pub fn resolve_unit_tests(
 
         let base_unit_test = DbtUnitTest {
             common_attr: CommonAttributes {
-                database: database.to_owned(),
-                schema: schema.to_owned(),
                 name: unit_test_name.to_owned(),
                 package_name: package_name.to_owned(),
                 original_file_path: mpe.relative_path.clone(),
@@ -196,31 +195,42 @@ pub fn resolve_unit_tests(
                 fqn,
                 description: unit_test.description.to_owned(),
                 patch_path: None,
+                checksum: DbtChecksum::default(),
+                raw_code: None,
+                language: None,
+                tags: properties_config
+                    .tags
+                    .clone()
+                    .map(|tags| tags.into())
+                    .unwrap_or_default(),
+                meta: properties_config.meta.clone().unwrap_or_default(),
             },
             base_attr: NodeBaseAttributes {
+                database: database.to_owned(),
+                schema: schema.to_owned(),
+                alias: "".to_string(),
+                relation_name: None,
                 depends_on: NodeDependsOn::default(),
                 refs: dependent_refs,
                 sources: dependent_sources,
-                checksum: DbtChecksum::default(),
-                created_at: None,
-                ..Default::default()
+                enabled,
+                extended_model: false,
+                quoting: package_quoting.try_into()?,
+                materialized: DbtMaterialization::Unit,
+                static_analysis: properties_config
+                    .static_analysis
+                    .unwrap_or(StaticAnalysisKind::On),
+                columns: BTreeMap::new(),
+                metrics: vec![],
             },
-            model: unit_test.model.to_owned(),
-            given: unit_test.given.clone().unwrap_or_default(),
-            expect: unit_test.expect.clone(),
-            versions: None,
-            version: None,
-            overrides: None,
-            tags: properties_config
-                .tags
-                .clone()
-                .map(|tags| tags.into())
-                .unwrap_or_default(),
-            meta: properties_config.meta.clone().unwrap_or_default(),
-            quoting: package_quoting.try_into()?,
-            static_analysis: properties_config
-                .static_analysis
-                .unwrap_or(StaticAnalysisKind::On),
+            unit_test_attr: DbtUnitTestAttr {
+                model: unit_test.model.to_owned(),
+                given: unit_test.given.clone().unwrap_or_default(),
+                expect: unit_test.expect.clone(),
+                versions: None,
+                version: None,
+                overrides: None,
+            },
             deprecated_config: properties_config,
         };
 
@@ -268,7 +278,7 @@ pub fn resolve_unit_tests(
 
                 let mut versioned_test = base_unit_test.clone();
                 versioned_test.common_attr.unique_id = format!("{base_unique_id}.v{version}");
-                versioned_test.version = Some(version.clone().into());
+                versioned_test.unit_test_attr.version = Some(version.clone().into());
                 versioned_test.base_attr.depends_on.nodes = vec![versioned_model_id.clone()];
                 versioned_test.base_attr.depends_on.nodes_with_ref_location =
                     vec![(versioned_model_id.clone(), location.clone())];

@@ -133,7 +133,7 @@ pub async fn run_model_event(
         .map_or_else(|| "".to_string(), |a| a.to_string());
 
     let hashed_contents = node
-        .base()
+        .common()
         .raw_code
         .as_ref()
         .map_or_else(|| "".to_string(), |a| format!("{:x}", md5::compute(a)));

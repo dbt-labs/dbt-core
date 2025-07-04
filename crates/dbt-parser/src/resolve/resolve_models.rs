@@ -19,7 +19,6 @@ use dbt_common::ErrorCode;
 use dbt_common::FsResult;
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
-use dbt_schemas::schemas::common::DbtContract;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::common::FreshnessRules;
@@ -31,6 +30,8 @@ use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
 use dbt_schemas::schemas::CommonAttributes;
 use dbt_schemas::schemas::DbtModel;
+use dbt_schemas::schemas::DbtModelAttr;
+use dbt_schemas::schemas::IntrospectionKind;
 use dbt_schemas::schemas::NodeBaseAttributes;
 use dbt_schemas::state::DbtAsset;
 use dbt_schemas::state::DbtPackage;
@@ -226,8 +227,6 @@ pub async fn resolve_models(
         // Create the DbtModel with all properties already set
         let mut dbt_model = DbtModel {
             common_attr: CommonAttributes {
-                database: database.to_string(), // will be updated below
-                schema: schema.to_string(),     // will be updated below
                 name: model_name.to_owned(),
                 package_name: package_name.to_owned(),
                 path: dbt_asset.path.to_owned(),
@@ -236,17 +235,25 @@ pub async fn resolve_models(
                 unique_id: unique_id.clone(),
                 fqn,
                 description: properties.description.clone(),
+                checksum: sql_file_info.checksum.clone(),
+                raw_code: Some("--placeholder--".to_string()),
+                language: Some("sql".to_string()),
+                tags: model_config
+                    .tags
+                    .clone()
+                    .map(|tags| tags.into())
+                    .unwrap_or_default(),
+                meta: model_config.meta.clone().unwrap_or_default(),
             },
             base_attr: NodeBaseAttributes {
-                alias: "".to_owned(), // will be updated below
-                checksum: sql_file_info.checksum.clone(),
-                relation_name: None, // will be updated below
-                compiled_path: None,
-                compiled: None,
-                compiled_code: None,
+                database: database.to_string(), // will be updated below
+                schema: schema.to_string(),     // will be updated below
+                alias: "".to_owned(),           // will be updated below
+                relation_name: None,            // will be updated below
+                enabled: model_config.enabled.unwrap_or(true),
+                extended_model: false,
                 columns,
                 depends_on: NodeDependsOn::default(),
-                language: Some("sql".to_string()),
                 refs: sql_file_info
                     .refs
                     .iter()
@@ -266,50 +273,37 @@ pub async fn resolve_models(
                     })
                     .collect(),
                 metrics,
-                build_path: None,
-                contract: DbtContract::default(),
-                created_at: None,
-                raw_code: Some("--placeholder--".to_string()),
-                unrendered_config: BTreeMap::new(),
-                doc_blocks: None,
-                extra_ctes_injected: None,
-                extra_ctes: None,
+                materialized: model_config
+                    .materialized
+                    .clone()
+                    .expect("materialized is required"),
+                quoting: model_config
+                    .quoting
+                    .expect("quoting is required")
+                    .try_into()
+                    .expect("quoting is required"),
+                static_analysis: model_config
+                    .static_analysis
+                    .unwrap_or(StaticAnalysisKind::On),
             },
-            introspection: None,
-            version: maybe_version.map(|v| v.into()),
-            latest_version: maybe_latest_version.map(|v| v.into()),
-            constraints: model_constraints,
-            other: BTreeMap::new(),
-            deprecation_date: None,
-            primary_key: vec![],
-            time_spine: None,
-            is_extended_model: false,
+            model_attr: DbtModelAttr {
+                introspection: IntrospectionKind::None,
+                version: maybe_version.map(|v| v.into()),
+                latest_version: maybe_latest_version.map(|v| v.into()),
+                constraints: model_constraints,
+                deprecation_date: None,
+                primary_key: vec![],
+                time_spine: None,
+                access: model_config.access.clone().unwrap_or_default(),
+                group: model_config.group.clone(),
+                contract: model_config.contract.clone(),
+                incremental_strategy: model_config.incremental_strategy.clone(),
+                freshness: model_config.freshness.clone(),
+                event_time: model_config.event_time.clone(),
+            },
             // Derived from the model config
-            materialized: model_config
-                .materialized
-                .clone()
-                .expect("materialized is required"),
-            quoting: model_config
-                .quoting
-                .expect("quoting is required")
-                .try_into()
-                .expect("quoting is required"),
-            access: model_config.access.clone().unwrap_or_default(),
-            group: model_config.group.clone(),
-            tags: model_config
-                .tags
-                .clone()
-                .map(|tags| tags.into())
-                .unwrap_or_default(),
-            meta: model_config.meta.clone().unwrap_or_default(),
-            enabled: model_config.enabled.unwrap_or(true),
-            static_analysis: model_config
-                .static_analysis
-                .unwrap_or(StaticAnalysisKind::On),
-            contract: model_config.contract.clone(),
-            incremental_strategy: model_config.incremental_strategy.clone(),
-            freshness: model_config.freshness.clone(),
             deprecated_config: model_config.clone(),
+            other: BTreeMap::new(),
         };
 
         let components = RelationComponents {

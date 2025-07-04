@@ -5,13 +5,13 @@ use dbt_common::{fs_err, show_error, show_warning, stdfs, unexpected_fs_err, Err
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
-use dbt_schemas::schemas::common::{DbtContract, DbtMaterialization, DbtQuoting, NodeDependsOn};
+use dbt_schemas::schemas::common::{DbtMaterialization, DbtQuoting, NodeDependsOn};
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::macros::DbtMacro;
 use dbt_schemas::schemas::project::{DbtProject, SnapshotConfig};
 use dbt_schemas::schemas::properties::SnapshotProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
-use dbt_schemas::schemas::{CommonAttributes, DbtSnapshot, NodeBaseAttributes};
+use dbt_schemas::schemas::{CommonAttributes, DbtSnapshot, DbtSnapshotAttr, NodeBaseAttributes};
 use dbt_schemas::state::{
     DbtAsset, DbtPackage, DbtRuntimeConfig, ModelStatus, RefsAndSourcesTracker,
 };
@@ -210,28 +210,46 @@ pub async fn resolve_snapshots(
             // Create initial snapshot with default values
             let mut dbt_snapshot = DbtSnapshot {
                 common_attr: CommonAttributes {
-                    database: database.to_owned(), // will be updated below
-                    schema: schema.to_owned(),     // will be updated below
                     name: snapshot_name.to_string(),
                     package_name: package_name.clone(),
                     path: dbt_asset.path.clone(),
+                    raw_code: Some("--placeholder--".to_string()), // TODO: This is only so that dbt-evaluator returns truthy
                     // The path to the YML file, if it is specified
                     original_file_path: dbt_asset.path.clone(),
                     unique_id: unique_id.clone(),
                     fqn: vec![package_name.to_owned(), snapshot_name.to_owned()],
                     description: properties.description.to_owned(),
                     patch_path,
+                    checksum: sql_file_info.checksum,
+                    language: Some("sql".to_string()),
+                    tags: final_config
+                        .tags
+                        .clone()
+                        .map(|tags| tags.into())
+                        .unwrap_or_default(),
+                    meta: final_config.meta.clone().unwrap_or_default(),
                 },
                 base_attr: NodeBaseAttributes {
-                    alias: "".to_owned(), // will be updated below
-                    checksum: sql_file_info.checksum,
-                    relation_name: None, // will be updated below
-                    build_path: None,
-                    unrendered_config: BTreeMap::new(),
-                    created_at: None,
-                    raw_code: Some("--placeholder--".to_string()), // TODO: This is only so that dbt-evaluator returns truthy
+                    database: database.to_owned(), // will be updated below
+                    schema: schema.to_owned(),     // will be updated below
+                    alias: "".to_owned(),          // will be updated below
+                    relation_name: None,           // will be updated below
                     columns,
                     depends_on: NodeDependsOn::default(),
+                    enabled: final_config.enabled.unwrap_or(true),
+                    extended_model: false,
+                    materialized: final_config
+                        .materialized
+                        .clone()
+                        .expect("materialized is required"),
+                    quoting: final_config
+                        .quoting
+                        .expect("quoting is required")
+                        .try_into()
+                        .expect("quoting is required"),
+                    static_analysis: final_config
+                        .static_analysis
+                        .unwrap_or(StaticAnalysisKind::On),
                     refs: sql_file_info
                         .refs
                         .iter()
@@ -251,38 +269,16 @@ pub async fn resolve_snapshots(
                         })
                         .collect(),
                     metrics: vec![],
-                    doc_blocks: None,
-                    language: Some("sql".to_string()),
-                    compiled: None,
-                    compiled_path: None,
-                    compiled_code: None,
-                    extra_ctes_injected: None,
-                    extra_ctes: None,
-                    contract: DbtContract::default(),
                 },
-                materialized: final_config
-                    .materialized
-                    .clone()
-                    .expect("materialized is required"),
-                quoting: final_config
-                    .quoting
-                    .expect("quoting is required")
-                    .try_into()
-                    .expect("quoting is required"),
-                static_analysis: final_config
-                    .static_analysis
-                    .unwrap_or(StaticAnalysisKind::On),
-                tags: final_config
-                    .tags
-                    .clone()
-                    .map(|tags| tags.into())
-                    .unwrap_or_default(),
-                meta: final_config.meta.clone().unwrap_or_default(),
-                snapshot_meta_column_names: final_config
-                    .snapshot_meta_column_names
-                    .clone()
-                    .unwrap_or_default(),
+                snapshot_attr: DbtSnapshotAttr {
+                    snapshot_meta_column_names: final_config
+                        .snapshot_meta_column_names
+                        .clone()
+                        .unwrap_or_default(),
+                },
                 deprecated_config: final_config.clone(),
+                compiled: None,
+                compiled_code: None,
                 other: BTreeMap::new(),
             };
 

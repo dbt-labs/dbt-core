@@ -82,11 +82,7 @@ pub async fn resolve(
 
     let mut operations = Operations::default();
     for package in &dbt_state.packages {
-        let (on_run_start, on_run_end) = resolve_operations(
-            &dbt_state.dbt_profile.database,
-            &dbt_state.dbt_profile.schema,
-            &package.dbt_project,
-        );
+        let (on_run_start, on_run_end) = resolve_operations(&package.dbt_project);
         operations.on_run_start.extend(on_run_start);
         operations.on_run_end.extend(on_run_end);
     }

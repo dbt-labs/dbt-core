@@ -15,7 +15,7 @@ use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::project::{DbtProject, SeedConfig};
 use dbt_schemas::schemas::properties::SeedProperties;
-use dbt_schemas::schemas::{CommonAttributes, DbtSeed, NodeBaseAttributes};
+use dbt_schemas::schemas::{CommonAttributes, DbtSeed, DbtSeedAttr, NodeBaseAttributes};
 use dbt_schemas::state::{DbtAsset, DbtPackage};
 use dbt_schemas::state::{ModelStatus, RefsAndSourcesTracker};
 use minijinja::value::Value as MinijinjaValue;
@@ -174,8 +174,6 @@ pub fn resolve_seeds(
         // Create initial seed with default values
         let mut dbt_seed = DbtSeed {
             common_attr: CommonAttributes {
-                database: database.to_string(), // will be updated below
-                schema: schema.to_string(),     // will be updated below
                 name: seed_name.to_owned(),
                 package_name: package_name.to_owned(),
                 path: path.to_owned(),
@@ -183,13 +181,6 @@ pub fn resolve_seeds(
                     seed_file.base_path.join(&path),
                     &io_args.in_dir,
                 )?,
-                patch_path,
-                unique_id: unique_id.clone(),
-                fqn,
-                description: seed.description.clone(),
-            },
-            base_attr: NodeBaseAttributes {
-                alias: "".to_owned(), // will be updated below
                 checksum: DbtChecksum::hash(
                     std::fs::read(seed_file.base_path.join(&path))
                         .map_err(|e| {
@@ -197,29 +188,41 @@ pub fn resolve_seeds(
                         })?
                         .as_slice(),
                 ),
-                relation_name: None, // will be updated below
-                columns,
-                build_path: None,
-                created_at: None,
-                depends_on: NodeDependsOn::default(),
+                patch_path,
+                unique_id: unique_id.clone(),
+                fqn,
+                description: seed.description.clone(),
                 raw_code: None,
-                unrendered_config: BTreeMap::new(),
+                language: None,
+                tags: properties_config
+                    .tags
+                    .clone()
+                    .map(|tags| tags.into())
+                    .unwrap_or_default(),
+                meta: properties_config.meta.clone().unwrap_or_default(),
+            },
+            base_attr: NodeBaseAttributes {
+                database: database.to_string(), // will be updated below
+                schema: schema.to_string(),     // will be updated below
+                alias: "".to_owned(),           // will be updated below
+                relation_name: None,            // will be updated below
+                columns,
+                depends_on: NodeDependsOn::default(),
+                quoting: properties_config
+                    .quoting
+                    .expect("quoting is required")
+                    .try_into()
+                    .expect("quoting is required"),
+                materialized: DbtMaterialization::Table,
                 ..Default::default()
             },
+            seed_attr: DbtSeedAttr {
+                quote_columns: properties_config.quote_columns.unwrap_or(false),
+                column_types: properties_config.column_types.clone(),
+                delimiter: properties_config.delimiter.clone().map(|d| d.into_inner()),
+                root_path: Some(seed_file.base_path.clone()),
+            },
             other: BTreeMap::new(),
-            root_path: Some(seed_file.base_path.clone()),
-            quoting: properties_config
-                .quoting
-                .expect("quoting is required")
-                .try_into()
-                .expect("quoting is required"),
-            tags: properties_config
-                .tags
-                .clone()
-                .map(|tags| tags.into())
-                .unwrap_or_default(),
-            meta: properties_config.meta.clone().unwrap_or_default(),
-            materialized: DbtMaterialization::Table,
             deprecated_config: properties_config.clone(),
         };
 

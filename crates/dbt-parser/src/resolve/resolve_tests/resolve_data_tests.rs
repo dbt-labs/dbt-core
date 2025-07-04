@@ -30,6 +30,7 @@ use dbt_schemas::schemas::properties::DataTestProperties;
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::ref_and_source::DbtRef;
 use dbt_schemas::schemas::ref_and_source::DbtSourceWrapper;
+use dbt_schemas::schemas::DbtTestAttr;
 use dbt_schemas::schemas::{CommonAttributes, DbtTest, InternalDbtNode, NodeBaseAttributes};
 use dbt_schemas::state::DbtRuntimeConfig;
 use dbt_schemas::state::ModelStatus;
@@ -173,8 +174,6 @@ pub async fn resolve_data_tests(
 
         let mut dbt_test = DbtTest {
             common_attr: CommonAttributes {
-                database: database.to_owned(),
-                schema: schema.to_owned(),
                 name: model_name.to_owned(),
                 package_name: package_name.to_owned(),
                 path: dbt_asset.path.to_owned(),
@@ -187,16 +186,34 @@ pub async fn resolve_data_tests(
                 unique_id: unique_id.clone(),
                 fqn,
                 description: properties.description.clone(),
+                checksum: DbtChecksum::hash(rendered_sql.as_bytes()),
+                raw_code: Some("".to_string()),
+                language: None,
+                tags: test_config
+                    .tags
+                    .clone()
+                    .map(|tags| tags.into())
+                    .unwrap_or_default(),
+                meta: test_config.meta.clone().unwrap_or_default(),
             },
             base_attr: NodeBaseAttributes {
+                database: database.to_owned(),
+                schema: schema.to_owned(),
                 alias: "will_be_updated_below".to_owned(),
-                checksum: DbtChecksum::hash(rendered_sql.as_bytes()),
                 relation_name: None,
-                compiled_path: None,
+                static_analysis: test_config
+                    .static_analysis
+                    .unwrap_or(StaticAnalysisKind::On),
+                quoting: test_config
+                    .quoting
+                    .expect("quoting is required")
+                    .try_into()
+                    .expect("quoting is required"),
+                materialized: DbtMaterialization::Test,
+                enabled: test_config.enabled.unwrap_or(true),
+                extended_model: false,
                 columns: columns_map,
                 depends_on: NodeDependsOn::default(),
-                language: None,
-                raw_code: Some("".to_string()),
                 refs: sql_file_info
                     .refs
                     .iter()
@@ -215,37 +232,16 @@ pub async fn resolve_data_tests(
                         location: Some(location.with_file(&dbt_asset.path)),
                     })
                     .collect(),
-                build_path: None,
-                contract: DbtContract::default(),
-                created_at: None,
                 metrics: vec![],
-                unrendered_config: BTreeMap::new(),
-                compiled: None,
-                compiled_code: None,
-                doc_blocks: None,
-                extra_ctes_injected: None,
-                extra_ctes: None,
+            },
+            test_attr: DbtTestAttr {
+                column_name: None,
+                attached_node: None,
+                test_metadata: None,
+                file_key_name: None,
             },
             deprecated_config: *test_config.clone(),
-            column_name: None,
-            attached_node: None,
-            test_metadata: None,
             other: BTreeMap::new(),
-            file_key_name: None,
-            quoting: test_config
-                .quoting
-                .expect("quoting is required")
-                .try_into()
-                .expect("quoting is required"),
-            static_analysis: test_config
-                .static_analysis
-                .unwrap_or(StaticAnalysisKind::On),
-            tags: test_config
-                .tags
-                .clone()
-                .map(|tags| tags.into())
-                .unwrap_or_default(),
-            meta: test_config.meta.clone().unwrap_or_default(),
         };
 
         let components = RelationComponents {

@@ -8,10 +8,11 @@ use dbt_jinja_utils::{jinja_environment::JinjaEnvironment, refs_and_sources::Ref
 use dbt_schemas::schemas::common::{Access, DbtMaterialization, DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::project::ModelConfig;
+use dbt_schemas::schemas::{DbtModelAttr, IntrospectionKind};
 use dbt_schemas::state::{ModelStatus, RefsAndSourcesTracker};
 use dbt_schemas::{
     schemas::{
-        common::{DbtContract, NodeDependsOn},
+        common::NodeDependsOn,
         project::DbtProject,
         properties::ModelProperties,
         ref_and_source::{DbtRef, DbtSourceWrapper},
@@ -149,8 +150,6 @@ pub async fn resolve_analyses(
 
         let mut dbt_model = DbtModel {
             common_attr: CommonAttributes {
-                database: database.to_string(), // will be updated below
-                schema: schema.to_string(),     // will be updated below
                 name: analysis_name.to_owned(),
                 package_name: package_name.to_owned(),
                 path: dbt_asset.path.to_owned(),
@@ -159,18 +158,24 @@ pub async fn resolve_analyses(
                 fqn,
                 description: properties.description.clone(),
                 patch_path,
+                checksum: sql_file_info.checksum.clone(),
+                language: Some("sql".to_string()),
+                raw_code: None,
+                tags: vec![],
+                meta: BTreeMap::new(),
             },
             base_attr: NodeBaseAttributes {
-                alias: "".to_owned(), // will be updated below
-                checksum: sql_file_info.checksum.clone(),
-
-                relation_name: None, // will be updated below
-                compiled_path: None,
-                compiled: None,
-                compiled_code: None,
+                database: database.to_string(), // will be updated below
+                schema: schema.to_string(),     // will be updated below
+                alias: "".to_owned(),           // will be updated below
+                relation_name: None,            // will be updated below
+                enabled: true,
+                extended_model: false,
+                materialized: DbtMaterialization::Analysis,
+                quoting: ResolvedQuoting::trues(),
+                static_analysis: StaticAnalysisKind::On,
                 columns,
                 depends_on: NodeDependsOn::default(),
-                language: Some("sql".to_string()),
                 refs: sql_file_info
                     .refs
                     .iter()
@@ -190,39 +195,27 @@ pub async fn resolve_analyses(
                     })
                     .collect(),
                 metrics,
-                build_path: None,
-                contract: DbtContract::default(),
-                created_at: None,
-                raw_code: None,
-                unrendered_config: BTreeMap::new(),
-                doc_blocks: None,
-                extra_ctes_injected: None,
-                extra_ctes: None,
             },
             deprecated_config: ModelConfig {
                 group: analysis_config.group.clone(),
                 ..Default::default()
             },
-            materialized: DbtMaterialization::Analysis,
-            quoting: ResolvedQuoting::trues(),
-            access: Access::default(),
-            group: None,
-            tags: vec![],
-            meta: BTreeMap::new(),
-            enabled: true,
-            introspection: None,
-            version: None,
-            latest_version: None,
-            constraints: vec![],
-            deprecation_date: None,
-            primary_key: vec![],
-            time_spine: None,
-            is_extended_model: false,
+            model_attr: DbtModelAttr {
+                introspection: IntrospectionKind::None,
+                access: Access::default(),
+                group: None,
+                version: None,
+                latest_version: None,
+                constraints: vec![],
+                deprecation_date: None,
+                primary_key: vec![],
+                time_spine: None,
+                contract: None,
+                incremental_strategy: None,
+                freshness: None,
+                event_time: None,
+            },
             other: BTreeMap::new(),
-            static_analysis: StaticAnalysisKind::On,
-            incremental_strategy: None,
-            contract: None,
-            freshness: None,
         };
 
         let components = RelationComponents {

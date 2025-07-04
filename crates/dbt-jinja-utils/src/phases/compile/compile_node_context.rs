@@ -8,9 +8,7 @@ use std::{
 use dashmap::DashMap;
 use dbt_common::serde_utils::convert_json_to_dash_map;
 use dbt_fusion_adapter::{load_store::ResultStore, relation_object::create_relation};
-use dbt_schemas::schemas::{
-    common::ResolvedQuoting, relations::base::BaseRelation, CommonAttributes, NodeBaseAttributes,
-};
+use dbt_schemas::schemas::{relations::base::BaseRelation, CommonAttributes, NodeBaseAttributes};
 use dbt_schemas::state::{DbtRuntimeConfig, RefsAndSourcesTracker};
 use minijinja::{
     constants::{TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID},
@@ -30,9 +28,7 @@ pub fn build_compile_node_context(
     model: &MinijinjaValue,
     common_attr: &CommonAttributes,
     base_attr: &NodeBaseAttributes,
-    alias: &str,
     config: &Value,
-    quoting: ResolvedQuoting,
     adapter_type: &str,
     base_context: &BTreeMap<String, MinijinjaValue>,
     root_project_name: &str,
@@ -60,24 +56,27 @@ pub fn build_compile_node_context(
     // Create a relation for 'this' using config values
     let this_relation = create_relation(
         adapter_type.to_string(),
-        common_attr.database.clone(),
-        common_attr.schema.clone(),
-        Some(alias.to_string()),
+        base_attr.database.clone(),
+        base_attr.schema.clone(),
+        Some(base_attr.alias.clone()),
         None,
-        quoting,
+        base_attr.quoting,
     )
     .unwrap();
 
     ctx.insert("this".to_owned(), this_relation.as_value());
     ctx.insert(
         "database".to_owned(),
-        MinijinjaValue::from(common_attr.database.to_string()),
+        MinijinjaValue::from(base_attr.database.to_string()),
     );
     ctx.insert(
         "schema".to_owned(),
-        MinijinjaValue::from(common_attr.schema.to_string()),
+        MinijinjaValue::from(base_attr.schema.to_string()),
     );
-    ctx.insert("identifier".to_owned(), MinijinjaValue::from(alias));
+    ctx.insert(
+        "identifier".to_owned(),
+        MinijinjaValue::from(base_attr.alias.clone()),
+    );
 
     let config_map = Arc::new(convert_json_to_dash_map(config.clone()));
     let compile_config = CompileConfig {

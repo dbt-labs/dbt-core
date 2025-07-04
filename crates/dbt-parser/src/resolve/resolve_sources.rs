@@ -9,12 +9,13 @@ use dbt_jinja_utils::refs_and_sources::RefsAndSources;
 use dbt_jinja_utils::serde::{into_typed_with_jinja, Omissible};
 use dbt_jinja_utils::utils::generate_relation_name;
 use dbt_schemas::schemas::common::{
-    merge_meta, merge_tags, normalize_quoting, DbtQuoting, FreshnessDefinition, FreshnessRules,
+    merge_meta, merge_tags, normalize_quoting, DbtChecksum, DbtMaterialization, DbtQuoting,
+    FreshnessDefinition, FreshnessRules, NodeDependsOn,
 };
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::project::{DefaultTo, SourceConfig};
 use dbt_schemas::schemas::properties::{SourceProperties, Tables};
-use dbt_schemas::schemas::{CommonAttributes, DbtSource};
+use dbt_schemas::schemas::{CommonAttributes, DbtSource, DbtSourceAttr, NodeBaseAttributes};
 use dbt_schemas::state::{DbtAsset, DbtPackage, ModelStatus, RefsAndSourcesTracker};
 use minijinja::Value as MinijinjaValue;
 use regex::Regex;
@@ -205,8 +206,6 @@ pub fn resolve_sources(
 
         let dbt_source = DbtSource {
             common_attr: CommonAttributes {
-                database: database.to_owned(),
-                schema: schema.to_owned(),
                 name: table_name.to_owned(),
                 package_name: package_name.to_owned(),
                 // original_file_path: dbt_asset.base_path.join(&dbt_asset.path),
@@ -218,27 +217,41 @@ pub fn resolve_sources(
                 description: table.description.to_owned(),
                 // todo: columns code gen missing
                 patch_path: Some(mpe.relative_path.clone()),
+                meta: merged_meta.unwrap_or_default(),
+                tags: merged_tags.unwrap_or_default(),
+                raw_code: None,
+                checksum: DbtChecksum::default(),
+                language: None,
             },
-            source_name: source_name.to_owned(),
-            identifier,
-            relation_name: Some(relation_name),
-            columns,
+            base_attr: NodeBaseAttributes {
+                database: database.to_owned(),
+                schema: schema.to_owned(),
+                alias: identifier.to_owned(),
+                relation_name: Some(relation_name),
+                quoting,
+                enabled: is_enabled,
+                extended_model: false,
+                materialized: DbtMaterialization::External,
+                static_analysis: source_properties_config
+                    .static_analysis
+                    .unwrap_or(StaticAnalysisKind::On),
+                columns,
+                refs: vec![],
+                sources: vec![],
+                depends_on: NodeDependsOn::default(),
+                metrics: vec![],
+            },
+            source_attr: DbtSourceAttr {
+                freshness: merged_freshness.clone(),
+                identifier,
+                source_name: source_name.to_owned(),
+                source_description: source.description.clone().unwrap_or("".to_string()), // needs to be some or empty string per dbt spec
+                loader: source.loader.clone().unwrap_or("".to_string()),
+                loaded_at_field: merged_loaded_at_field.clone(),
+                loaded_at_query: merged_loaded_at_query.clone(),
+            },
             deprecated_config: source_properties_config.clone(),
             other: BTreeMap::new(),
-            quoting,
-            source_description: source.description.clone().unwrap_or("".to_string()), // needs to be some or empty string per dbt spec
-            unrendered_config: BTreeMap::new(),
-            unrendered_database: None,
-            unrendered_schema: None,
-            loader: source.loader.clone().unwrap_or("".to_string()),
-            freshness: merged_freshness.clone(),
-            loaded_at_field: merged_loaded_at_field.clone(),
-            loaded_at_query: merged_loaded_at_query.clone(),
-            static_analysis: source_properties_config
-                .static_analysis
-                .unwrap_or(StaticAnalysisKind::On),
-            meta: merged_meta.unwrap_or_default(),
-            tags: merged_tags.unwrap_or_default(),
         };
         let status = if is_enabled {
             ModelStatus::Enabled

@@ -758,7 +758,7 @@ pub async fn collect_adapter_identifiers_detect_unsafe(
     for unsafe_id in all_unsafe_ids {
         if let Some(arc_model) = models.get_mut(&unsafe_id) {
             let model = Arc::make_mut(arc_model);
-            model.set_detected_introspection(Some(IntrospectionKind::Execute));
+            model.set_detected_introspection(IntrospectionKind::Execute);
         }
     }
 
@@ -803,15 +803,11 @@ async fn process_model_chunk_for_unsafe_detection(
             MinijinjaValue::from(model.common().unique_id.clone()),
         );
 
-        let quoting = model.quoting();
-
         let (render_resolved_context, _, _) = build_compile_node_context(
             &MinijinjaValue::from_serialize(model.serialize()),
             model.common(),
-            &model.base(),
-            model.base().alias.as_str(),
+            model.base(),
             &model.serialized_config(),
-            quoting,
             &adapter_type,
             &render_base_context,
             &root_project_name,

@@ -32,9 +32,10 @@ pub mod schemas {
 
     mod nodes;
     pub use nodes::{
-        CommonAttributes, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest,
-        InternalDbtNode, InternalDbtNodeAttributes, InternalDbtNodeWrapper, IntrospectionKind,
-        NodeBaseAttributes, Nodes,
+        CommonAttributes, DbtModel, DbtModelAttr, DbtSeed, DbtSeedAttr, DbtSnapshot,
+        DbtSnapshotAttr, DbtSource, DbtSourceAttr, DbtTest, DbtTestAttr, DbtUnitTest,
+        DbtUnitTestAttr, InternalDbtNode, InternalDbtNodeAttributes, InternalDbtNodeWrapper,
+        IntrospectionKind, NodeBaseAttributes, Nodes, TestMetadata,
     };
 
     pub use sources::{FreshnessResultsArtifact, FreshnessResultsMetadata, FreshnessResultsNode};

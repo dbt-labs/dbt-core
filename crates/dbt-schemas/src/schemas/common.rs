@@ -83,9 +83,10 @@ impl<T: Clone + Merge<T>> Merge<Option<T>> for Option<T> {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq, JsonSchema)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DbtMaterialization {
+    #[default]
     View,
     Table,
     Incremental,
@@ -174,6 +175,12 @@ pub struct ResolvedQuoting {
     pub database: bool,
     pub identifier: bool,
     pub schema: bool,
+}
+
+impl Default for ResolvedQuoting {
+    fn default() -> Self {
+        Self::trues()
+    }
 }
 
 impl ResolvedQuoting {

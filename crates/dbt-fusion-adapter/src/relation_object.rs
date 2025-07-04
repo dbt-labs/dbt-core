@@ -214,9 +214,9 @@ pub fn create_relation_from_node(
 ) -> FsResult<Arc<dyn BaseRelation>> {
     create_relation_internal(
         adapter_type,
-        node.common().database.clone(),
-        node.common().schema.clone(),
-        Some(node.base().alias), // all identifiers are consolidated to alias in InternalDbtNode
+        node.base().database.clone(),
+        node.base().schema.clone(),
+        Some(node.base().alias.clone()), // all identifiers are consolidated to alias in InternalDbtNode
         Some(RelationType::from(node.materialized())),
         node.quoting(),
     )
