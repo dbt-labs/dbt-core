@@ -333,15 +333,15 @@ impl BaseRelation for SnowflakeRelation {
 
     fn create_relation(
         &self,
-        database: String,
-        schema: String,
+        database: Option<String>,
+        schema: Option<String>,
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: Policy,
     ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
         Ok(Arc::new(SnowflakeRelation::new(
-            Some(database),
-            Some(schema),
+            database,
+            schema,
             identifier,
             relation_type,
             TableFormat::Default,

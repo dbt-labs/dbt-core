@@ -220,15 +220,15 @@ impl BaseRelation for DatabricksRelation {
 
     fn create_relation(
         &self,
-        database: String,
-        schema: String,
+        database: Option<String>,
+        schema: Option<String>,
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: Policy,
     ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
         Ok(Arc::new(DatabricksRelation::new(
-            Some(database),
-            Some(schema),
+            database,
+            schema,
             identifier,
             relation_type,
             None,

@@ -203,15 +203,15 @@ impl BaseRelation for PostgresRelation {
 
     fn create_relation(
         &self,
-        database: String,
-        schema: String,
+        database: Option<String>,
+        schema: Option<String>,
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: Policy,
     ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
         Ok(Arc::new(PostgresRelation::try_new(
-            Some(database),
-            Some(schema),
+            database,
+            schema,
             identifier,
             relation_type,
             custom_quoting,

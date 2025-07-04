@@ -306,8 +306,8 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
 
         Ok(self
             .create_relation(
-                database.unwrap_or(self.database().as_str().unwrap().to_string()),
-                schema.unwrap_or(self.schema().as_str().unwrap().to_string()),
+                Some(database.unwrap_or(self.database().as_str().unwrap().to_string())),
+                Some(schema.unwrap_or(self.schema().as_str().unwrap().to_string())),
                 Some(identifier.unwrap_or(self.identifier().as_str().unwrap().to_string())),
                 self.relation_type(),
                 self.quote_policy(),
@@ -420,8 +420,8 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     fn without_identifier(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
         let result = self
             .create_relation(
-                self.database().as_str().unwrap().to_string(),
-                self.schema().as_str().unwrap().to_string(),
+                Some(self.database().as_str().unwrap().to_string()),
+                Some(self.schema().as_str().unwrap().to_string()),
                 None,
                 self.relation_type(),
                 self.quote_policy(),
@@ -465,27 +465,59 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         let (database, schema, identifier) = match path {
             Some(val) => match val.as_object() {
                 Some(obj) => {
-                    let database = obj.get_value(&Value::from("database".to_string()));
-                    let schema = obj.get_value(&Value::from("schema".to_string()));
-                    let identifier = obj.get_value(&Value::from("identifier".to_string()));
-                    (
-                        database
-                            .map(|v| v.as_str().unwrap_or("dummy").to_string())
-                            .unwrap_or_else(|| self.database_as_str().unwrap()),
-                        schema
-                            .map(|v| v.as_str().unwrap_or("dummy").to_string())
-                            .unwrap_or_else(|| self.schema_as_str().unwrap()),
-                        identifier
-                            .map(|v| v.as_str().unwrap_or("dummy").to_string())
-                            .unwrap_or_else(|| self.identifier_as_str().unwrap()),
-                    )
+                    let database_value = obj.get_value(&Value::from("database"));
+                    let schema_value = obj.get_value(&Value::from("schema"));
+                    let identifier_value = obj.get_value(&Value::from("identifier"));
+
+                    // Differentiate between "not provided" vs "provided but none"
+                    let database = match database_value {
+                        None => {
+                            // Case 1: 'database' key was never provided in path
+                            Some(self.database_as_str().unwrap())
+                        }
+                        Some(val) if val.is_none() => {
+                            // Case 2: 'database' key was provided but set to none
+                            None
+                        }
+                        Some(val) => {
+                            // Case 3: 'database' key was provided with an actual value
+                            Some(
+                                val.as_str()
+                                    .map(|s| s.to_string())
+                                    .unwrap_or_else(|| self.database_as_str().unwrap()),
+                            )
+                        }
+                    };
+
+                    // Similar logic for schema
+                    let schema = match schema_value {
+                        None => Some(self.schema_as_str().unwrap()), // Key not provided
+                        Some(val) if val.is_none() => None,          // Key provided but none
+                        Some(val) => Some(
+                            val.as_str()
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|| self.schema_as_str().unwrap()),
+                        ),
+                    };
+
+                    let identifier = match identifier_value {
+                        None => Some(self.identifier_as_str().unwrap()), // Key not provided
+                        Some(val) if val.is_none() => Some(self.identifier_as_str().unwrap()), // Key provided but none
+                        Some(val) => Some(
+                            val.as_str()
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|| self.identifier_as_str().unwrap()),
+                        ),
+                    };
+
+                    (database, schema, identifier)
                 }
                 None => return invalid_argument!("incorrect 'path' value for incorporate"),
             },
             None => (
-                self.database_as_str()?,
-                self.schema_as_str()?,
-                self.identifier_as_str()?,
+                Some(self.database_as_str()?),
+                Some(self.schema_as_str()?),
+                Some(self.identifier_as_str()?),
             ),
         };
 
@@ -501,7 +533,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
             .create_relation(
                 database,
                 schema,
-                Some(identifier),
+                identifier,
                 relation_type,
                 self.quote_policy(),
             )?
@@ -519,8 +551,8 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     /// * [`BaseRelation::incorporate`] - Clones a relation incorporating new path components
     fn create_relation(
         &self,
-        database: String,
-        schema: String,
+        database: Option<String>,
+        schema: Option<String>,
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         quote_policy: Policy,
@@ -693,8 +725,8 @@ mod tests {
 
         fn create_relation(
             &self,
-            _database: String,
-            _schema: String,
+            _database: Option<String>,
+            _schema: Option<String>,
             _identifier: Option<String>,
             _relation_type: Option<RelationType>,
             _quote_policy: Policy,

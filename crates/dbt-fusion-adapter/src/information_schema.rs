@@ -116,8 +116,8 @@ impl BaseRelation for InformationSchema {
 
     fn create_relation(
         &self,
-        _database: String,
-        _schema: String,
+        _database: Option<String>,
+        _schema: Option<String>,
         _identifier: Option<String>,
         _relation_type: Option<RelationType>,
         _quote_policy: Policy,
