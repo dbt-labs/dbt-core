@@ -31,7 +31,12 @@ pub fn load_profiles<S: Serialize>(
     // TODO: Add Secret Renderer logic to profile renderer
 
     // Load Profiles From ~/.dbt/profiles.yml and the dbt_project_dir
-    let profile_path = get_profile_path(arg, &arg.profiles_dir)?;
+    let has_dbt_cloud_config_defined = if let Some(dbt_cloud) = raw_dbt_project.dbt_cloud.as_ref() {
+        dbt_cloud.project_id.is_some()
+    } else {
+        false
+    };
+    let profile_path = get_profile_path(arg, &arg.profiles_dir, has_dbt_cloud_config_defined)?;
 
     let abs_profile_path = canonicalize(&profile_path)?;
     let abs_in_dir = canonicalize(&arg.io.in_dir)?;
@@ -114,7 +119,14 @@ fn get_profile_string(
 fn get_profile_path(
     arg: &LoadArgs,
     dbt_profile_dir_override: &Option<PathBuf>,
+    has_dbt_cloud_config_defined: bool,
 ) -> FsResult<PathBuf> {
+    let dbt_cloud_not_supported_yet_message = if has_dbt_cloud_config_defined {
+        "Cloud CLI credentials from `dbt_cloud.yml` are not yet supported."
+    } else {
+        ""
+    };
+
     match dbt_profile_dir_override {
         Some(dbt_profile_dir_override) => {
             let maybe_profile_path = dbt_profile_dir_override.join(DBT_PROFILES_YML);
@@ -123,7 +135,9 @@ fn get_profile_path(
             } else {
                 err!(
                     ErrorCode::InvalidConfig,
-                    "No profiles.yml found found in --profiles-dir."
+                    "No profiles.yml found at `{}`. \n\n{} Try running without the --profiles-dir flag to check the default locations.",
+                    maybe_profile_path.display(),
+                    dbt_common::pretty_string::BLUE.apply_to("suggestion: ")
                 )
             }
         }
@@ -138,15 +152,19 @@ fn get_profile_path(
                 } else {
                     err!(
                         ErrorCode::InvalidConfig,
-                        "No profiles.yml found at `{}` or `{}`",
+                        "No profiles.yml found at `{}` or `{}`. \n\n{}Run `dbt init` to create a profiles.yml file and connect to your database. {}",
                         dbt_home_profile_path.display(),
-                        maybe_profile_path.display()
+                        maybe_profile_path.display(),
+                        dbt_common::pretty_string::BLUE.apply_to("suggestion: "),
+                        dbt_cloud_not_supported_yet_message
                     )
                 }
             } else {
                 err!(
                     ErrorCode::InvalidConfig,
-                    "No profiles.yml found in ~/.dbt, in project directory, or specified via --profiles-dir",
+                    "No profiles.yml found in ~/.dbt, in project directory, or specified via --profiles-dir. \n\n{} Run `dbt init` to create a profiles.yml file and connect to your database. {}",
+                    dbt_common::pretty_string::BLUE.apply_to("suggestion: "),
+                    dbt_cloud_not_supported_yet_message
                 )
             }
         }

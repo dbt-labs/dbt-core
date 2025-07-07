@@ -1,0 +1,3 @@
+kind: Fixes
+body: Add hint to run `dbt init` when profiles.yml isn't found, and warn that Cloud CLI isn't enabled yet when relevant
+time: 2025-07-04T13:26:48.755357+12:00

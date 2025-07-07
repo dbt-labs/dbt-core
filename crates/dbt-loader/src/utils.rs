@@ -121,12 +121,12 @@ pub fn read_profiles_and_extract_db_config<S: Serialize>(
     if dbt_profiles.config.is_some() {
         return err!(
             ErrorCode::InvalidConfig,
-            "Unexpected 'config' key in dbt profiles.yml"
+            "Unexpected 'config' key in profiles.yml"
         );
     }
     let profile_val = dbt_profiles.profiles.get(profile_str).ok_or(fs_err!(
         ErrorCode::IoError,
-        "Profile '{}' not found in dbt profiles.yml",
+        "Profile '{}' not found in profiles.yml",
         profile_str
     ))?;
     let db_targets: DbTargets = into_typed_with_jinja(
@@ -145,7 +145,7 @@ pub fn read_profiles_and_extract_db_config<S: Serialize>(
             .then(|| target.clone())
             .ok_or(fs_err!(
                 ErrorCode::IoError,
-                "Target '{}' not found in dbt profiles.yml",
+                "Target '{}' not found in profiles.yml",
                 target
             ))?,
         None => db_targets.default_target.clone(),
