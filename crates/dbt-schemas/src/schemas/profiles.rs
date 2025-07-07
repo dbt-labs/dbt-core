@@ -33,6 +33,7 @@ pub struct DbtProfiles {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type")]
 #[serde(rename_all = "lowercase")]
+#[allow(clippy::large_enum_variant)]
 pub enum DbConfig {
     Redshift(RedshiftDbConfig),
     Snowflake(SnowflakeDbConfig),
@@ -563,6 +564,17 @@ pub struct BigqueryDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub keyfile_json: Option<StringOrMap>,
     pub execution_project: Option<String>,
+    pub compute_region: Option<String>,
+    pub dataproc_batch: Option<String>,
+    pub dataproc_cluster_name: Option<String>,
+    pub dataproc_region: Option<String>,
+    pub gcs_bucket: Option<String>,
+    pub job_creation_timeout_seconds: Option<String>,
+    pub job_execution_timeout_seconds: Option<String>,
+    pub job_retries: Option<i64>,
+    pub job_retry_deadline_seconds: Option<String>,
+    pub target_name: Option<String>,
+
     #[serde(flatten)]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub ignored_properties: HashMap<String, serde_json::Value>,
@@ -637,6 +649,7 @@ fn default_databricks_database() -> Option<String> {
 #[derive(Serialize, JsonSchema)]
 #[serde(untagged)]
 #[serde(rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)]
 pub enum TargetContext {
     Snowflake(SnowflakeTargetEnv),
     Trino(TrinoTargetEnv),
@@ -689,6 +702,26 @@ pub struct SnowflakeTargetEnv {
 pub struct BigqueryTargetEnv {
     pub project: String,
     pub dataset: String,
+    pub client_id: Option<String>,
+    pub compute_region: Option<String>,
+    pub dataproc_batch: Option<String>,
+    pub dataproc_cluster_name: Option<String>,
+    pub dataproc_region: Option<String>,
+    pub execution_project: Option<String>,
+    pub gcs_bucket: Option<String>,
+    pub impersonate_service_account: Option<String>,
+    pub job_creation_timeout_seconds: Option<String>,
+    pub job_execution_timeout_seconds: Option<String>,
+    pub job_retries: Option<i64>,
+    pub job_retry_deadline_seconds: Option<String>,
+    pub location: Option<String>,
+    pub maximum_bytes_billed: Option<i64>,
+    pub method: Option<String>,
+    pub priority: Option<String>,
+    pub retries: Option<i64>,
+    pub target_name: Option<String>,
+    pub timeout_seconds: Option<i64>,
+    pub token_uri: Option<String>,
     #[serde(flatten)]
     pub common: CommonTargetContext,
 }
@@ -823,6 +856,26 @@ impl TryFrom<DbConfig> for TargetContext {
                         type_: adapter_type,
                         threads: None,
                     },
+                    client_id: config.client_id.clone(),
+                    compute_region: config.compute_region.clone(),
+                    dataproc_batch: config.dataproc_batch.clone(),
+                    dataproc_cluster_name: config.dataproc_cluster_name.clone(),
+                    dataproc_region: config.dataproc_region.clone(),
+                    execution_project: config.execution_project.clone(),
+                    gcs_bucket: config.gcs_bucket.clone(),
+                    impersonate_service_account: config.impersonate_service_account.clone(),
+                    job_creation_timeout_seconds: config.job_creation_timeout_seconds.clone(),
+                    job_execution_timeout_seconds: config.job_execution_timeout_seconds.clone(),
+                    job_retries: config.job_retries,
+                    job_retry_deadline_seconds: config.job_retry_deadline_seconds.clone(),
+                    location: config.location.clone(),
+                    maximum_bytes_billed: config.maximum_bytes_billed,
+                    method: config.method.clone(),
+                    priority: config.priority.clone(),
+                    retries: config.retries,
+                    target_name: config.target_name.clone(),
+                    timeout_seconds: config.timeout_seconds,
+                    token_uri: config.token_uri,
                 }))
             }
 
