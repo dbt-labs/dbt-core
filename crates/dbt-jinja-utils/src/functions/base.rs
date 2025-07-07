@@ -924,6 +924,16 @@ pub struct Exceptions {
 }
 
 impl Object for Exceptions {
+    // todo: create a shared enum for call_method and get_value to work off
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        // exceptions evaluate to 'true' in Python for truthiness checks
+        // usage: https://github.com/dbt-labs/dbt-adapters/blob/be0ab62ae2ad3504a37287f7a4ac12d30e7e94d9/dbt-adapters/src/dbt/include/global_project/macros/materializations/snapshots/helpers.sql#L271
+        match key.as_str()? {
+            "warn_snapshot_timestamp_data_types" => Some(Value::from(true)),
+            _ => None,
+        }
+    }
+
     fn call_method(
         self: &Arc<Self>,
         state: &State<'_, '_>,

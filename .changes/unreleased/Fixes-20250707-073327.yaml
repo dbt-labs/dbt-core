@@ -1,0 +1,3 @@
+kind: Fixes
+body: Fixed truthiness for snapshot timestamp warning
+time: 2025-07-07T07:33:27.824316115-07:00
