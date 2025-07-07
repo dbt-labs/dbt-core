@@ -373,9 +373,10 @@ impl Display for ClapResourceType {
 #[serde(rename_all = "lowercase")]
 #[clap(rename_all = "lowercase")]
 pub enum Phases {
-    Debug, // dbt debug
-    Deps,  // dbt deps
-    Parse, // dbt parse
+    Debug,      // dbt debug
+    Deps,       // dbt deps
+    JinjaCheck, // dbt jinja-check
+    Parse,      // dbt parse
     Format,
     Lint,
     Schedule,

@@ -412,6 +412,7 @@ pub struct UnaryOp<'a> {
 }
 
 /// A kind of binary operator.
+#[derive(Clone)]
 #[cfg_attr(feature = "internal_debug", derive(Debug))]
 #[cfg_attr(feature = "unstable_machinery_serde", derive(serde::Serialize))]
 pub enum BinOpKind {

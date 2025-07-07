@@ -224,6 +224,7 @@ mod output_tracker;
 mod template;
 mod utils;
 mod vm;
+pub use vm::listeners::TypecheckingEventListener;
 
 pub mod cache_key;
 pub mod filters;
@@ -264,6 +265,7 @@ pub use self::utils::{AutoEscape, HtmlEscape, UndefinedBehavior};
 pub use self::value::Value;
 
 pub use self::macros::__context;
+pub use self::vm::CodeLocation;
 pub use self::vm::State;
 
 // forwards compatibility

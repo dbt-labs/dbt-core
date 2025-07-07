@@ -71,6 +71,7 @@ aho-corasick = { version = "1.0", default-features = false, optional = true }
 indexmap = { version = "2.2.0", optional = true }
 memo-map = { version = "0.3.1", optional = true }
 percent-encoding = { version = "2.2.0", optional = true }
+regex.workspace = true
 self_cell = { version = "1.0.4", optional = true }
 serde = "1.0.130"
 serde_json = { version = "1.0.68", optional = true }

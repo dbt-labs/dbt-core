@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashSet};
 use std::ops::Deref;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::{fmt, io};
@@ -11,6 +12,7 @@ use crate::compiler::instructions::Instructions;
 use crate::compiler::lexer::WhitespaceConfig;
 use crate::compiler::meta::find_undeclared;
 use crate::compiler::parser::parse;
+use crate::compiler::typecheck::FunctionRegistry;
 use crate::environment::Environment;
 use crate::error::{attach_basic_debug_info, Error};
 use crate::listener::RenderingEventListener;
@@ -19,6 +21,7 @@ use crate::output_tracker::{OutputTracker, OutputTrackerLocation};
 use crate::syntax::SyntaxConfig;
 use crate::utils::AutoEscape;
 use crate::value::{self, Value};
+use crate::vm::listeners::TypecheckingEventListener;
 use crate::vm::{prepare_blocks, Context, State, Vm};
 
 /// Callback for auto escape determination
@@ -125,6 +128,34 @@ impl<'env, 'source> Template<'env, 'source> {
         // this function, and share the rest in _render.
         self._render(Value::from_serialize(&ctx), listeners)
             .map(|x| x.0)
+    }
+
+    /// typechecks the template with the given context.
+    #[allow(clippy::too_many_arguments)]
+    pub fn typecheck<S: Serialize>(
+        &self,
+        ctx: S,
+        path: PathBuf,
+        funcsigns: &FunctionRegistry,
+        warning_printer: Rc<dyn TypecheckingEventListener>,
+    ) -> Result<(), crate::Error> {
+        let vm = Vm::new(self.env);
+
+        vm.typecheck(
+            &self.compiled.instructions,
+            Value::from_serialize(&ctx),
+            &self.compiled.blocks,
+            self.compiled.initial_auto_escape,
+            path,
+            funcsigns,
+            warning_printer,
+        )
+    }
+
+    /// typechecks the template with the given context.
+    pub fn pass_get_macro_signature(&self, path: &Path) -> FunctionRegistry {
+        let vm = Vm::new(self.env);
+        vm.get_macro_signature(&self.compiled.instructions, path)
     }
 
     /// Like [`render`](Self::render) but also return the evaluated [`State`].

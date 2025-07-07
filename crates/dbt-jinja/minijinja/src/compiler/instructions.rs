@@ -1,6 +1,7 @@
 #[cfg(feature = "internal_debug")]
 use std::fmt;
 
+use crate::compiler::ast::BinOpKind;
 use crate::compiler::tokens::Span;
 use crate::output::CaptureMode;
 use crate::value::Value;
@@ -250,6 +251,10 @@ pub enum Instruction<'source> {
 
     CallStart(u32, u32, u32),
     CallStop(u32, u32, u32),
+
+    // keep track of line and column numbers for binops
+    BinOpStart(BinOpKind, u32, u32, u32),
+    BinOpStop(BinOpKind, u32, u32, u32),
 }
 
 #[derive(Copy, Clone)]

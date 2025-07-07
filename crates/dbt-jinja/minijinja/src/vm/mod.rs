@@ -36,16 +36,21 @@ use crate::vm::closure_object::Closure;
 
 pub(crate) use crate::vm::context::{Context, Frame};
 pub use crate::vm::state::State;
+pub use crate::vm::types::utils::CodeLocation;
 
 #[cfg(feature = "macros")]
 mod closure_object;
 mod context;
 #[cfg(feature = "fuel")]
 mod fuel;
+pub mod listeners;
 mod loop_object;
 #[cfg(feature = "macros")]
 mod macro_object;
+mod mod_typecheck;
 mod state;
+pub mod typemeta;
+pub mod types;
 
 // the cost of a single include against the stack limit.
 #[cfg(feature = "multi_template")]
@@ -1334,6 +1339,12 @@ impl<'env> Vm<'env> {
                 }
                 Instruction::CallStop(_, _, _) => {
                     call_start_stack.pop();
+                }
+                Instruction::BinOpStart(_, _, _, _) => {
+                    // no-op, we don't need to do anything here
+                }
+                Instruction::BinOpStop(_, _, _, _) => {
+                    // no-op, we don't need to do anything here
                 }
             }
             pc += 1;

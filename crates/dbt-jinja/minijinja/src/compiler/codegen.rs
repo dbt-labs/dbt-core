@@ -779,8 +779,22 @@ impl<'source> CodeGenerator<'source> {
                     }
                 }
             }
+
             ast::Expr::BinOp(c) => {
+                // add BinOpStart and BinOpStop to keep track of the line and column number of binop
+                self.add(Instruction::BinOpStart(
+                    c.op.clone(),
+                    c.span().start_line,
+                    c.span().start_col,
+                    c.span().start_offset,
+                ));
                 self.compile_bin_op(c);
+                self.add(Instruction::BinOpStop(
+                    c.op.clone(),
+                    c.span().end_line,
+                    c.span().end_col,
+                    c.span().end_offset,
+                ));
             }
             ast::Expr::IfExpr(i) => {
                 self.set_line_from_span(i.span());

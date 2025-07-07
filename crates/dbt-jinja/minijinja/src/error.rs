@@ -167,6 +167,8 @@ pub enum ErrorKind {
     RegexError,
     /// Error for when a disabled model is encountered
     DisabledModel,
+    /// Error for typecheck
+    TypeError,
 }
 
 impl ErrorKind {
@@ -213,6 +215,7 @@ impl ErrorKind {
             ErrorKind::SerdeDeserializeError => "could not deserialize".to_string(),
             ErrorKind::RegexError => "regex error".to_string(),
             ErrorKind::DisabledModel => "model is disabled".to_string(),
+            ErrorKind::TypeError => "type error".to_string(),
         }
     }
 }
