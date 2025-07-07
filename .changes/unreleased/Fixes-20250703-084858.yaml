@@ -1,3 +1,0 @@
-kind: Fixes
-body: gracefully handle deferral request errors and continue with no deferral
-time: 2025-07-03T08:48:58.068697+10:00
