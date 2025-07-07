@@ -50,7 +50,16 @@
         }
       ]
     },
-    "dbt-cloud": true,
+    "dbt-cloud": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ProjectDbtCloudConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "dispatch": {
       "type": [
         "array",
@@ -81,9 +90,13 @@
     },
     "flags": true,
     "log-path": {
-      "type": [
-        "string",
-        "null"
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LogPath"
+        },
+        {
+          "type": "null"
+        }
       ]
     },
     "macro-paths": {
@@ -264,9 +277,13 @@
       ]
     },
     "target-path": {
-      "type": [
-        "string",
-        "null"
+      "anyOf": [
+        {
+          "$ref": "#/definitions/TargetPath"
+        },
+        {
+          "type": "null"
+        }
       ]
     },
     "test-paths": {
@@ -678,6 +695,12 @@
         }
       ]
     },
+    "LogPath": {
+      "type": "string",
+      "enum": [
+        "logs"
+      ]
+    },
     "ModelFreshness": {
       "type": "object",
       "properties": {
@@ -740,9 +763,123 @@
             "null"
           ]
         },
+        "+auto_liquid_cluster": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+auto_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+automatic_clustering": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+backup": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+base_location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+base_location_subpath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+bind": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+buckets": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "+catalog": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+cluster_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryClusterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+clustered_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+compression": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+copy_grants": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+database": {
           "type": [
             "string",
+            "null"
+          ]
+        },
+        "+databricks_compute": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+databricks_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+dist": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+enable_refresh": {
+          "type": [
+            "boolean",
             "null"
           ]
         },
@@ -758,15 +895,77 @@
             "null"
           ]
         },
+        "+external_volume": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+fail_calc": {
           "type": [
             "string",
             "null"
           ]
         },
+        "+file_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+grant_access_to": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/GrantAccessToTarget"
+          }
+        },
         "+group": {
           "type": [
             "string",
+            "null"
+          ]
+        },
+        "+hours_to_expiration": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "+include_full_name_in_path": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+initialize": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+kms_key_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+labels": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "+labels_from_meta": {
+          "type": [
+            "boolean",
             "null"
           ]
         },
@@ -777,12 +976,97 @@
           ],
           "format": "int32"
         },
+        "+liquid_clustered_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+max_staleness": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+merge_with_schema_evolution": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+meta": {
           "type": [
             "object",
             "null"
           ],
           "additionalProperties": false
+        },
+        "+not_matched_by_source_action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+not_matched_by_source_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+not_matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+partition_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryPartitionConfigLegacy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+partition_expiration_days": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "+partitions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "+query_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "+quoting": {
           "anyOf": [
@@ -794,13 +1078,79 @@
             }
           ]
         },
+        "+refresh_interval_minutes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "+refresh_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+require_partition_filter": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+schema": {
           "type": [
             "string",
             "null"
           ]
         },
+        "+secure": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+severity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+skip_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+skip_not_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+snowflake_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+sort": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+sort_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+source_alias": {
           "type": [
             "string",
             "null"
@@ -842,6 +1192,37 @@
             }
           ]
         },
+        "+target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+target_lag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+tblproperties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+tmp_relation_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+transient": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+warn_if": {
           "type": [
             "string",
@@ -852,6 +1233,94 @@
           "type": [
             "string",
             "null"
+          ]
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/ProjectDataTestConfig"
+      }
+    },
+    "ProjectDbtCloudConfig": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrInteger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "api_key": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrInteger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "application": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrInteger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defer-env-id": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrInteger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "environment": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrInteger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "job-id": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrInteger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "project-id": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrInteger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "run-id": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrInteger"
+            },
+            {
+              "type": "null"
+            }
           ]
         }
       },
@@ -884,7 +1353,9 @@
           ]
         }
       },
-      "additionalProperties": false
+      "additionalProperties": {
+        "$ref": "#/definitions/ProjectExposureConfig"
+      }
     },
     "ProjectMetricConfigs": {
       "type": "object",
@@ -919,7 +1390,9 @@
           ]
         }
       },
-      "additionalProperties": false
+      "additionalProperties": {
+        "$ref": "#/definitions/ProjectMetricConfigs"
+      }
     },
     "ProjectModelConfig": {
       "type": "object",
@@ -1038,7 +1511,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "+compression": {
           "type": [
@@ -1227,7 +1702,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "+labels_from_meta": {
           "type": [
@@ -1544,14 +2021,7 @@
           ]
         },
         "+tags": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/definitions/StringOrArrayOfStrings"
         },
         "+target_alias": {
           "type": [
@@ -1595,7 +2065,9 @@
           ]
         }
       },
-      "additionalProperties": false
+      "additionalProperties": {
+        "$ref": "#/definitions/ProjectModelConfig"
+      }
     },
     "ProjectSavedQueriesConfig": {
       "type": "object",
@@ -1656,7 +2128,9 @@
           ]
         }
       },
-      "additionalProperties": false
+      "additionalProperties": {
+        "$ref": "#/definitions/ProjectSavedQueriesConfig"
+      }
     },
     "ProjectSeedConfig": {
       "type": "object",
@@ -1667,12 +2141,91 @@
             "null"
           ]
         },
+        "+auto_liquid_cluster": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+auto_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+automatic_clustering": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+backup": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+base_location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+base_location_subpath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+bind": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+buckets": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "+catalog": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+cluster_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryClusterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+clustered_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+column_types": {
           "type": [
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "+compression": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "+copy_grants": {
           "type": [
@@ -1686,7 +2239,32 @@
             "null"
           ]
         },
+        "+databricks_compute": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+databricks_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
         "+delimiter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+dist": {
           "type": [
             "string",
             "null"
@@ -1702,6 +2280,12 @@
             }
           ]
         },
+        "+enable_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+enabled": {
           "type": [
             "boolean",
@@ -1714,11 +2298,32 @@
             "null"
           ]
         },
+        "+external_volume": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+file_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+full_refresh": {
           "type": [
             "boolean",
             "null"
           ]
+        },
+        "+grant_access_to": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/GrantAccessToTarget"
+          }
         },
         "+grants": {
           "type": [
@@ -1733,12 +2338,132 @@
             "null"
           ]
         },
+        "+hours_to_expiration": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "+include_full_name_in_path": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+initialize": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+kms_key_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+labels": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "+labels_from_meta": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+liquid_clustered_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+max_staleness": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+merge_with_schema_evolution": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+meta": {
           "type": [
             "object",
             "null"
           ],
           "additionalProperties": false
+        },
+        "+not_matched_by_source_action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+not_matched_by_source_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+not_matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+partition_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryPartitionConfigLegacy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+partition_expiration_days": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "+partitions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         },
         "+persist_docs": {
           "anyOf": [
@@ -1770,6 +2495,12 @@
             }
           ]
         },
+        "+query_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+quote_columns": {
           "type": [
             "boolean",
@@ -1786,13 +2517,73 @@
             }
           ]
         },
+        "+refresh_interval_minutes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "+refresh_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+require_partition_filter": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+schema": {
           "type": [
             "string",
             "null"
           ]
         },
+        "+secure": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+skip_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+skip_not_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+snowflake_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+sort": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+sort_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+source_alias": {
           "type": [
             "string",
             "null"
@@ -1808,6 +2599,31 @@
             }
           ]
         },
+        "+target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+target_lag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+tblproperties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+tmp_relation_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+transient": {
           "type": [
             "boolean",
@@ -1815,7 +2631,9 @@
           ]
         }
       },
-      "additionalProperties": false
+      "additionalProperties": {
+        "$ref": "#/definitions/ProjectSeedConfig"
+      }
     },
     "ProjectSemanticModelConfig": {
       "type": "object",
@@ -1850,12 +2668,69 @@
           "additionalProperties": true
         }
       },
-      "additionalProperties": false
+      "additionalProperties": {
+        "$ref": "#/definitions/ProjectSemanticModelConfig"
+      }
     },
     "ProjectSnapshotConfig": {
       "type": "object",
       "properties": {
         "+alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+auto_liquid_cluster": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+auto_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+automatic_clustering": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+backup": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+base_location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+base_location_subpath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+bind": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+buckets": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "+catalog": {
           "type": [
             "string",
             "null"
@@ -1871,13 +2746,66 @@
             }
           ]
         },
+        "+cluster_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryClusterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+clustered_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+compression": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+copy_grants": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+database": {
           "type": [
             "string",
             "null"
           ]
         },
+        "+databricks_compute": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+databricks_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
         "+dbt_valid_to_current": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+dist": {
           "type": [
             "string",
             "null"
@@ -1893,6 +2821,12 @@
             }
           ]
         },
+        "+enable_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+enabled": {
           "type": [
             "boolean",
@@ -1904,6 +2838,27 @@
             "string",
             "null"
           ]
+        },
+        "+external_volume": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+file_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+grant_access_to": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/GrantAccessToTarget"
+          }
         },
         "+grants": true,
         "+group": {
@@ -1922,9 +2877,72 @@
             }
           ]
         },
+        "+hours_to_expiration": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "+include_full_name_in_path": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+initialize": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+invalidate_hard_deletes": {
           "type": [
             "boolean",
+            "null"
+          ]
+        },
+        "+kms_key_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+labels": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "+labels_from_meta": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+liquid_clustered_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+matched_condition": {
+          "type": [
+            "string",
             "null"
           ]
         },
@@ -1938,12 +2956,69 @@
             }
           ]
         },
+        "+max_staleness": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+merge_with_schema_evolution": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+meta": {
           "type": [
             "object",
             "null"
           ],
           "additionalProperties": false
+        },
+        "+not_matched_by_source_action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+not_matched_by_source_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+not_matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+partition_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryPartitionConfigLegacy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+partition_expiration_days": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "+partitions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         },
         "+persist_docs": {
           "anyOf": [
@@ -1975,6 +3050,12 @@
             }
           ]
         },
+        "+query_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+quote_columns": {
           "type": [
             "boolean",
@@ -1991,9 +3072,47 @@
             }
           ]
         },
+        "+refresh_interval_minutes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "+refresh_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+require_partition_filter": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+schema": {
           "type": [
             "string",
+            "null"
+          ]
+        },
+        "+secure": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+skip_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+skip_not_matched_step": {
+          "type": [
+            "boolean",
             "null"
           ]
         },
@@ -2005,6 +3124,34 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "+snowflake_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+sort": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+sort_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+source_alias": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+static_analysis": {
@@ -2033,6 +3180,37 @@
             }
           ]
         },
+        "+target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+target_lag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+tblproperties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+tmp_relation_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+transient": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+unique_key": {
           "anyOf": [
             {
@@ -2050,11 +3228,127 @@
           ]
         }
       },
-      "additionalProperties": false
+      "additionalProperties": {
+        "$ref": "#/definitions/ProjectSnapshotConfig"
+      }
     },
     "ProjectSourceConfig": {
       "type": "object",
       "properties": {
+        "+auto_liquid_cluster": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+auto_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+automatic_clustering": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+backup": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+base_location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+base_location_subpath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+bind": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+buckets": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "+catalog": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+cluster_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryClusterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+clustered_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+compression": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+copy_grants": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+databricks_compute": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+databricks_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+dist": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+enable_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+enabled": {
           "type": [
             "boolean",
@@ -2067,10 +3361,82 @@
             "null"
           ]
         },
+        "+external_volume": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+file_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+freshness": {
           "anyOf": [
             {
               "$ref": "#/definitions/FreshnessDefinition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+grant_access_to": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/GrantAccessToTarget"
+          }
+        },
+        "+hours_to_expiration": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "+include_full_name_in_path": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+initialize": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+kms_key_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+labels": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "+labels_from_meta": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+liquid_clustered_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
             },
             {
               "type": "null"
@@ -2089,50 +3455,25 @@
             "null"
           ]
         },
-        "+meta": {
+        "+location_root": {
           "type": [
-            "object",
+            "string",
             "null"
-          ],
-          "additionalProperties": false
-        },
-        "+quoting": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/DbtQuoting"
-            },
-            {
-              "type": "null"
-            }
           ]
         },
-        "+static_analysis": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StaticAnalysisKind"
-            },
-            {
-              "type": "null"
-            }
+        "+matched_condition": {
+          "type": [
+            "string",
+            "null"
           ]
         },
-        "+tags": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
-            },
-            {
-              "type": "null"
-            }
+        "+max_staleness": {
+          "type": [
+            "string",
+            "null"
           ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "ProjectUnitTestConfig": {
-      "type": "object",
-      "properties": {
-        "+enabled": {
+        },
+        "+merge_with_schema_evolution": {
           "type": [
             "boolean",
             "null"
@@ -2145,6 +3486,133 @@
           ],
           "additionalProperties": false
         },
+        "+not_matched_by_source_action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+not_matched_by_source_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+not_matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+partition_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryPartitionConfigLegacy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+partition_expiration_days": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "+partitions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "+query_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+quoting": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtQuoting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+refresh_interval_minutes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "+refresh_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+require_partition_filter": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+secure": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+skip_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+skip_not_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+snowflake_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+sort": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+sort_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+source_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+static_analysis": {
           "anyOf": [
             {
@@ -2164,9 +3632,441 @@
               "type": "null"
             }
           ]
+        },
+        "+target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+target_lag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+tblproperties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+tmp_relation_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+transient": {
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
-      "additionalProperties": false
+      "additionalProperties": {
+        "$ref": "#/definitions/ProjectSourceConfig"
+      }
+    },
+    "ProjectUnitTestConfig": {
+      "type": "object",
+      "properties": {
+        "+auto_liquid_cluster": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+auto_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+automatic_clustering": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+backup": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+base_location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+base_location_subpath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+bind": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+buckets": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "+catalog": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+cluster_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryClusterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+clustered_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+compression": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+copy_grants": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+databricks_compute": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+databricks_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+dist": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+enable_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+external_volume": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+file_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+grant_access_to": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/GrantAccessToTarget"
+          }
+        },
+        "+hours_to_expiration": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "+include_full_name_in_path": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+initialize": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+kms_key_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+labels": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "+labels_from_meta": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+liquid_clustered_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+max_staleness": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+merge_with_schema_evolution": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+not_matched_by_source_action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+not_matched_by_source_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+not_matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+partition_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryPartitionConfigLegacy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+partition_expiration_days": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "+partitions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "+query_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+refresh_interval_minutes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "+refresh_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+require_partition_filter": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+secure": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+skip_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+skip_not_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+snowflake_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+sort": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+sort_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+source_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+target_lag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+tblproperties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "+tmp_relation_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+transient": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/ProjectUnitTestConfig"
+      }
     },
     "QueryComment": {
       "anyOf": [
@@ -2294,6 +4194,23 @@
             "type": "string"
           }
         }
+      ]
+    },
+    "StringOrInteger": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer",
+          "format": "int64"
+        }
+      ]
+    },
+    "TargetPath": {
+      "type": "string",
+      "enum": [
+        "target"
       ]
     },
     "TimeConfig": {

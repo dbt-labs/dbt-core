@@ -9,8 +9,18 @@ name: test
 profile: test
 seed-paths:
 - seeds
+models:
+  +enabled: true
+  test:
+    +enabled: true
+    sub:
+      +enabled: true
+      inner:
+        +enabled: true
 seeds:
-  +quote_columns: false
+  +quote_columns: true
+  test:
+    +quote_columns: false
 snapshot-paths:
 - snapshots
 test-paths:

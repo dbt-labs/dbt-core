@@ -713,6 +713,15 @@ class ModelParamUsageDeprecation(WarnLevel):
         return line_wrap_message(deprecation_tag(description))
 
 
+class SourceOverrideDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D035"
+
+    def message(self) -> str:
+        description = f"The source property `overrides` is deprecated but was found on source `{self.source_name}` in file `{self.file}`. Instead, `enabled` should be used to disable the unwanted source."
+        return line_wrap_message(deprecation_tag(description))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
