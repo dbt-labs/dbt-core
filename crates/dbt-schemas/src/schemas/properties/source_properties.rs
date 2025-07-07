@@ -5,12 +5,8 @@ use crate::schemas::dbt_column::ColumnProperties;
 use crate::schemas::project::SourceConfig;
 use crate::schemas::serde::bool_or_string_bool;
 use crate::schemas::serde::StringOrArrayOfStrings;
-use dbt_common::err;
 use dbt_common::serde_utils::Omissible;
-use dbt_common::ErrorCode;
-use dbt_common::FsResult;
 use dbt_serde_yaml::JsonSchema;
-use dbt_serde_yaml::Spanned;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::{BTreeMap, HashMap};
@@ -25,23 +21,9 @@ pub struct SourceProperties {
     pub description: Option<String>,
     pub loader: Option<String>,
     pub name: String,
-    pub overrides: Spanned<Option<String>>,
     pub quoting: Option<DbtQuoting>,
     pub schema: Option<String>,
     pub tables: Option<Vec<Tables>>,
-}
-
-impl SourceProperties {
-    pub fn err_on_deprecated_overrides_for_source_properties(&self) -> FsResult<()> {
-        if self.overrides.is_some() {
-            return err!(
-                code => ErrorCode::DeprecatedOption,
-                loc => self.overrides.span().clone(),
-                "The `overrides` field is deprecated. Please remove it from your project to continue.",
-            );
-        }
-        Ok(())
-    }
 }
 
 #[skip_serializing_none]

@@ -68,9 +68,6 @@ pub fn resolve_sources(
             &[],
         )?;
 
-        // Throw an error if overrides are used
-        source.err_on_deprecated_overrides_for_source_properties()?;
-
         let table: Tables = into_typed_with_jinja(
             Some(io_args),
             mpe.table_value.unwrap(),
