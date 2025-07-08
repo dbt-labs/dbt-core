@@ -39,6 +39,23 @@ impl StaticBaseColumn for BigqueryColumnType {
         };
         Ok(Value::from(column_type))
     }
+
+    // https://github.com/dbt-labs/dbt-adapters/blob/6f2aae13e39c5df1c93e5d514678914142d71768/dbt-bigquery/src/dbt/adapters/bigquery/column.py#L97
+    fn numeric_type(args: &[Value]) -> Result<Value, MinijinjaError> {
+        let mut args: ArgParser = ArgParser::new(args, None);
+        let dtype: String = args.get("dtype")?;
+        Ok(Value::from(dtype))
+    }
+
+    // https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#string_type
+    fn string_type(args: &[Value]) -> Result<Value, MinijinjaError> {
+        let mut args: ArgParser = ArgParser::new(args, None);
+        let size = args.get::<usize>("size").ok();
+        match size {
+            Some(size) => Ok(Value::from(format!("STRING({size})"))),
+            _ => Ok(Value::from("STRING".to_string())),
+        }
+    }
 }
 
 /// A struct representing a column
@@ -93,7 +110,11 @@ impl BaseColumn for BigqueryColumn {
         Value::from(&format!("`{}`", self.name))
     }
 
-    // TODO: impl data_type
+    // TODO: impl data_type - need to handle nested types
+    // https://github.com/dbt-labs/dbt-adapters/blob/6f2aae13e39c5df1c93e5d514678914142d71768/dbt-bigquery/src/dbt/adapters/bigquery/column.py#L80
+    fn data_type(&self) -> Value {
+        Value::from(self.dtype.to_lowercase())
+    }
 }
 
 impl BaseColumnProperties for BigqueryColumn {
