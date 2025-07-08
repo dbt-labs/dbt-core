@@ -18,6 +18,7 @@ from dbt.config.project import read_project_flags
 from dbt.config.utils import normalize_warn_error_options
 from dbt.contracts.project import ProjectFlags
 from dbt.deprecations import fire_buffered_deprecations, renamed_env_var, warn
+from dbt.env_vars import KNOWN_ENGINE_ENV_VARS
 from dbt.events import ALL_EVENT_NAMES
 from dbt_common import ui
 from dbt_common.clients import jinja
@@ -321,6 +322,9 @@ class Flags:
         # Check event_time configs for validity
         self._validate_event_time_configs()
 
+        # Cross propagate engine env vars with their old non-engine prefixed versions names
+        self._cross_propagate_engine_env_vars()
+
         # Support lower cased access for legacy code.
         params = set(
             x for x in dir(self) if not callable(getattr(self, x)) and not x.startswith("__")
@@ -332,6 +336,23 @@ class Flags:
 
     def __str__(self) -> str:
         return str(pf(self.__dict__))
+
+    def _cross_propagate_engine_env_vars(self) -> None:
+        """
+        Cross propagate engine env vars with their old non-engine prefixed names.
+
+        There are some drawbacks to this approach. Namely, click only validates
+        environment variable types for the environment variables it is aware of.
+        Thus by using the new environment variable naming scheme for existing
+        environment variables (not newly added ones), we actually lose type guarantees.
+        This might require a rework.
+        """
+        for env_var in KNOWN_ENGINE_ENV_VARS:
+            if env_var.old_name is not None:
+                if hasattr(self, env_var.old_name) and not hasattr(self, env_var.name):
+                    object.__setattr__(self, env_var.name, getattr(self, env_var.old_name))
+                elif hasattr(self, env_var.name):
+                    object.__setattr__(self, env_var.old_name, getattr(self, env_var.name))
 
     def _override_if_set(self, lead: str, follow: str, defaulted: Set[str]) -> None:
         """If the value of the lead parameter was set explicitly, apply the value to follow, unless follow was also set explicitly."""

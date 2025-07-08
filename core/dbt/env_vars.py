@@ -37,7 +37,7 @@ def _create_engine_env_var(name: str) -> EngineEnvVar:
 
 
 # Here we are creating a set of all known engine env vars. This is used in this moduleto create an allow list of dbt
-# engine env vars.
+# engine env vars. We also use it in the cli flags module to cross propagate engine env vars with their old non-engine prefixed names.
 KNOWN_ENGINE_ENV_VARS: set[EngineEnvVar] = {
     _create_engine_env_var(envvar)
     for envvar in [*params.KNOWN_ENV_VARS, *_ADDITIONAL_ENGINE_ENV_VARS]
