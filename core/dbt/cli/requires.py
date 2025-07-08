@@ -17,6 +17,7 @@ from dbt.config.runtime import UnsetProfile, load_profile, load_project
 from dbt.context.providers import generate_runtime_macro_context
 from dbt.context.query_header import generate_query_header_context
 from dbt.deprecations import show_deprecations_summary
+from dbt.env_vars import validate_engine_env_vars
 from dbt.events.logging import setup_event_logger
 from dbt.events.types import (
     ArtifactUploadError,
@@ -107,6 +108,9 @@ def preflight(func):
 
         # Adapter management
         ctx.with_resource(adapter_management())
+
+        # Validate engine env var restricted name space
+        validate_engine_env_vars()
 
         return func(*args, **kwargs)
 
