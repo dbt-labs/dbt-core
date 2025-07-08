@@ -7,6 +7,8 @@ from dbt.deprecations import warn
 from dbt_common.constants import ENGINE_ENV_PREFIX
 
 # These are env vars that are not in the params module, but are still allowed to be set.
+# New additions to this list should use the new naming scheme, unless they are being added because
+# they already existed, but we didn't know about them previously.
 # TODO: Should at least some of these become (undocumented) cli param options?
 _ADDITIONAL_ENGINE_ENV_VARS: List[str] = [
     "DBT_INVOCATION_ENV",
