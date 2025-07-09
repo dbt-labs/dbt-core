@@ -79,10 +79,12 @@ pub async fn invocation_start_event(
 
 pub async fn invocation_end_event(invocation_id: String, result: &FsResult<i32>) {
     let env = InternalEnv::global();
-    let mut result_string = "ok".to_string();
-    if result.is_err() {
-        result_string = "error".to_string();
-    }
+    // result is set to Ok(1) for error and Ok(0) for success
+    let result_string = match result {
+        Ok(1) => "error".to_string(),
+        Ok(0) => "ok".to_string(),
+        _ => "unknown".to_string(),
+    };
     // Create Invocation start message
     let message = Invocation {
         //  REQUIRED invocation_id - globally unique identifier
