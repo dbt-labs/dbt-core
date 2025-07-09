@@ -25,6 +25,14 @@
   {% endif %}
 {% endmacro %}
 
+{% macro apply_alter_constraints(relation) %}
+  {%- for constraint in relation.alter_constraints -%}
+    {% call statement('add constraint') %}
+      ALTER TABLE {{ relation.render() }} ADD {{ constraint.render() }}
+    {% endcall %}
+  {%- endfor -%}
+{% endmacro %}
+
 {% macro alter_table_add_constraints(relation, constraints) %}
   {{ return(adapter.dispatch('alter_table_add_constraints', 'dbt')(relation, constraints)) }}
 {% endmacro %}

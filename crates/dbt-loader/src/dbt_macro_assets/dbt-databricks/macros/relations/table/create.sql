@@ -1,3 +1,53 @@
+{% macro create_table_at(relation, intermediate_relation, compiled_code) %}
+  {% set tags = config.get('databricks_tags') %}
+  {% set model_columns = model.get('columns', []) %}
+  {% set existing_columns = adapter.get_columns_in_relation(intermediate_relation) %}
+  {% set model_constraints = model.get('constraints', []) %}
+  {% set columns_and_constraints = adapter.parse_columns_and_constraints(existing_columns, model_columns, model_constraints) %}
+  {% set target_relation = relation.enrich(columns_and_constraints[1]) %}
+  
+  {% call statement('main') %}
+    {{ get_create_table_sql(target_relation, columns_and_constraints[0], compiled_code) }}
+  {% endcall %}
+
+  {{ apply_alter_constraints(target_relation) }}
+  {{ apply_tags(target_relation, tags) }}
+  {% set column_tags = adapter.get_column_tags_from_model(config.model) %}
+  {% if column_tags and column_tags.set_column_tags %}
+    {{ apply_column_tags(target_relation, column_tags) }}
+  {% endif %}
+
+  {% call statement('merge into target') %}
+    insert into {{ target_relation }} select * from {{ intermediate_relation }}
+  {% endcall %}
+{% endmacro %}
+
+{% macro get_create_table_sql(target_relation, columns, compiled_code) %}
+
+  {%- set catalog_relation = adapter.build_catalog_relation(config.model) -%}
+
+  {%- set contract = config.get('contract') -%}
+  {%- set contract_enforced = contract and contract.enforced -%}
+  {%- if contract_enforced -%}
+    {{ get_assert_columns_equivalent(compiled_code) }}
+  {%- endif -%}
+
+  {%- if catalog_relation.file_format == 'delta' %}
+  create or replace table {{ target_relation.render() }}
+  {% else %}
+  create table {{ target_relation.render() }}
+  {% endif -%}
+  {{ get_column_and_constraints_sql(target_relation, columns) }}
+  {{ file_format_clause(catalog_relation) }}
+  {{ databricks__options_clause(catalog_relation) }}
+  {{ partition_cols(label="partitioned by") }}
+  {{ liquid_clustered_cols() }}
+  {{ clustered_cols(label="clustered by") }}
+  {{ location_clause(catalog_relation) }}
+  {{ comment_clause() }}
+  {{ tblproperties_clause() }}
+{% endmacro %}
+
 {% macro databricks__create_table_as(temporary, relation, compiled_code, language='sql') -%}
   {%- if language == 'sql' -%}
     {%- if temporary -%}
@@ -67,3 +117,13 @@
     create or replace view {{ relation }} as
       {{ compiled_code }}
 {%- endmacro -%}
+
+{% macro get_create_intermediate_table(relation, compiled_code, language) %}
+  {%- if language == 'sql' -%}
+    -- INTENTIONAL DIVERGENCE 
+    -- create_temporary_view method cannot be used here, because DBX v2 api doesn't support session
+    {{ _create_view_simple(relation, compiled_code) }}
+  {%- else -%}
+    {{ create_python_intermediate_table(relation, compiled_code) }}
+  {%- endif -%}
+{% endmacro %}
