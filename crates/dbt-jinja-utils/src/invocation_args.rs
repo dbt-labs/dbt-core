@@ -1,6 +1,7 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, env};
 
 use dbt_common::io_args::EvalArgs;
+use itertools::Itertools;
 use log::LevelFilter;
 use minijinja::Value;
 
@@ -147,8 +148,13 @@ impl InvocationArgs {
     pub fn to_dict(&self) -> BTreeMap<String, Value> {
         let mut dict = BTreeMap::new();
         dict.insert(
-            "invocation_command".to_string(),
+            "which".to_string(),
             Value::from(self.invocation_command.clone()),
+        );
+
+        dict.insert(
+            "invocation_command".to_string(),
+            Value::from(env::args().join(" ")),
         );
         dict.insert("vars".to_string(), Value::from_object(self.vars.clone()));
         dict.insert("select".to_string(), Value::from(self.select.clone()));
