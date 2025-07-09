@@ -96,6 +96,10 @@ pub struct DatabricksFunctionReference {
     pub specific_name: String,
 }
 
+fn default_element_nullable() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "name")]
 #[serde(rename_all = "lowercase")]
@@ -132,11 +136,13 @@ pub enum DatabricksColumnTypeInfo {
     },
     Array {
         element_type: Box<DatabricksColumnTypeInfo>,
+        #[serde(default = "default_element_nullable")]
         element_nullable: bool,
     },
     Map {
         key_type: Box<DatabricksColumnTypeInfo>,
         value_type: Box<DatabricksColumnTypeInfo>,
+        #[serde(default = "default_element_nullable")]
         element_nullable: bool,
     },
     Struct {
@@ -233,7 +239,7 @@ impl DatabricksColumnTypeInfo {
                         .iter()
                         .map(|field| {
                             format!(
-                                "{}:{}{}{}",
+                                "`{}`:{}{}{}",
                                 field.name,
                                 field.type_.raw_type(),
                                 if field.nullable { "" } else { " NOT NULL" },
@@ -258,6 +264,7 @@ pub struct DatabricksStructFieldInfo {
     pub name: String,
     #[serde(rename = "type")]
     pub type_: DatabricksColumnTypeInfo,
+    #[serde(default = "default_element_nullable")]
     pub nullable: bool,
     pub comment: Option<String>,
     pub default: Option<String>,
@@ -411,7 +418,7 @@ mod tests {
             element_type: Box::new(struct_type),
             element_nullable: true,
         };
-        assert_eq!(struct_array.raw_type(), "ARRAY<STRUCT<id:int NOT NULL>>");
+        assert_eq!(struct_array.raw_type(), "ARRAY<STRUCT<`id`:int NOT NULL>>");
 
         // Array of maps
         let map_type = DatabricksColumnTypeInfo::Map {
@@ -524,7 +531,7 @@ mod tests {
         };
         assert_eq!(
             simple_struct.raw_type(),
-            "STRUCT<id:int NOT NULL,name:STRING>"
+            "STRUCT<`id`:int NOT NULL,`name`:STRING>"
         );
     }
 
@@ -551,7 +558,7 @@ mod tests {
         };
         assert_eq!(
             struct_with_comments.raw_type(),
-            "STRUCT<user_id:bigint NOT NULL COMMENT \"Unique user identifier\",email:STRING COMMENT \"User email address\">"
+            "STRUCT<`user_id`:bigint NOT NULL COMMENT \"Unique user identifier\",`email`:STRING COMMENT \"User email address\">"
         );
     }
 
@@ -569,7 +576,7 @@ mod tests {
         };
         assert_eq!(
             struct_with_escaped_comments.raw_type(),
-            "STRUCT<description:STRING COMMENT \"Contains \\\"quoted\\\" text\">"
+            "STRUCT<`description`:STRING COMMENT \"Contains \\\"quoted\\\" text\">"
         );
     }
 
@@ -605,7 +612,7 @@ mod tests {
         };
         assert_eq!(
             complex_struct.raw_type(),
-            "STRUCT<tags:ARRAY<STRING>,metadata:MAP<STRING,STRING> NOT NULL>"
+            "STRUCT<`tags`:ARRAY<STRING>,`metadata`:MAP<STRING,STRING> NOT NULL>"
         );
     }
 
@@ -651,7 +658,7 @@ mod tests {
         };
         assert_eq!(
             person_struct.raw_type(),
-            "STRUCT<name:STRING NOT NULL,address:STRUCT<street:STRING,city:STRING>>"
+            "STRUCT<`name`:STRING NOT NULL,`address`:STRUCT<`street`:STRING,`city`:STRING>>"
         );
     }
 
@@ -705,7 +712,7 @@ mod tests {
 
         assert_eq!(
             final_struct.raw_type(),
-            "STRUCT<complex_data:ARRAY<MAP<STRING,ARRAY<STRUCT<key:STRING NOT NULL,value:int>>>> COMMENT \"Complex nested data structure\">"
+            "STRUCT<`complex_data`:ARRAY<MAP<STRING,ARRAY<STRUCT<`key`:STRING NOT NULL,`value`:int>>>> COMMENT \"Complex nested data structure\">"
         );
     }
 
@@ -745,7 +752,7 @@ mod tests {
         };
         assert_eq!(
             struct_with_interval.raw_type(),
-            "STRUCT<duration:INTERVAL month>"
+            "STRUCT<`duration`:INTERVAL month>"
         );
     }
 
@@ -811,7 +818,7 @@ mod tests {
         };
         assert_eq!(
             struct_with_timestamps.raw_type(),
-            "STRUCT<created_at:timestamp_ltz NOT NULL,updated_at:timestamp_ntz>"
+            "STRUCT<`created_at`:timestamp_ltz NOT NULL,`updated_at`:timestamp_ntz>"
         );
     }
 }
