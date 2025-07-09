@@ -5,6 +5,7 @@ from dbt.deprecations import EnvironmentVariableNamespaceDeprecation as EVND
 from dbt.deprecations import active_deprecations
 from dbt.env_vars import KNOWN_ENGINE_ENV_VARS, validate_engine_env_vars
 from dbt.events.types import EnvironmentVariableNamespaceDeprecation
+from dbt.tests.util import safe_set_invocation_context
 from dbt_common.events.event_manager_client import add_callback_to_manager
 from tests.utils import EventCatcher
 
@@ -17,6 +18,7 @@ from tests.utils import EventCatcher
     },
 )
 def test_validate_engine_env_vars():
+    safe_set_invocation_context()
     event_catcher = EventCatcher(event_to_catch=EnvironmentVariableNamespaceDeprecation)
     add_callback_to_manager(event_catcher.catch)
 

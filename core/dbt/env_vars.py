@@ -1,10 +1,10 @@
-import os
 from dataclasses import dataclass
 from typing import List, Optional
 
 from dbt.cli import params
 from dbt.deprecations import warn
 from dbt_common.constants import ENGINE_ENV_PREFIX
+from dbt_common.context import get_invocation_context
 
 # These are env vars that are not in the params module, but are still allowed to be set.
 # New additions to this list should use the new naming scheme, unless they are being added because
@@ -51,7 +51,8 @@ def validate_engine_env_vars() -> None:
     """
     Validate that any set environment variables that begin with the engine prefix are allowed.
     """
-    for env_var in os.environ.keys():
+    env_vars = get_invocation_context()._env
+    for env_var in env_vars.keys():
         if env_var.startswith(ENGINE_ENV_PREFIX) and env_var not in _ALLOWED_ENV_VARS:
             warn(
                 "environment-variable-namespace-deprecation",
