@@ -13,7 +13,6 @@ use crate::vm::types::utils::{infer_type_from_const_value, instr_name, CodeLocat
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 use std::hash::Hash;
-use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -149,7 +148,6 @@ pub struct TypeChecker<'src> {
     pub cfg: CFG,
     pub in_states: Vec<TypecheckState>,
     pub function_registry: FunctionRegistry,
-    pub location: Option<CodeLocation>,
 }
 
 /// Typecheck logic implementation
@@ -161,14 +159,12 @@ impl<'env, 'src> TypeChecker<'src> {
             cfg,
             in_states,
             function_registry: funcsigns.clone(),
-            location: None,
         }
     }
 
     pub fn check(
         &mut self,
         state: &mut State<'_, 'env>,
-        path: PathBuf,
         warning_printer: Rc<dyn TypecheckingEventListener>,
     ) -> Result<(), crate::Error> {
         let mut worklist = VecDeque::new();
@@ -186,8 +182,7 @@ impl<'env, 'src> TypeChecker<'src> {
         }
 
         while let Some(bb_id) = worklist.pop_front() {
-            let out_state =
-                self.transfer_block(bb_id, state, path.clone(), warning_printer.clone())?;
+            let out_state = self.transfer_block(bb_id, state, warning_printer.clone())?;
             for (succ, _) in self.cfg.successor(bb_id) {
                 let changed = if first_merge[*succ] {
                     self.in_states[*succ] = out_state.clone();
@@ -211,7 +206,6 @@ impl<'env, 'src> TypeChecker<'src> {
         &mut self,
         bb_id: usize,
         state: &mut State<'_, 'env>,
-        path: PathBuf,
         warning_printer: Rc<dyn TypecheckingEventListener>,
     ) -> Result<TypecheckState, crate::Error> {
         let mut typestate = self.in_states[bb_id].clone();
@@ -268,7 +262,7 @@ impl<'env, 'src> TypeChecker<'src> {
                     };
                     typestate.locals.insert(name.to_string(), value_type);
                 }
-                Instruction::Lookup(name) => {
+                Instruction::Lookup(name, span) => {
                     // TYPECHECK: NO
                     let name_str: &str = name;
                     if let Some(typeset) = typestate.locals.get(name_str) {
@@ -279,13 +273,13 @@ impl<'env, 'src> TypeChecker<'src> {
                     // TODO: other internal states
                     else {
                         warning_printer.warn(
-                            &self.location.clone().unwrap_or_default(),
+                            span,
                             &format!("Potential TypeError: Unknown local variable '{name_str}'"),
                         );
                         typestate.stack.push(Type::Any);
                     }
                 }
-                Instruction::GetAttr(name) => {
+                Instruction::GetAttr(name, span) => {
                     // TYPECHECK: YES
                     // pop a type from the stack
                     let value_type = match typestate.stack.pop() {
@@ -309,7 +303,7 @@ impl<'env, 'src> TypeChecker<'src> {
                     } else {
                         if !value_type.is_any() {
                             warning_printer.warn(
-                                &self.location.clone().unwrap_or_default(),
+                                span,
                                 &format!(
                                     "Potential TypeError: Unknown attribute '{value_type}.{name}'"
                                 ),
@@ -362,7 +356,7 @@ impl<'env, 'src> TypeChecker<'src> {
                     };
                     typestate.stack.push(Type::Any);
                 }
-                Instruction::Slice => {
+                Instruction::Slice(span) => {
                     // TYPECHECK: YES
                     // b, step, stop must be Integer, None, or Value (or a union containing any of these)
                     let step = match typestate.stack.pop() {
@@ -405,7 +399,7 @@ impl<'env, 'src> TypeChecker<'src> {
                     for (name, slice_type) in [("b", &b), ("stop", &stop), ("step", &step)] {
                         if slice_type.coerce(&Type::Integer).is_none() {
                             warning_printer.warn(
-                                &self.location.clone().unwrap_or_default(),
+                                span,
                                 &format!("Type mismatch for slice {name}: type = {slice_type:?}"),
                             );
                         }
@@ -568,7 +562,7 @@ impl<'env, 'src> TypeChecker<'src> {
                         field1: Box::new(list_type),
                     });
                 }
-                Instruction::UnpackList(count) => {
+                Instruction::UnpackList(count, span) => {
                     let list_type = match typestate.stack.pop() {
                         Some(val) => val,
                         None => {
@@ -586,7 +580,7 @@ impl<'env, 'src> TypeChecker<'src> {
                         }
                     } else {
                         warning_printer.warn(
-                            &self.location.clone().unwrap_or_default(),
+                            span,
                             &format!(
                                 "Type mismatch for unpack list: expected Seq, got {list_type:?}"
                             ),
@@ -597,12 +591,12 @@ impl<'env, 'src> TypeChecker<'src> {
                     // TODO
                     // We need to modify the structure of the UnpackLists instruction, adding an expected total items count
                 }
-                Instruction::Add
-                | Instruction::Sub
-                | Instruction::Mul
-                | Instruction::Div
-                | Instruction::IntDiv
-                | Instruction::Pow => {
+                Instruction::Add(span)
+                | Instruction::Sub(span)
+                | Instruction::Mul(span)
+                | Instruction::Div(span)
+                | Instruction::IntDiv(span)
+                | Instruction::Pow(span) => {
                     // TYPECHECK: YES
                     // lhs and rhs must have the same type
                     let op = instr_name(&self.instr[global_idx]);
@@ -630,14 +624,14 @@ impl<'env, 'src> TypeChecker<'src> {
                         typestate.stack.push(result_type);
                     } else {
                         warning_printer.warn(
-                            &self.location.clone().unwrap_or_default(),
+                            span,
                             &format!("Type mismatch for {op}: lhs = {lhs_type}, rhs = {rhs_type}"),
                         );
                         typestate.stack.push(Type::Any);
                     }
                 }
 
-                Instruction::Rem => {
+                Instruction::Rem(span) => {
                     // TYPECHECK: YES
                     // lhs and rhs must have the same type
                     // or, according to the runtime logic, Rem can be used with lhs = String, rhs = Seq
@@ -679,7 +673,7 @@ impl<'env, 'src> TypeChecker<'src> {
                         typestate.stack.push(result_type);
                     } else {
                         warning_printer.warn(
-                            &self.location.clone().unwrap_or_default(),
+                            span,
                             &format!(
                                 "Type mismatch for {op}: lhs = {lhs_type:?}, rhs = {rhs_type:?}"
                             ),
@@ -688,12 +682,12 @@ impl<'env, 'src> TypeChecker<'src> {
                     }
                 }
 
-                Instruction::Eq
-                | Instruction::Ne
-                | Instruction::Lt
-                | Instruction::Lte
-                | Instruction::Gt
-                | Instruction::Gte => {
+                Instruction::Eq(span)
+                | Instruction::Ne(span)
+                | Instruction::Lt(span)
+                | Instruction::Lte(span)
+                | Instruction::Gt(span)
+                | Instruction::Gte(span) => {
                     // TYPECHECK: YES
                     // lhs and rhs must have the same type
                     let op = instr_name(&self.instr[global_idx]);
@@ -719,7 +713,7 @@ impl<'env, 'src> TypeChecker<'src> {
                     let result_type = lhs_type.can_compare_with(&rhs_type, op);
                     if !result_type {
                         warning_printer.warn(
-                            &self.location.clone().unwrap_or_default(),
+                            span,
                             &format!(
                                 "Type mismatch for {op}: lhs = {lhs_type:?}, rhs = {rhs_type:?}"
                             ),
@@ -728,7 +722,7 @@ impl<'env, 'src> TypeChecker<'src> {
                     typestate.stack.push(Type::Bool);
                 }
 
-                Instruction::Not => {
+                Instruction::Not(_) => {
                     // TYPECHECK: NO
                     let _item_type = match typestate.stack.pop() {
                         Some(val) => val,
@@ -741,7 +735,7 @@ impl<'env, 'src> TypeChecker<'src> {
                     };
                     typestate.stack.push(Type::Bool);
                 }
-                Instruction::StringConcat => {
+                Instruction::StringConcat(_) => {
                     // TYPECHECK: NO
                     // Stringconcat can actually concat any two types
                     let _rhs_type = match typestate.stack.pop() {
@@ -765,7 +759,7 @@ impl<'env, 'src> TypeChecker<'src> {
 
                     typestate.stack.push(Type::String);
                 }
-                Instruction::In => {
+                Instruction::In(_) => {
                     // TYPECHECK: NO
                     let _rhs_type = match typestate.stack.pop() {
                         Some(val) => val,
@@ -788,7 +782,7 @@ impl<'env, 'src> TypeChecker<'src> {
 
                     typestate.stack.push(Type::Bool);
                 }
-                Instruction::Neg => {
+                Instruction::Neg(_) => {
                     // TYPECHECK: YES
                     // The operand must be a number
                     let a = match typestate.stack.pop() {
@@ -828,7 +822,7 @@ impl<'env, 'src> TypeChecker<'src> {
 
                     typestate.stack.push(Type::Bool);
                 }
-                Instruction::PushLoop(_flags) => {
+                Instruction::PushLoop(_flags, span) => {
                     // TYPECHECK: NO
                     if let Some(loop_object) = typestate.stack.pop() {
                         let element_type = loop_object.get_seq_element_type();
@@ -836,7 +830,7 @@ impl<'env, 'src> TypeChecker<'src> {
                             typestate.stack.push(element_type);
                         } else {
                             warning_printer.warn(
-                                &self.location.clone().unwrap_or_default(),
+                                span,
                                 &format!(
                                     "Type mismatch for loop object: expected a sequence type, found {loop_object:?}"
                                 ),
@@ -872,14 +866,14 @@ impl<'env, 'src> TypeChecker<'src> {
                         }
                     };
                 }
-                Instruction::JumpIfFalseOrPop(_jump_target) => {
+                Instruction::JumpIfFalseOrPop(_jump_target, span) => {
                     // TYPECHECK: YES
                     // the operand must be a boolean
                     let a = typestate.peek().clone();
 
                     if !a.is_condition() {
                         warning_printer.warn(
-                            &self.location.clone().unwrap_or_default(),
+                            span,
                             &format!("Type mismatch for jump condition: type = {a:?}"),
                         );
                     }
@@ -890,14 +884,14 @@ impl<'env, 'src> TypeChecker<'src> {
                     Self::merge_into(&mut path_false, &path_true);
                     typestate = path_false;
                 }
-                Instruction::JumpIfTrueOrPop(_jump_target) => {
+                Instruction::JumpIfTrueOrPop(_jump_target, span) => {
                     // TYPECHECK: YES
                     // the operand must be a boolean
                     let a = typestate.peek().clone();
 
                     if !a.is_condition() {
                         warning_printer.warn(
-                            &self.location.clone().unwrap_or_default(),
+                            span,
                             &format!("Type mismatch for jump condition: type = {a:?}"),
                         );
                     }
@@ -915,7 +909,7 @@ impl<'env, 'src> TypeChecker<'src> {
                     // truncate
                     typestate.stack.truncate(saved_base);
                 }
-                Instruction::PushAutoEscape => {
+                Instruction::PushAutoEscape(span) => {
                     // TYPECHECK: YES
                     // the operand must be a string
                     let a = match typestate.stack.pop() {
@@ -929,10 +923,8 @@ impl<'env, 'src> TypeChecker<'src> {
                     };
 
                     if a.coerce(&Type::String).is_none() {
-                        warning_printer.warn(
-                            &self.location.clone().unwrap_or_default(),
-                            &format!("Type mismatch for auto escape: type = {a}"),
-                        );
+                        warning_printer
+                            .warn(span, &format!("Type mismatch for auto escape: type = {a}"));
                     }
                 }
                 Instruction::PopAutoEscape => {
@@ -969,7 +961,7 @@ impl<'env, 'src> TypeChecker<'src> {
                     typestate.drop_top(arg_count.unwrap_or(0) as usize);
                     typestate.stack.push(Type::Bool);
                 }
-                Instruction::CallFunction(name, arg_count, _span) => {
+                Instruction::CallFunction(name, arg_count, span) => {
                     // TYPECHECK: YES
                     // check the parameter types
                     // For internal rust functions
@@ -1012,7 +1004,7 @@ impl<'env, 'src> TypeChecker<'src> {
                                     }
                                     Err(msg) => {
                                         warning_printer.warn(
-                                            &self.location.clone().unwrap_or_default(),
+                                            span,
                                             &format!("Type mismatch for function '{name}': {msg}"),
                                         );
                                         typestate.stack.push(Type::Any);
@@ -1024,7 +1016,7 @@ impl<'env, 'src> TypeChecker<'src> {
 
                             if let Some(macro_def) = self.function_registry.get(*name) {
                                 warning_printer.warn(
-                                    &self.location.clone().unwrap_or_default(),
+                                    span,
                                     &format!(
                                         "Macro '{}'({}) needs a signature",
                                         name, macro_def.location
@@ -1036,20 +1028,20 @@ impl<'env, 'src> TypeChecker<'src> {
                     } else if let Some(arg_cnt) = arg_count {
                         let _args = typestate.get_call_args(*arg_cnt);
                         warning_printer.warn(
-                            &self.location.clone().unwrap_or_default(),
+                            span,
                             &format!("Potential TypeError: Function '{name}' is not defined."),
                         );
                         typestate.stack.push(Type::Any);
                     } else {
                         // TODO: handle the case when arg_count is None
                         warning_printer.warn(
-                            &self.location.clone().unwrap_or_default(),
+                            span,
                             &format!("Potential TypeError: Function '{name}' is not defined."),
                         );
                         typestate.stack.push(Type::Any);
                     }
                 }
-                Instruction::CallMethod(name, arg_count, _span) => {
+                Instruction::CallMethod(name, arg_count, span) => {
                     // TYPECHECK: NO? (Maybe add method check later)
 
                     let count = arg_count.unwrap_or(0);
@@ -1079,7 +1071,7 @@ impl<'env, 'src> TypeChecker<'src> {
                         if let Some(ret_type) = result.downcast_object_ref::<Type>().cloned() {
                             if ret_type == Type::Any && !self_type.is_any() {
                                 warning_printer.warn(
-                                    &self.location.clone().unwrap_or_default(),
+                                    span,
                                     &format!(
                                         "Potential TypeError: Method '{self_type}.{name}' is not defined.",
                                     ),
@@ -1127,7 +1119,7 @@ impl<'env, 'src> TypeChecker<'src> {
                     // Nothing to do with the stack
                 }
                 #[cfg(feature = "multi_template")]
-                Instruction::LoadBlocks => {
+                Instruction::LoadBlocks(span) => {
                     // TYPECHECK: YES
                     // the operand must be a string
                     let a = match typestate.stack.pop() {
@@ -1141,10 +1133,8 @@ impl<'env, 'src> TypeChecker<'src> {
                     };
 
                     if a.coerce(&Type::String).is_none() {
-                        warning_printer.warn(
-                            &self.location.clone().unwrap_or_default(),
-                            &format!("Type mismatch for block name: type = {a}"),
-                        );
+                        warning_printer
+                            .warn(span, &format!("Type mismatch for block name: type = {a}"));
                     }
                     // LoadBlocks does not change the stack, it just loads blocks
                 }
@@ -1206,20 +1196,6 @@ impl<'env, 'src> TypeChecker<'src> {
                 ) => {
                     // TYPECHECK: NO
                     // Nothing to do with the stack
-                }
-                Instruction::BinOpStart(_op, line, col, _offset) => {
-                    self.location = Some(CodeLocation {
-                        line: *line,
-                        col: *col,
-                        file: path.clone(),
-                    });
-                }
-                Instruction::BinOpStop(_op, line, col, _offset) => {
-                    self.location = Some(CodeLocation {
-                        line: *line,
-                        col: *col,
-                        file: path.clone(),
-                    });
                 }
             }
         }

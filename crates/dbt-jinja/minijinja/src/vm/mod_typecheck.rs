@@ -32,7 +32,6 @@ impl<'env> Vm<'env> {
         root: Value,
         blocks: &'template BTreeMap<&'env str, Instructions<'env>>,
         auto_escape: AutoEscape,
-        path: PathBuf,
         funcsigns: &FunctionRegistry,
         warning_printer: Rc<dyn TypecheckingEventListener>,
     ) -> Result<(), crate::Error> {
@@ -61,14 +60,7 @@ impl<'env> Vm<'env> {
             instructions,
             prepare_blocks(blocks),
         );
-        self.typecheck_impl(
-            &mut state,
-            Stack::default(),
-            0,
-            path,
-            funcsigns,
-            warning_printer,
-        )
+        self.typecheck_impl(&mut state, Stack::default(), 0, funcsigns, warning_printer)
     }
 
     /// Get macro signatures from the instructions
@@ -153,7 +145,6 @@ impl<'env> Vm<'env> {
         state: &mut State<'_, 'env>,
         _stack: Stack,
         _pc: usize,
-        path: PathBuf,
         funcsigns: &FunctionRegistry,
         warning_printer: Rc<dyn TypecheckingEventListener>,
     ) -> Result<(), crate::Error> {
@@ -165,7 +156,7 @@ impl<'env> Vm<'env> {
         // create a typechecker
         let mut typechecker = TypeChecker::new(instructions, cfg, funcsigns);
 
-        match typechecker.check(state, path, warning_printer) {
+        match typechecker.check(state, warning_printer) {
             Ok(()) => {}
             Err(err) => {
                 return Err(crate::Error::new(

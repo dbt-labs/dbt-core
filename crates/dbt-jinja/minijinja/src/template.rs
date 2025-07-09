@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashSet};
 use std::ops::Deref;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::{fmt, io};
@@ -135,7 +135,6 @@ impl<'env, 'source> Template<'env, 'source> {
     pub fn typecheck<S: Serialize>(
         &self,
         ctx: S,
-        path: PathBuf,
         funcsigns: &FunctionRegistry,
         warning_printer: Rc<dyn TypecheckingEventListener>,
     ) -> Result<(), crate::Error> {
@@ -146,7 +145,6 @@ impl<'env, 'source> Template<'env, 'source> {
             Value::from_serialize(&ctx),
             &self.compiled.blocks,
             self.compiled.initial_auto_escape,
-            path,
             funcsigns,
             warning_printer,
         )

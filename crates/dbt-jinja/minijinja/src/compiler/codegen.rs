@@ -154,7 +154,7 @@ impl<'source> CodeGenerator<'source> {
     }
 
     /// Starts a for loop
-    pub fn start_for_loop(&mut self, with_loop_var: bool, recursive: bool) {
+    pub fn start_for_loop(&mut self, with_loop_var: bool, recursive: bool, span: Span) {
         let mut flags = 0;
         if with_loop_var {
             flags |= LOOP_FLAG_WITH_LOOP_VAR;
@@ -162,7 +162,7 @@ impl<'source> CodeGenerator<'source> {
         if recursive {
             flags |= LOOP_FLAG_RECURSIVE;
         }
-        self.add(Instruction::PushLoop(flags));
+        self.add(Instruction::PushLoop(flags, span));
         let instr = self.add(Instruction::Iterate(!0));
         self.pending_block.push(PendingBlock::Loop {
             iter_instr: instr,
@@ -223,15 +223,15 @@ impl<'source> CodeGenerator<'source> {
     }
 
     /// Emits a short-circuited bool operator.
-    pub fn sc_bool(&mut self, and: bool) {
+    pub fn sc_bool(&mut self, and: bool, span: Span) {
         if let Some(PendingBlock::ScBool {
             ref mut jump_instrs,
         }) = self.pending_block.last_mut()
         {
             jump_instrs.push(self.instructions.add(if and {
-                Instruction::JumpIfFalseOrPop(!0)
+                Instruction::JumpIfFalseOrPop(!0, span)
             } else {
-                Instruction::JumpIfTrueOrPop(!0)
+                Instruction::JumpIfTrueOrPop(!0, span)
             }));
         } else {
             unreachable!();
@@ -244,8 +244,8 @@ impl<'source> CodeGenerator<'source> {
         if let Some(PendingBlock::ScBool { jump_instrs }) = self.pending_block.pop() {
             for instr in jump_instrs {
                 match self.instructions.get_mut(instr) {
-                    Some(Instruction::JumpIfFalseOrPop(ref mut target))
-                    | Some(Instruction::JumpIfTrueOrPop(ref mut target)) => {
+                    Some(Instruction::JumpIfFalseOrPop(ref mut target, _))
+                    | Some(Instruction::JumpIfTrueOrPop(ref mut target, _)) => {
                         *target = end;
                     }
                     _ => unreachable!(),
@@ -340,7 +340,7 @@ impl<'source> CodeGenerator<'source> {
             ast::Stmt::AutoEscape(auto_escape) => {
                 self.set_line_from_span(auto_escape.span());
                 self.compile_expr(&auto_escape.enabled);
-                self.add(Instruction::PushAutoEscape);
+                self.add(Instruction::PushAutoEscape(auto_escape.span()));
                 for node in &auto_escape.body {
                     self.compile_stmt(node);
                 }
@@ -390,7 +390,7 @@ impl<'source> CodeGenerator<'source> {
             ast::Stmt::Extends(extends) => {
                 self.set_line_from_span(extends.span());
                 self.compile_expr(&extends.name);
-                self.add_with_span(Instruction::LoadBlocks, extends.span());
+                self.add_with_span(Instruction::LoadBlocks(extends.span()), extends.span());
             }
             #[cfg(feature = "multi_template")]
             ast::Stmt::Include(include) => {
@@ -657,14 +657,14 @@ impl<'source> CodeGenerator<'source> {
         if let Some(ref filter_expr) = for_loop.filter_expr {
             self.add(Instruction::LoadConst(Value::from(0usize)));
             self.compile_expr(&for_loop.iter);
-            self.start_for_loop(false, false);
+            self.start_for_loop(false, false, span);
             self.add(Instruction::DupTop);
             self.compile_assignment(&for_loop.target);
             self.compile_expr(filter_expr);
             self.start_if();
             self.add(Instruction::Swap);
             self.add(Instruction::LoadConst(Value::from(1usize)));
-            self.add(Instruction::Add);
+            self.add(Instruction::Add(span));
             self.start_else();
             self.add(Instruction::DiscardTop);
             self.end_if();
@@ -674,7 +674,7 @@ impl<'source> CodeGenerator<'source> {
             self.compile_expr(&for_loop.iter);
         }
 
-        self.start_for_loop(true, for_loop.recursive);
+        self.start_for_loop(true, for_loop.recursive, span);
         self.compile_assignment(&for_loop.target);
         for node in &for_loop.body {
             self.compile_stmt(node);
@@ -702,7 +702,7 @@ impl<'source> CodeGenerator<'source> {
             }
             ast::Expr::List(list) => {
                 self.push_span(list.span());
-                self.add(Instruction::UnpackList(list.items.len()));
+                self.add(Instruction::UnpackList(list.items.len(), list.span()));
                 for expr in &list.items {
                     self.compile_assignment(expr);
                 }
@@ -710,7 +710,7 @@ impl<'source> CodeGenerator<'source> {
             }
             ast::Expr::Tuple(tuple) => {
                 self.push_span(tuple.span());
-                self.add(Instruction::UnpackList(tuple.items.len()));
+                self.add(Instruction::UnpackList(tuple.items.len(), tuple.span()));
                 for expr in &tuple.items {
                     self.compile_assignment(expr);
                 }
@@ -730,7 +730,7 @@ impl<'source> CodeGenerator<'source> {
         match expr {
             ast::Expr::Var(v) => {
                 self.set_line_from_span(v.span());
-                self.add(Instruction::Lookup(v.id));
+                self.add(Instruction::Lookup(v.id, v.span()));
             }
             ast::Expr::Const(v) => {
                 self.set_line_from_span(v.span());
@@ -754,7 +754,7 @@ impl<'source> CodeGenerator<'source> {
                 } else {
                     self.add(Instruction::LoadConst(Value::from(1)));
                 }
-                self.add(Instruction::Slice);
+                self.add(Instruction::Slice(s.span()));
                 self.pop_span();
             }
             ast::Expr::UnaryOp(c) => {
@@ -762,7 +762,7 @@ impl<'source> CodeGenerator<'source> {
                 match c.op {
                     ast::UnaryOpKind::Not => {
                         self.compile_expr(&c.expr);
-                        self.add(Instruction::Not);
+                        self.add(Instruction::Not(c.span()));
                     }
                     ast::UnaryOpKind::Neg => {
                         // common case: negative numbers.  In that case we
@@ -775,26 +775,13 @@ impl<'source> CodeGenerator<'source> {
                             }
                         }
                         self.compile_expr(&c.expr);
-                        self.add_with_span(Instruction::Neg, c.span());
+                        self.add_with_span(Instruction::Neg(c.span()), c.span());
                     }
                 }
             }
 
             ast::Expr::BinOp(c) => {
-                // add BinOpStart and BinOpStop to keep track of the line and column number of binop
-                self.add(Instruction::BinOpStart(
-                    c.op.clone(),
-                    c.span().start_line,
-                    c.span().start_col,
-                    c.span().start_offset,
-                ));
                 self.compile_bin_op(c);
-                self.add(Instruction::BinOpStop(
-                    c.op.clone(),
-                    c.span().end_line,
-                    c.span().end_col,
-                    c.span().end_offset,
-                ));
             }
             ast::Expr::IfExpr(i) => {
                 self.set_line_from_span(i.span());
@@ -830,7 +817,7 @@ impl<'source> CodeGenerator<'source> {
             ast::Expr::GetAttr(g) => {
                 self.push_span(g.span());
                 self.compile_expr(&g.expr);
-                self.add(Instruction::GetAttr(g.name));
+                self.add(Instruction::GetAttr(g.name, g.span()));
                 self.pop_span();
             }
             ast::Expr::GetItem(g) => {
@@ -1030,32 +1017,33 @@ impl<'source> CodeGenerator<'source> {
     }
 
     fn compile_bin_op(&mut self, c: &ast::Spanned<ast::BinOp<'source>>) {
-        self.push_span(c.span());
+        let span = c.span();
+        self.push_span(span);
         let instr = match c.op {
-            ast::BinOpKind::Eq => Instruction::Eq,
-            ast::BinOpKind::Ne => Instruction::Ne,
-            ast::BinOpKind::Lt => Instruction::Lt,
-            ast::BinOpKind::Lte => Instruction::Lte,
-            ast::BinOpKind::Gt => Instruction::Gt,
-            ast::BinOpKind::Gte => Instruction::Gte,
+            ast::BinOpKind::Eq => Instruction::Eq(span),
+            ast::BinOpKind::Ne => Instruction::Ne(span),
+            ast::BinOpKind::Lt => Instruction::Lt(span),
+            ast::BinOpKind::Lte => Instruction::Lte(span),
+            ast::BinOpKind::Gt => Instruction::Gt(span),
+            ast::BinOpKind::Gte => Instruction::Gte(span),
             ast::BinOpKind::ScAnd | ast::BinOpKind::ScOr => {
                 self.start_sc_bool();
                 self.compile_expr(&c.left);
-                self.sc_bool(matches!(c.op, ast::BinOpKind::ScAnd));
+                self.sc_bool(matches!(c.op, ast::BinOpKind::ScAnd), span);
                 self.compile_expr(&c.right);
                 self.end_sc_bool();
                 self.pop_span();
                 return;
             }
-            ast::BinOpKind::Add => Instruction::Add,
-            ast::BinOpKind::Sub => Instruction::Sub,
-            ast::BinOpKind::Mul => Instruction::Mul,
-            ast::BinOpKind::Div => Instruction::Div,
-            ast::BinOpKind::FloorDiv => Instruction::IntDiv,
-            ast::BinOpKind::Rem => Instruction::Rem,
-            ast::BinOpKind::Pow => Instruction::Pow,
-            ast::BinOpKind::Concat => Instruction::StringConcat,
-            ast::BinOpKind::In => Instruction::In,
+            ast::BinOpKind::Add => Instruction::Add(span),
+            ast::BinOpKind::Sub => Instruction::Sub(span),
+            ast::BinOpKind::Mul => Instruction::Mul(span),
+            ast::BinOpKind::Div => Instruction::Div(span),
+            ast::BinOpKind::FloorDiv => Instruction::IntDiv(span),
+            ast::BinOpKind::Rem => Instruction::Rem(span),
+            ast::BinOpKind::Pow => Instruction::Pow(span),
+            ast::BinOpKind::Concat => Instruction::StringConcat(span),
+            ast::BinOpKind::In => Instruction::In(span),
         };
         self.compile_expr(&c.left);
         self.compile_expr(&c.right);

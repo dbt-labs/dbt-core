@@ -1,7 +1,6 @@
 #[cfg(feature = "internal_debug")]
 use std::fmt;
 
-use crate::compiler::ast::BinOpKind;
 use crate::compiler::tokens::Span;
 use crate::output::CaptureMode;
 use crate::value::Value;
@@ -38,10 +37,10 @@ pub enum Instruction<'source> {
     StoreLocal(&'source str),
 
     /// Load a variable,
-    Lookup(&'source str),
+    Lookup(&'source str, Span),
 
     /// Looks up an attribute.
-    GetAttr(&'source str),
+    GetAttr(&'source str, Span),
 
     /// Sets an attribute.
     SetAttr(&'source str),
@@ -50,7 +49,7 @@ pub enum Instruction<'source> {
     GetItem,
 
     /// Performs a slice operation.
-    Slice,
+    Slice(Span),
 
     /// Loads a constant value.
     LoadConst(Value),
@@ -71,65 +70,65 @@ pub enum Instruction<'source> {
     BuildTuple(Option<usize>),
 
     /// Unpacks a list into N stack items.
-    UnpackList(usize),
+    UnpackList(usize, Span),
 
     /// Unpacks N lists onto the stack and pushes the number of items there were unpacked.
     UnpackLists(usize),
 
     /// Add the top two values
-    Add,
+    Add(Span),
 
     /// Subtract the top two values
-    Sub,
+    Sub(Span),
 
     /// Multiply the top two values
-    Mul,
+    Mul(Span),
 
     /// Divide the top two values
-    Div,
+    Div(Span),
 
     /// Integer divide the top two values as "integer".
     ///
     /// Note that in MiniJinja this currently uses an euclidean
     /// division to match the rem implementation.  In Python this
     /// instead uses a flooring division and a flooring remainder.
-    IntDiv,
+    IntDiv(Span),
 
     /// Calculate the remainder the top two values
-    Rem,
+    Rem(Span),
 
     /// x to the power of y.
-    Pow,
+    Pow(Span),
 
     /// Negates the value.
-    Neg,
+    Neg(Span),
 
     /// `=` operator
-    Eq,
+    Eq(Span),
 
     /// `!=` operator
-    Ne,
+    Ne(Span),
 
     /// `>` operator
-    Gt,
+    Gt(Span),
 
     /// `>=` operator
-    Gte,
+    Gte(Span),
 
     /// `<` operator
-    Lt,
+    Lt(Span),
 
     /// `<=` operator
-    Lte,
+    Lte(Span),
 
     /// Unary not
-    Not,
+    Not(Span),
 
     /// String concatenation operator
-    StringConcat,
+    StringConcat(Span),
 
     /// Performs a containment check
-    In,
+    In(Span),
 
     /// Apply a filter.
     ApplyFilter(&'source str, Option<u16>, LocalId),
@@ -143,7 +142,7 @@ pub enum Instruction<'source> {
     /// Starts a loop
     ///
     /// The argument are loop flags.
-    PushLoop(u8),
+    PushLoop(u8, Span),
 
     /// Starts a with block.
     PushWith,
@@ -167,13 +166,13 @@ pub enum Instruction<'source> {
     JumpIfFalse(usize),
 
     /// Jump if the stack top evaluates to false or pops the value
-    JumpIfFalseOrPop(usize),
+    JumpIfFalseOrPop(usize, Span),
 
     /// Jump if the stack top evaluates to true or pops the value
-    JumpIfTrueOrPop(usize),
+    JumpIfTrueOrPop(usize, Span),
 
     /// Sets the auto escape flag to the current value.
-    PushAutoEscape,
+    PushAutoEscape(Span),
 
     /// Resets the auto escape flag to the previous value.
     PopAutoEscape,
@@ -214,7 +213,7 @@ pub enum Instruction<'source> {
 
     /// Loads block from a template with name on stack ("extends")
     #[cfg(feature = "multi_template")]
-    LoadBlocks,
+    LoadBlocks(Span),
 
     /// Includes another template.
     #[cfg(feature = "multi_template")]
@@ -248,10 +247,6 @@ pub enum Instruction<'source> {
     MacroStop(u32, u32, u32),
 
     ModelReference(String, u32, u32, u32, u32, u32, u32),
-
-    // keep track of line and column numbers for binops
-    BinOpStart(BinOpKind, u32, u32, u32),
-    BinOpStop(BinOpKind, u32, u32, u32),
 }
 
 #[derive(Copy, Clone)]
@@ -438,11 +433,11 @@ impl<'source> Instructions<'source> {
         let idx = idx.min(self.instructions.len() - 1);
         for instr in self.instructions[..=idx].iter().rev() {
             let name = match instr {
-                Instruction::Lookup(name)
+                Instruction::Lookup(name, _)
                 | Instruction::StoreLocal(name)
                 | Instruction::CallFunction(name, _, _) => *name,
-                Instruction::PushLoop(flags) if flags & LOOP_FLAG_WITH_LOOP_VAR != 0 => "loop",
-                Instruction::PushLoop(_) | Instruction::PushWith => break,
+                Instruction::PushLoop(flags, _) if flags & LOOP_FLAG_WITH_LOOP_VAR != 0 => "loop",
+                Instruction::PushLoop(_, _) | Instruction::PushWith => break,
                 _ => continue,
             };
             if !rv.contains(&name) {

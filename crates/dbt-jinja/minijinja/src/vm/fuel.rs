@@ -52,18 +52,18 @@ impl FuelTracker {
 fn fuel_for_instruction(instruction: &Instruction) -> isize {
     match instruction {
         Instruction::BeginCapture(_)
-        | Instruction::PushLoop(_)
+        | Instruction::PushLoop(_, _)
         | Instruction::PushDidNotIterate
         | Instruction::PushWith
         | Instruction::PopFrame
         | Instruction::DupTop
         | Instruction::DiscardTop
-        | Instruction::PushAutoEscape
+        | Instruction::PushAutoEscape(_)
         | Instruction::PopAutoEscape => 0,
         #[cfg(feature = "multi_template")]
         Instruction::ExportLocals => 0,
         #[cfg(feature = "macros")]
-        Instruction::LoadBlocks | Instruction::BuildMacro(..) | Instruction::Return => 0,
+        Instruction::LoadBlocks(_) | Instruction::BuildMacro(..) | Instruction::Return => 0,
         _ => 1,
     }
 }

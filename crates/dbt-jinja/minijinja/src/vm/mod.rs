@@ -416,7 +416,7 @@ impl<'env> Vm<'env> {
                 Instruction::StoreLocal(name) => {
                     state.ctx.store(name, stack.pop());
                 }
-                Instruction::Lookup(name) => {
+                Instruction::Lookup(name, _) => {
                     if state.lookup(name).is_some()
                         && !state
                             .lookup(name)
@@ -445,7 +445,7 @@ impl<'env> Vm<'env> {
                         stack.push(Value::UNDEFINED);
                     }
                 }
-                Instruction::GetAttr(name) => {
+                Instruction::GetAttr(name, _span) => {
                     a = stack.pop();
                     // This is a common enough operation that it's interesting to consider a fast
                     // path here.  This is slightly faster than the regular attr lookup because we
@@ -505,7 +505,7 @@ impl<'env> Vm<'env> {
                         }
                     });
                 }
-                Instruction::Slice => {
+                Instruction::Slice(_span) => {
                     let step = stack.pop();
                     let stop = stack.pop();
                     b = stack.pop();
@@ -587,7 +587,7 @@ impl<'env> Vm<'env> {
                     v.reverse();
                     stack.push(Value::from_object(v))
                 }
-                Instruction::UnpackList(count) => {
+                Instruction::UnpackList(count, _span) => {
                     ctx_ok!(self.unpack_list(&mut stack, *count));
                 }
                 Instruction::UnpackLists(count) => {
@@ -604,29 +604,29 @@ impl<'env> Vm<'env> {
                     }
                     stack.push(Value::from(len));
                 }
-                Instruction::Add => func_binop!(add, "__add__"),
-                Instruction::Sub => func_binop!(sub, "__sub__"),
-                Instruction::Mul => func_binop!(mul, "__mul__"),
-                Instruction::Div => func_binop!(div, "__truediv__"),
-                Instruction::IntDiv => func_binop!(int_div, "__floordiv__"),
-                Instruction::Rem => func_binop!(rem, "__mod__"),
-                Instruction::Pow => func_binop!(pow, "__pow__"),
-                Instruction::Eq => op_binop!(==),
-                Instruction::Ne => op_binop!(!=),
-                Instruction::Gt => op_binop!(>),
-                Instruction::Gte => op_binop!(>=),
-                Instruction::Lt => op_binop!(<),
-                Instruction::Lte => op_binop!(<=),
-                Instruction::Not => {
+                Instruction::Add(_) => func_binop!(add, "__add__"),
+                Instruction::Sub(_) => func_binop!(sub, "__sub__"),
+                Instruction::Mul(_) => func_binop!(mul, "__mul__"),
+                Instruction::Div(_) => func_binop!(div, "__truediv__"),
+                Instruction::IntDiv(_) => func_binop!(int_div, "__floordiv__"),
+                Instruction::Rem(_) => func_binop!(rem, "__mod__"),
+                Instruction::Pow(_) => func_binop!(pow, "__pow__"),
+                Instruction::Eq(_) => op_binop!(==),
+                Instruction::Ne(_) => op_binop!(!=),
+                Instruction::Gt(_) => op_binop!(>),
+                Instruction::Gte(_) => op_binop!(>=),
+                Instruction::Lt(_) => op_binop!(<),
+                Instruction::Lte(_) => op_binop!(<=),
+                Instruction::Not(_) => {
                     a = stack.pop();
                     stack.push(Value::from(!a.is_true()));
                 }
-                Instruction::StringConcat => {
+                Instruction::StringConcat(_) => {
                     a = stack.pop();
                     b = stack.pop();
                     stack.push(ops::string_concat(b, &a));
                 }
-                Instruction::In => {
+                Instruction::In(_) => {
                     a = stack.pop();
                     b = stack.pop();
                     // the in-operator can fail if the value is undefined and
@@ -634,7 +634,7 @@ impl<'env> Vm<'env> {
                     ctx_ok!(state.undefined_behavior().assert_iterable(&a));
                     stack.push(ctx_ok!(ops::contains(&a, &b)));
                 }
-                Instruction::Neg => {
+                Instruction::Neg(_) => {
                     a = stack.pop();
                     stack.push(ctx_ok!(ops::neg(&a)));
                 }
@@ -658,7 +658,7 @@ impl<'env> Vm<'env> {
                     a = stack.pop();
                     stack.push(Value::from(a.is_undefined()));
                 }
-                Instruction::PushLoop(flags) => {
+                Instruction::PushLoop(flags, _) => {
                     a = stack.pop();
                     ctx_ok!(self.push_loop(state, a, *flags, pc, next_loop_recursion_jump.take()));
                 }
@@ -703,7 +703,7 @@ impl<'env> Vm<'env> {
                         continue;
                     }
                 }
-                Instruction::JumpIfFalseOrPop(jump_target) => {
+                Instruction::JumpIfFalseOrPop(jump_target, _) => {
                     if !ctx_ok!(undefined_behavior.is_true(stack.peek())) {
                         pc = *jump_target;
                         continue;
@@ -711,7 +711,7 @@ impl<'env> Vm<'env> {
                         stack.pop();
                     }
                 }
-                Instruction::JumpIfTrueOrPop(jump_target) => {
+                Instruction::JumpIfTrueOrPop(jump_target, _) => {
                     if ctx_ok!(undefined_behavior.is_true(stack.peek())) {
                         pc = *jump_target;
                         continue;
@@ -725,7 +725,7 @@ impl<'env> Vm<'env> {
                         self.call_block(name, state, out, current_location.clone(), listeners)?;
                     }
                 }
-                Instruction::PushAutoEscape => {
+                Instruction::PushAutoEscape(_) => {
                     a = stack.pop();
                     auto_escape_stack.push(state.auto_escape);
                     state.auto_escape = ctx_ok!(self.derive_auto_escape(a, initial_auto_escape));
@@ -1182,7 +1182,7 @@ impl<'env> Vm<'env> {
                 // lets you put some imports there and for as long as you do not
                 // create name clashes this works fine.
                 #[cfg(feature = "multi_template")]
-                Instruction::LoadBlocks => {
+                Instruction::LoadBlocks(_) => {
                     a = stack.pop();
                     if parent_instructions.is_some() {
                         bail!(Error::new(
@@ -1340,12 +1340,6 @@ impl<'env> Vm<'env> {
                             end_offset,
                         )
                     });
-                }
-                Instruction::BinOpStart(_, _, _, _) => {
-                    // no-op, we don't need to do anything here
-                }
-                Instruction::BinOpStop(_, _, _, _) => {
-                    // no-op, we don't need to do anything here
                 }
             }
             pc += 1;
