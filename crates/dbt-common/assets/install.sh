@@ -81,6 +81,7 @@ need install
 need mkdir
 need mktemp
 need tar
+need jq
 
 # Optional dependencies
 if [ -z $version ] || [ -z $target ]; then
@@ -313,23 +314,27 @@ setup_shell_config() {
 }
 
 # Determine version to install
-# Usage: determine_version version_url [specific_version]
+# Usage: determine_version [specific_version]
 # Returns: target version string
 determine_version() {
     local specific_version="$1"
     local target_version=""
+    version_url="https://public.cdn.getdbt.com/fs/versions.json"
 
-    version_url="https://public.cdn.getdbt.com/fs/latest.json"
+    versions=$(curl -s "$version_url")
 
-    if [ -z "$specific_version" ]; then
-        log_grey "Checking for latest version at $version_url"
-        target_version=$(curl -s "$version_url" | sed -n 's/.*"tag": *"v\([^"]*\)".*/\1/p')
-        log_grey "Latest available version: $target_version"
+    if [ -z "$specific_version" ];then
+        log_grey "Checking for latest version"
+        target_version=$(echo "$versions" | jq -r ".latest.tag" | sed 's/^v//')
+        log_grey "$specific_version available version: $target_version"
+    elif echo "$versions" | jq -e "has(\"$specific_version\")" > /dev/null;then
+        log_grey "Checking for $specific_version version"
+        target_version=$(echo "$versions" | jq -r ".\"$specific_version\".tag" | sed 's/^v//')
+        log_grey "$specific_version available version: $target_version"
     else
         target_version="$specific_version"
         log_grey "Requested version: $target_version"
     fi
-
     echo "$target_version"
 }
 
