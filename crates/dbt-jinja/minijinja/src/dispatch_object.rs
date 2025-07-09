@@ -152,6 +152,13 @@ impl Object for DispatchObject {
                         return Ok(rv);
                     }
                 }
+                // find the macro without prefix
+                if let Some(template_name) =
+                    macro_namespace_template_resolver(state, &self.macro_name, &mut attempts)
+                {
+                    let rv = self.execute_template(state, &template_name, args, listeners)?;
+                    return Ok(rv);
+                }
             }
         }
 

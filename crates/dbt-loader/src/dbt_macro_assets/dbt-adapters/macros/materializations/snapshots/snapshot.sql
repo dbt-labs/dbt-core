@@ -22,14 +22,8 @@
 
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
-  {# original code was set strategy_macro = strategy_dispatch(strategy_name) #}
-  {# there is a context in strategy and context is not going to be implemented #}
-  {# so we simplify the algorithm and use a if..else.. #}
-  {% if strategy_name == 'check' %}
-      {% set strategy_macro = dbt.snapshot_check_strategy %}
-  {% elif strategy_name == 'timestamp' %}
-      {% set strategy_macro = dbt.snapshot_timestamp_strategy %}
-  {% endif %}
+  {% set strategy_macro = strategy_dispatch(strategy_name) %}
+
   
   {# The model['config'] parameter below is no longer used, but passing anyway for compatibility #}
   {# It was a dictionary of config, instead of the config object from the context #}

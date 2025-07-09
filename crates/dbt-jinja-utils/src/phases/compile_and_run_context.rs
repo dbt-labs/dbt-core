@@ -360,8 +360,8 @@ impl Object for SourceFunction {
 pub struct MacroLookupContext {
     /// The root project name.
     pub root_project_name: String,
-    /// The current project name.
-    pub current_project_name: String,
+    /// The current project name, when no current project specified, we search from the root project.
+    pub current_project_name: Option<String>,
     /// The packages in the project.
     pub packages: BTreeSet<String>,
 }
@@ -374,14 +374,14 @@ impl Object for MacroLookupContext {
                 if self.packages.contains(lookup_macro) {
                     Some(MinijinjaValue::from_object(MacroLookupContext {
                         root_project_name: self.root_project_name.clone(),
-                        current_project_name: lookup_macro.to_string(),
-                        packages: self.packages.clone(),
+                        current_project_name: Some(lookup_macro.to_string()),
+                        packages: BTreeSet::new(),
                     }))
                 } else {
                     Some(MinijinjaValue::from_object(DispatchObject {
                         macro_name: lookup_macro.to_string(),
-                        package_name: Some(self.current_project_name.clone()),
-                        strict: true,
+                        package_name: self.current_project_name.clone(),
+                        strict: self.current_project_name.is_some(),
                         auto_execute: false,
                         // TODO: If the macro uses a recursive context (i.e. context['self']) we will stack overflow
                         // but there is no way to conjure up a context object here without access to State

@@ -281,7 +281,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
         "context".to_owned(),
         MinijinjaValue::from_object(MacroLookupContext {
             root_project_name: root_project_name.to_string(),
-            current_project_name: package_name.to_string(),
+            current_project_name: None,
             packages,
         }),
     );

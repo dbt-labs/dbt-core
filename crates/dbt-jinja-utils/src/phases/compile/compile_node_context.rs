@@ -145,7 +145,7 @@ pub fn build_compile_node_context(
         "context".to_owned(),
         MinijinjaValue::from_object(MacroLookupContext {
             root_project_name: root_project_name.to_string(),
-            current_project_name: common_attr.package_name.clone(),
+            current_project_name: None,
             packages,
         }),
     );

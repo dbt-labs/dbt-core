@@ -160,7 +160,6 @@ async fn extend_with_model_context<S: Serialize>(
 /// Extend the base context with stateful functions
 pub fn extend_base_context_stateful_fn(
     base_context: &mut BTreeMap<String, MinijinjaValue>,
-    package_name: &str,
     root_project_name: &str,
     packages: BTreeSet<String>,
 ) {
@@ -185,7 +184,7 @@ pub fn extend_base_context_stateful_fn(
         "context".to_owned(),
         MinijinjaValue::from_object(MacroLookupContext {
             root_project_name: root_project_name.to_string(),
-            current_project_name: package_name.to_string(),
+            current_project_name: None,
             packages,
         }),
     );
@@ -204,17 +203,11 @@ pub async fn build_run_node_context<S: Serialize>(
     io_args: &IoArgs,
     resource_type: &str,
     sql_header: Option<MinijinjaValue>,
-    root_project_name: &str,
     packages: BTreeSet<String>,
 ) -> BTreeMap<String, MinijinjaValue> {
     // Build model-specific context
     let mut context = base_context.clone();
-    extend_base_context_stateful_fn(
-        &mut context,
-        &common_attr.package_name,
-        root_project_name,
-        packages,
-    );
+    extend_base_context_stateful_fn(&mut context, &common_attr.package_name, packages);
 
     extend_with_model_context(
         &mut context,
