@@ -187,13 +187,25 @@ fn process_package_file(
     for package in dbt_packages.packages {
         let entry_name = match package {
             DbtPackageEntry::Hub(hub_package) => hub_package.package,
-            DbtPackageEntry::Git(git_package) => (*git_package.git).clone(),
+            DbtPackageEntry::Git(git_package) => {
+                let mut key = (*git_package.git).clone();
+                if let Some(subdirectory) = &git_package.subdirectory {
+                    key.push_str(&format!("#{subdirectory}"));
+                }
+                key
+            }
             DbtPackageEntry::Local(local_package) => {
                 let full_path = get_local_package_full_path(in_dir, &local_package);
                 let relative_path = stdfs::diff_paths(&full_path, in_dir)?;
                 relative_path.to_string_lossy().to_string()
             }
-            DbtPackageEntry::Private(private_package) => (*private_package.private).clone(),
+            DbtPackageEntry::Private(private_package) => {
+                let mut key = (*private_package.private).clone();
+                if let Some(subdirectory) = &private_package.subdirectory {
+                    key.push_str(&format!("#{subdirectory}"));
+                }
+                key
+            }
         };
         if let Some(entry_name) = package_lookup_map.get(&entry_name) {
             dependencies.insert(entry_name.to_string());

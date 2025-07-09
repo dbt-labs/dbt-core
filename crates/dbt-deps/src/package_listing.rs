@@ -17,13 +17,11 @@ use dbt_schemas::schemas::{
     project::DbtProject,
 };
 
-use crate::{
-    private_package::get_resolved_url, types::LocalPinnedPackage,
-    utils::get_local_package_full_path,
-};
+use crate::{private_package::get_resolved_url, utils::get_local_package_full_path};
 
 use super::types::{
-    GitUnpinnedPackage, HubUnpinnedPackage, LocalUnpinnedPackage, PrivateUnpinnedPackage,
+    GitUnpinnedPackage, HubUnpinnedPackage, LocalPinnedPackage, LocalUnpinnedPackage,
+    PrivateUnpinnedPackage,
 };
 
 trait Incorporatable {
@@ -150,8 +148,14 @@ impl PackageListing {
                     into_typed_with_jinja(Some(&self.io_args), value, true, jinja_env, &(), &[])
                 }?;
 
+                // Create key that includes subdirectory if present
+                let mut package_key = git_package_url.clone();
+                if let Some(subdirectory) = &git_package.subdirectory {
+                    package_key.push_str(&format!("#{subdirectory}"));
+                }
+
                 self.handle_remote_package(
-                    &git_package_url.clone(),
+                    &package_key,
                     UnpinnedPackage::Git(GitUnpinnedPackage {
                         git: git_package_url,
                         name: None,
@@ -216,8 +220,15 @@ impl PackageListing {
                 private_package.private = Verbatim(private_package_private);
 
                 let private_package_url = get_resolved_url(&private_package)?;
+
+                // Create key that includes subdirectory if present
+                let mut package_key = private_package_url.clone();
+                if let Some(subdirectory) = &private_package.subdirectory {
+                    package_key.push_str(&format!("#{subdirectory}"));
+                }
+
                 self.handle_remote_package(
-                    &private_package_url.clone(),
+                    &package_key,
                     UnpinnedPackage::Private(PrivateUnpinnedPackage {
                         private: private_package_url,
                         name: None,
@@ -241,11 +252,11 @@ impl PackageListing {
 
     fn handle_remote_package(
         &mut self,
-        package_url: &str,
+        package_key: &str,
         new_package: UnpinnedPackage,
         package_type: &str,
     ) -> FsResult<()> {
-        if let Some(existing_package) = self.packages.get_mut(package_url) {
+        if let Some(existing_package) = self.packages.get_mut(package_key) {
             match existing_package {
                 UnpinnedPackage::Git(existing_git_package) if package_type == "git" => {
                     if let UnpinnedPackage::Git(new_git_package) = new_package {
@@ -261,14 +272,14 @@ impl PackageListing {
                     return err!(
                         ErrorCode::InvalidConfig,
                         "Found conflicting package types for package {}: '{}' vs '{}'",
-                        package_url,
+                        package_key,
                         package_type,
                         existing_package.type_name(),
                     );
                 }
             }
         } else {
-            self.packages.insert(package_url.to_string(), new_package);
+            self.packages.insert(package_key.to_string(), new_package);
         }
         Ok(())
     }
@@ -333,8 +344,13 @@ impl PackageListing {
                 }
             }
             UnpinnedPackage::Git(git_unpinned_package) => {
+                // Create key that includes subdirectory if present
+                let mut package_key = git_unpinned_package.git.clone();
+                if let Some(subdirectory) = &git_unpinned_package.subdirectory {
+                    package_key.push_str(&format!("#{subdirectory}"));
+                }
                 self.handle_remote_unpinned_package::<GitUnpinnedPackage>(
-                    &git_unpinned_package.git,
+                    &package_key,
                     package,
                     "git",
                 )?;
@@ -376,8 +392,13 @@ impl PackageListing {
                 }
             }
             UnpinnedPackage::Private(private_unpinned_package) => {
+                // Create key that includes subdirectory if present
+                let mut package_key = private_unpinned_package.private.clone();
+                if let Some(subdirectory) = &private_unpinned_package.subdirectory {
+                    package_key.push_str(&format!("#{subdirectory}"));
+                }
                 self.handle_remote_unpinned_package::<PrivateUnpinnedPackage>(
-                    &private_unpinned_package.private,
+                    &package_key,
                     package,
                     "private",
                 )?;
@@ -395,5 +416,141 @@ impl PackageListing {
             self.incorporate(package.clone(), jinja_env)?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_common::io_args::IoArgs;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_handle_remote_package_with_subdirectory() {
+        let io_args = IoArgs::default();
+        let mut package_listing = PackageListing::new(io_args);
+
+        // Create two git packages with the same URL but different subdirectories
+        let git_package_1 = UnpinnedPackage::Git(GitUnpinnedPackage {
+            git: "https://github.com/dbt-labs/dbt-core.git".to_string(),
+            name: None,
+            warn_unpinned: None,
+            revisions: vec!["main".to_string()],
+            subdirectory: Some("core".to_string()),
+            unrendered: HashMap::new(),
+            original_entry: GitPackage {
+                git: Verbatim("https://github.com/dbt-labs/dbt-core.git".to_string()),
+                revision: Some("main".to_string()),
+                warn_unpinned: None,
+                subdirectory: Some("core".to_string()),
+                unrendered: HashMap::new(),
+            },
+        });
+
+        let git_package_2 = UnpinnedPackage::Git(GitUnpinnedPackage {
+            git: "https://github.com/dbt-labs/dbt-core.git".to_string(),
+            name: None,
+            warn_unpinned: None,
+            revisions: vec!["main".to_string()],
+            subdirectory: Some("adapters".to_string()),
+            unrendered: HashMap::new(),
+            original_entry: GitPackage {
+                git: Verbatim("https://github.com/dbt-labs/dbt-core.git".to_string()),
+                revision: Some("main".to_string()),
+                warn_unpinned: None,
+                subdirectory: Some("adapters".to_string()),
+                unrendered: HashMap::new(),
+            },
+        });
+
+        // Add the first package
+        package_listing
+            .handle_remote_package(
+                "https://github.com/dbt-labs/dbt-core.git#core",
+                git_package_1,
+                "git",
+            )
+            .unwrap();
+
+        // Add the second package - should be treated as a separate package
+        package_listing
+            .handle_remote_package(
+                "https://github.com/dbt-labs/dbt-core.git#adapters",
+                git_package_2,
+                "git",
+            )
+            .unwrap();
+
+        // Verify that both packages are stored with different keys
+        assert_eq!(package_listing.packages.len(), 2);
+        assert!(package_listing
+            .packages
+            .contains_key("https://github.com/dbt-labs/dbt-core.git#core"));
+        assert!(package_listing
+            .packages
+            .contains_key("https://github.com/dbt-labs/dbt-core.git#adapters"));
+    }
+
+    #[test]
+    fn test_handle_remote_package_same_url_no_subdirectory() {
+        let io_args = IoArgs::default();
+        let mut package_listing = PackageListing::new(io_args);
+
+        // Create two git packages with the same URL and no subdirectory
+        let git_package_1 = UnpinnedPackage::Git(GitUnpinnedPackage {
+            git: "https://github.com/dbt-labs/dbt-core.git".to_string(),
+            name: None,
+            warn_unpinned: None,
+            revisions: vec!["main".to_string()],
+            subdirectory: None,
+            unrendered: HashMap::new(),
+            original_entry: GitPackage {
+                git: Verbatim("https://github.com/dbt-labs/dbt-core.git".to_string()),
+                revision: Some("main".to_string()),
+                warn_unpinned: None,
+                subdirectory: None,
+                unrendered: HashMap::new(),
+            },
+        });
+
+        let git_package_2 = UnpinnedPackage::Git(GitUnpinnedPackage {
+            git: "https://github.com/dbt-labs/dbt-core.git".to_string(),
+            name: None,
+            warn_unpinned: None,
+            revisions: vec!["develop".to_string()],
+            subdirectory: None,
+            unrendered: HashMap::new(),
+            original_entry: GitPackage {
+                git: Verbatim("https://github.com/dbt-labs/dbt-core.git".to_string()),
+                revision: Some("develop".to_string()),
+                warn_unpinned: None,
+                subdirectory: None,
+                unrendered: HashMap::new(),
+            },
+        });
+
+        // Add the first package
+        package_listing
+            .handle_remote_package(
+                "https://github.com/dbt-labs/dbt-core.git",
+                git_package_1,
+                "git",
+            )
+            .unwrap();
+
+        // Add the second package - should be incorporated into the first one
+        package_listing
+            .handle_remote_package(
+                "https://github.com/dbt-labs/dbt-core.git",
+                git_package_2,
+                "git",
+            )
+            .unwrap();
+
+        // Verify that only one package is stored (they should be incorporated)
+        assert_eq!(package_listing.packages.len(), 1);
+        assert!(package_listing
+            .packages
+            .contains_key("https://github.com/dbt-labs/dbt-core.git"));
     }
 }

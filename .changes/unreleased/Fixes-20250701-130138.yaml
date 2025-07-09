@@ -1,0 +1,3 @@
+kind: Fixes
+body: Handle git packages that differ only in subdirectory
+time: 2025-07-01T13:01:38.235003-04:00

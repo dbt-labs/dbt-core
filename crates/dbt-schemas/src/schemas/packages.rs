@@ -186,12 +186,22 @@ impl DbtPackageLock {
     pub fn entry_name(&self) -> String {
         match self {
             DbtPackageLock::Hub(hub_package_lock) => hub_package_lock.package.to_string(),
-            DbtPackageLock::Git(git_package_lock) => git_package_lock.git.to_string(),
+            DbtPackageLock::Git(git_package_lock) => {
+                let mut key = git_package_lock.git.to_string();
+                if let Some(subdirectory) = &git_package_lock.subdirectory {
+                    key.push_str(&format!("#{subdirectory}"));
+                }
+                key
+            }
             DbtPackageLock::Local(local_package_lock) => {
                 local_package_lock.local.to_string_lossy().to_string()
             }
             DbtPackageLock::Private(private_package_lock) => {
-                private_package_lock.private.to_string()
+                let mut key = private_package_lock.private.to_string();
+                if let Some(subdirectory) = &private_package_lock.subdirectory {
+                    key.push_str(&format!("#{subdirectory}"));
+                }
+                key
             }
         }
     }
