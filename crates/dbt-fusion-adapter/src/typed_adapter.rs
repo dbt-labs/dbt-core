@@ -620,7 +620,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     }
 
     /// parse_partition_by
-    fn parse_partition_by(&self, _partition_by: BigqueryPartitionConfig) -> AdapterResult<()> {
+    fn parse_partition_by(&self, _partition_by: Value) -> AdapterResult<Value> {
         unimplemented!("only available with BigQuery adapter")
     }
 

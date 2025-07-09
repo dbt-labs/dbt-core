@@ -8,6 +8,7 @@ use minijinja::{
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
 use serde::{Deserialize, Serialize};
 use std::{rc::Rc, sync::Arc};
+use strum::{Display, EnumString};
 
 use crate::schemas::columns::base::StdColumn;
 
@@ -35,6 +36,20 @@ pub struct BigqueryPartitionConfig {
     pub time_ingestion_partitioning: bool,
     #[serde(default)]
     pub copy_partitions: bool,
+}
+
+/// Enum representing all field names in BigqueryPartitionConfig
+#[derive(Debug, Clone, EnumString, Display)]
+#[strum(serialize_all = "snake_case")]
+enum PartitionConfigField {
+    Field,
+    DataType,
+    TimeIngestionPartitioning,
+    CopyPartitions,
+    // Flattened field for TimeConfig
+    Granularity,
+    // Flattened field for RangeConfig
+    Range,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
@@ -95,6 +110,16 @@ impl BigqueryPartitionConfig {
             BigqueryPartitionConfigInner::Range(_) => Err(MinijinjaError::new(
                 MinijinjaErrorKind::InvalidArgument,
                 "RangeConfig does not have a granularity",
+            )),
+        }
+    }
+
+    pub fn range(&self) -> Result<Range, MinijinjaError> {
+        match &self.inner {
+            BigqueryPartitionConfigInner::Range(RangeConfig { range }) => Ok(range.clone()),
+            BigqueryPartitionConfigInner::Time(_) => Err(MinijinjaError::new(
+                MinijinjaErrorKind::InvalidArgument,
+                "TimeConfig does not have a range",
             )),
         }
     }
@@ -240,6 +265,24 @@ impl BigqueryPartitionConfig {
 }
 
 impl Object for BigqueryPartitionConfig {
+    fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
+        let key_str = key.as_str()?;
+        let field = PartitionConfigField::try_from(key_str).ok()?;
+
+        match field {
+            PartitionConfigField::Field => Some(MinijinjaValue::from(self.field.clone())),
+            PartitionConfigField::DataType => Some(MinijinjaValue::from(self.data_type.clone())),
+            PartitionConfigField::Granularity => self.granularity().map(MinijinjaValue::from).ok(),
+            PartitionConfigField::TimeIngestionPartitioning => {
+                Some(MinijinjaValue::from(self.time_ingestion_partitioning))
+            }
+            PartitionConfigField::CopyPartitions => {
+                Some(MinijinjaValue::from(self.copy_partitions))
+            }
+            PartitionConfigField::Range => self.range().map(MinijinjaValue::from_serialize).ok(),
+        }
+    }
+
     fn call_method(
         self: &Arc<Self>,
         _state: &State,
@@ -321,5 +364,156 @@ mod tests {
         ); // default
         assert!(!config.time_ingestion_partitioning); // default
         assert!(!config.copy_partitions); // default
+    }
+
+    #[test]
+    fn test_partition_config_field_enum_covers_all_fields_time_config() {
+        // Create a sample config with time partitioning
+        let config = BigqueryPartitionConfig {
+            field: "test_field".to_string(),
+            data_type: "date".to_string(),
+            inner: BigqueryPartitionConfigInner::Time(TimeConfig {
+                granularity: "day".to_string(),
+            }),
+            time_ingestion_partitioning: false,
+            copy_partitions: false,
+        };
+
+        // Serialize to JSON to get all field names
+        let json_value = serde_json::to_value(&config).unwrap();
+        let json_object = json_value.as_object().unwrap();
+
+        // Test that all JSON fields can be parsed by our enum (except flattened fields)
+        for field_name in json_object.keys() {
+            assert!(
+                PartitionConfigField::try_from(field_name.as_str()).is_ok(),
+                "Field '{field_name}' should be parseable by PartitionConfigField enum"
+            );
+        }
+
+        // Test that a bogus field is rejected
+        assert!(PartitionConfigField::try_from("invalid_field").is_err());
+    }
+
+    #[test]
+    fn test_partition_config_field_enum_covers_all_fields_range_config() {
+        // Create a sample config with range partitioning
+        let config = BigqueryPartitionConfig {
+            field: "user_id".to_string(),
+            data_type: "int64".to_string(),
+            inner: BigqueryPartitionConfigInner::Range(RangeConfig {
+                range: Range {
+                    start: 0,
+                    end: 100,
+                    interval: 10,
+                },
+            }),
+            time_ingestion_partitioning: true,
+            copy_partitions: true,
+        };
+
+        // Serialize to JSON to get all field names
+        let json_value = serde_json::to_value(&config).unwrap();
+        let json_object = json_value.as_object().unwrap();
+
+        // Test that all JSON fields can be parsed by our enum (except nested range fields)
+        for field_name in json_object.keys() {
+            assert!(
+                PartitionConfigField::try_from(field_name.as_str()).is_ok(),
+                "Field '{field_name}' should be parseable by PartitionConfigField enum"
+            );
+        }
+    }
+
+    #[test]
+    fn test_get_value_returns_correct_values() {
+        // Test with time config
+        let time_config = Arc::new(BigqueryPartitionConfig {
+            field: "created_at".to_string(),
+            data_type: "timestamp".to_string(),
+            inner: BigqueryPartitionConfigInner::Time(TimeConfig {
+                granularity: "hour".to_string(),
+            }),
+            time_ingestion_partitioning: true,
+            copy_partitions: false,
+        });
+
+        // Test field values
+        assert_eq!(
+            time_config
+                .get_value(&MinijinjaValue::from("field"))
+                .unwrap(),
+            MinijinjaValue::from("created_at")
+        );
+        assert_eq!(
+            time_config
+                .get_value(&MinijinjaValue::from("data_type"))
+                .unwrap(),
+            MinijinjaValue::from("timestamp")
+        );
+        assert_eq!(
+            time_config
+                .get_value(&MinijinjaValue::from("granularity"))
+                .unwrap(),
+            MinijinjaValue::from("hour")
+        );
+        assert_eq!(
+            time_config
+                .get_value(&MinijinjaValue::from("time_ingestion_partitioning"))
+                .unwrap(),
+            MinijinjaValue::from(true)
+        );
+        assert_eq!(
+            time_config
+                .get_value(&MinijinjaValue::from("copy_partitions"))
+                .unwrap(),
+            MinijinjaValue::from(false)
+        );
+
+        // Test with range config (granularity should return None)
+        let range_config = Arc::new(BigqueryPartitionConfig {
+            field: "user_id".to_string(),
+            data_type: "int64".to_string(),
+            inner: BigqueryPartitionConfigInner::Range(RangeConfig {
+                range: Range {
+                    start: 0,
+                    end: 100,
+                    interval: 10,
+                },
+            }),
+            time_ingestion_partitioning: false,
+            copy_partitions: true,
+        });
+
+        assert_eq!(
+            range_config
+                .get_value(&MinijinjaValue::from("field"))
+                .unwrap(),
+            MinijinjaValue::from("user_id")
+        );
+        assert_eq!(
+            range_config
+                .get_value(&MinijinjaValue::from("data_type"))
+                .unwrap(),
+            MinijinjaValue::from("int64")
+        );
+        // granularity should return None for range config
+        assert!(range_config
+            .get_value(&MinijinjaValue::from("granularity"))
+            .is_none());
+        assert_eq!(
+            range_config
+                .get_value(&MinijinjaValue::from("copy_partitions"))
+                .unwrap(),
+            MinijinjaValue::from(true)
+        );
+
+        // Test that invalid fields return None
+        assert!(time_config
+            .get_value(&MinijinjaValue::from("invalid_field"))
+            .is_none());
+        assert!(range_config
+            .get_value(&MinijinjaValue::from("invalid_field"))
+            .is_none());
     }
 }

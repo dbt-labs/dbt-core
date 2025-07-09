@@ -935,10 +935,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(Value::from(result))
     }
 
-    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L566-L567
-    /// In dbt, this methods converts a python dict to a BigqueryPartitionConfig
-    /// this is unnecessary here since the input arg should be fetched from value of ManifestModelConfig type
-    /// and the validation is done via a Minijinja value's downcast_object
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L579-L586
     ///
     /// # Panics
     /// This method will panic if called on a non-BigQuery adapter
@@ -949,15 +946,9 @@ impl BaseAdapter for BridgeAdapter {
 
         let raw_partition_by = parser.get::<Value>("raw_partition_by")?;
 
-        if !raw_partition_by.is_none() {
-            let partition_by = BigqueryPartitionConfigLegacy::deserialize(raw_partition_by.clone())
-                .map_err(|e| {
-                    MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
-                })?;
-            self.typed_adapter
-                .parse_partition_by(partition_by.validate()?)?;
-        }
-        Ok(raw_partition_by)
+        let result = self.typed_adapter.parse_partition_by(raw_partition_by)?;
+
+        Ok(result)
     }
 
     #[tracing::instrument(skip(self, _state))]

@@ -1,0 +1,3 @@
+kind: Fixes
+body: Fix parsing of BigQuery partition_by config
+time: 2025-07-09T13:18:01.411145-07:00
