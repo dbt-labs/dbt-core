@@ -906,7 +906,7 @@ impl<'env> Vm<'env> {
                             Ok(rv) => {
                                 // return implements  https://docs.getdbt.com/reference/dbt-jinja-functions/return
                                 if *name == "return" {
-                                    return Err(Error::abrupt_return(rv));
+                                    return Err(Error::abrupt_return(rv, *this_span));
                                 } else {
                                     rv
                                 }
@@ -975,7 +975,7 @@ impl<'env> Vm<'env> {
                             Ok(rv) => {
                                 // return implements  https://docs.getdbt.com/reference/dbt-jinja-functions/return
                                 if *name == "return" {
-                                    return Err(Error::abrupt_return(rv));
+                                    return Err(Error::abrupt_return(rv, *this_span));
                                 } else {
                                     rv
                                 }
@@ -1080,7 +1080,7 @@ impl<'env> Vm<'env> {
                                 // return implements  https://docs.getdbt.com/reference/dbt-jinja-functions/return
 
                                 if *name == "return" {
-                                    return Err(Error::abrupt_return(rv));
+                                    return Err(Error::abrupt_return(rv, *this_span));
                                 } else {
                                     rv
                                 }
@@ -1340,6 +1340,9 @@ impl<'env> Vm<'env> {
                             end_offset,
                         )
                     });
+                }
+                Instruction::MacroName(_) => {
+                    // no-op, we don't need to do anything here
                 }
             }
             pc += 1;

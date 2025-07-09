@@ -18,6 +18,7 @@ pub struct BasicBlock {
     pub end: usize,
     pub successor: Vec<(BlockId, EdgeKind)>,
     pub predecessor: Vec<BlockId>,
+    pub current_macro: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -77,6 +78,11 @@ impl CFG {
         }
         ret
     }
+
+    /// return a reference to the block with the given id
+    pub fn get_block(&self, id: BlockId) -> Option<&BasicBlock> {
+        self.blocks.get(id)
+    }
 }
 
 fn is_block_terminator(inst: &Instruction) -> bool {
@@ -89,6 +95,7 @@ fn is_block_terminator(inst: &Instruction) -> bool {
             | Instruction::Iterate(_)
             | Instruction::FastRecurse
             | Instruction::PopFrame
+            | Instruction::Return
     )
 }
 
@@ -103,10 +110,12 @@ fn branch_targets(cur_idx: usize, inst: &Instruction) -> Vec<(usize, EdgeKind)> 
         }
         Instruction::JumpIfTrueOrPop(t, _) => vec![(*t, Cond(true)), (cur_idx + 1, Cond(false))],
         Instruction::PopFrame => vec![(cur_idx + 1, EdgeKind::FallThrough)],
+        Instruction::Return => vec![],
         _ => vec![(cur_idx + 1, FallThrough)],
     }
 }
 
+#[allow(clippy::needless_range_loop)]
 pub fn build_cfg(code: &[Instruction]) -> CFG {
     use EdgeKind::*;
 
@@ -132,12 +141,21 @@ pub fn build_cfg(code: &[Instruction]) -> CFG {
         } else {
             code.len() - 1
         };
+        // Find cur_macro for this block (if any)
+        let mut cur_macro: Option<String> = None;
+        for idx in start..=end {
+            if let Instruction::MacroName(name) = &code[idx] {
+                cur_macro = Some(name.to_string());
+                break;
+            }
+        }
         blocks.push(BasicBlock {
             id: i,
             start,
             end,
             successor: Vec::new(),
             predecessor: Vec::new(),
+            current_macro: cur_macro,
         });
         for index in instruction_to_basic_block
             .iter_mut()

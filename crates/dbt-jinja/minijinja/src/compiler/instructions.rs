@@ -247,6 +247,9 @@ pub enum Instruction<'source> {
     MacroStop(u32, u32, u32),
 
     ModelReference(String, u32, u32, u32, u32, u32, u32),
+
+    // keep track of macro name
+    MacroName(&'source str),
 }
 
 #[derive(Copy, Clone)]

@@ -182,19 +182,54 @@ impl<'env, 'src> TypeChecker<'src> {
         }
 
         while let Some(bb_id) = worklist.pop_front() {
-            let out_state = self.transfer_block(bb_id, state, warning_printer.clone())?;
-            for (succ, _) in self.cfg.successor(bb_id) {
-                let changed = if first_merge[*succ] {
-                    self.in_states[*succ] = out_state.clone();
-                    first_merge[*succ] = false;
-                    true
-                } else {
-                    Self::merge_into(&mut self.in_states[*succ], &out_state)
-                };
-                if !visited[*succ] || changed {
-                    worklist.push_back(*succ);
-                    visited[*succ] = true;
+            let out_state = self.transfer_block(bb_id, state, warning_printer.clone());
+
+            match out_state {
+                Ok(out_state) => {
+                    for (succ, _) in self.cfg.successor(bb_id) {
+                        let changed = if first_merge[*succ] {
+                            self.in_states[*succ] = out_state.clone();
+                            first_merge[*succ] = false;
+                            true
+                        } else {
+                            Self::merge_into(&mut self.in_states[*succ], &out_state)
+                        };
+                        if !visited[*succ] || changed {
+                            worklist.push_back(*succ);
+                            visited[*succ] = true;
+                        }
+                    }
                 }
+                Err(e) => match e.try_abrupt_return() {
+                    Some(rv) => {
+                        let mut registry_ret_type = Type::Invalid;
+                        if let Some(macro_block) = self.cfg.get_block(bb_id) {
+                            if let Some(macro_name) = macro_block.current_macro.as_ref() {
+                                if let Some(funcsign) = self.function_registry.get(macro_name) {
+                                    registry_ret_type = funcsign.ret_type.clone();
+                                }
+                            }
+                        }
+                        // try match rv with registry_ret_type
+                        let rv_type = rv
+                            .downcast_object_ref::<Type>()
+                            .cloned()
+                            .unwrap_or(Type::Any);
+                        let span = e.get_abrupt_return_span();
+                        if rv_type.coerce(&registry_ret_type).is_none() {
+                            warning_printer.warn(
+                                &span,
+                                &format!(
+                                    "Type mismatch: expected return type {registry_ret_type}, got {rv_type}"
+                                ),
+                            );
+                        }
+                        continue;
+                    }
+                    None => {
+                        return Err(e);
+                    }
+                },
             }
         }
         Ok(())
@@ -987,7 +1022,7 @@ impl<'env, 'src> TypeChecker<'src> {
 
                     if *name == "return" {
                         if let Some(arg) = typestate.stack.pop() {
-                            return Err(crate::Error::abrupt_return(Value::from(arg)));
+                            return Err(crate::Error::abrupt_return(Value::from(arg), *span));
                         }
                         return Err(crate::Error::new(
                             crate::error::ErrorKind::InvalidOperation,
@@ -1194,6 +1229,10 @@ impl<'env, 'src> TypeChecker<'src> {
                     _end_col,
                     _end_offset,
                 ) => {
+                    // TYPECHECK: NO
+                    // Nothing to do with the stack
+                }
+                Instruction::MacroName(_name) => {
                     // TYPECHECK: NO
                     // Nothing to do with the stack
                 }

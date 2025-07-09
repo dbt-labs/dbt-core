@@ -484,7 +484,7 @@ impl<'source> CodeGenerator<'source> {
         use crate::compiler::instructions::MACRO_CALLER;
         self.set_line_from_span(macro_decl.span());
         let instr = self.add(Instruction::Jump(!0));
-
+        self.add(Instruction::MacroName(macro_decl.name));
         // dbt function parameters support lateral variables, e.g.
         // {% macro foo(a, b=a+1, c=b+1) %}
         // So we have to evaluate the defaults from left to right
