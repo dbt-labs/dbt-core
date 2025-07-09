@@ -185,10 +185,10 @@ pub enum Instruction<'source> {
     EndCapture,
 
     /// Calls a global function
-    CallFunction(&'source str, Option<u16>),
+    CallFunction(&'source str, Option<u16>, Span),
 
     /// Calls a method
-    CallMethod(&'source str, Option<u16>),
+    CallMethod(&'source str, Option<u16>, Span),
 
     /// Calls an object
     CallObject(Option<u16>),
@@ -248,9 +248,6 @@ pub enum Instruction<'source> {
     MacroStop(u32, u32, u32),
 
     ModelReference(String, u32, u32, u32, u32, u32, u32),
-
-    CallStart(u32, u32, u32),
-    CallStop(u32, u32, u32),
 
     // keep track of line and column numbers for binops
     BinOpStart(BinOpKind, u32, u32, u32),
@@ -443,7 +440,7 @@ impl<'source> Instructions<'source> {
             let name = match instr {
                 Instruction::Lookup(name)
                 | Instruction::StoreLocal(name)
-                | Instruction::CallFunction(name, _) => *name,
+                | Instruction::CallFunction(name, _, _) => *name,
                 Instruction::PushLoop(flags) if flags & LOOP_FLAG_WITH_LOOP_VAR != 0 => "loop",
                 Instruction::PushLoop(_) | Instruction::PushWith => break,
                 _ => continue,
@@ -500,5 +497,5 @@ impl fmt::Debug for Instructions<'_> {
 #[test]
 #[cfg(target_pointer_width = "64")]
 fn test_sizes() {
-    assert_eq!(std::mem::size_of::<Instruction>(), 48);
+    assert_eq!(std::mem::size_of::<Instruction>(), 56);
 }

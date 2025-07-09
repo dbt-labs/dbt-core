@@ -969,7 +969,7 @@ impl<'env, 'src> TypeChecker<'src> {
                     typestate.drop_top(arg_count.unwrap_or(0) as usize);
                     typestate.stack.push(Type::Bool);
                 }
-                Instruction::CallFunction(name, arg_count) => {
+                Instruction::CallFunction(name, arg_count, _span) => {
                     // TYPECHECK: YES
                     // check the parameter types
                     // For internal rust functions
@@ -1049,7 +1049,7 @@ impl<'env, 'src> TypeChecker<'src> {
                         typestate.stack.push(Type::Any);
                     }
                 }
-                Instruction::CallMethod(name, arg_count) => {
+                Instruction::CallMethod(name, arg_count, _span) => {
                     // TYPECHECK: NO? (Maybe add method check later)
 
                     let count = arg_count.unwrap_or(0);
@@ -1206,20 +1206,6 @@ impl<'env, 'src> TypeChecker<'src> {
                 ) => {
                     // TYPECHECK: NO
                     // Nothing to do with the stack
-                }
-                Instruction::CallStart(line, col, _offset) => {
-                    self.location = Some(CodeLocation {
-                        line: *line,
-                        col: *col,
-                        file: path.clone(),
-                    });
-                }
-                Instruction::CallStop(line, col, _offset) => {
-                    self.location = Some(CodeLocation {
-                        line: *line,
-                        col: *col,
-                        file: path.clone(),
-                    });
                 }
                 Instruction::BinOpStart(_op, line, col, _offset) => {
                     self.location = Some(CodeLocation {

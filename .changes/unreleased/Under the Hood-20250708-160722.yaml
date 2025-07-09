@@ -1,0 +1,3 @@
+kind: Under the Hood
+body: move span into Instruction::CallFunction
+time: 2025-07-08T16:07:22.601169815-07:00

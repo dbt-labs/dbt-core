@@ -876,11 +876,6 @@ impl<'source> CodeGenerator<'source> {
     ) {
         let span = c.span();
         self.push_span(span);
-        self.add(Instruction::CallStart(
-            span.start_line,
-            span.start_col,
-            span.start_offset,
-        ));
 
         match c.identify_call() {
             ast::CallType::Function(name) => {
@@ -901,7 +896,7 @@ impl<'source> CodeGenerator<'source> {
                         }
                     }
                 }
-                self.add(Instruction::CallFunction(name, arg_count));
+                self.add(Instruction::CallFunction(name, arg_count, span));
             }
             #[cfg(feature = "multi_template")]
             ast::CallType::Block(name) => {
@@ -912,7 +907,7 @@ impl<'source> CodeGenerator<'source> {
             ast::CallType::Method(expr, name) => {
                 self.compile_expr(expr);
                 let arg_count = self.compile_call_args(&c.args, 1, caller);
-                self.add(Instruction::CallMethod(name, arg_count));
+                self.add(Instruction::CallMethod(name, arg_count, span));
             }
             ast::CallType::Object(expr) => {
                 self.compile_expr(expr);
@@ -920,11 +915,6 @@ impl<'source> CodeGenerator<'source> {
                 self.add(Instruction::CallObject(arg_count));
             }
         };
-        self.add(Instruction::CallStop(
-            span.end_line,
-            span.end_col,
-            span.end_offset,
-        ));
         self.pop_span();
     }
 

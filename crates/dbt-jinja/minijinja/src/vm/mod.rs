@@ -274,7 +274,6 @@ impl<'env> Vm<'env> {
         let mut next_loop_recursion_jump = None;
         let mut loaded_filters = [None; MAX_LOCALS];
         let mut loaded_tests = [None; MAX_LOCALS];
-        let mut call_start_stack = vec![];
 
         // If we are extending we are holding the instructions of the target parent
         // template here.  This is used to detect multiple extends and the evaluation
@@ -770,7 +769,7 @@ impl<'env> Vm<'env> {
                     stack.drop_top(arg_count);
                     stack.push(Value::from(rv));
                 }
-                Instruction::CallFunction(name, arg_count) => {
+                Instruction::CallFunction(name, arg_count, this_span) => {
                     let path_and_span_and_deltaline = if let Some((Some(path), Some(span))) =
                         template_registry
                             .get(&Value::from(&format!("{root_package_name}.{name}")))
@@ -883,7 +882,11 @@ impl<'env> Vm<'env> {
 
                         let args: Vec<Value> =
                             if function_name == "ref" || function_name == "source" {
-                                let start: &(u32, u32, u32) = call_start_stack.last().unwrap();
+                                let start: (u32, u32, u32) = (
+                                    this_span.start_line,
+                                    this_span.start_col,
+                                    this_span.start_offset,
+                                );
                                 let mut location_arg = value_map_with_capacity(1);
                                 location_arg
                                     .insert(Value::from("location"), Value::from_serialize(start));
@@ -1017,7 +1020,7 @@ impl<'env> Vm<'env> {
                         state.ctx.file_stack.pop();
                     }
                 }
-                Instruction::CallMethod(name, arg_count) => {
+                Instruction::CallMethod(name, arg_count, this_span) => {
                     listeners
                         .iter()
                         .for_each(|listener| listener.on_reference(name));
@@ -1100,7 +1103,11 @@ impl<'env> Vm<'env> {
                             .map(|x| x.to_string())
                             .unwrap_or(name.to_string());
                         let args_vals = if function_name == "ref" || function_name == "source" {
-                            let start: &(u32, u32, u32) = call_start_stack.last().unwrap();
+                            let start: (u32, u32, u32) = (
+                                this_span.start_line,
+                                this_span.start_col,
+                                this_span.start_offset,
+                            );
                             let mut location_arg = value_map_with_capacity(1);
                             location_arg
                                 .insert(Value::from("location"), Value::from_serialize(start));
@@ -1333,12 +1340,6 @@ impl<'env> Vm<'env> {
                             end_offset,
                         )
                     });
-                }
-                Instruction::CallStart(start_line, start_col, start_offset) => {
-                    call_start_stack.push((*start_line, *start_col, *start_offset));
-                }
-                Instruction::CallStop(_, _, _) => {
-                    call_start_stack.pop();
                 }
                 Instruction::BinOpStart(_, _, _, _) => {
                     // no-op, we don't need to do anything here
