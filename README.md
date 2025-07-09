@@ -10,7 +10,8 @@ This repo hosts components of the dbt Fusion engine, the foundation for future i
 
 > [!IMPORTANT]  
 > **Note: the dbt Fusion Engine is in Beta!**
-Bugs and missing functionality compared to dbt Core will be resolved continuously in the leadup to a final release (see [this post](https://docs.getdbt.com/blog/dbt-fusion-engine-path-to-ga) for more details). 
+
+Bugs and missing functionality compared to dbt Core will be resolved continuously in the leadup to a final release (more info: [the dbt Fusion Engine: the Path to GA](https://docs.getdbt.com/blog/dbt-fusion-engine-path-to-ga)). 
 
 The dbt Fusion engine is a ground up, first principles rewrite of the dbt Core execution engine, built to be interoperable with the standard dbt authoring layer. Fusion enforces some ambiguous areas of the authoring spec more strictly than dbt Core to ensure correctness (for example, dbt Core does not proactively validate most YAML configurations). Many of these discrepancies can be fixed automatically with the [dbt Autofix](https://github.com/dbt-labs/dbt-autofix) tool.
 
@@ -25,13 +26,15 @@ The dbt Fusion engine is being released to this repository incrementally, so, un
 > [!TIP]  
 > You don't have to build this project from source to use the new dbt! We recommend using the precompiled binary with additional capabilities: 
 
-There are several ways to get started with Fusion (for more, see dbt Fusion's quickstart documentation [here](https://docs.getdbt.com/guides/fusion?step=1))
-1. **Download dbt the vs-code extension** - For most people the best experience. This will install the dbt fusion CLI and Language Server on your system - see the install guide [here](https://docs.getdbt.com/docs/install-dbt-extension).
-2. **Install Fusion Directly** Install just the fusion CLI with the command below or see dbt's documentation [here](https://docs.getdbt.com/docs/fusion/install-fusion)
+There are several ways to get started with Fusion (for more, see the [Quickstart for the dbt Fusion engine](https://docs.getdbt.com/guides/fusion?step=1))
+1. **Download dbt the vs-code extension** - For most people the best experience. This will install the dbt fusion CLI and Language Server on your system - see the docs page: [Install the dbt VS Code extension](https://docs.getdbt.com/docs/install-dbt-extension).
+2. **Install Fusion Directly** Install just the fusion CLI with the command below or see dbt's documentation: [About Fusion installation](https://docs.getdbt.com/docs/fusion/install-fusion)
+
 ``` bash
 curl -fsSL https://public.cdn.getdbt.com/fs/install/install.sh | sh -s -- --update
 ```
-3. **Build Fusion from Source** - See the *Compiling from Source* section below
+
+3. **Build Fusion from Source** - See the below section: [Compiling from Source](#compiling-from-source)
 
 
 ### Supported Operating Systems and CPU Microarchitectures
@@ -49,7 +52,6 @@ Legend:
 
 
 ## Timeline
-
 
 | Target Date | Milestone                   | Description                                  |
 |-------------|-----------------------------|----------------------------------------------|
@@ -78,7 +80,7 @@ Releases of various Fusion components will be iterative as each component reache
 <details>
   <summary><i>Can I con contribute to the dbt Fusion engine?</i></summary>
 
-  Yes absolutely!. Please see our contribution guidelines [here](CONTRIBUTING.md)
+  Yes absolutely!. Please see [`CONTRIBUTING.md`](CONTRIBUTING.md) for contribution guidelines
 </details>
 
 <details>
@@ -100,18 +102,17 @@ Releases of various Fusion components will be iterative as each component reache
 
 <details>
   <summary><i>This repo doesn't have all of dbt's functionality, when will the rest come?</i></summary>
-  dbt Fusion's source code is being published as components are finalized. Please see the Timeline section above
+  dbt Fusion's source code is being published as components are finalized. Please see the above section: [Timeline](#timeline).
 </details>
 
 <details>
   <summary><i>Can I use dbt Fusion today?</i></summary>
 
-  | State	       | Description | Workaround	| Resolvable by |
-  |--------------|-------------|------------|---------------|
-  | Unblocked    |  You can adopt the dbt Fusion engine with no changes to your project   | --- | --- |
-  | Soft blocked | Your project contains functionality [deprecated in dbt Core v1.10](https://www.getdbt.com/blog/how-to-get-ready-for-the-new-dbt-engine). | Resolve deprecations with the dbt-autofix script or workflow in dbt Studio| Users |
-  | Hard blocked | Your project contains Python models or uses a not-yet-supported adapter | Remove unsupported functionality if possible | dbt Labs |
-</details>
+  | State        | Description                                                                                                                                                         | Workaround                                                                 | Resolvable by |
+  |--------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------|---------------|
+  | Unblocked    | You can adopt the dbt Fusion engine with no changes to your project                                                                                                 | ---                                                                        | ---           |
+  | Soft blocked | Your project contains functionality (for more info: [How to get ready for the new dbt engine](https://www.getdbt.com/blog/how-to-get-ready-for-the-new-dbt-engine). | Resolve deprecations with the dbt-autofix script or workflow in dbt Studio | Users         |
+  | Hard blocked | Your project contains Python models or uses a not-yet-supported adapter                                                                                             | Remove unsupported functionality if possible                               | dbt Labs      |</details>
 
 
 
@@ -192,7 +193,7 @@ To run tests, increase the stack size and use nextest.
 ```
 
 # License
-The dbt Fusion engine is a monorepo and contains more than one License. Most code is licensed under ELv2. For more, please see our [licenses](LICENSES.md) section.
+The dbt Fusion engine is a monorepo and contains more than one License. Most code is licensed under ELv2. For more, please see [`LICENSES.md`](LICENSES.md).
 
 # Acknowledgments
 *To the dbt community:* dbt the tool & dbt Labs the company would not be here without the incredible community of authors, contributors, practitioners, and enthusiasts. dbt Fusion is an evolution of that work & stands on the shoulders of what has come before. 
