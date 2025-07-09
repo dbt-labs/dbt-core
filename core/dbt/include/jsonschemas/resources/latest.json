@@ -708,9 +708,123 @@
             "null"
           ]
         },
+        "auto_liquid_cluster": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "auto_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "automatic_clustering": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "backup": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "base_location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "base_location_subpath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bind": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "buckets": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "catalog": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cluster_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryClusterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "clustered_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "compression": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "copy_grants": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "database": {
           "type": [
             "string",
+            "null"
+          ]
+        },
+        "databricks_compute": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "databricks_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dist": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enable_refresh": {
+          "type": [
+            "boolean",
             "null"
           ]
         },
@@ -726,15 +840,77 @@
             "null"
           ]
         },
+        "external_volume": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "fail_calc": {
           "type": [
             "string",
             "null"
           ]
         },
+        "file_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "grant_access_to": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/GrantAccessToTarget"
+          }
+        },
         "group": {
           "type": [
             "string",
+            "null"
+          ]
+        },
+        "hours_to_expiration": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "include_full_name_in_path": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "initialize": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kms_key_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "labels": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "labels_from_meta": {
+          "type": [
+            "boolean",
             "null"
           ]
         },
@@ -745,12 +921,97 @@
           ],
           "format": "int32"
         },
+        "liquid_clustered_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_staleness": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "merge_with_schema_evolution": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "meta": {
           "type": [
             "object",
             "null"
           ],
           "additionalProperties": true
+        },
+        "not_matched_by_source_action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "not_matched_by_source_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "not_matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "partition_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryPartitionConfigLegacy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "partition_expiration_days": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "partitions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "query_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "quoting": {
           "anyOf": [
@@ -762,13 +1023,80 @@
             }
           ]
         },
+        "refresh_interval_minutes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "refresh_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "require_partition_filter": {
+          "default": false,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "schema": {
           "type": [
             "string",
             "null"
           ]
         },
+        "secure": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "severity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "skip_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "skip_not_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "snowflake_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sort": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sort_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_alias": {
           "type": [
             "string",
             "null"
@@ -808,6 +1136,37 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_lag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tblproperties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "tmp_relation_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "transient": {
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "warn_if": {
@@ -2414,7 +2773,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "labels_from_meta": {
           "type": [
@@ -2768,7 +3129,6 @@
           ]
         },
         "transient": {
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -3395,6 +3755,77 @@
             "null"
           ]
         },
+        "auto_liquid_cluster": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "auto_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "automatic_clustering": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "backup": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "base_location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "base_location_subpath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bind": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "buckets": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "catalog": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cluster_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryClusterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "clustered_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "column_types": {
           "type": [
             "object",
@@ -3403,6 +3834,12 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "compression": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "copy_grants": {
           "type": [
@@ -3416,7 +3853,32 @@
             "null"
           ]
         },
+        "databricks_compute": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "databricks_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
         "delimiter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dist": {
           "type": [
             "string",
             "null"
@@ -3432,6 +3894,12 @@
             }
           ]
         },
+        "enable_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "enabled": {
           "type": [
             "boolean",
@@ -3444,11 +3912,32 @@
             "null"
           ]
         },
+        "external_volume": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "full_refresh": {
           "type": [
             "boolean",
             "null"
           ]
+        },
+        "grant_access_to": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/GrantAccessToTarget"
+          }
         },
         "grants": {
           "type": [
@@ -3463,12 +3952,132 @@
             "null"
           ]
         },
+        "hours_to_expiration": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "include_full_name_in_path": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "initialize": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kms_key_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "labels": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "labels_from_meta": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "liquid_clustered_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_staleness": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "merge_with_schema_evolution": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "meta": {
           "type": [
             "object",
             "null"
           ],
           "additionalProperties": true
+        },
+        "not_matched_by_source_action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "not_matched_by_source_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "not_matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "partition_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryPartitionConfigLegacy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "partition_expiration_days": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "partitions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         },
         "persist_docs": {
           "anyOf": [
@@ -3500,6 +4109,12 @@
             }
           ]
         },
+        "query_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "quote_columns": {
           "type": [
             "boolean",
@@ -3516,13 +4131,74 @@
             }
           ]
         },
+        "refresh_interval_minutes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "refresh_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "require_partition_filter": {
+          "default": false,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "schema": {
           "type": [
             "string",
             "null"
           ]
         },
+        "secure": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "skip_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "skip_not_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "snowflake_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sort": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sort_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_alias": {
           "type": [
             "string",
             "null"
@@ -3536,6 +4212,31 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_lag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tblproperties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "tmp_relation_type": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "transient": {
@@ -3739,6 +4440,61 @@
             "null"
           ]
         },
+        "auto_liquid_cluster": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "auto_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "automatic_clustering": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "backup": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "base_location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "base_location_subpath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bind": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "buckets": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "catalog": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "check_cols": {
           "anyOf": [
             {
@@ -3749,13 +4505,66 @@
             }
           ]
         },
+        "cluster_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryClusterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "clustered_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "compression": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "copy_grants": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "database": {
           "type": [
             "string",
             "null"
           ]
         },
+        "databricks_compute": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "databricks_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
         "dbt_valid_to_current": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dist": {
           "type": [
             "string",
             "null"
@@ -3771,6 +4580,12 @@
             }
           ]
         },
+        "enable_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "enabled": {
           "type": [
             "boolean",
@@ -3782,6 +4597,27 @@
             "string",
             "null"
           ]
+        },
+        "external_volume": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "grant_access_to": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/GrantAccessToTarget"
+          }
         },
         "grants": true,
         "group": {
@@ -3800,9 +4636,72 @@
             }
           ]
         },
+        "hours_to_expiration": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "include_full_name_in_path": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "initialize": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "invalidate_hard_deletes": {
           "type": [
             "boolean",
+            "null"
+          ]
+        },
+        "kms_key_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "labels": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "labels_from_meta": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "liquid_clustered_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "matched_condition": {
+          "type": [
+            "string",
             "null"
           ]
         },
@@ -3816,12 +4715,69 @@
             }
           ]
         },
+        "max_staleness": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "merge_with_schema_evolution": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "meta": {
           "type": [
             "object",
             "null"
           ],
           "additionalProperties": true
+        },
+        "not_matched_by_source_action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "not_matched_by_source_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "not_matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "partition_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryPartitionConfigLegacy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "partition_expiration_days": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "partitions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         },
         "persist_docs": {
           "anyOf": [
@@ -3853,6 +4809,12 @@
             }
           ]
         },
+        "query_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "quote_columns": {
           "type": [
             "boolean",
@@ -3869,9 +4831,48 @@
             }
           ]
         },
+        "refresh_interval_minutes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "refresh_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "require_partition_filter": {
+          "default": false,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "schema": {
           "type": [
             "string",
+            "null"
+          ]
+        },
+        "secure": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "skip_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "skip_not_matched_step": {
+          "type": [
+            "boolean",
             "null"
           ]
         },
@@ -3883,6 +4884,34 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "snowflake_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sort": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sort_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_alias": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "static_analysis": {
@@ -3909,6 +4938,37 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_lag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tblproperties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "tmp_relation_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "transient": {
+          "type": [
+            "boolean",
+            "null"
           ]
         },
         "unique_key": {
@@ -4035,6 +5095,120 @@
     "SourceConfig": {
       "type": "object",
       "properties": {
+        "auto_liquid_cluster": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "auto_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "automatic_clustering": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "backup": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "base_location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "base_location_subpath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bind": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "buckets": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "catalog": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cluster_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryClusterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "clustered_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "compression": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "copy_grants": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "databricks_compute": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "databricks_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dist": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enable_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "enabled": {
           "type": [
             "boolean",
@@ -4047,10 +5221,82 @@
             "null"
           ]
         },
+        "external_volume": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "freshness": {
           "anyOf": [
             {
               "$ref": "#/definitions/FreshnessDefinition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "grant_access_to": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/GrantAccessToTarget"
+          }
+        },
+        "hours_to_expiration": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "include_full_name_in_path": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "initialize": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kms_key_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "labels": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "labels_from_meta": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "liquid_clustered_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
             },
             {
               "type": "null"
@@ -4069,12 +5315,87 @@
             "null"
           ]
         },
+        "location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_staleness": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "merge_with_schema_evolution": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "meta": {
           "type": [
             "object",
             "null"
           ],
           "additionalProperties": true
+        },
+        "not_matched_by_source_action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "not_matched_by_source_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "not_matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "partition_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryPartitionConfigLegacy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "partition_expiration_days": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "partitions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "query_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "quoting": {
           "anyOf": [
@@ -4084,6 +5405,73 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "refresh_interval_minutes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "refresh_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "require_partition_filter": {
+          "default": false,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "secure": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "skip_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "skip_not_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "snowflake_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sort": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sort_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_alias": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "static_analysis": {
@@ -4104,6 +5492,37 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_lag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tblproperties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "tmp_relation_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "transient": {
+          "type": [
+            "boolean",
+            "null"
           ]
         }
       },
@@ -4151,12 +5570,6 @@
         },
         "name": {
           "type": "string"
-        },
-        "overrides": {
-          "type": [
-            "string",
-            "null"
-          ]
         },
         "quoting": {
           "anyOf": [
@@ -4429,7 +5842,217 @@
     "UnitTestConfig": {
       "type": "object",
       "properties": {
+        "auto_liquid_cluster": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "auto_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "automatic_clustering": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "backup": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "base_location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "base_location_subpath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bind": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "buckets": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "catalog": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cluster_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryClusterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "clustered_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "compression": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "copy_grants": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "databricks_compute": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "databricks_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dist": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enable_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "external_volume": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "grant_access_to": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/GrantAccessToTarget"
+          }
+        },
+        "hours_to_expiration": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "include_full_name_in_path": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "initialize": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kms_key_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "labels": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "labels_from_meta": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "liquid_clustered_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_staleness": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "merge_with_schema_evolution": {
           "type": [
             "boolean",
             "null"
@@ -4441,6 +6064,124 @@
             "null"
           ],
           "additionalProperties": true
+        },
+        "not_matched_by_source_action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "not_matched_by_source_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "not_matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "partition_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryPartitionConfigLegacy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "partition_expiration_days": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "partitions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "query_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "refresh_interval_minutes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "refresh_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "require_partition_filter": {
+          "default": false,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "secure": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "skip_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "skip_not_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "snowflake_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sort": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sort_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "static_analysis": {
           "anyOf": [
@@ -4460,6 +6201,37 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_lag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tblproperties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "tmp_relation_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "transient": {
+          "type": [
+            "boolean",
+            "null"
           ]
         }
       },
@@ -4548,7 +6320,10 @@
         },
         "v": true
       },
-      "additionalProperties": false
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true
+      }
     },
     "WhereFilter": {
       "type": "object",
