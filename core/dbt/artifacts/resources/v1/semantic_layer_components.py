@@ -2,9 +2,10 @@ from dataclasses import dataclass
 from typing import List, Sequence, Tuple
 
 from dbt_common.dataclass_schema import dbtClassMixin
-from dbt_semantic_interfaces.call_parameter_sets import FilterCallParameterSets
-from dbt_semantic_interfaces.parsing.where_filter.where_filter_parser import (
-    WhereFilterParser,
+from dbt_semantic_interfaces.call_parameter_sets import JinjaCallParameterSets
+from dbt_semantic_interfaces.parsing.where_filter.jinja_object_parser import (
+    JinjaObjectParser,
+    QueryItemLocation,
 )
 
 
@@ -14,9 +15,11 @@ class WhereFilter(dbtClassMixin):
 
     def call_parameter_sets(
         self, custom_granularity_names: Sequence[str]
-    ) -> FilterCallParameterSets:
-        return WhereFilterParser.parse_call_parameter_sets(
-            self.where_sql_template, custom_granularity_names=custom_granularity_names
+    ) -> JinjaCallParameterSets:
+        return JinjaObjectParser.parse_call_parameter_sets(
+            self.where_sql_template,
+            custom_granularity_names=custom_granularity_names,
+            query_item_location=QueryItemLocation.NON_ORDER_BY,
         )
 
 
@@ -26,7 +29,7 @@ class WhereFilterIntersection(dbtClassMixin):
 
     def filter_expression_parameter_sets(
         self, custom_granularity_names: Sequence[str]
-    ) -> Sequence[Tuple[str, FilterCallParameterSets]]:
+    ) -> Sequence[Tuple[str, JinjaCallParameterSets]]:
         raise NotImplementedError
 
 
