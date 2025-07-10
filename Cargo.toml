@@ -157,7 +157,7 @@ minijinja-contrib = { path = "crates/dbt-jinja/minijinja-contrib", features = [
 ] }
 
 # serde
-dbt-serde_yaml = { git = "https://github.com/sdf-labs/dbt-serde-yaml", rev = "663485ab41b08d3ea067a986f5e17ce039050422", features = [
+dbt-serde_yaml = { git = "https://github.com/sdf-labs/dbt-serde-yaml", rev = "400d293007808f4757efee5b5269b12662a7bc5c", features = [
   "filename",
   "schemars",
   "flatten_dunder",
