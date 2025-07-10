@@ -12,7 +12,7 @@ use dbt_jinja_utils::{
 use dbt_schemas::schemas::{
     packages::{
         DbtPackageEntry, DbtPackages, DbtPackagesLock, GitPackage, HubPackage, LocalPackage,
-        PrivatePackage,
+        PrivatePackage, TarballPackage,
     },
     project::DbtProject,
 };
@@ -21,7 +21,7 @@ use crate::{private_package::get_resolved_url, utils::get_local_package_full_pat
 
 use super::types::{
     GitUnpinnedPackage, HubUnpinnedPackage, LocalPinnedPackage, LocalUnpinnedPackage,
-    PrivateUnpinnedPackage,
+    PrivateUnpinnedPackage, TarballUnpinnedPackage,
 };
 
 trait Incorporatable {
@@ -41,6 +41,12 @@ impl Incorporatable for PrivateUnpinnedPackage {
     }
 }
 
+impl Incorporatable for TarballUnpinnedPackage {
+    fn incorporate(&mut self, other: Self) {
+        self.incorporate(other);
+    }
+}
+
 #[derive(Debug, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum UnpinnedPackage {
@@ -48,6 +54,7 @@ pub enum UnpinnedPackage {
     Git(GitUnpinnedPackage),
     Local(LocalUnpinnedPackage),
     Private(PrivateUnpinnedPackage),
+    Tarball(TarballUnpinnedPackage),
 }
 
 impl UnpinnedPackage {
@@ -57,6 +64,7 @@ impl UnpinnedPackage {
             UnpinnedPackage::Git(_) => "git",
             UnpinnedPackage::Local(_) => "local",
             UnpinnedPackage::Private(_) => "private",
+            UnpinnedPackage::Tarball(_) => "tarball",
         }
     }
 }
@@ -246,6 +254,32 @@ impl PackageListing {
                     "private",
                 )?;
             }
+            DbtPackageEntry::Tarball(tarball_package) => {
+                let tarball_package: TarballPackage = {
+                    let value = dbt_serde_yaml::to_value(&tarball_package).map_err(|e| {
+                        unexpected_fs_err!("Failed to serialize tarball package spec: {e}")
+                    })?;
+                    into_typed_with_jinja(Some(&self.io_args), value, true, jinja_env, &(), &[])
+                }?;
+                let tarball_url: String = {
+                    let value =
+                        dbt_serde_yaml::to_value(&tarball_package.tarball).map_err(|e| {
+                            unexpected_fs_err!("Failed to serialize tarball package URL: {e}")
+                        })?;
+                    into_typed_with_jinja(Some(&self.io_args), value, true, jinja_env, &(), &[])
+                }?;
+
+                self.handle_remote_package(
+                    &tarball_url.clone(),
+                    UnpinnedPackage::Tarball(TarballUnpinnedPackage {
+                        tarball: tarball_url,
+                        name: None,
+                        unrendered: tarball_package.unrendered.clone(),
+                        original_entry: tarball_package,
+                    }),
+                    "tarball",
+                )?;
+            }
         }
         Ok(())
     }
@@ -266,6 +300,11 @@ impl PackageListing {
                 UnpinnedPackage::Private(existing_private_package) if package_type == "private" => {
                     if let UnpinnedPackage::Private(new_private_package) = new_package {
                         existing_private_package.incorporate(new_private_package);
+                    }
+                }
+                UnpinnedPackage::Tarball(existing_tarball_package) if package_type == "tarball" => {
+                    if let UnpinnedPackage::Tarball(new_tarball_package) = new_package {
+                        existing_tarball_package.incorporate(new_tarball_package);
                     }
                 }
                 _ => {
@@ -300,6 +339,11 @@ impl PackageListing {
                 UnpinnedPackage::Private(existing_private_package) if package_type == "private" => {
                     if let UnpinnedPackage::Private(new_private_package) = new_package {
                         existing_private_package.incorporate(new_private_package.clone());
+                    }
+                }
+                UnpinnedPackage::Tarball(existing_tarball_package) if package_type == "tarball" => {
+                    if let UnpinnedPackage::Tarball(new_tarball_package) = new_package {
+                        existing_tarball_package.incorporate(new_tarball_package.clone());
                     }
                 }
                 _ => {
@@ -401,6 +445,13 @@ impl PackageListing {
                     &package_key,
                     package,
                     "private",
+                )?;
+            }
+            UnpinnedPackage::Tarball(tarball_unpinned_package) => {
+                self.handle_remote_unpinned_package::<TarballUnpinnedPackage>(
+                    &tarball_unpinned_package.tarball,
+                    package,
+                    "tarball",
                 )?;
             }
         }

@@ -2,7 +2,9 @@ use std::path::PathBuf;
 use std::{collections::HashMap, str::FromStr};
 
 use dbt_common::{err, fs_err, ErrorCode, FsError, FsResult};
-use dbt_schemas::schemas::packages::{GitPackage, HubPackage, PackageVersion, PrivatePackage};
+use dbt_schemas::schemas::packages::{
+    GitPackage, HubPackage, PackageVersion, PrivatePackage, TarballPackage,
+};
 use serde_json::Value;
 
 use super::semver::{
@@ -298,6 +300,74 @@ impl TryFrom<PrivatePackage> for PrivateUnpinnedPackage {
             subdirectory: private_package.subdirectory.clone(),
             unrendered: private_package.unrendered.clone(),
             original_entry: private_package,
+        })
+    }
+}
+
+// Tarball packages
+#[derive(Debug, Clone)]
+pub struct TarballPinnedPackage {
+    pub tarball: String,
+    pub name: String,
+    pub unrendered: HashMap<String, Value>,
+}
+
+impl TarballPinnedPackage {
+    pub fn source_type(&self) -> String {
+        "tarball".to_string()
+    }
+
+    pub fn get_version(&self) -> String {
+        "tarball".to_string()
+    }
+
+    pub fn nice_version_name(&self) -> String {
+        format!("tarball (url: {})", self.tarball)
+    }
+}
+
+impl TryFrom<TarballUnpinnedPackage> for TarballPinnedPackage {
+    type Error = Box<FsError>;
+
+    fn try_from(tarball_unpinned_package: TarballUnpinnedPackage) -> Result<Self, Self::Error> {
+        Ok(Self {
+            tarball: tarball_unpinned_package.tarball,
+            name: tarball_unpinned_package.name.ok_or_else(|| {
+                fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "Tarball package name is required for pinned packages"
+                )
+            })?,
+            unrendered: tarball_unpinned_package.unrendered,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TarballUnpinnedPackage {
+    pub tarball: String,
+    pub name: Option<String>,
+    pub unrendered: HashMap<String, Value>,
+    pub original_entry: TarballPackage,
+}
+
+impl TarballUnpinnedPackage {
+    #[allow(unused_variables)]
+    pub fn incorporate(&mut self, other: Self) {
+        // For tarball packages, we don't need to merge anything since they're always pinned
+        // Just keep the current values
+    }
+}
+
+impl TryFrom<TarballPackage> for TarballUnpinnedPackage {
+    type Error = Box<FsError>;
+
+    fn try_from(tarball_package: TarballPackage) -> Result<Self, Self::Error> {
+        Ok(Self {
+            tarball: (*tarball_package.tarball).clone(),
+            name: None,
+            unrendered: tarball_package.unrendered.clone(),
+            original_entry: tarball_package,
         })
     }
 }

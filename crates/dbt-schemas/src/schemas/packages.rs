@@ -26,6 +26,7 @@ pub enum DbtPackageEntry {
     Git(GitPackage),
     Local(LocalPackage),
     Private(PrivatePackage),
+    Tarball(TarballPackage),
 }
 
 impl From<DbtPackageLock> for DbtPackageEntry {
@@ -42,6 +43,9 @@ impl From<DbtPackageLock> for DbtPackageEntry {
             }
             DbtPackageLock::Private(private_package_lock) => {
                 DbtPackageEntry::Private(PrivatePackage::from(private_package_lock))
+            }
+            DbtPackageLock::Tarball(tarball_package_lock) => {
+                DbtPackageEntry::Tarball(TarballPackage::from(tarball_package_lock))
             }
         }
     }
@@ -171,6 +175,7 @@ pub enum DbtPackageLock {
     Git(GitPackageLock),
     Local(LocalPackageLock),
     Private(PrivatePackageLock),
+    Tarball(TarballPackageLock),
 }
 
 impl DbtPackageLock {
@@ -180,6 +185,7 @@ impl DbtPackageLock {
             DbtPackageLock::Git(git_package_lock) => git_package_lock.name.to_string(),
             DbtPackageLock::Local(local_package_lock) => local_package_lock.name.to_string(),
             DbtPackageLock::Private(private_package_lock) => private_package_lock.name.to_string(),
+            DbtPackageLock::Tarball(tarball_package_lock) => tarball_package_lock.name.to_string(),
         }
     }
 
@@ -203,6 +209,9 @@ impl DbtPackageLock {
                 }
                 key
             }
+            DbtPackageLock::Tarball(tarball_package_lock) => {
+                tarball_package_lock.tarball.to_string()
+            }
         }
     }
 
@@ -212,6 +221,7 @@ impl DbtPackageLock {
             DbtPackageLock::Git(_) => "git".to_string(),
             DbtPackageLock::Local(_) => "local".to_string(),
             DbtPackageLock::Private(_) => "private".to_string(),
+            DbtPackageLock::Tarball(_) => "tarball".to_string(),
         }
     }
 }
@@ -256,6 +266,30 @@ pub struct PrivatePackageLock {
     pub subdirectory: Option<String>,
     #[serde(flatten)]
     pub unrendered: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TarballPackageLock {
+    pub tarball: Verbatim<String>,
+    pub name: String,
+    #[serde(flatten)]
+    pub unrendered: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TarballPackage {
+    pub tarball: Verbatim<String>,
+    #[serde(flatten)]
+    pub unrendered: HashMap<String, serde_json::Value>,
+}
+
+impl From<TarballPackageLock> for TarballPackage {
+    fn from(tarball_package_lock: TarballPackageLock) -> Self {
+        TarballPackage {
+            tarball: tarball_package_lock.tarball,
+            unrendered: tarball_package_lock.unrendered,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]

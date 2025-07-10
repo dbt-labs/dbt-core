@@ -1,15 +1,16 @@
 use dbt_common::io_args::IoArgs;
-use dbt_common::{err, stdfs, ErrorCode, FsResult};
+use dbt_common::{err, fs_err, stdfs, ErrorCode, FsResult};
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_schemas::schemas::packages::{
     DbtPackageLock, DbtPackages, DbtPackagesLock, GitPackageLock, HubPackageLock, LocalPackageLock,
-    PackageVersion, PrivatePackageLock,
+    PackageVersion, PrivatePackageLock, TarballPackageLock,
 };
 use std::collections::HashSet;
 
 use crate::{
     package_listing::UnpinnedPackage,
-    types::{GitPinnedPackage, LocalPinnedPackage, PrivatePinnedPackage},
+    tarball_client::TarballClient,
+    types::{GitPinnedPackage, LocalPinnedPackage, PrivatePinnedPackage, TarballPinnedPackage},
     utils::{handle_git_like_package, read_and_validate_dbt_project, sha1_hash_packages},
 };
 
@@ -88,6 +89,17 @@ pub async fn compute_package_lock(
                         revision: pinned_package.revision,
                         warn_unpinned: pinned_package.warn_unpinned,
                         subdirectory: pinned_package.subdirectory,
+                        unrendered: pinned_package.unrendered,
+                    }));
+            }
+            UnpinnedPackage::Tarball(tarball_unpinned_package) => {
+                let pinned_package: TarballPinnedPackage =
+                    tarball_unpinned_package.clone().try_into()?;
+                dbt_packages_lock
+                    .packages
+                    .push(DbtPackageLock::Tarball(TarballPackageLock {
+                        tarball: tarball_unpinned_package.original_entry.tarball.clone(),
+                        name: pinned_package.name,
                         unrendered: pinned_package.unrendered,
                     }));
             }
@@ -176,6 +188,56 @@ async fn resolve_packages(
                 }
                 // Keep tmp_dir alive until we're done with checkout_path
                 drop(tmp_dir);
+            }
+            UnpinnedPackage::Tarball(tarball_unpinned_package) => {
+                // Download and extract the tarball
+                let tarball_dir = tempfile::tempdir().map_err(|e| {
+                    fs_err!(ErrorCode::IoError, "Failed to create temp dir: {}", e,)
+                })?;
+                let tar_path = tarball_dir
+                    .path()
+                    .join(tarball_unpinned_package.tarball.replace('/', "_"));
+                let untar_path = tempfile::TempDir::new().map_err(|e| {
+                    fs_err!(ErrorCode::IoError, "Failed to create untar dir: {}", e)
+                })?;
+
+                let mut tarball_client = TarballClient::new();
+                tarball_client
+                    .download_and_extract_tarball(
+                        &tarball_unpinned_package.tarball,
+                        &tar_path,
+                        &untar_path,
+                        "tarball_package",
+                    )
+                    .await?;
+
+                // Find the extracted package directory
+                let tar_contents = std::fs::read_dir(&untar_path).map_err(|e| {
+                    fs_err!(
+                        ErrorCode::IoError,
+                        "Failed to read untarred directory: {}",
+                        e
+                    )
+                })?;
+                let tar_contents: Vec<_> = tar_contents
+                    .filter_map(|entry| entry.ok())
+                    .filter(|entry| entry.path().is_dir())
+                    .collect();
+
+                if tar_contents.len() != 1 {
+                    return err!(
+                        ErrorCode::InvalidConfig,
+                        "Incorrect structure for package extracted from {}. The extracted package needs to follow the structure <package_name>/<package_contents>.",
+                        tarball_unpinned_package.tarball
+                    );
+                }
+
+                let checkout_path = tar_contents[0].path();
+                let dbt_project = read_and_validate_dbt_project(&checkout_path)?;
+                tarball_unpinned_package.name = Some(dbt_project.name);
+                if let Some(dbt_packages) = load_dbt_packages(io, &checkout_path)?.0 {
+                    next_listing.update_from(&dbt_packages.packages, jinja_env)?;
+                }
             }
         }
         final_listing.incorporate_unpinned_package(unpinned_package)?;

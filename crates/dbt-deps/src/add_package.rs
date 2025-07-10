@@ -93,7 +93,7 @@ fn create_packages_yml_entry(
     );
 
     // For local packages, version is not applicable
-    if source != "local" {
+    if source != "local" && source != "tarball" {
         if let Some(ver) = version {
             if ver.contains(',') {
                 let versions: Vec<String> = ver.split(',').map(|v| v.trim().to_string()).collect();
@@ -185,8 +185,16 @@ pub fn add_package(package_str: &str, project_dir: &Path) -> FsResult<()> {
     // Determine the source based on the package string
     let source = if package_str.contains('@') && !package_str.contains("://") {
         "hub"
-    } else if package_str.contains("://") || package_str.starts_with("git@") {
+    } else if package_str.contains("://")
+        && (package_str.starts_with("git@")
+            || package_str.contains("github.com")
+            || package_str.contains("gitlab.com"))
+    {
         "git"
+    } else if package_str.contains("://")
+        && (package_str.ends_with(".tar.gz") || package_str.ends_with(".tgz"))
+    {
+        "tarball"
     } else {
         // For local packages, validate that the path exists or is a valid relative path
         let local_path = Path::new(&package.name);

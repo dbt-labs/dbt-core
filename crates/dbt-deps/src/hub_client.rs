@@ -6,12 +6,7 @@ use reqwest_retry::{
     policies::ExponentialBackoff as RetryExponentialBackoff, RetryTransientMiddleware,
 };
 use serde::Deserialize;
-use std::{
-    collections::{HashMap, HashSet},
-    fs::File,
-    io::Write,
-    path::Path,
-};
+use std::collections::{HashMap, HashSet};
 
 pub const DBT_HUB_URL: &str = "https://hub.getdbt.com";
 pub const DBT_CORE_FIXED_VERSION: &str = "1.8.7";
@@ -140,48 +135,5 @@ impl HubClient {
     ) -> FsResult<Vec<String>> {
         // TODO: Implement version checking
         Ok(hub_package.versions.keys().cloned().collect())
-    }
-
-    pub async fn download_tarball(&mut self, download_url: &str, out_path: &Path) -> FsResult<()> {
-        let tarball_res = self.client.get(download_url).send().await.map_err(|e| {
-            fs_err!(
-                ErrorCode::RuntimeError,
-                "Failed to get tarball from {download_url}; status: {}",
-                e.status().unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
-            )
-        })?;
-        if tarball_res.status().is_success() {
-            let mut file = File::create(out_path).map_err(|e| {
-                fs_err!(
-                    ErrorCode::IoError,
-                    "Failed to create file at {}; {}",
-                    out_path.display(),
-                    e
-                )
-            })?;
-            file.write_all(
-                tarball_res
-                    .bytes()
-                    .await
-                    .map_err(|e| {
-                        fs_err!(
-                            ErrorCode::RuntimeError,
-                            "Failed to write to file at {}; status: {}",
-                            out_path.display(),
-                            e
-                        )
-                    })?
-                    .as_ref(),
-            )
-            .map_err(|e| {
-                fs_err!(
-                    ErrorCode::IoError,
-                    "Failed to write to file at {}; {}",
-                    out_path.display(),
-                    e
-                )
-            })?;
-        }
-        Ok(())
     }
 }

@@ -241,6 +241,7 @@ fn process_package_file(
                 }
                 key
             }
+            DbtPackageEntry::Tarball(tarball_package) => (*tarball_package.tarball).clone(),
         };
         if let Some(entry_name) = package_lookup_map.get(&entry_name) {
             dependencies.insert(entry_name.to_string());
