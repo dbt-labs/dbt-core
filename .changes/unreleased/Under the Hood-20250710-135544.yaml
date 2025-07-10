@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Remove unneeded space from error message
+time: 2025-07-10T13:55:44.305588+12:00
+custom:
+  PR: dbt-labs/fs#4351
+  Issues: "dbt-labs/fs#3623 dbt-labs/fs#3637"

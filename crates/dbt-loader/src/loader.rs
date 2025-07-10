@@ -121,7 +121,7 @@ pub async fn load(
                 StringOrInteger::String(ref s) => Some(s.parse::<usize>().map_err(|_| {
                     fs_err!(
                         ErrorCode::Generic,
-                        "Invalid number of threads in profiles.yml : {}",
+                        "Invalid number of threads in profiles.yml: {}",
                         s
                     )
                 })?),

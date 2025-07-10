@@ -7,7 +7,7 @@ versionExt: md
 versionFormat: '## dbt-fusion {{.Version}} - {{.Time.Format "January 02, 2006"}}'
 kindFormat: "### {{.Kind}}"
 changeFormat: |-
-  - {{.Body}}
+  - {{.Body}}{{if .Custom.PR}} ({{.Custom.PR}}){{end}}{{if .Custom.Issues}} - {{.Custom.Issues}}{{end}}
 
 kinds:
   - label: Breaking Changes
