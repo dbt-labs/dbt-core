@@ -593,9 +593,11 @@ class GenericJSONSchemaValidationDeprecation(WarnLevel):
 
     def message(self) -> str:
         if self.key_path == "":
-            description = f"{self.violation} at top level in file `{self.file}`"
+            description = (
+                f"{self.violation} at top level in file `{self.file}` is possibly a deprecation"
+            )
         else:
-            description = f"{self.violation} in file `{self.file}` at path `{self.key_path}`"
+            description = f"{self.violation} in file `{self.file}` at path `{self.key_path}` is possibly a deprecation"
 
         return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
