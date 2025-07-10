@@ -1,3 +1,0 @@
-kind: Fixes
-body: '[Databricks] Fix serialization for nonstandard struct field names'
-time: 2025-07-08T09:25:13.126703828-07:00

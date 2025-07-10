@@ -1,3 +1,0 @@
-kind: Fixes
-body: '[Bigquery] Fix certain column data_types rendering incorrectly'
-time: 2025-07-07T17:47:43.976287831-07:00
