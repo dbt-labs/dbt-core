@@ -21,27 +21,28 @@ _ADDITIONAL_ENGINE_ENV_VARS: List[str] = [
 ]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class EngineEnvVar:
     name: str
     old_name: Optional[str] = None
 
-
-def _create_engine_env_var(name: str) -> EngineEnvVar:
-    if name.startswith(ENGINE_ENV_PREFIX):
-        return EngineEnvVar(name=name)
-    elif name.startswith("DBT"):
-        return EngineEnvVar(name=name.replace("DBT", f"{ENGINE_ENV_PREFIX}"), old_name=name)
-    else:
-        raise RuntimeError(
-            f"Invalid environment variable: {name}, this will only happen if we add a new option to dbt that has an envvar that doesn't start with DBT_ or {ENGINE_ENV_PREFIX}"
-        )
+    def __init__(self, envvar: str) -> None:
+        if envvar.startswith(ENGINE_ENV_PREFIX):
+            object.__setattr__(self, "name", envvar)
+            object.__setattr__(self, "old_name", None)
+        elif envvar.startswith("DBT"):
+            object.__setattr__(self, "name", envvar.replace("DBT", f"{ENGINE_ENV_PREFIX}"))
+            object.__setattr__(self, "old_name", envvar)
+        else:
+            raise RuntimeError(
+                f"Invalid environment variable: {envvar}, this will only happen if we add a new option to dbt that has an envvar that doesn't start with DBT_ or {ENGINE_ENV_PREFIX}"
+            )
 
 
 # Here we are creating a set of all known engine env vars. This is used in this moduleto create an allow list of dbt
 # engine env vars. We also use it in the cli flags module to cross propagate engine env vars with their old non-engine prefixed names.
 KNOWN_ENGINE_ENV_VARS: set[EngineEnvVar] = {
-    _create_engine_env_var(envvar)
+    EngineEnvVar(envvar=envvar)
     for envvar in [*params.KNOWN_ENV_VARS, *_ADDITIONAL_ENGINE_ENV_VARS]
 }
 _ALLOWED_ENV_VARS: set[str] = {envvar.name for envvar in KNOWN_ENGINE_ENV_VARS}
