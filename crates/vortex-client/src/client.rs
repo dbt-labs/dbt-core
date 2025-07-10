@@ -462,7 +462,7 @@ impl VortexProducerClient {
     }
 
     pub async fn shutdown(&self) -> Result<()> {
-        const MAX_SHUTDOWN_DELAY_MS: u64 = 100;
+        const MAX_SHUTDOWN_DELAY_MS: u64 = 200;
 
         if let Some(shutdown_tx_mutex) = &self.shutdown_tx {
             let shutdown_tx = shutdown_tx_mutex.lock().await;
