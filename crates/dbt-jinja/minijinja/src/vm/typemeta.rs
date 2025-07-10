@@ -8,6 +8,7 @@ use crate::vm::types::adapter::AdapterType;
 use crate::vm::types::api::ApiType;
 use crate::vm::types::builtin::Type;
 use crate::vm::types::function::FunctionType;
+use crate::vm::types::internal_func::InternalCaller;
 use crate::vm::types::relation::RelationType;
 use crate::vm::types::utils::{infer_type_from_const_value, instr_name, CodeLocation};
 use std::collections::{BTreeMap, VecDeque};
@@ -76,38 +77,6 @@ impl TypecheckState {
         self.frame_base = self.stack.len();
     }
 
-    pub fn entry() -> Self {
-        Self {
-            stack: Vec::new(),
-            locals: SymbolTable::from([
-                ("this".to_string(), Type::Relation(RelationType::default())),
-                ("database".to_string(), Type::String),
-                ("schema".to_string(), Type::String),
-                ("identifier".to_string(), Type::String),
-                ("config".to_string(), Type::Map(BTreeMap::default())),
-                (
-                    "model".to_string(),
-                    Type::Seq {
-                        field1: Box::new(Type::Any),
-                    },
-                ),
-                ("store_result".to_string(), Type::Function),
-                ("load_result".to_string(), Type::Function),
-                ("store_raw_result".to_string(), Type::Function),
-                ("TARGET_PACKAGE_NAME".to_string(), Type::String),
-                ("TARGET_UNIQUE_ID".to_string(), Type::String),
-                ("api".to_string(), Type::Api(ApiType::default())),
-                ("adapter".to_string(), Type::Adapter(AdapterType::default())),
-            ]),
-            frame_base: 0,
-            cur_loop_obj_type: None,
-        }
-    }
-
-    pub fn bottom() -> Self {
-        Self::entry()
-    }
-
     pub fn get_call_args(&mut self, n: u16) -> Vec<Type> {
         // get n items from the stack
         self.stack
@@ -153,7 +122,7 @@ pub struct TypeChecker<'src> {
 /// Typecheck logic implementation
 impl<'env, 'src> TypeChecker<'src> {
     pub fn new(instr: &'src [Instruction<'src>], cfg: CFG, funcsigns: &FunctionRegistry) -> Self {
-        let in_states = vec![TypecheckState::bottom(); cfg.blocks.len()];
+        let in_states = vec![TypecheckState::default(); cfg.blocks.len()];
         Self {
             instr,
             cfg,
@@ -174,7 +143,7 @@ impl<'env, 'src> TypeChecker<'src> {
         // Find all roots (blocks with no predecessors)
         for (i, block) in self.cfg.blocks.iter().enumerate() {
             if block.predecessor.is_empty() {
-                self.in_states[i] = TypecheckState::entry();
+                self.in_states[i] = TypecheckState::default();
                 worklist.push_back(i);
                 visited[i] = true;
                 first_merge[i] = false;
@@ -1029,7 +998,36 @@ impl<'env, 'src> TypeChecker<'src> {
                             "Stack underflow on return",
                         ));
                     }
-                    if let Some(funcsign) = self.function_registry.get(*name) {
+                    if *name == "caller" {
+                        // judge whether current block is a macro
+                        if let Some(block) = self.cfg.get_block(bb_id) {
+                            if let Some(macro_name) = &block.current_macro {
+                                if let Some(arg_cnt) = arg_count {
+                                    let args = typestate.get_call_args(*arg_cnt);
+                                    let caller: Arc<InternalCaller> = Arc::new(InternalCaller {});
+                                    match caller.resolve_arguments(&args) {
+                                        Ok(ret_type) => {
+                                            typestate.stack.push(ret_type);
+                                        }
+                                        Err(msg) => {
+                                            warning_printer.warn(
+                                                span,
+                                                &format!(
+                                                    "Type error for function 'caller' in macro {macro_name}: {msg}"
+                                                ),
+                                            );
+                                            typestate.stack.push(Type::Any);
+                                        }
+                                    }
+                                } else {
+                                    return Err(crate::Error::new(
+                                        crate::error::ErrorKind::InvalidOperation,
+                                        "Function 'caller' requires an argument count",
+                                    ));
+                                }
+                            }
+                        }
+                    } else if let Some(funcsign) = self.function_registry.get(*name) {
                         if funcsign.has_signature {
                             if let Some(arg_cnt) = arg_count {
                                 let args = typestate.get_call_args(*arg_cnt);
