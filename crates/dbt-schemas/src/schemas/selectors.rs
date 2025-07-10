@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use dbt_common::node_selector::{IndirectSelection, SelectExpression};
-use dbt_serde_yaml::JsonSchema;
+use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
@@ -46,7 +46,7 @@ pub struct SelectorDefinition {
 // ---- definition discriminated union ---------------------------------------------------------
 //
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, JsonSchema)]
 #[serde(untagged)]
 pub enum SelectorDefinitionValue {
     /// CLI-style selector string (e.g. `"snowplow tag:nightly"`).
@@ -57,7 +57,7 @@ pub enum SelectorDefinitionValue {
 }
 
 /// Top‐level expression: either a boolean node or a single atom
-#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+#[derive(Serialize, UntaggedEnumDeserialize, Debug, Clone, JsonSchema)]
 #[serde(untagged)]
 pub enum SelectorExpr {
     Composite(CompositeExpr),
@@ -88,6 +88,8 @@ pub enum CompositeKind {
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(untagged)]
 pub enum AtomExpr {
+    // TODO: UntaggedEnumDeserialize does not support inlined struct variants --
+    // these must be converted into named structs.
     /// Leaf node that corresponds to a single CLI-style selector
     /// with optional graph-walk modifiers.
     Method {

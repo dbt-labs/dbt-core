@@ -47,12 +47,15 @@ pub fn column_tests_inner(
                 if col.tests.is_some() && col.data_tests.is_some() {
                     return None; // Error is handled above
                 }
-                col.tests.as_ref().or(col.data_tests.as_ref()).map(|tests| {
-                    (
-                        col.name.clone(),
-                        (col.quote.unwrap_or(false), tests.clone()),
-                    )
-                })
+                (*col.tests)
+                    .as_ref()
+                    .or((*col.data_tests).as_ref())
+                    .map(|tests| {
+                        (
+                            col.name.clone(),
+                            (col.quote.unwrap_or(false), tests.clone()),
+                        )
+                    })
             })
             .collect();
         Ok(Some(column_tests))

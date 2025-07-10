@@ -3,7 +3,7 @@ use std::{
     path::PathBuf,
 };
 
-use dbt_serde_yaml::Verbatim;
+use dbt_serde_yaml::{UntaggedEnumDeserialize, Verbatim};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -19,7 +19,7 @@ pub struct DbtPackages {
     pub packages: Vec<DbtPackageEntry>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, UntaggedEnumDeserialize, Clone)]
 #[serde(untagged)]
 pub enum DbtPackageEntry {
     Hub(HubPackage),
@@ -168,7 +168,7 @@ impl DbtPackagesLock {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, UntaggedEnumDeserialize, Clone)]
 #[serde(untagged)]
 pub enum DbtPackageLock {
     Hub(HubPackageLock),
@@ -301,6 +301,8 @@ pub struct DeprecatedDbtPackagesLock {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum DeprecatedDbtPackageLock {
+    // TODO: UntaggedEnumDeserialize does not support inlined struct variants --
+    // these must be converted into named structs.
     Hub {
         package: String,
         #[serde(rename = "version")]

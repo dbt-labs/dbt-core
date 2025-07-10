@@ -1,10 +1,10 @@
-use dbt_serde_yaml::{JsonSchema, Verbatim};
+use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize, Verbatim};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
 use crate::schemas::project::DataTestConfig;
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, JsonSchema)]
 #[serde(untagged)]
 pub enum DataTests {
     String(String),

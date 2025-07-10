@@ -7,7 +7,7 @@ mod tests {
     #[test]
     fn test_tarball_package_creation() {
         let tarball_package = TarballPackage {
-            tarball: Verbatim("https://example.com/package.tar.gz".to_string()),
+            tarball: Verbatim::from("https://example.com/package.tar.gz".to_string()),
             unrendered: HashMap::new(),
         };
 
@@ -20,7 +20,7 @@ mod tests {
     #[test]
     fn test_tarball_package_lock_creation() {
         let tarball_package_lock = TarballPackageLock {
-            tarball: Verbatim("https://example.com/package.tar.gz".to_string()),
+            tarball: Verbatim::from("https://example.com/package.tar.gz".to_string()),
             name: "test-package".to_string(),
             unrendered: HashMap::new(),
         };
@@ -35,7 +35,7 @@ mod tests {
     #[test]
     fn test_tarball_package_from_lock() {
         let tarball_package_lock = TarballPackageLock {
-            tarball: Verbatim("https://example.com/package.tar.gz".to_string()),
+            tarball: Verbatim::from("https://example.com/package.tar.gz".to_string()),
             name: "test-package".to_string(),
             unrendered: HashMap::new(),
         };

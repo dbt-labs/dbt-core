@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 use dbt_common::{err, fs_err, CodeLocation, ErrorCode, FsError, FsResult};
 use dbt_frontend_common::Dialect;
-use dbt_serde_yaml::{JsonSchema, Verbatim};
+use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize, Verbatim};
 use hex;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
@@ -578,7 +578,7 @@ pub struct PersistDocsConfig {
     pub relation: Option<bool>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
 #[serde(untagged)]
 pub enum Hooks {
     String(String),

@@ -1,6 +1,7 @@
 use crate::schemas::common::TimeGranularity;
 use crate::schemas::project::MetricConfig;
 use dbt_serde_yaml::JsonSchema;
+use dbt_serde_yaml::UntaggedEnumDeserialize;
 use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -32,7 +33,7 @@ pub enum MetricType {
     Conversion,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, JsonSchema)]
 #[serde(untagged)]
 pub enum StringOrMetricInputMeasure {
     String(String),

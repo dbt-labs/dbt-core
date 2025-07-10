@@ -456,7 +456,7 @@ pub fn collect_model_version_info(
             .iter()
             .find(|(v, _, _)| v == &latest_version)
             .map(|(_, _, config)| config.clone())
-            .unwrap_or_else(|| Verbatim(None));
+            .unwrap_or_else(|| Verbatim::from(None));
 
         // Only add the latest version by model.name if it's not already in the list (as in, defined by a defined_in)
         if !version_entries.iter().any(|(_, d, _)| d == &model.name) {

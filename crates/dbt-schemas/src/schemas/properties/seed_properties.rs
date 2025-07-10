@@ -23,7 +23,7 @@ impl SeedProperties {
             name,
             columns: None,
             config: None,
-            data_tests: Verbatim(None),
+            data_tests: Verbatim::from(None),
             description: None,
             tests: None,
         }

@@ -1,5 +1,5 @@
 use dbt_common::current_function_name;
-use dbt_serde_yaml::JsonSchema;
+use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize};
 use minijinja::{
     arg_utils::ArgParser,
     listener::RenderingEventListener,
@@ -16,7 +16,7 @@ use crate::schemas::columns::base::StdColumn;
 /// but the bigquery-adapter throws RunTime error
 /// the behaviors are tested from the latest dbt-core + bigquery-adapter as this is written
 /// we're conformant to this behavior via here and via the `validate` method
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, JsonSchema)]
 #[serde(untagged)]
 pub enum BigqueryPartitionConfigLegacy {
     String(String),
@@ -52,7 +52,7 @@ enum PartitionConfigField {
     Range,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, JsonSchema)]
 #[serde(untagged)]
 pub enum BigqueryPartitionConfigInner {
     Range(RangeConfig),

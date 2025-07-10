@@ -26,7 +26,7 @@ pub fn default_hooks(
         if let Some(child_hooks) = &mut **child_hooks {
             child_hooks.extend(parent_hooks);
         } else {
-            *child_hooks = Verbatim(Some(parent_hooks.clone()));
+            *child_hooks = Verbatim::from(Some(parent_hooks.clone()));
         }
     }
 }

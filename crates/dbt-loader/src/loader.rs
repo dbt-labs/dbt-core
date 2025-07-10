@@ -79,8 +79,7 @@ pub async fn load(
             "'source-paths' cannot be specified in dbt_project.yml",
         );
     }
-    if simplified_dbt_project
-        .log_path
+    if (*simplified_dbt_project.log_path)
         .as_ref()
         .is_some_and(|path| path != "logs")
     {
@@ -89,8 +88,7 @@ pub async fn load(
             "'log-path' cannot be specified in dbt_project.yml",
         );
     }
-    if simplified_dbt_project
-        .target_path
+    if (*simplified_dbt_project.target_path)
         .as_ref()
         .is_some_and(|path| path != "target")
     {
@@ -273,8 +271,7 @@ pub async fn load_inner(
     let dbt_project = load_project_yml(&arg.io, env, &dbt_project_path, arg.vars.clone())?;
     load_vars(
         &dbt_project.name,
-        dbt_project
-            .vars
+        (*dbt_project.vars)
             .as_ref()
             .map(|vars| Deserialize::deserialize(vars.clone()))
             .transpose()

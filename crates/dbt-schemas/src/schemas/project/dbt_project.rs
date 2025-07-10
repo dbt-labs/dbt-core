@@ -7,6 +7,7 @@ use std::fmt::Debug;
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::ShouldBe;
 use dbt_serde_yaml::Spanned;
+use dbt_serde_yaml::UntaggedEnumDeserialize;
 use dbt_serde_yaml::Verbatim;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -170,7 +171,7 @@ pub struct _Dispatch {
     pub search_order: Vec<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, JsonSchema)]
 #[serde(untagged)]
 pub enum QueryComment {
     String(String),
@@ -265,13 +266,13 @@ mod tests {
             dbt_cloud: None,
             dispatch: None,
             flags: None,
-            on_run_end: Verbatim(None),
-            on_run_start: Verbatim(None),
-            query_comment: Verbatim(None),
+            on_run_end: Verbatim::from(None),
+            on_run_start: Verbatim::from(None),
+            query_comment: Verbatim::from(None),
             quoting: Spanned::new(None),
             require_dbt_version: None,
             restrict_access: None,
-            vars: Verbatim(None),
+            vars: Verbatim::from(None),
         };
         assert_eq!(project.get_project_id(), "92c907bdbc0c4f27451b9b9fdb1bc8ec");
     }

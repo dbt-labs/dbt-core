@@ -225,7 +225,7 @@ impl PackageListing {
                     into_typed_with_jinja(Some(&self.io_args), value, true, jinja_env, &(), &[])
                 }?;
 
-                private_package.private = Verbatim(private_package_private);
+                private_package.private = Verbatim::from(private_package_private);
 
                 let private_package_url = get_resolved_url(&private_package)?;
 
@@ -490,7 +490,7 @@ mod tests {
             subdirectory: Some("core".to_string()),
             unrendered: HashMap::new(),
             original_entry: GitPackage {
-                git: Verbatim("https://github.com/dbt-labs/dbt-core.git".to_string()),
+                git: Verbatim::from("https://github.com/dbt-labs/dbt-core.git".to_string()),
                 revision: Some("main".to_string()),
                 warn_unpinned: None,
                 subdirectory: Some("core".to_string()),
@@ -506,7 +506,7 @@ mod tests {
             subdirectory: Some("adapters".to_string()),
             unrendered: HashMap::new(),
             original_entry: GitPackage {
-                git: Verbatim("https://github.com/dbt-labs/dbt-core.git".to_string()),
+                git: Verbatim::from("https://github.com/dbt-labs/dbt-core.git".to_string()),
                 revision: Some("main".to_string()),
                 warn_unpinned: None,
                 subdirectory: Some("adapters".to_string()),
@@ -556,7 +556,7 @@ mod tests {
             subdirectory: None,
             unrendered: HashMap::new(),
             original_entry: GitPackage {
-                git: Verbatim("https://github.com/dbt-labs/dbt-core.git".to_string()),
+                git: Verbatim::from("https://github.com/dbt-labs/dbt-core.git".to_string()),
                 revision: Some("main".to_string()),
                 warn_unpinned: None,
                 subdirectory: None,
@@ -572,7 +572,7 @@ mod tests {
             subdirectory: None,
             unrendered: HashMap::new(),
             original_entry: GitPackage {
-                git: Verbatim("https://github.com/dbt-labs/dbt-core.git".to_string()),
+                git: Verbatim::from("https://github.com/dbt-labs/dbt-core.git".to_string()),
                 revision: Some("develop".to_string()),
                 warn_unpinned: None,
                 subdirectory: None,

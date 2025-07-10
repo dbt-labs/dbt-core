@@ -137,7 +137,7 @@ mod tests {
 
         // Test get_resolved_url()
         let private_package = PrivatePackage {
-            private: dbt_serde_yaml::Verbatim("dbt-labs/dbt-integration-project".to_string()),
+            private: "dbt-labs/dbt-integration-project".to_string().into(),
             revision: Some("dbt/1.0.0".to_string()),
             provider: None,
             subdirectory: None,
@@ -159,7 +159,7 @@ mod tests {
         std::env::remove_var("DBT_ENV_PRIVATE_GIT_PROVIDER_INFO");
 
         let private_package = PrivatePackage {
-            private: dbt_serde_yaml::Verbatim("dbt-labs/dbt-integration-project".to_string()),
+            private: "dbt-labs/dbt-integration-project".to_string().into(),
             revision: None,
             provider: Some("github".to_string()),
             subdirectory: None,
@@ -181,9 +181,9 @@ mod tests {
         std::env::remove_var("DBT_ENV_PRIVATE_GIT_PROVIDER_INFO");
 
         let private_package = PrivatePackage {
-            private: dbt_serde_yaml::Verbatim(
-                "dbt-labs/unrestricted/nesting/allowed/dbt-integration-project".to_string(),
-            ),
+            private: "dbt-labs/unrestricted/nesting/allowed/dbt-integration-project"
+                .to_string()
+                .into(),
             revision: None,
             provider: Some("gitlab".to_string()),
             subdirectory: None,
@@ -205,9 +205,9 @@ mod tests {
         std::env::remove_var("DBT_ENV_PRIVATE_GIT_PROVIDER_INFO");
 
         let private_package = PrivatePackage {
-            private: dbt_serde_yaml::Verbatim(
-                "dbt-labs/dbt-integration-project/some-repo".to_string(),
-            ),
+            private: "dbt-labs/dbt-integration-project/some-repo"
+                .to_string()
+                .into(),
             revision: None,
             provider: Some("ado".to_string()),
             subdirectory: None,
@@ -229,9 +229,9 @@ mod tests {
         std::env::remove_var("DBT_ENV_PRIVATE_GIT_PROVIDER_INFO");
 
         let private_package = PrivatePackage {
-            private: dbt_serde_yaml::Verbatim(
-                "dbt-labs/dbt-integration-project/some-repo".to_string(),
-            ),
+            private: "dbt-labs/dbt-integration-project/some-repo"
+                .to_string()
+                .into(),
             revision: None,
             provider: Some("unknown".to_string()),
             subdirectory: None,

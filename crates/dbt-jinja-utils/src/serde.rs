@@ -55,14 +55,18 @@
 //!   `minijinja::Value`, serialize them to a `yaml::Value` *first*, then
 //!   serialize the `yaml::Value` to the target format.
 //!
-//! * `#[serde(untagged)]` also does not work with types that contain
-//!   `Verbatim<T>` or `flatten_dunder` fields. For the specific use case of
-//!   error recovery during deserialization, use the
-//!   `dbt_serde_yaml::ShouldBe<T>` wrapper type instead (see type documentation
-//!   for more details). More generally, however, `#[serde(untagged)]` should
-//!   *only* be used on simple enums (i.e. those without deep-nested structs),
-//!   as it introduces backtracking during deserialization, which can lead to
-//!   super-linear deserialization time on large inputs.
+//! * Untagged enums (`#[serde(untagged)]`) containing "magic" dbt-serde_yaml
+//!   facilities, such as `Verbatim<T>` or `flatten_dunder` fields, does
+//!   *not* work with the default `#[derive(Deserialize)]` decorator -- use
+//!   `#[derive(UntaggedEnumDeserialize)]` instead (Note:
+//!   `UntaggedEnumDeserialize` works on untagged enums *only* -- for all other
+//!   types, use the default `#[derive(Deserialize)]` decorator).
+//!
+//! * For the specific use case of error recovery during deserialization, the
+//!   `dbt_serde_yaml::ShouldBe<T>` wrapper type should be preferred -- unlike
+//!   general `#[serde(untagged)]` enums which requires backtracking during
+//!   deserialization, `ShouldBe<T>` does not backtrack and is zero overhead on
+//!   the happy path (see type documentation for more details).
 
 use std::{
     path::{Path, PathBuf},

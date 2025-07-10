@@ -1,0 +1,3 @@
+kind: Under the Hood
+body: New dbt-serde_yaml mechanisms; more accurate yaml error locations
+time: 2025-07-07T18:51:37.865924427-07:00

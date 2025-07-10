@@ -457,11 +457,11 @@ impl DefaultTo<SeedConfig> for SeedConfig {
     }
 
     fn get_pre_hook(&self) -> Option<&Hooks> {
-        self.pre_hook.as_ref()
+        (*self.pre_hook).as_ref()
     }
 
     fn get_post_hook(&self) -> Option<&Hooks> {
-        self.post_hook.as_ref()
+        (*self.post_hook).as_ref()
     }
 
     fn default_to(&mut self, parent: &SeedConfig) {
