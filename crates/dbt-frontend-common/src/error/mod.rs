@@ -3,10 +3,10 @@
 //! This module defines the error handling infrastructure for the frontend.
 //!
 //! We use a two-tiered error structure: [InternalError] and [FrontendError].
-//!
-//!       ┏ ━ ━ ━ ━ ━ ━ ━ ┓    ┏ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━            
-//!        DatafusionError      (other library errors)┃           
-//!       ┗ ━ ━ ━ ━ ━ ━ ━ ┛    ┗ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━            
+//! ```text
+//!       ┏ ━ ━ ━ ━ ━ ━ ━ ┓    ┏ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━┓           
+//!        DatafusionError      (other library errors)            
+//!       ┗ ━ ━ ━ ━ ━ ━ ━ ┛    ┗ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━┛           
 //!               │                        │                      
 //!               │                        │                      
 //!               └───────────┬────────────┘                      
@@ -17,10 +17,10 @@
 //!                   │ InternalError │ ═══════ ║ InternalResult ║
 //!                   └───────────────┘         ╚════════════════╝
 //!            ──┐            │                          │        
-//!  ErrorCode   │            ▼                          ▼        
-//!              │   ┌ ─ ─ ─ ─ ─ ─ ─ ─          ┌ ─ ─ ─ ─ ─ ─ ─ ─
-//!CodeLocation  ├───  lift()         │           lift()        │
-//!              │   └ ─ ─ ─ ─ ─ ─ ─ ─          └ ─ ─ ─ ─ ─ ─ ─ ─
+//! ErrorCode    │            ▼                          ▼        
+//!              │   ┌ ─ ─ ─ ─ ─ ─ ─ ┐          ┌ ─ ─ ─ ─ ─ ─ ─ ┐
+//! CodeLocation ├───| lift()        |          | lift()        |
+//!              │   └ ─ ─ ─ ─ ─ ─ ─ ┘          └ ─ ─ ─ ─ ─ ─ ─ ┘
 //! Description  │            │                          │        
 //!            ──┘            ▼                          ▼        
 //!                  ┌────────────────┐         ╔════════════════╗
@@ -31,7 +31,7 @@
 //!                           │                          │        
 //!                           ▼                          ▼        
 //!                      (To caller)                (To caller)   
-//!
+//! ```
 
 mod code_location;
 mod codes;
