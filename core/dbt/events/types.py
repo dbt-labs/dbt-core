@@ -727,7 +727,7 @@ class EnvironmentVariableNamespaceDeprecation(WarnLevel):
         return "D036"
 
     def message(self) -> str:
-        description = f"Found custom environment variable `{self.env_var}` in the environment. The prefix `{self.reserved_prefix}` reserved for dbt engine environment variables. Custom environment variables with the prefix `{self.reserved_prefix}` may cause collisions and runtime errors."
+        description = f"Found custom environment variable `{self.env_var}` in the environment. The prefix `{self.reserved_prefix}` is reserved for dbt engine environment variables. Custom environment variables with the prefix `{self.reserved_prefix}` may cause collisions and runtime errors."
         return line_wrap_message(deprecation_tag(description))
 
 
