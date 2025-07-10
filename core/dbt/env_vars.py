@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from dbt.cli import params
 from dbt.deprecations import warn
+from dbt.exceptions import DbtInternalError
 from dbt_common.constants import ENGINE_ENV_PREFIX
 from dbt_common.context import get_invocation_context
 
@@ -34,7 +35,7 @@ class EngineEnvVar:
             object.__setattr__(self, "name", envvar.replace("DBT", f"{ENGINE_ENV_PREFIX}"))
             object.__setattr__(self, "old_name", envvar)
         else:
-            raise RuntimeError(
+            raise DbtInternalError(
                 f"Invalid environment variable: {envvar}, this will only happen if we add a new option to dbt that has an envvar that doesn't start with DBT_ or {ENGINE_ENV_PREFIX}"
             )
 
