@@ -108,7 +108,8 @@ pub fn resolve_final_selectors(
 
     // Find default selector name if no explicit selector provided
     let default_sel_name = resolved_selectors.iter().find_map(|(name, entry)| {
-        if entry.is_default {
+        // Command line arguments (if provided) take precedence over the default
+        if entry.is_default && !(arg.select.is_some() || arg.exclude.is_some()) {
             Some(name.clone())
         } else {
             None
