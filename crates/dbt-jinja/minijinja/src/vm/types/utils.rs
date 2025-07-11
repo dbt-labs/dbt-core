@@ -4,10 +4,12 @@ use crate::value::{Value, ValueKind};
 use crate::vm::types::adapter::AdapterType;
 use crate::vm::types::api::{ApiColumnType, ApiType};
 use crate::vm::types::builtin::Type;
+use crate::vm::types::class::DynClassType;
 use crate::vm::types::relation::RelationType;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Returns the type of a value
 pub fn infer_type_from_const_value(val: &Value) -> Type {
@@ -96,13 +98,13 @@ pub fn parse_type(s: &str) -> Type {
         "none" => Type::None,
         "undefined" => Type::Undefined,
         "invalid" => Type::Invalid,
-        "relation_object" => Type::Relation(RelationType::default()),
-        "adapter" => Type::Adapter(AdapterType::default()),
+        "relation_object" => Type::Class(DynClassType::new(Arc::new(RelationType::default()))),
+        "adapter" => Type::Class(DynClassType::new(Arc::new(AdapterType::default()))),
         "value" => Type::Any,
         "kwargs" => Type::Kwargs(BTreeMap::default()),
         "frame" => Type::Frame,
-        "api" => Type::Api(ApiType::default()),
-        "apicolumn" => Type::ApiColumn(ApiColumnType::default()),
+        "api" => Type::Class(DynClassType::new(Arc::new(ApiType::default()))),
+        "apicolumn" => Type::Class(DynClassType::new(Arc::new(ApiColumnType::default()))),
         "stdcolumn" => Type::StdColumn,
         _ => panic!("Unknown type: {s}"),
     }

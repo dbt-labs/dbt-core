@@ -2,14 +2,12 @@ use std::collections::BTreeMap;
 
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::Arc;
 
 use crate::compiler::cfg::build_cfg;
 use crate::compiler::instructions::{Instruction, Instructions};
 use crate::vm::listeners::TypecheckingEventListener;
 use crate::vm::typemeta::TypeChecker;
-use crate::vm::types::builtin::Type;
-use crate::vm::types::function::{parse_macro_signature, BasicFunctionType};
+use crate::vm::types::function::parse_macro_signature;
 
 use crate::compiler::typecheck::FunctionRegistry;
 
@@ -110,23 +108,8 @@ impl<'env> Vm<'env> {
                                 col: col_num,
                                 file: path.to_path_buf(),
                             };
-                            funcsigns.insert(name.to_string(), Arc::new(funcsign));
+                            funcsigns.insert(name.to_string(), funcsign);
                             current_funcsign.clear();
-                        } else {
-                            funcsigns.insert(
-                                name.to_string(),
-                                Arc::new(BasicFunctionType {
-                                    name: name.to_string(),
-                                    args: vec![],
-                                    ret_type: Type::Any,
-                                    location: CodeLocation {
-                                        line: line_num,
-                                        col: col_num,
-                                        file: path.to_path_buf(),
-                                    },
-                                    has_signature: false,
-                                }),
-                            );
                         }
                     }
                 }
@@ -156,7 +139,7 @@ impl<'env> Vm<'env> {
         // create a typechecker
         let mut typechecker = TypeChecker::new(instructions, cfg, funcsigns);
 
-        match typechecker.check(state, warning_printer) {
+        match typechecker.check(warning_printer) {
             Ok(()) => {}
             Err(err) => {
                 return Err(crate::Error::new(

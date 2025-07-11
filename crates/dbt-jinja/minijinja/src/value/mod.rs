@@ -224,7 +224,8 @@ pub use crate::value::object::{
 };
 
 #[macro_use]
-mod type_erase;
+/// Provides type erasure utilities for creating dynamic trait objects.
+pub mod type_erase;
 pub(crate) mod argtypes;
 #[cfg(feature = "deserialization")]
 mod deserialize;

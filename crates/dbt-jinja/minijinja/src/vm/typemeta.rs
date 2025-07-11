@@ -1,22 +1,25 @@
 use crate::compiler::cfg::CFG;
 use crate::compiler::instructions::Instruction;
 use crate::compiler::typecheck::FunctionRegistry;
-use crate::value::{Object, Value};
 use crate::vm::listeners::TypecheckingEventListener;
-use crate::vm::state::State;
 use crate::vm::types::adapter::AdapterType;
 use crate::vm::types::api::ApiType;
 use crate::vm::types::builtin::Type;
-use crate::vm::types::function::FunctionType;
+use crate::vm::types::class::DynClassType;
+use crate::vm::types::function::{
+    DynFunctionType, FunctionType, LoadResultFunctionType, StoreRawResultFunctionType,
+    StoreResultFunctionType,
+};
 use crate::vm::types::internal_func::InternalCaller;
 use crate::vm::types::relation::RelationType;
 use crate::vm::types::utils::{infer_type_from_const_value, instr_name, CodeLocation};
+use crate::Value;
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 use std::hash::Hash;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::OnceLock;
+
 /// symbol table mapping local variable names to their types
 type SymbolTable = BTreeMap<String, Type>;
 
@@ -29,18 +32,15 @@ pub struct TypecheckState {
     pub cur_loop_obj_type: Option<Type>,
 }
 
-#[allow(clippy::incompatible_msrv)]
-fn default_typeset() -> &'static Type {
-    static DEFAULT: OnceLock<Type> = OnceLock::new();
-    DEFAULT.get_or_init(|| Type::Any)
-}
-
 impl TypecheckState {
     pub fn new() -> Self {
         TypecheckState {
             stack: Vec::new(),
             locals: SymbolTable::from([
-                ("this".to_string(), Type::Relation(RelationType::default())),
+                (
+                    "this".to_string(),
+                    Type::Class(DynClassType::new(Arc::new(RelationType::default()))),
+                ),
                 ("database".to_string(), Type::String),
                 ("schema".to_string(), Type::String),
                 ("identifier".to_string(), Type::String),
@@ -51,13 +51,34 @@ impl TypecheckState {
                         field1: Box::new(Type::Any),
                     },
                 ),
-                ("store_result".to_string(), Type::Function),
-                ("load_result".to_string(), Type::Function),
-                ("store_raw_result".to_string(), Type::Function),
+                (
+                    "store_result".to_string(),
+                    Type::Function(DynFunctionType::new(Arc::new(
+                        StoreResultFunctionType::default(),
+                    ))),
+                ),
+                (
+                    "load_result".to_string(),
+                    Type::Function(DynFunctionType::new(Arc::new(
+                        LoadResultFunctionType::default(),
+                    ))),
+                ),
+                (
+                    "store_raw_result".to_string(),
+                    Type::Function(DynFunctionType::new(Arc::new(
+                        StoreRawResultFunctionType::default(),
+                    ))),
+                ),
                 ("TARGET_PACKAGE_NAME".to_string(), Type::String),
                 ("TARGET_UNIQUE_ID".to_string(), Type::String),
-                ("api".to_string(), Type::Api(ApiType::default())),
-                ("adapter".to_string(), Type::Adapter(AdapterType::default())),
+                (
+                    "api".to_string(),
+                    Type::Class(DynClassType::new(Arc::new(ApiType::default()))),
+                ),
+                (
+                    "adapter".to_string(),
+                    Type::Class(DynClassType::new(Arc::new(AdapterType::default()))),
+                ),
             ]),
             frame_base: 0,
             cur_loop_obj_type: None,
@@ -70,7 +91,7 @@ impl TypecheckState {
 
     #[track_caller]
     pub fn peek(&self) -> &Type {
-        self.stack.last().unwrap_or_else(|| default_typeset())
+        self.stack.last().unwrap()
     }
 
     pub fn push_frame(&mut self) {
@@ -120,7 +141,7 @@ pub struct TypeChecker<'src> {
 }
 
 /// Typecheck logic implementation
-impl<'env, 'src> TypeChecker<'src> {
+impl<'src> TypeChecker<'src> {
     pub fn new(instr: &'src [Instruction<'src>], cfg: CFG, funcsigns: &FunctionRegistry) -> Self {
         let in_states = vec![TypecheckState::default(); cfg.blocks.len()];
         Self {
@@ -133,7 +154,6 @@ impl<'env, 'src> TypeChecker<'src> {
 
     pub fn check(
         &mut self,
-        state: &mut State<'_, 'env>,
         warning_printer: Rc<dyn TypecheckingEventListener>,
     ) -> Result<(), crate::Error> {
         let mut worklist = VecDeque::new();
@@ -151,7 +171,7 @@ impl<'env, 'src> TypeChecker<'src> {
         }
 
         while let Some(bb_id) = worklist.pop_front() {
-            let out_state = self.transfer_block(bb_id, state, warning_printer.clone());
+            let out_state = self.transfer_block(bb_id, warning_printer.clone());
 
             match out_state {
                 Ok(out_state) => {
@@ -209,7 +229,6 @@ impl<'env, 'src> TypeChecker<'src> {
     fn transfer_block(
         &mut self,
         bb_id: usize,
-        state: &mut State<'_, 'env>,
         warning_printer: Rc<dyn TypecheckingEventListener>,
     ) -> Result<TypecheckState, crate::Error> {
         let mut typestate = self.in_states[bb_id].clone();
@@ -272,7 +291,9 @@ impl<'env, 'src> TypeChecker<'src> {
                     if let Some(typeset) = typestate.locals.get(name_str) {
                         typestate.stack.push(typeset.clone());
                     } else if name_str == "adapter" {
-                        typestate.stack.push(Type::Adapter(AdapterType::default()));
+                        typestate.stack.push(Type::Class(DynClassType::new(Arc::new(
+                            AdapterType::default(),
+                        ))));
                     }
                     // TODO: other internal states
                     else {
@@ -295,25 +316,15 @@ impl<'env, 'src> TypeChecker<'src> {
                             ))
                         }
                     };
-                    if let Some(rv) = Arc::new(value_type.clone()).get_value(&Value::from(*name)) {
-                        if let Some(attr_type) = rv.downcast_object_ref::<Type>().cloned() {
-                            typestate.stack.push(attr_type);
-                        } else {
-                            return Err(crate::Error::new(
-                                crate::error::ErrorKind::InvalidOperation,
-                                "Method call returned a non-Type object",
-                            ));
-                        }
-                    } else {
-                        if !value_type.is_any() {
+                    match value_type.get_attribute(name) {
+                        Ok(rv) => typestate.stack.push(rv),
+                        Err(e) => {
                             warning_printer.warn(
                                 span,
-                                &format!(
-                                    "Potential TypeError: Unknown attribute '{value_type}.{name}'"
-                                ),
+                                &format!("Unknown attribute '{value_type}.{name}': {e}"),
                             );
+                            typestate.stack.push(Type::Any);
                         }
-                        typestate.stack.push(Type::Any);
                     }
                 }
 
@@ -526,7 +537,7 @@ impl<'env, 'src> TypeChecker<'src> {
                     // Could easily modify it to a 'usize
                     let list_type = typestate.peek().clone();
 
-                    if Type::is_union(&list_type) {
+                    if list_type.is_union() {
                         if let Some(count) = n {
                             // currently not support n == None
                             // pop the items from the stack
@@ -991,7 +1002,10 @@ impl<'env, 'src> TypeChecker<'src> {
 
                     if *name == "return" {
                         if let Some(arg) = typestate.stack.pop() {
-                            return Err(crate::Error::abrupt_return(Value::from(arg), *span));
+                            return Err(crate::Error::abrupt_return(
+                                Value::from_object(arg),
+                                *span,
+                            ));
                         }
                         return Err(crate::Error::new(
                             crate::error::ErrorKind::InvalidOperation,
@@ -1004,8 +1018,8 @@ impl<'env, 'src> TypeChecker<'src> {
                             if let Some(macro_name) = &block.current_macro {
                                 if let Some(arg_cnt) = arg_count {
                                     let args = typestate.get_call_args(*arg_cnt);
-                                    let caller: Arc<InternalCaller> = Arc::new(InternalCaller {});
-                                    match caller.resolve_arguments(&args) {
+
+                                    match InternalCaller::default().resolve_arguments(&args) {
                                         Ok(ret_type) => {
                                             typestate.stack.push(ret_type);
                                         }
@@ -1031,7 +1045,9 @@ impl<'env, 'src> TypeChecker<'src> {
                         if funcsign.has_signature {
                             if let Some(arg_cnt) = arg_count {
                                 let args = typestate.get_call_args(*arg_cnt);
-                                match funcsign.clone().resolve_arguments(&args) {
+                                let function_type =
+                                    DynFunctionType::new(Arc::new(funcsign.clone()));
+                                match function_type.resolve_arguments(&args) {
                                     Ok(ret_type) => {
                                         typestate.stack.push(ret_type.clone());
                                     }
@@ -1081,8 +1097,6 @@ impl<'env, 'src> TypeChecker<'src> {
                     if count > 0 {
                         // Pop (arg_count - 1) arguments
                         let method_args = typestate.get_call_args(count - 1);
-                        let method_args_vec: Vec<Value> =
-                            method_args.into_iter().map(Value::from).collect();
                         // Pop the last one as 'self'
                         let self_type = match typestate.stack.pop() {
                             Some(val) => val,
@@ -1093,30 +1107,52 @@ impl<'env, 'src> TypeChecker<'src> {
                                 ))
                             }
                         };
+                        if self_type.is_any() {
+                            typestate.stack.push(Type::Any);
+                            continue;
+                        }
 
-                        let result = Arc::new(self_type.clone()).call_method(
-                            state,
-                            name,
-                            &method_args_vec,
-                            &[],
-                        )?;
-
-                        if let Some(ret_type) = result.downcast_object_ref::<Type>().cloned() {
-                            if ret_type == Type::Any && !self_type.is_any() {
+                        let function = match self_type.get_attribute(name) {
+                            Ok(rv) => rv,
+                            Err(e) => {
                                 warning_printer.warn(
                                     span,
-                                    &format!(
-                                        "Potential TypeError: Method '{self_type}.{name}' is not defined.",
-                                    ),
+                                    &format!("Unknown method '{self_type}.{name}': {e}"),
                                 );
+                                typestate.stack.push(Type::Any);
+                                continue;
                             }
-                            typestate.stack.push(ret_type);
-                        } else {
-                            return Err(crate::Error::new(
-                                crate::error::ErrorKind::InvalidOperation,
-                                "Method call returned a non-Type object",
-                            ));
+                        };
+
+                        if function.is_any() {
+                            warning_printer.warn(
+                                span,
+                                &format!("Potential TypeError: Method '{self_type}.{name}' is not defined."),
+                            );
+                            typestate.stack.push(Type::Any);
+                            continue;
                         }
+
+                        let result = match function.call(&method_args) {
+                            Ok(rv) => rv,
+                            Err(e) => {
+                                if !function.is_any() {
+                                    warning_printer.warn(
+                                        span,
+                                        &format!("Method call failed '{self_type}.{name}': {e}"),
+                                    );
+                                }
+                                Type::Any
+                            }
+                        };
+
+                        if result.is_any() {
+                            warning_printer.warn(
+                                span,
+                                &format!("Method call result is not defined '{self_type}.{name}'"),
+                            );
+                        }
+                        typestate.stack.push(result);
                     } else {
                         // TODO: handle the case when arg_count is None
                         return Err(crate::Error::new(

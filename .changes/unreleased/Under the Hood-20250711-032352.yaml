@@ -1,0 +1,5 @@
+kind: Under the Hood
+body: refactor jinja check
+time: 2025-07-11T03:23:52.466603896-07:00
+custom:
+  PR: dbt-labs/fs#4387

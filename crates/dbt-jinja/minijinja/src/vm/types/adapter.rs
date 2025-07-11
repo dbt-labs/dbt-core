@@ -1,6 +1,6 @@
-use crate::value::{Object, Value};
 use crate::vm::types::builtin::Type;
-use crate::vm::types::function::FunctionType;
+use crate::vm::types::class::{ClassType, DynClassType};
+use crate::vm::types::function::{DynFunctionType, FunctionType};
 use crate::vm::types::relation::RelationType;
 use std::hash::Hash;
 use std::sync::Arc;
@@ -11,27 +11,28 @@ pub struct AdapterType {
     // pub relation: Arc<dyn BaseRelation>,
 }
 
-impl Object for AdapterType {
-    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        match key.as_str().unwrap_or("default") {
-            "get_relation" => Some(Value::from(AdapterGetRelationFunction::default())),
-            _ => None,
+impl ClassType for AdapterType {
+    fn get_attribute(&self, key: &str) -> Result<Type, crate::Error> {
+        match key {
+            "get_relation" => Ok(Type::Function(DynFunctionType::new(Arc::new(
+                AdapterGetRelationFunction::default(),
+            )))),
+            _ => Err(crate::Error::new(
+                crate::error::ErrorKind::InvalidOperation,
+                "Type does not support attribute access",
+            )),
         }
     }
 }
 
-#[derive(Debug, Default)]
-struct AdapterGetRelationFunction {}
-
-impl From<AdapterGetRelationFunction> for Value {
-    fn from(func: AdapterGetRelationFunction) -> Self {
-        Value::from_object(func)
-    }
-}
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
+pub struct AdapterGetRelationFunction {}
 
 impl FunctionType for AdapterGetRelationFunction {
-    fn _resolve_arguments(self: &Arc<Self>, _args: &[Type]) -> Result<Type, crate::Error> {
-        Ok(Type::Relation(RelationType::default()))
+    fn _resolve_arguments(&self, _args: &[Type]) -> Result<Type, crate::Error> {
+        Ok(Type::Class(DynClassType::new(Arc::new(
+            RelationType::default(),
+        ))))
     }
 
     fn arg_names(&self) -> Vec<String> {

@@ -1,15 +1,8 @@
-use crate::listener::RenderingEventListener;
-use crate::value::{Object, Value};
-use crate::vm::state::State;
-use crate::vm::types::adapter::AdapterType;
-use crate::vm::types::api::{ApiColumnType, ApiType};
-use crate::vm::types::relation::RelationType;
+use crate::vm::types::class::DynClassType;
+use crate::vm::types::function::DynFunctionType;
 use crate::vm::types::union::UnionType;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-use std::hash::Hash;
-use std::rc::Rc;
-use std::sync::Arc;
 
 /// Represents the type of a value in the type system.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -27,50 +20,48 @@ pub enum Type {
     Undefined,
     Invalid,
     Union(UnionType),
-    Relation(RelationType),
-    Adapter(AdapterType),
     Any,
     Kwargs(BTreeMap<String, Box<Type>>),
     Frame,
-    Function, // Function with named arguments
-    Api(ApiType),
-    ApiColumn(ApiColumnType),
+    Class(DynClassType),
+    Function(DynFunctionType),
     StdColumn,
 }
 
-impl Object for Type {
-    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        match self.as_ref() {
-            Type::Relation(relation) => Arc::new(relation.clone()).get_value(key),
-            Type::Api(api) => Arc::new(api.clone()).get_value(key),
-            Type::Adapter(adapter) => Arc::new(adapter.clone()).get_value(key),
-            Type::ApiColumn(api_column) => Arc::new(api_column.clone()).get_value(key),
-            _ => None,
-        }
-    }
-
-    fn call_method(
-        self: &Arc<Self>,
-        state: &State<'_, '_>,
-        method: &str,
-        args: &[Value],
-        listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Value, crate::Error> {
-        if let Some(func) = self.get_value(&Value::from(method)) {
-            func.call(state, args, listeners)
-        } else {
-            Ok(Value::from(Type::Any))
-        }
-    }
-}
-
-impl From<Type> for Value {
-    fn from(ty: Type) -> Self {
-        Value::from_object(ty)
-    }
-}
+// only used in abrupt_return
+impl crate::value::Object for Type {}
 
 impl Type {
+    pub fn get_attribute(&self, name: &str) -> Result<Type, crate::Error> {
+        match self {
+            Type::Map(map) => {
+                if let Some(ty) = map.get(name) {
+                    Ok(ty.as_ref().clone())
+                } else {
+                    Err(crate::Error::new(
+                        crate::error::ErrorKind::InvalidOperation,
+                        "Type does not support method calls",
+                    ))
+                }
+            }
+            Type::Class(class) => class.get_attribute(name),
+            _ => Err(crate::Error::new(
+                crate::error::ErrorKind::InvalidOperation,
+                "Type does not support attribute access",
+            )),
+        }
+    }
+
+    pub fn call(&self, args: &[Type]) -> Result<Type, crate::Error> {
+        match self {
+            Type::Function(func) => func.resolve_arguments(args),
+            _ => Err(crate::Error::new(
+                crate::error::ErrorKind::InvalidOperation,
+                "Type does not support method calls",
+            )),
+        }
+    }
+
     /// Judge whether there is a type cast between two types.
     pub fn is_type_cast(&self, other: &Type) -> bool {
         matches!(self, Type::Any) || matches!(other, Type::Any)
@@ -166,10 +157,6 @@ impl Type {
         matches!(self, Type::Union(_))
     }
 
-    pub fn is_relation(&self) -> bool {
-        matches!(self, Type::Relation(_))
-    }
-
     pub fn is_any(&self) -> bool {
         matches!(self, Type::Any)
     }
@@ -231,15 +218,12 @@ impl std::fmt::Display for Type {
                     union_type.types.iter().map(|t| t.to_string()).collect();
                 write!(f, "union[{}]", types_str.join(", "))
             }
-            Type::Relation(_) => write!(f, "relation_object"),
-            Type::Adapter(_) => write!(f, "adapter"),
             Type::Any => write!(f, "any"),
             Type::Kwargs(_) => write!(f, "kwargs"),
             Type::Frame => write!(f, "frame"),
-            Type::Function => write!(f, "function"),
-            Type::Api(_) => write!(f, "api"),
-            Type::ApiColumn(_) => write!(f, "apicolumn"),
+            Type::Function(_) => write!(f, "function"),
             Type::StdColumn => write!(f, "stdcolumn"),
+            Type::Class(class) => write!(f, "class[{}]", class.type_name()),
         }
     }
 }

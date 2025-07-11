@@ -1,41 +1,14 @@
-use crate::listener::RenderingEventListener;
-use crate::value::Object;
-use crate::value::Value;
-use crate::vm::state::State;
 use crate::vm::types::builtin::Type;
 use crate::vm::types::utils::parse_type;
 use crate::vm::types::utils::CodeLocation;
 use std::fmt;
-use std::rc::Rc;
-use std::sync::Arc;
+use std::hash::{Hash, Hasher};
 
-impl<T> Object for T
-where
-    T: FunctionType + Send + Sync + 'static, // the usual bounds
-{
-    fn call(
-        self: &Arc<Self>,
-        _state: &State<'_, '_>,
-        args: &[Value],
-        _listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Value, crate::Error> {
-        let types = args
-            .iter()
-            .map(|arg| arg.downcast_object_ref::<Type>().unwrap().clone())
-            .collect::<Vec<_>>();
+// Import the type_erase macro
+use super::type_erase::type_erase;
 
-        self.resolve_arguments(&types).map(Value::from_object)
-    }
-
-    /* forward/implement any other required Object methods here,
-    or use default implementations if Object supplies them */
-}
-
-pub trait FunctionType: Object {
-    fn resolve_arguments(
-        self: &Arc<Self>,
-        actual_arguments: &[Type],
-    ) -> Result<Type, crate::Error> {
+pub trait FunctionType: Send + Sync + std::fmt::Debug {
+    fn resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error> {
         let mut args = Vec::new();
         let mut kwargs_map = std::collections::BTreeMap::new();
         let mut has_kwargs = false;
@@ -78,29 +51,63 @@ pub trait FunctionType: Object {
         }
     }
 
-    fn _resolve_arguments(
-        self: &Arc<Self>,
-        actual_arguments: &[Type],
-    ) -> Result<Type, crate::Error>;
-
-    fn call(
-        self: &Arc<Self>,
-        _state: &State<'_, '_>,
-        args: &[Value],
-        _listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Value, crate::Error> {
-        let types = args
-            .iter()
-            .map(|arg| arg.downcast_object_ref::<Type>().unwrap().clone())
-            .collect::<Vec<_>>();
-
-        self.resolve_arguments(&types).map(Value::from_object)
-    }
-
     fn arg_names(&self) -> Vec<String>;
+
+    fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error>;
 }
 
-#[derive(Clone)]
+// Type-erased version of FunctionType
+type_erase! {
+    pub trait FunctionType => DynFunctionType {
+        fn resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error>;
+        fn arg_names(&self) -> Vec<String>;
+        fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error>;
+    }
+}
+
+impl std::fmt::Debug for DynFunctionType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DynFunctionType({})", self.type_name())
+    }
+}
+
+impl PartialEq for DynFunctionType {
+    fn eq(&self, other: &Self) -> bool {
+        // Compare by pointer equality for type-erased objects
+        self.ptr == other.ptr && self.vtable == other.vtable
+    }
+}
+
+impl Eq for DynFunctionType {}
+
+impl Hash for DynFunctionType {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // Hash the pointer and vtable
+        self.ptr.hash(state);
+        self.vtable.hash(state);
+    }
+}
+
+impl PartialOrd for DynFunctionType {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for DynFunctionType {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // Compare by pointer values
+        match self.ptr.cmp(&other.ptr) {
+            std::cmp::Ordering::Equal => self.vtable.cmp(&other.vtable),
+            other => other,
+        }
+    }
+}
+
+unsafe impl Send for DynFunctionType {}
+unsafe impl Sync for DynFunctionType {}
+
+#[derive(Clone, Eq, PartialEq)]
 pub struct BasicFunctionType {
     pub name: String,
     pub args: Vec<Type>,
@@ -109,11 +116,26 @@ pub struct BasicFunctionType {
     pub has_signature: bool,
 }
 
+impl BasicFunctionType {
+    pub fn new(
+        name: &str,
+        args: Vec<Type>,
+        ret_type: Type,
+        location: CodeLocation,
+        has_signature: bool,
+    ) -> Self {
+        Self {
+            name: name.to_string(),
+            args,
+            ret_type,
+            location,
+            has_signature,
+        }
+    }
+}
+
 impl FunctionType for BasicFunctionType {
-    fn _resolve_arguments(
-        self: &Arc<Self>,
-        actual_arguments: &[Type],
-    ) -> Result<Type, crate::Error> {
+    fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error> {
         // match the actual arguments with the expected arguments, if matches return Ok else Err
         if self.args.len() != actual_arguments.len() {
             Err(crate::Error::new(
@@ -192,5 +214,57 @@ impl std::fmt::Debug for BasicFunctionType {
                 .join(", "),
             self.ret_type
         )
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct StoreResultFunctionType;
+
+impl FunctionType for StoreResultFunctionType {
+    fn _resolve_arguments(&self, _actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        // TODO: check args
+        Ok(Type::String)
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec![
+            "name".to_string(),
+            "response".to_string(),
+            "agate_table".to_string(),
+        ]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct LoadResultFunctionType;
+
+impl FunctionType for LoadResultFunctionType {
+    fn _resolve_arguments(&self, _actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        // TODO: check args and return the result type
+        Ok(Type::Any)
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["name".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct StoreRawResultFunctionType;
+
+impl FunctionType for StoreRawResultFunctionType {
+    fn _resolve_arguments(&self, _actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        // TODO: check args
+        Ok(Type::String)
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec![
+            "name".to_string(),
+            "message".to_string(),
+            "code".to_string(),
+            "rows_affected".to_string(),
+            "agate_table".to_string(),
+        ]
     }
 }
