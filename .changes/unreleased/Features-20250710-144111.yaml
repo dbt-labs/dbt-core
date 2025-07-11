@@ -1,0 +1,6 @@
+kind: Features
+body: (adapter/bigquery) support adapter.grant_access_to
+time: 2025-07-10T14:41:11.954535927-07:00
+custom:
+  PR: dbt-labs/fs#4291
+  Issues: "dbt-labs/fs#1513"

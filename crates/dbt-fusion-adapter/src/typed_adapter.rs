@@ -498,7 +498,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         _state: &State,
         _conn: &'_ mut dyn Connection,
-        _entity: &str,
+        _entity: Arc<dyn BaseRelation>,
         _entity_type: &str,
         _role: Option<&str>,
         _database: &str,

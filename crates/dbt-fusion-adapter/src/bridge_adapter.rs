@@ -1038,7 +1038,7 @@ impl BaseAdapter for BridgeAdapter {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 4, 4)?;
 
-        let entity = parser.get::<String>("entity")?;
+        let entity = parser.get::<Value>("entity")?;
         let entity_type = parser.get::<String>("entity_type")?;
         let role = parser.get::<Value>("role")?;
         let grant_target =
@@ -1068,10 +1068,11 @@ impl BaseAdapter for BridgeAdapter {
             )
         };
         let mut conn = self.borrow_tlocal_connection()?;
+        let relation = downcast_value_to_dyn_base_relation(entity)?;
         let result = self.typed_adapter.grant_access_to(
             state,
             conn.as_mut(),
-            &entity,
+            relation,
             &entity_type,
             role,
             database,
