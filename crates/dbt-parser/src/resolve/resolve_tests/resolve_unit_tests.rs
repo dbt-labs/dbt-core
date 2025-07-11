@@ -29,6 +29,7 @@ use dbt_schemas::schemas::project::UnitTestConfig;
 use dbt_schemas::schemas::properties::UnitTestProperties;
 use dbt_schemas::schemas::ref_and_source::DbtRef;
 use dbt_schemas::schemas::ref_and_source::DbtSourceWrapper;
+use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::DbtUnitTestAttr;
 use dbt_schemas::schemas::{CommonAttributes, DbtUnitTest, NodeBaseAttributes};
 use dbt_schemas::state::DbtPackage;
@@ -36,6 +37,7 @@ use dbt_schemas::state::DbtRuntimeConfig;
 use dbt_schemas::state::ResourcePathKind;
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -49,14 +51,13 @@ pub fn resolve_unit_tests(
     package_quoting: DbtQuoting,
     root_project: &DbtProject,
     root_project_configs: &RootProjectConfigs,
-    database: &str,
-    schema: &str,
     adapter_type: &str,
     package_name: &str,
     jinja_env: &JinjaEnvironment<'static>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     model_properties: &BTreeMap<String, MinimalPropertiesEntry>,
     runtime_config: Arc<DbtRuntimeConfig>,
+    models: &BTreeMap<String, Arc<DbtModel>>,
 ) -> FsResult<(
     BTreeMap<String, Arc<DbtUnitTest>>,
     BTreeMap<String, Arc<DbtUnitTest>>,
@@ -86,9 +87,18 @@ pub fn resolve_unit_tests(
         // - if so, we should get it and still store it so that it is available,
         // - but we should not serialize it
         // - for now just use the global ones
-        let database = database.to_owned();
-        let schema = schema.to_owned();
+
         let location = CodeLocation::default(); // TODO
+        let model_name = format!("model.{}.{}", package_name, unit_test.model);
+        let (database, schema, alias, model_found) = match models.get(&model_name) {
+            Some(model) => (
+                model.base_attr.database.clone(),
+                model.base_attr.schema.clone(),
+                model.base_attr.alias.clone(),
+                true,
+            ),
+            None => (String::new(), String::new(), unit_test.model.clone(), false),
+        };
 
         // Create base unit test node
         let base_unique_id = format!(
@@ -179,12 +189,14 @@ pub fn resolve_unit_tests(
                             return err!(ErrorCode::Unexpected, "Invalid given input: {}", input);
                         }
                     }
+                } else if input.eq("this") {
+                    // this is handled at render time.
+                    continue;
                 } else {
                     return err!(ErrorCode::Unexpected, "Invalid given input: {}", input);
                 }
             }
         }
-
         let base_unit_test = DbtUnitTest {
             common_attr: CommonAttributes {
                 name: unit_test_name.to_owned(),
@@ -208,7 +220,7 @@ pub fn resolve_unit_tests(
             base_attr: NodeBaseAttributes {
                 database: database.to_owned(),
                 schema: schema.to_owned(),
-                alias: "".to_string(),
+                alias: alias.to_owned(), // alias will be used to constrcut `this` relation.
                 relation_name: None,
                 depends_on: NodeDependsOn::default(),
                 refs: dependent_refs,
@@ -229,11 +241,10 @@ pub fn resolve_unit_tests(
                 expect: unit_test.expect.clone(),
                 versions: None,
                 version: None,
-                overrides: None,
+                overrides: unit_test.overrides.clone(),
             },
             deprecated_config: properties_config,
         };
-
         // Check if this model has versions
         if let Some(version_info) = model_properties
             .get(&unit_test.model)
@@ -290,10 +301,10 @@ pub fn resolve_unit_tests(
             }
         } else {
             // Non-versioned case
-            if enabled {
-                unit_tests.insert(base_unique_id, Arc::new(base_unit_test));
-            } else {
+            if !model_found || !enabled {
                 disabled_unit_tests.insert(base_unique_id, Arc::new(base_unit_test));
+            } else {
+                unit_tests.insert(base_unique_id, Arc::new(base_unit_test));
             }
         }
     }

@@ -141,6 +141,6 @@ pub mod schemas {
         pub use semantic_models_properties::SemanticModelsProperties;
         pub use snapshot_properties::SnapshotProperties;
         pub use source_properties::{SourceProperties, Tables};
-        pub use unit_test_properties::UnitTestProperties;
+        pub use unit_test_properties::{UnitTestOverrides, UnitTestProperties};
     }
 }

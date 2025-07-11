@@ -14,7 +14,7 @@ use crate::schemas::{
     project::{
         DataTestConfig, ModelConfig, SeedConfig, SnapshotConfig, SourceConfig, UnitTestConfig,
     },
-    properties::ModelConstraint,
+    properties::{ModelConstraint, UnitTestOverrides},
     ref_and_source::{DbtRef, DbtSourceWrapper},
     serde::StringOrInteger,
     DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest,
@@ -162,7 +162,7 @@ pub struct ManifestUnitTest {
     pub expect: Expect,
     pub versions: Option<IncludeExclude>,
     pub version: Option<StringOrInteger>,
-    pub overrides: Option<Value>,
+    pub overrides: Option<UnitTestOverrides>,
 }
 
 impl From<DbtUnitTest> for ManifestUnitTest {

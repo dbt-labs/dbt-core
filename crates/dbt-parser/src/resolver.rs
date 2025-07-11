@@ -397,14 +397,13 @@ pub async fn resolve_inner(
         package_quoting,
         dbt_state.root_project(),
         root_project_configs,
-        database,
-        schema,
         adapter_type,
         package_name,
         jinja_env,
         &base_ctx,
         &min_properties.models,
         runtime_config,
+        &nodes.models,
     )?;
     nodes.unit_tests.extend(unit_tests);
     disabled_nodes.unit_tests.extend(disabled_unit_tests);

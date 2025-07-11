@@ -18,7 +18,7 @@ use crate::schemas::{
         DataTestConfig, ModelConfig, SeedConfig, SnapshotConfig, SnapshotMetaColumnNames,
         SourceConfig, UnitTestConfig,
     },
-    properties::{ModelConstraint, ModelFreshness},
+    properties::{ModelConstraint, ModelFreshness, UnitTestOverrides},
     ref_and_source::{DbtRef, DbtSourceWrapper},
     serde::StringOrInteger,
 };
@@ -1357,7 +1357,7 @@ pub struct DbtUnitTestAttr {
     pub expect: Expect,
     pub versions: Option<IncludeExclude>,
     pub version: Option<StringOrInteger>,
-    pub overrides: Option<Value>,
+    pub overrides: Option<UnitTestOverrides>,
 }
 
 #[skip_serializing_none]

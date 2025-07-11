@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use crate::schemas::{
     common::{Expect, Given},
     project::UnitTestConfig,
@@ -22,7 +24,7 @@ pub struct UnitTestProperties {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct UnitTestOverrides {
-    pub env_vars: Option<serde_json::Value>,
-    pub macros: Option<serde_json::Value>,
-    pub vars: Option<serde_json::Value>,
+    pub env_vars: Option<BTreeMap<String, serde_json::Value>>,
+    pub macros: Option<BTreeMap<String, serde_json::Value>>,
+    pub vars: Option<BTreeMap<String, serde_json::Value>>,
 }
