@@ -50,11 +50,7 @@ pub fn initialize_parse_jinja_environment(
     io_args: IoArgs,
 ) -> FsResult<JinjaEnvironment<'static>> {
     // Set the thread local dependencies
-    if THREAD_LOCAL_DEPENDENCIES.get().is_none() {
-        THREAD_LOCAL_DEPENDENCIES
-            .set(Mutex::new(all_package_names))
-            .unwrap();
-    }
+    THREAD_LOCAL_DEPENDENCIES.get_or_init(|| Mutex::new(all_package_names));
     let target_context = TargetContext::try_from(db_config.clone())
         .map_err(|e| fs_err!(ErrorCode::InvalidConfig, "{}", &e))?;
     let target_context = Arc::new(build_target_context_map(profile, target, target_context));
