@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use crate::vm::types::builtin::Type;
+use crate::types::builtin::Type;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct UnionType {

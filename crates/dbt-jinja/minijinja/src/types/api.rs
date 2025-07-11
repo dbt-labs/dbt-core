@@ -1,7 +1,7 @@
 use crate::error::Error;
-use crate::vm::types::builtin::Type;
-use crate::vm::types::class::{ClassType, DynClassType};
-use crate::vm::types::function::{DynFunctionType, FunctionType};
+use crate::types::builtin::Type;
+use crate::types::class::{ClassType, DynClassType};
+use crate::types::function::{DynFunctionType, FunctionType};
 use std::hash::Hash;
 use std::sync::Arc;
 

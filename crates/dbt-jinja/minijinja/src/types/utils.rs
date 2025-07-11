@@ -1,11 +1,11 @@
 use crate::compiler::instructions::Instruction;
+use crate::types::adapter::AdapterType;
+use crate::types::api::{ApiColumnType, ApiType};
+use crate::types::builtin::Type;
+use crate::types::class::DynClassType;
+use crate::types::relation::RelationType;
 use crate::value::argtypes::KwargsValues;
 use crate::value::{Value, ValueKind};
-use crate::vm::types::adapter::AdapterType;
-use crate::vm::types::api::{ApiColumnType, ApiType};
-use crate::vm::types::builtin::Type;
-use crate::vm::types::class::DynClassType;
-use crate::vm::types::relation::RelationType;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;

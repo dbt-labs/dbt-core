@@ -1,6 +1,6 @@
-use crate::vm::types::builtin::Type;
-use crate::vm::types::utils::parse_type;
-use crate::vm::types::utils::CodeLocation;
+use crate::types::builtin::Type;
+use crate::types::utils::parse_type;
+use crate::types::utils::CodeLocation;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 

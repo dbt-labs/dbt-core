@@ -5,20 +5,20 @@ use std::rc::Rc;
 
 use crate::compiler::cfg::build_cfg;
 use crate::compiler::instructions::{Instruction, Instructions};
+use crate::types::function::parse_macro_signature;
 use crate::vm::listeners::TypecheckingEventListener;
 use crate::vm::typemeta::TypeChecker;
-use crate::vm::types::function::parse_macro_signature;
 
 use crate::compiler::typecheck::FunctionRegistry;
 
 use crate::machinery::Span;
+use crate::types::utils::CodeLocation;
 use crate::utils::AutoEscape;
 use crate::value::{value_optimization, Value};
 use crate::vm::context::Stack;
 pub(crate) use crate::vm::context::{Context, Frame};
 use crate::vm::prepare_blocks;
 pub use crate::vm::state::State;
-use crate::vm::types::utils::CodeLocation;
 use crate::vm::Vm;
 
 impl<'env> Vm<'env> {

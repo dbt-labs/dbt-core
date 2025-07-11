@@ -1,6 +1,6 @@
-use crate::vm::types::class::DynClassType;
-use crate::vm::types::function::DynFunctionType;
-use crate::vm::types::union::UnionType;
+use crate::types::class::DynClassType;
+use crate::types::function::DynFunctionType;
+use crate::types::union::UnionType;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 

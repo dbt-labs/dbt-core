@@ -19,6 +19,7 @@ pub struct BasicBlock {
     pub successor: Vec<(BlockId, EdgeKind)>,
     pub predecessor: Vec<BlockId>,
     pub current_macro: Option<String>,
+    pub type_constraints: std::collections::BTreeMap<String, crate::types::builtin::Type>,
 }
 
 #[derive(Debug, Clone)]
@@ -115,10 +116,13 @@ fn branch_targets(cur_idx: usize, inst: &Instruction) -> Vec<(usize, EdgeKind)> 
     }
 }
 
+// ...existing code...
+
 #[allow(clippy::needless_range_loop)]
 pub fn build_cfg(code: &[Instruction]) -> CFG {
     use EdgeKind::*;
 
+    // 1. Identify block leaders (start of each basic block)
     let mut leaders: BTreeSet<usize> = BTreeSet::new();
     leaders.insert(0);
     for (index, instruction) in code.iter().enumerate() {
@@ -132,6 +136,7 @@ pub fn build_cfg(code: &[Instruction]) -> CFG {
         }
     }
 
+    // 2. Build basic blocks and instruction-to-block mapping
     let leader_vec: Vec<_> = leaders.into_iter().collect();
     let mut blocks = Vec::<BasicBlock>::new();
     let mut instruction_to_basic_block = vec![0; code.len()];
@@ -141,14 +146,11 @@ pub fn build_cfg(code: &[Instruction]) -> CFG {
         } else {
             code.len() - 1
         };
-        // Find cur_macro for this block (if any)
-        let mut cur_macro: Option<String> = None;
-        for idx in start..=end {
-            if let Instruction::MacroName(name) = &code[idx] {
-                cur_macro = Some(name.to_string());
-                break;
-            }
-        }
+        // Find macro name for this block, if any (only at block start)
+        let cur_macro = match code.get(start) {
+            Some(Instruction::MacroName(name)) => Some(name.to_string()),
+            _ => None,
+        };
         blocks.push(BasicBlock {
             id: i,
             start,
@@ -156,35 +158,110 @@ pub fn build_cfg(code: &[Instruction]) -> CFG {
             successor: Vec::new(),
             predecessor: Vec::new(),
             current_macro: cur_macro,
+            type_constraints: std::collections::BTreeMap::new(),
         });
-        for index in instruction_to_basic_block
-            .iter_mut()
-            .take(end + 1)
-            .skip(start)
-        {
-            *index = i;
+        for idx in start..=end {
+            instruction_to_basic_block[idx] = i;
         }
     }
 
-    for block in &mut blocks {
-        let last = block.end;
-        for (target, kind) in branch_targets(last, &code[last]) {
-            if target < code.len() {
-                block
-                    .successor
-                    .push((instruction_to_basic_block[target], kind));
+    // 3. Collect macro entry points (MacroName at block start)
+    // Instead of a map, collect a Vec<(block_idx, macro_name)>
+    let mut macro_entries = Vec::new();
+    for (i, block) in blocks.iter().enumerate() {
+        if let Some(Instruction::MacroName(name)) = code.get(block.start) {
+            macro_entries.push((i, name.to_string()));
+        }
+    }
+
+    // 4. For each BuildMacro, find the nearest previous MacroName block
+    let mut macro_succ_edges = Vec::new();
+    for (block_id, block) in blocks.iter().enumerate() {
+        for idx in block.start..=block.end {
+            if let Instruction::BuildMacro(ref macro_name, _target_idx, _) = code[idx] {
+                // Find the nearest previous block with MacroName(macro_name)
+                if let Some(&(macro_block_id, _)) = macro_entries
+                    .iter()
+                    .rev()
+                    .find(|&&(bidx, ref n)| bidx < block_id && n == macro_name)
+                {
+                    macro_succ_edges.push((block_id, macro_block_id));
+                }
             }
         }
     }
 
+    // 5. Collect type narrowing updates (for type inference)
+    let mut type_narrow_updates: Vec<(usize, String, crate::types::builtin::Type)> = Vec::new();
+
+    // 6. Collect control-flow edges (successors and their kinds)
+    let mut tmp_succ: Vec<Vec<(BlockId, EdgeKind)>> = vec![Vec::new(); blocks.len()];
     let mut tmp_preds: Vec<Vec<BlockId>> = vec![Vec::new(); blocks.len()];
-    for from in &blocks {
-        for (to, _) in &from.successor {
-            tmp_preds[*to].push(from.id);
+    for (block_id, block) in blocks.iter().enumerate() {
+        let last = block.end;
+        for (target, kind) in branch_targets(last, &code[last]) {
+            // Type narrowing for string test
+            if let Instruction::JumpIfFalse(jump_target) = &code[last] {
+                if last > 1 {
+                    // look back to see if the previous instruction was a string test
+                    if let Instruction::PerformTest(test_name, Some(1), 0) = &code[last - 1] {
+                        // only implements string test for now. TODO: add more judgements
+                        if *test_name == "string" {
+                            // look back to see if a variable was under string test
+                            if let Instruction::Lookup(var_name, _) = &code[last - 2] {
+                                // Find all blocks whose instructions are in (last+1)..*jump_target*
+                                let start_idx = last + 1;
+                                let end_idx = *jump_target;
+                                for (bidx, b) in blocks.iter().enumerate() {
+                                    if b.start >= start_idx && b.end < end_idx {
+                                        type_narrow_updates.push((
+                                            bidx,
+                                            var_name.to_string(),
+                                            crate::types::builtin::Type::String,
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if target < code.len() {
+                let succ_block = instruction_to_basic_block[target];
+                tmp_succ[block_id].push((succ_block, kind));
+                tmp_preds[succ_block].push(block_id);
+            }
+        }
+    }
+
+    // 7. Assign successors to blocks (including macro call edges)
+    for (block_id, succs) in tmp_succ.iter_mut().enumerate() {
+        // Add macro call successors
+        for &(from, to) in &macro_succ_edges {
+            if from == block_id {
+                succs.push((to, EdgeKind::Uncond));
+            }
+        }
+        blocks[block_id].successor = succs.clone();
+    }
+
+    // 8. Build predecessors from successors (dedup)
+    let mut tmp_preds: Vec<Vec<BlockId>> = vec![Vec::new(); blocks.len()];
+    for (from, block) in blocks.iter().enumerate() {
+        for &(to, _) in &block.successor {
+            tmp_preds[to].push(from);
         }
     }
     for (i, preds) in tmp_preds.into_iter().enumerate() {
-        blocks[i].predecessor = preds;
+        let mut all_preds = preds;
+        all_preds.sort_unstable();
+        all_preds.dedup();
+        blocks[i].predecessor = all_preds;
+    }
+
+    // 9. Apply type narrowing updates
+    for (block_id, var_name, ty) in type_narrow_updates {
+        blocks[block_id].type_constraints.insert(var_name, ty);
     }
 
     CFG {

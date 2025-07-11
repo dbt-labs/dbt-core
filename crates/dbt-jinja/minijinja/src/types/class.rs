@@ -1,4 +1,4 @@
-use crate::vm::types::builtin::Type;
+use crate::types::builtin::Type;
 use std::hash::{Hash, Hasher};
 
 // Import the type_erase macro

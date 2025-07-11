@@ -1,18 +1,18 @@
 use crate::compiler::cfg::CFG;
 use crate::compiler::instructions::Instruction;
 use crate::compiler::typecheck::FunctionRegistry;
-use crate::vm::listeners::TypecheckingEventListener;
-use crate::vm::types::adapter::AdapterType;
-use crate::vm::types::api::ApiType;
-use crate::vm::types::builtin::Type;
-use crate::vm::types::class::DynClassType;
-use crate::vm::types::function::{
+use crate::types::adapter::AdapterType;
+use crate::types::api::ApiType;
+use crate::types::builtin::Type;
+use crate::types::class::DynClassType;
+use crate::types::function::{
     DynFunctionType, FunctionType, LoadResultFunctionType, StoreRawResultFunctionType,
     StoreResultFunctionType,
 };
-use crate::vm::types::internal_func::InternalCaller;
-use crate::vm::types::relation::RelationType;
-use crate::vm::types::utils::{infer_type_from_const_value, instr_name, CodeLocation};
+use crate::types::internal_func::InternalCaller;
+use crate::types::relation::RelationType;
+use crate::types::utils::{infer_type_from_const_value, instr_name, CodeLocation};
+use crate::vm::listeners::TypecheckingEventListener;
 use crate::Value;
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
@@ -288,7 +288,10 @@ impl<'src> TypeChecker<'src> {
                 Instruction::Lookup(name, span) => {
                     // TYPECHECK: NO
                     let name_str: &str = name;
-                    if let Some(typeset) = typestate.locals.get(name_str) {
+                    // first try to search in self.cfg.get_block(bb_id).type_narrow
+                    if let Some(ty) = self.cfg.blocks[bb_id].type_constraints.get(name_str) {
+                        typestate.stack.push(ty.clone());
+                    } else if let Some(typeset) = typestate.locals.get(name_str) {
                         typestate.stack.push(typeset.clone());
                     } else if name_str == "adapter" {
                         typestate.stack.push(Type::Class(DynClassType::new(Arc::new(

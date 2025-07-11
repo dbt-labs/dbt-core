@@ -1,5 +1,5 @@
-use crate::vm::types::builtin::Type;
-use crate::vm::types::function::FunctionType;
+use crate::types::builtin::Type;
+use crate::types::function::FunctionType;
 
 #[derive(Clone, Debug, Default)]
 pub struct InternalCaller {}

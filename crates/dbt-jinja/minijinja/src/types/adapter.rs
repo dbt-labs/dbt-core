@@ -1,7 +1,7 @@
-use crate::vm::types::builtin::Type;
-use crate::vm::types::class::{ClassType, DynClassType};
-use crate::vm::types::function::{DynFunctionType, FunctionType};
-use crate::vm::types::relation::RelationType;
+use crate::types::builtin::Type;
+use crate::types::class::{ClassType, DynClassType};
+use crate::types::function::{DynFunctionType, FunctionType};
+use crate::types::relation::RelationType;
 use std::hash::Hash;
 use std::sync::Arc;
 

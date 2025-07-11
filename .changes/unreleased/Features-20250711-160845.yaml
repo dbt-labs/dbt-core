@@ -1,0 +1,5 @@
+kind: Features
+body: Support PerformTest
+time: 2025-07-11T16:08:45.673253-05:00
+custom:
+  PR: dbt-labs/fs#4403

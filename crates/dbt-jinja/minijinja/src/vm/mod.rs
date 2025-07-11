@@ -34,9 +34,9 @@ use crate::vm::state::BlockStack;
 #[cfg(feature = "macros")]
 use crate::vm::closure_object::Closure;
 
+pub use crate::types::utils::CodeLocation;
 pub(crate) use crate::vm::context::{Context, Frame};
 pub use crate::vm::state::State;
-pub use crate::vm::types::utils::CodeLocation;
 
 #[cfg(feature = "macros")]
 mod closure_object;
@@ -50,7 +50,6 @@ mod macro_object;
 mod mod_typecheck;
 mod state;
 pub mod typemeta;
-pub mod types;
 
 // the cost of a single include against the stack limit.
 #[cfg(feature = "multi_template")]
