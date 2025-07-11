@@ -152,6 +152,7 @@ class MicrobatchMacroOutsideOfBatchesDeprecation(DBTDeprecation):
 class GenericJSONSchemaValidationDeprecation(DBTDeprecation):
     _name = "generic-json-schema-validation-deprecation"
     _event = "GenericJSONSchemaValidationDeprecation"
+    _is_preview = True
 
 
 class UnexpectedJinjaBlockDeprecation(DBTDeprecation):

@@ -14,12 +14,16 @@ from dbt.adapters.factory import load_plugin
 from dbt.config.project import Project, _get_required_version
 from dbt.constants import DEPENDENCIES_FILE_NAME
 from dbt.contracts.project import GitPackage, LocalPackage, PackageConfig
-from dbt.deprecations import GenericJSONSchemaValidationDeprecation
+from dbt.deprecations import (
+    GenericJSONSchemaValidationDeprecation as GenericJSONSchemaValidationDeprecationCore,
+)
+from dbt.events.types import GenericJSONSchemaValidationDeprecation
 from dbt.flags import set_from_args
 from dbt.jsonschemas import project_schema
 from dbt.node_types import NodeType
 from dbt.tests.util import safe_set_invocation_context
 from dbt_common.events.event_manager_client import get_event_manager
+from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtRuntimeError
 from dbt_common.semver import VersionSpecifier
 from tests.unit.config import (
@@ -625,11 +629,21 @@ class TestDeprecations:
         project_dict: Dict[str, Any] = {}
 
         event_catcher = EventCatcher(GenericJSONSchemaValidationDeprecation)
+        note_catcher = EventCatcher(Note)
         get_event_manager().add_callback(event_catcher.catch)
+        get_event_manager().add_callback(note_catcher.catch)
 
         jsonschema_validate(
             schema=project_schema(), json=project_dict, file_path="dbt_project.yml"
         )
 
-        assert len(event_catcher.caught_events) == 1
-        assert "'name' is a required property at top level" in event_catcher.caught_events[0].info.msg  # type: ignore
+        if GenericJSONSchemaValidationDeprecationCore()._is_preview:
+            assert len(note_catcher.caught_events) == 1
+            assert len(event_catcher.caught_events) == 0
+            event = note_catcher.caught_events[0]
+        else:
+            assert len(event_catcher.caught_events) == 1
+            assert len(note_catcher.caught_events) == 0
+            event = event_catcher.caught_events[0]
+
+        assert "'name' is a required property at top level" in event.info.msg
