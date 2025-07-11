@@ -1,6 +1,8 @@
 use dbt_common::io_args::IoArgs;
 use dbt_common::stdfs::File;
-use dbt_common::{constants::DBT_PACKAGES_LOCK_FILE, err, fs_err, stdfs, ErrorCode, FsResult};
+use dbt_common::{
+    constants::DBT_PACKAGES_LOCK_FILE, err, fs_err, show_warning, stdfs, ErrorCode, FsResult,
+};
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_schemas::schemas::packages::DbtPackagesLock;
 use flate2::read::GzDecoder;
@@ -62,6 +64,22 @@ pub async fn install_packages(
         match package {
             UnpinnedPackage::Hub(hub_unpinned_package) => {
                 let pinned_package = hub_unpinned_package.resolved(hub_registry).await?;
+                if pinned_package.version != pinned_package.version_latest
+                    && (std::env::var("NEXTEST").is_err()
+                        || (std::env::var("NEXTEST").is_ok()
+                            && std::env::var("TEST_DEPS_LATEST_VERSION").is_ok()))
+                {
+                    show_warning!(
+                        io_args,
+                        fs_err!(
+                            ErrorCode::DependencyWarning,
+                            "Updated version available for {}@{}: {}",
+                            pinned_package.name,
+                            pinned_package.version,
+                            pinned_package.version_latest,
+                        )
+                    );
+                }
                 let version = pinned_package.get_version();
                 let tar_name = format!("{}.{}.tar.gz", pinned_package.package, version);
                 let tar_path = tarball_dir.path().join(tar_name);

@@ -103,6 +103,8 @@ pub enum ErrorCode {
 
     DisabledModel = 1064,
 
+    DependencyWarning = 1065,
+
     // --------------------------------------------------------------------------------------------
     // Jinja
     MacroUnsupportedValueType = 1500,
