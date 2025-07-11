@@ -47,9 +47,9 @@ pub struct MetricTypeParams {
     #[serde(default)]
     pub input_measures: Vec<MetricInputMeasure>,
     pub numerator: Option<MetricInput>,
-    pub denominator: Option<MetricInput>,
+    pub denominator: Option<StringOrMetricInputMeasure>,
     pub expr: Option<String>,
-    pub window: Option<MetricTimeWindow>,
+    pub window: Option<String>,
     pub metrics: Option<Vec<MetricInput>>,
     pub conversion_type_params: Option<ConversionTypeParams>,
     pub cumulative_type_params: Option<CumulativeTypeParams>,
@@ -61,7 +61,7 @@ pub struct MetricInputMeasure {
     pub name: String,
     pub filter: Option<WhereFilterIntersection>,
     pub alias: Option<String>,
-    pub join_to_timepine: Option<bool>,
+    pub join_to_timespine: Option<bool>,
     pub fill_nulls_with: Option<i32>,
 }
 
@@ -87,13 +87,13 @@ pub struct ConversionTypeParams {
     pub conversion_measure: MetricInputMeasure,
     pub entity: String,
     pub calculation: ConversionCalculationType,
-    pub window: Option<MetricTimeWindow>,
+    pub window: Option<String>,
     pub constant_properties: Option<Vec<ConstantPropertyInput>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct CumulativeTypeParams {
-    pub window: Option<MetricTimeWindow>,
+    pub window: Option<String>,
     pub grain_to_date: Option<String>,
     pub period_agg: PeriodAggregationType,
 }
