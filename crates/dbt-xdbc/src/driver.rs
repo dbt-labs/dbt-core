@@ -35,6 +35,8 @@ pub enum Backend {
     Postgres,
     /// Databricks driver implementation (ADBC).
     Databricks,
+    /// Redshift driver implementation (ADBC).
+    Redshift,
     /// Databricks driver implementation (ODBC).
     DatabricksODBC,
     /// Redshift driver implementation (ODBC).
@@ -62,6 +64,7 @@ impl Display for Backend {
             Backend::BigQuery => write!(f, "BigQuery"),
             Backend::Postgres => write!(f, "PostgreSQL"),
             Backend::Databricks => write!(f, "Databricks"),
+            Backend::Redshift => write!(f, "Redshift"),
             Backend::DatabricksODBC => write!(f, "Databricks"),
             Backend::RedshiftODBC => write!(f, "Redshift"),
             Backend::Generic { library_name, .. } => write!(f, "Generic({library_name})"),
@@ -76,6 +79,8 @@ impl Backend {
             Backend::BigQuery => Some("adbc_driver_bigquery"),
             Backend::Postgres => Some("adbc_driver_postgresql"),
             Backend::Databricks => Some("adbc_driver_databricks"),
+            // todo: swap over to Redshift specific driver once available
+            Backend::Redshift => Some("adbc_driver_postgresql"),
             Backend::DatabricksODBC | Backend::RedshiftODBC => None, // these use ODBC
             Backend::Generic { library_name, .. } => Some(library_name),
         }
@@ -98,6 +103,7 @@ impl Backend {
             Backend::BigQuery => FFIProtocol::Adbc,
             Backend::Postgres => FFIProtocol::Adbc,
             Backend::Databricks => FFIProtocol::Adbc,
+            Backend::Redshift => FFIProtocol::Adbc,
             Backend::DatabricksODBC => FFIProtocol::Odbc,
             Backend::RedshiftODBC => FFIProtocol::Odbc,
             Backend::Generic { .. } => FFIProtocol::Adbc,
@@ -223,7 +229,11 @@ impl AdbcDriver {
     ) -> Result<ManagedAdbcDriver> {
         match backend {
             // These drivers are published to the dbt Labs CDN.
-            Backend::Snowflake | Backend::BigQuery | Backend::Postgres | Backend::Databricks => {
+            Backend::Snowflake
+            | Backend::BigQuery
+            | Backend::Postgres
+            | Backend::Databricks
+            | Backend::Redshift => {
                 debug_assert!(backend.ffi_protocol() == FFIProtocol::Adbc);
                 debug_assert!(install::is_installable_driver(backend));
                 #[cfg(debug_assertions)]

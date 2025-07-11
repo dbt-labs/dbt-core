@@ -53,7 +53,7 @@ mod tests {
                     .with_named_option(bigquery::AUTH_CREDENTIALS, auth_credentials)?;
                 Ok(builder)
             }
-            Backend::Postgres => {
+            Backend::Postgres | Backend::Redshift => {
                 // Configuration for Postgres:
                 //     CREATE ROLE username WITH LOGIN PASSWORD 'an_secure_password';
                 //     CREATE DATABASE adbc_test;
