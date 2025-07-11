@@ -13,7 +13,7 @@ permissions:
 jobs:
   publish-pypi:
     name: Publish to pypi.org
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_RUNNER }}
     env:
       MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
     if: ${{ !github.event.pull_request }}

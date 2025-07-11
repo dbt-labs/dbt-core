@@ -8,7 +8,7 @@ on:
 jobs:
   macos:
     name: macOS Wheels (universal2)
-    runs-on: macos-latest
+    runs-on: ${{ vars.MACOS_RUNNER }}
 
     steps:
       - uses: actions/checkout@v4
@@ -29,7 +29,7 @@ jobs:
 
   linux:
     name: Linux Wheels
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_RUNNER }}
     strategy:
       matrix:
         target: [i686, x86_64, armv7l, aarch64]
@@ -57,7 +57,7 @@ jobs:
 
   windows:
     name: Windows Wheels
-    runs-on: windows-latest
+    runs-on: ${{ vars.WINDOWS_RUNNER }}
     strategy:
       matrix:
         target: [x64, x86] 
@@ -82,7 +82,7 @@ jobs:
 
   sdist:
     name: Source Distribution
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_RUNNER }}
     steps:
       - uses: actions/checkout@v4
       - name: Build sdist

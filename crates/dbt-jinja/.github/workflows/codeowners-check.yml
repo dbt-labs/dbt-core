@@ -9,7 +9,7 @@ on:
 jobs:
   validate-codeowners:
     if: github.actor != 'dependabot[bot]'
-    runs-on: depot-ubuntu-24.04
+    runs-on: ${{ vars.UBUNTU_RUNNER }}
     steps:
       - uses: actions/checkout@v4
       - uses: mszostok/codeowners-validator@v0.7.2

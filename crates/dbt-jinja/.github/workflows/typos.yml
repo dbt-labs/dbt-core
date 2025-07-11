@@ -6,7 +6,7 @@ on:
 jobs:
   run:
     name: Spell Check with Typos
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_RUNNER }}
     steps:
     - name: Checkout Actions Repository
       uses: actions/checkout@v4

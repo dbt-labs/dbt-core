@@ -5,7 +5,7 @@ on: [push, pull_request]
 jobs:
   test-latest:
     name: Test on Latest Stable
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_RUNNER }}
 
     steps:
       - uses: actions/checkout@v4
@@ -20,7 +20,7 @@ jobs:
 
   test-nightly:
     name: Test on nightly
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_RUNNER }}
 
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +37,7 @@ jobs:
 
   test-32bit:
     name: Check on 1.63.0 (32bit)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_RUNNER }}
 
     steps:
       - uses: actions/checkout@v4
@@ -57,7 +57,7 @@ jobs:
 
   test-fuel-feature:
     name: Check on 1.63.0 (fuel feature)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_RUNNER }}
 
     steps:
       - uses: actions/checkout@v4
@@ -72,7 +72,7 @@ jobs:
 
   test-stable:
     name: Test on 1.63.0
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_RUNNER }}
 
     steps:
       - uses: actions/checkout@v4
@@ -87,7 +87,7 @@ jobs:
 
   test-no-lock:
     name: Test on Latest (No Lock)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_RUNNER }}
 
     steps:
       - uses: actions/checkout@v4
@@ -102,7 +102,7 @@ jobs:
 
   test-wasi:
     name: Test on WASI
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_RUNNER }}
  
     steps:
       - uses: actions/checkout@v4
@@ -121,7 +121,7 @@ jobs:
 
   test-python:
     name: Test on Python binding
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_RUNNER }}
 
     steps:
       - uses: actions/checkout@v4
@@ -134,7 +134,7 @@ jobs:
   
   test-cli-linux:
     name: Test CLI Linux
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_RUNNER }}
 
     steps:
       - uses: actions/checkout@v4
@@ -149,7 +149,7 @@ jobs:
   
   test-cli-windows:
     name: Test CLI Windows
-    runs-on: windows-latest
+    runs-on: ${{ vars.WINDOWS_RUNNER }}
 
     steps:
       - uses: actions/checkout@v4

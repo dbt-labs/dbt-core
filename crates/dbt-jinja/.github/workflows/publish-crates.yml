@@ -9,7 +9,7 @@ on:
 jobs:
   publish-crates:
     name: Publish to crates.io
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_RUNNER }}
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     if: ${{ !github.event.pull_request }}
