@@ -14,7 +14,9 @@ from dbt.adapters.factory import load_plugin
 from dbt.config.project import Project, _get_required_version
 from dbt.constants import DEPENDENCIES_FILE_NAME
 from dbt.contracts.project import GitPackage, LocalPackage, PackageConfig
-from dbt.deprecations import GenericJSONSchemaValidationDeprecation as GJVD
+from dbt.deprecations import (
+    GenericJSONSchemaValidationDeprecation as GenericJSONSchemaValidationDeprecationCore,
+)
 from dbt.events.types import GenericJSONSchemaValidationDeprecation
 from dbt.flags import set_from_args
 from dbt.jsonschemas import project_schema
@@ -635,7 +637,7 @@ class TestDeprecations:
             schema=project_schema(), json=project_dict, file_path="dbt_project.yml"
         )
 
-        if GJVD()._is_preview:
+        if GenericJSONSchemaValidationDeprecationCore()._is_preview:
             assert len(note_catcher.caught_events) == 1
             assert len(event_catcher.caught_events) == 0
             event = note_catcher.caught_events[0]

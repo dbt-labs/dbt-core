@@ -10,7 +10,9 @@ import dbt_common
 from dbt import deprecations
 from dbt.cli.main import dbtRunner
 from dbt.clients.registry import _get_cached
-from dbt.deprecations import GenericJSONSchemaValidationDeprecation as GJVD
+from dbt.deprecations import (
+    GenericJSONSchemaValidationDeprecation as GenericJSONSchemaValidationDeprecationCore,
+)
 from dbt.events.types import (
     CustomKeyInConfigDeprecation,
     CustomKeyInObjectDeprecation,
@@ -319,7 +321,7 @@ class TestDeprecatedInvalidDeprecationDate:
                 True
             ), "Expected an exception to be raised, because a model object can't be created with a deprecation_date as an int"
 
-        if GJVD()._is_preview:
+        if GenericJSONSchemaValidationDeprecationCore()._is_preview:
             assert len(note_catcher.caught_events) == 1
             assert len(event_catcher.caught_events) == 0
             event = note_catcher.caught_events[0]
