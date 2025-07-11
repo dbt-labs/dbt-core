@@ -2,7 +2,10 @@ use chrono::{DateTime, Utc};
 use dbt_common::io_args::StaticAnalysisKind;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 use crate::{
     dbt_utils::get_dbt_schema_version,
@@ -100,6 +103,22 @@ pub struct DbtManifest {
     pub disabled: BTreeMap<String, Vec<Value>>,
     pub selectors: BTreeMap<String, DbtSelector>,
     pub groups: BTreeMap<String, DbtGroup>,
+}
+
+impl DbtManifest {
+    pub fn into_map_compiled_sql(self) -> HashMap<String, Option<String>> {
+        self.nodes
+            .into_iter()
+            .filter_map(|(id, node)| match node {
+                DbtNode::Model(model) => Some((id, model.base_attr.compiled_code)),
+                DbtNode::Test(test) => Some((id, test.base_attr.compiled_code)),
+                DbtNode::Snapshot(snapshot) => Some((id, snapshot.base_attr.compiled_code)),
+                DbtNode::Seed(seed) => Some((id, seed.base_attr.compiled_code)),
+                DbtNode::Operation(_operation) => None,
+                DbtNode::Analysis(analysis) => Some((id, analysis.base_attr.compiled_code)),
+            })
+            .collect::<HashMap<_, _>>()
+    }
 }
 
 impl Serialize for DbtManifest {

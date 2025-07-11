@@ -14,7 +14,7 @@ use proto_rust::v1::public::events::fusion::{
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+
 use vortex_client::client::{log_proto, ErrorMode};
 
 pub async fn invocation_start_event(
@@ -116,7 +116,7 @@ pub async fn invocation_end_event(invocation_id: String, result: &FsResult<i32>)
 /// In dbt-core, this is in core/dbt/task/run.py::track_model_run
 pub async fn run_model_event(
     invocation_id: String,
-    run_stats: &Arc<DashMap<String, Stat>>,
+    run_stats: &DashMap<String, Stat>,
     node: &dyn InternalDbtNodeAttributes,
     maybe_incremental_strategy: Option<String>,
     is_contract_enforced: bool,

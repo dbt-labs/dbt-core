@@ -858,11 +858,11 @@ macro_rules! show_progress_exit {
 
 #[macro_export]
 macro_rules! maybe_interactive_or_exit {
-    ( $arg:expr, $start_time:expr, $resolver_state:expr, $db:expr, $jinja_env:expr, $instructions:expr) => {
+    ( $arg:expr, $start_time:expr, $resolver_state:expr, $db:expr, $map_compiled_sql:expr, $jinja_env:expr) => {
         if !$arg.interactive {
             show_progress_exit!($arg, $start_time)
         } else {
-            repl::run($resolver_state, &$arg, $db, $jinja_env, $instructions).await
+            repl::run($resolver_state, &$arg, $db, $map_compiled_sql, $jinja_env).await
         }
     };
 }
@@ -881,7 +881,7 @@ macro_rules! checkpoint_maybe_exit {
 
 #[macro_export]
 macro_rules! checkpoint_maybe_interactive_or_exit {
-    ( $phase:expr, $arg:expr, $start_time:expr, $resolver_state:expr, $db:expr, $jinja_env:expr, $instructions:expr ) => {
+    ( $phase:expr, $arg:expr, $start_time:expr, $resolver_state:expr, $db:expr, $map_compiled_sql:expr, $jinja_env:expr) => {
         if $arg.phase <= $phase
             || $crate::error_counter::get_error_counter($arg.io.invocation_id.to_string().as_str())
                 > 0
@@ -891,8 +891,8 @@ macro_rules! checkpoint_maybe_interactive_or_exit {
                 $start_time,
                 $resolver_state,
                 $db,
-                $jinja_env,
-                $instructions
+                $map_compiled_sql,
+                $jinja_env
             );
         }
     };

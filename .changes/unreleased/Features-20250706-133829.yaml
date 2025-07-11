@@ -1,0 +1,5 @@
+kind: Features
+body: Minor update macro checkpointing
+time: 2025-07-06T13:38:29.17482921-07:00
+custom:
+  PR: dbt-labs/fs#4287
