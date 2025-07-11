@@ -2715,7 +2715,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": true
+          "additionalProperties": {
+            "$ref": "#/definitions/StringOrArrayOfStrings"
+          }
         },
         "group": {
           "type": [
@@ -3944,7 +3946,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": true
+          "additionalProperties": {
+            "$ref": "#/definitions/StringOrArrayOfStrings"
+          }
         },
         "group": {
           "type": [
@@ -4619,7 +4623,15 @@
             "$ref": "#/definitions/GrantAccessToTarget"
           }
         },
-        "grants": true,
+        "grants": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/StringOrArrayOfStrings"
+          }
+        },
         "group": {
           "type": [
             "string",
