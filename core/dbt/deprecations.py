@@ -205,6 +205,11 @@ class ModelParamUsageDeprecation(DBTDeprecation):
     _event = "ModelParamUsageDeprecation"
 
 
+class EnvironmentVariableNamespaceDeprecation(DBTDeprecation):
+    _name = "environment-variable-namespace-deprecation"
+    _event = "EnvironmentVariableNamespaceDeprecation"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -286,6 +291,7 @@ deprecations_list: List[DBTDeprecation] = [
     ModelParamUsageDeprecation(),
     WEOInlcudeExcludeDeprecation(),
     SourceOverrideDeprecation(),
+    EnvironmentVariableNamespaceDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

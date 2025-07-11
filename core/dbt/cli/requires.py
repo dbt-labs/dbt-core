@@ -3,7 +3,7 @@ import os
 import time
 import traceback
 from functools import update_wrapper
-from typing import Optional
+from typing import Dict, Optional
 
 from click import Context
 
@@ -17,6 +17,7 @@ from dbt.config.runtime import UnsetProfile, load_profile, load_project
 from dbt.context.providers import generate_runtime_macro_context
 from dbt.context.query_header import generate_query_header_context
 from dbt.deprecations import show_deprecations_summary
+from dbt.env_vars import KNOWN_ENGINE_ENV_VARS, validate_engine_env_vars
 from dbt.events.logging import setup_event_logger
 from dbt.events.types import (
     ArtifactUploadError,
@@ -56,6 +57,17 @@ from dbt_common.record import (
 from dbt_common.utils import cast_dict_to_dict_of_strings
 
 
+def _cross_propagate_engine_env_vars(env_dict: Dict[str, str]) -> None:
+    for env_var in KNOWN_ENGINE_ENV_VARS:
+        if env_var.old_name is not None:
+            # If the old name is in the env dict, and not the new name, set the new name based on the old name
+            if env_var.old_name in env_dict and env_var.name not in env_dict:
+                env_dict[env_var.name] = env_dict[env_var.old_name]
+            # If the new name is in the env dict, override the old name with it
+            elif env_var.name in env_dict:
+                env_dict[env_var.old_name] = env_dict[env_var.name]
+
+
 def preflight(func):
     def wrapper(*args, **kwargs):
         ctx = args[0]
@@ -69,7 +81,9 @@ def preflight(func):
 
         # Must be set after record/replay is set up so that the env can be
         # recorded or replayed if needed.
-        get_invocation_context()._env = get_env()
+        env_dict = get_env()
+        _cross_propagate_engine_env_vars(env_dict)
+        get_invocation_context()._env = env_dict
 
         # Flags
         flags = Flags(ctx)
@@ -107,6 +121,9 @@ def preflight(func):
 
         # Adapter management
         ctx.with_resource(adapter_management())
+
+        # Validate engine env var restricted name space
+        validate_engine_env_vars()
 
         return func(*args, **kwargs)
 
