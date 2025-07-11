@@ -1,0 +1,3 @@
+kind: Features
+body: Include custom test name in generic test unique_id if specified
+time: 2025-06-13T16:54:08.250498-04:00

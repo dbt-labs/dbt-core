@@ -126,7 +126,7 @@ fn persist_inner(
 
     let full_name = generate_test_name(
         test_macro_name.as_str(),
-        custom_test_name.is_some(),
+        custom_test_name,
         project_name,
         test_config,
         &kwargs,
@@ -333,16 +333,16 @@ where
             macro_name
         ))?
         .to_owned();
-    let name = args
+    let custom_name = args
         .remove("name")
         .and_then(|v| v.as_str().map(String::from));
-    let (macro_name, name) = if let Some(name) = name {
-        (Some(name), macro_name.to_string())
+    let (custom_name, macro_name) = if let Some(custom_name) = custom_name {
+        (Some(custom_name), macro_name.to_string())
     } else {
         (None, macro_name.to_string())
     };
     extract_kwargs_and_config(&args, kwargs, config)?;
-    Ok((macro_name, name))
+    Ok((custom_name, macro_name))
 }
 
 fn parse_test_name_and_namespace(test_name: &str) -> (String, Option<String>) {
@@ -363,7 +363,7 @@ static CLEAN_REGEX: LazyLock<Regex> =
 /// * `is_custom_test_name` - Whether a custom name was provided for this test
 fn generate_test_name(
     test_macro_name: &str,
-    is_custom_test_name: bool,
+    custom_test_name: Option<String>,
     project_name: &str,
     test_config: &GenericTestConfig,
     kwargs: &BTreeMap<String, Value>,
@@ -399,8 +399,13 @@ fn generate_test_name(
         flat_args.extend(parts);
     }
 
+    // Include custom_test_name as suffix if provided
+    if let Some(custom_test_name) = custom_test_name {
+        flat_args.push(custom_test_name);
+    }
+
     // Clean args to only allow alphanumeric and underscore
-    let mut clean_flat_args: Vec<String> = flat_args
+    let clean_flat_args: Vec<String> = flat_args
         .iter()
         .map(|arg| {
             CLEAN_REGEX
@@ -409,11 +414,6 @@ fn generate_test_name(
                 .to_string()
         })
         .collect();
-
-    // we don't need to any suffix since a name is explicitly defined using `name` field
-    if is_custom_test_name {
-        clean_flat_args = vec![];
-    }
 
     // Join args with double underscores - empty string if no args
     let suffix = if !clean_flat_args.is_empty() {
@@ -1289,7 +1289,7 @@ mod tests {
         // Generate the test name
         let test_name = generate_test_name(
             test_macro_name,
-            false,
+            None,
             project_name,
             &test_config,
             &kwargs,
@@ -1311,7 +1311,7 @@ mod tests {
         let empty_set_vars = BTreeMap::new();
         let test_name_no_vars = generate_test_name(
             test_macro_name,
-            false,
+            None,
             project_name,
             &test_config,
             &kwargs,
@@ -1323,6 +1323,35 @@ mod tests {
         assert!(
             test_name_no_vars.contains(set_var_name),
             "Test name should contain the variable name when no set vars are provided"
+        );
+    }
+
+    #[test]
+    fn test_generate_test_name_with_custom_test_name() {
+        // Create test inputs
+        let custom_test_name = "custom_test_name";
+        let test_config = GenericTestConfig {
+            resource_type: "model".to_string(),
+            resource_name: "my_model".to_string(),
+            version_num: None,
+            model_tests: None,
+            column_tests: None,
+            source_name: None,
+        };
+
+        let test_name_no_vars = generate_test_name(
+            "test_macro_name",
+            Some(custom_test_name.to_string()),
+            "project_name",
+            &test_config,
+            &BTreeMap::new(),
+            None,
+            &BTreeMap::new(),
+        );
+
+        assert!(
+            test_name_no_vars.contains(custom_test_name),
+            "Test name should contain the custom test name when provided"
         );
     }
 
