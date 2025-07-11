@@ -8,6 +8,6 @@ Err(
         kind: SyntaxError,
         detail: "template exceeds maximum recursion limits",
         name: "max-recursion-tags.txt",
-        line: 20,
+        line: 10,
     },
 )
