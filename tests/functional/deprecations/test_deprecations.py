@@ -10,6 +10,9 @@ import dbt_common
 from dbt import deprecations
 from dbt.cli.main import dbtRunner
 from dbt.clients.registry import _get_cached
+from dbt.deprecations import (
+    GenericJSONSchemaValidationDeprecation as GenericJSONSchemaValidationDeprecationCore,
+)
 from dbt.events.types import (
     CustomKeyInConfigDeprecation,
     CustomKeyInObjectDeprecation,
@@ -22,6 +25,7 @@ from dbt.events.types import (
     WEOIncludeExcludeDeprecation,
 )
 from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
+from dbt_common.events.types import Note
 from dbt_common.exceptions import EventCompilationError
 from tests.functional.deprecations.fixtures import (
     bad_name_yaml,
@@ -305,17 +309,27 @@ class TestDeprecatedInvalidDeprecationDate:
     @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_deprecated_invalid_deprecation_date(self, project):
         event_catcher = EventCatcher(GenericJSONSchemaValidationDeprecation)
+        note_catcher = EventCatcher(Note)
         try:
-            run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
+            run_dbt(
+                ["parse", "--no-partial-parse"],
+                callbacks=[event_catcher.catch, note_catcher.catch],
+            )
         except:  # noqa
             assert (
                 True
             ), "Expected an exception to be raised, because a model object can't be created with a deprecation_date as an int"
 
-        assert len(event_catcher.caught_events) == 1
-        assert (
-            "1 is not of type 'string', 'null' in file" in event_catcher.caught_events[0].info.msg
-        )
+        if GenericJSONSchemaValidationDeprecationCore()._is_preview:
+            assert len(note_catcher.caught_events) == 1
+            assert len(event_catcher.caught_events) == 0
+            event = note_catcher.caught_events[0]
+        else:
+            assert len(event_catcher.caught_events) == 1
+            assert len(note_catcher.caught_events) == 0
+            event = event_catcher.caught_events[0]
+
+        assert "1 is not of type 'string', 'null' in file" in event.info.msg
 
 
 class TestDuplicateYAMLKeysInSchemaFiles:
