@@ -2,15 +2,17 @@ use std::collections::BTreeMap;
 
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::compiler::cfg::build_cfg;
 use crate::compiler::instructions::{Instruction, Instructions};
-use crate::types::function::parse_macro_signature;
+use crate::types::function::{
+    parse_macro_signature, DynFunctionType, UndefinedFunctionType, UserDefinedFunctionType,
+};
 use crate::vm::listeners::TypecheckingEventListener;
 use crate::vm::typemeta::TypeChecker;
 
 use crate::compiler::typecheck::FunctionRegistry;
-
 use crate::machinery::Span;
 use crate::types::utils::CodeLocation;
 use crate::utils::AutoEscape;
@@ -67,7 +69,7 @@ impl<'env> Vm<'env> {
         instructions: &Instructions<'_>,
         path: &Path,
     ) -> FunctionRegistry {
-        let mut funcsigns = FunctionRegistry::new();
+        let mut funcsigns: FunctionRegistry = BTreeMap::new();
         let mut current_funcsign = String::new();
         for (i, instruction) in instructions.instructions.iter().enumerate() {
             match instruction {
@@ -101,15 +103,32 @@ impl<'env> Vm<'env> {
 
                         // add the function signature if it exists
                         if !current_funcsign.is_empty() {
-                            let mut funcsign = parse_macro_signature(current_funcsign.clone());
-                            funcsign.name = name.to_string();
-                            funcsign.location = CodeLocation {
-                                line: line_num,
-                                col: col_num,
-                                file: path.to_path_buf(),
-                            };
-                            funcsigns.insert(name.to_string(), funcsign);
+                            let (args, ret_type) = parse_macro_signature(current_funcsign.clone());
+                            let funcsign = UserDefinedFunctionType::new(
+                                name,
+                                args,
+                                ret_type,
+                                CodeLocation {
+                                    line: line_num,
+                                    col: col_num,
+                                    file: path.to_path_buf(),
+                                },
+                            );
+                            funcsigns
+                                .insert(name.to_string(), DynFunctionType::new(Arc::new(funcsign)));
                             current_funcsign.clear();
+                        } else {
+                            funcsigns.insert(
+                                name.to_string(),
+                                DynFunctionType::new(Arc::new(UndefinedFunctionType::new(
+                                    name,
+                                    CodeLocation {
+                                        line: line_num,
+                                        col: col_num,
+                                        file: path.to_path_buf(),
+                                    },
+                                ))),
+                            );
                         }
                     }
                 }
@@ -131,6 +150,8 @@ impl<'env> Vm<'env> {
         funcsigns: &FunctionRegistry,
         warning_printer: Rc<dyn TypecheckingEventListener>,
     ) -> Result<(), crate::Error> {
+        // warning_printer.warn(&Span::default(), &format!("start a file"));
+        // dbg!(state.instructions);
         // get instructions
         let instructions = &state.instructions.instructions;
 

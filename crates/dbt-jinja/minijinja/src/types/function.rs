@@ -67,7 +67,7 @@ type_erase! {
 
 impl std::fmt::Debug for DynFunctionType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DynFunctionType({})", self.type_name())
+        write!(f, "{}", self.type_debug())
     }
 }
 
@@ -108,33 +108,25 @@ unsafe impl Send for DynFunctionType {}
 unsafe impl Sync for DynFunctionType {}
 
 #[derive(Clone, Eq, PartialEq)]
-pub struct BasicFunctionType {
+pub struct UserDefinedFunctionType {
     pub name: String,
     pub args: Vec<Type>,
     pub ret_type: Type,
     pub location: CodeLocation,
-    pub has_signature: bool,
 }
 
-impl BasicFunctionType {
-    pub fn new(
-        name: &str,
-        args: Vec<Type>,
-        ret_type: Type,
-        location: CodeLocation,
-        has_signature: bool,
-    ) -> Self {
+impl UserDefinedFunctionType {
+    pub fn new(name: &str, args: Vec<Type>, ret_type: Type, location: CodeLocation) -> Self {
         Self {
             name: name.to_string(),
             args,
             ret_type,
             location,
-            has_signature,
         }
     }
 }
 
-impl FunctionType for BasicFunctionType {
+impl FunctionType for UserDefinedFunctionType {
     fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error> {
         // match the actual arguments with the expected arguments, if matches return Ok else Err
         if self.args.len() != actual_arguments.len() {
@@ -168,7 +160,35 @@ impl FunctionType for BasicFunctionType {
     }
 }
 
-pub fn parse_macro_signature(funcsign_str: String) -> BasicFunctionType {
+#[derive(Debug)]
+pub struct UndefinedFunctionType {
+    pub name: String,
+    pub location: CodeLocation,
+}
+
+impl UndefinedFunctionType {
+    pub fn new(name: &str, location: CodeLocation) -> Self {
+        Self {
+            name: name.to_string(),
+            location,
+        }
+    }
+}
+
+impl FunctionType for UndefinedFunctionType {
+    fn _resolve_arguments(&self, _actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        Err(crate::Error::new(
+            crate::error::ErrorKind::TypeError,
+            format!("Function {} @ {} is not defined", self.name, self.location),
+        ))
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec![]
+    }
+}
+
+pub fn parse_macro_signature(funcsign_str: String) -> (Vec<Type>, Type) {
     // parse the function signature string
     let parts: Vec<&str> = funcsign_str.split("->").collect();
     if parts.len() != 2 {
@@ -189,19 +209,13 @@ pub fn parse_macro_signature(funcsign_str: String) -> BasicFunctionType {
                 .collect()
         };
         let ret_type = parse_type(ret_type_str);
-        BasicFunctionType {
-            name: String::new(),
-            args,
-            ret_type,
-            location: CodeLocation::default(),
-            has_signature: true,
-        }
+        (args, ret_type)
     } else {
         panic!("Invalid function signature format: missing '('");
     }
 }
 
-impl std::fmt::Debug for BasicFunctionType {
+impl std::fmt::Debug for UserDefinedFunctionType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -266,5 +280,31 @@ impl FunctionType for StoreRawResultFunctionType {
             "rows_affected".to_string(),
             "agate_table".to_string(),
         ]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct RefFunctionType;
+
+impl FunctionType for RefFunctionType {
+    fn _resolve_arguments(&self, _actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        Ok(Type::String)
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["name".to_string(), "namespace".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct SourceFunctionType;
+
+impl FunctionType for SourceFunctionType {
+    fn _resolve_arguments(&self, _actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        Ok(Type::String)
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["name".to_string(), "namespace".to_string()]
     }
 }

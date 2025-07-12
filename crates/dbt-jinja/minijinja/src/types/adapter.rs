@@ -6,9 +6,13 @@ use std::hash::Hash;
 use std::sync::Arc;
 
 /// Metadata for relation objects, including valid attributes and their return types.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
-pub struct AdapterType {
-    // pub relation: Arc<dyn BaseRelation>,
+#[derive(Clone, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
+pub struct AdapterType {}
+
+impl std::fmt::Debug for AdapterType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("adapter")
+    }
 }
 
 impl ClassType for AdapterType {
@@ -25,8 +29,14 @@ impl ClassType for AdapterType {
     }
 }
 
-#[derive(Debug, Default, Clone, Eq, PartialEq)]
+#[derive(Default, Clone, Eq, PartialEq)]
 pub struct AdapterGetRelationFunction {}
+
+impl std::fmt::Debug for AdapterGetRelationFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("adapter.get_relation")
+    }
+}
 
 impl FunctionType for AdapterGetRelationFunction {
     fn _resolve_arguments(&self, _args: &[Type]) -> Result<Type, crate::Error> {

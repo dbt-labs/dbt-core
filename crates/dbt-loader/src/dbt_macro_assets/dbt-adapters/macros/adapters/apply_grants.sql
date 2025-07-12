@@ -12,10 +12,12 @@
   -- but better safe than sorry.
 #}
 
+-- funcsign: () -> bool
 {% macro copy_grants() %}
     {{ return(adapter.dispatch('copy_grants', 'dbt')()) }}
 {% endmacro %}
 
+-- funcsign: () -> bool
 {% macro default__copy_grants() %}
     {{ return(True) }}
 {% endmacro %}
@@ -30,15 +32,17 @@
   -- By default, pick the former, because it's what we prefer when available.
 #}
 
+-- funcsign: () -> bool
 {% macro support_multiple_grantees_per_dcl_statement() %}
     {{ return(adapter.dispatch('support_multiple_grantees_per_dcl_statement', 'dbt')()) }}
 {% endmacro %}
 
+-- funcsign: () -> bool
 {%- macro default__support_multiple_grantees_per_dcl_statement() -%}
     {{ return(True) }}
 {%- endmacro -%}
 
-
+-- funcsign: (relation, bool) -> bool
 {% macro should_revoke(existing_relation, full_refresh_mode=True) %}
 
     {% if not existing_relation %}
@@ -56,10 +60,12 @@
 
 {# ------- DCL STATEMENT TEMPLATES --------- #}
 
+-- funcsign: (relation) -> string
 {% macro get_show_grant_sql(relation) %}
     {{ return(adapter.dispatch("get_show_grant_sql", "dbt")(relation)) }}
 {% endmacro %}
 
+-- funcsign: (relation) -> string
 {% macro default__get_show_grant_sql(relation) %}
     show grants on {{ relation.render() }}
 {% endmacro %}

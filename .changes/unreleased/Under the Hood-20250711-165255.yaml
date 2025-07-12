@@ -1,0 +1,5 @@
+kind: Under the Hood
+body: minor fixes of jinja check
+time: 2025-07-11T16:52:55.539865948-07:00
+custom:
+  PR: dbt-labs/fs#4406

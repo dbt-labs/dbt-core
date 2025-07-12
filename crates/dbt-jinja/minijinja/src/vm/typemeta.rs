@@ -6,8 +6,8 @@ use crate::types::api::ApiType;
 use crate::types::builtin::Type;
 use crate::types::class::DynClassType;
 use crate::types::function::{
-    DynFunctionType, FunctionType, LoadResultFunctionType, StoreRawResultFunctionType,
-    StoreResultFunctionType,
+    DynFunctionType, FunctionType, LoadResultFunctionType, RefFunctionType, SourceFunctionType,
+    StoreRawResultFunctionType, StoreResultFunctionType, UserDefinedFunctionType,
 };
 use crate::types::internal_func::InternalCaller;
 use crate::types::relation::RelationType;
@@ -78,6 +78,16 @@ impl TypecheckState {
                 (
                     "adapter".to_string(),
                     Type::Class(DynClassType::new(Arc::new(AdapterType::default()))),
+                ),
+                (
+                    "ref".to_string(),
+                    Type::Function(DynFunctionType::new(Arc::new(RefFunctionType::default()))),
+                ),
+                (
+                    "source".to_string(),
+                    Type::Function(DynFunctionType::new(
+                        Arc::new(SourceFunctionType::default()),
+                    )),
                 ),
             ]),
             frame_base: 0,
@@ -191,27 +201,30 @@ impl<'src> TypeChecker<'src> {
                 }
                 Err(e) => match e.try_abrupt_return() {
                     Some(rv) => {
-                        let mut registry_ret_type = Type::Invalid;
                         if let Some(macro_block) = self.cfg.get_block(bb_id) {
                             if let Some(macro_name) = macro_block.current_macro.as_ref() {
                                 if let Some(funcsign) = self.function_registry.get(macro_name) {
-                                    registry_ret_type = funcsign.ret_type.clone();
+                                    if let Some(user_defined_func) =
+                                        funcsign.downcast_ref::<UserDefinedFunctionType>()
+                                    {
+                                        let expected_ret_type = user_defined_func.ret_type.clone();
+                                        // try match rv with registry_ret_type
+                                        let rv_type = rv
+                                            .downcast_object_ref::<Type>()
+                                            .cloned()
+                                            .unwrap_or(Type::Any);
+                                        let span = e.get_abrupt_return_span();
+                                        if rv_type.coerce(&expected_ret_type).is_none() {
+                                            warning_printer.warn(
+                                                &span,
+                                                &format!(
+                                                    "Type mismatch: expected return type {expected_ret_type}, got {rv_type}"
+                                                ),
+                                            );
+                                        }
+                                    }
                                 }
                             }
-                        }
-                        // try match rv with registry_ret_type
-                        let rv_type = rv
-                            .downcast_object_ref::<Type>()
-                            .cloned()
-                            .unwrap_or(Type::Any);
-                        let span = e.get_abrupt_return_span();
-                        if rv_type.coerce(&registry_ret_type).is_none() {
-                            warning_printer.warn(
-                                &span,
-                                &format!(
-                                    "Type mismatch: expected return type {registry_ret_type}, got {rv_type}"
-                                ),
-                            );
                         }
                         continue;
                     }
@@ -293,13 +306,7 @@ impl<'src> TypeChecker<'src> {
                         typestate.stack.push(ty.clone());
                     } else if let Some(typeset) = typestate.locals.get(name_str) {
                         typestate.stack.push(typeset.clone());
-                    } else if name_str == "adapter" {
-                        typestate.stack.push(Type::Class(DynClassType::new(Arc::new(
-                            AdapterType::default(),
-                        ))));
-                    }
-                    // TODO: other internal states
-                    else {
+                    } else {
                         warning_printer.warn(
                             span,
                             &format!("Potential TypeError: Unknown local variable '{name_str}'"),
@@ -418,7 +425,7 @@ impl<'src> TypeChecker<'src> {
                         if slice_type.coerce(&Type::Integer).is_none() {
                             warning_printer.warn(
                                 span,
-                                &format!("Type mismatch for slice {name}: type = {slice_type:?}"),
+                                &format!("Type mismatch for slice {name}: type = {slice_type}"),
                             );
                         }
                     }
@@ -600,7 +607,7 @@ impl<'src> TypeChecker<'src> {
                         warning_printer.warn(
                             span,
                             &format!(
-                                "Type mismatch for unpack list: expected Seq, got {list_type:?}"
+                                "Type mismatch for unpack list: expected Seq, got {list_type}"
                             ),
                         );
                     }
@@ -692,9 +699,7 @@ impl<'src> TypeChecker<'src> {
                     } else {
                         warning_printer.warn(
                             span,
-                            &format!(
-                                "Type mismatch for {op}: lhs = {lhs_type:?}, rhs = {rhs_type:?}"
-                            ),
+                            &format!("Type mismatch for {op}: lhs = {lhs_type}, rhs = {rhs_type}"),
                         );
                         typestate.stack.push(Type::Any);
                     }
@@ -732,9 +737,7 @@ impl<'src> TypeChecker<'src> {
                     if !result_type {
                         warning_printer.warn(
                             span,
-                            &format!(
-                                "Type mismatch for {op}: lhs = {lhs_type:?}, rhs = {rhs_type:?}"
-                            ),
+                            &format!("Type mismatch for {op}: lhs = {lhs_type}, rhs = {rhs_type}"),
                         );
                     }
                     typestate.stack.push(Type::Bool);
@@ -850,7 +853,7 @@ impl<'src> TypeChecker<'src> {
                             warning_printer.warn(
                                 span,
                                 &format!(
-                                    "Type mismatch for loop object: expected a sequence type, found {loop_object:?}"
+                                    "Type mismatch for loop object: expected a sequence type, found {loop_object}"
                                 ),
                             );
                             typestate.stack.push(Type::Any);
@@ -892,7 +895,7 @@ impl<'src> TypeChecker<'src> {
                     if !a.is_condition() {
                         warning_printer.warn(
                             span,
-                            &format!("Type mismatch for jump condition: type = {a:?}"),
+                            &format!("Type mismatch for jump condition: type = {a}"),
                         );
                     }
 
@@ -910,7 +913,7 @@ impl<'src> TypeChecker<'src> {
                     if !a.is_condition() {
                         warning_printer.warn(
                             span,
-                            &format!("Type mismatch for jump condition: type = {a:?}"),
+                            &format!("Type mismatch for jump condition: type = {a}"),
                         );
                     }
 
@@ -1014,8 +1017,7 @@ impl<'src> TypeChecker<'src> {
                             crate::error::ErrorKind::InvalidOperation,
                             "Stack underflow on return",
                         ));
-                    }
-                    if *name == "caller" {
+                    } else if *name == "caller" {
                         // judge whether current block is a macro
                         if let Some(block) = self.cfg.get_block(bb_id) {
                             if let Some(macro_name) = &block.current_macro {
@@ -1044,38 +1046,45 @@ impl<'src> TypeChecker<'src> {
                                 }
                             }
                         }
-                    } else if let Some(funcsign) = self.function_registry.get(*name) {
-                        if funcsign.has_signature {
-                            if let Some(arg_cnt) = arg_count {
-                                let args = typestate.get_call_args(*arg_cnt);
-                                let function_type =
-                                    DynFunctionType::new(Arc::new(funcsign.clone()));
-                                match function_type.resolve_arguments(&args) {
-                                    Ok(ret_type) => {
-                                        typestate.stack.push(ret_type.clone());
-                                    }
-                                    Err(msg) => {
-                                        warning_printer.warn(
-                                            span,
-                                            &format!("Type mismatch for function '{name}': {msg}"),
-                                        );
-                                        typestate.stack.push(Type::Any);
-                                    }
+                    } else if *name == "source" || *name == "ref" {
+                        if let Some(arg_cnt) = arg_count {
+                            let args = typestate.get_call_args(*arg_cnt);
+                            let function_type = match *name {
+                                "source" => {
+                                    DynFunctionType::new(Arc::new(SourceFunctionType::default()))
+                                }
+                                "ref" => DynFunctionType::new(Arc::new(RefFunctionType::default())),
+                                _ => unreachable!(),
+                            };
+                            match function_type.resolve_arguments(&args) {
+                                Ok(ret_type) => {
+                                    typestate.stack.push(ret_type.clone());
+                                }
+                                Err(msg) => {
+                                    warning_printer.warn(
+                                        span,
+                                        &format!("Type mismatch for function '{name}': {msg}"),
+                                    );
+                                    typestate.stack.push(Type::Any);
                                 }
                             }
-                        } else {
-                            // Macro defined without a signature, should report a warning
-
-                            if let Some(macro_def) = self.function_registry.get(*name) {
-                                warning_printer.warn(
-                                    span,
-                                    &format!(
-                                        "Macro '{}'({}) needs a signature",
-                                        name, macro_def.location
-                                    ),
-                                );
+                        }
+                    } else if let Some(funcsign) = self.function_registry.get(*name) {
+                        if let Some(arg_cnt) = arg_count {
+                            let args = typestate.get_call_args(*arg_cnt);
+                            // funcsign is now &DynFunctionType, so we can directly use resolve_arguments
+                            match funcsign.resolve_arguments(&args) {
+                                Ok(ret_type) => {
+                                    typestate.stack.push(ret_type.clone());
+                                }
+                                Err(msg) => {
+                                    warning_printer.warn(
+                                        span,
+                                        &format!("Type mismatch for function '{name}': {msg}"),
+                                    );
+                                    typestate.stack.push(Type::Any);
+                                }
                             }
-                            typestate.stack.push(Type::Any);
                         }
                     } else if let Some(arg_cnt) = arg_count {
                         let _args = typestate.get_call_args(*arg_cnt);
@@ -1120,7 +1129,7 @@ impl<'src> TypeChecker<'src> {
                             Err(e) => {
                                 warning_printer.warn(
                                     span,
-                                    &format!("Unknown method '{self_type}.{name}': {e}"),
+                                    &format!("Unknown method '{self_type:?}.{name}': {e}"),
                                 );
                                 typestate.stack.push(Type::Any);
                                 continue;

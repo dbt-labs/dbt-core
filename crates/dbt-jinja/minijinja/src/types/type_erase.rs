@@ -27,6 +27,7 @@ macro_rules! type_erase {
                 $($($f_impl: fn(*const (), $($p_impl: $t_impl),*) $(-> $r_impl)?,)*)*
                 __type_id: fn() -> std::any::TypeId,
                 __type_name: fn() -> &'static str,
+                __type_debug: fn(*const ()) -> String,
                 __incref: fn(*const ()),
                 __decref: fn(*const ()),
             }
@@ -38,7 +39,7 @@ macro_rules! type_erase {
 
             impl $erased_t_name {
                 #[doc = concat!("Returns a new boxed, type-erased [`", stringify!($t_name), "`].")]
-                $v fn new<T: $t_name + 'static>(v: std::sync::Arc<T>) -> Self {
+                $v fn new<T: $t_name + std::fmt::Debug + 'static>(v: std::sync::Arc<T>) -> Self {
                     let ptr = std::sync::Arc::into_raw(v) as *const T as *const ();
                     let vtable = &VTable {
                         $(
@@ -55,6 +56,10 @@ macro_rules! type_erase {
                         )*)*
                         __type_id: || std::any::TypeId::of::<T>(),
                         __type_name: || std::any::type_name::<T>(),
+                        __type_debug: |ptr| unsafe {
+                            let arc = std::mem::ManuallyDrop::new(std::sync::Arc::<T>::from_raw(ptr as *const T));
+                            format!("{:?}", &*arc)
+                        },
                         __incref: |ptr| unsafe {
                             std::sync::Arc::<T>::increment_strong_count(ptr as *const T);
                         },
@@ -79,6 +84,11 @@ macro_rules! type_erase {
                 /// Returns the type name of the concrete underlying type.
                 $v fn type_name(&self) -> &'static str {
                     (vt(self).__type_name)()
+                }
+
+                /// Returns the debug string of the concrete underlying type.
+                $v fn type_debug(&self) -> String {
+                    (vt(self).__type_debug)(self.ptr)
                 }
 
                 /// Downcast to `T` if the boxed value holds a `T`.
@@ -132,7 +142,7 @@ macro_rules! type_erase {
                 }
             }
 
-            impl<T: $t_name + 'static> From<std::sync::Arc<T>> for $erased_t_name {
+            impl<T: $t_name + std::fmt::Debug + 'static> From<std::sync::Arc<T>> for $erased_t_name {
                 fn from(value: std::sync::Arc<T>) -> Self {
                     $erased_t_name::new(value)
                 }

@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 /// Represents the type of a value in the type system.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Type {
     String,
     Integer,
@@ -26,6 +26,32 @@ pub enum Type {
     Class(DynClassType),
     Function(DynFunctionType),
     StdColumn,
+}
+
+impl fmt::Debug for Type {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::String => write!(f, "String"),
+            Self::Integer => write!(f, "Integer"),
+            Self::Float => write!(f, "Float"),
+            Self::Bool => write!(f, "Bool"),
+            Self::Bytes => write!(f, "Bytes"),
+            Self::Seq { field1 } => f.debug_struct("Seq").field("field1", field1).finish(),
+            Self::Map(arg0) => f.debug_tuple("Map").field(arg0).finish(),
+            Self::Iterable => write!(f, "Iterable"),
+            Self::Plain => write!(f, "Plain"),
+            Self::None => write!(f, "None"),
+            Self::Undefined => write!(f, "Undefined"),
+            Self::Invalid => write!(f, "Invalid"),
+            Self::Union(arg0) => f.debug_tuple("Union").field(arg0).finish(),
+            Self::Any => write!(f, "Any"),
+            Self::Kwargs(arg0) => f.debug_tuple("Kwargs").field(arg0).finish(),
+            Self::Frame => write!(f, "Frame"),
+            Self::Class(arg0) => f.write_fmt(format_args!("{arg0:?}")),
+            Self::Function(arg0) => f.write_fmt(format_args!("{arg0:?}")),
+            Self::StdColumn => write!(f, "StdColumn"),
+        }
+    }
 }
 
 // only used in abrupt_return

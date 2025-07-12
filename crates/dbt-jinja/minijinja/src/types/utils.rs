@@ -98,7 +98,7 @@ pub fn parse_type(s: &str) -> Type {
         "none" => Type::None,
         "undefined" => Type::Undefined,
         "invalid" => Type::Invalid,
-        "relation_object" => Type::Class(DynClassType::new(Arc::new(RelationType::default()))),
+        "relation" => Type::Class(DynClassType::new(Arc::new(RelationType::default()))),
         "adapter" => Type::Class(DynClassType::new(Arc::new(AdapterType::default()))),
         "value" => Type::Any,
         "kwargs" => Type::Kwargs(BTreeMap::default()),
