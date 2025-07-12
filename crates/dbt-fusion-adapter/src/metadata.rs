@@ -206,6 +206,11 @@ fn is_tolerable(e: &AdapterError, adapter_type: AdapterType) -> bool {
         // 42501: insufficient privileges
         // 02000: does not exist or not authorizedntax error
         AdapterType::Snowflake => e.sqlstate() == "42501" || e.sqlstate() == "02000",
+        // Databricks doesn't provide an explicit enough SQLSTATE, noticed most of their errors' SQLSTATE is HY000
+        // so we have to match on the error message below.
+        // By the time of writing down this note, it is a problem from their backend thus not something we can fix on the SDK or driver layer
+        // check out data/repros/databricks_create_schema_no_catalog_access on how to repro this error
+        AdapterType::Databricks => e.message().contains("PERMISSION_DENIED"),
         _ => {
             #[cfg(debug_assertions)]
             {
