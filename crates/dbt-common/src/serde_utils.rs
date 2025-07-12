@@ -396,6 +396,15 @@ mod tests {
             field: Omissible::Present(None),
         };
         assert_eq!(value, expected);
+
+        let yaml = r#"
+            field: null
+        "#;
+        let value: TestStruct = dbt_serde_yaml::from_str(yaml).unwrap();
+        let expected = TestStruct {
+            field: Omissible::Present(None),
+        };
+        assert_eq!(value, expected);
     }
 
     #[test]

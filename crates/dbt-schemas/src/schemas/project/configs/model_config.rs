@@ -8,6 +8,8 @@ use serde_with::skip_serializing_none;
 use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
+use super::omissible_utils::handle_omissible_override;
+
 use crate::default_to;
 use crate::schemas::common::DbtBatchSize;
 use crate::schemas::common::DbtContract;
@@ -102,7 +104,7 @@ pub struct ProjectModelConfig {
     )]
     pub copy_grants: Option<bool>,
     #[serde(rename = "+database")]
-    pub database: Option<String>,
+    pub database: Omissible<Option<String>>,
     #[serde(rename = "+databricks_compute")]
     pub databricks_compute: Option<String>,
     #[serde(rename = "+databricks_tags")]
@@ -248,7 +250,7 @@ pub struct ProjectModelConfig {
     )]
     pub require_partition_filter: Option<bool>,
     #[serde(rename = "+schema")]
-    pub schema: Option<String>,
+    pub schema: Omissible<Option<String>>,
     #[serde(
         default,
         rename = "+skip_matched_step",
@@ -306,8 +308,8 @@ pub struct ModelConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub alias: Option<String>,
-    pub schema: Option<String>,
-    pub database: Option<String>,
+    pub schema: Omissible<Option<String>>,
+    pub database: Omissible<Option<String>>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub catalog_name: Option<String>,
     // need default to ensure None if field is not set
@@ -668,13 +670,15 @@ impl DefaultTo<ModelConfig> for ModelConfig {
         #[allow(unused, clippy::let_unit_value)]
         let grants = default_to_grants(grants, &parent.grants);
 
+        // Handle Omissible fields for hierarchical overrides
+        handle_omissible_override(schema, &parent.schema);
+        handle_omissible_override(database, &parent.database);
+
         default_to!(
             parent,
             [
                 enabled,
                 alias,
-                schema,
-                database,
                 catalog_name,
                 group,
                 materialized,
@@ -718,11 +722,11 @@ impl DefaultTo<ModelConfig> for ModelConfig {
     }
 
     fn database(&self) -> Option<String> {
-        self.database.clone()
+        self.database.clone().into_inner().unwrap_or(None)
     }
 
     fn schema(&self) -> Option<String> {
-        self.schema.clone()
+        self.schema.clone().into_inner().unwrap_or(None)
     }
 
     fn alias(&self) -> Option<String> {

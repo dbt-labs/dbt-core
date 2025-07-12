@@ -83,6 +83,8 @@ pub mod schemas {
             pub mod exposure_config;
             pub mod metric_config;
             pub mod model_config;
+            pub mod omissible_utils;
+            pub mod omissible_utils_tests;
             pub mod saved_queries_config;
             pub mod seed_config;
             pub mod semantic_model_config;

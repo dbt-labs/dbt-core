@@ -219,8 +219,8 @@ pub async fn resolve_analyses(
         };
 
         let components = RelationComponents {
-            database: analysis_config.database.clone(),
-            schema: analysis_config.schema.clone(),
+            database: analysis_config.database.into_inner().unwrap_or(None),
+            schema: analysis_config.schema.into_inner().unwrap_or(None),
             alias: analysis_config.alias.clone(),
             store_failures: None,
         };

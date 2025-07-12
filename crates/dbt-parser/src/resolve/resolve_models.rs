@@ -307,8 +307,8 @@ pub async fn resolve_models(
         };
 
         let components = RelationComponents {
-            database: model_config.database.clone(),
-            schema: model_config.schema.clone(),
+            database: model_config.database.into_inner().unwrap_or(None),
+            schema: model_config.schema.into_inner().unwrap_or(None),
             alias: model_config.alias.clone(),
             store_failures: None,
         };
