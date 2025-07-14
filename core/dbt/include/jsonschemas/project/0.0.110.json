@@ -1111,9 +1111,13 @@
           ]
         },
         "+severity": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Severity"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "+skip_matched_step": {
@@ -4137,6 +4141,13 @@
         }
       },
       "additionalProperties": false
+    },
+    "Severity": {
+      "type": "string",
+      "enum": [
+        "Error",
+        "Warn"
+      ]
     },
     "SnapshotMetaColumnNames": {
       "type": "object",
