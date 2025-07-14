@@ -10,6 +10,7 @@ use crate::schemas::{
         NodeDependsOn,
     },
     dbt_column::DbtColumn,
+    manifest::DbtOperation,
     nodes::TestMetadata,
     project::{
         DataTestConfig, ModelConfig, SeedConfig, SnapshotConfig, SourceConfig, UnitTestConfig,
@@ -473,6 +474,40 @@ impl From<DbtModel> for ManifestModel {
             primary_key: Some(model.model_attr.primary_key),
             time_spine: model.model_attr.time_spine,
             other: model.other,
+        }
+    }
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct ManifestOperation {
+    #[serde(flatten)]
+    pub common_attr: ManifestCommonAttributes,
+
+    #[serde(flatten)]
+    pub base_attr: ManifestNodeBaseAttributes,
+
+    #[serde(flatten)]
+    pub other: BTreeMap<String, Value>,
+}
+
+impl From<DbtOperation> for ManifestOperation {
+    fn from(operation: DbtOperation) -> Self {
+        Self {
+            common_attr: ManifestCommonAttributes {
+                unique_id: operation.common_attr.unique_id,
+                name: operation.common_attr.name,
+                package_name: operation.common_attr.package_name,
+                fqn: operation.common_attr.fqn,
+                path: operation.common_attr.path,
+                original_file_path: operation.common_attr.original_file_path,
+                patch_path: operation.common_attr.patch_path,
+                description: operation.common_attr.description,
+                ..Default::default()
+            },
+            base_attr: ManifestNodeBaseAttributes::default(),
+            other: operation.other,
         }
     }
 }

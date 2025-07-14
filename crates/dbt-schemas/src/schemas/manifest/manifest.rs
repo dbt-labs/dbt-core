@@ -13,8 +13,8 @@ use crate::{
         common::{DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn},
         macros::{DbtDocsMacro, DbtMacro},
         manifest::manifest_nodes::{
-            ManifestDataTest, ManifestModel, ManifestSeed, ManifestSnapshot, ManifestSource,
-            ManifestUnitTest,
+            ManifestDataTest, ManifestModel, ManifestOperation, ManifestSeed, ManifestSnapshot,
+            ManifestSource, ManifestUnitTest,
         },
         nodes::{DbtSeedAttr, DbtSnapshotAttr, DbtSourceAttr, DbtTestAttr},
         CommonAttributes, DbtModel, DbtModelAttr, DbtSeed, DbtSnapshot, DbtSource, DbtTest,
@@ -24,9 +24,7 @@ use crate::{
     state::ResolverState,
 };
 
-use super::{
-    DbtExposure, DbtGroup, DbtMetric, DbtOperation, DbtSavedQuery, DbtSelector, DbtSemanticModel,
-};
+use super::{DbtExposure, DbtGroup, DbtMetric, DbtSavedQuery, DbtSelector, DbtSemanticModel};
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,7 +35,7 @@ pub enum DbtNode {
     Test(ManifestDataTest),
     Snapshot(ManifestSnapshot),
     Seed(ManifestSeed),
-    Operation(DbtOperation),
+    Operation(ManifestOperation),
     Analysis(ManifestModel),
 }
 
@@ -323,13 +321,13 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
             .chain(resolver_state.operations.on_run_start.iter().map(|node| {
                 (
                     node.common_attr.unique_id.clone(),
-                    DbtNode::Operation(node.clone()),
+                    DbtNode::Operation((*node).clone().into()),
                 )
             }))
             .chain(resolver_state.operations.on_run_end.iter().map(|node| {
                 (
                     node.common_attr.unique_id.clone(),
-                    DbtNode::Operation(node.clone()),
+                    DbtNode::Operation((*node).clone().into()),
                 )
             }))
             .collect(),

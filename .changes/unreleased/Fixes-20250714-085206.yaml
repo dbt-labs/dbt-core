@@ -1,0 +1,5 @@
+kind: Fixes
+body: Fixes operation node incompatibility in manifest.json
+time: 2025-07-14T08:52:06.886576206-07:00
+custom:
+  PR: dbt-labs/fs#4433
