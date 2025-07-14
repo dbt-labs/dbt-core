@@ -267,6 +267,7 @@ def profile(func):
         threads = getattr(flags, "THREADS", None)
         profile = load_profile(flags.PROJECT_DIR, flags.VARS, flags.PROFILE, flags.TARGET, threads)
         ctx.obj["profile"] = profile
+        get_invocation_context().uses_adapter(profile.credentials.type)
 
         return func(*args, **kwargs)
 
