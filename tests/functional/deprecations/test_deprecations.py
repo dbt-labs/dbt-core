@@ -10,9 +10,6 @@ import dbt_common
 from dbt import deprecations
 from dbt.cli.main import dbtRunner
 from dbt.clients.registry import _get_cached
-from dbt.deprecations import (
-    GenericJSONSchemaValidationDeprecation as GenericJSONSchemaValidationDeprecationCore,
-)
 from dbt.events.types import (
     CustomKeyInConfigDeprecation,
     CustomKeyInObjectDeprecation,
@@ -321,16 +318,9 @@ class TestDeprecatedInvalidDeprecationDate:
                 True
             ), "Expected an exception to be raised, because a model object can't be created with a deprecation_date as an int"
 
-        if GenericJSONSchemaValidationDeprecationCore()._is_preview:
-            assert len(note_catcher.caught_events) == 1
-            assert len(event_catcher.caught_events) == 0
-            event = note_catcher.caught_events[0]
-        else:
-            assert len(event_catcher.caught_events) == 1
-            assert len(note_catcher.caught_events) == 0
-            event = event_catcher.caught_events[0]
-
-        assert "1 is not of type 'string', 'null' in file" in event.info.msg
+        # type-based jsonschema validation is not enabled, so no deprecations are raised even though deprecation_date is an int
+        assert len(event_catcher.caught_events) == 0
+        assert len(note_catcher.caught_events) == 0
 
 
 class TestDuplicateYAMLKeysInSchemaFiles:
