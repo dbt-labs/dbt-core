@@ -92,12 +92,16 @@ def _validate_with_schema(
     return validator.iter_errors(json)
 
 
-def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path: str) -> None:
+def _can_run_validations() -> bool:
     if not os.environ.get("DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS"):
-        return
+        return False
 
     invocation_context = get_invocation_context()
-    if not _JSONSCHEMA_SUPPORTED_ADAPTERS.issubset(invocation_context.adapter_types):
+    return _JSONSCHEMA_SUPPORTED_ADAPTERS.issubset(invocation_context.adapter_types)
+
+
+def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path: str) -> None:
+    if not _can_run_validations():
         return
 
     errors = _validate_with_schema(schema, json)
@@ -158,11 +162,7 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
 
 
 def validate_model_config(config: Dict[str, Any], file_path: str) -> None:
-    if not os.environ.get("DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS"):
-        return
-
-    invocation_context = get_invocation_context()
-    if not _JSONSCHEMA_SUPPORTED_ADAPTERS.issubset(invocation_context.adapter_types):
+    if not _can_run_validations():
         return
 
     resources_jsonschema = resources_schema()
