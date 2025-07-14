@@ -150,9 +150,9 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                         ):
                             deprecations.warn(
                                 "missing-plus-prefix-in-config-deprecation",
-                                key=key,
+                                key=sub_error.path[-1],
                                 file=file_path,
-                                key_path=key_path,
+                                key_path=error_path_to_string(error),
                             )
         elif error.validator == "type":
             pass
