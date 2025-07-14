@@ -12,9 +12,16 @@ from jsonschema.validators import Draft7Validator, extend
 
 from dbt import deprecations
 from dbt.include.jsonschemas import JSONSCHEMAS_PATH
+from dbt_common.context import get_invocation_context
 
 _PROJECT_SCHEMA: Optional[Dict[str, Any]] = None
 _RESOURCES_SCHEMA: Optional[Dict[str, Any]] = None
+
+_JSONSCHEMA_SUPPORTED_ADAPTERS = {
+    "bigquery",
+    "databricks" "redshift",
+    "snowflake",
+}
 
 
 def load_json_from_package(jsonschema_type: str, filename: str) -> Dict[str, Any]:
@@ -86,8 +93,11 @@ def _validate_with_schema(
 
 
 def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path: str) -> None:
-
     if not os.environ.get("DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS"):
+        return
+
+    invocation_context = get_invocation_context()
+    if not _JSONSCHEMA_SUPPORTED_ADAPTERS.issubset(invocation_context.adapter_types):
         return
 
     errors = _validate_with_schema(schema, json)
@@ -149,6 +159,10 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
 
 def validate_model_config(config: Dict[str, Any], file_path: str) -> None:
     if not os.environ.get("DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS"):
+        return
+
+    invocation_context = get_invocation_context()
+    if not _JSONSCHEMA_SUPPORTED_ADAPTERS.issubset(invocation_context.adapter_types):
         return
 
     resources_jsonschema = resources_schema()
