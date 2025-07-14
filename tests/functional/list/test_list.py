@@ -1067,6 +1067,12 @@ class TestList:
             "test.my_second_favorite_test",
             "semantic_model:test.my_sm",
             "metric:test.total_outer",
+            "metric:test.conversion_metric",
+            "metric:test.cumulative_metric",
+            "metric:test.cumulative_metric_2",
+            "metric:test.derived_metric",
+            "metric:test.filtered_ratio_metric",
+            "metric:test.simple_ratio_metric",
             "saved_query:test.my_saved_query",
             "test.expression_is_true_seed_b_2",
             "test.not_null_seed__a_",
@@ -1101,7 +1107,15 @@ class TestList:
         assert set(results) == {"semantic_model:test.my_sm"}
 
         results = self.run_dbt_ls(["--resource-type", "metric"])
-        assert set(results) == {"metric:test.total_outer"}
+        assert set(results) == {
+            "metric:test.total_outer",
+            "metric:test.simple_ratio_metric",
+            "metric:test.filtered_ratio_metric",
+            "metric:test.conversion_metric",
+            "metric:test.cumulative_metric",
+            "metric:test.cumulative_metric_2",
+            "metric:test.derived_metric",
+        }
 
         results = self.run_dbt_ls(["--resource-type", "saved_query"])
         assert set(results) == {"saved_query:test.my_saved_query"}
