@@ -148,9 +148,8 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                             and isinstance(sub_error.path[-1], str)
                             and not sub_error.path[-1].startswith("+")
                         ):
-                            # TODO: replace with custom "missing plus prefix"deprecation
                             deprecations.warn(
-                                "custom-key-in-config-deprecation",
+                                "missing-plus-prefix-in-config-deprecation",
                                 key=key,
                                 file=file_path,
                                 key_path=key_path,
