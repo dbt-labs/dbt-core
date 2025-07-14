@@ -50,6 +50,7 @@ mod macro_object;
 mod mod_typecheck;
 mod state;
 pub mod typemeta;
+pub use mod_typecheck::find_macro_signatures;
 
 // the cost of a single include against the stack limit.
 #[cfg(feature = "multi_template")]
@@ -412,7 +413,7 @@ impl<'env> Vm<'env> {
                 Instruction::Emit => {
                     ctx_ok!(self.env.format(&stack.pop(), state, out));
                 }
-                Instruction::StoreLocal(name) => {
+                Instruction::StoreLocal(name, _) => {
                     state.ctx.store(name, stack.pop());
                 }
                 Instruction::Lookup(name, _) => {
@@ -494,7 +495,7 @@ impl<'env> Vm<'env> {
                         ));
                     }
                 }
-                Instruction::GetItem => {
+                Instruction::GetItem(_) => {
                     a = stack.pop();
                     b = stack.pop();
                     stack.push(match b.get_item_opt(&a) {
@@ -567,7 +568,7 @@ impl<'env> Vm<'env> {
                     }
                     stack.push(Kwargs::wrap(rv));
                 }
-                Instruction::BuildList(n) => {
+                Instruction::BuildList(n, _span) => {
                     let count = n.unwrap_or_else(|| stack.pop().try_into().unwrap());
                     let mut v = Vec::with_capacity(untrusted_size_hint(count));
                     for _ in 0..count {
@@ -738,7 +739,7 @@ impl<'env> Vm<'env> {
                 Instruction::EndCapture => {
                     stack.push(out.end_capture(state.auto_escape));
                 }
-                Instruction::ApplyFilter(name, arg_count, local_id) => {
+                Instruction::ApplyFilter(name, arg_count, local_id, _span) => {
                     let filter =
                         ctx_ok!(get_or_lookup_local(&mut loaded_filters, *local_id, || {
                             state.env.get_filter(name)
@@ -1132,7 +1133,7 @@ impl<'env> Vm<'env> {
                     stack.drop_top(arg_count);
                     stack.push(a);
                 }
-                Instruction::CallObject(arg_count) => {
+                Instruction::CallObject(arg_count, _span) => {
                     let args = stack.get_call_args(*arg_count);
                     let arg_count = args.len();
                     a = ctx_ok!(args[0].call(state, &args[1..], listeners));
@@ -1342,6 +1343,9 @@ impl<'env> Vm<'env> {
                 }
                 Instruction::MacroName(_) => {
                     // no-op, we don't need to do anything here
+                }
+                Instruction::FinishedParameterLoading => {
+                    // TODO
                 }
             }
             pc += 1;

@@ -10,6 +10,7 @@ use std::sync::Arc;
 use memo_map::MemoMap;
 use self_cell::self_cell;
 
+use crate::compiler::codegen::CodeGenerationProfile;
 use crate::compiler::instructions::Instructions;
 use crate::error::{Error, ErrorKind};
 use crate::template::CompiledTemplate;
@@ -29,6 +30,7 @@ pub(crate) struct LoaderStore<'source> {
     loader: Option<Arc<LoadFunc>>,
     owned_templates: MemoMap<Arc<str>, Arc<LoadedTemplate>>,
     borrowed_templates: BTreeMap<&'source str, Arc<CompiledTemplate<'source>>>,
+    profile: CodeGenerationProfile,
 }
 
 impl fmt::Debug for LoaderStore<'_> {
@@ -69,12 +71,16 @@ impl fmt::Debug for LoadedTemplate {
 }
 
 impl<'source> LoaderStore<'source> {
-    pub fn new(template_config: TemplateConfig) -> LoaderStore<'source> {
+    pub fn new(
+        template_config: TemplateConfig,
+        profile: CodeGenerationProfile,
+    ) -> LoaderStore<'source> {
         LoaderStore {
             template_config,
             loader: None,
             owned_templates: MemoMap::default(),
             borrowed_templates: BTreeMap::default(),
+            profile,
         }
     }
 
@@ -98,6 +104,7 @@ impl<'source> LoaderStore<'source> {
                         source,
                         &self.template_config,
                         filename,
+                        self.profile,
                     ))),
                 );
             }
@@ -106,7 +113,12 @@ impl<'source> LoaderStore<'source> {
                 let name: Arc<str> = name.into();
                 self.owned_templates.replace(
                     name.clone(),
-                    ok!(self.make_owned_template(name, source.to_string(), filename)),
+                    ok!(self.make_owned_template(
+                        name,
+                        source.to_string(),
+                        filename,
+                        self.profile,
+                    )),
                 );
             }
         }
@@ -136,7 +148,7 @@ impl<'source> LoaderStore<'source> {
                         None => None,
                     }
                     .ok_or_else(|| Error::new_not_found(&name));
-                    self.make_owned_template(name, ok!(loader_result), None)
+                    self.make_owned_template(name, ok!(loader_result), None, self.profile)
                 })
                 .map(|x| x.borrow_dependent())
         }
@@ -154,11 +166,12 @@ impl<'source> LoaderStore<'source> {
         name: Arc<str>,
         source: String,
         filename: Option<String>,
+        profile: CodeGenerationProfile,
     ) -> Result<Arc<LoadedTemplate>, Error> {
         LoadedTemplate::try_new(
             (name, source.into_boxed_str()),
             |(name, source)| -> Result<_, Error> {
-                CompiledTemplate::new(name, source, &self.template_config, filename)
+                CompiledTemplate::new(name, source, &self.template_config, filename, profile)
             },
         )
         .map(Arc::new)

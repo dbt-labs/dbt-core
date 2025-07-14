@@ -192,7 +192,7 @@ pub fn build_cfg(code: &[Instruction]) -> CFG {
     }
 
     // 5. Collect type narrowing updates (for type inference)
-    let mut type_narrow_updates: Vec<(usize, String, crate::types::builtin::Type)> = Vec::new();
+    let mut type_constraint_updates: Vec<(usize, String, crate::types::builtin::Type)> = Vec::new();
 
     // 6. Collect control-flow edges (successors and their kinds)
     let mut tmp_succ: Vec<Vec<(BlockId, EdgeKind)>> = vec![Vec::new(); blocks.len()];
@@ -214,10 +214,10 @@ pub fn build_cfg(code: &[Instruction]) -> CFG {
                                 let end_idx = *jump_target;
                                 for (bidx, b) in blocks.iter().enumerate() {
                                     if b.start >= start_idx && b.end < end_idx {
-                                        type_narrow_updates.push((
+                                        type_constraint_updates.push((
                                             bidx,
                                             var_name.to_string(),
-                                            crate::types::builtin::Type::String,
+                                            crate::types::builtin::Type::String(None),
                                         ));
                                     }
                                 }
@@ -260,13 +260,47 @@ pub fn build_cfg(code: &[Instruction]) -> CFG {
     }
 
     // 9. Apply type narrowing updates
-    for (block_id, var_name, ty) in type_narrow_updates {
+    for (block_id, var_name, ty) in type_constraint_updates {
         blocks[block_id].type_constraints.insert(var_name, ty);
     }
 
-    CFG {
+    let mut cfg = CFG {
         blocks,
         instruction_to_basic_block,
         entry: 0,
+    };
+
+    // find all blocks with a current_macro
+    let roots = Vec::from_iter(
+        cfg.blocks
+            .iter()
+            .enumerate()
+            .filter_map(|(i, b)| b.current_macro.as_ref().map(|_| i)),
+    );
+
+    for root in roots {
+        populate_current_macro(&mut cfg, root, &mut BTreeSet::new());
+    }
+
+    cfg
+}
+
+fn populate_current_macro(
+    cfg: &mut CFG,
+    current_block_id: BlockId,
+    visited: &mut BTreeSet<BlockId>,
+) {
+    if visited.contains(&current_block_id) {
+        return;
+    }
+    visited.insert(current_block_id);
+
+    // for all successors, populate the current macro to them
+    let successors = &cfg.blocks[current_block_id].successor.clone();
+    for &(succ_id, _) in successors {
+        if let Some(macro_name) = &cfg.blocks[current_block_id].current_macro {
+            cfg.blocks[succ_id].current_macro = Some(macro_name.clone());
+            populate_current_macro(cfg, succ_id, visited);
+        }
     }
 }

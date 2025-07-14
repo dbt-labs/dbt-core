@@ -5,13 +5,34 @@ use std::hash::{Hash, Hasher};
 use super::type_erase::type_erase;
 
 pub trait ClassType: Send + Sync + std::fmt::Debug {
-    fn get_attribute(&self, key: &str) -> Result<Type, crate::Error>;
+    fn get_attribute(&self, key: &str) -> Result<Type, crate::Error> {
+        Err(crate::Error::new(
+            crate::error::ErrorKind::InvalidOperation,
+            format!("{self:?}.{key} is not supported"),
+        ))
+    }
+
+    fn constructor(&self, _args: &[Type]) -> Result<Type, crate::Error> {
+        Err(crate::Error::new(
+            crate::error::ErrorKind::InvalidOperation,
+            format!("{self:?} does not support constructor"),
+        ))
+    }
+
+    fn subscript(&self, _index: &Type) -> Result<Type, crate::Error> {
+        Err(crate::Error::new(
+            crate::error::ErrorKind::InvalidOperation,
+            format!("{self:?} does not support subscript"),
+        ))
+    }
 }
 
 // Type-erased version of ClassType
 type_erase! {
     pub trait ClassType => DynClassType {
         fn get_attribute(&self, key: &str) -> Result<Type, crate::Error>;
+        fn constructor(&self, args: &[Type]) -> Result<Type, crate::Error>;
+        fn subscript(&self, index: &Type) -> Result<Type, crate::Error>;
     }
 }
 

@@ -1,5 +1,6 @@
 use crate::types::builtin::Type;
-use crate::types::utils::parse_type;
+use crate::types::iterable::IterableType;
+use crate::types::list::ListType;
 use crate::types::utils::CodeLocation;
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -42,7 +43,7 @@ pub trait FunctionType: Send + Sync + std::fmt::Debug {
                 } else {
                     // Missing argument, use Type::Any as fallback
                     // This is for the case where the previous arguments have default values and users do not provide them
-                    sorted_args.push(Type::None);
+                    sorted_args.push(Type::Any { hard: true });
                 }
             }
             self._resolve_arguments(&sorted_args)
@@ -115,6 +116,12 @@ pub struct UserDefinedFunctionType {
     pub location: CodeLocation,
 }
 
+impl fmt::Debug for UserDefinedFunctionType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
 impl UserDefinedFunctionType {
     pub fn new(name: &str, args: Vec<Type>, ret_type: Type, location: CodeLocation) -> Self {
         Self {
@@ -139,11 +146,13 @@ impl FunctionType for UserDefinedFunctionType {
                 ),
             ))
         } else {
-            for (expected, actual) in self.args.iter().zip(actual_arguments) {
-                if expected.coerce(actual).is_none() {
+            for (i, (expected, actual)) in self.args.iter().zip(actual_arguments).enumerate() {
+                if !actual.is_subtype_of(expected) {
                     return Err(crate::Error::new(
                         crate::error::ErrorKind::TypeError,
-                        format!("Argument type mismatch: expected {expected:?}, got {actual:?}"),
+                        format!(
+                            "Argument type mismatch: expected {expected:?}, got {actual:?}, at index {i}"
+                        ),
                     ));
                 }
             }
@@ -160,10 +169,15 @@ impl FunctionType for UserDefinedFunctionType {
     }
 }
 
-#[derive(Debug)]
 pub struct UndefinedFunctionType {
     pub name: String,
     pub location: CodeLocation,
+}
+
+impl fmt::Debug for UndefinedFunctionType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.name.to_string())
+    }
 }
 
 impl UndefinedFunctionType {
@@ -188,56 +202,13 @@ impl FunctionType for UndefinedFunctionType {
     }
 }
 
-pub fn parse_macro_signature(funcsign_str: String) -> (Vec<Type>, Type) {
-    // parse the function signature string
-    let parts: Vec<&str> = funcsign_str.split("->").collect();
-    if parts.len() != 2 {
-        panic!("Invalid function signature format");
-    }
-    let sig = parts[0].trim();
-    let ret_type_str = parts[1].trim();
-
-    // Find function name and parameter list
-    if let Some(paren_start) = sig.find('(') {
-        let params_str = &sig[paren_start + 1..sig.len() - 1]; // remove parentheses
-        let args = if params_str.trim().is_empty() {
-            Vec::new()
-        } else {
-            params_str
-                .split(',')
-                .map(|s| parse_type(s.trim()))
-                .collect()
-        };
-        let ret_type = parse_type(ret_type_str);
-        (args, ret_type)
-    } else {
-        panic!("Invalid function signature format: missing '('");
-    }
-}
-
-impl std::fmt::Debug for UserDefinedFunctionType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}({}) -> {}",
-            self.name,
-            self.args
-                .iter()
-                .map(|t| format!("{t}"))
-                .collect::<Vec<_>>()
-                .join(", "),
-            self.ret_type
-        )
-    }
-}
-
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub struct StoreResultFunctionType;
 
 impl FunctionType for StoreResultFunctionType {
     fn _resolve_arguments(&self, _actual_arguments: &[Type]) -> Result<Type, crate::Error> {
         // TODO: check args
-        Ok(Type::String)
+        Ok(Type::String(None))
     }
 
     fn arg_names(&self) -> Vec<String> {
@@ -255,7 +226,7 @@ pub struct LoadResultFunctionType;
 impl FunctionType for LoadResultFunctionType {
     fn _resolve_arguments(&self, _actual_arguments: &[Type]) -> Result<Type, crate::Error> {
         // TODO: check args and return the result type
-        Ok(Type::Any)
+        Ok(Type::Any { hard: true })
     }
 
     fn arg_names(&self) -> Vec<String> {
@@ -269,7 +240,7 @@ pub struct StoreRawResultFunctionType;
 impl FunctionType for StoreRawResultFunctionType {
     fn _resolve_arguments(&self, _actual_arguments: &[Type]) -> Result<Type, crate::Error> {
         // TODO: check args
-        Ok(Type::String)
+        Ok(Type::String(None))
     }
 
     fn arg_names(&self) -> Vec<String> {
@@ -288,7 +259,7 @@ pub struct RefFunctionType;
 
 impl FunctionType for RefFunctionType {
     fn _resolve_arguments(&self, _actual_arguments: &[Type]) -> Result<Type, crate::Error> {
-        Ok(Type::String)
+        Ok(Type::String(None))
     }
 
     fn arg_names(&self) -> Vec<String> {
@@ -301,10 +272,232 @@ pub struct SourceFunctionType;
 
 impl FunctionType for SourceFunctionType {
     fn _resolve_arguments(&self, _actual_arguments: &[Type]) -> Result<Type, crate::Error> {
-        Ok(Type::String)
+        Ok(Type::String(None))
     }
 
     fn arg_names(&self) -> Vec<String> {
         vec!["name".to_string(), "namespace".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct DiffOfTwoDictsFunctionType;
+
+impl FunctionType for DiffOfTwoDictsFunctionType {
+    fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        // TODO: check args
+        Ok(actual_arguments[0].clone())
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["dict_a".to_string(), "dict_b".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct LogFunctionType;
+
+impl FunctionType for LogFunctionType {
+    fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        if actual_arguments.len() != 1 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "log requires exactly 1 argument",
+            ));
+        }
+        if !matches!(
+            actual_arguments[0],
+            Type::String(_) | Type::Integer(_) | Type::Float | Type::Bool
+        ) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "log requires a string argument",
+            ));
+        }
+        Ok(Type::None)
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["message".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct LengthFunctionType;
+
+impl FunctionType for LengthFunctionType {
+    fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        if actual_arguments.len() != 1 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "length requires exactly 1 argument",
+            ));
+        }
+        if !matches!(
+            actual_arguments[0],
+            Type::List(_)
+                | Type::String(_)
+                | Type::Dict(_)
+                | Type::Iterable(_)
+                | Type::Any { hard: true }
+        ) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                format!(
+                    "length requires a list argument, got {:?}",
+                    actual_arguments[0]
+                ),
+            ));
+        }
+        Ok(Type::Integer(None))
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["value".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct JoinFunctionType;
+
+impl FunctionType for JoinFunctionType {
+    fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        if actual_arguments.len() != 2 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "join requires exactly 2 arguments",
+            ));
+        }
+        let iterable = actual_arguments[0].clone();
+        let separator = actual_arguments[1].clone();
+        if !matches!(iterable, Type::List(_) | Type::Iterable(_)) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                format!(
+                    "join requires a list or iterable argument as the first argument, got {iterable:?}"
+                ),
+            ));
+        }
+        if !matches!(separator, Type::String(_)) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                format!(
+                    "join requires a string argument as the second argument, got {separator:?}"
+                ),
+            ));
+        }
+        Ok(Type::String(None))
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["iterable".to_string(), "separator".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct MapFunctionType {}
+
+impl FunctionType for MapFunctionType {
+    fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        if actual_arguments.len() != 2 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "map requires exactly 2 arguments",
+            ));
+        }
+        if let Type::String(Some(key)) = &actual_arguments[1] {
+            let element = match &actual_arguments[0] {
+                Type::List(ListType { element }) | Type::Iterable(IterableType { element }) => {
+                    element.get_attribute(key.as_str())
+                }
+                Type::Any { hard: true } => Ok(Type::Any { hard: true }),
+                _ => {
+                    return Err(crate::Error::new(
+                        crate::error::ErrorKind::TypeError,
+                        format!(
+                            "map requires a list or iterable argument as the first argument, got {:?}",
+                            actual_arguments[0]
+                        ),
+                    ));
+                }
+            }?;
+            Ok(Type::Iterable(IterableType::new(
+                element.get_attribute(key.as_str())?,
+            )))
+        } else {
+            Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                format!(
+                    "map requires a literal string argument as the second argument, got {:?}",
+                    actual_arguments[1]
+                ),
+            ))
+        }
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["iterable".to_string(), "attribute".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct ListFunctionType;
+
+impl FunctionType for ListFunctionType {
+    fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        if actual_arguments.len() != 1 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "list requires exactly 1 argument",
+            ));
+        }
+        let element = match &actual_arguments[0] {
+            Type::List(ListType { element }) | Type::Iterable(IterableType { element }) => element,
+            _ => {
+                return Err(crate::Error::new(
+                    crate::error::ErrorKind::TypeError,
+                    format!(
+                        "list requires a list or iterable argument, got {:?}",
+                        actual_arguments[0]
+                    ),
+                ));
+            }
+        };
+        Ok(Type::List(ListType::new(*element.clone())))
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["iterable".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct CastFunctionType;
+
+impl FunctionType for CastFunctionType {
+    fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        if actual_arguments.len() != 2 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "cast requires exactly 1 argument",
+            ));
+        }
+        if !matches!(actual_arguments[0], Type::String(_)) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "cast requires a string argument as the first argument",
+            ));
+        }
+        if !matches!(actual_arguments[1], Type::String(_)) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "cast requires a string argument as the second argument",
+            ));
+        }
+        Ok(Type::String(None))
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["type".to_string(), "value".to_string()]
     }
 }

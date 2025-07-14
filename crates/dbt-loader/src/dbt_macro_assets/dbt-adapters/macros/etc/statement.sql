@@ -1,7 +1,7 @@
 {#--
 The macro override naming method (spark__statement) only works for macros which are called with adapter.dispatch. For macros called directly, you can just redefine them.
 --#}
--- funcsign: (string, bool, bool, string) -> string
+-- funcsign: (optional[string], bool, bool, string) -> none
 {%- macro statement(name=None, fetch_result=False, auto_begin=True, language='sql') -%}
   {%- if execute: -%}
     {%- set compiled_code = caller() -%}
@@ -44,6 +44,7 @@ The macro override naming method (spark__statement) only works for macros which 
 
 
 {# a user-friendly interface into statements #}
+-- funcsign: (string) -> agate_table
 {% macro run_query(sql) %}
   {% call statement("run_query_statement", fetch_result=true, auto_begin=false) %}
     {{ sql }}

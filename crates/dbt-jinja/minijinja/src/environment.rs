@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use serde::Serialize;
 
-use crate::compiler::codegen::CodeGenerator;
+use crate::compiler::codegen::{CodeGenerationProfile, CodeGenerator};
 use crate::compiler::instructions::Instructions;
 use crate::compiler::parser::parse_expr;
 use crate::constants::{
@@ -66,6 +66,7 @@ pub struct Environment<'source> {
     #[cfg(feature = "fuel")]
     fuel: Option<u64>,
     recursion_limit: usize,
+    profile: CodeGenerationProfile,
 }
 
 impl Default for Environment<'_> {
@@ -93,10 +94,21 @@ impl<'source> Environment<'source> {
     /// default configuration you can use the alternative
     /// [`empty`](Environment::empty) method.
     pub fn new() -> Environment<'source> {
+        Environment::new_with_profile(CodeGenerationProfile::Render)
+    }
+
+    /// Creates a new environment with a specific profile.
+    ///
+    /// The profile determines the code generation strategy used by the environment.
+    /// This can be useful for optimizing performance or memory usage depending on
+    /// the use case.
+    ///
+    pub fn new_with_profile(profile: CodeGenerationProfile) -> Environment<'source> {
         Environment {
-            templates: TemplateStore::new(TemplateConfig::new(Arc::new(
-                defaults::default_auto_escape_callback,
-            ))),
+            templates: TemplateStore::new(
+                TemplateConfig::new(Arc::new(defaults::default_auto_escape_callback)),
+                profile,
+            ),
             filters: defaults::get_builtin_filters(),
             tests: defaults::get_builtin_tests(),
             globals: defaults::get_globals(),
@@ -109,6 +121,7 @@ impl<'source> Environment<'source> {
             #[cfg(feature = "fuel")]
             fuel: None,
             recursion_limit: MAX_RECURSION,
+            profile,
         }
     }
 
@@ -123,7 +136,10 @@ impl<'source> Environment<'source> {
     /// logic for auto escaping configured.
     pub fn empty() -> Environment<'source> {
         Environment {
-            templates: TemplateStore::new(TemplateConfig::new(Arc::new(defaults::no_auto_escape))),
+            templates: TemplateStore::new(
+                TemplateConfig::new(Arc::new(defaults::no_auto_escape)),
+                CodeGenerationProfile::Render,
+            ),
             filters: Default::default(),
             tests: Default::default(),
             globals: Default::default(),
@@ -136,6 +152,7 @@ impl<'source> Environment<'source> {
             #[cfg(feature = "fuel")]
             fuel: None,
             recursion_limit: MAX_RECURSION,
+            profile: CodeGenerationProfile::Render,
         }
     }
 
@@ -423,6 +440,7 @@ impl<'source> Environment<'source> {
                 source,
                 &self.templates.template_config,
                 None,
+                self.profile,
             )))),
         ))
     }
@@ -707,7 +725,7 @@ impl<'source> Environment<'source> {
     fn _compile_expression<'expr>(&self, expr: &'expr str) -> Result<Instructions<'expr>, Error> {
         attach_basic_debug_info(
             parse_expr(expr).map(|ast| {
-                let mut gen = CodeGenerator::new("<expression>", expr);
+                let mut gen = CodeGenerator::new("<expression>", expr, self.profile);
                 gen.compile_expr(&ast);
                 gen.finish().0
             }),

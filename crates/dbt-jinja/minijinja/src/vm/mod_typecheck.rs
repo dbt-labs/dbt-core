@@ -4,11 +4,11 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
+use crate::compiler::ast;
 use crate::compiler::cfg::build_cfg;
-use crate::compiler::instructions::{Instruction, Instructions};
-use crate::types::function::{
-    parse_macro_signature, DynFunctionType, UndefinedFunctionType, UserDefinedFunctionType,
-};
+use crate::compiler::instructions::Instructions;
+use crate::types::funcsign_parser::parse;
+use crate::types::function::{DynFunctionType, UndefinedFunctionType, UserDefinedFunctionType};
 use crate::vm::listeners::TypecheckingEventListener;
 use crate::vm::typemeta::TypeChecker;
 
@@ -32,7 +32,7 @@ impl<'env> Vm<'env> {
         root: Value,
         blocks: &'template BTreeMap<&'env str, Instructions<'env>>,
         auto_escape: AutoEscape,
-        funcsigns: &FunctionRegistry,
+        funcsigns: Arc<FunctionRegistry>,
         warning_printer: Rc<dyn TypecheckingEventListener>,
     ) -> Result<(), crate::Error> {
         let _guard = value_optimization();
@@ -63,83 +63,6 @@ impl<'env> Vm<'env> {
         self.typecheck_impl(&mut state, Stack::default(), 0, funcsigns, warning_printer)
     }
 
-    /// Get macro signatures from the instructions
-    pub fn get_macro_signature(
-        &self,
-        instructions: &Instructions<'_>,
-        path: &Path,
-    ) -> FunctionRegistry {
-        let mut funcsigns: FunctionRegistry = BTreeMap::new();
-        let mut current_funcsign = String::new();
-        for (i, instruction) in instructions.instructions.iter().enumerate() {
-            match instruction {
-                Instruction::EmitRaw(val) => {
-                    // if val starts with "[\n]*-- funcsign:" in regex
-                    let trimmed = val.trim_start();
-                    if let Some(funcsign_str) = trimmed.strip_prefix("-- funcsign:") {
-                        // parse the function signature
-                        current_funcsign = funcsign_str.to_string();
-                    }
-                }
-                Instruction::BuildMacro(name, _offset, _flags) => {
-                    // Check if the previous instruction is MacroStart and the next is MacroStop (by variant)
-                    let prev_is_macro_start = instructions
-                        .instructions
-                        .get(i.wrapping_sub(1))
-                        .map(|instr| matches!(instr, Instruction::MacroStart(_, _, _, _, _, _)))
-                        .unwrap_or(false);
-                    let next_is_macro_stop = instructions
-                        .instructions
-                        .get(i + 1)
-                        .map(|instr| matches!(instr, Instruction::MacroStop(_, _, _,)))
-                        .unwrap_or(false);
-
-                    if prev_is_macro_start && next_is_macro_stop {
-                        // get the line and column numbers from the MacroStart instruction
-                        let (line_num, col_num, _index) = match instructions.instructions[i - 1] {
-                            Instruction::MacroStart(line, col, idx, _, _, _) => (line, col, idx),
-                            _ => continue, // should not happen
-                        };
-
-                        // add the function signature if it exists
-                        if !current_funcsign.is_empty() {
-                            let (args, ret_type) = parse_macro_signature(current_funcsign.clone());
-                            let funcsign = UserDefinedFunctionType::new(
-                                name,
-                                args,
-                                ret_type,
-                                CodeLocation {
-                                    line: line_num,
-                                    col: col_num,
-                                    file: path.to_path_buf(),
-                                },
-                            );
-                            funcsigns
-                                .insert(name.to_string(), DynFunctionType::new(Arc::new(funcsign)));
-                            current_funcsign.clear();
-                        } else {
-                            funcsigns.insert(
-                                name.to_string(),
-                                DynFunctionType::new(Arc::new(UndefinedFunctionType::new(
-                                    name,
-                                    CodeLocation {
-                                        line: line_num,
-                                        col: col_num,
-                                        file: path.to_path_buf(),
-                                    },
-                                ))),
-                            );
-                        }
-                    }
-                }
-                _ => {
-                    // continue to the next instruction
-                }
-            }
-        }
-        funcsigns
-    }
-
     #[inline]
     #[allow(clippy::too_many_arguments)]
     fn typecheck_impl(
@@ -147,7 +70,7 @@ impl<'env> Vm<'env> {
         state: &mut State<'_, 'env>,
         _stack: Stack,
         _pc: usize,
-        funcsigns: &FunctionRegistry,
+        funcsigns: Arc<FunctionRegistry>,
         warning_printer: Rc<dyn TypecheckingEventListener>,
     ) -> Result<(), crate::Error> {
         // warning_printer.warn(&Span::default(), &format!("start a file"));
@@ -219,4 +142,83 @@ fn deserialize_span(value: &Value) -> Span {
             .as_usize()
             .unwrap() as u32,
     }
+}
+
+/// Find macro signatures in the template.
+///
+/// This function is used to find macro signatures in the template.
+/// It is used to type check the template.
+pub fn find_macro_signatures(
+    root: &ast::Stmt,
+    last_func_sign: &mut Option<(Span, String)>,
+    funcsigns: &mut FunctionRegistry,
+    path: &Path,
+) -> Result<(), crate::Error> {
+    match root {
+        ast::Stmt::Template(template) => {
+            for child in template.children.iter() {
+                find_macro_signatures(child, last_func_sign, funcsigns, path)?;
+            }
+        }
+        ast::Stmt::EmitRaw(emit_raw) => {
+            // find "-- funcsign:" in emit_raw.raw
+            let raw = emit_raw.raw.trim();
+            if raw.contains("-- funcsign: ") {
+                *last_func_sign = Some((
+                    emit_raw.span,
+                    raw.split("-- funcsign: ")
+                        .nth(1)
+                        .unwrap()
+                        .trim()
+                        .to_string(),
+                ));
+            } else {
+                *last_func_sign = None;
+            }
+        }
+        ast::Stmt::Macro(macro_decl) => {
+            let macro_name = macro_decl.0.name;
+            if let Some((span, func_sign)) = last_func_sign {
+                if span.start_line >= macro_decl.0.span.start_line {
+                    return Err(crate::Error::new(
+                        crate::error::ErrorKind::InvalidOperation,
+                        "[BUG] funcsign is after macro declaration",
+                    ));
+                }
+                let (args, returns) = parse(func_sign).map_err(|e| {
+                    crate::Error::new(
+                        crate::error::ErrorKind::InvalidOperation,
+                        format!("failed to parse funcsign: {e}"),
+                    )
+                })?;
+                funcsigns.insert(
+                    macro_name.to_string(),
+                    DynFunctionType::new(Arc::new(UserDefinedFunctionType::new(
+                        macro_name,
+                        args,
+                        returns,
+                        CodeLocation {
+                            line: macro_decl.0.span.start_line,
+                            col: macro_decl.0.span.start_col,
+                            file: path.to_path_buf(),
+                        },
+                    ))),
+                );
+            } else if !funcsigns.contains_key(macro_name) {
+                funcsigns.insert(
+                    macro_name.to_string(),
+                    DynFunctionType::new(Arc::new(UndefinedFunctionType::new(
+                        macro_name,
+                        CodeLocation {
+                            line: macro_decl.0.span.start_line,
+                            col: macro_decl.0.span.start_col,
+                            file: path.to_path_buf(),
+                        },
+                    ))),
+                );
+            }
+        }
+        _ => {}
+    }
+    Ok(())
 }

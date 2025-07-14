@@ -1,4 +1,5 @@
 #![cfg(feature = "unstable_machinery")]
+use minijinja::compiler::codegen::CodeGenerationProfile;
 use minijinja::machinery::{CodeGenerator, Instruction, Instructions, Span, Vm};
 use minijinja::value::Value;
 use minijinja::{AutoEscape, Environment, Error, Output, OutputTracker};
@@ -35,7 +36,7 @@ fn test_loop() {
     let mut ctx = std::collections::BTreeMap::new();
     ctx.insert("items", Value::from((1..=9).collect::<Vec<_>>()));
 
-    let mut c = CodeGenerator::new("<unknown>", "");
+    let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::Lookup("items", Span::default()));
     c.start_for_loop(false, false, Span::default());
     c.add(Instruction::Emit);
@@ -53,7 +54,7 @@ fn test_if() {
         let mut ctx = std::collections::BTreeMap::new();
         ctx.insert("cond", Value::from(val));
 
-        let mut c = CodeGenerator::new("<unknown>", "");
+        let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
         c.add(Instruction::Lookup("cond", Span::default()));
         c.start_if();
         c.add(Instruction::EmitRaw("true"));
@@ -73,7 +74,7 @@ fn test_if_branches() {
     ctx.insert("false", Value::from(false));
     ctx.insert("nil", Value::from(()));
 
-    let mut c = CodeGenerator::new("<unknown>", "");
+    let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::Lookup("false", Span::default()));
     c.start_if();
     c.add(Instruction::EmitRaw("nope1"));
@@ -117,7 +118,7 @@ fn test_basic() {
 
 #[test]
 fn test_error_info() {
-    let mut c = CodeGenerator::new("hello.html", "");
+    let mut c = CodeGenerator::new("hello.html", "", CodeGenerationProfile::Render);
     c.set_line(1);
     c.add(Instruction::EmitRaw("<h1>Hello</h1>\n"));
     c.set_line(2);
@@ -136,7 +137,7 @@ fn test_error_info() {
 
 #[test]
 fn test_op_eq() {
-    let mut c = CodeGenerator::new("hello.html", "");
+    let mut c = CodeGenerator::new("hello.html", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(1)));
     c.add(Instruction::LoadConst(Value::from(1)));
     c.add(Instruction::Eq(Span::default()));
@@ -145,7 +146,7 @@ fn test_op_eq() {
     let output = simple_eval(&c.finish().0, ()).unwrap();
     assert_eq!(output, "true");
 
-    let mut c = CodeGenerator::new("hello.html", "");
+    let mut c = CodeGenerator::new("hello.html", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(1)));
     c.add(Instruction::LoadConst(Value::from(2)));
     c.add(Instruction::Eq(Span::default()));
@@ -157,7 +158,7 @@ fn test_op_eq() {
 
 #[test]
 fn test_op_ne() {
-    let mut c = CodeGenerator::new("<unknown>", "");
+    let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(1)));
     c.add(Instruction::LoadConst(Value::from("foo")));
     c.add(Instruction::Ne(Span::default()));
@@ -166,7 +167,7 @@ fn test_op_ne() {
     let output = simple_eval(&c.finish().0, ()).unwrap();
     assert_eq!(output, "true");
 
-    let mut c = CodeGenerator::new("<unknown>", "");
+    let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from("foo")));
     c.add(Instruction::LoadConst(Value::from("foo")));
     c.add(Instruction::Ne(Span::default()));
@@ -178,7 +179,7 @@ fn test_op_ne() {
 
 #[test]
 fn test_op_lt() {
-    let mut c = CodeGenerator::new("<unknown>", "");
+    let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(1)));
     c.add(Instruction::LoadConst(Value::from(2)));
     c.add(Instruction::Lt(Span::default()));
@@ -187,7 +188,7 @@ fn test_op_lt() {
     let output = simple_eval(&c.finish().0, ()).unwrap();
     assert_eq!(output, "true");
 
-    let mut c = CodeGenerator::new("<unknown>", "");
+    let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(2)));
     c.add(Instruction::LoadConst(Value::from(1)));
     c.add(Instruction::Lt(Span::default()));
@@ -199,7 +200,7 @@ fn test_op_lt() {
 
 #[test]
 fn test_op_gt() {
-    let mut c = CodeGenerator::new("<unknown>", "");
+    let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(1)));
     c.add(Instruction::LoadConst(Value::from(2)));
     c.add(Instruction::Gt(Span::default()));
@@ -208,7 +209,7 @@ fn test_op_gt() {
     let output = simple_eval(&c.finish().0, ()).unwrap();
     assert_eq!(output, "false");
 
-    let mut c = CodeGenerator::new("<unknown>", "");
+    let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(2)));
     c.add(Instruction::LoadConst(Value::from(1)));
     c.add(Instruction::Gt(Span::default()));
@@ -220,7 +221,7 @@ fn test_op_gt() {
 
 #[test]
 fn test_op_lte() {
-    let mut c = CodeGenerator::new("<unknown>", "");
+    let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(1)));
     c.add(Instruction::LoadConst(Value::from(1)));
     c.add(Instruction::Lte(Span::default()));
@@ -229,7 +230,7 @@ fn test_op_lte() {
     let output = simple_eval(&c.finish().0, ()).unwrap();
     assert_eq!(output, "true");
 
-    let mut c = CodeGenerator::new("<unknown>", "");
+    let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(2)));
     c.add(Instruction::LoadConst(Value::from(1)));
     c.add(Instruction::Lte(Span::default()));
@@ -241,7 +242,7 @@ fn test_op_lte() {
 
 #[test]
 fn test_op_gte() {
-    let mut c = CodeGenerator::new("<unknown>", "");
+    let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(1)));
     c.add(Instruction::LoadConst(Value::from(2)));
     c.add(Instruction::Gte(Span::default()));
@@ -250,7 +251,7 @@ fn test_op_gte() {
     let output = simple_eval(&c.finish().0, ()).unwrap();
     assert_eq!(output, "false");
 
-    let mut c = CodeGenerator::new("<unknown>", "");
+    let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(1)));
     c.add(Instruction::LoadConst(Value::from(1)));
     c.add(Instruction::Gte(Span::default()));
@@ -262,7 +263,7 @@ fn test_op_gte() {
 
 #[test]
 fn test_op_not() {
-    let mut c = CodeGenerator::new("<unknown>", "");
+    let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(0)));
     c.add(Instruction::Not(Span::default()));
     c.add(Instruction::Emit);
@@ -270,7 +271,7 @@ fn test_op_not() {
     let output = simple_eval(&c.finish().0, ()).unwrap();
     assert_eq!(output, "true");
 
-    let mut c = CodeGenerator::new("<unknown>", "");
+    let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(true)));
     c.add(Instruction::Not(Span::default()));
     c.add(Instruction::Emit);
@@ -281,7 +282,7 @@ fn test_op_not() {
 
 #[test]
 fn test_string_concat() {
-    let mut c = CodeGenerator::new("<unknown>", "");
+    let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from("foo")));
     c.add(Instruction::LoadConst(Value::from(42)));
     c.add(Instruction::StringConcat(Span::default()));
@@ -293,7 +294,7 @@ fn test_string_concat() {
 
 #[test]
 fn test_unpacking() {
-    let mut c = CodeGenerator::new("<unknown>", "");
+    let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(vec!["bar", "foo"])));
     c.add(Instruction::UnpackList(2, Span::default()));
     c.add(Instruction::StringConcat(Span::default()));
@@ -305,12 +306,12 @@ fn test_unpacking() {
 
 #[test]
 fn test_call_object() {
-    let mut c = CodeGenerator::new("<unknown>", "");
+    let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from_function(|a: u64| {
         42 + a
     })));
     c.add(Instruction::LoadConst(Value::from(23i32)));
-    c.add(Instruction::CallObject(Some(2)));
+    c.add(Instruction::CallObject(Some(2), Span::default()));
     c.add(Instruction::Emit);
 
     let output = simple_eval(&c.finish().0, ()).unwrap();

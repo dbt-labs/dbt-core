@@ -1,13 +1,16 @@
+-- funcsign: (relation) -> optional[agate_table]
 {% macro get_columns_in_relation(relation) -%}
   {{ return(adapter.dispatch('get_columns_in_relation', 'dbt')(relation)) }}
 {% endmacro %}
 
+-- funcsign: (relation) -> optional[agate_table]
 {% macro default__get_columns_in_relation(relation) -%}
   {{ exceptions.raise_not_implemented(
     'get_columns_in_relation macro not implemented for adapter '+adapter.type()) }}
 {% endmacro %}
 
 {# helper for adapter-specific implementations of get_columns_in_relation #}
+-- funcsign: (agate_table) -> list[api_column]
 {% macro sql_convert_columns_in_relation(table) -%}
   {% set columns = [] %}
   {% for row in table %}
@@ -16,7 +19,7 @@
   {{ return(columns) }}
 {% endmacro %}
 
-
+-- funcsign: (string, optional[string]) -> string
 {% macro get_empty_subquery_sql(select_sql, select_sql_header=none) -%}
   {{ return(adapter.dispatch('get_empty_subquery_sql', 'dbt')(select_sql, select_sql_header)) }}
 {% endmacro %}
@@ -25,6 +28,7 @@
   Builds a query that results in the same schema as the given select_sql statement, without necessitating a data scan.
   Useful for running a query in a 'pre-flight' context, such as model contract enforcement (assert_columns_equivalent macro).
 #}
+-- funcsign: (string, optional[string]) -> string
 {% macro default__get_empty_subquery_sql(select_sql, select_sql_header=none) %}
     {%- if select_sql_header is not none -%}
     {{ select_sql_header }}
@@ -36,10 +40,12 @@
     limit 0
 {% endmacro %}
 
+-- funcsign: (list[api_column]) -> none
 {% macro get_empty_schema_sql(columns) -%}
   {{ return(adapter.dispatch('get_empty_schema_sql', 'dbt')(columns)) }}
 {% endmacro %}
 
+-- funcsign: (dict[string, api_column]) -> none
 {% macro default__get_empty_schema_sql(columns) %}
     {%- set col_err = [] -%}
     {%- set col_naked_numeric = [] -%}
@@ -62,6 +68,7 @@
     {%- endif -%}
 {% endmacro %}
 
+-- funcsign: (string, optional[string]) -> string
 {% macro get_column_schema_from_query(select_sql, select_sql_header=none) -%}
     {% set columns = [] %}
     {# -- Using an 'empty subquery' here to get the same schema as the given select_sql statement, without necessitating a data scan.#}
@@ -71,10 +78,12 @@
 {% endmacro %}
 
 -- here for back compat
+-- funcsign: (string) -> list[string]
 {% macro get_columns_in_query(select_sql) -%}
   {{ return(adapter.dispatch('get_columns_in_query', 'dbt')(select_sql)) }}
 {% endmacro %}
 
+-- funcsign: (string) -> list[string]
 {% macro default__get_columns_in_query(select_sql) %}
     {% call statement('get_columns_in_query', fetch_result=True, auto_begin=False) -%}
         {{ get_empty_subquery_sql(select_sql) }}
@@ -82,10 +91,12 @@
     {{ return(load_result('get_columns_in_query').table.columns | map(attribute='name') | list) }}
 {% endmacro %}
 
+-- funcsign: (relation, string, string) -> none
 {% macro alter_column_type(relation, column_name, new_column_type) -%}
   {{ return(adapter.dispatch('alter_column_type', 'dbt')(relation, column_name, new_column_type)) }}
 {% endmacro %}
 
+-- funcsign: (relation, string, string) -> none
 {% macro default__alter_column_type(relation, column_name, new_column_type) -%}
   {#
     1. Create a new column (w/ temp name and correct type)
@@ -105,10 +116,12 @@
 {% endmacro %}
 
 
+-- funcsign: (relation, optional[list[api_column]], optional[list[api_column]]) -> none
 {% macro alter_relation_add_remove_columns(relation, add_columns = none, remove_columns = none) -%}
   {{ return(adapter.dispatch('alter_relation_add_remove_columns', 'dbt')(relation, add_columns, remove_columns)) }}
 {% endmacro %}
 
+-- funcsign: (relation, optional[list[api_column]], optional[list[api_column]]) -> none
 {% macro default__alter_relation_add_remove_columns(relation, add_columns, remove_columns) %}
 
   {% if add_columns is none %}

@@ -1,11 +1,21 @@
 pub mod adapter;
+pub mod agate_table;
 pub mod api;
 pub mod builtin;
 pub mod class;
+pub mod dict;
+pub mod exceptions;
 pub mod function;
 pub mod internal_func;
 pub mod relation;
 #[macro_use]
 pub mod type_erase;
+pub mod funcsign_parser;
+pub mod iterable;
+pub mod list;
+pub mod loop_;
+pub mod string;
+pub mod struct_;
+pub mod tuple;
 pub mod union;
 pub mod utils;

@@ -46,6 +46,12 @@ enum PendingBlock {
     },
 }
 
+#[derive(Clone, Copy)]
+pub enum CodeGenerationProfile {
+    TypeCheck,
+    Render,
+}
+
 /// Provides a convenient interface to creating instructions for the VM.
 pub struct CodeGenerator<'source> {
     instructions: Instructions<'source>,
@@ -56,11 +62,16 @@ pub struct CodeGenerator<'source> {
     filter_local_ids: BTreeMap<&'source str, LocalId>,
     test_local_ids: BTreeMap<&'source str, LocalId>,
     raw_template_bytes: usize,
+    profile: CodeGenerationProfile,
 }
 
 impl<'source> CodeGenerator<'source> {
     /// Creates a new code generator.
-    pub fn new(file: &'source str, source: &'source str) -> CodeGenerator<'source> {
+    pub fn new(
+        file: &'source str,
+        source: &'source str,
+        profile: CodeGenerationProfile,
+    ) -> CodeGenerator<'source> {
         CodeGenerator {
             instructions: Instructions::new(file, source, None),
             blocks: BTreeMap::new(),
@@ -70,6 +81,7 @@ impl<'source> CodeGenerator<'source> {
             filter_local_ids: BTreeMap::new(),
             test_local_ids: BTreeMap::new(),
             raw_template_bytes: 0,
+            profile,
         }
     }
 
@@ -77,6 +89,7 @@ impl<'source> CodeGenerator<'source> {
         file: &'source str,
         source: &'source str,
         filename: Option<String>,
+        profile: CodeGenerationProfile,
     ) -> CodeGenerator<'source> {
         CodeGenerator {
             instructions: Instructions::new(file, source, filename),
@@ -87,6 +100,7 @@ impl<'source> CodeGenerator<'source> {
             filter_local_ids: BTreeMap::new(),
             test_local_ids: BTreeMap::new(),
             raw_template_bytes: 0,
+            profile,
         }
     }
 
@@ -138,6 +152,7 @@ impl<'source> CodeGenerator<'source> {
             self.instructions.name(),
             self.instructions.source(),
             Some(self.instructions.filename()),
+            self.profile,
         );
         sub.current_line = self.current_line;
         sub.span_stack = self.span_stack.last().cloned().into_iter().collect();
@@ -492,15 +507,21 @@ impl<'source> CodeGenerator<'source> {
         for (i, arg) in macro_decl.args.iter().enumerate() {
             if i >= macro_decl.args.len() - macro_decl.defaults.len() {
                 let default = defaults_iter.next().unwrap();
-                self.add(Instruction::DupTop);
-                self.add(Instruction::IsUndefined);
-                self.start_if();
-                self.add(Instruction::DiscardTop);
-                self.compile_expr(default);
-                self.end_if();
+                match self.profile {
+                    CodeGenerationProfile::Render => {
+                        self.add(Instruction::DupTop);
+                        self.add(Instruction::IsUndefined);
+                        self.start_if();
+                        self.add(Instruction::DiscardTop);
+                        self.compile_expr(default);
+                        self.end_if();
+                    }
+                    CodeGenerationProfile::TypeCheck => {}
+                }
             }
             self.compile_assignment(arg);
         }
+        self.add(Instruction::FinishedParameterLoading);
         let span = macro_decl.span();
 
         for node in &macro_decl.body {
@@ -554,7 +575,7 @@ impl<'source> CodeGenerator<'source> {
     #[cfg(feature = "macros")]
     fn compile_macro(&mut self, macro_decl: &ast::Spanned<ast::Macro<'source>>) {
         self.compile_macro_expression(macro_decl);
-        self.add(Instruction::StoreLocal(macro_decl.name));
+        self.add(Instruction::StoreLocal(macro_decl.name, macro_decl.span()));
     }
 
     #[cfg(feature = "macros")]
@@ -616,7 +637,12 @@ impl<'source> CodeGenerator<'source> {
                         self.add_with_span(Instruction::FastSuper, call.span());
                         return;
                     } else if name == "loop" && call.args.len() == 1 {
-                        self.compile_call_args(std::slice::from_ref(&call.args[0]), 0, None);
+                        self.compile_call_args(
+                            std::slice::from_ref(&call.args[0]),
+                            0,
+                            None,
+                            call.span(),
+                        );
                         self.add(Instruction::FastRecurse);
                         return;
                     }
@@ -669,7 +695,7 @@ impl<'source> CodeGenerator<'source> {
             self.add(Instruction::DiscardTop);
             self.end_if();
             self.end_for_loop(false);
-            self.add(Instruction::BuildList(None));
+            self.add(Instruction::BuildList(None, span));
         } else {
             self.compile_expr(&for_loop.iter);
         }
@@ -698,7 +724,7 @@ impl<'source> CodeGenerator<'source> {
     pub fn compile_assignment(&mut self, expr: &ast::Expr<'source>) {
         match expr {
             ast::Expr::Var(var) => {
-                self.add(Instruction::StoreLocal(var.id));
+                self.add(Instruction::StoreLocal(var.id, var.span()));
             }
             ast::Expr::List(list) => {
                 self.push_span(list.span());
@@ -801,15 +827,20 @@ impl<'source> CodeGenerator<'source> {
                 if let Some(ref expr) = f.expr {
                     self.compile_expr(expr);
                 }
-                let arg_count = self.compile_call_args(&f.args, 1, None);
+                let arg_count = self.compile_call_args(&f.args, 1, None, f.span());
                 let local_id = get_local_id(&mut self.filter_local_ids, f.name);
-                self.add(Instruction::ApplyFilter(f.name, arg_count, local_id));
+                self.add(Instruction::ApplyFilter(
+                    f.name,
+                    arg_count,
+                    local_id,
+                    f.span(),
+                ));
                 self.pop_span();
             }
             ast::Expr::Test(f) => {
                 self.push_span(f.span());
                 self.compile_expr(&f.expr);
-                let arg_count = self.compile_call_args(&f.args, 1, None);
+                let arg_count = self.compile_call_args(&f.args, 1, None, f.span());
                 let local_id = get_local_id(&mut self.test_local_ids, f.name);
                 self.add(Instruction::PerformTest(f.name, arg_count, local_id));
                 self.pop_span();
@@ -824,7 +855,7 @@ impl<'source> CodeGenerator<'source> {
                 self.push_span(g.span());
                 self.compile_expr(&g.expr);
                 self.compile_expr(&g.subscript_expr);
-                self.add(Instruction::GetItem);
+                self.add(Instruction::GetItem(g.span()));
                 self.pop_span();
             }
             ast::Expr::Call(c) => {
@@ -835,7 +866,7 @@ impl<'source> CodeGenerator<'source> {
                 for item in &l.items {
                     self.compile_expr(item);
                 }
-                self.add(Instruction::BuildList(Some(l.items.len())));
+                self.add(Instruction::BuildList(Some(l.items.len()), l.span()));
             }
             ast::Expr::Map(m) => {
                 self.set_line_from_span(m.span());
@@ -866,7 +897,7 @@ impl<'source> CodeGenerator<'source> {
 
         match c.identify_call() {
             ast::CallType::Function(name) => {
-                let arg_count = self.compile_call_args(&c.args, 0, caller);
+                let arg_count = self.compile_call_args(&c.args, 0, caller, span);
                 if name == "ref" {
                     for arg in &c.args {
                         if let ast::CallArg::Pos(ast::Expr::Const(c)) = arg {
@@ -893,13 +924,13 @@ impl<'source> CodeGenerator<'source> {
             }
             ast::CallType::Method(expr, name) => {
                 self.compile_expr(expr);
-                let arg_count = self.compile_call_args(&c.args, 1, caller);
+                let arg_count = self.compile_call_args(&c.args, 1, caller, span);
                 self.add(Instruction::CallMethod(name, arg_count, span));
             }
             ast::CallType::Object(expr) => {
                 self.compile_expr(expr);
-                let arg_count = self.compile_call_args(&c.args, 1, caller);
-                self.add(Instruction::CallObject(arg_count));
+                let arg_count = self.compile_call_args(&c.args, 1, caller, span);
+                self.add(Instruction::CallObject(arg_count, span));
             }
         };
         self.pop_span();
@@ -910,6 +941,7 @@ impl<'source> CodeGenerator<'source> {
         args: &[ast::CallArg<'source>],
         extra_args: usize,
         caller: Option<&Caller<'source>>,
+        span: Span,
     ) -> Option<u16> {
         let mut pending_args = extra_args;
         let mut num_args_batches = 0;
@@ -922,9 +954,16 @@ impl<'source> CodeGenerator<'source> {
                     self.compile_expr(expr);
                     pending_args += 1;
                 }
+                ast::CallArg::PosSplat(_expr)
+                    if matches!(self.profile, CodeGenerationProfile::TypeCheck) =>
+                {
+                    // Type check mode, we need to push a placeholder for the any type
+                    self.add(Instruction::LoadConst(Value::from("__sdf_any")));
+                    pending_args += 1;
+                }
                 ast::CallArg::PosSplat(expr) => {
                     if pending_args > 0 {
-                        self.add(Instruction::BuildList(Some(pending_args)));
+                        self.add(Instruction::BuildList(Some(pending_args), span));
                         pending_args = 0;
                         num_args_batches += 1;
                     }
@@ -1005,7 +1044,7 @@ impl<'source> CodeGenerator<'source> {
 
         if num_args_batches > 0 {
             if pending_args > 0 {
-                self.add(Instruction::BuildList(Some(pending_args)));
+                self.add(Instruction::BuildList(Some(pending_args), span));
                 num_args_batches += 1;
             }
             self.add(Instruction::UnpackLists(num_args_batches));

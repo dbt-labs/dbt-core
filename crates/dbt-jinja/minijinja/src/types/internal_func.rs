@@ -12,7 +12,7 @@ impl FunctionType for InternalCaller {
                 "The 'caller' function does not accept any arguments.".to_string(),
             ));
         }
-        Ok(Type::String)
+        Ok(Type::String(None))
     }
 
     fn arg_names(&self) -> Vec<String> {

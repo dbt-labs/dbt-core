@@ -12,10 +12,10 @@ pub struct RelationType {}
 impl ClassType for RelationType {
     fn get_attribute(&self, key: &str) -> Result<Type, crate::Error> {
         match key {
-            "database" => Ok(Type::String),
-            "schema" => Ok(Type::String),
-            "identifier" => Ok(Type::String),
-            "type" => Ok(Type::String),
+            "database" => Ok(Type::String(None)),
+            "schema" => Ok(Type::String(None)),
+            "identifier" => Ok(Type::String(None)),
+            "type" => Ok(Type::String(None)),
             "is_table" => Ok(Type::Bool),
             "is_view" => Ok(Type::Bool),
             "is_materialized_view" => Ok(Type::Bool),
@@ -26,9 +26,12 @@ impl ClassType for RelationType {
             "include" => Ok(Type::Function(DynFunctionType::new(Arc::new(
                 RelationIncludeFunction::default(),
             )))),
+            "render" => Ok(Type::Function(DynFunctionType::new(Arc::new(
+                RelationRenderFunction::default(),
+            )))),
             _ => Err(crate::Error::new(
                 crate::error::ErrorKind::InvalidOperation,
-                "Type does not support attribute access",
+                format!("{self:?}.{key} is not supported"),
             )),
         }
     }
@@ -40,7 +43,7 @@ pub struct RelationIncludeFunction {}
 impl FunctionType for RelationIncludeFunction {
     fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
         for arg in args {
-            if arg.coerce(&Type::Bool).is_none() {
+            if !arg.is_subtype_of(&Type::Bool) {
                 return Err(Error::new(
                     crate::error::ErrorKind::TypeError,
                     format!("Expected bool for relation include function arguments, found {arg}"),
@@ -59,5 +62,24 @@ impl FunctionType for RelationIncludeFunction {
             "schema".to_string(),
             "identifier".to_string(),
         ]
+    }
+}
+
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
+pub struct RelationRenderFunction {}
+
+impl FunctionType for RelationRenderFunction {
+    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
+        if !args.is_empty() {
+            return Err(Error::new(
+                crate::error::ErrorKind::TypeError,
+                "Expected no arguments for relation render function",
+            ));
+        }
+        Ok(Type::String(None))
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec![]
     }
 }

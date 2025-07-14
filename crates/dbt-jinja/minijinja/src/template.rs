@@ -1,13 +1,12 @@
 use std::collections::{BTreeMap, HashSet};
 use std::ops::Deref;
-use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::{fmt, io};
 
 use serde::Serialize;
 
-use crate::compiler::codegen::CodeGenerator;
+use crate::compiler::codegen::{CodeGenerationProfile, CodeGenerator};
 use crate::compiler::instructions::Instructions;
 use crate::compiler::lexer::WhitespaceConfig;
 use crate::compiler::meta::find_undeclared;
@@ -135,7 +134,7 @@ impl<'env, 'source> Template<'env, 'source> {
     pub fn typecheck<S: Serialize>(
         &self,
         ctx: S,
-        funcsigns: &FunctionRegistry,
+        funcsigns: Arc<FunctionRegistry>,
         warning_printer: Rc<dyn TypecheckingEventListener>,
     ) -> Result<(), crate::Error> {
         let vm = Vm::new(self.env);
@@ -148,12 +147,6 @@ impl<'env, 'source> Template<'env, 'source> {
             funcsigns,
             warning_printer,
         )
-    }
-
-    /// typechecks the template with the given context.
-    pub fn pass_get_macro_signature(&self, path: &Path) -> FunctionRegistry {
-        let vm = Vm::new(self.env);
-        vm.get_macro_signature(&self.compiled.instructions, path)
     }
 
     /// Like [`render`](Self::render) but also return the evaluated [`State`].
@@ -441,8 +434,12 @@ impl<'source> CompiledTemplate<'source> {
         source: &'source str,
         config: &TemplateConfig,
         filename: Option<String>,
+        profile: CodeGenerationProfile,
     ) -> Result<CompiledTemplate<'source>, Error> {
-        attach_basic_debug_info(Self::_new_impl(name, source, config, filename), source)
+        attach_basic_debug_info(
+            Self::_new_impl(name, source, config, filename, profile),
+            source,
+        )
     }
 
     fn _new_impl(
@@ -450,6 +447,7 @@ impl<'source> CompiledTemplate<'source> {
         source: &'source str,
         config: &TemplateConfig,
         filename: Option<String>,
+        profile: CodeGenerationProfile,
     ) -> Result<CompiledTemplate<'source>, Error> {
         // the parser/compiler combination can create constants in which case
         // we can probably benefit from the value optimization a bit.
@@ -460,7 +458,7 @@ impl<'source> CompiledTemplate<'source> {
             config.syntax_config.clone(),
             config.ws_config
         ));
-        let mut gen = CodeGenerator::new_with_filename(name, source, filename);
+        let mut gen = CodeGenerator::new_with_filename(name, source, filename, profile);
         gen.compile_stmt(&ast);
         let buffer_size_hint = gen.buffer_size_hint();
         let (instructions, blocks) = gen.finish();

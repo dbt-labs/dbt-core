@@ -34,7 +34,7 @@ pub enum Instruction<'source> {
     EmitRaw(&'source str),
 
     /// Stores a variable (only possible in for loops)
-    StoreLocal(&'source str),
+    StoreLocal(&'source str, Span),
 
     /// Load a variable,
     Lookup(&'source str, Span),
@@ -46,7 +46,7 @@ pub enum Instruction<'source> {
     SetAttr(&'source str),
 
     /// Looks up an item.
-    GetItem,
+    GetItem(Span),
 
     /// Performs a slice operation.
     Slice(Span),
@@ -64,7 +64,7 @@ pub enum Instruction<'source> {
     MergeKwargs(usize),
 
     /// Builds a list of the last n pairs on the stack.
-    BuildList(Option<usize>),
+    BuildList(Option<usize>, Span),
 
     /// Builds a tuple of the last n pairs on the stack.
     BuildTuple(Option<usize>),
@@ -131,7 +131,7 @@ pub enum Instruction<'source> {
     In(Span),
 
     /// Apply a filter.
-    ApplyFilter(&'source str, Option<u16>, LocalId),
+    ApplyFilter(&'source str, Option<u16>, LocalId, Span),
 
     /// Perform a filter.
     PerformTest(&'source str, Option<u16>, LocalId),
@@ -190,7 +190,7 @@ pub enum Instruction<'source> {
     CallMethod(&'source str, Option<u16>, Span),
 
     /// Calls an object
-    CallObject(Option<u16>),
+    CallObject(Option<u16>, Span),
 
     /// Duplicates the top item
     DupTop,
@@ -248,8 +248,15 @@ pub enum Instruction<'source> {
 
     ModelReference(String, u32, u32, u32, u32, u32, u32),
 
-    // keep track of macro name
+    // A label instruction to indicate the start of a macro
+    // After MacroName, there will be a series of StoreLocal instructions for parameters
+    // If the macro is not pre-defined, the number of StoreLocal instructions is unknown at this point
+    // We need to push a special type to the stack.
+    // This special type cannot be consumed by StoreLocal until FinishedParameterLoading is called
     MacroName(&'source str),
+
+    // A label instruction to indicate the end of parameter loading of a macro
+    FinishedParameterLoading,
 }
 
 #[derive(Copy, Clone)]
@@ -437,7 +444,7 @@ impl<'source> Instructions<'source> {
         for instr in self.instructions[..=idx].iter().rev() {
             let name = match instr {
                 Instruction::Lookup(name, _)
-                | Instruction::StoreLocal(name)
+                | Instruction::StoreLocal(name, _)
                 | Instruction::CallFunction(name, _, _) => *name,
                 Instruction::PushLoop(flags, _) if flags & LOOP_FLAG_WITH_LOOP_VAR != 0 => "loop",
                 Instruction::PushLoop(_, _) | Instruction::PushWith => break,
