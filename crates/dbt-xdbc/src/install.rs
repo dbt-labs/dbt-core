@@ -233,7 +233,11 @@ pub fn pre_install_driver(backend: Backend) -> Result<()> {
 pub fn is_installable_driver(backend: Backend) -> bool {
     matches!(
         backend,
-        Backend::Snowflake | Backend::BigQuery | Backend::Postgres | Backend::Databricks
+        Backend::Snowflake
+            | Backend::BigQuery
+            | Backend::Postgres
+            | Backend::Databricks
+            | Backend::Redshift
     )
 }
 
