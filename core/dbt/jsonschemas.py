@@ -19,7 +19,8 @@ _RESOURCES_SCHEMA: Optional[Dict[str, Any]] = None
 
 _JSONSCHEMA_SUPPORTED_ADAPTERS = {
     "bigquery",
-    "databricks" "redshift",
+    "databricks",
+    "redshift",
     "snowflake",
 }
 
@@ -97,7 +98,7 @@ def _can_run_validations() -> bool:
         return False
 
     invocation_context = get_invocation_context()
-    return _JSONSCHEMA_SUPPORTED_ADAPTERS.issubset(invocation_context.adapter_types)
+    return invocation_context.adapter_types.issubset(_JSONSCHEMA_SUPPORTED_ADAPTERS)
 
 
 def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path: str) -> None:
