@@ -716,6 +716,16 @@ pub enum StoreFailuresAs {
     View,
 }
 
+#[derive(Debug, Serialize, Default, Deserialize, Clone, EnumString, Display, JsonSchema)]
+#[strum(serialize_all = "lowercase")]
+pub enum Severity {
+    #[default]
+    #[serde(alias = "error", alias = "ERROR")]
+    Error,
+    #[serde(alias = "warn", alias = "WARN")]
+    Warn,
+}
+
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct Versions {

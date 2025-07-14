@@ -7,7 +7,7 @@ use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
 
 use crate::default_to;
-use crate::schemas::common::{DbtQuoting, StoreFailuresAs};
+use crate::schemas::common::{DbtQuoting, Severity, StoreFailuresAs};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfigLegacy};
 use crate::schemas::project::configs::common::{
@@ -40,7 +40,7 @@ pub struct ProjectDataTestConfig {
     #[serde(rename = "+schema")]
     pub schema: Option<String>,
     #[serde(rename = "+severity")]
-    pub severity: Option<String>,
+    pub severity: Option<Severity>,
     #[serde(
         default,
         rename = "+store_failures",
@@ -258,7 +258,7 @@ pub struct DataTestConfig {
     pub limit: Option<i32>,
     pub meta: Option<BTreeMap<String, Value>>,
     pub schema: Option<String>,
-    pub severity: Option<String>,
+    pub severity: Option<Severity>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub store_failures: Option<bool>,
     pub store_failures_as: Option<StoreFailuresAs>,
