@@ -657,6 +657,19 @@ class TestMissingPlusPrefixDeprecationCustomConfig:
         assert "Missing '+' prefix on `custom_config`" in event_catcher.caught_events[0].info.msg
 
 
+class TestCustomConfigInDbtProjectYmlNoDeprecation:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {"seeds": {"path": {"+custom_config": True}}}
+
+    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
+    @mock.patch("dbt.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
+    def test_missing_plus_prefix_deprecation_sub_path(self, project):
+        note_catcher = EventCatcher(Note)
+        run_dbt(["parse", "--no-partial-parse"], callbacks=[note_catcher.catch])
+        assert len(note_catcher.caught_events) == 0
+
+
 class TestJsonSchemaValidationGating:
     @pytest.fixture(scope="class")
     def models(self):
