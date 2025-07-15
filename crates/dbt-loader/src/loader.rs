@@ -418,6 +418,13 @@ pub async fn load_inner(
         &["sql"],
         &all_files,
     );
+    let fixture_files = find_files_by_kind_and_extension(
+        package_path,
+        &dbt_project.name,
+        &ResourcePathKind::FixturePaths,
+        &["csv"],
+        &all_files,
+    );
     let seed_files = find_files_by_kind_and_extension(
         package_path,
         &dbt_project.name,
@@ -446,6 +453,7 @@ pub async fn load_inner(
         analysis_files,
         model_sql_files,
         test_files,
+        fixture_files,
         seed_files,
         macro_files,
         docs_files,
@@ -553,6 +561,19 @@ fn collect_paths(dbt_project: &DbtProject) -> HashMap<ResourcePathKind, Vec<Stri
     all_dirs.insert(
         ResourcePathKind::TestPaths,
         dbt_project.test_paths.clone().unwrap_or_default(),
+    );
+    all_dirs.insert(
+        ResourcePathKind::FixturePaths,
+        dbt_project
+            .test_paths
+            .clone()
+            .unwrap_or_default()
+            .iter()
+            .map(|p| {
+                let path = PathBuf::from(p).join("fixtures");
+                path.into_os_string().into_string().unwrap_or_default()
+            })
+            .collect(),
     );
     // Only register docs paths if they are explicitly specified
     if dbt_project.docs_paths.is_some() && !dbt_project.docs_paths.as_ref().unwrap().is_empty() {

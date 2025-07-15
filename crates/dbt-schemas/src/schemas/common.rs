@@ -575,7 +575,9 @@ pub struct Expect {
     pub fixture: Option<String>,
 }
 
-#[derive(Debug, Serialize, Default, Deserialize, Clone, EnumString, Display, JsonSchema)]
+#[derive(
+    Debug, Serialize, Default, Deserialize, Clone, EnumString, Display, JsonSchema, PartialEq,
+)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum Formats {

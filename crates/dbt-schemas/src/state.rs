@@ -42,6 +42,7 @@ pub enum ResourcePathKind {
     SeedPaths,
     SnapshotPaths,
     TestPaths,
+    FixturePaths,
 }
 
 impl fmt::Display for ResourcePathKind {
@@ -57,6 +58,7 @@ impl fmt::Display for ResourcePathKind {
             ResourcePathKind::TestPaths => "test paths",
             ResourcePathKind::ProjectPaths => "project paths",
             ResourcePathKind::ProfilePaths => "profile paths",
+            ResourcePathKind::FixturePaths => "fixture paths",
         };
         write!(f, "{kind_str}")
     }
@@ -141,6 +143,7 @@ pub struct DbtPackage {
     pub model_sql_files: Vec<DbtAsset>,
     pub macro_files: Vec<DbtAsset>,
     pub test_files: Vec<DbtAsset>,
+    pub fixture_files: Vec<DbtAsset>,
     pub seed_files: Vec<DbtAsset>,
     pub docs_files: Vec<DbtAsset>,
     pub snapshot_files: Vec<DbtAsset>,

@@ -20,6 +20,7 @@ use dbt_schemas::schemas::common::DbtChecksum;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::common::Expect;
+use dbt_schemas::schemas::common::Formats;
 use dbt_schemas::schemas::common::Given;
 use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::packages::DeprecatedDbtPackageLock;
@@ -197,6 +198,53 @@ pub fn resolve_unit_tests(
                 }
             }
         }
+
+        let mut file_map: BTreeMap<String, String> = BTreeMap::new();
+
+        for asset in package.fixture_files.iter() {
+            asset.path.file_name().map(|file_name| {
+                file_map.insert(
+                    file_name.to_string_lossy().to_string(),
+                    asset.path.to_string_lossy().to_string(),
+                )
+            });
+        }
+
+        let given = unit_test.given.as_ref().map_or(vec![], |vec| {
+            vec.iter()
+                .map(|given| {
+                    let full_path: Option<String> = match given.fixture {
+                        Some(ref fixture) if given.format == Formats::Csv => {
+                            file_map.get(&(fixture.clone() + ".csv")).cloned()
+                        }
+                        _ => given.fixture.clone(),
+                    };
+
+                    Given {
+                        fixture: full_path,
+                        input: given.input.clone(),
+                        rows: given.rows.clone(),
+                        format: given.format.clone(),
+                    }
+                })
+                .collect::<Vec<_>>()
+        });
+
+        let expect = {
+            let full_path: Option<String> = match unit_test.expect.fixture {
+                Some(ref fixture) if unit_test.expect.format == Formats::Csv => {
+                    file_map.get(&(fixture.clone() + ".csv")).cloned()
+                }
+                _ => unit_test.expect.fixture.clone(),
+            };
+
+            Expect {
+                fixture: full_path,
+                rows: unit_test.expect.rows.clone(),
+                format: unit_test.expect.format.clone(),
+            }
+        };
+
         let base_unit_test = DbtUnitTest {
             common_attr: CommonAttributes {
                 name: unit_test_name.to_owned(),
@@ -237,8 +285,8 @@ pub fn resolve_unit_tests(
             },
             unit_test_attr: DbtUnitTestAttr {
                 model: unit_test.model.to_owned(),
-                given: unit_test.given.clone().unwrap_or_default(),
-                expect: unit_test.expect.clone(),
+                given,
+                expect,
                 versions: None,
                 version: None,
                 overrides: unit_test.overrides.clone(),
