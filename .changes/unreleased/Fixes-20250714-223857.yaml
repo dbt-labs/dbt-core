@@ -1,0 +1,5 @@
+kind: Fixes
+body: Fix source always considered fresh
+time: 2025-07-14T22:38:57.640843541-07:00
+custom:
+  PR: dbt-labs/fs#4447

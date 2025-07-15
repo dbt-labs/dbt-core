@@ -370,7 +370,7 @@ pub struct BigQueryNodeConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub labels_from_meta: Option<bool>,
     pub kms_key_name: Option<String>,
-    #[serde(default = "default_false", deserialize_with = "bool_or_string_bool")]
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub require_partition_filter: Option<bool>,
     #[serde(default, deserialize_with = "u64_or_string_u64")]
     pub partition_expiration_days: Option<u64>,
@@ -382,8 +382,4 @@ pub struct BigQueryNodeConfig {
     pub refresh_interval_minutes: Option<u64>,
     pub description: Option<String>,
     pub max_staleness: Option<String>,
-}
-
-fn default_false() -> Option<bool> {
-    Some(false)
 }
