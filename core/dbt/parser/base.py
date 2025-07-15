@@ -365,6 +365,14 @@ class ConfiguredParser(
         if "group" in config_dict and config_dict["group"]:
             parsed_node.group = config_dict["group"]
 
+        # If we have meta in the config, copy to node level
+        if "meta" in config_dict and config_dict["meta"]:
+            parsed_node.meta = config_dict["meta"]
+
+        # If we have tags in the config, copy to node level
+        if "tags" in config_dict and config_dict["tags"]:
+            parsed_node.tags = config_dict["tags"]
+
         # If we have access in the config, copy to node level
         if parsed_node.resource_type == NodeType.Model and config_dict.get("access", None):
             if AccessType.is_valid(config_dict["access"]):
