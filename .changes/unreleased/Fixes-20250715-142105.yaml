@@ -1,0 +1,5 @@
+kind: Fixes
+body: support case insensitive bool for minijinja args
+time: 2025-07-15T14:21:05.234428-07:00
+custom:
+  PR: dbt-labs/fs#4462

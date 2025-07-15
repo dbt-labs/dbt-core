@@ -11,8 +11,8 @@ use crate::syntax::SyntaxConfig;
 use crate::value::Value;
 
 const MAX_RECURSION: usize = 100;
-const RESERVED_NAMES: [&str; 8] = [
-    "true", "True", "false", "False", "none", "None", "loop", "self",
+const RESERVED_NAMES: [&str; 10] = [
+    "true", "True", "TRUE", "false", "False", "FALSE", "none", "None", "loop", "self",
 ];
 
 #[allow(clippy::incompatible_msrv)]
@@ -710,8 +710,8 @@ impl<'a> Parser<'a> {
         }
 
         match token {
-            Token::Ident("true" | "True") => Ok(const_val!(true)),
-            Token::Ident("false" | "False") => Ok(const_val!(false)),
+            Token::Ident("true" | "True" | "TRUE") => Ok(const_val!(true)),
+            Token::Ident("false" | "False" | "FALSE") => Ok(const_val!(false)),
             Token::Ident("none" | "None") => Ok(const_val!(())),
             Token::Ident(name) => Ok(ast::Expr::Var(Spanned::new(ast::Var { id: name }, span))),
             Token::Str(_) | Token::String(_) => {
