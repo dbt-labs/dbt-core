@@ -1,0 +1,6 @@
+kind: Fixes
+body: Allow profile environment variables to accept keyword arguments
+time: 2025-07-14T11:44:24.075095023-07:00
+custom:
+  PR: dbt-labs/fs#4230
+  Issues: "dbt-labs/dbt-fusion#277"

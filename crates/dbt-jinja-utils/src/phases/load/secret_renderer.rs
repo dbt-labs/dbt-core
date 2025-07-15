@@ -1,6 +1,7 @@
 //! This module contains the logic for rendering secrets in the dbt project.
 
 use dbt_common::{fs_err, ErrorCode, FsResult};
+use minijinja::{arg_utils::ArgParser, value::Kwargs};
 use regex::Regex;
 
 use crate::utils::{DBT_INTERNAL_ENV_VAR_PREFIX, ENV_VARS, SECRET_ENV_VAR_PREFIX};
@@ -10,11 +11,21 @@ const SECRET_PLACEHOLDER: &str = "$$$DBT_SECRET_START$$${}$$$DBT_SECRET_END$$$";
 /// Prefix which identifies environment variables which contains secrets.
 /// A function that returns an environment variable from the environment, with special handling for secrets
 pub fn secret_context_env_var_fn(
-) -> impl Fn(String, Option<String>) -> Result<minijinja::Value, minijinja::Error> {
-    move |var_name: String,
-          default_value: Option<String>|
-          -> Result<minijinja::Value, minijinja::Error> {
+) -> impl Fn(&[minijinja::Value], Kwargs) -> Result<minijinja::Value, minijinja::Error> {
+    move |args: &[minijinja::Value], kwargs: Kwargs| -> Result<minijinja::Value, minijinja::Error> {
         let mut env_vars_guard = ENV_VARS.lock().unwrap();
+
+        let mut arg_parser = ArgParser::new(args, Some(kwargs));
+        let var_name = arg_parser
+            .get::<String>("value")
+            .or_else(|_| arg_parser.get::<String>("var"))
+            .map_err(|_| {
+                minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidOperation,
+                    "env_var requires a 'value' or 'var' argument",
+                )
+            })?;
+        let default_value = arg_parser.get_optional::<minijinja::Value>("default");
 
         // First check if the variable exists
         match std::env::var(&var_name) {
@@ -37,7 +48,7 @@ pub fn secret_context_env_var_fn(
             Err(_) => {
                 // Variable doesn't exist, use default if provided
                 if let Some(default) = default_value {
-                    Ok(default.into())
+                    Ok(default)
                 } else {
                     Err(minijinja::Error::new(
                         minijinja::ErrorKind::InvalidOperation,
