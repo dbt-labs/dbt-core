@@ -14,7 +14,6 @@ use dbt_schemas::schemas::macros::build_macro_units;
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
-use dbt_schemas::state::NodesWithChangeset;
 use dbt_schemas::state::RenderResults;
 use dbt_schemas::state::{DbtPackage, Macros};
 use dbt_schemas::state::{DbtRuntimeConfig, Operations};
@@ -53,7 +52,6 @@ pub async fn resolve(
     arg: &ResolveArgs,
     invocation_args: &InvocationArgs,
     dbt_state: Arc<DbtState>,
-    _change_set: &Option<NodesWithChangeset>,
 ) -> FsResult<(ResolverState, JinjaEnvironment<'static>)> {
     let _pb = with_progress!(arg.io, spinner => RESOLVING);
 
@@ -67,16 +65,8 @@ pub async fn resolve(
     for package in &dbt_state.packages {
         dbt_common::check_cancellation!(arg.io.should_cancel_compilation)?;
 
-        let resolved_macros = resolve_macros(
-            &arg.io,
-            &package
-                .macro_files
-                .iter()
-                // This is a temporary solution, for a feature that is supposed to be
-                // deprecated in the future
-                .chain(&package.snapshot_files)
-                .collect::<Vec<_>>(),
-        )?;
+        let macro_files = package.macro_files.iter().chain(&package.snapshot_files);
+        let resolved_macros = resolve_macros(&arg.io, macro_files.collect::<Vec<_>>().as_slice())?;
         macros.macros.extend(resolved_macros);
         let docs_macros = resolve_docs_macros(&package.docs_files)?;
         macros.docs_macros.extend(docs_macros);

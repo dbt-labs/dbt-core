@@ -204,7 +204,7 @@ async fn execute_all_phases(arg: &EvalArgs, _cli: &Cli) -> FsResult<i32> {
     let invocation_args = InvocationArgs::from_eval_args(&arg);
     let arc_dbt_state = Arc::new(dbt_state);
     let (resolved_state, _jinja_env) =
-        resolve(&resolve_args, &invocation_args, arc_dbt_state, &None).await?;
+        resolve(&resolve_args, &invocation_args, arc_dbt_state).await?;
 
     let dbt_manifest = build_manifest(&arg.io.invocation_id.to_string(), &resolved_state);
 

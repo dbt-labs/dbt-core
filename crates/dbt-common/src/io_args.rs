@@ -48,7 +48,7 @@ pub struct IoArgs {
 
     // internal fields
     pub show_timings: bool, // whether to show timings in the status messages
-    pub build_cache_nodes_url: Option<String>,
+    pub build_cache_url: Option<String>,
     pub build_cache_cas_url: Option<String>,
     pub build_cache_mode: Option<BuildCacheMode>,
 }
@@ -78,7 +78,7 @@ impl Clone for IoArgs {
             send_anonymous_usage_stats: self.send_anonymous_usage_stats,
             should_cancel_compilation: self.should_cancel_compilation.clone(),
             show_timings: self.show_timings,
-            build_cache_nodes_url: self.build_cache_nodes_url.clone(),
+            build_cache_url: self.build_cache_url.clone(),
             build_cache_cas_url: self.build_cache_cas_url.clone(),
             build_cache_mode: self.build_cache_mode,
         }
