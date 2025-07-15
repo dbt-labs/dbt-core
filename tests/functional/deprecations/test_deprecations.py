@@ -296,6 +296,7 @@ class TestDeprecationSummary:
         assert found_summary, "Expected to find PackageRedirectDeprecation in deprecations summary"
 
 
+@mock.patch("dbt.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
 class TestDeprecatedInvalidDeprecationDate:
     @pytest.fixture(scope="class")
     def models(self):
@@ -346,6 +347,7 @@ class TestCustomKeyInConfigDeprecation:
             "models.yml": custom_key_in_config_yaml,
         }
 
+    @mock.patch("dbt.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
     @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_custom_key_in_config_deprecation(self, project):
         event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
@@ -368,6 +370,7 @@ class TestMultipleCustomKeysInConfigDeprecation:
             "models.yml": multiple_custom_keys_in_config_yaml,
         }
 
+    @mock.patch("dbt.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
     @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_multiple_custom_keys_in_config_deprecation(self, project):
         event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
@@ -394,6 +397,7 @@ class TestCustomKeyInObjectDeprecation:
             "models.yml": custom_key_in_object_yaml,
         }
 
+    @mock.patch("dbt.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
     @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_custom_key_in_object_deprecation(self, project):
         event_catcher = EventCatcher(CustomKeyInObjectDeprecation)
