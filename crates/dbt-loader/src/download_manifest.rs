@@ -5,6 +5,7 @@ use reqwest_middleware::ClientBuilder;
 use reqwest_retry::{
     policies::ExponentialBackoff as RetryExponentialBackoff, RetryTransientMiddleware,
 };
+use std::error::Error;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
@@ -109,27 +110,54 @@ pub async fn download_manifest_from_cloud(
     let client = ClientBuilder::new(reqwest::Client::new())
         .with(RetryTransientMiddleware::new_with_policy(retry_policy))
         .build();
-    let response = client
+    let response = match client
         .get(&url)
         .header("Content-Type", "application/json")
         .header("Authorization", format!("Bearer {token}"))
         .send()
         .await
-        .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to execute HTTP request: {}", e))?;
+    {
+        Ok(response) => response,
+        Err(e) => {
+            // Don't fail the entire operation if API request fails
+            show_warning!(
+                io,
+                fs_err!(
+                    ErrorCode::Generic,
+                    "Failed to request deferral manifest from the dbt platform for project {}, continuing without deferral. Error: {}",
+                    project_id,
+                    e
+                )
+            );
+            return Ok(None);
+        }
+    };
 
-    if !response.status().is_success() {
+    let status = response.status();
+    if !status.is_success() {
+        let error_message = if let Ok(text) = response.text().await {
+            // Try to parse JSON and extract user_message
+            if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(&text) {
+                if let Some(user_message) = json_value["status"]["user_message"].as_str() {
+                    format!(": {user_message}")
+                } else {
+                    format!(" - {text}")
+                }
+            } else {
+                format!(" - {text}")
+            }
+        } else {
+            "".to_string()
+        };
+
         show_warning!(
             io,
             fs_err!(
                 ErrorCode::Generic,
                 "Failed to request deferral manifest from the dbt platform for project {}, continuing without deferral. HTTP status {}{}",
                 project_id,
-                response.status(),
-                if let Ok(text) = response.text().await {
-                    format!(" - {text}")
-                } else {
-                    "".to_string()
-                }
+                status,
+                error_message
             )
         );
         return Ok(None);
@@ -154,11 +182,27 @@ pub async fn download_manifest_from_cloud(
         })?;
 
     // Download manifest from presigned URL
-    let manifest_response = client
-        .get(presigned_url)
-        .send()
-        .await
-        .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to download manifest: {}", e))?;
+    let manifest_response = match client.get(presigned_url).send().await {
+        Ok(response) => response,
+        Err(e) => {
+            // Extract the source error from middleware/retry errors
+            let source_error = if let Some(source) = e.source() {
+                format!(" (source: {source})")
+            } else {
+                String::new()
+            };
+            show_warning!(
+                io,
+                fs_err!(
+                    ErrorCode::Generic,
+                    "Failed to download manifest: {}{}",
+                    e,
+                    source_error
+                )
+            );
+            return Ok(None);
+        }
+    };
 
     if !manifest_response.status().is_success() {
         show_warning!(
