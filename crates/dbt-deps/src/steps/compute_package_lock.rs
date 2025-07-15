@@ -95,12 +95,16 @@ pub async fn compute_package_lock(
             UnpinnedPackage::Tarball(tarball_unpinned_package) => {
                 let pinned_package: TarballPinnedPackage =
                     tarball_unpinned_package.clone().try_into()?;
+                let mut unrendered = pinned_package.unrendered;
+                // We remove the 'name' from unrendered so that we don't
+                // end up with two 'name' fields in the package lock.
+                unrendered.remove("name");
                 dbt_packages_lock
                     .packages
                     .push(DbtPackageLock::Tarball(TarballPackageLock {
                         tarball: tarball_unpinned_package.original_entry.tarball.clone(),
                         name: pinned_package.name,
-                        unrendered: pinned_package.unrendered,
+                        unrendered,
                     }));
             }
         }
