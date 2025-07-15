@@ -1,6 +1,0 @@
-kind: Fixes
-body: Unit tests search for fixtures recurively
-time: 2025-07-14T10:09:01.218647747-07:00
-custom:
-  PR: dbt-labs/fs#4435
-  Issues: "dbt-labs/dbt-fusion#362"
