@@ -87,8 +87,17 @@ pub struct CustomGranularity {
     pub name: String,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdatesOn {
+    #[default]
+    Any,
+    All,
+}
+
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
 pub struct ModelFreshness {
     pub build_after: Option<FreshnessRules>,
+    pub updates_on: Option<UpdatesOn>,
 }

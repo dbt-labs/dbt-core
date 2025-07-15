@@ -1,0 +1,6 @@
+kind: Features
+body: Add build_after.updates_on support
+time: 2025-07-12T08:34:43.139487-07:00
+custom:
+  PR: dbt-labs/fs#4412
+  Issues: "dbt-labs/fs#3818"
