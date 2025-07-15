@@ -74,7 +74,7 @@ setup(
         # Minor versions for these are expected to be backwards-compatible
         "dbt-common>=1.27.0,<2.0",
         "dbt-adapters>=1.15.2,<2.0",
-        "dbt-protos>=1.0.337,<2.0",
+        "dbt-protos>=1.0.339,<2.0",
         "pydantic<3",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
