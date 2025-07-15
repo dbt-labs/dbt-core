@@ -641,13 +641,9 @@
           "type": "string"
         },
         "window": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/MetricTimeWindow"
-            },
-            {
-              "type": "null"
-            }
+          "type": [
+            "string",
+            "null"
           ]
         }
       },
@@ -669,13 +665,9 @@
           "$ref": "#/definitions/PeriodAggregationType"
         },
         "window": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/MetricTimeWindow"
-            },
-            {
-              "type": "null"
-            }
+          "type": [
+            "string",
+            "null"
           ]
         }
       },
@@ -2279,7 +2271,7 @@
             }
           ]
         },
-        "join_to_timepine": {
+        "join_to_timespine": {
           "type": [
             "boolean",
             "null"
@@ -2344,7 +2336,7 @@
         "denominator": {
           "anyOf": [
             {
-              "$ref": "#/definitions/MetricInput"
+              "$ref": "#/definitions/StringOrMetricInputMeasure"
             },
             {
               "type": "null"
@@ -2394,13 +2386,9 @@
           ]
         },
         "window": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/MetricTimeWindow"
-            },
-            {
-              "type": "null"
-            }
+          "type": [
+            "string",
+            "null"
           ]
         }
       },
@@ -2715,7 +2703,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": true
+          "additionalProperties": {
+            "$ref": "#/definitions/StringOrArrayOfStrings"
+          }
         },
         "group": {
           "type": [
@@ -3944,7 +3934,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": true
+          "additionalProperties": {
+            "$ref": "#/definitions/StringOrArrayOfStrings"
+          }
         },
         "group": {
           "type": [
@@ -4619,7 +4611,15 @@
             "$ref": "#/definitions/GrantAccessToTarget"
           }
         },
-        "grants": true,
+        "grants": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/StringOrArrayOfStrings"
+          }
+        },
         "group": {
           "type": [
             "string",
