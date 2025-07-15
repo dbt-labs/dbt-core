@@ -24,6 +24,20 @@ _JSONSCHEMA_SUPPORTED_ADAPTERS = {
     "snowflake",
 }
 
+_HIERARCHICAL_CONFIG_KEYS = {
+    "seeds",
+    "sources",
+    "models",
+    "snapshots",
+    "tests",
+    "exposures",
+    "data_tests",
+    "metrics",
+    "saved_queries",
+    "semantic_models",
+    "unit_tests",
+}
+
 
 def load_json_from_package(jsonschema_type: str, filename: str) -> Dict[str, Any]:
     """Loads a JSON file from within a package."""
@@ -154,7 +168,7 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                                 key_path=key_path,
                             )
             # dbt_project.yml configs
-            elif "dbt_project.yml" in file_path:
+            elif "dbt_project.yml" in file_path and error_path[0] in _HIERARCHICAL_CONFIG_KEYS:
                 for sub_error in sub_errors:
                     if isinstance(sub_error, ValidationError) and sub_error.validator == "type":
                         # Only raise type-errors if they are indicating leaf config without a plus prefix
