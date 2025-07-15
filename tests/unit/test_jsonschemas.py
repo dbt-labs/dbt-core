@@ -7,6 +7,8 @@ from dbt.deprecations import (
     GenericJSONSchemaValidationDeprecation,
 )
 from dbt.jsonschemas import validate_model_config
+from dbt.tests.util import safe_set_invocation_context
+from dbt_common.context import get_invocation_context
 from dbt_common.events.event_manager_client import add_callback_to_manager
 from tests.utils import EventCatcher
 
@@ -14,6 +16,8 @@ from tests.utils import EventCatcher
 class TestValidateModelConfigNoError:
     @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_validate_model_config_no_error(self):
+        safe_set_invocation_context()
+        get_invocation_context().uses_adapter("snowflake")
         caught_events = []
         add_callback_to_manager(caught_events.append)
 
@@ -25,6 +29,8 @@ class TestValidateModelConfigNoError:
 
     @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_validate_model_config_error(self):
+        safe_set_invocation_context()
+        get_invocation_context().uses_adapter("snowflake")
         ckiod_catcher = EventCatcher(CustomKeyInObjectDeprecation)
         ckicd_catcher = EventCatcher(CustomKeyInConfigDeprecation)
         gjsvd_catcher = EventCatcher(GenericJSONSchemaValidationDeprecation)
