@@ -1,0 +1,6 @@
+kind: Fixes
+body: Rename indent filter parameters
+time: 2025-07-11T21:29:47.3853+09:00
+custom:
+  PR: dbt-labs/fs#4389
+  Issues: "dbt-labs/dbt-fusion#379"

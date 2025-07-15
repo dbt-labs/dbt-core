@@ -1216,16 +1216,13 @@ mod builtins {
     pub fn indent(args: &[Value]) -> Result<String, Error> {
         let mut arg_parser = ArgParser::new(args, None);
         let mut value: String = arg_parser.next_positional()?;
-        let width: usize = arg_parser.get_optional("width").unwrap_or(0);
-        let indent_first_line: bool = arg_parser
-            .get_optional("indent_first_line")
-            .unwrap_or(false);
-        let indent_blank_lines: bool = arg_parser
-            .get_optional("indent_blank_lines")
-            .unwrap_or(false);
+        let width: usize = arg_parser
+            .get_optional("width")
+            .or_else(|| arg_parser.next_positional().ok())
+            .unwrap_or(0);
+        let indent_first_line: bool = arg_parser.get_optional("first").unwrap_or(false);
+        let indent_blank_lines: bool = arg_parser.get_optional("blank").unwrap_or(false);
 
-        // Handle the case where width is specified both as positional and keyword argument
-        // This is invalid, so we return an error
         ok!(arg_parser.assert_all_used());
 
         fn strip_trailing_newline(input: &mut String) {

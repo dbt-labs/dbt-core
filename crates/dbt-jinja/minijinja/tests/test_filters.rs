@@ -56,41 +56,31 @@ fn test_indent() {
 }
 
 #[test]
-fn test_indent_with_indented_first_line() {
+fn test_indent_first_line() {
     let teststring = String::from("test\ntest1\n\ntest2\n");
-    let args = vec![Value::from(teststring), Value::from(2), Value::from(true)];
+    let args = args!(teststring, 2, first => true);
     assert_eq!(
-        indent(&args).unwrap(),
+        indent(args).unwrap(),
         String::from("  test\n  test1\n\n  test2")
     );
 }
 
 #[test]
-fn test_indent_with_indented_blank_line() {
+fn test_indent_blank_line() {
     let teststring = String::from("test\ntest1\n\ntest2\n");
-    let args = vec![
-        Value::from(teststring),
-        Value::from(2),
-        Value::from(()),
-        Value::from(true),
-    ];
+    let args = args!(teststring, 2, blank => true);
     assert_eq!(
-        indent(&args).unwrap(),
+        indent(args).unwrap(),
         String::from("test\n  test1\n  \n  test2")
     );
 }
 
 #[test]
-fn test_indent_with_all_indented() {
+fn test_indent_all_lines() {
     let teststring = String::from("test\ntest1\n\ntest2\n");
-    let args = vec![
-        Value::from(teststring),
-        Value::from(2),
-        Value::from(true),
-        Value::from(true),
-    ];
+    let args = args!(teststring, 2, first => true, blank => true);
     assert_eq!(
-        indent(&args).unwrap(),
+        indent(args).unwrap(),
         String::from("  test\n  test1\n  \n  test2")
     );
 }
