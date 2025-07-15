@@ -620,7 +620,7 @@
       ],
       "properties": {
         "base_measure": {
-          "$ref": "#/definitions/MetricInputMeasure"
+          "$ref": "#/definitions/StringOrMetricInputMeasure"
         },
         "calculation": {
           "$ref": "#/definitions/ConversionCalculationType"
@@ -635,7 +635,7 @@
           }
         },
         "conversion_measure": {
-          "$ref": "#/definitions/MetricInputMeasure"
+          "$ref": "#/definitions/StringOrMetricInputMeasure"
         },
         "entity": {
           "type": "string"
@@ -1049,9 +1049,13 @@
           ]
         },
         "severity": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Severity"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "skip_matched_step": {
@@ -2213,7 +2217,7 @@
         "filter": {
           "anyOf": [
             {
-              "$ref": "#/definitions/WhereFilterIntersection"
+              "$ref": "#/definitions/StringOrArrayOfStrings"
             },
             {
               "type": "null"
@@ -2264,7 +2268,7 @@
         "filter": {
           "anyOf": [
             {
-              "$ref": "#/definitions/WhereFilterIntersection"
+              "$ref": "#/definitions/StringOrArrayOfStrings"
             },
             {
               "type": "null"
@@ -2336,7 +2340,7 @@
         "denominator": {
           "anyOf": [
             {
-              "$ref": "#/definitions/StringOrMetricInputMeasure"
+              "$ref": "#/definitions/StringOrMetricInput"
             },
             {
               "type": "null"
@@ -2348,13 +2352,6 @@
             "string",
             "null"
           ]
-        },
-        "input_measures": {
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/MetricInputMeasure"
-          }
         },
         "measure": {
           "anyOf": [
@@ -2372,13 +2369,13 @@
             "null"
           ],
           "items": {
-            "$ref": "#/definitions/MetricInput"
+            "$ref": "#/definitions/StringOrMetricInput"
           }
         },
         "numerator": {
           "anyOf": [
             {
-              "$ref": "#/definitions/MetricInput"
+              "$ref": "#/definitions/StringOrMetricInput"
             },
             {
               "type": "null"
@@ -2420,9 +2417,13 @@
           ]
         },
         "filter": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "label": {
@@ -4423,6 +4424,13 @@
       },
       "additionalProperties": false
     },
+    "Severity": {
+      "type": "string",
+      "enum": [
+        "Error",
+        "Warn"
+      ]
+    },
     "SnapshotConfig": {
       "type": "object",
       "properties": {
@@ -5628,6 +5636,16 @@
         }
       ]
     },
+    "StringOrMetricInput": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/definitions/MetricInput"
+        }
+      ]
+    },
     "StringOrMetricInputMeasure": {
       "anyOf": [
         {
@@ -6240,9 +6258,27 @@
     "UnitTestOverrides": {
       "type": "object",
       "properties": {
-        "env_vars": true,
-        "macros": true,
-        "vars": true
+        "env_vars": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "macros": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        },
+        "vars": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false
+        }
       },
       "additionalProperties": false
     },
@@ -6324,33 +6360,6 @@
         "type": "object",
         "additionalProperties": true
       }
-    },
-    "WhereFilter": {
-      "type": "object",
-      "required": [
-        "where_sql_template"
-      ],
-      "properties": {
-        "where_sql_template": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "WhereFilterIntersection": {
-      "type": "object",
-      "required": [
-        "where_filters"
-      ],
-      "properties": {
-        "where_filters": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/WhereFilter"
-          }
-        }
-      },
-      "additionalProperties": false
     },
     "_MeasureExpr": {
       "anyOf": [
