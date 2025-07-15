@@ -320,6 +320,51 @@ macro_rules! show_progress {
 }
 
 #[macro_export]
+macro_rules! show_info {
+    ( $io:expr, $info:expr) => {{
+        use $crate::io_args::ShowOptions;
+        use $crate::pretty_string::pretty_green;
+        use $crate::logging::{FsInfo, LogEvent};
+
+
+        if let Some(reporter) = &$io.status_reporter {
+            reporter.show_progress($info.event.action().as_str(), &$info.target, $info.desc.as_deref());
+        }
+
+        // TODO: these filtering conditions should be moved to the logger side
+        if (
+            ($io.should_show(ShowOptions::Progress) && $info.is_phase_unknown())
+            || ($io.should_show(ShowOptions::ProgressParse) && $info.is_phase_parse())
+            || ($io.should_show(ShowOptions::ProgressRender) && $info.is_phase_render())
+            || ($io.should_show(ShowOptions::ProgressAnalyze) && $info.is_phase_analyze())
+            || ($io.should_show(ShowOptions::ProgressRun) && $info.is_phase_run())
+        )
+            // Do not show parse/compile generic tests
+            && !($info.target.contains(dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME)
+                && ($info.event.action().as_str().contains(dbt_common::constants::PARSING)
+                    || $info.event.action().as_str().contains(dbt_common::constants::RENDERING)
+                    || $info.event.action().as_str().contains(dbt_common::constants::ANALYZING)))
+        {
+            let output = pretty_green($info.event.action().as_str(), &$info.target, $info.desc.as_deref());
+            let event = $info.event;
+            if let Some(data_json) = $info.data {
+                $crate::_log!(event.level(),
+                    _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+                    name = event.name(), data:serde = data_json;
+                     "{}", output
+                );
+            } else {
+                $crate::_log!(event.level(),
+                    _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+                    name = event.name();
+                     "{}", output
+                );
+            }
+        }
+    }};
+}
+
+#[macro_export]
 /// Display a progress bar or spinner with optional context items.
 ///
 /// Each progress bar or spinner must have a unique identifier (`uid`), which is

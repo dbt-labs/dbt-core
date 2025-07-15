@@ -32,6 +32,7 @@ pub const DBT_PACKAGES_DIR_NAME: &str = "dbt_packages";
 pub const DBT_INTERNAL_PACKAGES_DIR_NAME: &str = "dbt_internal_packages";
 pub const DBT_MANIFEST_JSON: &str = "manifest.json";
 pub const DBT_COMPILED_DIR_NAME: &str = "compiled";
+pub const DBT_METADATA_DIR_NAME: &str = "metadata";
 pub const DBT_EPHEMERAL_DIR_NAME: &str = "ephemeral";
 pub const DBT_HOOKS_DIR_NAME: &str = "hooks";
 pub const DBT_CTE_PREFIX: &str = "__dbt__cte__";
@@ -72,6 +73,7 @@ pub const EXTENDING: &str = " Extending";
 pub const RESOLVING: &str = " Resolving";
 pub const PARSING: &str = "   Parsing";
 pub const REMOVING: &str = "  Removing";
+pub const CACHING: &str = "   Caching";
 // not being issued right now
 pub const SCHEDULING: &str = "Scheduling";
 //
@@ -113,3 +115,10 @@ pub const NOOP: &str = "noop";
 
 // log targets
 pub const EXECUTING: &str = " ExecutingSql";
+
+// cas/node read/write
+
+pub const CAS_RD: &str = "   Reading";
+pub const CAS_WR: &str = "   Writing";
+pub const NODES_RD: &str = "   Reading";
+pub const NODES_WR: &str = "   Writing";

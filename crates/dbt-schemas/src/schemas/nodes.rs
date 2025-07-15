@@ -1,4 +1,5 @@
 use core::fmt;
+use std::str::FromStr;
 use std::{any::Any, collections::BTreeMap, fmt::Display, path::PathBuf, sync::Arc};
 
 use dbt_common::{err, io_args::StaticAnalysisKind, ErrorCode, FsResult};
@@ -26,6 +27,7 @@ use crate::schemas::{
 #[derive(
     Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize,
 )]
+#[serde(rename_all = "snake_case")]
 pub enum IntrospectionKind {
     #[default]
     None,
@@ -45,6 +47,21 @@ impl Display for IntrospectionKind {
             IntrospectionKind::InternalSchema => write!(f, "internal_schema"),
             IntrospectionKind::ExternalSchema => write!(f, "external_schema"),
             IntrospectionKind::Unknown => write!(f, "unknown"),
+        }
+    }
+}
+
+impl FromStr for IntrospectionKind {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "none" => Ok(IntrospectionKind::None),
+            "execute" => Ok(IntrospectionKind::Execute),
+            "upstream_schema" => Ok(IntrospectionKind::UpstreamSchema),
+            "internal_schema" => Ok(IntrospectionKind::InternalSchema),
+            "external_schema" => Ok(IntrospectionKind::ExternalSchema),
+            _ => Err(()),
         }
     }
 }
@@ -1295,7 +1312,7 @@ pub struct NodeBaseAttributes {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtSeed {
     #[serde(flatten)]
@@ -1331,7 +1348,7 @@ fn is_false(b: &bool) -> bool {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtUnitTest {
     #[serde(flatten)]
@@ -1351,6 +1368,7 @@ pub struct DbtUnitTest {
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub struct DbtUnitTestAttr {
     pub model: String,
     pub given: Vec<Given>,
@@ -1361,7 +1379,7 @@ pub struct DbtUnitTestAttr {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtTest {
     #[serde(flatten)]
@@ -1399,7 +1417,7 @@ pub struct TestMetadata {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtSnapshot {
     #[serde(flatten)]
@@ -1429,7 +1447,7 @@ pub struct DbtSnapshotAttr {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtSource {
     #[serde(flatten)]
@@ -1451,7 +1469,7 @@ pub struct DbtSource {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtSourceAttr {
     pub identifier: String,
@@ -1486,7 +1504,7 @@ impl DbtSource {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtModel {
     #[serde(flatten)]

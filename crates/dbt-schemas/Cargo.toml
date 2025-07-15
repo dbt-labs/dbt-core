@@ -13,6 +13,7 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
+blake3 = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 dbt-adapter-proc-macros = { workspace = true }

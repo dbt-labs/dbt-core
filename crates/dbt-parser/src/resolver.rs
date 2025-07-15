@@ -14,6 +14,7 @@ use dbt_schemas::schemas::macros::build_macro_units;
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
+use dbt_schemas::state::NodesWithChangeset;
 use dbt_schemas::state::RenderResults;
 use dbt_schemas::state::{DbtPackage, Macros};
 use dbt_schemas::state::{DbtRuntimeConfig, Operations};
@@ -52,6 +53,7 @@ pub async fn resolve(
     arg: &ResolveArgs,
     invocation_args: &InvocationArgs,
     dbt_state: Arc<DbtState>,
+    _change_set: &Option<NodesWithChangeset>,
 ) -> FsResult<(ResolverState, JinjaEnvironment<'static>)> {
     let _pb = with_progress!(arg.io, spinner => RESOLVING);
 

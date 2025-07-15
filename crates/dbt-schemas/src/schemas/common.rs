@@ -46,6 +46,28 @@ pub enum FreshnessPeriod {
     hour,
     day,
 }
+impl FromStr for FreshnessPeriod {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "minute" => Ok(FreshnessPeriod::minute),
+            "hour" => Ok(FreshnessPeriod::hour),
+            "day" => Ok(FreshnessPeriod::day),
+            _ => Err(()),
+        }
+    }
+}
+impl std::fmt::Display for FreshnessPeriod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let period_str = match self {
+            FreshnessPeriod::minute => "minute",
+            FreshnessPeriod::hour => "hour",
+            FreshnessPeriod::day => "day",
+        };
+        write!(f, "{period_str}")
+    }
+}
 
 #[skip_serializing_none]
 #[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
@@ -101,7 +123,25 @@ pub enum DbtMaterialization {
     #[serde(untagged)]
     Unknown(String),
 }
+impl FromStr for DbtMaterialization {
+    type Err = ();
 
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "view" => Ok(DbtMaterialization::View),
+            "table" => Ok(DbtMaterialization::Table),
+            "incremental" => Ok(DbtMaterialization::Incremental),
+            "materialized_view" => Ok(DbtMaterialization::MaterializedView),
+            "external" => Ok(DbtMaterialization::External),
+            "test" => Ok(DbtMaterialization::Test),
+            "ephemeral" => Ok(DbtMaterialization::Ephemeral),
+            "unit" => Ok(DbtMaterialization::Unit),
+            "analysis" => Ok(DbtMaterialization::Analysis),
+            "streaming_table" => Ok(DbtMaterialization::StreamingTable),
+            other => Ok(DbtMaterialization::Unknown(other.to_string())),
+        }
+    }
+}
 impl From<DbtMaterialization> for String {
     fn from(materialization: DbtMaterialization) -> Self {
         materialization.to_string()
@@ -146,9 +186,7 @@ impl From<DbtMaterialization> for RelationType {
     }
 }
 
-#[derive(
-    Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumString, Display, JsonSchema,
-)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Display, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum Access {
@@ -156,6 +194,19 @@ pub enum Access {
     #[default]
     Protected,
     Public,
+}
+
+impl FromStr for Access {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "private" => Ok(Access::Private),
+            "protected" => Ok(Access::Protected),
+            "public" => Ok(Access::Public),
+            _ => Err(()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
@@ -179,7 +230,11 @@ pub struct ResolvedQuoting {
 
 impl Default for ResolvedQuoting {
     fn default() -> Self {
+        // dbt rules
         Self::trues()
+        // todo: however a much more sensible rule would be
+        // Self::falses()
+        // ... since SQL is case insensitive -- so let the dialect dictate and not the user...
     }
 }
 
@@ -512,7 +567,7 @@ pub struct IncludeExclude {
     pub include: Option<StringOrArrayOfStrings>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Default)]
 pub struct Expect {
     pub rows: Option<Rows>,
     #[serde(default)]

@@ -408,6 +408,10 @@ impl InitArgs {
                 log_level_file: self.common_args.log_level_file,
                 log_path: self.common_args.log_path.clone(),
                 trace_path: self.common_args.trace_path.clone(),
+                show_timings: arg.from_main,
+                build_cache_mode: arg.io.build_cache_mode,
+                build_cache_nodes_url: arg.io.build_cache_nodes_url.clone(),
+                build_cache_cas_url: arg.io.build_cache_cas_url.clone(),
             },
             ..Default::default()
         }
@@ -489,6 +493,10 @@ impl CommonArgs {
                 log_level_file: self.log_level_file,
                 log_path: self.log_path.clone(),
                 trace_path: self.trace_path.clone(),
+                show_timings: arg.from_main,
+                build_cache_mode: arg.io.build_cache_mode,
+                build_cache_nodes_url: arg.io.build_cache_nodes_url.clone(),
+                build_cache_cas_url: arg.io.build_cache_cas_url.clone(),
             },
             profiles_dir: self.profiles_dir.clone(),
             packages_install_path: self.packages_install_path.clone(),
@@ -560,6 +568,10 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             },
             log_path: cli.common_args().log_path,
             trace_path: cli.common_args().trace_path,
+            show_timings: true, // always true for main
+            build_cache_mode: None,
+            build_cache_nodes_url: None,
+            build_cache_cas_url: None,
         },
         from_main: true,
 
@@ -584,6 +596,10 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             log_level_file: cli.common_args().log_level_file,
             log_path: cli.common_args().log_path,
             trace_path: cli.common_args().trace_path,
+            show_timings: false, // always false for lib
+            build_cache_mode: None,
+            build_cache_nodes_url: None,
+            build_cache_cas_url: None,
         },
         from_main: false,
         target: cli.common_args().target,

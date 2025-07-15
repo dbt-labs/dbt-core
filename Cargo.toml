@@ -180,6 +180,7 @@ arrow-ipc = { version = "=54.2.1" }
 arrow-json = { version = "=54.2.1" }
 arrow-schema = { version = "=54.2.1", features = ["serde"] }
 parquet = { version = "=54.2.1" }
+serde_arrow = { version = "0.13.4", features = ["arrow-54"] }
 
 # xdbc
 adbc-core = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_core", version = "0.18.0", features = [

@@ -1,7 +1,7 @@
 use chrono_tz::Tz;
 use std::{
     any::Any,
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     path::{Path, PathBuf},
     sync::Arc,
     time::SystemTime,
@@ -21,11 +21,13 @@ use crate::schemas::{
     serde::{FloatOrString, StringOrArrayOfStrings},
     DbtSource, InternalDbtNodeAttributes, Nodes,
 };
+use blake3::Hasher;
 use chrono::{DateTime, Local, Utc};
 use dbt_common::{fs_err, serde_utils::convert_json_to_map, ErrorCode, FsResult};
 use minijinja::compiler::parser::materialization_macro_name;
 use minijinja::{value::Object, MacroSpans, Value as MinijinjaValue};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::fmt;
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Ord, PartialOrd)]
@@ -98,7 +100,7 @@ impl fmt::Display for DbtAsset {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DbtProfile {
     pub profile: String,
     pub target: String,
@@ -106,8 +108,20 @@ pub struct DbtProfile {
     pub schema: String,
     pub database: String,
     pub relative_profile_path: PathBuf,
-    // New fields to match dbt's implementation
+    #[serde(skip)]
     pub threads: Option<usize>, // from flags in dbt
+}
+
+impl DbtProfile {
+    pub fn blake3_hash(&self) -> String {
+        let mut hasher = Hasher::new();
+        // Serialize self, skipping threads due to #[serde(skip)]
+        let bytes = serde_json::to_vec(self).expect("Serialization failed");
+        hasher.update(&bytes);
+        let hash = hasher.finalize();
+        // Truncate to 16 bytes and encode as hex
+        hex::encode(&hash.as_bytes()[..16])
+    }
 }
 impl fmt::Display for DbtProfile {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -229,6 +243,71 @@ pub trait RefsAndSourcesTracker: fmt::Debug + Send + Sync {
     ) -> FsResult<(String, MinijinjaValue, ModelStatus)>;
 }
 
+// test only
+#[derive(Debug)]
+pub struct DummyRefsAndSourcesTracker;
+
+impl RefsAndSourcesTracker for DummyRefsAndSourcesTracker {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn insert_ref(
+        &mut self,
+        _node: &dyn InternalDbtNodeAttributes,
+        _adapter_type: &str,
+        _model_status: ModelStatus,
+        _overwrite: bool,
+    ) -> FsResult<()> {
+        // No-op for dummy
+        Ok(())
+    }
+
+    fn insert_source(
+        &mut self,
+        _package_name: &str,
+        _source: &DbtSource,
+        _adapter_type: &str,
+        _model_status: ModelStatus,
+    ) -> FsResult<()> {
+        // No-op for dummy
+        Ok(())
+    }
+
+    fn lookup_ref(
+        &self,
+        _package_name: &Option<String>,
+        name: &str,
+        _version: &Option<String>,
+        _node_package_name: &Option<String>,
+    ) -> FsResult<(String, MinijinjaValue, ModelStatus)> {
+        Err(fs_err!(
+            ErrorCode::Generic,
+            "DummyRefsAndSourcesTracker: lookup_ref not implemented for '{}'",
+            name
+        ))
+    }
+
+    fn lookup_source(
+        &self,
+        _package_name: &str,
+        source_name: &str,
+        table_name: &str,
+    ) -> FsResult<(String, MinijinjaValue, ModelStatus)> {
+        Err(fs_err!(
+            ErrorCode::Generic,
+            "DummyRefsAndSourcesTracker: lookup_source not implemented for '{}.{}'",
+            source_name,
+            table_name
+        ))
+    }
+}
+
+impl Default for DummyRefsAndSourcesTracker {
+    fn default() -> Self {
+        DummyRefsAndSourcesTracker
+    }
+}
 #[derive(Debug, Clone, Default)]
 pub struct Macros {
     pub macros: BTreeMap<String, DbtMacro>,
@@ -299,7 +378,47 @@ impl fmt::Display for ResolverState {
     }
 }
 
-#[derive(Debug, Clone)]
+// A subset of resolver state
+#[derive(Debug, Clone, Default)]
+pub struct ResolvedNodes {
+    pub nodes: Nodes,
+    pub disabled_nodes: Nodes,
+    pub macros: Macros,
+    pub operations: Operations,
+}
+// A changeset describes the difference between two sets of files
+// - one on the file system
+// - one in content addressable store CAS) in a dbt project.
+// The changeset contains:
+// - files that are the same in both sets
+// - files that are different in both sets
+// - files that are missing in the filesystem
+// - files that are missing in the CAS
+// - whether the deps are the same e.g. (i.e dependencies.yml, package.lock and all dbt_packages)
+// files are represented by their relative path to the project root
+#[derive(Debug, Clone, Default)]
+pub struct Changeset {
+    pub same: HashSet<String>,
+    pub different: HashSet<String>,
+    pub missing_in_fs: HashSet<String>,
+    pub missing_in_cas: HashSet<String>,
+    pub are_deps_the_same: bool,
+}
+impl Changeset {
+    pub fn no_change(&self) -> bool {
+        self.different.is_empty()
+            && self.missing_in_fs.is_empty()
+            && self.missing_in_cas.is_empty()
+            && !self.same.is_empty()
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct NodesWithChangeset {
+    pub changeset: Changeset,
+    pub resolved_nodes: ResolvedNodes,
+}
+#[derive(Debug, Clone, Default)]
 pub struct RenderResults {
     pub rendering_results: BTreeMap<String, (String, MacroSpans)>,
 }
