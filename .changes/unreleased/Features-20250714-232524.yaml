@@ -1,0 +1,6 @@
+kind: Features
+body: Gate jsonschema validations by adapter
+time: 2025-07-14T23:25:24.475471-05:00
+custom:
+  Author: QMalcolm
+  Issue: "11680"
