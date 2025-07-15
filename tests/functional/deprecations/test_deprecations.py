@@ -5,6 +5,7 @@ from unittest import mock
 
 import pytest
 import yaml
+from pytest_mock import MockerFixture
 
 import dbt_common
 from dbt import deprecations
@@ -603,3 +604,53 @@ class TestEnvironmentVariableNamespaceDeprecation:
             "DBT_ENGINE_MY_CUSTOM_ENV_VAR_FOR_TESTING"
             == event_catcher.caught_events[0].data.env_var
         )
+
+
+class TestJsonSchemaValidationGating:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models_trivial.sql": models_trivial__model_sql,
+            "models.yml": custom_key_in_config_yaml,
+        }
+
+    @pytest.mark.parametrize(
+        "postgres_is_valid,dbt_private_run_jsonschema_validations,expected_events",
+        [
+            (True, "True", 1),
+            (False, "True", 0),
+            (False, "False", 0),
+            (False, "False", 0),
+        ],
+    )
+    def test_jsonschema_validation_gating(
+        self,
+        project,
+        mocker: MockerFixture,
+        postgres_is_valid: bool,
+        dbt_private_run_jsonschema_validations: bool,
+        expected_events: int,
+    ) -> None:
+        mocker.patch.dict(
+            os.environ,
+            {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": dbt_private_run_jsonschema_validations},
+        )
+
+        if postgres_is_valid:
+            supported_adapters_with_postgres = {
+                "postgres",
+                "bigquery",
+                "databricks",
+                "redshift",
+                "snowflake",
+            }
+            mocker.patch(
+                "dbt.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", supported_adapters_with_postgres
+            )
+
+        event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == expected_events
