@@ -7,6 +7,7 @@ use dbt_serde_yaml::JsonSchema;
 use merge::Merge;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
+use serde_json::Value;
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -565,7 +566,8 @@ pub struct BigqueryDbConfig {
     pub keyfile_json: Option<StringOrMap>,
     pub execution_project: Option<String>,
     pub compute_region: Option<String>,
-    pub dataproc_batch: Option<String>,
+    // TODO: support this https://docs.getdbt.com/docs/core/connect-data-platform/bigquery-setup
+    pub dataproc_batch: Option<Value>,
     pub dataproc_cluster_name: Option<String>,
     pub dataproc_region: Option<String>,
     pub gcs_bucket: Option<String>,
@@ -704,7 +706,7 @@ pub struct BigqueryTargetEnv {
     pub dataset: String,
     pub client_id: Option<String>,
     pub compute_region: Option<String>,
-    pub dataproc_batch: Option<String>,
+    pub dataproc_batch: Option<Value>,
     pub dataproc_cluster_name: Option<String>,
     pub dataproc_region: Option<String>,
     pub execution_project: Option<String>,

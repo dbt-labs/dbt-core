@@ -9,6 +9,11 @@ pub struct AdapterConfig {
 }
 
 impl AdapterConfig {
+    /// Get all the top level keys in the config
+    pub fn keys(&self) -> Vec<String> {
+        self.db_config.keys().cloned().collect()
+    }
+
     /// Make new config
     pub fn new(db_config: HashMap<String, Value>) -> Self {
         Self { db_config }
