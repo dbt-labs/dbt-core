@@ -733,6 +733,15 @@ class EnvironmentVariableNamespaceDeprecation(WarnLevel):
         return line_wrap_message(deprecation_tag(description))
 
 
+class MissingPlusPrefixDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D037"
+
+    def message(self) -> str:
+        description = f"Missing '+' prefix on `{self.key}` found at `{self.key_path}` in file `{self.file}`. Hierarchical config values without a '+' prefix are deprecated in dbt_project.yml."
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
