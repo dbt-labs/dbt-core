@@ -22,6 +22,7 @@ class TestProjectJsonschemaValidatedOnlyOnce:
         assert mocked_jsonschema_validate.call_count == 1
 
 
+@mock.patch("dbt.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
 class TestGenericJsonSchemaValidationDeprecation:
     """Ensure that the generic jsonschema validation deprecation can be fired"""
 

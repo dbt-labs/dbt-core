@@ -98,6 +98,7 @@ class TestSourceOverride:
 
         return insert_id + 1
 
+    @mock.patch("dbt.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
     @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_source_overrides(self, project):
         insert_id = 101
