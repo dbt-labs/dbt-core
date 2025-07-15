@@ -154,7 +154,7 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                                 key_path=key_path,
                             )
             # dbt_project.yml configs
-            else:
+            elif "dbt_project.yml" in file_path:
                 for sub_error in sub_errors:
                     if isinstance(sub_error, ValidationError) and sub_error.validator == "type":
                         # Only raise type-errors if they are indicating leaf config without a plus prefix
@@ -167,7 +167,7 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                                 "missing-plus-prefix-in-config-deprecation",
                                 key=sub_error.path[-1],
                                 file=file_path,
-                                key_path=error_path_to_string(error),
+                                key_path=error_path_to_string(sub_error),
                             )
         elif error.validator == "type":
             # Not deprecating invalid types yet
