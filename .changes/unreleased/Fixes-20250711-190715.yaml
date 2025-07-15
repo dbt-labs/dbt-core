@@ -1,5 +1,0 @@
-kind: Fixes
-body: Correcting Semantic Layer JSONSchema objects
-time: 2025-07-11T19:07:15.427046-05:00
-custom:
-  PR: dbt-labs/fs#4408

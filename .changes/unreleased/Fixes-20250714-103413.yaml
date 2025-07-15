@@ -1,5 +1,0 @@
-kind: Fixes
-body: Fix two name fields in tarball package lock entry
-time: 2025-07-14T10:34:13.31425-04:00
-custom:
-  PR: dbt-labs/fs#4429

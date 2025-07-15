@@ -1,5 +1,0 @@
-kind: Under the Hood
-body: Improve accuracy of metrics jsonschemas
-time: 2025-07-10T18:55:20.594664-04:00
-custom:
-  PR: dbt-labs/fs#4380

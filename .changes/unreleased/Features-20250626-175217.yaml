@@ -1,6 +1,0 @@
-kind: Features
-body: Validate test severity config and include warn/error enum options in jsonschema
-time: 2025-06-26T17:52:17.774977-04:00
-custom:
-  PR: dbt-labs/fs#4174
-  Issues: "dbt-labs/fs#3763"

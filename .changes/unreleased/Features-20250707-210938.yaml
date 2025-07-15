@@ -1,6 +1,0 @@
-kind: Features
-body: Issue message when deps installed version is not latest version
-time: 2025-07-07T21:09:38.632295-04:00
-custom:
-  PR: dbt-labs/fs#4310
-  Issues: "dbt-labs/dbt-fusion#326"

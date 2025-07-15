@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix root project database schema overwrite package config
-time: 2025-07-11T09:24:37.835001097-07:00
-custom:
-  PR: dbt-labs/fs#4385
-  Issues: "dbt-labs/dbt-fusion#187 dbt-labs/dbt-fusion#313"
