@@ -724,6 +724,15 @@ class SourceOverrideDeprecation(WarnLevel):
         return line_wrap_message(deprecation_tag(description))
 
 
+class EnvironmentVariableNamespaceDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D036"
+
+    def message(self) -> str:
+        description = f"Found custom environment variable `{self.env_var}` in the environment. The prefix `{self.reserved_prefix}` is reserved for dbt engine environment variables. Custom environment variables with the prefix `{self.reserved_prefix}` may cause collisions and runtime errors."
+        return line_wrap_message(deprecation_tag(description))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================

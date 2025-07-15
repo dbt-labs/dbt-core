@@ -19,6 +19,7 @@ from dbt.events.types import (
     CustomOutputPathInSourceFreshnessDeprecation,
     DeprecationsSummary,
     DuplicateYAMLKeysDeprecation,
+    EnvironmentVariableNamespaceDeprecation,
     GenericJSONSchemaValidationDeprecation,
     ModelParamUsageDeprecation,
     PackageRedirectDeprecation,
@@ -597,3 +598,22 @@ class TestSelectParamNoModelUsageRunnerDeprecation:
         assert len(event_catcher.caught_events) == 0
         dbtRunner(callbacks=[event_catcher.catch]).invoke(["ls", "--select", "some_model"])
         assert len(event_catcher.caught_events) == 0
+
+
+class TestEnvironmentVariableNamespaceDeprecation:
+    @mock.patch.dict(
+        os.environ,
+        {
+            "DBT_ENGINE_PARTIAL_PARSE": "False",
+            "DBT_ENGINE_MY_CUSTOM_ENV_VAR_FOR_TESTING": "True",
+        },
+    )
+    def test_environment_variable_namespace_deprecation(self):
+        event_catcher = EventCatcher(event_to_catch=EnvironmentVariableNamespaceDeprecation)
+
+        run_dbt(["parse", "--show-all-deprecations"], callbacks=[event_catcher.catch])
+        assert len(event_catcher.caught_events) == 1
+        assert (
+            "DBT_ENGINE_MY_CUSTOM_ENV_VAR_FOR_TESTING"
+            == event_catcher.caught_events[0].data.env_var
+        )
