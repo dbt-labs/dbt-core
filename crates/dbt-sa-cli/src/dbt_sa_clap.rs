@@ -237,7 +237,7 @@ pub struct CommonArgs {
     /// Write JSON artifacts to disk [env: DBT_WRITE_JSON=]. Use --no-write-json to suppress writing JSON artifacts.
     #[arg(global = true, long,  default_value_t=true,  action = ArgAction::SetTrue, env = "DBT_WRITE_JSON", value_parser = BoolishValueParser::new())]
     pub write_json: bool,
-    #[arg(global = true,long,action = ArgAction::SetTrue,  default_value_t=false, env = "DBT_WRITE_JSON",value_parser = BoolishValueParser::new(),hide = true,conflicts_with = "write_json")]
+    #[arg(global = true,long,action = ArgAction::SetTrue,  default_value_t=false, value_parser = BoolishValueParser::new(),hide = true)]
     pub no_write_json: bool,
 
     /// Set 'log-path' for the current run, overriding 'DBT_LOG_PATH'.
@@ -259,9 +259,11 @@ pub struct CommonArgs {
     #[arg(global = true, long, env = "DBT_LOG_LEVEL_FILE")]
     pub log_level_file: Option<LevelFilter>,
 
-    /// Set send_anonymous_usage_stats for sending vortex events
-    #[arg(global = true, long, default_value = "true", env = "SEND_ANONYMOUS_USAGE_STATE", value_parser = BoolishValueParser::new())]
+    // Send anonymous usage stats to dbt Labs.
+    #[arg(global = true, long, default_value_t=true, action = ArgAction::SetTrue, env = "DBT_SEND_ANONYMOUS_USAGE_STATS", value_parser = BoolishValueParser::new())]
     pub send_anonymous_usage_stats: bool,
+    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new())]
+    pub no_send_anonymous_usage_stats: bool,
 
     /// Debug flag
     #[arg(global = true, long, short = 'd', default_value = "false", action = ArgAction::SetTrue,  env = "DBT_DEBUG", value_parser = BoolishValueParser::new(),hide = true)]
@@ -537,9 +539,21 @@ impl CommonArgs {
             log_path: self.log_path.clone(),
             project_dir: self.project_dir.clone(),
             quiet: self.quiet,
-            write_json: !self.no_write_json,
+            write_json: if self.no_write_json {
+                false
+            } else {
+                self.write_json
+            },
             target_path: self.target_path.clone(),
             ..Default::default()
+        }
+    }
+
+    pub fn get_send_anonymous_usage_stats(&self) -> bool {
+        if self.no_send_anonymous_usage_stats {
+            false
+        } else {
+            self.send_anonymous_usage_stats
         }
     }
 }
@@ -552,7 +566,7 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             show: cli.common_args().show.iter().cloned().collect(),
             in_dir: PathBuf::new(),
             out_dir: PathBuf::new(),
-            send_anonymous_usage_stats: cli.common_args().send_anonymous_usage_stats,
+            send_anonymous_usage_stats: cli.common_args().get_send_anonymous_usage_stats(),
             status_reporter: None,
             should_cancel_compilation: None,
             log_format: cli.common_args().log_format,
@@ -588,7 +602,7 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             show: cli.common_args().show.iter().cloned().collect(),
             in_dir: PathBuf::new(),
             out_dir: PathBuf::new(),
-            send_anonymous_usage_stats: cli.common_args().send_anonymous_usage_stats,
+            send_anonymous_usage_stats: cli.common_args().get_send_anonymous_usage_stats(),
             status_reporter: None,
             should_cancel_compilation: None,
             log_format: cli.common_args().log_format,
