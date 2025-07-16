@@ -35,7 +35,19 @@ pub async fn get_or_install_packages(
     add_package: Option<String>,
     vars: BTreeMap<String, dbt_serde_yaml::Value>,
 ) -> FsResult<(DbtPackagesLock, Vec<UpstreamProject>)> {
-    let mut hub_registry = HubClient::new(DBT_HUB_URL);
+    let hub_url_from_env = std::env::var("DBT_PACKAGE_HUB_URL");
+    let hub_url = hub_url_from_env
+        .as_deref()
+        .map(|s| {
+            if s.ends_with('/') {
+                // dbt-core required a trailing slash - here we support but do not require it.
+                &s[0..s.len() - 1]
+            } else {
+                s
+            }
+        })
+        .unwrap_or(DBT_HUB_URL);
+    let mut hub_registry = HubClient::new(hub_url);
 
     let package_render_scope = RenderSecretScope::new(env, vars);
 
