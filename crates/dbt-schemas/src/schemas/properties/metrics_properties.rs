@@ -132,6 +132,6 @@ pub struct MetricInput {
     pub name: String,
     pub filter: Option<StringOrArrayOfStrings>,
     pub alias: Option<String>,
-    pub offset_window: Option<MetricTimeWindow>,
+    pub offset_window: Option<String>,
     pub offset_to_grain: Option<String>,
 }
