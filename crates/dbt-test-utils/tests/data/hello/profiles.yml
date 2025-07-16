@@ -1,0 +1,19 @@
+hello_world:
+  target: snowflake_local
+  outputs:
+    datafusion:
+      type: datafusion
+      execute: local
+      database: js
+      schema: pub
+    snowflake_local:
+      type: snowflake
+      execute: local
+      database: js
+      schema: pub
+      # these shouldn't be necessary, but they are today
+      warehouse: compute_wh
+      user: admin
+      password: admin
+      account: snowflake.local
+      role: accountadmin

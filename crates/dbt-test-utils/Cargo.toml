@@ -1,0 +1,47 @@
+[package]
+name = "dbt-test-utils"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+edition.workspace = true
+license.workspace = true
+keywords.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+arrow = { workspace = true }
+async-trait = { workspace = true }
+chrono-tz = { workspace = true }
+clap = { workspace = true }
+dbt-common = { workspace = true }
+dbt-jinja-utils = { workspace = true }
+dbt-loader = { workspace = true }
+dbt-schemas = { workspace = true }
+dbt-serde_yaml = { workspace = true }
+dbt-test-containers = { workspace = true }
+dbt-test-primitives = { workspace = true }
+diffy = { version = "0.4.2" }
+dirs = { workspace = true }
+dotenv = { version = "0.15.0" }
+ignore = { version = "0.4" }
+itertools = { workspace = true }
+libc = "0.2.170"
+merge = { workspace = true }
+once_cell = { workspace = true }
+parquet = { workspace = true }
+pretty_assertions = { version = "1.4.1" }
+regex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["fileapi"] }
+
+[lib]
+name = "dbt_test_utils"
+doctest = false
+path = "src/mod.rs"
