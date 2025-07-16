@@ -84,6 +84,8 @@ setup(
         "daff>=1.3.46",
         "typing-extensions>=4.4",
         # ----
+        # OpenLineage Dependencies
+        "openlineage-python==1.30.1",
     ],
     zip_safe=False,
     classifiers=[

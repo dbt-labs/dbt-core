@@ -40,3 +40,5 @@ types-pytz
 types-requests
 types-setuptools
 mocker
+# OpenLinage dependency
+openlineage-python==1.30.1
