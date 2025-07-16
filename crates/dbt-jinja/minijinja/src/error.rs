@@ -25,8 +25,8 @@ use crate::compiler::tokens::Span;
 /// # let mut env = minijinja::Environment::new();
 /// # env.add_template("", "");
 /// # let template = env.get_template("").unwrap(); let ctx = ();
-/// match template.render(ctx, Rc::new(DefaultRenderingEventListener)) {
-///     Ok((result, _)) => println!("{}", result),
+/// match template.render(ctx, &[Rc::new(DefaultRenderingEventListener::default())]) {
+///     Ok(result) => println!("{}", result),
 ///     Err(err) => {
 ///         eprintln!("Could not render template: {:#}", err);
 ///         // render causes as well
@@ -436,7 +436,7 @@ impl Error {
     /// # let mut env = Environment::new();
     /// # env.set_debug(true);
     /// let tmpl = env.template_from_str("Hello {{ foo + bar }}!").unwrap();
-    /// let err = tmpl.render(context!(foo => "a string", bar => 0), Rc::new(DefaultRenderingEventListener)).unwrap_err();
+    /// let err = tmpl.render(context!(foo => "a string", bar => 0), &[Rc::new(DefaultRenderingEventListener::default())]).unwrap_err();
     /// let src = err.template_source().unwrap();
     /// assert_eq!(&src[err.range().unwrap()], "{{ foo + bar }}");
     /// ```

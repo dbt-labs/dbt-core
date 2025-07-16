@@ -110,7 +110,7 @@ impl<'env, 'source> Template<'env, 'source> {
     /// # let mut env = Environment::new();
     /// # env.add_template("hello", "Hello {{ name }}!").unwrap();
     /// let tmpl = env.get_template("hello").unwrap();
-    /// println!("{}", tmpl.render(context!(name => "John"), Rc::new(DefaultRenderingEventListener)).unwrap().0);
+    /// println!("{}", tmpl.render(context!(name => "John"), &[Rc::new(DefaultRenderingEventListener::default())]).unwrap());
     /// ```
     ///
     /// To render a single block use [`eval_to_state`](Self::eval_to_state) in
@@ -160,7 +160,7 @@ impl<'env, 'source> Template<'env, 'source> {
     /// # use std::rc::Rc;
     /// # let mut env = Environment::new();
     /// let tmpl = env.template_from_str("{% set x = 42 %}Hello {{ what }}!").unwrap();
-    /// let (rv, _, state) = tmpl.render_and_return_state(context!{ what => "World" }, Rc::new(DefaultRenderingEventListener)).unwrap();
+    /// let (rv, state) = tmpl.render_and_return_state(context!{ what => "World" }, &[Rc::new(DefaultRenderingEventListener::default())]).unwrap();
     /// assert_eq!(rv, "Hello World!");
     /// assert_eq!(state.lookup("x"), Some(Value::from(42)));
     /// ```
@@ -204,7 +204,7 @@ impl<'env, 'source> Template<'env, 'source> {
     /// use std::io::stdout;
     ///
     /// let tmpl = env.get_template("hello").unwrap();
-    /// tmpl.render_to_write(context!(name => "John"), &mut stdout(), Rc::new(DefaultRenderingEventListener)).unwrap();
+    /// tmpl.render_to_write(context!(name => "John"), &mut stdout(), &[Rc::new(DefaultRenderingEventListener::default())]).unwrap();
     /// ```
     ///
     /// **Note on values:** The [`Value`] type implements `Serialize` and can be
@@ -242,7 +242,7 @@ impl<'env, 'source> Template<'env, 'source> {
     /// # let mut env = Environment::new();
     /// # env.add_template("hello", "")?;
     /// let tmpl = env.get_template("hello")?;
-    /// let state = tmpl.eval_to_state(context!(name => "John"), Rc::new(DefaultRenderingEventListener))?;
+    /// let state = tmpl.eval_to_state(context!(name => "John"), &[Rc::new(DefaultRenderingEventListener::default())])?;
     /// println!("{:?}", state.exports());
     /// # Ok(()) }
     /// ```

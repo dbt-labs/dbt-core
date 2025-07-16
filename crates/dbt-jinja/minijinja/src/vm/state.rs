@@ -256,9 +256,9 @@ impl<'template, 'env> State<'template, 'env> {
     /// # let mut env = Environment::new();
     /// # env.add_template("hello", "{% block hi %}Hello {{ name }}!{% endblock %}")?;
     /// let tmpl = env.get_template("hello")?;
-    /// let (rv, _) = tmpl
-    ///     .eval_to_state(context!(name => "John"), Rc::new(DefaultRenderingEventListener))?
-    ///     .render_block("hi", Rc::new(DefaultRenderingEventListener))?;
+    /// let rv = tmpl
+    ///     .eval_to_state(context!(name => "John"), &[Rc::new(DefaultRenderingEventListener::default())])?
+    ///     .render_block("hi", &[Rc::new(DefaultRenderingEventListener::default())])?;
     /// println!("{}", rv);
     /// # Ok(()) }
     /// ```

@@ -929,7 +929,7 @@ impl Value {
     /// let val = Value::make_object_iterable(vec![1, 2, 3], |vec| {
     ///     Box::new(vec.iter().copied().map(Value::from))
     /// });
-    /// assert_eq!(val.to_string(), "[1, 2, 3]");
+    /// assert_eq!(val.to_string(), "(1, 2, 3)");
     /// ````
     pub fn make_object_iterable<T, F>(object: T, maker: F) -> Value
     where
@@ -1534,7 +1534,7 @@ impl Value {
     ///         Value::from(42),
     ///         Value::from(Kwargs::from_iter([("mult", Value::from(2))])),
     ///     ],
-    ///    Rc::new(DefaultRenderingEventListener),
+    ///    &[Rc::new(DefaultRenderingEventListener::default())],
     /// ).unwrap();
     /// assert_eq!(rv, Value::from(84));
     /// ```
@@ -1552,7 +1552,7 @@ impl Value {
     /// let func = Value::from_function(|v: i64, kwargs: Kwargs| {
     ///     v * kwargs.get::<i64>("mult").unwrap_or(1)
     /// });
-    /// let rv = func.call(state, args!(42, mult => 2), Rc::new(DefaultRenderingEventListener)).unwrap();
+    /// let rv = func.call(state, args!(42, mult => 2), &[Rc::new(DefaultRenderingEventListener::default())]).unwrap();
     /// assert_eq!(rv, Value::from(84));
     /// ```
     pub fn call(

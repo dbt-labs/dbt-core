@@ -187,7 +187,7 @@ impl<'source> Environment<'source> {
     /// ```
     /// # use minijinja::Environment;
     /// let mut env = Environment::new();
-    /// env.add_template_owned("index.html".to_string(), "Hello {{ name }}!".to_string()).unwrap();
+    /// env.add_template_owned("index.html".to_string(), "Hello {{ name }}!".to_string(), Some("index.html".to_string())).unwrap();
     /// ```
     ///
     /// **Note**: the name is a bit of a misnomer as this API also allows to borrow too as
@@ -347,7 +347,10 @@ impl<'source> Environment<'source> {
     ///         let _: () = from_args(args)?;
     ///         state.apply_filter("items", &[value.clone()])
     ///     } else {
-    ///         Err(Error::from(ErrorKind::UnknownMethod))
+    ///         Err(Error::from(ErrorKind::UnknownMethod(
+    ///            "dummy".to_string(),
+    ///            method.to_string(),
+    ///         )))
     ///     }
     /// });
     /// ```
@@ -385,7 +388,7 @@ impl<'source> Environment<'source> {
     ///
     /// # assert_eq!(env.templates().count(), 2);
     /// for (name, tmpl) in env.templates() {
-    ///     println!("{}", tmpl.render(context!{ name => "World" }, Rc::new(DefaultRenderingEventListener)).unwrap().0);
+    ///     println!("{}", tmpl.render(context!{ name => "World" }, &[Rc::new(DefaultRenderingEventListener::default())]).unwrap());
     /// }
     /// ```
     pub fn templates(&self) -> impl Iterator<Item = (&str, Template<'_, '_>)> {
@@ -408,7 +411,7 @@ impl<'source> Environment<'source> {
     /// let mut env = Environment::new();
     /// env.add_template("hello.txt", "Hello {{ name }}!").unwrap();
     /// let tmpl = env.get_template("hello.txt").unwrap();
-    /// println!("{}", tmpl.render(context!{ name => "World" }, Rc::new(DefaultRenderingEventListener)).unwrap().0);
+    /// println!("{}", tmpl.render(context!{ name => "World" }, &[Rc::new(DefaultRenderingEventListener::default())]).unwrap());
     /// ```
     pub fn get_template(&self, name: &str) -> Result<Template<'_, '_>, Error> {
         let compiled = ok!(self.templates.get(name));
@@ -425,8 +428,8 @@ impl<'source> Environment<'source> {
     /// # use std::rc::Rc;
     /// let env = Environment::new();
     /// let tmpl = env.template_from_named_str("template_name", "Hello {{ name }}").unwrap();
-    /// let rv = tmpl.render(context! { name => "World" }, Rc::new(DefaultRenderingEventListener));
-    /// println!("{}", rv.unwrap().0);
+    /// let rv = tmpl.render(context! { name => "World" }, &[Rc::new(DefaultRenderingEventListener::default())]);
+    /// println!("{}", rv.unwrap());
     /// ```
     pub fn template_from_named_str(
         &self,
@@ -468,9 +471,9 @@ impl<'source> Environment<'source> {
     ///     "template_name",
     ///     "Hello {{ name }}",
     ///     context!{ name => "World" },
-    ///     Rc::new(DefaultRenderingEventListener)
+    ///     &[Rc::new(DefaultRenderingEventListener::default())],
     /// );
-    /// println!("{}", rv.unwrap().0);
+    /// println!("{}", rv.unwrap());
     /// ```
     ///
     /// **Note on values:** The [`Value`] type implements `Serialize` and can be
@@ -585,7 +588,7 @@ impl<'source> Environment<'source> {
     ///         },
     ///     )
     ///});
-    /// # assert_eq!(env.render_str("{{ none }}", (), Rc::new(DefaultRenderingEventListener)).unwrap().0, "");
+    /// # assert_eq!(env.render_str("{{ none }}", (), &[Rc::new(DefaultRenderingEventListener::default())]).unwrap(), "");
     /// ```
     pub fn set_formatter<F>(&mut self, f: F)
     where

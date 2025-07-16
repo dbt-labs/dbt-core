@@ -415,7 +415,9 @@ impl<'a> ArgsIter<'a> {
     /// for these will not include the parameter names, but will still indicate the number of
     /// positional parameters expected. For example, when you call `len()` with no arguments:
     ///
+    /// ```text
     ///     len() takes exactly one argument (0 given)
+    /// ```
     pub fn for_unnamed_pos_args(
         fn_name: &'a str,
         num_pos_params: usize,
@@ -500,21 +502,21 @@ impl<'a> ArgsIter<'a> {
 
     /// Get the next kwarg at the current iterator position.
     ///
+    /// ```python
     ///     def f(x, y, alpha=None, beta=None)
+    /// ```
     ///
     /// ```rust
+    /// # use minijinja::{Error, Value};
+    /// # use minijinja::arg_utils::ArgsIter;
     /// fn f(args: &[Value]) -> Result<(), Error> {
     ///     let iter = ArgsIter::new("f", &["x", "y"], args);
-    ///     let x = iter.next_arg()?;
-    ///     let y = iter.next_arg()?;
-    ///     let alpha = iter.next_kwarg("alpha")?;
-    ///     let beta = iter.next_kwarg("beta")?;
+    ///     let x = iter.next_arg::<&Value>()?;
+    ///     let y = iter.next_arg::<&Value>()?;
+    ///     let alpha = iter.next_kwarg::<Option<&Value>>("alpha")?;
+    ///     let beta = iter.next_kwarg::<Option<&Value>>("beta")?;
     ///     iter.finish()?;
     ///     // ...use x, y, alpha, beta here...
-    ///     # drop(x);
-    ///     # drop(y);
-    ///     # drop(alpha);
-    ///     # drop(beta);
     ///     Ok(())
     /// }
     /// ```
@@ -559,7 +561,9 @@ impl<'a> ArgsIter<'a> {
     ///
     /// Call this instead of `finish()` if you expect trailing kwargs. Example:
     ///
+    /// ```python
     ///     def f(x, y=20, **kwargs)
+    /// ```
     pub fn trailing_kwargs(&'a self) -> Result<&'a Kwargs, MinijinjaError> {
         if self.index.get() < self.num_pos_args {
             // The user called trailing_kwargs() now, so the current iterator

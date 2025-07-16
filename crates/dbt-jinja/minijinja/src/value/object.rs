@@ -158,7 +158,7 @@ use crate::vm::State;
 /// # let env = Environment::new();
 /// let tmpl = env.template_from_str("HOME={{ env.HOME }}; PID={{ pid }}; MAGIC={{ magic }}")?;
 /// let ctx = Value::from_object(DynamicContext { magic: 42 });
-/// let rv = tmpl.render(ctx, Rc::new(DefaultRenderingEventListener))?;
+/// let rv = tmpl.render(ctx, &[Rc::new(DefaultRenderingEventListener::default())])?;
 /// # Ok(()) }
 /// ```
 ///

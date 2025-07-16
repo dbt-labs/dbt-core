@@ -200,7 +200,7 @@ macro_rules! __context_pair {
 /// # let env = Environment::default();
 /// # let state = &env.empty_state();
 /// # let value = Value::from(());
-/// value.call(state, args!(1, 2, foo => "bar"), Rc::new(DefaultRenderingEventListener));
+/// value.call(state, args!(1, 2, foo => "bar"), &[Rc::new(DefaultRenderingEventListener::default())]);
 /// ```
 ///
 /// Note that this like [`context!`](crate::context) goes through
@@ -342,6 +342,7 @@ macro_rules! jinja_err {
 /// # Examples
 ///
 /// ```
+/// # use minijinja::tuple;
 /// let t = tuple![1, 2, 3];
 /// assert_eq!(t[0], 1);
 /// assert_eq!(t[1], 2);
@@ -351,6 +352,7 @@ macro_rules! jinja_err {
 /// - Create a [`Vec`] from a given element and size:
 ///
 /// ```
+/// # use minijinja::tuple;
 /// let t = tuple![1; 3];
 /// assert_eq!(t, [1, 1, 1]);
 /// ```
@@ -380,14 +382,12 @@ macro_rules! tuple {
 /// ```
 /// # use minijinja::value::mutable_vec::MutableVec;
 /// # use minijinja::Value;
+/// # use minijinja::list;
 /// // Create a MutableVec with elements
 /// let list = list![1, 2, 3];
 ///
-/// // Create a MutableVec from a single element repeated n times
-/// let repeated = list![1; 3]; // equivalent to [1, 1, 1]
-///
 /// // Create an empty MutableVec
-/// let empty = list![];
+/// let empty: MutableVec<i32> = list![];
 /// ```
 #[macro_export]
 macro_rules! list {

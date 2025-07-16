@@ -34,7 +34,7 @@ use crate::vm::Vm;
 /// # use std::rc::Rc;
 /// let env = Environment::new();
 /// let expr = env.compile_expression("number > 10 and number < 20").unwrap();
-/// let rv = expr.eval(context!(number => 15), Rc::new(DefaultRenderingEventListener)).unwrap();
+/// let rv = expr.eval(context!(number => 15), &[Rc::new(DefaultRenderingEventListener::default())]).unwrap();
 /// assert!(rv.is_true());
 /// ```
 pub struct Expression<'env, 'source> {
