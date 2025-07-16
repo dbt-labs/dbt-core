@@ -187,14 +187,14 @@ sources:
             config:
               meta:
                 test: 1
-                tags: ["tags"]
+              tags: ["tags"]
         config:
           enabled: true
           event_time: column_name
           loaded_at_field: column_name
           meta:
-            test: 1
-          tags: ["tag"]
+            table_meta: 1
+          tags: ["table_tag"]
           freshness:
             warn_after:
               count: 1
