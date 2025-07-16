@@ -45,6 +45,7 @@ pub struct Stat {
     pub start_time: SystemTime,
     pub end_time: SystemTime,
     pub status: NodeStatus,
+    pub thread_id: String,
 }
 
 impl Stat {
@@ -61,6 +62,12 @@ impl Stat {
             start_time,
             end_time,
             status,
+            thread_id: format!(
+                "Thread-{}",
+                format!("{:?}", std::thread::current().id())
+                    .trim_start_matches("ThreadId(")
+                    .trim_end_matches(")")
+            ),
         }
     }
 

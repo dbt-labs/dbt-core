@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix thread_id in run_result
+time: 2025-07-15T17:55:26.121376753-07:00
+custom:
+  PR: dbt-labs/fs#4472
+  Issues: "dbt-labs/fs#4353"
