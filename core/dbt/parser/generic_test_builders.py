@@ -220,6 +220,13 @@ class TestBuilder(Generic[Testable]):
                 raise TestDefinitionDictLengthError(data_test)
             test_name, test_args = data_test[0]
 
+        # Handle when args are nested under 'args' separately from 'config'
+        args = test_args.pop("args", {})
+        test_args = {**test_args, **args}
+
+        # TODO: raise deprecation if args other than config are not nested under args
+        # if not args and any(k != "config" for k in test_args.keys()):
+
         if not isinstance(test_args, dict):
             raise TestArgsNotDictError(test_args)
         if not isinstance(test_name, str):
