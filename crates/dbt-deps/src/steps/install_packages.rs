@@ -122,8 +122,7 @@ pub async fn install_packages(
                         pinned_package.name.clone(),
                         pinned_package.version.clone(),
                         "hub".to_string(),
-                    )
-                    .await;
+                    );
                 }
             }
             UnpinnedPackage::Git(git_unpinned_package) => {
@@ -147,8 +146,7 @@ pub async fn install_packages(
                         .unwrap_or("none".to_string()),
                     commit_sha,
                     "git".to_string(),
-                )
-                .await;
+                );
             }
             UnpinnedPackage::Local(local_unpinned_package) => {
                 let package_path = &io_args.in_dir.join(&local_unpinned_package.local);
@@ -164,8 +162,7 @@ pub async fn install_packages(
                         .unwrap_or("none".to_string()),
                     "".to_string(),
                     "local".to_string(),
-                )
-                .await;
+                );
             }
             UnpinnedPackage::Private(private_unpinned_package) => {
                 let (tmp_dir, checkout_path, commit_sha) = handle_git_like_package(
@@ -188,8 +185,7 @@ pub async fn install_packages(
                         .unwrap_or("none".to_string()),
                     commit_sha,
                     "private".to_string(),
-                )
-                .await;
+                );
             }
             UnpinnedPackage::Tarball(tarball_unpinned_package) => {
                 // Download and extract the tarball
@@ -246,8 +242,7 @@ pub async fn install_packages(
                         .unwrap_or("none".to_string()),
                     "tarball".to_string(),
                     "tarball".to_string(),
-                )
-                .await;
+                );
             }
         }
     }

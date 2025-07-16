@@ -9,134 +9,404 @@
 //! - `VORTEX_DEV_MODE_OUTPUT_PATH` (default `/tmp/vortex_dev_mode_output.jsonl`): The path to the
 //!   file where the producer will write the messages.  Note that this file will be appended to, not
 //!   overwritten, so it can grow quite large!
-use std::fs::OpenOptions;
-use std::io::{self, BufWriter, Write};
-
+use std::any::Any;
+use std::fs;
+use std::io::{self, Write as _};
 use std::ops::DerefMut;
 use std::path::PathBuf;
-#[cfg(not(test))]
-use std::time::{SystemTime, UNIX_EPOCH};
-
-#[cfg(test)]
-use mock_instant::global::{SystemTime, UNIX_EPOCH};
+use std::sync::{mpsc, LazyLock, Mutex};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
 use dbt_env::env::InternalEnv;
 use http::HeaderValue;
 use pbjson_types::Timestamp;
 use prost::Message;
 use proto_rust::v1::events::vortex::{VortexMessage, VortexMessageBatch};
-use reqwest::StatusCode;
-use std::sync::{self, Arc, LazyLock};
-use std::time::{Duration, Instant};
-use tokio::sync::{mpsc, watch, Mutex};
-use tokio::task::{JoinError, JoinHandle};
-use uuid::Uuid;
 
 #[cfg(not(test))]
 use log::debug;
-
 #[cfg(test)]
 use std::println as debug;
 
 const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_millis(500);
-const DEFAULT_MAX_BATCH_SIZE_BYTES: usize = 1024; // 1kb batches
-const DEFAULT_QUEUE_CAPACITY: usize = 10000;
+const DEFAULT_TARGET_BATCH_SIZE_BYTES: usize = 1024; // 1kb batches
+const DEFAULT_BODY_SIZE_LIMIT_BYTES: usize = 4 * 1024 * 1024; // 4mb body size limit
+const MAX_ENCODED_MESSAGE_SIZE_BYTES: usize = 2 * 1024 * 1024; // 2mb
+const MIN_BACKOFF_MILLIS: u64 = 200;
+const MAX_BACKOFF_MILLIS: u64 = 30_000;
 
-// Global singleton instance
-static PRODUCER: LazyLock<Arc<VortexProducerClient>> =
-    LazyLock::new(|| Arc::new(VortexProducerClient::default()));
+const LOG_PROTO_SHUTDOWN_MESSAGE: &str = "You're trying to log a message via \
+Vortex, but the client is already shut down. This should be fixed, but on release \
+builds the message will simply be dropped.";
 
-/// Main entrypoint for logging messages to Vortex.
-#[inline(always)]
-pub async fn log_proto<T: Message + prost::Name + serde::Serialize>(
-    message: T,
-    error_mode: ErrorMode,
-) -> Result<()> {
-    PRODUCER.log_proto(message, error_mode).await
-}
+static WORKER_THREAD: Mutex<Option<JoinHandle<Result<(), ureq::Error>>>> = Mutex::new(None);
 
-pub async fn shutdown() -> Result<()> {
-    PRODUCER.shutdown().await
-}
+static PRODUCER: LazyLock<VortexProducerClient> = LazyLock::new(|| {
+    let mut client = VortexProducerClient::default();
+    let handle = client.take_thread_handle();
+    debug_assert!(
+        client.is_in_dev_mode() || handle.is_some(),
+        "Worker thread must be spawned by VortexProducerClient::new()"
+    );
+    let mut lock = WORKER_THREAD.lock().unwrap();
+    *lock = handle;
+    client
+});
 
-pub type Result<T> = std::result::Result<T, ProducerError>;
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ErrorMode {
-    LogAndContinue,
-    LogAndRaise,
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum ProducerError {
-    ValidationError(String),
-    SendError(String),
-    BadRequestError(String),
-    ShutdownError(String),
-    UnknownError(String),
+    /// The client is in dev mode and cannot write messages to the log file.
+    DevModeError(io::Error),
+    /// Communication error with the Vortex HTTP endpoint.
+    SendError(ureq::Error),
+    /// Failed to join the worker thread during shutdown.
+    ShutdownError(Box<dyn Any + Send + 'static>),
 }
 
 impl std::fmt::Display for ProducerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ProducerError::ValidationError(msg) => write!(f, "Validation error: {msg}"),
-            ProducerError::SendError(msg) => write!(f, "Send error: {msg}"),
-            ProducerError::BadRequestError(msg) => write!(f, "Bad request error: {msg}"),
-            ProducerError::ShutdownError(msg) => write!(f, "Shutdown error: {msg}"),
-            ProducerError::UnknownError(msg) => write!(f, "Unknown error: {msg}"),
+            ProducerError::DevModeError(e) => write!(f, "Vortex: dev mode error: {e}"),
+            ProducerError::SendError(e) => write!(f, "Vortex: send error: {e}"),
+            ProducerError::ShutdownError(e) => write!(f, "Vortex: shutdown error: {e:?}"),
         }
     }
 }
 
 impl std::error::Error for ProducerError {}
 
-impl From<reqwest::Error> for ProducerError {
-    fn from(e: reqwest::Error) -> Self {
-        ProducerError::SendError(format!("Failed to send message: {e}"))
+/// Main entrypoint for logging messages to Vortex.
+///
+/// Caller should ignore the return error. This function is non-blocking in production
+/// and only returns an error when the client is in dev-mode logging to a file.
+#[inline(always)]
+pub fn log_proto<T: Message + prost::Name + serde::Serialize>(
+    message: T,
+) -> Result<(), ProducerError> {
+    PRODUCER
+        .log_proto(message, false) // can only fail in dev mode
+        .map_err(ProducerError::DevModeError)
+}
+
+/// Logs the last message to Vortex and shuts down the client.
+pub fn log_proto_and_shutdown<T: Message + prost::Name + serde::Serialize>(
+    shutdown_message: T,
+) -> Result<(), ProducerError> {
+    PRODUCER
+        .log_proto(shutdown_message, true) // can only fail in dev mode
+        .map_err(ProducerError::DevModeError)?;
+    // Wait for the worker thread to finish processing messages. Since a
+    // shutdown message has been sent, it will NOT block indefinitely.
+    let handle = {
+        let mut lock = WORKER_THREAD.lock().unwrap();
+        lock.take()
+    };
+    match handle {
+        Some(h) => match h.join() {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(ProducerError::SendError(e)),
+            Err(e) => Err(ProducerError::ShutdownError(e)),
+        },
+        None => Ok(()), // dev-mode or already shut down
     }
 }
 
-impl From<std::time::SystemTimeError> for ProducerError {
-    fn from(e: std::time::SystemTimeError) -> Self {
-        ProducerError::UnknownError(format!("Failed to generate a timestamp! {e}"))
+pub fn vortex_producer_is_running() -> bool {
+    let lock = WORKER_THREAD.lock().unwrap();
+    lock.is_some()
+}
+
+struct Batch {
+    // configuration and the RNG
+    target_batch_size: usize,
+    body_size_limit: usize,
+    flush_interval: Duration,
+    rng: rand::rngs::ThreadRng,
+    // mutable state
+    messages: Vec<VortexMessage>,
+    bytes_buffered: usize,
+    last_error: Option<ureq::Error>,
+    deadline: Option<Instant>,
+    num_attempts: usize,
+}
+
+impl Batch {
+    fn new(target_batch_size: usize, body_size_limit: usize, flush_interval: Duration) -> Self {
+        debug_assert!(
+            target_batch_size > 0,
+            "target_batch_size must be greater than 0"
+        );
+        debug_assert!(
+            body_size_limit >= 2 * target_batch_size,
+            "body_size_limit must be much larger than target_batch_size"
+        );
+        Self {
+            target_batch_size,
+            body_size_limit,
+            flush_interval,
+            rng: rand::rng(),
+            messages: Vec::new(),
+            bytes_buffered: 0,
+            last_error: None,
+            deadline: None, // INVARIANT: deadline.is_none() implies is_empty()
+            num_attempts: 0,
+        }
+    }
+
+    fn for_agent(agent: &dyn SenderAgent) -> Self {
+        Self::new(
+            agent.target_batch_size(),
+            agent.body_size_limit(),
+            agent.flush_interval(),
+        )
+    }
+
+    fn push(&mut self, message: Box<VortexMessage>) {
+        let encoded_len = message.encoded_len();
+        if encoded_len > self.body_size_limit.min(MAX_ENCODED_MESSAGE_SIZE_BYTES) {
+            debug_assert!(
+                false,
+                "{} message is too large ({} bytes).",
+                message
+                    .any
+                    .as_ref()
+                    .map_or("unknown", |a| a.type_url.as_str()),
+                encoded_len
+            );
+            return; // silently drop the large message in release builds
+        }
+        if self.deadline.is_none() {
+            debug_assert!(
+                self.messages.is_empty(),
+                "If deadline is None, messages must be empty"
+            );
+            // Set a deadline when the first message is added to the batch.
+            self.deadline = Some(Instant::now() + self.flush_interval);
+        }
+        self.bytes_buffered += encoded_len;
+        self.messages.push(*message);
+    }
+
+    fn is_empty(&self) -> bool {
+        self.messages.is_empty()
+    }
+
+    fn is_full(&self) -> bool {
+        self.bytes_buffered >= self.target_batch_size
+    }
+
+    fn is_overdue(&self) -> bool {
+        let overdue = self
+            .deadline
+            .map(|deadline| Instant::now() >= deadline)
+            .unwrap_or(false);
+        overdue || {
+            // Even if the batch is not overdue for sending, we can still
+            // send if it's full and we are not retrying with backoff.
+            self.is_full() && self.num_attempts == 0
+        }
+    }
+
+    fn clear(&mut self) -> Result<(), ureq::Error> {
+        self.messages.clear();
+        self.bytes_buffered = 0;
+        let res = match self.last_error.take() {
+            Some(error) => Err(error),
+            None => Ok(()),
+        };
+        self.deadline = None;
+        self.num_attempts = 0;
+        res
+    }
+
+    fn clear_after_success(&mut self) {
+        let _ = self.clear();
+    }
+
+    /// Adjust the deadline for the next retry with exponential backoff.
+    fn backoff(&mut self) {
+        use rand::Rng as _;
+        // backoff() is called after a failed send operation, so
+        // we should have at least one message in the batch.
+        debug_assert!(!self.is_empty());
+        // Exponential backoff with jitter: MIN_BACKOFF_MILLIS * 2**num_attempts + jitter.
+        let backoff_millis = MIN_BACKOFF_MILLIS
+            .saturating_mul(1u64 << self.num_attempts.min(63))
+            .saturating_add(self.rng.random_range(0..=MIN_BACKOFF_MILLIS))
+            .min(MAX_BACKOFF_MILLIS);
+        let backoff = Duration::from_millis(backoff_millis);
+        self.deadline = Some(Instant::now() + backoff);
+        self.num_attempts += 1;
+    }
+
+    fn prune(&mut self) {
+        debug_assert!(
+            self.messages.len() >= 2,
+            "prune: batch must have at least 2 messages to prune."
+        );
+        let mut i = 0;
+        let mut new_bytes_buffered = self.bytes_buffered;
+        while i < self.messages.len() {
+            new_bytes_buffered -= self.messages[i].encoded_len();
+            if new_bytes_buffered < self.body_size_limit {
+                self.messages.drain(0..=i);
+                self.bytes_buffered = new_bytes_buffered;
+                break;
+            } else {
+                i += 1;
+            }
+        }
+        // This is a consequence of not letting messages larger than the
+        // body_size_limit into the batch in the first place.
+        debug_assert!(!self.is_empty(), "batch must not be empty after pruning.");
+    }
+
+    fn encode_for_sending(&mut self) -> Vec<u8> {
+        debug_assert!(!self.is_empty(), "send_batch: batch must be non-empty.");
+        if self.bytes_buffered > self.body_size_limit {
+            self.prune();
+        }
+        // Override the client sent timestamp for each message that goes into the batch.
+        let now = VortexProducerClient::current_timestamp();
+        self.messages.iter_mut().for_each(|msg| {
+            msg.vortex_client_sent_at = Some(now);
+        });
+
+        let mut message_batch = VortexMessageBatch {
+            request_id: uuid::Uuid::new_v4().to_string(),
+            payload: Vec::new(),
+        };
+        // Consume these messages into a batch's payload and then swap them back to
+        // the original messages vector to enable retries from the caller if needed.
+        std::mem::swap(&mut self.messages, &mut message_batch.payload);
+        let body = message_batch.encode_to_vec();
+        std::mem::swap(&mut self.messages, &mut message_batch.payload);
+        body
+    }
+
+    fn on_error(&mut self, error: ureq::Error) {
+        #[allow(clippy::single_match)]
+        match error {
+            ureq::Error::StatusCode(_) => {
+                // Status codes should be handled in `on_response`
+                // because `http_status_as_error` is not enabled.
+                unreachable!("`http_status_as_error` is not enabled.")
+            }
+            _ => (),
+        }
+        self.last_error = Some(error);
+        self.backoff();
+    }
+
+    fn on_response(&mut self, status: http::StatusCode, text: String) {
+        if status.is_success() {
+            self.clear_after_success();
+            debug!("Successfully sent telemetry batch.");
+        } else {
+            self.backoff();
+            debug!("Failed to send batch of messages: {status}: {text}");
+            self.last_error = Some(ureq::Error::StatusCode(status.as_u16()));
+        }
     }
 }
 
-#[cfg(test)]
-impl From<mock_instant::SystemTimeError> for ProducerError {
-    fn from(e: mock_instant::SystemTimeError) -> Self {
-        ProducerError::UnknownError(format!("Failed to generate a timestamp! {e}"))
+/// Abstract interface for the HTTP agent that sends batches of messages to the Vortex endpoint.
+trait SenderAgent: Send {
+    /// Return the threshold for considering a batch full.
+    fn target_batch_size(&self) -> usize;
+
+    /// This is the maximum size of the body that can be sent in a single request.
+    ///
+    /// It should be much larger than the target batch size to accommodate more
+    /// messages after a post-failure backoff period. When the batch reaches this size,
+    /// messages start being dropped to avoid exceeding the limit.
+    fn body_size_limit(&self) -> usize;
+
+    /// The interval after which the batch should be flushed, even if it is not full yet.
+    ///
+    /// During retries, the backoff period is honored and it may exceed this interval.
+    fn flush_interval(&self) -> Duration;
+
+    /// Send a batch of messages to the Vortex endpoint.
+    ///
+    /// Errors are accumulated in the mutable `Batch` parameter. The batch is
+    /// cleared after a successful send, otherwise the batch accumulates errors
+    /// and preserves messages to enable retries. `false` is returned when the
+    /// send operation failed, and `true` when it succeeded. We don't return
+    /// the error directly because the error is consumed by the batch and caller
+    /// only needs to know whether the send was successful or not.
+    ///
+    /// PRECONDITION: !batch.is_empty()
+    fn send_batch(&self, batch: &mut Batch) -> bool;
+}
+
+struct BatchSenderAgentImpl {
+    agent: ureq::Agent,
+    endpoint: http::Uri,
+    vortex_client_platform: HeaderValue,
+}
+
+impl BatchSenderAgentImpl {
+    pub fn new(endpoint: http::Uri, vortex_client_platform: HeaderValue) -> Self {
+        let agent = ureq::Agent::new_with_defaults();
+        Self {
+            agent,
+            endpoint,
+            vortex_client_platform,
+        }
     }
 }
 
-impl From<JoinError> for ProducerError {
-    fn from(e: JoinError) -> Self {
-        ProducerError::ShutdownError(format!("Failed to join worker task! {e}"))
+impl SenderAgent for BatchSenderAgentImpl {
+    fn target_batch_size(&self) -> usize {
+        DEFAULT_TARGET_BATCH_SIZE_BYTES
     }
-}
 
-impl From<io::Error> for ProducerError {
-    fn from(e: io::Error) -> Self {
-        ProducerError::UnknownError(format!("IO error occurred: {e}"))
+    fn body_size_limit(&self) -> usize {
+        DEFAULT_BODY_SIZE_LIMIT_BYTES
     }
-}
 
-#[derive(Debug, Clone, serde::Serialize)]
-struct VortexDevModeMessage {
-    type_url: String,
-    message: serde_json::Value,
+    fn flush_interval(&self) -> Duration {
+        DEFAULT_FLUSH_INTERVAL
+    }
+
+    fn send_batch(&self, batch: &mut Batch) -> bool {
+        let body = batch.encode_for_sending();
+        let result = self
+            .agent
+            .post(self.endpoint.clone())
+            .header("Content-Type", "application/vnd.google.protobuf")
+            .header(
+                "X-Vortex-Client-Platform",
+                self.vortex_client_platform.clone(),
+            )
+            .send(body);
+
+        match result {
+            Ok(response) => {
+                let status = response.status();
+                let text = response.into_body().read_to_string().unwrap_or_default();
+                batch.on_response(status, text);
+                true
+            }
+            Err(e) => {
+                batch.on_error(e);
+                false
+            }
+        }
+    }
 }
 
 struct VortexProducerClient {
-    sender: mpsc::Sender<VortexMessage>,
-    shutdown_tx: Option<Mutex<watch::Sender<bool>>>,
-    future: Option<Mutex<JoinHandle<()>>>,
+    sender: mpsc::Sender<(Box<VortexMessage>, bool)>,
+    thread_handle: Option<JoinHandle<Result<(), ureq::Error>>>,
     /// Path to the file where messages will be written in dev mode.
     ///
     /// Only set in development mode. MUST be `None` in production.
     dev_mode_output_path: Option<PathBuf>,
     /// Dev-mode output writer, used to write messages to a file in development mode.
-    dev_mode_output_writer: sync::Mutex<Result<BufWriter<std::fs::File>>>,
+    dev_mode_output_writer: Mutex<Result<io::BufWriter<std::fs::File>, io::Error>>,
 }
 
 impl Default for VortexProducerClient {
@@ -147,7 +417,9 @@ impl Default for VortexProducerClient {
             let base_url = vortex_config.base_url.clone();
             let ingest_endpoint = vortex_config.ingest_endpoint.clone();
             let full_url = format!("{base_url}{ingest_endpoint}");
-            url::Url::parse(&full_url).expect("Failed to parse Vortex endpoint URL")
+            full_url
+                .parse::<http::Uri>()
+                .expect("Failed to parse Vortex endpoint URL")
         };
         let vortex_client_platform = {
             // Construct the X-Vortex-Client-Platform header with service, client, and proto library
@@ -160,6 +432,7 @@ impl Default for VortexProducerClient {
             let service_version = env.invocation_config().dbt_version.clone();
             // TODO: Change this to the actual version of the proto-rust library.
             let proto_version = "unknown";
+            #[allow(clippy::uninlined_format_args)]
             let header_value_string = format!(
                 "{}/{} {}/{} {}/{}",
                 service_name,
@@ -180,175 +453,60 @@ impl Default for VortexProducerClient {
                 None
             }
         };
-        Self::new(
-            DEFAULT_QUEUE_CAPACITY,
-            DEFAULT_MAX_BATCH_SIZE_BYTES,
-            DEFAULT_FLUSH_INTERVAL,
-            endpoint,
-            vortex_client_platform,
-            dev_mode_output_path,
-        )
+        let agent = BatchSenderAgentImpl::new(endpoint, vortex_client_platform);
+        let agent: Box<dyn SenderAgent> = Box::new(agent);
+        Self::new(agent, dev_mode_output_path)
     }
 }
 
 impl VortexProducerClient {
-    fn new(
-        queue_capacity: usize,
-        max_batch_size: usize,
-        flush_interval: Duration,
-        endpoint: url::Url,
-        vortex_client_platform: HeaderValue,
-        dev_mode_output_path: Option<PathBuf>,
-    ) -> Self {
+    fn new(agent: Box<dyn SenderAgent>, dev_mode_output_path: Option<PathBuf>) -> Self {
         let dev_mode_output_writer = if let Some(path) = &dev_mode_output_path {
-            match OpenOptions::new().append(true).create(true).open(path) {
+            match fs::OpenOptions::new().append(true).create(true).open(path) {
                 Ok(file) => {
-                    let writer = BufWriter::new(file);
-                    sync::Mutex::new(Ok(writer))
+                    let writer = io::BufWriter::new(file);
+                    Mutex::new(Ok(writer))
                 }
-                Err(e) => sync::Mutex::new(Err(e.into())),
+                Err(e) => Mutex::new(Err(e)),
             }
         } else {
-            let err = ProducerError::UnknownError(
+            let e = io::Error::other(
                 "Trying to write JSON, but client is not in dev-mode.".to_string(),
             );
-            sync::Mutex::new(Err(err))
+            Mutex::new(Err(e))
         };
 
-        let (sender, mut receiver) = mpsc::channel(queue_capacity);
-        let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+        let (sender, receiver) = mpsc::channel();
 
         let mut client = Self {
             sender,
-            shutdown_tx: Some(Mutex::new(shutdown_tx)),
-            future: None,
+            thread_handle: None,
             dev_mode_output_path,
             dev_mode_output_writer,
         };
-
-        // Spawn worker task
-        client.future = Some(Mutex::new(tokio::spawn(async move {
-            let mut vortex_messages: Vec<VortexMessage> = Vec::new();
-            let mut bytes_buffered = 0;
-
-            let mut shutdown = false;
-            while !shutdown {
-                let should_flush = tokio::select! {
-                    _ = tokio::time::sleep(flush_interval) => {
-                        true
-                    },
-                    _ = shutdown_rx.changed() => {
-                        shutdown = true;
-                        // Drain the channel if shutdown is requested
-                        while let Ok(msg) = receiver.try_recv() {
-                            bytes_buffered += msg.encoded_len();
-                            vortex_messages.push(msg);
-                        }
-                        true
-                    },
-                    msg = receiver.recv() => {
-                        match msg {
-                            Some(msg) => {
-                                bytes_buffered += msg.encoded_len();
-                                vortex_messages.push(msg);
-                                bytes_buffered >= max_batch_size
-                            }
-                            None => {
-                                debug!("Channel has been closed, exiting worker!");
-                                break;
-                            }
-                        }
-                    }
-                };
-
-                if should_flush && !vortex_messages.is_empty() {
-                    debug!("Flushing {} telemetry messages", vortex_messages.len());
-                    match Self::send_batch(
-                        endpoint.clone(),
-                        vortex_client_platform.clone(),
-                        &mut vortex_messages,
-                    )
-                    .await
-                    {
-                        Ok(_) => {
-                            vortex_messages.clear();
-                            bytes_buffered = 0;
-                        }
-                        Err(ProducerError::BadRequestError(e)) => {
-                            debug!("Failed to send telemetry batch: {e}");
-                            vortex_messages.clear();
-                            bytes_buffered = 0;
-                        }
-                        Err(e) => {
-                            // Skip clearing the messages so they can be included in the next batch.
-                            debug!("Failed to send telemetry batch: {e}");
-                        }
-                    }
-                }
-            }
-
-            receiver.close();
-        })));
-
+        client.thread_handle = if client.is_in_dev_mode() {
+            None
+        } else {
+            Some(thread::spawn(move || worker_thread_loop(agent, receiver)))
+        };
         client
+    }
+
+    fn take_thread_handle(&mut self) -> Option<JoinHandle<Result<(), ureq::Error>>> {
+        debug_assert!(
+            self.is_in_dev_mode() || self.thread_handle.is_some(),
+            "take_thread_handle() must be called only once."
+        );
+        self.thread_handle.take()
     }
 
     pub fn is_in_dev_mode(&self) -> bool {
         self.dev_mode_output_path.is_some()
     }
 
-    async fn send_batch(
-        endpoint: url::Url,
-        vortex_client_platform: HeaderValue,
-        messages: &mut Vec<VortexMessage>,
-    ) -> Result<()> {
-        // Override the client sent timestamp for each message that goes into the batch.
-        let now = Self::current_timestamp();
-        messages.iter_mut().for_each(|msg| {
-            msg.vortex_client_sent_at = Some(now);
-        });
-
-        let body = {
-            let mut batch = VortexMessageBatch {
-                request_id: Uuid::new_v4().to_string(),
-                payload: Vec::new(),
-            };
-            // Consume these messages into a batch's payload and then swap them back to
-            // the original messages vector to enable retries from the caller if needed.
-            std::mem::swap(messages, &mut batch.payload);
-            let body = batch.encode_to_vec();
-            std::mem::swap(messages, &mut batch.payload);
-            body
-        };
-
-        let client = reqwest::Client::new();
-        let response = client
-            .post(endpoint)
-            .header("Content-Type", "application/vnd.google.protobuf")
-            .header("X-Vortex-Client-Platform", vortex_client_platform)
-            .body(body)
-            .send()
-            .await?;
-
-        let status = response.status();
-        let text = response.text().await?;
-
-        if status.is_success() {
-            debug!("Successfully sent telemetry batch.");
-            Ok(())
-        } else {
-            debug!("Failed to send message: {status} {text}");
-            let err = if status == StatusCode::BAD_REQUEST {
-                let message = format!("Failed to send message: {status} {text}");
-                ProducerError::BadRequestError(message)
-            } else {
-                ProducerError::SendError(format!("Failed to send message: {status} {text}"))
-            };
-            Err(err)
-        }
-    }
-
+    #[cfg(not(test))]
     fn current_timestamp() -> Timestamp {
+        use std::time::{SystemTime, UNIX_EPOCH};
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or(Duration::ZERO);
@@ -358,21 +516,26 @@ impl VortexProducerClient {
         }
     }
 
-    pub async fn log_proto<T: Message + prost::Name + serde::Serialize>(
+    #[cfg(test)]
+    fn current_timestamp() -> Timestamp {
+        Timestamp {
+            seconds: 0,
+            nanos: 0,
+        }
+    }
+
+    fn log_proto<T: Message + prost::Name + serde::Serialize>(
         &self,
         message: T,
-        error_mode: ErrorMode,
-    ) -> Result<()> {
+        is_shutdown: bool,
+    ) -> Result<(), io::Error> {
         if self.is_in_dev_mode() {
-            // This code should never run in production, so using unwrap_or_default to avoid
-            // panics.
+            // This code should never run in prod, so using unwrap_or_default to avoid panics.
             let json_value = serde_json::to_value(&message).unwrap_or_default();
-            self.do_log_proto_in_dev(T::PACKAGE, T::NAME, json_value, error_mode)
-                .unwrap_or_default();
-            Ok(())
+            self.do_log_proto_in_dev(T::PACKAGE, T::NAME, json_value)
         } else {
-            self.do_log_proto_in_prod(T::PACKAGE, T::NAME, message.encode_to_vec(), error_mode)
-                .await
+            self.do_log_proto_in_prod(T::PACKAGE, T::NAME, message.encode_to_vec(), is_shutdown);
+            Ok(())
         }
     }
 
@@ -387,22 +550,13 @@ impl VortexProducerClient {
         package: &'static str,
         name: &'static str,
         json_message: serde_json::Value,
-        error_mode: ErrorMode,
-    ) -> Result<()> {
-        // Dummy up sending error
-        if self.sender.is_closed() {
-            match error_mode {
-                ErrorMode::LogAndContinue => {
-                    return Ok(());
-                }
-                ErrorMode::LogAndRaise => {
-                    return Err(ProducerError::SendError(
-                        "Failed to send message".to_string(),
-                    ));
-                }
-            }
+    ) -> Result<(), io::Error> {
+        /// A message that will be written to the dev-mode output file as JSON.
+        #[derive(Debug, Clone, serde::Serialize)]
+        struct VortexDevModeMessage {
+            type_url: String,
+            message: serde_json::Value,
         }
-
         let dev_mode_msg = VortexDevModeMessage {
             type_url: format!("/{package}.{name}"),
             message: json_message,
@@ -414,10 +568,13 @@ impl VortexProducerClient {
             Ok(writer) => {
                 writer.write_all(json_payload.as_bytes())?;
                 writeln!(writer)?; // carriage return after
-                writer.flush()?;
-                Ok(())
+                writer.flush()
             }
-            Err(e) => Err(e.clone()),
+            Err(e) => {
+                // we can't clone io::Error, so we create a custom one that carries the kind
+                let e = io::Error::new(e.kind(), e.to_string());
+                Err(e)
+            }
         }
     }
 
@@ -427,80 +584,217 @@ impl VortexProducerClient {
     /// for different message types, thus saving on binary size and compilation time
     /// for every `log_proto` callsite.
     #[inline(never)]
-    async fn do_log_proto_in_prod(
+    fn do_log_proto_in_prod(
         &self,
         package: &'static str,
         name: &'static str,
         serialized_value: Vec<u8>,
-        error_mode: ErrorMode,
-    ) -> Result<()> {
+        is_shutdown: bool,
+    ) {
         let any = pbjson_types::Any {
             type_url: format!("/{package}.{name}"),
             value: serialized_value.into(),
         };
-        let vortex_msg = VortexMessage {
-            any: Some(any),
-            vortex_event_created_at: Some(Self::current_timestamp()),
-            vortex_client_sent_at: None,
-            vortex_backend_received_at: None,
-            vortex_backend_processed_at: None,
-        };
+        let msg = box_any_message(any);
+        let res = self.sender.send((msg, is_shutdown));
 
-        match self.sender.send(vortex_msg).await {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                let err = ProducerError::SendError(format!("Failed to send message: {e}"));
-                match error_mode {
-                    ErrorMode::LogAndContinue => {
-                        debug!("{err}");
-                        Ok(())
-                    }
-                    ErrorMode::LogAndRaise => Err(err),
-                }
-            }
+        #[cfg(debug_assertions)]
+        if res.is_err() {
+            eprintln!("{LOG_PROTO_SHUTDOWN_MESSAGE} type_url=/{package}.{name}");
         }
     }
+}
 
-    pub async fn shutdown(&self) -> Result<()> {
-        const MAX_SHUTDOWN_DELAY_MS: u64 = 200;
+fn box_any_message(any: pbjson_types::Any) -> Box<VortexMessage> {
+    Box::new(VortexMessage {
+        any: Some(any),
+        vortex_event_created_at: Some(VortexProducerClient::current_timestamp()),
+        vortex_client_sent_at: None,
+        vortex_backend_received_at: None,
+        vortex_backend_processed_at: None,
+    })
+}
 
-        if let Some(shutdown_tx_mutex) = &self.shutdown_tx {
-            let shutdown_tx = shutdown_tx_mutex.lock().await;
-            if !shutdown_tx.is_closed() {
-                shutdown_tx.send(true).map_err(|_| {
-                    ProducerError::ShutdownError("Failed to send shutdown signal!".to_string())
-                })?;
+/// Worker thread loop for processing messages from the channel and sending them in batches.
+/// If messages stay in a partial batch for a while, they will be sent even before the
+/// full batch is completed to ensure timely delivery. If the batch has messages that are
+/// being retried after a failure, a deadline will be honored even if the batch is full.
+/// If and only if the batch grows too large during a backoff period, it will be pruned
+/// to the HTTP body size limit accepted by the Vortex endpoint.
+///
+/// IMPORTANT: messages are only dropped if two anomalies occur at the same time:
+/// 1) the backend is not responsive for a while and the client is forced to backoff;
+/// 2) the number of events logged during the backoff is so large that the batch
+///    grows larger than the HTTP body size limit set by the Vortex endpoint. This
+///    limit is much higher than the target batch size.
+///
+///
+/// ```
+///                ┌───────────────────┐
+///                ▼                   │
+///    ┌──────────────┐  event or   ┌────────────┐  non-empty  ┌─────────┐
+/// ──▶│ WaitForEvent │ ───────────▶│ Processing │ ───────────▶│ Sending │
+///    └──────────────┘  timeout    └────────────┘    batch    └─────────┘
+///                                    │      ▲                   │
+///                                    │      └───────────────────┘
+///                                    ▼
+///                              ┌────────────┐
+///                              │ Terminated │
+///                              └────────────┘
+/// ```
+fn worker_thread_loop(
+    agent: Box<dyn SenderAgent>,
+    receiver: mpsc::Receiver<(Box<VortexMessage>, bool)>,
+) -> Result<(), ureq::Error> {
+    enum State {
+        Processing,
+        Sending,
+        WaitForEvent,
+        Terminated,
+    }
+    let next_state = |event: (Option<Box<VortexMessage>>, bool),
+                      shutdown_flag: &mut bool,
+                      batch: &mut Batch|
+     -> State {
+        match event {
+            (Some(msg), is_shutdown) => {
+                *shutdown_flag |= is_shutdown;
+                batch.push(msg);
+                if batch.is_overdue() {
+                    State::Sending
+                } else {
+                    State::Processing
+                }
+            }
+            (None, is_shutdown) => {
+                *shutdown_flag |= is_shutdown;
+                if *shutdown_flag {
+                    if !batch.is_empty() {
+                        State::Sending // Send the *last* batch.
+                    } else {
+                        State::Terminated // Batch and queue are empty.
+                    }
+                } else {
+                    // Not shutting down, so we take deadline into account.
+                    if batch.is_overdue() {
+                        State::Sending // Send the *full* or *overdue* batch.
+                    } else {
+                        // Enter the "WaitForEvent" state: batch is partially filled
+                        // and the queue was empty, so we wait for more messages.
+                        State::WaitForEvent
+                    }
+                }
             }
         }
+    };
 
-        if let Some(future_mutex) = &self.future {
-            let future = future_mutex.lock().await;
-
-            let shutdown_start = Instant::now();
-
-            loop {
-                if future.is_finished() {
-                    break;
-                }
-                tokio::time::sleep(Duration::from_millis(5)).await;
-                if shutdown_start.elapsed() > Duration::from_millis(MAX_SHUTDOWN_DELAY_MS) {
-                    return Err(ProducerError::ShutdownError(
-                        "Failed to shut down background thread in time, moving on!".to_string(),
-                    ));
-                }
+    let mut state = State::Processing;
+    let mut shutdown_flag = false;
+    let mut batch = Batch::for_agent(agent.as_ref());
+    loop {
+        match state {
+            // "Processing" state: peek the queue to see if there are any messages.
+            State::Processing => {
+                let event = peek_queue(&receiver);
+                state = next_state(event, &mut shutdown_flag, &mut batch);
             }
+            State::Sending => {
+                let sent = agent.send_batch(&mut batch);
+                state = if shutdown_flag && !sent {
+                    State::Terminated // If shutting down, give up on first send failure.
+                } else {
+                    State::Processing // Come back to "Processing" state after "Sending".
+                };
+            }
+            // "WaitForEvent" state: wait for an event or timeout.
+            State::WaitForEvent => {
+                state = match wait_for_event(&receiver, batch.deadline) {
+                    WaitForEvent::Event(event) => next_state(event, &mut shutdown_flag, &mut batch),
+                    WaitForEvent::Timeout => {
+                        // Go back to "Processing" state: re-consider sending the partial batch.
+                        State::Processing
+                    }
+                };
+            }
+            State::Terminated => break,
         }
-        Ok(())
+    }
+    // Take the last error, if any, from the batch.
+    batch.clear()
+}
+
+/// Returns a message and the shutdown flag peeked from the queue without blocking.
+///
+/// When the sender is dropped, and all messages have been processed,
+/// the shutdown flag is returned as `true`.
+fn peek_queue(
+    receiver: &mpsc::Receiver<(Box<VortexMessage>, bool)>,
+) -> (Option<Box<VortexMessage>>, bool) {
+    match receiver.try_recv() {
+        Ok((msg, is_shutdown)) => (Some(msg), is_shutdown),
+        Err(mpsc::TryRecvError::Empty) => (None, false),
+        Err(mpsc::TryRecvError::Disconnected) => (None, true),
+    }
+}
+
+enum WaitForEvent {
+    /// Message and shutdown flag received from the channel.
+    ///
+    /// The shutdown message comes with the shutdown flag set to `true`.
+    /// If the sender has disconnected, `wait_for_event` will return no
+    /// message and the shutdown flag set to `true`.
+    Event((Option<Box<VortexMessage>>, bool)),
+    /// No message received, but the channel is still open.
+    Timeout,
+}
+
+/// `recv_timeout` or `recv` from the `mpsc::Receiver` of events.
+///
+/// This function only blocks indefinitely when the `deadline` is `None`. And
+/// that's only the case when the batch of messages has no messages in it, so
+/// waking up only when there are new messages in the queue is the right thing
+/// to do. This guarantees retries, timely delivery, and progress in the worker
+/// thread loop with the minimal number of wakeups.
+fn wait_for_event(
+    receiver: &mpsc::Receiver<(Box<VortexMessage>, bool)>,
+    deadline: Option<Instant>,
+) -> WaitForEvent {
+    if let Some(deadline) = deadline {
+        let timeout = deadline.saturating_duration_since(Instant::now());
+        match receiver.recv_timeout(timeout) {
+            Ok((message, is_shutdown)) => WaitForEvent::Event((Some(message), is_shutdown)),
+            Err(mpsc::RecvTimeoutError::Timeout) => WaitForEvent::Timeout,
+            Err(mpsc::RecvTimeoutError::Disconnected) => WaitForEvent::Event((None, true)),
+        }
+    } else {
+        match receiver.recv() {
+            Ok((message, is_shutdown)) => WaitForEvent::Event((Some(message), is_shutdown)),
+            Err(mpsc::RecvError) => WaitForEvent::Event((None, true)),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
-    use tokio::time::timeout;
 
-    // Create a test message
+    use http::StatusCode;
+    use std::sync::Arc;
+
+    const TARGET_BATCH_SIZE_BYTES: usize = 128;
+    const FLUSH_INTERVAL: Duration = Duration::from_millis(16);
+    const LONG_FLUSH_INTERVAL: Duration = Duration::from_secs(300);
+
+    /// Safety margin for some time-releated assertions.
+    ///
+    /// We can never assume a thread will get scheduled immediately by the OS,
+    /// (Linux, Windows, and macOS are not real-time operating systems), so
+    /// when asserting that "something happens within a certain time" we should
+    /// allow for some delay.
+    ///
+    /// IMPORTANT: increase this in case of flakeness in tests.
+    const MARGIN: Duration = Duration::from_millis(MIN_BACKOFF_MILLIS / 2);
+
     #[derive(prost::Message, Clone, serde::Serialize)]
     struct TestMessage {
         #[prost(string, tag = "1")]
@@ -512,75 +806,604 @@ mod tests {
         const PACKAGE: &'static str = "test";
     }
 
-    #[tokio::test]
-    async fn test_log_proto_non_blocking_on_unreachable_server() {
-        // Create a client with an unreachable URL
-        let client = VortexProducerClient::default();
-
-        let message = TestMessage {
-            field: "test".to_string(),
-        };
-
-        let result = timeout(
-            Duration::from_millis(100),
-            client.log_proto(message, ErrorMode::LogAndContinue),
-        )
-        .await;
-
-        // Should complete before timeout fires
-        assert!(result.is_ok(), "log_proto should not block");
-
-        // Cleanup
-        client.shutdown().await.unwrap();
+    fn test_message(i: usize) -> TestMessage {
+        let field = format!("Message {i}");
+        TestMessage { field }
     }
 
-    #[tokio::test]
-    async fn test_log_proto_non_blocking_after_shutdown() {
-        // Create a client
-        let client = VortexProducerClient::default();
-
-        let message = TestMessage {
-            field: "test".to_string(),
+    fn boxed_message<T: Message + prost::Name + serde::Serialize>(
+        message: T,
+    ) -> Box<VortexMessage> {
+        let any = pbjson_types::Any {
+            type_url: T::type_url(),
+            value: message.encode_to_vec().into(),
         };
-
-        client.shutdown().await.unwrap();
-
-        // Attempt to log one more message with a timeout
-        let result = timeout(
-            Duration::from_millis(100),
-            client.log_proto(message, ErrorMode::LogAndContinue),
-        )
-        .await;
-
-        // Should complete within timeout (non-blocking)
-        assert!(result.is_ok(), "log_proto should not block");
-
-        // Cleanup
-        client.shutdown().await.unwrap();
+        box_any_message(any)
     }
 
-    #[tokio::test]
-    async fn test_log_proto_with_error_mode() {
-        let client = VortexProducerClient::default();
+    fn boxed_test_message(i: usize) -> Box<VortexMessage> {
+        boxed_message(test_message(i))
+    }
 
-        let message = TestMessage {
-            field: "test".to_string(),
-        };
+    #[test]
+    #[allow(clippy::cognitive_complexity)]
+    fn test_batch() {
+        const MAX_BACKOFF: Duration = Duration::from_secs(30);
+        let mut batch = Batch::new(
+            TARGET_BATCH_SIZE_BYTES,
+            TARGET_BATCH_SIZE_BYTES * 2,
+            FLUSH_INTERVAL,
+        );
+        assert!(batch.is_empty());
+        assert!(!batch.is_full());
+        assert!(!batch.is_overdue());
+        assert!(batch.deadline.is_none());
 
-        tokio::time::sleep(Duration::from_secs(0)).await;
+        let message = boxed_test_message(0);
+        batch.push(message);
+        assert!(!batch.is_empty());
+        assert!(!batch.is_full());
+        assert!(!batch.is_overdue());
+        assert!(batch.deadline.is_some());
+        if let Some(deadline) = batch.deadline {
+            assert!(deadline <= Instant::now() + DEFAULT_FLUSH_INTERVAL + MARGIN);
+        }
 
-        client.shutdown().await.unwrap();
+        thread::sleep(batch.flush_interval);
+        assert!(
+            batch.is_overdue(),
+            "batch should be overdue after deadline expires"
+        );
 
-        let result = client
-            .log_proto(message.clone(), ErrorMode::LogAndContinue)
-            .await;
-        assert!(result.is_ok());
+        let mut prev_deadline = batch.deadline.unwrap();
+        batch.backoff();
+        assert_eq!(
+            batch.num_attempts, 1,
+            "backoff should increment the attempt count"
+        );
+        assert!(
+            batch.deadline.unwrap() > prev_deadline,
+            "backoff should extend the deadline"
+        );
+        for i in 2..100 {
+            prev_deadline = batch.deadline.unwrap();
+            batch.backoff();
+            assert_eq!(batch.num_attempts, i);
+            assert!(batch.deadline.unwrap() >= prev_deadline);
+            assert!(batch.deadline.unwrap() <= Instant::now() + MAX_BACKOFF);
+        }
 
-        // This can't actually be tested now, because VORTEX_DEV_MODE is on
-        // and sending messages won't fail.
-        let _result = client.log_proto(message, ErrorMode::LogAndRaise).await;
+        batch.clear_after_success();
+        assert!(batch.is_empty());
+        assert!(!batch.is_full());
+        assert!(!batch.is_overdue());
+        assert!(batch.deadline.is_none());
+        assert_eq!(batch.num_attempts, 0);
 
-        // Cleanup
-        client.shutdown().await.unwrap();
+        for i in 0.. {
+            let message = test_message(i);
+            batch.push(boxed_message(message));
+            if batch.is_full() {
+                break;
+            }
+        }
+        assert!(batch.is_overdue(), "a full batch is considered overdue");
+        batch.backoff();
+        assert!(
+            !batch.is_overdue(),
+            "a full batch that failed to send must respect the backoff"
+        );
+        thread::sleep(
+            batch
+                .deadline
+                .unwrap()
+                .saturating_duration_since(Instant::now()),
+        );
+        assert!(
+            batch.is_overdue(),
+            "a batch is eventually overdue for retry"
+        );
+    }
+
+    #[derive(Default)]
+    struct SentBatches {
+        failed: Vec<Vec<VortexMessage>>,
+        sent: Vec<Vec<VortexMessage>>,
+    }
+
+    #[derive(Default)]
+    struct SentBatchesHandle {
+        inner: Mutex<SentBatches>,
+    }
+    impl SentBatchesHandle {
+        fn with_lock(&self, fnc: impl FnOnce(&SentBatches)) {
+            let lock = self.inner.lock().unwrap();
+            fnc(&lock);
+        }
+
+        fn push_failed_attempt(&self, messages: Vec<VortexMessage>) {
+            let mut messages = messages;
+            for msg in &mut messages {
+                assert!(
+                    msg.vortex_client_sent_at.is_some(),
+                    "message must have a sent timestamp."
+                );
+                // clear the sent at timestamps to simplify the test assertions
+                msg.vortex_client_sent_at = None;
+            }
+            let mut lock = self.inner.lock().unwrap();
+            lock.failed.push(messages);
+        }
+
+        fn num_failed_attempts(&self) -> usize {
+            self.inner.lock().unwrap().failed.len()
+        }
+
+        fn push(&self, messages: Vec<VortexMessage>) {
+            let mut messages = messages;
+            for msg in &mut messages {
+                assert!(
+                    msg.vortex_client_sent_at.is_some(),
+                    "message must have a sent timestamp."
+                );
+                // clear the sent at timestamps to simplify the test assertions
+                msg.vortex_client_sent_at = None;
+            }
+            let mut lock = self.inner.lock().unwrap();
+            lock.sent.push(messages);
+        }
+
+        fn len(&self) -> usize {
+            self.inner.lock().unwrap().sent.len()
+        }
+
+        fn poll_until(
+            &self,
+            interval: Duration,
+            predicate: impl Fn(&SentBatches) -> bool,
+        ) -> Duration {
+            const MAX_POLL_DURATION: Duration = Duration::from_secs(30);
+            let start = Instant::now();
+            while {
+                let lock = self.inner.lock().unwrap();
+                !predicate(&lock)
+            } {
+                thread::sleep(interval);
+                if start.elapsed() >= MAX_POLL_DURATION {
+                    panic!("SentBatchesHandle::poll_until(): timed out waiting for condition to be met.");
+                }
+            }
+            start.elapsed()
+        }
+    }
+
+    enum ServerMode {
+        AlwaysSucceed,
+        Unreachable,
+        BoundedSuccesses(usize),
+        BoundedFailures(usize),
+    }
+
+    struct TestSenderAgent {
+        max_batch_size: usize,
+        flush_interval: Duration,
+        mode: ServerMode,
+        sent_batches: Arc<SentBatchesHandle>,
+        num_successes: Mutex<usize>, // for BoundedSuccesses mode
+        num_failures: Mutex<usize>,  // for BoundedFailures mode
+    }
+    impl TestSenderAgent {
+        fn new(mode: ServerMode, max_batch_size: usize, flush_interval: Duration) -> Self {
+            // For test purposes, we set body_size_limit to be twice the max_batch_size,
+            // so we don't need it explicitly configured here.
+            Self {
+                max_batch_size,
+                flush_interval,
+                mode,
+                sent_batches: Arc::new(SentBatchesHandle::default()),
+                num_successes: Mutex::new(0),
+                num_failures: Mutex::new(0),
+            }
+        }
+
+        fn with_server_mode(mode: ServerMode) -> Self {
+            Self::new(mode, TARGET_BATCH_SIZE_BYTES, FLUSH_INTERVAL)
+        }
+
+        fn with_long_flush_interval(mode: ServerMode) -> Self {
+            Self::new(mode, TARGET_BATCH_SIZE_BYTES, LONG_FLUSH_INTERVAL)
+        }
+
+        fn sent_batches_handle(&self) -> Arc<SentBatchesHandle> {
+            Arc::clone(&self.sent_batches)
+        }
+    }
+    impl SenderAgent for TestSenderAgent {
+        fn target_batch_size(&self) -> usize {
+            self.max_batch_size
+        }
+        fn body_size_limit(&self) -> usize {
+            self.max_batch_size * 2
+        }
+        fn flush_interval(&self) -> Duration {
+            self.flush_interval
+        }
+        fn send_batch(&self, batch: &mut Batch) -> bool {
+            assert!(!batch.is_empty(), "send_batch: batch must be non-empty.");
+            let _body = batch.encode_for_sending();
+            // XXX: _body contains more than bytes_buffered (UUID, message count, etc.),
+            // but we enforce the limit only on bytes_buffered.
+            debug_assert!(
+                batch.bytes_buffered <= self.body_size_limit() + 128,
+                "send_batch: batch size exceeds body_size_limit."
+            );
+            match self.mode {
+                ServerMode::AlwaysSucceed => {
+                    self.sent_batches.push(batch.messages.clone());
+                    batch.on_response(StatusCode::OK, "OK".to_string());
+                    true
+                }
+                ServerMode::Unreachable => {
+                    self.sent_batches
+                        .push_failed_attempt(batch.messages.clone());
+                    batch.on_error(ureq::Error::ConnectionFailed);
+                    false
+                }
+                ServerMode::BoundedSuccesses(max_successes) => {
+                    let success = {
+                        let mut num_successes = self.num_successes.lock().unwrap();
+                        if *num_successes < max_successes {
+                            *num_successes += 1;
+                            true
+                        } else {
+                            false
+                        }
+                    };
+                    if success {
+                        self.sent_batches.push(batch.messages.clone());
+                        batch.on_response(StatusCode::OK, "OK".to_string());
+                        true
+                    } else {
+                        self.sent_batches
+                            .push_failed_attempt(batch.messages.clone());
+                        batch.on_response(
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "Vortex server has failed".to_string(),
+                        );
+                        false
+                    }
+                }
+                ServerMode::BoundedFailures(max_failures) => {
+                    let fail = {
+                        let mut num_failures = self.num_failures.lock().unwrap();
+                        if *num_failures < max_failures {
+                            *num_failures += 1;
+                            true
+                        } else {
+                            false
+                        }
+                    };
+                    if fail {
+                        self.sent_batches
+                            .push_failed_attempt(batch.messages.clone());
+                        batch.on_response(
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "Vortex server has failed".to_string(),
+                        );
+                        false
+                    } else {
+                        self.sent_batches.push(batch.messages.clone());
+                        batch.on_response(StatusCode::OK, "OK".to_string());
+                        true
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_log_is_non_blocking_on_unreachable_server() {
+        let agent = TestSenderAgent::with_long_flush_interval(ServerMode::Unreachable);
+        let sent_batches_handle = agent.sent_batches_handle();
+        let mut client = VortexProducerClient::new(Box::new(agent), None);
+
+        client.log_proto(test_message(0), false).unwrap();
+        client.log_proto(test_message(1), true).unwrap(); // shutdown message
+        client.log_proto(test_message(2), false).unwrap(); // after shutdown message (logged)
+
+        let start = Instant::now();
+        let handle = client.take_thread_handle();
+        handle.unwrap().join().unwrap().unwrap_err(); // wait for the worker thread to finish
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed < MARGIN,
+            "Worker thread should not block indefinitely on retries when server is unreachable"
+        );
+
+        assert_eq!(sent_batches_handle.num_failed_attempts(), 1);
+        assert_eq!(sent_batches_handle.len(), 0);
+    }
+
+    #[test]
+    fn test_log_is_non_blocking_after_shutdown() {
+        let agent = TestSenderAgent::with_long_flush_interval(ServerMode::AlwaysSucceed);
+        let sent_batches_handle = agent.sent_batches_handle();
+        let mut client = VortexProducerClient::new(Box::new(agent), None);
+
+        client.log_proto(test_message(0), false).unwrap();
+        client.log_proto(test_message(1), false).unwrap();
+        client.log_proto(test_message(2), false).unwrap();
+        client.log_proto(test_message(3), false).unwrap(); // TARGET_BATCH_SIZE_BYTES reached
+        client.log_proto(test_message(4), false).unwrap();
+        client.log_proto(test_message(5), true).unwrap(); // shutdown message
+        client.log_proto(test_message(6), false).unwrap(); // after shutdown message (still logged)
+
+        let start = Instant::now();
+        let handle = client.take_thread_handle();
+        handle.unwrap().join().unwrap().unwrap(); // wait for the worker thread to finish
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed < MARGIN,
+            "Worker thread should not block indefinitely on retries when server is unreachable"
+        );
+
+        // this panics in debug mode, but is a no-op in release mode
+        #[cfg(not(debug_assertions))]
+        let _ = client.log_proto(test_message(7), false); // panic in debug, silently dropped in release
+
+        sent_batches_handle.with_lock(|batches| {
+            assert_eq!(batches.sent.len(), 2);
+            assert_eq!(
+                batches.sent,
+                vec![
+                    vec![
+                        *boxed_test_message(0),
+                        *boxed_test_message(1),
+                        *boxed_test_message(2),
+                        *boxed_test_message(3), // TARGET_BATCH_SIZE_BYTES reached
+                    ],
+                    vec![
+                        *boxed_test_message(4),
+                        *boxed_test_message(5), // shutdown message
+                        *boxed_test_message(6),
+                    ]
+                ]
+            );
+        });
+    }
+
+    #[test]
+    fn test_batch_is_sent_after_flush_interval() {
+        let agent = TestSenderAgent::with_server_mode(ServerMode::AlwaysSucceed);
+        let flush_interval = agent.flush_interval();
+        let sent_batches_handle = agent.sent_batches_handle();
+        let mut client = VortexProducerClient::new(Box::new(agent), None);
+
+        client.log_proto(test_message(0), false).unwrap();
+        client.log_proto(test_message(1), false).unwrap();
+        let elapsed = sent_batches_handle.poll_until(FLUSH_INTERVAL / 2, |batches| {
+            batches.sent.len() == 1 && batches.sent[0].len() == 2
+        });
+        assert!(elapsed >= flush_interval);
+
+        client.log_proto(test_message(2), false).unwrap();
+        client.log_proto(test_message(3), true).unwrap(); // shutdown message
+        client.log_proto(test_message(4), false).unwrap(); // after shutdown message (still logged)
+
+        client
+            .take_thread_handle()
+            .unwrap()
+            .join()
+            .unwrap()
+            .unwrap();
+
+        sent_batches_handle.with_lock(|batches| {
+            assert!(batches.sent.len() >= 2);
+            if batches.sent.len() == 2 {
+                assert_eq!(
+                    batches.sent,
+                    vec![
+                        vec![
+                            *boxed_test_message(0),
+                            *boxed_test_message(1), // FLUSH_INTERVAL reached
+                        ],
+                        vec![
+                            *boxed_test_message(2),
+                            *boxed_test_message(3), // shutdown message
+                            *boxed_test_message(4),
+                        ]
+                    ]
+                );
+            } else {
+                let mut count = 0;
+                for batch in &batches.sent {
+                    count += batch.len();
+                }
+                assert!(
+                    count <= 4,
+                    "Expected at least 4 messages in total, but got {count}"
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn test_batch_is_sent_after_retries() {
+        let agent = TestSenderAgent::with_server_mode(ServerMode::BoundedFailures(2));
+        let flush_interval = agent.flush_interval();
+        let sent_batches_handle = agent.sent_batches_handle();
+        let mut client = VortexProducerClient::new(Box::new(agent), None);
+
+        client.log_proto(test_message(0), false).unwrap();
+        client.log_proto(test_message(1), false).unwrap();
+        sent_batches_handle.poll_until(flush_interval / 2, |batches| {
+            assert!(batches.sent.is_empty());
+            // 1 is observable here because flush_interval/2 < MIN_BACKOFF_MILLIS.
+            batches.failed.len() == 1
+        });
+        client.log_proto(test_message(2), false).unwrap();
+        sent_batches_handle.poll_until(flush_interval / 2, |batches| {
+            // we expect the server to fail again, so the batch is not sent yet
+            assert!(batches.sent.is_empty());
+            batches.failed.len() == 2
+        });
+        sent_batches_handle.poll_until(flush_interval / 2, |batches| {
+            // we expect the server to send 3 events after the backoff period
+            assert!(batches.failed.len() == 2);
+            if batches.sent.len() == 1 {
+                assert_eq!(
+                    batches.sent[0].len(),
+                    3,
+                    "all 3 events should be sent in a batch"
+                );
+                true
+            } else {
+                false
+            }
+        });
+        client.log_proto(test_message(3), true).unwrap(); // shutdown message
+        client.log_proto(test_message(4), false).unwrap(); // after shutdown message (still logged)
+        client
+            .take_thread_handle()
+            .unwrap()
+            .join()
+            .unwrap()
+            .unwrap();
+
+        assert!(sent_batches_handle.len() >= 2);
+        sent_batches_handle.with_lock(|batches| {
+            assert_eq!(
+                batches.sent,
+                vec![
+                    vec![
+                        *boxed_test_message(0),
+                        *boxed_test_message(1),
+                        *boxed_test_message(2), // after backoff for 2 failures
+                    ],
+                    vec![*boxed_test_message(3), *boxed_test_message(4),]
+                ]
+            );
+        });
+    }
+
+    #[test]
+    fn test_terminates_after_permanent_failure() {
+        let agent = TestSenderAgent::with_server_mode(ServerMode::BoundedSuccesses(2));
+        let flush_interval = agent.flush_interval();
+        let sent_batches_handle = agent.sent_batches_handle();
+        let mut client = VortexProducerClient::new(Box::new(agent), None);
+
+        client.log_proto(test_message(0), false).unwrap();
+        client.log_proto(test_message(1), false).unwrap();
+        client.log_proto(test_message(2), false).unwrap();
+        client.log_proto(test_message(3), false).unwrap();
+        let elapsed =
+            sent_batches_handle.poll_until(flush_interval / 2, |batches| batches.sent.len() == 1);
+        assert!(elapsed < flush_interval + MARGIN); // TARGET_BATCH_SIZE_BYTES reached
+
+        // After 1 success, the server will keep failing, so let's simulate a burst of messages.
+        for i in 4..=14 {
+            client.log_proto(test_message(i), false).unwrap();
+        }
+        // Poll for the next and last success.
+        sent_batches_handle.poll_until(flush_interval / 2, |batches| batches.sent.len() == 2);
+        // Look at the next 2 failures.
+        sent_batches_handle.poll_until(flush_interval / 2, |batches| {
+            if batches.failed.len() == 2 {
+                assert_eq!(
+                    batches.failed,
+                    vec![
+                        // The first failure is a full batch with TARGET_BATCH_SIZE_BYTES.
+                        vec![
+                            *boxed_test_message(8),
+                            *boxed_test_message(9),
+                            *boxed_test_message(10),
+                            *boxed_test_message(11),
+                        ],
+                        // Due to backoff, the second failure also has all the messages
+                        // peeked from the queue during the backoff period.
+                        vec![
+                            // "Message 8" was dropped, to make the batch smaller than BODY_SIZE_LIMIT.
+                            *boxed_test_message(9),
+                            *boxed_test_message(10),
+                            *boxed_test_message(11),
+                            *boxed_test_message(12),
+                            *boxed_test_message(13),
+                            *boxed_test_message(14),
+                        ],
+                    ]
+                );
+                true
+            } else {
+                false
+            }
+        });
+
+        // During the backoff period before the 3rd failure, we log more messages.
+        client.log_proto(test_message(15), false).unwrap();
+        client.log_proto(test_message(16), false).unwrap();
+        client.log_proto(test_message(17), false).unwrap();
+        sent_batches_handle.poll_until(flush_interval / 2, |batches| {
+            if batches.failed.len() == 3 {
+                assert_eq!(
+                    batches.failed[2],
+                    vec![
+                        // "Message 8" was dropped before.
+                        // Now "Message 9" and "Message 10" are dropped.
+                        *boxed_test_message(11),
+                        *boxed_test_message(12),
+                        *boxed_test_message(13),
+                        *boxed_test_message(14),
+                        *boxed_test_message(15),
+                        *boxed_test_message(16),
+                        *boxed_test_message(17),
+                    ],
+                );
+                true
+            } else {
+                false
+            }
+        });
+
+        // During the backoff period we burst and log a shutdown message. We expect a 4th
+        // failure in the request attempt made as soon as the shutdown message is received.
+        for i in 18..=30 {
+            client.log_proto(test_message(i), false).unwrap();
+        }
+        client.log_proto(test_message(31), true).unwrap();
+        let elapsed = sent_batches_handle.poll_until(flush_interval / 2, |batches| {
+            if batches.failed.len() == 4 {
+                assert_eq!(
+                    batches.failed[3],
+                    vec![
+                        // A bunch of messages from the final burst are dropped.
+                        *boxed_test_message(25),
+                        *boxed_test_message(26),
+                        *boxed_test_message(27),
+                        *boxed_test_message(28),
+                        *boxed_test_message(29),
+                        *boxed_test_message(30),
+                        *boxed_test_message(31), // shutdown message get a fair chance
+                    ],
+                );
+                true
+            } else {
+                false
+            }
+        });
+        // The backoff at this point is much longer than 4 * MIN_BACKOFF_MILLIS,
+        // but we expect the shutdown message to be sent as soon as the OS wakes up the
+        // thread with that final shutdown message in the queue.
+        assert!(
+            elapsed < Duration::from_millis(4 * MIN_BACKOFF_MILLIS),
+            "shutdown cancels the backoff and sends the shutdown message immediately"
+        );
+
+        client
+            .take_thread_handle()
+            .unwrap()
+            .join()
+            .unwrap()
+            .unwrap_err();
     }
 }

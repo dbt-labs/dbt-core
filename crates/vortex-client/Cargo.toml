@@ -17,15 +17,11 @@ http = { workspace = true }
 log = { workspace = true }
 pbjson-types = { workspace = true }
 prost = { workspace = true }
-reqwest = { workspace = true }
+rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true }
-url = { workspace = true }
+ureq = { workspace = true }
 uuid = { workspace = true }
-
-[dev-dependencies]
-mock_instant = { workspace = true }
 
 [lib]
 name = "vortex_client"

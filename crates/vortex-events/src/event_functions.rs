@@ -1,6 +1,8 @@
 use dashmap::DashMap;
-use dbt_common::stats::{NodeStatus, Stat};
-use dbt_common::FsResult;
+use dbt_common::{
+    stats::{NodeStatus, Stat},
+    FsResult,
+};
 use dbt_env::env::InternalEnv;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_schemas::schemas::{
@@ -15,9 +17,9 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use vortex_client::client::{log_proto, ErrorMode};
+use vortex_client::client::{log_proto, log_proto_and_shutdown, ProducerError};
 
-pub async fn invocation_start_event(
+pub fn invocation_start_event(
     invocation_id: String,
     root_project_name: &str,
     profile_path: PathBuf,
@@ -55,7 +57,7 @@ pub async fn invocation_start_event(
         enrichment: None,
     };
 
-    let _ = log_proto(message, ErrorMode::LogAndContinue).await;
+    let _ = log_proto(message);
 
     let dbt_inv_env = env.invocation_config().environment.clone();
     // dbt-core: core/dbt/tracking.py::get_dbt_env_context
@@ -70,21 +72,26 @@ pub async fn invocation_start_event(
         enrichment: None,
     };
 
-    let _ = log_proto(message, ErrorMode::LogAndContinue).await;
+    let _ = log_proto(message);
 
     if dbt_inv_env != *"manual" {
-        let _ = cloud_invocation_event(invocation_id).await;
+        cloud_invocation_event(invocation_id);
     }
 }
 
-pub async fn invocation_end_event(invocation_id: String, result: &FsResult<i32>) {
-    let env = InternalEnv::global();
+pub fn build_result_string(result: &FsResult<i32>) -> String {
     // result is set to Ok(1) for error and Ok(0) for success
-    let result_string = match result {
-        Ok(1) => "error".to_string(),
-        Ok(0) => "ok".to_string(),
-        _ => "unknown".to_string(),
-    };
+    match result {
+        Ok(1) => "error",
+        Ok(0) => "ok",
+        _ => "unknown",
+    }
+    .to_string()
+}
+
+/// Logs the `Invocation` event and shuts down the Vortex client.
+pub fn invocation_end_event(invocation_id: String, result_string: String, shutdown: bool) {
+    let env = InternalEnv::global();
     // Create Invocation start message
     let message = Invocation {
         //  REQUIRED invocation_id - globally unique identifier
@@ -110,11 +117,22 @@ pub async fn invocation_end_event(invocation_id: String, result: &FsResult<i32>)
         enrichment: None,
     };
 
-    let _ = log_proto(message, ErrorMode::LogAndContinue).await;
+    if shutdown {
+        let _ = log_proto_and_shutdown(message).map_err(|e| {
+            #[cfg(debug_assertions)]
+            match e {
+                ProducerError::DevModeError(e) => eprintln!("{e}"),
+                ProducerError::SendError(e) => eprintln!("{e}"),
+                ProducerError::ShutdownError(e) => panic!("{e:?}"),
+            }
+        });
+    } else {
+        let _ = log_proto(message);
+    }
 }
 
 /// In dbt-core, this is in core/dbt/task/run.py::track_model_run
-pub async fn run_model_event(
+pub fn run_model_event(
     invocation_id: String,
     run_stats: &DashMap<String, Stat>,
     node: &dyn InternalDbtNodeAttributes,
@@ -209,16 +227,11 @@ pub async fn run_model_event(
         enrichment: None,
     };
 
-    let _ = log_proto(message, ErrorMode::LogAndContinue).await;
+    let _ = log_proto(message);
 }
 
 /// core/dbt/task/deps.py::track_package_install
-pub async fn package_install_event(
-    invocation_id: String,
-    name: String,
-    version: String,
-    source: String,
-) {
+pub fn package_install_event(invocation_id: String, name: String, version: String, source: String) {
     let message = PackageInstall {
         // REQUIRED invocation_id - globally unique identifier
         invocation_id,
@@ -238,11 +251,11 @@ pub async fn package_install_event(
         enrichment: None,
     };
 
-    let _ = log_proto(message, ErrorMode::LogAndContinue).await;
+    let _ = log_proto(message);
 }
 
 /// dbt-core core/dbt/compilation.py::print_compile_stats, track_resource_counts
-pub async fn resource_counts_event(args: InvocationArgs, manifest: &DbtManifest) {
+pub fn resource_counts_event(args: InvocationArgs, manifest: &DbtManifest) {
     let mut model_count = 0;
     let mut seed_count = 0;
     let mut data_test_count = 0;
@@ -308,10 +321,10 @@ pub async fn resource_counts_event(args: InvocationArgs, manifest: &DbtManifest)
         enrichment: None,
     };
 
-    let _ = log_proto(message, ErrorMode::LogAndContinue).await;
+    let _ = log_proto(message);
 }
 
-pub async fn cloud_invocation_event(invocation_id: String) {
+pub fn cloud_invocation_event(invocation_id: String) {
     let env = InternalEnv::global();
     let message = CloudInvocation {
         // REQUIRED invocation_id - globally unique identifier
@@ -333,14 +346,10 @@ pub async fn cloud_invocation_event(invocation_id: String) {
         enrichment: None,
     };
 
-    let _ = log_proto(message, ErrorMode::LogAndContinue).await;
+    let _ = log_proto(message);
 }
 
-pub async fn adapter_info_event(
-    invocation_id: String,
-    adapter_type: String,
-    adapter_unique_id: String,
-) {
+pub fn adapter_info_event(invocation_id: String, adapter_type: String, adapter_unique_id: String) {
     let message = AdapterInfo {
         // REQUIRED invocation_id - globally unique identifier
         invocation_id,
@@ -357,11 +366,11 @@ pub async fn adapter_info_event(
         enrichment: None,
     };
 
-    let _ = log_proto(message, ErrorMode::LogAndContinue).await;
+    let _ = log_proto(message);
 }
 
 /// Not yet implemented, all stubbed
-pub async fn adapter_info_v2_event() {
+pub fn adapter_info_v2_event() {
     let message = AdapterInfoV2 {
         // REQUIRED  event_id - unique identifier for this event (uuid)
         event_id: uuid::Uuid::new_v4().to_string(),
@@ -385,7 +394,7 @@ pub async fn adapter_info_v2_event() {
         enrichment: None,
     };
 
-    let _ = log_proto(message, ErrorMode::LogAndContinue).await;
+    let _ = log_proto(message);
 }
 
 /// This looks for or creates a .user.yml file in the same directory
