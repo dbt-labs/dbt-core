@@ -18,7 +18,7 @@ The main subdirectories of core/dbt:
 - [`task`](core/dbt/task/README.md): Set forth the actions that dbt can perform when invoked
 
 Legacy tests are found in the 'test' directory:
-- [`unit tests`](core/dbt/test/unit/README.md): Unit tests
+- [`unit tests`](tests/unit/README.md): Unit tests
 - [`integration tests`](core/dbt/test/integration/README.md): Integration tests
 
 ### Invoking dbt
