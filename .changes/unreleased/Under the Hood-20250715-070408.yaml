@@ -1,5 +1,0 @@
-kind: Under the Hood
-body: Cleanup some function args and types
-time: 2025-07-15T07:04:08.341433326-07:00
-custom:
-  PR: dbt-labs/fs#4455

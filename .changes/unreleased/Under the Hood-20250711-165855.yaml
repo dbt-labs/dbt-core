@@ -1,5 +1,0 @@
-kind: Under the Hood
-body: (update adapter) allow access Config keys
-time: 2025-07-11T16:58:55.828475824-07:00
-custom:
-  PR: dbt-labs/fs#4407
