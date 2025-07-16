@@ -819,3 +819,39 @@ def test_inject_ctes_with_recursive():
     """
     generated_sql = inject_ctes_into_sql(starting_sql, ctes)
     assert norm_whitespace(generated_sql) == norm_whitespace(expected_sql)
+
+
+def test_inject_ctes_trailing_comma_fix():
+    """Test that trailing commas are not added when there are no existing CTEs.
+    
+    This test verifies the fix for the trailing comma bug where SQL like
+    "with select * from table" would incorrectly become
+    "with injected_cte as (select 1), select * from table"
+    instead of the correct
+    "with injected_cte as (select 1) select * from table"
+    """
+    # Test case 1: SQL with WITH clause but no existing CTEs (should not add trailing comma)
+    starting_sql = "with select * from table"
+    ctes = [
+        InjectedCTE(
+            id="test_cte",
+            sql="test_cte as (select 1 as id)"
+        )
+    ]
+    expected_sql = """with test_cte as (select 1 as id)select * from table"""
+    
+    generated_sql = inject_ctes_into_sql(starting_sql, ctes)
+    assert norm_whitespace(generated_sql) == norm_whitespace(expected_sql)
+    
+    # Specifically verify no trailing comma before main SELECT
+    assert ", select" not in generated_sql.lower()
+    
+    # Test case 2: SQL with existing CTEs should still add comma (existing behavior)
+    starting_sql_with_ctes = "with existing_cte as (select 1) select * from existing_cte"
+    expected_sql_with_ctes = """with test_cte as (select 1 as id), existing_cte as (select 1) select * from existing_cte"""
+    
+    generated_sql_with_ctes = inject_ctes_into_sql(starting_sql_with_ctes, ctes)
+    assert norm_whitespace(generated_sql_with_ctes) == norm_whitespace(expected_sql_with_ctes)
+    
+    # Verify comma is properly added between CTEs
+    assert "test_cte as (select 1 as id), existing_cte" in generated_sql_with_ctes
