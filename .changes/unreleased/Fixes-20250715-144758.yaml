@@ -1,5 +1,0 @@
-kind: Fixes
-body: Fix handling of some command line flags
-time: 2025-07-15T14:47:58.111212-04:00
-custom:
-  PR: dbt-labs/fs#4461
