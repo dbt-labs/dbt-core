@@ -4,10 +4,10 @@ use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
 use dashmap::DashMap;
 use minijinja::{
+    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value,
     arg_utils::ArgParser,
     listener::RenderingEventListener,
     value::{Enumerator, Object},
-    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value,
 };
 
 /// A struct that represents a compile time config object to be used during compile time
@@ -106,7 +106,7 @@ impl Object for CompileConfig {
                         return Err(MinijinjaError::new(
                             MinijinjaErrorKind::InvalidOperation,
                             "persist_docs must be a dictionary".to_string(),
-                        ))
+                        ));
                     }
                 };
 
@@ -126,7 +126,7 @@ impl Object for CompileConfig {
                         return Err(MinijinjaError::new(
                             MinijinjaErrorKind::InvalidOperation,
                             "persist_docs must be a dictionary".to_string(),
-                        ))
+                        ));
                     }
                 };
 

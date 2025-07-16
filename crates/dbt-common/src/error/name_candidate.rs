@@ -1,6 +1,6 @@
 use dbt_frontend_common::{
-    ident::{Ident, Identifier},
     Dialect, Qualified, QualifiedName,
+    ident::{Ident, Identifier},
 };
 use itertools::Itertools;
 use std::sync::Arc;

@@ -1,12 +1,12 @@
+use crate::AdapterType;
 use crate::errors::AdapterError;
 use crate::errors::{AdapterResult, AsyncAdapterResult};
 use crate::typed_adapter::TypedBaseAdapter;
-use crate::AdapterType;
 
 use arrow::array::RecordBatch;
 use arrow_schema::Schema;
-use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, RelationPattern};
 use dbt_schemas::schemas::relations::DEFAULT_DATABRICKS_DATABASE;
+use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, RelationPattern};
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};

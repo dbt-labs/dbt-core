@@ -4,7 +4,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use chrono::DateTime;
 use chrono_tz::Tz;
-use dbt_common::{fs_err, io_args::IoArgs, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, fs_err, io_args::IoArgs};
 use dbt_fusion_adapter::parse::adapter::create_parse_adapter;
 use dbt_schemas::{
     dbt_utils::resolve_package_quoting,

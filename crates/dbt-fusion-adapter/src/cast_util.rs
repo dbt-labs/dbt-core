@@ -9,12 +9,12 @@ use dbt_schemas::schemas::columns::postgres::PostgresColumn;
 use dbt_schemas::schemas::columns::redshift::RedshiftColumn;
 use dbt_schemas::schemas::columns::snowflake::SnowflakeColumn;
 use dbt_schemas::schemas::relations::base::BaseRelation;
-use minijinja::jinja_err;
 use minijinja::Error as MinijinjaError;
 use minijinja::ErrorKind as MinijinjaErrorKind;
 use minijinja::Value as MinijinjaValue;
-use serde::de::DeserializeOwned;
+use minijinja::jinja_err;
 use serde::Deserialize;
+use serde::de::DeserializeOwned;
 
 use std::file;
 use std::sync::Arc;

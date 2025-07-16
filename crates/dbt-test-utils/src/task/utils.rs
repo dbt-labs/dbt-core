@@ -11,9 +11,10 @@ use std::{
 use regex::Regex;
 
 use dbt_common::{
+    FsResult,
     io_args::SystemArgs,
     stdfs::{self},
-    tokiofs, unexpected_err, FsResult,
+    tokiofs, unexpected_err,
 };
 
 /// Copies a directory and its contents, excluding .gitignored files.
@@ -122,8 +123,10 @@ pub fn check_set_user_env_var() {
         // set_var is generally disallowed but intentional here
         let run_id = std::env::var("GITHUB_RUN_ID").unwrap_or_else(|_| "0000000".to_string());
         let run_number = std::env::var("GITHUB_RUN_NUMBER").unwrap_or_else(|_| "0".to_string());
-        #[allow(clippy::disallowed_methods)]
-        std::env::set_var("USER", format!("{run_id}x{run_number}"));
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::set_var("USER", format!("{run_id}x{run_number}"));
+        }
     }
 }
 

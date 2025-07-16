@@ -2,7 +2,7 @@ use super::ir::{ArithmeticOp, ComparisonOp, Expr, Function};
 use std::borrow::Borrow;
 use std::iter::Peekable;
 
-use super::tokenize::{tokenize, Token};
+use super::tokenize::{Token, tokenize};
 
 pub fn try_parse(s: &str) -> Result<Expr, String> {
     let mut tokens = tokenize(s).peekable();

@@ -264,11 +264,7 @@ where
             sinks.insert(elem.to_owned());
         }
     }
-    if !all {
-        sinks
-    } else {
-        visited
-    }
+    if !all { sinks } else { visited }
 }
 
 pub fn get_sources<T, U>(deps: &BTreeMap<T, BTreeSet<U>>) -> BTreeSet<U>

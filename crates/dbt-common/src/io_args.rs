@@ -9,7 +9,7 @@ use std::{
     collections::{BTreeMap, HashSet},
     fmt::{self, Display},
     path::{Path, PathBuf},
-    sync::{atomic::AtomicBool, Arc},
+    sync::{Arc, atomic::AtomicBool},
 };
 use strum::EnumIter;
 use strum_macros::Display;
@@ -21,8 +21,8 @@ use crate::{
     io_utils::StatusReporter,
     logging::LogFormat,
     node_selector::{
-        conjoin_expression, parse_model_specifiers, IndirectSelection, SelectExpression,
-        SelectionCriteria,
+        IndirectSelection, SelectExpression, SelectionCriteria, conjoin_expression,
+        parse_model_specifiers,
     },
     pretty_string::BLUE,
 };

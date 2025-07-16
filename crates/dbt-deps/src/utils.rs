@@ -4,7 +4,7 @@ use dbt_schemas::schemas::packages::{DbtPackageEntry, LocalPackage};
 use sha1::Digest;
 
 use dbt_common::{
-    constants::DBT_PROJECT_YML, err, fs_err, io_utils::try_read_yml_to_str, ErrorCode, FsResult,
+    ErrorCode, FsResult, constants::DBT_PROJECT_YML, err, fs_err, io_utils::try_read_yml_to_str,
 };
 use dbt_jinja_utils::serde::from_yaml_raw;
 use dbt_schemas::schemas::project::DbtProject;

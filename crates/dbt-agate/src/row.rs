@@ -1,9 +1,9 @@
 use crate::columns::ColumnNamesAsTuple;
 use crate::table::TableRepr;
 use crate::{MappedSequence, Tuple, TupleRepr};
+use minijinja::Value;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Object, ObjectRepr};
-use minijinja::Value;
 use minijinja::{Error as MinijinjaError, State};
 use std::fmt;
 use std::rc::Rc;

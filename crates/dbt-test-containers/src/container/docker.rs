@@ -1,11 +1,11 @@
 use super::error::ContainerError;
 use super::utils::{await_build_progress, create_docker_context_tarball, get_docker};
+use bollard::Docker;
 use bollard::container::{
     Config, CreateContainerOptions, ListContainersOptions, LogsOptions, WaitContainerOptions,
 };
 use bollard::image::{BuildImageOptions, CreateImageOptions, ListImagesOptions};
 use bollard::service::HostConfig;
-use bollard::Docker;
 use futures_util::stream::StreamExt;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -210,7 +210,7 @@ pub async fn initialize_container(config: ContainerConfig) -> Result<Container, 
                 _ => {
                     return Err(ContainerError::ConfigError(
                         "Must specify one of image_uri or dockerfile".to_string(),
-                    ))
+                    ));
                 }
             };
             // --------------------------------------------------------

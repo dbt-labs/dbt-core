@@ -1,9 +1,9 @@
 use dbt_common::io_args::IoArgs;
-use dbt_common::{fs_err, fsinfo, show_progress, show_warning, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, fs_err, fsinfo, show_progress, show_warning};
 use dbt_schemas::schemas::project::ProjectDbtCloudConfig;
 use reqwest_middleware::ClientBuilder;
 use reqwest_retry::{
-    policies::ExponentialBackoff as RetryExponentialBackoff, RetryTransientMiddleware,
+    RetryTransientMiddleware, policies::ExponentialBackoff as RetryExponentialBackoff,
 };
 use std::error::Error;
 use std::path::PathBuf;
@@ -77,9 +77,15 @@ pub async fn download_manifest_from_cloud(
     // Check if defer_env_id is specified and show warning
     if let Some(defer_env_id) = &dbt_cloud_config.context.defer_env_id {
         show_progress!(
-                io,
-                fsinfo!("WARNING".into(), format!("defer_env_id '{}' is specified but not yet supported - using prod/staging environment", defer_env_id))
-            );
+            io,
+            fsinfo!(
+                "WARNING".into(),
+                format!(
+                    "defer_env_id '{}' is specified but not yet supported - using prod/staging environment",
+                    defer_env_id
+                )
+            )
+        );
     }
 
     let project = match dbt_cloud_config.get_project_by_id(project_id.to_string().as_str()) {

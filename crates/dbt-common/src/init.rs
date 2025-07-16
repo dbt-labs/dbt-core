@@ -2,7 +2,7 @@
 #![allow(clippy::disallowed_methods)]
 
 use crate::pretty_string::{GREEN, YELLOW};
-use crate::{fs_err, profile_setup::ProfileSetup, ErrorCode, FsResult};
+use crate::{ErrorCode, FsResult, fs_err, profile_setup::ProfileSetup};
 use rust_embed::RustEmbed;
 use std::env;
 use std::fs;
@@ -193,7 +193,10 @@ pub fn run_init_workflow(
             ));
         }
 
-        log::info!("{} A dbt_project.yml already exists in this directory; skipping sample project creation.", YELLOW.apply_to("Warning"));
+        log::info!(
+            "{} A dbt_project.yml already exists in this directory; skipping sample project creation.",
+            YELLOW.apply_to("Warning")
+        );
 
         // Create or update .vscode/extensions.json even when skipping project creation
         create_or_update_vscode_extensions(Path::new("."))?;

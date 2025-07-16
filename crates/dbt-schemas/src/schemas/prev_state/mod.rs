@@ -1,8 +1,8 @@
-use super::{manifest::DbtManifest, RunResultsArtifact};
+use super::{RunResultsArtifact, manifest::DbtManifest};
 use crate::schemas::common::{DbtQuoting, ResolvedQuoting};
 use crate::schemas::manifest::nodes_from_dbt_manifest;
 use crate::schemas::{InternalDbtNode, Nodes};
-use dbt_common::{constants::DBT_MANIFEST_JSON, fs_err, stdfs, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, constants::DBT_MANIFEST_JSON, fs_err, stdfs};
 use std::fmt;
 use std::path::{Path, PathBuf};
 

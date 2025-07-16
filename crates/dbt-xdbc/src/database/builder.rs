@@ -14,7 +14,7 @@ use std::fmt;
 use url::Url;
 
 use crate::database::fingerprint_config;
-use crate::{builder::BuilderIter, Backend, Database, Driver};
+use crate::{Backend, Database, Driver, builder::BuilderIter};
 
 use super::Fingerprint;
 

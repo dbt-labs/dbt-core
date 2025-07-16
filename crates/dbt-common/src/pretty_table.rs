@@ -13,11 +13,11 @@ use arrow::{
 };
 use arrow_schema::{Field, Schema};
 use comfy_table::*;
-use comfy_table::{presets::UTF8_FULL_CONDENSED, Table};
+use comfy_table::{Table, presets::UTF8_FULL_CONDENSED};
 use term_size;
 
-use crate::fs_err;
 use crate::FsResult;
+use crate::fs_err;
 
 pub fn make_table_name<T: AsRef<str>>(catalog: T, schema: T, table: T) -> String {
     [catalog.as_ref(), schema.as_ref(), table.as_ref()].join(".")

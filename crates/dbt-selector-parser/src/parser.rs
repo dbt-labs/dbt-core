@@ -6,12 +6,12 @@
 use std::{collections::BTreeMap, str::FromStr};
 
 use dbt_common::{
-    err, fs_err,
+    ErrorCode, FsResult, err, fs_err,
     io_args::IoArgs,
     node_selector::{
-        parse_model_specifiers, IndirectSelection, MethodName, SelectExpression, SelectionCriteria,
+        IndirectSelection, MethodName, SelectExpression, SelectionCriteria, parse_model_specifiers,
     },
-    show_warning, ErrorCode, FsResult,
+    show_warning,
 };
 
 use dbt_schemas::schemas::selectors::{
@@ -353,9 +353,10 @@ mod tests {
         assert!(result.is_err());
         if let Err(e) = result {
             assert_eq!(e.code, ErrorCode::SelectorError);
-            assert!(e
-                .to_string()
-                .contains("MethodKey must have exactly one key-value pair"));
+            assert!(
+                e.to_string()
+                    .contains("MethodKey must have exactly one key-value pair")
+            );
         }
     }
 
@@ -458,9 +459,10 @@ mod tests {
         assert!(result.is_err());
         if let Err(e) = result {
             assert_eq!(e.code, ErrorCode::SelectorError);
-            assert!(e
-                .to_string()
-                .contains("Top level exclude not allowed in YAML selectors"));
+            assert!(
+                e.to_string()
+                    .contains("Top level exclude not allowed in YAML selectors")
+            );
         }
     }
 

@@ -1,6 +1,6 @@
 use clap::Parser;
 use dbt_test_containers::container::docker::{
-    fetch_container_logs, initialize_container, shutdown_container, ContainerConfig, PortBinding,
+    ContainerConfig, PortBinding, fetch_container_logs, initialize_container, shutdown_container,
 };
 use std::collections::HashMap;
 

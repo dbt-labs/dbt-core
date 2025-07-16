@@ -10,14 +10,14 @@ use arrow_schema::{ArrowError, Field, Schema};
 use dashmap::DashMap;
 use dbt_xdbc::{Connection, QueryCtx, Statement};
 use once_cell::sync::Lazy;
-use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::arrow::ArrowWriter;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::file::properties::WriterProperties;
 use regex::Regex;
 
 use std::collections::hash_map::DefaultHasher;
 use std::fmt;
-use std::fs::{self, create_dir_all, metadata, File};
+use std::fs::{self, File, create_dir_all, metadata};
 use std::hash::{Hash, Hasher};
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
@@ -62,7 +62,7 @@ fn compute_file_name(query_ctx: &QueryCtx) -> AdbcResult<String> {
                 return Err(AdbcError::with_message_and_status(
                     "Neither node id nor sql was set in the query context",
                     AdbcStatus::Internal,
-                ))
+                ));
             }
         },
     };

@@ -1,6 +1,6 @@
+use minijinja::Value;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::Object;
-use minijinja::Value;
 use minijinja::{Error as MinijinjaError, State};
 
 use std::rc::Rc;

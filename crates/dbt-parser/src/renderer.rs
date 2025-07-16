@@ -7,7 +7,7 @@ use dbt_common::constants::PARSING;
 use dbt_common::io_args::IoArgs;
 use dbt_common::tokiofs::read_to_string;
 use dbt_common::{
-    fs_err, show_error, show_progress, show_warning_soon_to_be_error, ErrorCode, FsError, FsResult,
+    ErrorCode, FsError, FsResult, fs_err, show_error, show_progress, show_warning_soon_to_be_error,
 };
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::listener::{DefaultListenerFactory, ListenerFactory};
@@ -19,10 +19,10 @@ use dbt_jinja_utils::refs_and_sources::RefsAndSources;
 use dbt_jinja_utils::serde::into_typed_with_jinja_error;
 use dbt_jinja_utils::silence_base_context;
 use dbt_jinja_utils::utils::render_sql;
+use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::common::{DbtChecksum, DbtQuoting, Hooks};
 use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::properties::GetConfig;
-use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::{DbtModel, InternalDbtNode, IntrospectionKind, Nodes};
 use dbt_schemas::state::{DbtAsset, DbtRuntimeConfig, ModelStatus};
 

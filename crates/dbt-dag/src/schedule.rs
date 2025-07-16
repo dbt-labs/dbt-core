@@ -241,19 +241,25 @@ mod tests {
         };
 
         // Check that standalone test is kept even though it has no dependencies
-        assert!(schedule
-            .sorted_nodes
-            .contains(&"test.project.standalone_test".to_string()));
+        assert!(
+            schedule
+                .sorted_nodes
+                .contains(&"test.project.standalone_test".to_string())
+        );
 
         // Check that model1 is kept because test1 depends on it
-        assert!(schedule
-            .sorted_nodes
-            .contains(&"model.project.model1".to_string()));
+        assert!(
+            schedule
+                .sorted_nodes
+                .contains(&"model.project.model1".to_string())
+        );
 
         // Check that test1 is kept
-        assert!(schedule
-            .sorted_nodes
-            .contains(&"test.project.test1".to_string()));
+        assert!(
+            schedule
+                .sorted_nodes
+                .contains(&"test.project.test1".to_string())
+        );
     }
 
     #[test]
@@ -306,17 +312,23 @@ mod tests {
         };
 
         // Check that model1 is kept because test1 and unit_test1 depend on it
-        assert!(schedule
-            .sorted_nodes
-            .contains(&"model.project.model1".to_string()));
+        assert!(
+            schedule
+                .sorted_nodes
+                .contains(&"model.project.model1".to_string())
+        );
 
         // Check that test1 is kept
-        assert!(schedule
-            .sorted_nodes
-            .contains(&"test.project.test1".to_string()));
+        assert!(
+            schedule
+                .sorted_nodes
+                .contains(&"test.project.test1".to_string())
+        );
 
-        assert!(schedule
-            .sorted_nodes
-            .contains(&"unit_test.project.unit_test1".to_string()));
+        assert!(
+            schedule
+                .sorted_nodes
+                .contains(&"unit_test.project.unit_test1".to_string())
+        );
     }
 }

@@ -1,6 +1,6 @@
+use minijinja::Value;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Object};
-use minijinja::Value;
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
 use std::rc::Rc;
 use std::sync::Arc;

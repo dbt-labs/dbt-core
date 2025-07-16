@@ -5,6 +5,7 @@ use serde_json::Value;
 use serde_with::skip_serializing_none;
 
 use crate::schemas::{
+    DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest,
     common::{
         DbtChecksum, DbtContract, DbtQuoting, Expect, FreshnessDefinition, Given, IncludeExclude,
         NodeDependsOn,
@@ -18,7 +19,6 @@ use crate::schemas::{
     properties::{ModelConstraint, UnitTestOverrides},
     ref_and_source::{DbtRef, DbtSourceWrapper},
     serde::StringOrInteger,
-    DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest,
 };
 
 #[skip_serializing_none]

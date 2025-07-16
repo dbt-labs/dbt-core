@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use dbt_schemas::schemas::{
-    common::DbtChecksum, manifest::DbtOperation, project::DbtProject, CommonAttributes,
+    CommonAttributes, common::DbtChecksum, manifest::DbtOperation, project::DbtProject,
 };
 
 pub fn resolve_operations(dbt_project: &DbtProject) -> (Vec<DbtOperation>, Vec<DbtOperation>) {

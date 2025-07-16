@@ -14,7 +14,7 @@ use std::fs;
 use std::io::{self, Write as _};
 use std::ops::DerefMut;
 use std::path::PathBuf;
-use std::sync::{mpsc, LazyLock, Mutex};
+use std::sync::{LazyLock, Mutex, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -970,7 +970,9 @@ mod tests {
             } {
                 thread::sleep(interval);
                 if start.elapsed() >= MAX_POLL_DURATION {
-                    panic!("SentBatchesHandle::poll_until(): timed out waiting for condition to be met.");
+                    panic!(
+                        "SentBatchesHandle::poll_until(): timed out waiting for condition to be met."
+                    );
                 }
             }
             start.elapsed()

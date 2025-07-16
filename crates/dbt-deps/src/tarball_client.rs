@@ -1,8 +1,8 @@
-use dbt_common::{fs_err, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, fs_err};
 use reqwest::{Client, StatusCode};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{
-    policies::ExponentialBackoff as RetryExponentialBackoff, RetryTransientMiddleware,
+    RetryTransientMiddleware, policies::ExponentialBackoff as RetryExponentialBackoff,
 };
 use std::{fs::File, io::Write, path::Path};
 

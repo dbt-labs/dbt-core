@@ -1,6 +1,6 @@
 use crate::schemas::common::DocsConfig;
 use crate::schemas::common::Versions;
-use crate::schemas::serde::{bool_or_string_bool, string_or_array, FloatOrString};
+use crate::schemas::serde::{FloatOrString, bool_or_string_bool, string_or_array};
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::Verbatim;
 use serde::de::DeserializeOwned;
@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 
-use super::unit_test_properties::UnitTestProperties;
 use super::DataTestProperties;
 use super::ExposureProperties;
 use super::MetricsProperties;
@@ -18,6 +17,7 @@ use super::SeedProperties;
 use super::SemanticModelsProperties;
 use super::SnapshotProperties;
 use super::SourceProperties;
+use super::unit_test_properties::UnitTestProperties;
 
 #[derive(Deserialize, Debug)]
 pub struct DbtPropertiesFileValues {

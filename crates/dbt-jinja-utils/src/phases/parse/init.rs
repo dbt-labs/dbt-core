@@ -7,7 +7,7 @@ use std::{
 
 use chrono::DateTime;
 use chrono_tz::Tz;
-use dbt_common::{fs_err, io_args::IoArgs, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, fs_err, io_args::IoArgs};
 use dbt_fusion_adapter::parse::adapter::create_parse_adapter;
 use dbt_schemas::{
     schemas::{
@@ -17,8 +17,8 @@ use dbt_schemas::{
     state::DbtVars,
 };
 use minijinja::{
-    dispatch_object::THREAD_LOCAL_DEPENDENCIES, macro_unit::MacroUnit,
-    value::Value as MinijinjaValue, UndefinedBehavior,
+    UndefinedBehavior, dispatch_object::THREAD_LOCAL_DEPENDENCIES, macro_unit::MacroUnit,
+    value::Value as MinijinjaValue,
 };
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
 

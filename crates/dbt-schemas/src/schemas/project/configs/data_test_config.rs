@@ -3,20 +3,20 @@ use dbt_serde_yaml::{JsonSchema, ShouldBe};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::skip_serializing_none;
-use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
+use std::collections::btree_map::Iter;
 
 use crate::default_to;
 use crate::schemas::common::{DbtQuoting, Severity, StoreFailuresAs};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfigLegacy};
 use crate::schemas::project::configs::common::{
-    default_meta_and_tags, default_quoting, RedshiftNodeConfig,
+    RedshiftNodeConfig, default_meta_and_tags, default_quoting,
 };
 use crate::schemas::project::{
     BigQueryNodeConfig, DatabricksNodeConfig, DefaultTo, IterChildren, SnowflakeNodeConfig,
 };
-use crate::schemas::serde::{bool_or_string_bool, u64_or_string_u64, StringOrArrayOfStrings};
+use crate::schemas::serde::{StringOrArrayOfStrings, bool_or_string_bool, u64_or_string_u64};
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
@@ -460,28 +460,28 @@ impl DefaultTo<DataTestConfig> for DataTestConfig {
 
     fn default_to(&mut self, parent: &DataTestConfig) {
         let DataTestConfig {
-            ref mut alias,
-            ref mut database,
-            ref mut enabled,
-            ref mut error_if,
-            ref mut fail_calc,
-            ref mut group,
-            ref mut limit,
-            ref mut meta,
-            ref mut schema,
-            ref mut severity,
-            ref mut store_failures,
-            ref mut store_failures_as,
-            ref mut tags,
-            ref mut warn_if,
-            ref mut quoting,
-            ref mut where_,
-            ref mut static_analysis,
+            alias,
+            database,
+            enabled,
+            error_if,
+            fail_calc,
+            group,
+            limit,
+            meta,
+            schema,
+            severity,
+            store_failures,
+            store_failures_as,
+            tags,
+            warn_if,
+            quoting,
+            where_,
+            static_analysis,
             // Adapter specific configs
-            snowflake_node_config: ref mut snowflake_config,
-            bigquery_node_config: ref mut bigquery_config,
-            databricks_node_config: ref mut databricks_config,
-            redshift_node_config: ref mut redshift_config,
+            snowflake_node_config: snowflake_config,
+            bigquery_node_config: bigquery_config,
+            databricks_node_config: databricks_config,
+            redshift_node_config: redshift_config,
         } = self;
 
         // Handle adapter-specific configs

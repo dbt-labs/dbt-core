@@ -1,7 +1,7 @@
 use crate::information_schema::InformationSchema;
 use crate::relation_object::{RelationObject, StaticBaseRelation};
 
-use dbt_common::{current_function_name, fs_err, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, current_function_name, fs_err};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::{
@@ -9,7 +9,7 @@ use dbt_schemas::schemas::relations::base::{
 };
 use minijinja::arg_utils::check_num_args;
 use minijinja::{
-    arg_utils::ArgParser, Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value,
+    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value, arg_utils::ArgParser,
 };
 
 use std::any::Any;
@@ -239,13 +239,13 @@ impl BaseRelation for SnowflakeRelation {
             // Warning if transient is explicitly set to true
             if transient_explicitly_set_true {
                 eprintln!(
-                            "Warning: Iceberg format relations cannot be transient. Please remove either \
+                    "Warning: Iceberg format relations cannot be transient. Please remove either \
                             the transient or iceberg config options from {}.{}.{}. If left unmodified, \
                             dbt will ignore 'transient'.",
-                            self.path.database.as_deref().unwrap_or(""),
-                            self.path.schema.as_deref().unwrap_or(""),
-                            self.path.identifier.as_deref().unwrap_or("")
-                        );
+                    self.path.database.as_deref().unwrap_or(""),
+                    self.path.schema.as_deref().unwrap_or(""),
+                    self.path.identifier.as_deref().unwrap_or("")
+                );
             }
             return Ok(Value::from("iceberg"));
         }

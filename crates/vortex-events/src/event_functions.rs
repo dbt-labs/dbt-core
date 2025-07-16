@@ -1,13 +1,13 @@
 use dashmap::DashMap;
 use dbt_common::{
-    stats::{NodeStatus, Stat},
     FsResult,
+    stats::{NodeStatus, Stat},
 };
 use dbt_env::env::InternalEnv;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_schemas::schemas::{
-    manifest::{DbtManifest, DbtNode},
     InternalDbtNodeAttributes,
+    manifest::{DbtManifest, DbtNode},
 };
 use proto_rust::v1::events::fusion::CloudInvocation;
 use proto_rust::v1::public::events::fusion::{
@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use vortex_client::client::{log_proto, log_proto_and_shutdown, ProducerError};
+use vortex_client::client::{ProducerError, log_proto, log_proto_and_shutdown};
 
 pub fn invocation_start_event(
     invocation_id: String,

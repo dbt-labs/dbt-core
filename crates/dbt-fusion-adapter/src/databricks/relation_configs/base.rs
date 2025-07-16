@@ -1,3 +1,4 @@
+use crate::databricks::relation_configs::DatabricksRelationConfig;
 use crate::databricks::relation_configs::column_comments::ColumnCommentsConfig;
 use crate::databricks::relation_configs::comment::CommentConfig;
 use crate::databricks::relation_configs::constraints::ConstraintsConfig;
@@ -7,15 +8,14 @@ use crate::databricks::relation_configs::query::QueryConfig;
 use crate::databricks::relation_configs::refresh::RefreshConfig;
 use crate::databricks::relation_configs::tags::TagsConfig;
 use crate::databricks::relation_configs::tblproperties::TblPropertiesConfig;
-use crate::databricks::relation_configs::DatabricksRelationConfig;
 
-use crate::funcs::none_value;
 use crate::AdapterResult;
+use crate::funcs::none_value;
 use dbt_agate::AgateTable;
+use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::relations::relation_configs::{
     BaseRelationChangeSet, BaseRelationConfig, ComponentConfig, RelationChangeSet,
 };
-use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use minijinja::arg_utils::ArgParser;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Object};

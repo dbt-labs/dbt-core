@@ -1,5 +1,5 @@
 use dbt_common::io_args::IoArgs;
-use dbt_common::{err, fs_err, stdfs, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, err, fs_err, stdfs};
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_schemas::schemas::packages::{
     DbtPackageLock, DbtPackages, DbtPackagesLock, GitPackageLock, HubPackageLock, LocalPackageLock,

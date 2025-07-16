@@ -12,7 +12,7 @@ use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
 
 use crate::checksums::SORTED_CDN_DRIVER_CHECKSUMS;
 use crate::{
-    Backend, BIGQUERY_DRIVER_VERSION, DATABRICKS_DRIVER_VERSION, POSTGRES_DRIVER_VERSION,
+    BIGQUERY_DRIVER_VERSION, Backend, DATABRICKS_DRIVER_VERSION, POSTGRES_DRIVER_VERSION,
     SNOWFLAKE_DRIVER_VERSION,
 };
 
@@ -47,7 +47,10 @@ impl fmt::Display for InstallError {
         match self {
             InstallError::Http(error) => write!(f, "HTTP error: {error}"),
             InstallError::GetRandom(error) => write!(f, "getrandom error: {error}"),
-            InstallError::DetermineCacheDir => write!(f, "Unable to determine cache directory for ADBC driver installation in this platform."),
+            InstallError::DetermineCacheDir => write!(
+                f,
+                "Unable to determine cache directory for ADBC driver installation in this platform."
+            ),
 
             InstallError::Io(error) => write!(f, "IO error: {error}"),
             InstallError::ZstdDecompress(code) => {
@@ -62,7 +65,9 @@ impl fmt::Display for InstallError {
                     error
                 )
             }
-            InstallError::CreateFIle(error, path_buf) => write!(f, "Unable to create file {}: {}", path_buf.display(), error),
+            InstallError::CreateFIle(error, path_buf) => {
+                write!(f, "Unable to create file {}: {}", path_buf.display(), error)
+            }
             InstallError::WriteFile(error) => write!(f, "Unable to write file: {error}"),
             InstallError::SyncFile(error) => write!(f, "Unable to sync file: {error}"),
             InstallError::RenameFile(error) => write!(f, "Unable to rename file: {error}"),

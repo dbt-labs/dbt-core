@@ -1,11 +1,11 @@
 use dbt_common::current_function_name;
 use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize};
+use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
 use minijinja::{
     arg_utils::ArgParser,
     listener::RenderingEventListener,
     value::{Object, Value as MinijinjaValue},
 };
-use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
 use serde::{Deserialize, Serialize};
 use std::{rc::Rc, sync::Arc};
 use strum::{Display, EnumString};
@@ -498,9 +498,11 @@ mod tests {
             MinijinjaValue::from("int64")
         );
         // granularity should return None for range config
-        assert!(range_config
-            .get_value(&MinijinjaValue::from("granularity"))
-            .is_none());
+        assert!(
+            range_config
+                .get_value(&MinijinjaValue::from("granularity"))
+                .is_none()
+        );
         assert_eq!(
             range_config
                 .get_value(&MinijinjaValue::from("copy_partitions"))
@@ -509,11 +511,15 @@ mod tests {
         );
 
         // Test that invalid fields return None
-        assert!(time_config
-            .get_value(&MinijinjaValue::from("invalid_field"))
-            .is_none());
-        assert!(range_config
-            .get_value(&MinijinjaValue::from("invalid_field"))
-            .is_none());
+        assert!(
+            time_config
+                .get_value(&MinijinjaValue::from("invalid_field"))
+                .is_none()
+        );
+        assert!(
+            range_config
+                .get_value(&MinijinjaValue::from("invalid_field"))
+                .is_none()
+        );
     }
 }

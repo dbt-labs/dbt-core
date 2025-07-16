@@ -5,8 +5,8 @@ use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::skip_serializing_none;
-use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
+use std::collections::btree_map::Iter;
 
 use super::omissible_utils::handle_omissible_override;
 
@@ -22,15 +22,15 @@ use crate::schemas::common::{DocsConfig, OnConfigurationChange};
 use crate::schemas::common::{Hooks, OnSchemaChange};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfigLegacy};
+use crate::schemas::project::configs::common::BigQueryNodeConfig;
+use crate::schemas::project::configs::common::DatabricksNodeConfig;
+use crate::schemas::project::configs::common::RedshiftNodeConfig;
+use crate::schemas::project::configs::common::SnowflakeNodeConfig;
 use crate::schemas::project::configs::common::default_column_types;
 use crate::schemas::project::configs::common::default_hooks;
 use crate::schemas::project::configs::common::default_meta_and_tags;
 use crate::schemas::project::configs::common::default_quoting;
 use crate::schemas::project::configs::common::default_to_grants;
-use crate::schemas::project::configs::common::BigQueryNodeConfig;
-use crate::schemas::project::configs::common::DatabricksNodeConfig;
-use crate::schemas::project::configs::common::RedshiftNodeConfig;
-use crate::schemas::project::configs::common::SnowflakeNodeConfig;
 use crate::schemas::project::dbt_project::DefaultTo;
 use crate::schemas::project::dbt_project::IterChildren;
 use crate::schemas::properties::ModelFreshness;
@@ -591,55 +591,55 @@ impl DefaultTo<ModelConfig> for ModelConfig {
         // Handle simple fields - using a pattern that ensures all fields are covered
         let ModelConfig {
             // Custom fields (already handled above)
-            ref mut post_hook,
-            ref mut pre_hook,
-            ref mut meta,
-            ref mut tags,
-            ref mut quoting,
+            post_hook,
+            pre_hook,
+            meta,
+            tags,
+            quoting,
 
             // Flattened configs (already handled above)
-            snowflake_node_config: ref mut snowflake_model_config,
-            bigquery_node_config: ref mut bigquery_model_config,
-            databricks_node_config: ref mut databricks_model_config,
-            redshift_node_config: ref mut redshift_model_config,
+            snowflake_node_config: snowflake_model_config,
+            bigquery_node_config: bigquery_model_config,
+            databricks_node_config: databricks_model_config,
+            redshift_node_config: redshift_model_config,
 
             // Simple fields (handle with macro)
-            ref mut enabled,
-            ref mut alias,
-            ref mut schema,
-            ref mut database,
-            ref mut catalog_name,
-            ref mut group,
-            ref mut materialized,
-            ref mut incremental_strategy,
-            ref mut incremental_predicates,
-            ref mut batch_size,
-            ref mut lookback,
-            ref mut begin,
-            ref mut persist_docs,
-            ref mut column_types,
-            ref mut full_refresh,
-            ref mut unique_key,
-            ref mut on_schema_change,
-            ref mut on_configuration_change,
-            ref mut grants,
-            ref mut packages,
-            ref mut docs,
-            ref mut contract,
-            ref mut event_time,
-            ref mut concurrent_batches,
-            ref mut merge_update_columns,
-            ref mut merge_exclude_columns,
-            ref mut access,
-            ref mut table_format,
-            ref mut static_analysis,
-            ref mut freshness,
-            ref mut sql_header,
-            ref mut auto_refresh,
-            ref mut backup,
-            ref mut bind,
-            ref mut location,
-            ref mut predicates,
+            enabled,
+            alias,
+            schema,
+            database,
+            catalog_name,
+            group,
+            materialized,
+            incremental_strategy,
+            incremental_predicates,
+            batch_size,
+            lookback,
+            begin,
+            persist_docs,
+            column_types,
+            full_refresh,
+            unique_key,
+            on_schema_change,
+            on_configuration_change,
+            grants,
+            packages,
+            docs,
+            contract,
+            event_time,
+            concurrent_batches,
+            merge_update_columns,
+            merge_exclude_columns,
+            access,
+            table_format,
+            static_analysis,
+            freshness,
+            sql_header,
+            auto_refresh,
+            backup,
+            bind,
+            location,
+            predicates,
         } = self;
 
         // Handle flattened configs

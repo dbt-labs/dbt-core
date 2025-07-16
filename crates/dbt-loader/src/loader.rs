@@ -24,8 +24,8 @@ use dbt_common::error::LiftableResult;
 use project::DbtProject;
 
 use dbt_common::stdfs::last_modified;
-use dbt_common::{ectx, err, show_progress, with_progress, ErrorCode};
-use dbt_common::{fs_err, FsResult};
+use dbt_common::{ErrorCode, ectx, err, show_progress, with_progress};
+use dbt_common::{FsResult, fs_err};
 use dbt_schemas::schemas::project::{self, DbtProjectSimplified, ProjectDbtCloudConfig};
 use dbt_schemas::state::{DbtAsset, DbtPackage, DbtState, DbtVars, ResourcePathKind};
 

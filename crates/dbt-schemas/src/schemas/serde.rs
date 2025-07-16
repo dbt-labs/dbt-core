@@ -3,9 +3,8 @@ use std::str::FromStr;
 
 use dbt_serde_yaml::JsonSchema;
 use serde::{
-    self,
+    self, Deserialize, Deserializer, Serialize,
     de::{self, DeserializeOwned},
-    Deserialize, Deserializer, Serialize,
 };
 use serde_json::Value;
 
@@ -198,18 +197,10 @@ impl PartialEq for StringOrArrayOfStrings {
                 StringOrArrayOfStrings::ArrayOfStrings(a2),
             ) => a1 == a2,
             (StringOrArrayOfStrings::String(s), StringOrArrayOfStrings::ArrayOfStrings(a)) => {
-                if a.len() == 1 {
-                    a[0] == *s
-                } else {
-                    false
-                }
+                if a.len() == 1 { a[0] == *s } else { false }
             }
             (StringOrArrayOfStrings::ArrayOfStrings(a), StringOrArrayOfStrings::String(s)) => {
-                if a.len() == 1 {
-                    a[0] == *s
-                } else {
-                    false
-                }
+                if a.len() == 1 { a[0] == *s } else { false }
             }
         }
     }

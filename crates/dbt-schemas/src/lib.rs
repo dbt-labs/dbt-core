@@ -60,8 +60,8 @@ pub mod schemas {
         pub use exposure::DbtExposure;
         pub use group::DbtGroup;
         pub use manifest::{
-            build_manifest, nodes_from_dbt_manifest, BaseMetadata, DbtManifest, DbtNode,
-            ManifestMetadata,
+            BaseMetadata, DbtManifest, DbtNode, ManifestMetadata, build_manifest,
+            nodes_from_dbt_manifest,
         };
         pub use manifest_nodes::{
             ManifestDataTest, ManifestModel, ManifestSeed, ManifestSnapshot, ManifestSource,

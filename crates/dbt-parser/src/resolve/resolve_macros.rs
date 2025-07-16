@@ -1,6 +1,6 @@
-use dbt_common::io_args::IoArgs;
 use dbt_common::ErrorCode;
 use dbt_common::FsResult;
+use dbt_common::io_args::IoArgs;
 use dbt_common::{err, fs_err, stdfs};
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_schemas::schemas::macros::DbtDocsMacro;
@@ -213,7 +213,8 @@ pub fn resolve_macros(
                     _ => {
                         return err!(
                             ErrorCode::MacroSyntaxError,
-                            "Refs, sources, configs and other resources are not allowed in macros. Path: {}", macro_file.display()
+                            "Refs, sources, configs and other resources are not allowed in macros. Path: {}",
+                            macro_file.display()
                         );
                     }
                 }

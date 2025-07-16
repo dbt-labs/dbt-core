@@ -1,7 +1,7 @@
+use crate::FsResult;
 use crate::constants::EXECUTING;
 use crate::io_args::IoArgs;
 use crate::pretty_string::remove_ansi_codes;
-use crate::FsResult;
 use clap::ValueEnum;
 use log::{LevelFilter, Metadata, Record};
 use serde::{Deserialize, Serialize};
@@ -461,7 +461,11 @@ impl std::fmt::Debug for FsLogConfig {
         write!(
             f,
             "FsLogConfig {{ log_format: {:?}, log_level: {:?}, file_log_path: {:?}, file_log_level: {:?}, file_log_format: {:?} }}",
-            self.log_format, self.log_level, self.file_log_path, self.file_log_level, self.file_log_format
+            self.log_format,
+            self.log_level,
+            self.file_log_path,
+            self.file_log_level,
+            self.file_log_format
         )
     }
 }

@@ -4,8 +4,8 @@ use std::{fmt, marker::PhantomData};
 use dashmap::DashMap;
 use minijinja::Value;
 use serde::{
-    de::{value::UnitDeserializer, Visitor},
     Deserialize, Deserializer, Serialize,
+    de::{Visitor, value::UnitDeserializer},
 };
 
 /// Converts a serde_json::Value to a minijinja::Value
@@ -221,7 +221,7 @@ where
         T::schema_name()
     }
 
-    fn json_schema(generator: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+    fn json_schema(generator: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
         T::json_schema(generator)
     }
 
@@ -235,7 +235,7 @@ where
 
     #[doc(hidden)]
     fn _schemars_private_non_optional_json_schema(
-        generator: &mut schemars::gen::SchemaGenerator,
+        generator: &mut schemars::r#gen::SchemaGenerator,
     ) -> schemars::schema::Schema {
         T::_schemars_private_non_optional_json_schema(generator)
     }
@@ -352,17 +352,19 @@ mod tests {
             field: 
         "#;
         let err = dbt_serde_yaml::from_str::<TestStruct>(yaml).unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("invalid type: unit value, expected a string"));
+        assert!(
+            err.to_string()
+                .contains("invalid type: unit value, expected a string")
+        );
 
         let yaml = r#"
             field: null
         "#;
         let err = dbt_serde_yaml::from_str::<TestStruct>(yaml).unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("invalid type: unit value, expected a string"));
+        assert!(
+            err.to_string()
+                .contains("invalid type: unit value, expected a string")
+        );
     }
 
     #[test]

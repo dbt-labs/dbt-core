@@ -4,7 +4,7 @@ use crate::utils::{get_version_hash, strip_version_hash};
 use crate::{internal_err, make_internal_err};
 use datafusion::sql::{ResolvedTableReference, TableReference};
 use itertools::Itertools;
-use serde::{de, Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, de};
 use std::path::PathBuf;
 
 pub use dbt_ident::{Ident, Identifier};

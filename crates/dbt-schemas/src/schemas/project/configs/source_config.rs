@@ -3,8 +3,8 @@ use dbt_serde_yaml::{JsonSchema, ShouldBe};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::skip_serializing_none;
-use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
+use std::collections::btree_map::Iter;
 
 use crate::default_to;
 use crate::schemas::common::{DbtQuoting, FreshnessDefinition};
@@ -16,7 +16,7 @@ use crate::schemas::project::configs::common::RedshiftNodeConfig;
 use crate::schemas::project::configs::common::SnowflakeNodeConfig;
 use crate::schemas::project::configs::common::{default_meta_and_tags, default_quoting};
 use crate::schemas::project::{DefaultTo, IterChildren};
-use crate::schemas::serde::{bool_or_string_bool, u64_or_string_u64, StringOrArrayOfStrings};
+use crate::schemas::serde::{StringOrArrayOfStrings, bool_or_string_bool, u64_or_string_u64};
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
@@ -414,19 +414,19 @@ impl DefaultTo<SourceConfig> for SourceConfig {
 
     fn default_to(&mut self, parent: &SourceConfig) {
         let SourceConfig {
-            ref mut enabled,
-            ref mut event_time,
-            ref mut meta,
-            ref mut freshness,
-            ref mut tags,
-            ref mut quoting,
-            ref mut loaded_at_field,
-            ref mut loaded_at_query,
-            ref mut static_analysis,
-            snowflake_node_config: ref mut snowflake_source_config,
-            bigquery_node_config: ref mut bigquery_source_config,
-            databricks_node_config: ref mut databricks_source_config,
-            redshift_node_config: ref mut redshift_source_config,
+            enabled,
+            event_time,
+            meta,
+            freshness,
+            tags,
+            quoting,
+            loaded_at_field,
+            loaded_at_query,
+            static_analysis,
+            snowflake_node_config: snowflake_source_config,
+            bigquery_node_config: bigquery_source_config,
+            databricks_node_config: databricks_source_config,
+            redshift_node_config: redshift_source_config,
         } = self;
 
         // Handle flattened configs

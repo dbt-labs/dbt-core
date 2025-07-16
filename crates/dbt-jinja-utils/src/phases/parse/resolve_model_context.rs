@@ -6,35 +6,35 @@ use std::{
     path::PathBuf,
     rc::Rc,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
     },
 };
 
 use chrono::TimeZone;
 use chrono_tz::{Europe::London, Tz};
-use dbt_common::{io_args::StaticAnalysisKind, serde_utils::convert_json_to_map, FsResult};
+use dbt_common::{FsResult, io_args::StaticAnalysisKind, serde_utils::convert_json_to_map};
 use dbt_frontend_common::error::CodeLocation;
 use dbt_fusion_adapter::{load_store::ResultStore, relation_object::create_relation};
 use dbt_schemas::schemas::{
+    DbtModelAttr, InternalDbtNode, IntrospectionKind,
     common::{Access, DbtMaterialization, ResolvedQuoting},
     project::{DefaultTo, ModelConfig},
-    DbtModelAttr, InternalDbtNode, IntrospectionKind,
 };
 use dbt_schemas::{
     dbt_types::RelationType,
     schemas::{
-        common::{DbtChecksum, DbtQuoting, NodeDependsOn},
         CommonAttributes, DbtModel, NodeBaseAttributes,
+        common::{DbtChecksum, DbtQuoting, NodeDependsOn},
     },
     state::DbtRuntimeConfig,
 };
 use minijinja::{
+    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State,
     arg_utils::ArgParser,
     constants::TARGET_UNIQUE_ID,
     listener::RenderingEventListener,
     value::{Object, ObjectRepr, Value as MinijinjaValue, ValueKind},
-    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State,
 };
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
 

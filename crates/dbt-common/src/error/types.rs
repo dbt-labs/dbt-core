@@ -1,7 +1,7 @@
 use crate::{
     error::{
         code_location::AbstractLocation,
-        name_candidate::{format_candidates, NameCandidate},
+        name_candidate::{NameCandidate, format_candidates},
     },
     is_sdf_debug,
 };
@@ -19,7 +19,7 @@ use std::{
 
 use crate::io_utils::find_enclosed_substring;
 
-use super::{code_location::MiniJinjaErrorWrapper, preprocessor_location::MacroSpan, ErrorCode};
+use super::{ErrorCode, code_location::MiniJinjaErrorWrapper, preprocessor_location::MacroSpan};
 
 pub type FsResult<T, E = Box<FsError>> = Result<T, E>;
 

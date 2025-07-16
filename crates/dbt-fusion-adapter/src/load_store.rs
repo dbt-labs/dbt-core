@@ -1,7 +1,7 @@
 use minijinja::arg_utils::ArgParser;
 use minijinja::value::Value;
 use minijinja::{
-    missing_argument, too_many_arguments, Error as MinijinjaError, ErrorKind as MinijinjaErrorKind,
+    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, missing_argument, too_many_arguments,
 };
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -25,7 +25,9 @@ impl ResultStore {
     }
 
     /// Returns a callable function that stores results in the internal map
-    pub fn store_result(&self) -> impl Fn(&[Value]) -> Result<Value, MinijinjaError> + Clone {
+    pub fn store_result(
+        &self,
+    ) -> impl Fn(&[Value]) -> Result<Value, MinijinjaError> + Clone + use<> {
         let store = self.clone();
         move |args: &[Value]| {
             let mut args = ArgParser::new(args, None);
@@ -66,7 +68,9 @@ impl ResultStore {
     }
 
     /// Returns a callable function that loads results from the internal map
-    pub fn load_result(&self) -> impl Fn(&[Value]) -> Result<Value, MinijinjaError> + Clone {
+    pub fn load_result(
+        &self,
+    ) -> impl Fn(&[Value]) -> Result<Value, MinijinjaError> + Clone + use<> {
         let store = self.clone();
         move |args: &[Value]| {
             let mut args: ArgParser = ArgParser::new(args, None);
@@ -107,7 +111,9 @@ impl ResultStore {
     }
 
     /// Returns a callable function that stores raw results in the internal map
-    pub fn store_raw_result(&self) -> impl Fn(&[Value]) -> Result<Value, MinijinjaError> + Clone {
+    pub fn store_raw_result(
+        &self,
+    ) -> impl Fn(&[Value]) -> Result<Value, MinijinjaError> + Clone + use<> {
         let store = self.clone();
         move |args: &[Value]| {
             let mut args = ArgParser::new(args, None);

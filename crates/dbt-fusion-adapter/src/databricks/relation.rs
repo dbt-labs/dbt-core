@@ -1,6 +1,6 @@
 use crate::relation_object::{RelationObject, StaticBaseRelation};
 
-use dbt_common::{fs_err, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath,
 };

@@ -188,7 +188,7 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
 
     /// Valid snapshot target.
     fn valid_snapshot_target(&self, state: &State, args: &[Value])
-        -> Result<Value, MinijinjaError>;
+    -> Result<Value, MinijinjaError>;
 
     /// Assert valid snapshot target given strategy.
     fn assert_valid_snapshot_target_given_strategy(
@@ -343,7 +343,7 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
 
     /// compare_dbr_version
     fn compare_dbr_version(&self, _state: &State, _args: &[Value])
-        -> Result<Value, MinijinjaError>;
+    -> Result<Value, MinijinjaError>;
 
     /// compute_external_path
     fn compute_external_path(
@@ -401,7 +401,7 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
 
     /// get_relation_config
     fn get_relation_config(&self, _state: &State, _args: &[Value])
-        -> Result<Value, MinijinjaError>;
+    -> Result<Value, MinijinjaError>;
 
     /// get_config_from_model
     fn get_config_from_model(

@@ -1,7 +1,8 @@
 use dbt_common::io_args::IoArgs;
 use dbt_common::{
+    ErrorCode, FsResult,
     constants::{DBT_DEPENDENCIES_YML, DBT_PACKAGES_YML},
-    err, fs_err, show_warning, stdfs, ErrorCode, FsResult,
+    err, fs_err, show_warning, stdfs,
 };
 use dbt_jinja_utils::serde::{from_yaml_error, value_from_file};
 use std::{
@@ -19,7 +20,7 @@ use dbt_schemas::schemas::{
     profiles::{DbConfig, DbTargets, DbtProfilesIntermediate},
 };
 use fs_deps::utils::get_local_package_full_path;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::{fs::metadata, io, time::SystemTime};
 
 use walkdir::WalkDir;

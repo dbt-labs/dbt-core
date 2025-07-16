@@ -6,13 +6,13 @@ use adbc_core::{
 };
 use arrow_array::RecordBatch;
 use arrow_schema::{Schema, SchemaRef};
-use dbt_common::pretty_table::{pretty_data_table, DisplayFormat};
-use dialoguer::{theme::ColorfulTheme, BasicHistory, Input};
+use dbt_common::pretty_table::{DisplayFormat, pretty_data_table};
+use dialoguer::{BasicHistory, Input, theme::ColorfulTheme};
 
 use crate::{
-    bigquery, connection,
+    Backend, Connection, Database, Driver, QueryCtx, bigquery, connection,
     database::{self, LogLevel},
-    driver, snowflake, Backend, Connection, Database, Driver, QueryCtx,
+    driver, snowflake,
 };
 
 pub struct ReplState {
@@ -269,7 +269,7 @@ pub async fn run_repl(backend_str: &str) -> Result<()> {
             return Err(Error::with_message_and_status(
                 format!("Unsupported backend: {backend_str}"),
                 adbc_core::error::Status::InvalidArguments,
-            ))
+            ));
         }
     };
 
@@ -318,7 +318,9 @@ pub async fn run_repl(backend_str: &str) -> Result<()> {
                 println!("  <query>         - Execute SQL query");
                 println!("  :show-schema    - Show current schema");
                 println!("  :show-batch     - Show current batch");
-                println!("  :move <int>     - Move current batch pointer. Negative values move backwards, positive values move forwards.");
+                println!(
+                    "  :move <int>     - Move current batch pointer. Negative values move backwards, positive values move forwards."
+                );
                 println!("  :prev           - Move to previous batch");
                 println!("  :next           - Advance to next batch");
                 println!("  :reload         - Reload the xdbc driver");

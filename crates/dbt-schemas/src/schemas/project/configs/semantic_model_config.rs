@@ -1,12 +1,12 @@
 use dbt_serde_yaml::{JsonSchema, ShouldBe};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-use std::collections::{btree_map::Iter, BTreeMap};
+use std::collections::{BTreeMap, btree_map::Iter};
 
 use crate::{
     default_to,
     schemas::{
-        project::{configs::common::default_meta_and_tags, DefaultTo, IterChildren},
+        project::{DefaultTo, IterChildren, configs::common::default_meta_and_tags},
         serde::StringOrArrayOfStrings,
     },
 };
@@ -67,10 +67,10 @@ impl DefaultTo<SemanticModelConfig> for SemanticModelConfig {
 
     fn default_to(&mut self, parent: &SemanticModelConfig) {
         let SemanticModelConfig {
-            ref mut enabled,
-            ref mut group,
-            ref mut meta,
-            ref mut tags,
+            enabled,
+            group,
+            meta,
+            tags,
         } = self;
 
         #[allow(unused, clippy::let_unit_value)]

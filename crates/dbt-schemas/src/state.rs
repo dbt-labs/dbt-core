@@ -8,6 +8,7 @@ use std::{
 };
 
 use crate::schemas::{
+    DbtSource, InternalDbtNodeAttributes, Nodes,
     common::{DbtQuoting, ResolvedQuoting},
     macros::{DbtDocsMacro, DbtMacro},
     manifest::DbtOperation,
@@ -19,13 +20,12 @@ use crate::schemas::{
     relations::base::{BaseRelation, RelationPattern},
     selectors::ResolvedSelector,
     serde::{FloatOrString, StringOrArrayOfStrings},
-    DbtSource, InternalDbtNodeAttributes, Nodes,
 };
 use blake3::Hasher;
 use chrono::{DateTime, Local, Utc};
-use dbt_common::{fs_err, serde_utils::convert_json_to_map, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, fs_err, serde_utils::convert_json_to_map};
 use minijinja::compiler::parser::materialization_macro_name;
-use minijinja::{value::Object, MacroSpans, Value as MinijinjaValue};
+use minijinja::{MacroSpans, Value as MinijinjaValue, value::Object};
 use serde::Deserialize;
 use serde::Serialize;
 use std::fmt;
@@ -130,7 +130,13 @@ impl fmt::Display for DbtProfile {
         write!(
             f,
             "DbtProfile {{ profile: {}, target: {}, db_config: {:?}, schema: {}, database: {} , path: {}, threads: {:?}}}",
-            self.profile, self.target, self.db_config, self.schema, self.database, self.relative_profile_path.display(), self.threads,
+            self.profile,
+            self.target,
+            self.db_config,
+            self.schema,
+            self.database,
+            self.relative_profile_path.display(),
+            self.threads,
         )
     }
 }

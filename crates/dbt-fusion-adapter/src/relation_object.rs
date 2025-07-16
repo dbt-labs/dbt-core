@@ -1,12 +1,12 @@
 use dbt_common::{FsError, FsResult};
 use dbt_schemas::dbt_types::RelationType;
+use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::relations::base::{BaseRelation, TableFormat};
-use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use minijinja::arg_utils::ArgParser;
 use minijinja::value::{Enumerator, Object, ValueKind};
-use minijinja::{listener::RenderingEventListener, Value};
 use minijinja::{Error as MinijinjaError, State};
+use minijinja::{Value, listener::RenderingEventListener};
 use serde::Deserialize;
 
 use crate::bigquery::relation::BigqueryRelation;

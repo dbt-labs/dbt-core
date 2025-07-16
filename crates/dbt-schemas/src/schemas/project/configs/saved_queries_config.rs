@@ -1,4 +1,4 @@
-use std::collections::{btree_map::Iter, BTreeMap};
+use std::collections::{BTreeMap, btree_map::Iter};
 
 use dbt_serde_yaml::{JsonSchema, ShouldBe};
 use serde::{Deserialize, Serialize};
@@ -7,8 +7,8 @@ use serde_with::skip_serializing_none;
 use crate::{
     default_to,
     schemas::{
-        project::{configs::common::default_meta_and_tags, DefaultTo, IterChildren},
-        serde::{bool_or_string_bool, StringOrArrayOfStrings},
+        project::{DefaultTo, IterChildren, configs::common::default_meta_and_tags},
+        serde::{StringOrArrayOfStrings, bool_or_string_bool},
     },
 };
 
@@ -104,13 +104,13 @@ impl DefaultTo<SavedQueriesConfig> for SavedQueriesConfig {
 
     fn default_to(&mut self, parent: &SavedQueriesConfig) {
         let SavedQueriesConfig {
-            ref mut cache,
-            ref mut enabled,
-            ref mut export_as,
-            ref mut schema,
-            ref mut group,
-            ref mut meta,
-            ref mut tags,
+            cache,
+            enabled,
+            export_as,
+            schema,
+            group,
+            meta,
+            tags,
         } = self;
 
         #[allow(unused, clippy::let_unit_value)]

@@ -1,7 +1,8 @@
 use crate::{functions::register_base_functions, jinja_environment::JinjaEnvironment};
-use dbt_common::{io_args::IoArgs, unexpected_fs_err, FsError, FsResult};
+use dbt_common::{FsError, FsResult, io_args::IoArgs, unexpected_fs_err};
 use dbt_fusion_adapter::BaseAdapter;
 use minijinja::{
+    Environment, Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, Value,
     constants::{
         DBT_AND_ADAPTERS_NAMESPACE, MACRO_NAMESPACE_REGISTRY, MACRO_TEMPLATE_REGISTRY,
         NON_INTERNAL_PACKAGES, ROOT_PACKAGE_NAME,
@@ -9,7 +10,6 @@ use minijinja::{
     dispatch_object::get_internal_packages,
     macro_unit::MacroUnit,
     value::ValueKind,
-    Environment, Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, Value,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

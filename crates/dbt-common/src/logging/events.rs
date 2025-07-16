@@ -12,11 +12,11 @@
 use std::time::Duration;
 
 use crate::{
+    CodeLocation,
     constants::{
         ANALYZING, DEBUGGED, FAILED, PARSING, PASS, PREVIEWING, RENDERED, RENDERING, RUNNING,
         SKIPPING, SUCCESS,
     },
-    CodeLocation,
 };
 use log::Level;
 use serde::{Deserialize, Serialize};

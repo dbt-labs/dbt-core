@@ -1,11 +1,11 @@
-use crate::table::TableRepr;
 use crate::Tuple;
+use crate::table::TableRepr;
 use crate::{MappedSequence, TupleRepr};
 use core::fmt;
 use minijinja::arg_utils::ArgsIter;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Object, ObjectRepr};
-use minijinja::{assert_nullary_args, Error as MinijinjaError, State, Value};
+use minijinja::{Error as MinijinjaError, State, Value, assert_nullary_args};
 use std::rc::Rc;
 use std::sync::Arc;
 

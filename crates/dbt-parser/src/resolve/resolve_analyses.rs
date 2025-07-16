@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::show_error;
-use dbt_common::{error::AbstractLocation, FsResult};
+use dbt_common::{FsResult, error::AbstractLocation};
 use dbt_jinja_utils::{jinja_environment::JinjaEnvironment, refs_and_sources::RefsAndSources};
 use dbt_schemas::schemas::common::{Access, DbtMaterialization, DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_column::process_columns;
@@ -12,21 +12,21 @@ use dbt_schemas::schemas::{DbtModelAttr, IntrospectionKind};
 use dbt_schemas::state::{ModelStatus, RefsAndSourcesTracker};
 use dbt_schemas::{
     schemas::{
+        CommonAttributes, DbtModel, NodeBaseAttributes,
         common::NodeDependsOn,
         project::DbtProject,
         properties::ModelProperties,
         ref_and_source::{DbtRef, DbtSourceWrapper},
-        CommonAttributes, DbtModel, NodeBaseAttributes,
     },
     state::{DbtPackage, DbtRuntimeConfig},
 };
 use minijinja::MacroSpans;
 
-use crate::dbt_project_config::{init_project_config, RootProjectConfigs};
+use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
 use crate::utils::RelationComponents;
 use crate::{
     args::ResolveArgs,
-    renderer::{render_unresolved_sql_files, SqlFileRenderResult},
+    renderer::{SqlFileRenderResult, render_unresolved_sql_files},
     utils::{get_node_fqn, get_original_file_path, get_unique_id, update_node_relation_components},
 };
 

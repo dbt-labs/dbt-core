@@ -19,10 +19,9 @@ mod tests {
     use arrow_array::Array as _;
     use arrow_array::{cast::AsArray, types::*};
     use dbt_xdbc::{
-        bigquery, connection,
+        Backend, Connection, Database, Driver, QueryCtx, Statement, bigquery, connection,
         database::{self, LogLevel},
-        databricks, driver, redshift, snowflake, Backend, Connection, Database, Driver, QueryCtx,
-        Statement,
+        databricks, driver, redshift, snowflake,
     };
 
     const ADBC_VERSION: AdbcVersion = AdbcVersion::V110;
@@ -206,9 +205,11 @@ mod tests {
     fn database_get_info() -> Result<()> {
         with_database(Backend::Snowflake, |mut database| {
             assert_eq!(database.vendor_name(), Ok("Snowflake".to_owned()));
-            assert!(database
-                .vendor_version()
-                .is_ok_and(|version| version.starts_with("v")));
+            assert!(
+                database
+                    .vendor_version()
+                    .is_ok_and(|version| version.starts_with("v"))
+            );
             assert!(database.vendor_arrow_version().is_ok());
             assert_eq!(database.vendor_sql(), Ok(true));
             assert_eq!(database.vendor_substrait(), Ok(false));
@@ -524,9 +525,10 @@ mod tests {
         assert!(conn_res.is_err());
         let err = conn_res.unwrap_err();
         assert!(err.message.contains("nonexistent_driver"));
-        assert!(err
-            .message
-            .contains("The Databricks ODBC driver can be downloaded from"));
+        assert!(
+            err.message
+                .contains("The Databricks ODBC driver can be downloaded from")
+        );
         Ok(())
     }
 

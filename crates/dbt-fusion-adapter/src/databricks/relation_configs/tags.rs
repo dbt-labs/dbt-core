@@ -1,11 +1,11 @@
 use crate::databricks::relation_configs::base::{
-    get_config_value, DatabricksComponentConfig, DatabricksComponentProcessor,
-    DatabricksComponentProcessorProperties, DatabricksRelationResults,
+    DatabricksComponentConfig, DatabricksComponentProcessor,
+    DatabricksComponentProcessorProperties, DatabricksRelationResults, get_config_value,
 };
 
 use crate::{
-    errors::{AdapterError, AdapterErrorKind},
     AdapterResult,
+    errors::{AdapterError, AdapterErrorKind},
 };
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use serde::{Deserialize, Serialize};

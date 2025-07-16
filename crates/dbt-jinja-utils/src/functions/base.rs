@@ -6,20 +6,20 @@ use std::{
     sync::Arc,
 };
 
-use dbt_agate::{print_table, AgateTable};
-use dbt_common::{fs_err, io_args::IoArgs, show_warning, ErrorCode};
+use dbt_agate::{AgateTable, print_table};
+use dbt_common::{ErrorCode, fs_err, io_args::IoArgs, show_warning};
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
-use minijinja::value::{mutable_map::MutableMap, ValueMap};
+use minijinja::value::{ValueMap, mutable_map::MutableMap};
 
 use minijinja::{
+    Environment, Error, ErrorKind, State, Value,
     arg_utils::ArgParser,
     listener::RenderingEventListener,
     value::{Kwargs, Object},
-    Environment, Error, ErrorKind, State, Value,
 };
 
 use crate::utils::{
-    node_metadata_from_state, DBT_INTERNAL_ENV_VAR_PREFIX, ENV_VARS, SECRET_ENV_VAR_PREFIX,
+    DBT_INTERNAL_ENV_VAR_PREFIX, ENV_VARS, SECRET_ENV_VAR_PREFIX, node_metadata_from_state,
 };
 
 use crate::functions::contract_error::get_contract_mismatches;
@@ -157,7 +157,7 @@ impl Object for DocMacro {
                 return Err(Error::new(
                     ErrorKind::InvalidOperation,
                     "Invalid arguments to doc macro",
-                ))
+                ));
             }
         };
 
@@ -505,7 +505,7 @@ pub fn diff_of_two_dicts_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Erro
                 return Err(Error::new(
                     ErrorKind::InvalidOperation,
                     "diff_of_two_dicts requires a dict_a argument",
-                ))
+                ));
             }
         }
         .clone();
@@ -517,7 +517,7 @@ pub fn diff_of_two_dicts_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Erro
                 return Err(Error::new(
                     ErrorKind::InvalidOperation,
                     "diff_of_two_dicts requires a dict_b argument",
-                ))
+                ));
             }
         }
         .clone();
@@ -674,8 +674,8 @@ pub fn set_strict_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
 /// ```jinja
 /// {% set result = try_or_compiler_error("Error", my_function, arg1, arg2, kwarg1="value1", kwarg2="value2") %}
 /// ```
-pub fn try_or_compiler_error_fn(
-) -> impl Fn(&State<'_, '_>, &[Value], Kwargs) -> Result<Value, Error> {
+pub fn try_or_compiler_error_fn()
+-> impl Fn(&State<'_, '_>, &[Value], Kwargs) -> Result<Value, Error> {
     move |state: &State<'_, '_>, args: &[Value], kwargs: Kwargs| -> Result<Value, Error> {
         let mut args = ArgParser::new(args, Some(kwargs));
         let message_if_exception = args.get::<String>("message_if_exception")?;
@@ -1002,7 +1002,9 @@ impl Object for Exceptions {
                     }
                 };
 
-                let message = format!("Trying to create {expected_type} {relation}, but it currently exists as a {relation_type}. Either drop {relation} manually, or run dbt with `--full-refresh` and dbt will drop it for you.");
+                let message = format!(
+                    "Trying to create {expected_type} {relation}, but it currently exists as a {relation_type}. Either drop {relation} manually, or run dbt with `--full-refresh` and dbt will drop it for you."
+                );
                 if let Some((node_id, file_path)) = node_metadata_from_state(state) {
                     Err(Error::new(
                         ErrorKind::InvalidOperation,
@@ -1032,7 +1034,9 @@ impl Object for Exceptions {
                     get_contract_mismatches(yaml_columns, sql_columns)?;
                 //  print_table(table, max_rows, max_columns, max_column_width)
                 let column_diff_string = print_table(column_diff_table, 50, 50, 50)?;
-                let message = format!("This model has an enforced contract that failed.\n Please ensure the name, data_type, and number of columns in your contract match the columns in your model's definition.\n\n {column_diff_string}");
+                let message = format!(
+                    "This model has an enforced contract that failed.\n Please ensure the name, data_type, and number of columns in your contract match the columns in your model's definition.\n\n {column_diff_string}"
+                );
                 if let Some((node_id, file_path)) = node_metadata_from_state(state) {
                     Err(Error::new(
                         ErrorKind::InvalidOperation,
@@ -1072,7 +1076,9 @@ impl Object for Exceptions {
                     }
                 };
 
-                let message = format!("Contracted models require data_type to be defined for each column.  Please ensure that the column name and data_type are defined within the YAML configuration for the {column_names_string} column(s).");
+                let message = format!(
+                    "Contracted models require data_type to be defined for each column.  Please ensure that the column name and data_type are defined within the YAML configuration for the {column_names_string} column(s)."
+                );
                 if let Some((node_id, file_path)) = node_metadata_from_state(state) {
                     Err(Error::new(
                         ErrorKind::InvalidOperation,
@@ -1120,7 +1126,9 @@ impl Object for Exceptions {
                 let updated_at_data_type = args
                     .get::<String>("updated_at_data_type")
                     .unwrap_or_else(|_| "".to_string());
-                let warning = format!("Data type of snapshot table timestamp columns ({snapshot_time_data_type}) doesn't match derived column 'updated_at' ({updated_at_data_type}). Please update snapshot config 'updated_at'.");
+                let warning = format!(
+                    "Data type of snapshot table timestamp columns ({snapshot_time_data_type}) doesn't match derived column 'updated_at' ({updated_at_data_type}). Please update snapshot config 'updated_at'."
+                );
                 show_warning!(
                     self.io_args,
                     fs_err!(ErrorCode::Generic, "{}", warning.as_str())

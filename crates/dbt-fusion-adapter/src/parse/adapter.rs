@@ -1,3 +1,4 @@
+use crate::SqlEngine;
 use crate::base_adapter::{AdapterType, AdapterTyping, BaseAdapter};
 use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::funcs::{
@@ -6,24 +7,23 @@ use crate::funcs::{
 };
 use crate::metadata::MetadataAdapter;
 use crate::parse::relation::EmptyRelation;
-use crate::relation_object::{create_relation, RelationObject};
+use crate::relation_object::{RelationObject, create_relation};
 use crate::response::AdapterResponse;
 use crate::typed_adapter::TypedBaseAdapter;
-use crate::SqlEngine;
 
 use dashmap::{DashMap, DashSet};
 use dbt_agate::AgateTable;
 use dbt_common::behavior_flags::Behavior;
-use dbt_common::{current_function_name, FsError, FsResult};
+use dbt_common::{FsError, FsResult, current_function_name};
 use dbt_schemas::schemas::columns::base::StdColumnType;
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
 use dbt_xdbc::Connection;
-use minijinja::arg_utils::{check_num_args, ArgParser};
+use minijinja::Value;
+use minijinja::arg_utils::{ArgParser, check_num_args};
 use minijinja::constants::TARGET_UNIQUE_ID;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::Object;
-use minijinja::Value;
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
 use serde::Deserialize;
 

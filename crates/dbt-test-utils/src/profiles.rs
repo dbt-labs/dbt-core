@@ -1,8 +1,8 @@
-use dbt_common::io_args::IoArgs;
 use dbt_common::FsResult;
+use dbt_common::io_args::IoArgs;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
-use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
 use dbt_jinja_utils::phases::load::RenderSecretScope;
+use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
 use dbt_jinja_utils::serde::from_yaml_error;
 use dbt_loader::args::LoadArgs;
 use dbt_loader::utils::read_profiles_and_extract_db_config;

@@ -7,8 +7,8 @@ use dbt_common::constants::DBT_PROJECT_YML;
 
 use dbt_common::stdfs;
 
-use dbt_common::{err, fs_err, show_warning};
 use dbt_common::{ErrorCode, FsResult};
+use dbt_common::{err, fs_err, show_warning};
 use dbt_schemas::state::{DbtPackage, DbtVars};
 
 use crate::args::LoadArgs;

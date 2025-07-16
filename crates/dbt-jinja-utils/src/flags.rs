@@ -3,9 +3,9 @@ use std::sync::Arc;
 use std::{collections::BTreeMap, rc::Rc};
 
 use minijinja::{
+    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State,
     listener::RenderingEventListener,
     value::{Object, ObjectRepr, Value},
-    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State,
 };
 
 use crate::invocation_args::InvocationArgs;

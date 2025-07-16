@@ -8,7 +8,7 @@ use arrow_schema::Schema;
 use core::result::Result;
 use dbt_common::constants::EXECUTING;
 use dbt_xdbc::semaphore::Semaphore;
-use dbt_xdbc::{connection, database, driver, Connection, Database, QueryCtx};
+use dbt_xdbc::{Connection, Database, QueryCtx, connection, database, driver};
 use log;
 use serde_json::json;
 use tracy_client::span;

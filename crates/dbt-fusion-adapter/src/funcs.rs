@@ -7,8 +7,8 @@ use dbt_agate::AgateTable;
 
 use arrow::array::RecordBatch;
 use minijinja::listener::RenderingEventListener;
-use minijinja::value::mutable_vec::MutableVec;
 use minijinja::value::ValueKind;
+use minijinja::value::mutable_vec::MutableVec;
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
 use minijinja_contrib::modules::py_datetime::date::PyDate;
 use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;

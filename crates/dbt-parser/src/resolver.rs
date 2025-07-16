@@ -1,14 +1,14 @@
 //! Module containing the entrypoint for the resolve phase.
-use dbt_common::constants::{DBT_GENERIC_TESTS_DIR_NAME, RESOLVING};
-use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 #[allow(unused_imports)]
 use dbt_common::FsError;
-use dbt_common::{err, fs_err, show_error, with_progress, ErrorCode, FsResult};
+use dbt_common::constants::{DBT_GENERIC_TESTS_DIR_NAME, RESOLVING};
+use dbt_common::once_cell_vars::DISPATCH_CONFIG;
+use dbt_common::{ErrorCode, FsResult, err, fs_err, show_error, with_progress};
 use dbt_common::{show_warning, stdfs};
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::phases::parse::build_resolve_context;
 use dbt_jinja_utils::phases::parse::init::initialize_parse_jinja_environment;
-use dbt_jinja_utils::refs_and_sources::{resolve_dependencies, RefsAndSources};
+use dbt_jinja_utils::refs_and_sources::{RefsAndSources, resolve_dependencies};
 use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::schemas::macros::build_macro_units;
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
@@ -24,7 +24,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{build_root_project_configs, RootProjectConfigs};
+use crate::dbt_project_config::{RootProjectConfigs, build_root_project_configs};
 use crate::resolve::resolve_operations::resolve_operations;
 use crate::utils::{self};
 

@@ -6,10 +6,10 @@ use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 
 use crate::default_to;
-use crate::schemas::common::merge_meta;
-use crate::schemas::common::merge_tags;
 use crate::schemas::common::DbtQuoting;
 use crate::schemas::common::Hooks;
+use crate::schemas::common::merge_meta;
+use crate::schemas::common::merge_tags;
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfigLegacy};
 use crate::schemas::project::dbt_project::DefaultTo;
@@ -142,19 +142,19 @@ impl DefaultTo<SnowflakeNodeConfig> for SnowflakeNodeConfig {
     fn default_to(&mut self, parent: &SnowflakeNodeConfig) {
         // Exhaustive destructuring ensures all fields are handled
         let SnowflakeNodeConfig {
-            ref mut external_volume,
-            ref mut base_location_root,
-            ref mut base_location_subpath,
-            ref mut target_lag,
-            ref mut snowflake_warehouse,
-            ref mut refresh_mode,
-            ref mut initialize,
-            ref mut tmp_relation_type,
-            ref mut query_tag,
-            ref mut automatic_clustering,
-            ref mut copy_grants,
-            ref mut secure,
-            ref mut transient,
+            external_volume,
+            base_location_root,
+            base_location_subpath,
+            target_lag,
+            snowflake_warehouse,
+            refresh_mode,
+            initialize,
+            tmp_relation_type,
+            query_tag,
+            automatic_clustering,
+            copy_grants,
+            secure,
+            transient,
         } = self;
 
         default_to!(
@@ -182,20 +182,20 @@ impl DefaultTo<BigQueryNodeConfig> for BigQueryNodeConfig {
     fn default_to(&mut self, parent: &BigQueryNodeConfig) {
         // Exhaustive destructuring ensures all fields are handled
         let BigQueryNodeConfig {
-            ref mut partition_by,
-            ref mut cluster_by,
-            ref mut hours_to_expiration,
-            ref mut labels,
-            ref mut labels_from_meta,
-            ref mut kms_key_name,
-            ref mut require_partition_filter,
-            ref mut partition_expiration_days,
-            ref mut grant_access_to,
-            ref mut partitions,
-            ref mut enable_refresh,
-            ref mut refresh_interval_minutes,
-            ref mut description,
-            ref mut max_staleness,
+            partition_by,
+            cluster_by,
+            hours_to_expiration,
+            labels,
+            labels_from_meta,
+            kms_key_name,
+            require_partition_filter,
+            partition_expiration_days,
+            grant_access_to,
+            partitions,
+            enable_refresh,
+            refresh_interval_minutes,
+            description,
+            max_staleness,
         } = self;
 
         default_to!(
@@ -224,27 +224,27 @@ impl DefaultTo<DatabricksNodeConfig> for DatabricksNodeConfig {
     fn default_to(&mut self, parent: &DatabricksNodeConfig) {
         // Exhaustive destructuring ensures all fields are handled
         let DatabricksNodeConfig {
-            ref mut file_format,
-            ref mut location_root,
-            ref mut tblproperties,
-            ref mut include_full_name_in_path,
-            ref mut liquid_clustered_by,
-            ref mut auto_liquid_cluster,
-            ref mut clustered_by,
-            ref mut buckets,
-            ref mut catalog,
-            ref mut databricks_tags,
-            ref mut compression,
-            ref mut databricks_compute,
-            ref mut target_alias,
-            ref mut source_alias,
-            ref mut matched_condition,
-            ref mut not_matched_condition,
-            ref mut not_matched_by_source_condition,
-            ref mut not_matched_by_source_action,
-            ref mut merge_with_schema_evolution,
-            ref mut skip_matched_step,
-            ref mut skip_not_matched_step,
+            file_format,
+            location_root,
+            tblproperties,
+            include_full_name_in_path,
+            liquid_clustered_by,
+            auto_liquid_cluster,
+            clustered_by,
+            buckets,
+            catalog,
+            databricks_tags,
+            compression,
+            databricks_compute,
+            target_alias,
+            source_alias,
+            matched_condition,
+            not_matched_condition,
+            not_matched_by_source_condition,
+            not_matched_by_source_action,
+            merge_with_schema_evolution,
+            skip_matched_step,
+            skip_not_matched_step,
         } = self;
 
         default_to!(
@@ -279,12 +279,12 @@ impl DefaultTo<DatabricksNodeConfig> for DatabricksNodeConfig {
 impl DefaultTo<RedshiftNodeConfig> for RedshiftNodeConfig {
     fn default_to(&mut self, parent: &RedshiftNodeConfig) {
         let RedshiftNodeConfig {
-            ref mut auto_refresh,
-            ref mut backup,
-            ref mut bind,
-            ref mut dist,
-            ref mut sort,
-            ref mut sort_type,
+            auto_refresh,
+            backup,
+            bind,
+            dist,
+            sort,
+            sort_type,
         } = self;
 
         default_to!(parent, [auto_refresh, backup, bind, dist, sort, sort_type]);

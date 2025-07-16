@@ -8,7 +8,7 @@
 //! - Adding packages to existing packages.yml files
 //!
 
-use dbt_common::{err, stdfs, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, err, stdfs};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -134,7 +134,7 @@ pub fn add_package_to_yml(
                     ErrorCode::IoError,
                     "Failed to serialize packages.yml: {}",
                     e
-                )
+                );
             }
         };
         stdfs::write(packages_path, yaml_content)?;
@@ -168,7 +168,7 @@ pub fn add_package_to_yml(
                 ErrorCode::IoError,
                 "Failed to serialize packages.yml: {}",
                 e
-            )
+            );
         }
     };
     stdfs::write(packages_path, yaml_content)?;

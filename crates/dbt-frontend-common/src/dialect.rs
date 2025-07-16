@@ -1,8 +1,8 @@
 use crate::ident::{
-    ColumnRef, FullyQualifiedName, QualifiedName, LOWERCASE_DRAFT_SUFFIX, UPPERCASE_DRAFT_SUFFIX,
+    ColumnRef, FullyQualifiedName, LOWERCASE_DRAFT_SUFFIX, QualifiedName, UPPERCASE_DRAFT_SUFFIX,
 };
 
-use super::error::{internal_err, InternalError, InternalResult};
+use super::error::{InternalError, InternalResult, internal_err};
 use super::ident::Identifier;
 use crate::make_internal_err;
 use serde::{Deserialize, Serialize};

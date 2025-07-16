@@ -1,7 +1,7 @@
 use dbt_common::io_args::IoArgs;
 use dbt_common::stdfs::File;
 use dbt_common::{
-    constants::DBT_PACKAGES_LOCK_FILE, err, fs_err, show_warning, stdfs, ErrorCode, FsResult,
+    ErrorCode, FsResult, constants::DBT_PACKAGES_LOCK_FILE, err, fs_err, show_warning, stdfs,
 };
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_schemas::schemas::packages::DbtPackagesLock;

@@ -1,4 +1,4 @@
-use dbt_common::{err, fs_err, ErrorCode, FsError, FsResult};
+use dbt_common::{ErrorCode, FsError, FsResult, err, fs_err};
 use std::sync::LazyLock;
 use std::{collections::HashMap, fmt::Display, str::FromStr};
 

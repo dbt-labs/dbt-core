@@ -1,6 +1,6 @@
 use arrow::array::{
-    Decimal128Array, Int16Array, Int32Array, Int64Array, Int8Array, UInt16Array, UInt32Array,
-    UInt64Array, UInt8Array,
+    Decimal128Array, Int8Array, Int16Array, Int32Array, Int64Array, UInt8Array, UInt16Array,
+    UInt32Array, UInt64Array,
 };
 use arrow::datatypes::DataType;
 use arrow::record_batch::RecordBatch;

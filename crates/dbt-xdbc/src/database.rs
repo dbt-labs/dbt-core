@@ -3,15 +3,15 @@
 //!
 
 use adbc_core::{
+    Database as _, Optionable,
     driver_manager::ManagedDatabase as ManagedAdbcDatabase,
     error::{Error, Result, Status},
     options::{AdbcVersion, InfoCode, OptionConnection, OptionDatabase, OptionValue},
-    Database as _, Optionable,
 };
 use arrow_array::{
+    Array,
     cast::AsArray,
     types::{Int64Type, UInt32Type},
-    Array,
 };
 use parking_lot::RwLockUpgradableReadGuard;
 use serde::Deserialize;
@@ -30,8 +30,8 @@ use crate::connection::OdbcConnection;
 #[cfg(feature = "odbc")]
 use crate::odbc::OdbcEnv;
 use crate::{
-    connection::AdbcConnection, semaphore::Semaphore, snowflake, str_from_sqlstate, Backend,
-    Connection,
+    Backend, Connection, connection::AdbcConnection, semaphore::Semaphore, snowflake,
+    str_from_sqlstate,
 };
 
 mod builder;
@@ -164,8 +164,8 @@ impl TokenRefresher {
         account: String,
         refresh_token: String,
     ) -> Self {
-        use base64::engine::general_purpose;
         use base64::Engine as _;
+        use base64::engine::general_purpose;
         const BASE64_ENGINE: &general_purpose::GeneralPurpose = &general_purpose::STANDARD;
 
         let http_config = ureq::Agent::config_builder()
@@ -825,8 +825,8 @@ pub(crate) fn fingerprint_config<'a>(
 
 #[cfg(test)]
 mod tests {
-    use crate::database::{fingerprint_config, Fingerprint};
-    use crate::{database, Backend};
+    use crate::database::{Fingerprint, fingerprint_config};
+    use crate::{Backend, database};
     use std::collections::HashSet;
 
     #[test]

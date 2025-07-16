@@ -1,5 +1,5 @@
-use crate::expr::ir::{ArithmeticOp, ComparisonOp, Function};
 use crate::expr::Expr;
+use crate::expr::ir::{ArithmeticOp, ComparisonOp, Function};
 use std::borrow::Borrow;
 use std::hash::Hash;
 

@@ -1,4 +1,4 @@
-use dbt_common::{err, fs_err, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use std::{path::PathBuf, process::Command};
 // Use the local git client!
 

@@ -3,7 +3,7 @@ use dbt_serde_yaml::{JsonSchema, ShouldBe};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::skip_serializing_none;
-use std::collections::{btree_map::Iter, BTreeMap};
+use std::collections::{BTreeMap, btree_map::Iter};
 
 use crate::{
     default_to,
@@ -11,11 +11,11 @@ use crate::{
         manifest::GrantAccessToTarget,
         manifest::{BigqueryClusterConfig, BigqueryPartitionConfigLegacy},
         project::{
-            configs::common::default_meta_and_tags, configs::common::BigQueryNodeConfig,
+            DefaultTo, IterChildren, configs::common::BigQueryNodeConfig,
             configs::common::DatabricksNodeConfig, configs::common::RedshiftNodeConfig,
-            configs::common::SnowflakeNodeConfig, DefaultTo, IterChildren,
+            configs::common::SnowflakeNodeConfig, configs::common::default_meta_and_tags,
         },
-        serde::{bool_or_string_bool, u64_or_string_u64, StringOrArrayOfStrings},
+        serde::{StringOrArrayOfStrings, bool_or_string_bool, u64_or_string_u64},
     },
 };
 
@@ -390,14 +390,14 @@ impl DefaultTo<UnitTestConfig> for UnitTestConfig {
 
     fn default_to(&mut self, parent: &UnitTestConfig) {
         let UnitTestConfig {
-            ref mut enabled,
-            ref mut static_analysis,
-            ref mut meta,
-            ref mut tags,
-            snowflake_node_config: ref mut snowflake_config,
-            bigquery_node_config: ref mut bigquery_config,
-            databricks_node_config: ref mut databricks_config,
-            redshift_node_config: ref mut redshift_config,
+            enabled,
+            static_analysis,
+            meta,
+            tags,
+            snowflake_node_config: snowflake_config,
+            bigquery_node_config: bigquery_config,
+            databricks_node_config: databricks_config,
+            redshift_node_config: redshift_config,
         } = self;
 
         // Handle adapter-specific configs

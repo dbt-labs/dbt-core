@@ -1,6 +1,6 @@
 use dbt_common::node_selector::IndirectSelection;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
-use dbt_common::{err, fs_err, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::phases::parse::build_resolve_context;
 use dbt_jinja_utils::serde::value_from_file;

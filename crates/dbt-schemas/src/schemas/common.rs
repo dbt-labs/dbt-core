@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 
-use dbt_common::{err, fs_err, CodeLocation, ErrorCode, FsError, FsResult};
+use dbt_common::{CodeLocation, ErrorCode, FsError, FsResult, err, fs_err};
 use dbt_frontend_common::Dialect;
 use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize, Verbatim};
 use hex;
@@ -33,7 +33,8 @@ impl FreshnessRules {
             return Err(fs_err!(
                 ErrorCode::InvalidArgument,
                 "count and period are required when freshness is provided, count: {:?}, period: {:?}",
-                rule.count, rule.period
+                rule.count,
+                rule.period
             ));
         }
         Ok(())

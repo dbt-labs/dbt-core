@@ -1,4 +1,4 @@
-use crate::databricks::relation_configs::{base::from_relation_config, DatabricksRelationConfig};
+use crate::databricks::relation_configs::{DatabricksRelationConfig, base::from_relation_config};
 
 use crate::AdapterResult;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;

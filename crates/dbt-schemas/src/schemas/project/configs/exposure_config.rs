@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 use crate::{
     default_to,
     schemas::{
-        project::{configs::common::default_meta_and_tags, DefaultTo},
-        serde::{bool_or_string_bool, StringOrArrayOfStrings},
+        project::{DefaultTo, configs::common::default_meta_and_tags},
+        serde::{StringOrArrayOfStrings, bool_or_string_bool},
     },
 };
 
@@ -61,9 +61,9 @@ impl DefaultTo<ExposureConfig> for ExposureConfig {
 
     fn default_to(&mut self, parent: &ExposureConfig) {
         let ExposureConfig {
-            ref mut meta,
-            ref mut tags,
-            ref mut enabled,
+            meta,
+            tags,
+            enabled,
         } = self;
 
         #[allow(unused, clippy::let_unit_value)]

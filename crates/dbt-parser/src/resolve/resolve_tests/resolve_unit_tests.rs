@@ -1,21 +1,23 @@
-use crate::dbt_project_config::init_project_config;
 use crate::dbt_project_config::RootProjectConfigs;
+use crate::dbt_project_config::init_project_config;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::utils::get_node_fqn;
 use crate::utils::get_unique_id;
+use dbt_common::CodeLocation;
+use dbt_common::ErrorCode;
+use dbt_common::FsResult;
 use dbt_common::err;
 use dbt_common::error::AbstractLocation;
 use dbt_common::fs_err;
 use dbt_common::io_args::IoArgs;
 use dbt_common::io_args::StaticAnalysisKind;
-use dbt_common::CodeLocation;
-use dbt_common::ErrorCode;
-use dbt_common::FsResult;
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::phases::parse::build_resolve_model_context;
 use dbt_jinja_utils::phases::parse::render_extract_ref_or_source_expr;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
+use dbt_schemas::schemas::DbtModel;
+use dbt_schemas::schemas::DbtUnitTestAttr;
 use dbt_schemas::schemas::common::DbtChecksum;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::DbtQuoting;
@@ -30,8 +32,6 @@ use dbt_schemas::schemas::project::UnitTestConfig;
 use dbt_schemas::schemas::properties::UnitTestProperties;
 use dbt_schemas::schemas::ref_and_source::DbtRef;
 use dbt_schemas::schemas::ref_and_source::DbtSourceWrapper;
-use dbt_schemas::schemas::DbtModel;
-use dbt_schemas::schemas::DbtUnitTestAttr;
 use dbt_schemas::schemas::{CommonAttributes, DbtUnitTest, NodeBaseAttributes};
 use dbt_schemas::state::DbtPackage;
 use dbt_schemas::state::DbtRuntimeConfig;
@@ -40,9 +40,9 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
 
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn resolve_unit_tests(

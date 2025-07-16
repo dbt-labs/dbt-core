@@ -4,8 +4,8 @@ use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
 use dbt_schemas::state::DbtVars;
 use minijinja::{
-    constants::TARGET_PACKAGE_NAME, listener::RenderingEventListener, value::Object, Error,
-    ErrorKind, State, Value,
+    Error, ErrorKind, State, Value, constants::TARGET_PACKAGE_NAME,
+    listener::RenderingEventListener, value::Object,
 };
 
 /// A struct that represent a var object to be used in configuration contexts
@@ -65,11 +65,11 @@ impl Object for ConfiguredVar {
             .and_then(|v| v.as_str().map(|s| s.to_string()))
         else {
             return Err(Error::new(
-                    ErrorKind::InvalidOperation,
-                    format!(
-                        "'TARGET_PACKAGE_NAME' should be set. Missing in configured var context while looking up var: {var_name}"
-                    ),
-                ));
+                ErrorKind::InvalidOperation,
+                format!(
+                    "'TARGET_PACKAGE_NAME' should be set. Missing in configured var context while looking up var: {var_name}"
+                ),
+            ));
         };
         let vars_lookup = self.vars.get(&package_name).ok_or(Error::new(
             ErrorKind::InvalidOperation,
@@ -127,11 +127,11 @@ impl Object for ConfiguredVar {
                 .and_then(|v| v.as_str().map(|s| s.to_string()))
             else {
                 return Err(Error::new(
-                        ErrorKind::InvalidOperation,
-                        format!(
-                            "'TARGET_PACKAGE_NAME' should be set. Missing in configured var context while looking up var: {var_name}"
-                        ),
-                    ));
+                    ErrorKind::InvalidOperation,
+                    format!(
+                        "'TARGET_PACKAGE_NAME' should be set. Missing in configured var context while looking up var: {var_name}"
+                    ),
+                ));
             };
             let vars_lookup = self.vars.get(&package_name).ok_or(Error::new(
                 ErrorKind::InvalidOperation,

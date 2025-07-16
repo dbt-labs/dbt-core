@@ -5,7 +5,7 @@ use dbt_schemas::man::execute_man_command;
 
 use dbt_common::io_args::{EvalArgs, IoArgs};
 use dbt_common::{
-    checkpoint_maybe_exit,
+    ErrorCode, FsResult, checkpoint_maybe_exit,
     constants::{DBT_MANIFEST_JSON, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME, INSTALLING, VALIDATING},
     fs_err, fsinfo,
     io_args::{Phases, SystemArgs},
@@ -14,7 +14,6 @@ use dbt_common::{
     pretty_string::GREEN,
     show_error, show_progress, show_progress_exit, show_result_with_default_title, stdfs,
     tracing::init_tracing,
-    ErrorCode, FsResult,
 };
 
 #[allow(unused_imports)]

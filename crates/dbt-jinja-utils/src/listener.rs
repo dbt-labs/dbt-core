@@ -6,8 +6,8 @@ use std::{
 };
 
 use minijinja::{
-    listener::{DefaultRenderingEventListener, RenderingEventListener},
     MacroSpans,
+    listener::{DefaultRenderingEventListener, RenderingEventListener},
 };
 
 /// Trait for creating and destroying rendering event listeners

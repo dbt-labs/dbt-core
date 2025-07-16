@@ -9,7 +9,7 @@ use adbc_core::{
     options::{OptionConnection, OptionValue},
 };
 
-use crate::{builder::BuilderIter, Connection, Database};
+use crate::{Connection, Database, builder::BuilderIter};
 
 /// A builder for [`Connection`].
 ///

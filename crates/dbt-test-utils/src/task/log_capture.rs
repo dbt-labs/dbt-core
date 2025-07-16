@@ -118,7 +118,7 @@ impl Task for Arc<ExecuteAndCaptureLogs> {
 mod tests {
     use super::*;
     use dbt_common::logging::dbt_compat_log::{
-        log_entry::Data, CompletionLogData, ExecutingLogData, LogInfo,
+        CompletionLogData, ExecutingLogData, LogInfo, log_entry::Data,
     };
 
     #[test]

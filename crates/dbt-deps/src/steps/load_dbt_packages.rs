@@ -1,9 +1,9 @@
 use dbt_common::io_args::IoArgs;
 use dbt_common::{
+    ErrorCode, FsResult,
     constants::{DBT_DEPENDENCIES_YML, DBT_PACKAGES_YML},
     err,
     io_utils::try_read_yml_to_str,
-    ErrorCode, FsResult,
 };
 use dbt_schemas::schemas::packages::DbtPackages;
 use std::path::Path;
@@ -50,15 +50,21 @@ pub fn load_dbt_packages(
             let has_packages_in_deps = !dbt_dependencies_yml.packages.is_empty();
             let has_projects_in_deps = !dbt_dependencies_yml.projects.is_empty();
 
-            match (has_packages_in_yml, has_packages_in_deps, has_projects_in_deps) {
+            match (
+                has_packages_in_yml,
+                has_packages_in_deps,
+                has_projects_in_deps,
+            ) {
                 (true, false, true) => {
                     // Merge packages from packages.yml and projects from dependencies.yml
                     let mut merged = dbt_package_yml;
                     merged.projects = dbt_dependencies_yml.projects;
                     Ok((Some(merged), DbtPackageType::PackageYml))
-                },
+                }
                 (true, false, false) => Ok((Some(dbt_package_yml), DbtPackageType::PackageYml)),
-                (false, true, _) => Ok((Some(dbt_dependencies_yml), DbtPackageType::DependenciesYml)),
+                (false, true, _) => {
+                    Ok((Some(dbt_dependencies_yml), DbtPackageType::DependenciesYml))
+                }
                 (false, false, _) => Ok((None, DbtPackageType::PackageYml)),
                 (true, true, _) => err!(
                     ErrorCode::InvalidConfig,

@@ -5,8 +5,8 @@ use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::skip_serializing_none;
-use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
+use std::collections::btree_map::Iter;
 
 use crate::default_to;
 use crate::schemas::common::DbtQuoting;
@@ -15,20 +15,20 @@ use crate::schemas::common::Hooks;
 use crate::schemas::common::PersistDocsConfig;
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfigLegacy};
+use crate::schemas::project::DefaultTo;
+use crate::schemas::project::IterChildren;
+use crate::schemas::project::configs::common::BigQueryNodeConfig;
+use crate::schemas::project::configs::common::DatabricksNodeConfig;
+use crate::schemas::project::configs::common::RedshiftNodeConfig;
+use crate::schemas::project::configs::common::SnowflakeNodeConfig;
 use crate::schemas::project::configs::common::default_column_types;
 use crate::schemas::project::configs::common::default_hooks;
 use crate::schemas::project::configs::common::default_meta_and_tags;
 use crate::schemas::project::configs::common::default_quoting;
 use crate::schemas::project::configs::common::default_to_grants;
-use crate::schemas::project::configs::common::BigQueryNodeConfig;
-use crate::schemas::project::configs::common::DatabricksNodeConfig;
-use crate::schemas::project::configs::common::RedshiftNodeConfig;
-use crate::schemas::project::configs::common::SnowflakeNodeConfig;
-use crate::schemas::project::DefaultTo;
-use crate::schemas::project::IterChildren;
+use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::bool_or_string_bool;
 use crate::schemas::serde::u64_or_string_u64;
-use crate::schemas::serde::StringOrArrayOfStrings;
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
@@ -467,29 +467,29 @@ impl DefaultTo<SeedConfig> for SeedConfig {
     fn default_to(&mut self, parent: &SeedConfig) {
         // Handle simple fields - using a pattern that ensures all fields are covered
         let SeedConfig {
-            ref mut post_hook,
-            ref mut pre_hook,
-            ref mut meta,
-            ref mut tags,
-            ref mut quoting,
-            ref mut column_types,
-            ref mut database,
-            ref mut schema,
-            ref mut alias,
-            ref mut docs,
-            ref mut enabled,
-            ref mut grants,
-            ref mut quote_columns,
-            ref mut delimiter,
-            ref mut event_time,
-            ref mut full_refresh,
-            ref mut group,
-            ref mut persist_docs,
+            post_hook,
+            pre_hook,
+            meta,
+            tags,
+            quoting,
+            column_types,
+            database,
+            schema,
+            alias,
+            docs,
+            enabled,
+            grants,
+            quote_columns,
+            delimiter,
+            event_time,
+            full_refresh,
+            group,
+            persist_docs,
             // Adapter specific configs
-            snowflake_node_config: ref mut snowflake_config,
-            bigquery_node_config: ref mut bigquery_config,
-            databricks_node_config: ref mut databricks_config,
-            redshift_node_config: ref mut redshift_config,
+            snowflake_node_config: snowflake_config,
+            bigquery_node_config: bigquery_config,
+            databricks_node_config: databricks_config,
+            redshift_node_config: redshift_config,
         } = self;
 
         // Handle adapter-specific configs
@@ -510,8 +510,6 @@ impl DefaultTo<SeedConfig> for SeedConfig {
         let quoting = default_quoting(quoting, &parent.quoting);
         #[allow(unused, clippy::let_unit_value)]
         let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
-        #[allow(unused, clippy::let_unit_value)]
-        let tags = ();
         #[allow(unused, clippy::let_unit_value)]
         let column_types = default_column_types(column_types, &parent.column_types);
         #[allow(unused, clippy::let_unit_value)]

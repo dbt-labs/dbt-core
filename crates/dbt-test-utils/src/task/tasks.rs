@@ -3,10 +3,10 @@
 use std::{io::Write, path::PathBuf, process::Command, sync::Arc};
 
 use async_trait::async_trait;
-use dbt_common::{constants::DBT_INTERNAL_PACKAGES_DIR_NAME, FsResult};
+use dbt_common::{FsResult, constants::DBT_INTERNAL_PACKAGES_DIR_NAME};
 
 use super::{
-    goldie::execute_and_compare, task_seq::CommandFn, ProjectEnv, Task, TestEnv, TestResult,
+    ProjectEnv, Task, TestEnv, TestResult, goldie::execute_and_compare, task_seq::CommandFn,
 };
 
 /// Common helper function to prepare command vector with standard DBT paths and options

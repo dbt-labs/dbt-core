@@ -5,7 +5,7 @@ use std::{collections::HashMap, path::PathBuf};
 use async_trait::async_trait;
 use dbt_common::stdfs;
 use dbt_test_containers::container::docker::{
-    initialize_container, wait_for_container_stop, ContainerConfig, MountPoint,
+    ContainerConfig, MountPoint, initialize_container, wait_for_container_stop,
 };
 use dbt_test_primitives::is_update_golden_files_mode;
 

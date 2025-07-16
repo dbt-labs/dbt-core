@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use dbt_common::{err, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, err};
 use dbt_schemas::schemas::{data_tests::DataTests, dbt_column::ColumnProperties};
 
 type DataTestVec = Vec<DataTests>;

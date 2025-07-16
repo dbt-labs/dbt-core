@@ -5,14 +5,14 @@ use std::{
 };
 
 use dbt_common::{
-    err, io_args::IoArgs, show_error, unexpected_err, CodeLocation, ErrorCode, FsResult,
+    CodeLocation, ErrorCode, FsResult, err, io_args::IoArgs, show_error, unexpected_err,
 };
 use dbt_fusion_adapter::relation_object::create_relation_from_node;
 use dbt_schemas::{
     schemas::{
+        DbtSource, InternalDbtNodeAttributes, Nodes,
         common::DbtQuoting,
         ref_and_source::{DbtRef, DbtSourceWrapper},
-        DbtSource, InternalDbtNodeAttributes, Nodes,
     },
     state::{ModelStatus, RefsAndSourcesTracker},
 };

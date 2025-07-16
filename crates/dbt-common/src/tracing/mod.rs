@@ -1,5 +1,5 @@
-use crate::io_args::IoArgs;
 use crate::FsResult;
+use crate::io_args::IoArgs;
 
 #[cfg(debug_assertions)]
 use std::fs::File;
@@ -12,7 +12,7 @@ use tracing::subscriber::set_global_default;
 #[cfg(debug_assertions)]
 use tracing_subscriber::fmt::format::FmtSpan;
 #[cfg(debug_assertions)]
-use tracing_subscriber::{fmt::writer::BoxMakeWriter, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt::writer::BoxMakeWriter};
 
 pub struct FsTraceConfig {
     pub file_path: Option<PathBuf>,

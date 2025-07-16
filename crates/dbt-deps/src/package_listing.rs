@@ -2,8 +2,8 @@ use dbt_serde_yaml::Verbatim;
 use std::{collections::HashMap, path::Path};
 
 use dbt_common::{
-    constants::DBT_PROJECT_YML, err, io_args::IoArgs, io_utils::try_read_yml_to_str,
-    unexpected_fs_err, ErrorCode, FsResult,
+    ErrorCode, FsResult, constants::DBT_PROJECT_YML, err, io_args::IoArgs,
+    io_utils::try_read_yml_to_str, unexpected_fs_err,
 };
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnvironment,
@@ -534,12 +534,16 @@ mod tests {
 
         // Verify that both packages are stored with different keys
         assert_eq!(package_listing.packages.len(), 2);
-        assert!(package_listing
-            .packages
-            .contains_key("https://github.com/dbt-labs/dbt-core.git#core"));
-        assert!(package_listing
-            .packages
-            .contains_key("https://github.com/dbt-labs/dbt-core.git#adapters"));
+        assert!(
+            package_listing
+                .packages
+                .contains_key("https://github.com/dbt-labs/dbt-core.git#core")
+        );
+        assert!(
+            package_listing
+                .packages
+                .contains_key("https://github.com/dbt-labs/dbt-core.git#adapters")
+        );
     }
 
     #[test]
@@ -600,8 +604,10 @@ mod tests {
 
         // Verify that only one package is stored (they should be incorporated)
         assert_eq!(package_listing.packages.len(), 1);
-        assert!(package_listing
-            .packages
-            .contains_key("https://github.com/dbt-labs/dbt-core.git"));
+        assert!(
+            package_listing
+                .packages
+                .contains_key("https://github.com/dbt-labs/dbt-core.git")
+        );
     }
 }

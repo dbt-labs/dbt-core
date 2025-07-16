@@ -2,17 +2,17 @@
 //!
 //!
 
+use crate::Database;
 use crate::database::AdbcDatabase;
 #[cfg(feature = "odbc")]
 use crate::database::OdbcDatabase;
 use crate::install;
 use crate::semaphore::Semaphore;
-use crate::Database;
 use adbc_core::{
+    Driver as _,
     driver_manager::ManagedDriver as ManagedAdbcDriver,
     error::{Error, Result, Status},
     options::{AdbcVersion, OptionDatabase, OptionValue},
-    Driver as _,
 };
 use libloading;
 use parking_lot::RwLockUpgradableReadGuard;

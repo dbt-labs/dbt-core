@@ -1,3 +1,4 @@
+use crate::AdapterType;
 use crate::cast_util::dyn_base_columns_to_value;
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::funcs::{execute_macro, none_value};
@@ -5,17 +6,16 @@ use crate::record_batch_utils::get_column_values;
 use crate::relation_object::RelationObject;
 use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
-use crate::sql_engine::{execute_query_with_retry, SqlEngine};
-use crate::AdapterType;
+use crate::sql_engine::{SqlEngine, execute_query_with_retry};
 use crate::{AdapterResult, AdapterTyping};
 use dbt_agate::AgateTable;
 
 use arrow::array::{RecordBatch, StringArray, TimestampMillisecondArray};
 use arrow_schema::{DataType, Schema};
-use dbt_common::behavior_flags::BehaviorFlag;
 use dbt_common::FsResult;
+use dbt_common::behavior_flags::BehaviorFlag;
 use dbt_frontend_common::dialect::Dialect;
-use dbt_schemas::schemas::columns::base::{string_type, BaseColumn, StdColumn};
+use dbt_schemas::schemas::columns::base::{BaseColumn, StdColumn, string_type};
 use dbt_schemas::schemas::common::Constraint;
 use dbt_schemas::schemas::common::ConstraintSupport;
 use dbt_schemas::schemas::common::ConstraintType;
@@ -28,7 +28,7 @@ use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_schemas::schemas::relations::relation_configs::BaseRelationConfig;
 use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes};
 use dbt_xdbc::{Connection, QueryCtx};
-use minijinja::{args, State, Value};
+use minijinja::{State, Value, args};
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -791,7 +791,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                         return Err(AdapterError::new(
                             AdapterErrorKind::Configuration,
                             format!("Could not find key {column}"),
-                        ))
+                        ));
                     }
                 },
                 None => column.to_string(),
@@ -833,7 +833,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         if invalidate_hard_deletes.is_some() && hard_deletes.is_some() {
             return Err(AdapterError::new(
                 AdapterErrorKind::Configuration,
-                "You cannot set both the invalidate_hard_deletes and hard_deletes config properties on the same snapshot."
+                "You cannot set both the invalidate_hard_deletes and hard_deletes config properties on the same snapshot.",
             ));
         }
 

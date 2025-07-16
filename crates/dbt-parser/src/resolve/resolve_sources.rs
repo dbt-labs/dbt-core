@@ -1,16 +1,16 @@
 //! Module containing the entrypoint for the resolve phase.
-use crate::dbt_project_config::{init_project_config, RootProjectConfigs};
+use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
 use crate::utils::get_node_fqn;
 
 use dbt_common::io_args::{IoArgs, StaticAnalysisKind};
-use dbt_common::{err, show_error, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, err, show_error};
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
-use dbt_jinja_utils::serde::{into_typed_with_jinja, Omissible};
+use dbt_jinja_utils::serde::{Omissible, into_typed_with_jinja};
 use dbt_jinja_utils::utils::generate_relation_name;
 use dbt_schemas::schemas::common::{
-    merge_meta, merge_tags, normalize_quoting, DbtChecksum, DbtMaterialization, DbtQuoting,
-    FreshnessDefinition, FreshnessRules, NodeDependsOn,
+    DbtChecksum, DbtMaterialization, DbtQuoting, FreshnessDefinition, FreshnessRules,
+    NodeDependsOn, merge_meta, merge_tags, normalize_quoting,
 };
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::project::{DefaultTo, SourceConfig};

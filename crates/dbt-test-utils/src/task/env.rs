@@ -1,12 +1,12 @@
 use std::path::{Path, PathBuf};
 
-use dbt_common::{stdfs, FsResult};
+use dbt_common::{FsResult, stdfs};
 use tempfile::TempDir;
 
 use crate::task::utils::strip_leading_relative;
 
-use super::utils::copy_dir_non_ignored;
 use super::TestResult;
+use super::utils::copy_dir_non_ignored;
 
 // ------------------------------------------------------------------------------------------------
 /// Project environment to help us isolate test execution, such that one test uses one directory.

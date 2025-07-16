@@ -1,13 +1,13 @@
 use crate::information_schema::InformationSchema;
 use crate::relation_object::{RelationObject, StaticBaseRelation};
 
-use dbt_common::{current_function_name, fs_err, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, current_function_name, fs_err};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath,
 };
-use minijinja::arg_utils::{check_num_args, ArgParser};
+use minijinja::arg_utils::{ArgParser, check_num_args};
 use minijinja::{Error as MinijinjaError, State, Value};
 
 use std::any::Any;

@@ -75,13 +75,13 @@ use std::{
 };
 
 use dbt_common::{
-    fs_err, io_args::IoArgs, io_utils::try_read_yml_to_str, show_error,
-    show_warning_soon_to_be_error, CodeLocation, ErrorCode, FsError, FsResult,
+    CodeLocation, ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs,
+    io_utils::try_read_yml_to_str, show_error, show_warning_soon_to_be_error,
 };
 use dbt_serde_yaml::Value;
 use minijinja::listener::RenderingEventListener;
 use regex::Regex;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{jinja_environment::JinjaEnvironment, phases::load::secret_renderer::render_secrets};
 

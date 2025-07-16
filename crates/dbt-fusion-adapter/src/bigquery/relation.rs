@@ -1,7 +1,7 @@
 use crate::relation_object::{RelationObject, StaticBaseRelation};
 
 use arrow::array::RecordBatch;
-use dbt_common::{fs_err, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::{

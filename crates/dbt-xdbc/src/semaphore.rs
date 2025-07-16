@@ -117,8 +117,8 @@ impl fmt::Debug for Semaphore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::mpsc::channel;
     use std::sync::Arc;
+    use std::sync::mpsc::channel;
     use std::thread;
     use std::time::Duration;
 

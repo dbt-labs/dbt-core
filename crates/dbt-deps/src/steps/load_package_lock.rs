@@ -1,9 +1,10 @@
 use dbt_common::io_args::IoArgs;
 use dbt_common::{
+    ErrorCode, FsResult,
     constants::{DBT_PACKAGES_LOCK_FILE, DBT_PROJECT_YML},
     err, fs_err,
     io_utils::try_read_yml_to_str,
-    show_warning, stdfs, ErrorCode, FsResult,
+    show_warning, stdfs,
 };
 use dbt_jinja_utils::serde::from_yaml_raw;
 use dbt_schemas::schemas::{

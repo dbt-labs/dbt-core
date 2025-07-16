@@ -1,7 +1,7 @@
 use super::config::AdapterConfig;
 use super::errors::AdapterResult;
 
-use dbt_xdbc::{database, Backend};
+use dbt_xdbc::{Backend, database};
 
 /// Authorization trait.
 pub trait Auth: Send + Sync {

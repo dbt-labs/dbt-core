@@ -4,7 +4,7 @@
 
 use arrow::array::{AsArray as _, PrimitiveArray};
 use arrow::buffer::{BooleanBuffer, NullBuffer, ScalarBuffer};
-use arrow::compute::{cast_with_options, CastOptions};
+use arrow::compute::{CastOptions, cast_with_options};
 use arrow::datatypes::*;
 use arrow::util::display::FormatOptions;
 use arrow_array::{Array, ArrowPrimitiveType, BooleanArray, GenericByteArray, OffsetSizeTrait};
@@ -584,8 +584,8 @@ mod tests {
         TimestampMillisecondArray, TimestampNanosecondArray, TimestampSecondArray, UInt64Array,
     };
     use arrow_buffer::Buffer;
-    use arrow_data::decimal::MAX_DECIMAL128_FOR_EACH_PRECISION;
     use arrow_data::ArrayData;
+    use arrow_data::decimal::MAX_DECIMAL128_FOR_EACH_PRECISION;
     use minijinja::Value;
     use std::sync::Arc;
 

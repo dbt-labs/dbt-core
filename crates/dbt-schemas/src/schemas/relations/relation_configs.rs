@@ -1,4 +1,4 @@
-use crate::schemas::{relations::base::BaseRelation, InternalDbtNodeAttributes};
+use crate::schemas::{InternalDbtNodeAttributes, relations::base::BaseRelation};
 use dbt_common::FsResult;
 use minijinja::Value;
 use std::{any::Any, collections::BTreeMap, fmt, sync::Arc};

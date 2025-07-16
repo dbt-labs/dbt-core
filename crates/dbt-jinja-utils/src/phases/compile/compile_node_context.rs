@@ -8,11 +8,11 @@ use std::{
 use dashmap::DashMap;
 use dbt_common::serde_utils::convert_json_to_dash_map;
 use dbt_fusion_adapter::{load_store::ResultStore, relation_object::create_relation};
-use dbt_schemas::schemas::{relations::base::BaseRelation, CommonAttributes, NodeBaseAttributes};
+use dbt_schemas::schemas::{CommonAttributes, NodeBaseAttributes, relations::base::BaseRelation};
 use dbt_schemas::state::{DbtRuntimeConfig, RefsAndSourcesTracker};
 use minijinja::{
-    constants::{TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID},
     Value as MinijinjaValue,
+    constants::{TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID},
 };
 use serde_json::Value;
 

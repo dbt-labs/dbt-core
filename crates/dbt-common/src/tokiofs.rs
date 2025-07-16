@@ -3,7 +3,7 @@ use std::time::SystemTime;
 use tokio;
 
 use crate::error::LiftableResult;
-use crate::{ectx, FsResult};
+use crate::{FsResult, ectx};
 
 /// Wrapper around [`tokio::fs::create_dir_all`] that returns a useful error in case of failure.
 pub async fn create_dir_all(path: impl AsRef<Path>) -> FsResult<()> {

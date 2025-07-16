@@ -8,7 +8,7 @@ use std::{
 };
 
 use dbt_common::{
-    fs_err, io_args::IoArgs, show_error, show_warning_soon_to_be_error, ErrorCode, FsResult,
+    ErrorCode, FsResult, fs_err, io_args::IoArgs, show_error, show_warning_soon_to_be_error,
 };
 use dbt_schemas::schemas::project::{
     DataTestConfig, DefaultTo, IterChildren, ModelConfig, SeedConfig, SnapshotConfig, SourceConfig,

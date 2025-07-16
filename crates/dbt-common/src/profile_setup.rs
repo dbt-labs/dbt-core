@@ -1,5 +1,5 @@
 use crate::pretty_string::GREEN;
-use crate::{fs_err, ErrorCode, FsResult};
+use crate::{ErrorCode, FsResult, fs_err};
 use dialoguer::{Confirm, Input, Password, Select};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -73,7 +73,7 @@ impl ProfileSetup {
                     ErrorCode::InvalidArgument,
                     "Unsupported adapter: {}",
                     adapter
-                ))
+                ));
             }
         }
 

@@ -1,8 +1,8 @@
+use crate::AdapterResult;
 use crate::databricks::relation_configs::base::{
     DatabricksComponentConfig, DatabricksComponentProcessor,
     DatabricksComponentProcessorProperties, DatabricksRelationResults,
 };
-use crate::AdapterResult;
 
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use serde::{Deserialize, Serialize};

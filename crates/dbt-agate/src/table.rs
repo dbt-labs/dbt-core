@@ -1,3 +1,4 @@
+use crate::Tuple;
 use crate::column::Column;
 use crate::columns::ColumnNamesAsTuple;
 use crate::columns::Columns;
@@ -7,17 +8,16 @@ use crate::print_table::print_table;
 use crate::row::Row;
 use crate::rows::Rows;
 use crate::vec_of_rows::VecOfRows;
-use crate::Tuple;
 
 use arrow::record_batch::RecordBatch;
 use arrow_schema::{ArrowError, Schema};
+use minijinja::Value;
 use minijinja::arg_utils::ArgsIter;
 use minijinja::listener::RenderingEventListener;
-use minijinja::value::mutable_map::MutableMap;
 use minijinja::value::Kwargs;
 use minijinja::value::ValueMap;
+use minijinja::value::mutable_map::MutableMap;
 use minijinja::value::{Enumerator, Object};
-use minijinja::Value;
 use minijinja::{Error as MinijinjaError, ErrorKind, State};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -551,9 +551,9 @@ mod tests {
     use arrow::datatypes::{DataType, Field, Schema};
     use arrow::record_batch::RecordBatch;
     use arrow_schema::Fields;
-    use minijinja::value::mutable_map::MutableMap;
-    use minijinja::value::ValueMap;
     use minijinja::Environment;
+    use minijinja::value::ValueMap;
+    use minijinja::value::mutable_map::MutableMap;
     use std::sync::Arc;
 
     fn simple_record_batch() -> RecordBatch {

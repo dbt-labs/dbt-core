@@ -1,11 +1,11 @@
-use dbt_common::{fs_err, ErrorCode, FsError, FsResult};
+use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
 use dbt_fusion_adapter::{
-    factory::create_static_relation, BaseAdapter, BridgeAdapter, ParseAdapter, SqlEngine,
+    BaseAdapter, BridgeAdapter, ParseAdapter, SqlEngine, factory::create_static_relation,
 };
 use minijinja::{
-    listener::RenderingEventListener,
-    value::{mutable_map::MutableMap, ValueMap},
     Environment, Error as MinijinjaError, State, Template, UndefinedBehavior, Value,
+    listener::RenderingEventListener,
+    value::{ValueMap, mutable_map::MutableMap},
 };
 use serde::Serialize;
 use std::{borrow::Cow, collections::BTreeMap, rc::Rc, sync::Arc};

@@ -4,8 +4,8 @@ use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 
 use super::{
-    common::{FreshnessDefinition, FreshnessStatus},
     TimingInfo,
+    common::{FreshnessDefinition, FreshnessStatus},
 };
 
 /// Metadata about the dbt run invocation.

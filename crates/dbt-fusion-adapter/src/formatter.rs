@@ -1,12 +1,12 @@
 use minijinja_contrib::modules::py_datetime::date::PyDate;
 use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
 
+use crate::AdapterType;
 use crate::bigquery::formatter::BigquerySqlLiteralFormatter;
 use crate::databricks::formatter::DatabricksSqlLiteralFormatter;
 use crate::postgres::formatter::PostgreSqlLiteralFormatter;
 use crate::redshift::formatter::RedshiftSqlLiteralFormatter;
 use crate::snowflake::formatter::SnowflakeSqlLiteralFormatter;
-use crate::AdapterType;
 
 /// Formatter for SQL Literals
 /// This trait contains default implementations based on the SQL standard

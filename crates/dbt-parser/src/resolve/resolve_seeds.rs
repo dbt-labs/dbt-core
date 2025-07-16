@@ -1,10 +1,10 @@
-use crate::dbt_project_config::{init_project_config, RootProjectConfigs};
+use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
 use crate::utils::{
-    get_node_fqn, register_duplicate_resource, trigger_duplicate_errors,
-    update_node_relation_components, RelationComponents,
+    RelationComponents, get_node_fqn, register_duplicate_resource, trigger_duplicate_errors,
+    update_node_relation_components,
 };
 use dbt_common::io_args::IoArgs;
-use dbt_common::{fs_err, show_error, stdfs, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, fs_err, show_error, stdfs};
 use dbt_frontend_common::Dialect;
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;

@@ -1,6 +1,6 @@
 //! This module contains the logic for rendering secrets in the dbt project.
 
-use dbt_common::{fs_err, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, fs_err};
 use minijinja::{arg_utils::ArgParser, value::Kwargs};
 use regex::Regex;
 
@@ -10,8 +10,8 @@ const SECRET_PLACEHOLDER: &str = "$$$DBT_SECRET_START$$${}$$$DBT_SECRET_END$$$";
 
 /// Prefix which identifies environment variables which contains secrets.
 /// A function that returns an environment variable from the environment, with special handling for secrets
-pub fn secret_context_env_var_fn(
-) -> impl Fn(&[minijinja::Value], Kwargs) -> Result<minijinja::Value, minijinja::Error> {
+pub fn secret_context_env_var_fn()
+-> impl Fn(&[minijinja::Value], Kwargs) -> Result<minijinja::Value, minijinja::Error> {
     move |args: &[minijinja::Value], kwargs: Kwargs| -> Result<minijinja::Value, minijinja::Error> {
         let mut env_vars_guard = ENV_VARS.lock().unwrap();
 

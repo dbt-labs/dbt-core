@@ -1,18 +1,18 @@
 use std::path::PathBuf;
 use std::{collections::HashMap, str::FromStr};
 
-use dbt_common::{err, fs_err, ErrorCode, FsError, FsResult};
+use dbt_common::{ErrorCode, FsError, FsResult, err, fs_err};
 use dbt_schemas::schemas::packages::{
     GitPackage, HubPackage, PackageVersion, PrivatePackage, TarballPackage,
 };
 use serde_json::Value;
 
 use super::semver::{
-    filter_installable, reduce_versions, resolve_to_specific_version, Matchers, Version,
-    VersionSpecifier,
+    Matchers, Version, VersionSpecifier, filter_installable, reduce_versions,
+    resolve_to_specific_version,
 };
 
-use super::hub_client::{HubClient, DBT_CORE_FIXED_VERSION};
+use super::hub_client::{DBT_CORE_FIXED_VERSION, HubClient};
 
 #[derive(Debug, Clone)]
 pub struct HubPinnedPackage {

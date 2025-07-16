@@ -25,7 +25,7 @@ use std::str::FromStr;
 use std::sync::LazyLock;
 use strum::{Display, EnumIter, EnumString};
 
-use crate::{err, fs_err, ErrorCode, FsResult};
+use crate::{ErrorCode, FsResult, err, fs_err};
 
 // Common has only the syntax. The rest is in dbt-scheduler
 
@@ -455,7 +455,7 @@ pub fn parse_model_specifiers(tokens: &[String]) -> FsResult<SelectExpression> {
             return Err(fs_err!(
                 ErrorCode::SelectorError,
                 "selector contained only delimiters but no actual criteria"
-            ))
+            ));
         }
         1 => or_terms.pop().unwrap(),
         _ => SelectExpression::Or(or_terms),

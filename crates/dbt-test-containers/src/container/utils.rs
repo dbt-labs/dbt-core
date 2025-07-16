@@ -113,7 +113,9 @@ pub async fn get_docker() -> Result<bollard::Docker, ContainerError> {
                     match compare_versions(m.as_str(), MIN_DOCKER_DESKTOP_VERSION) {
                         std::cmp::Ordering::Greater | std::cmp::Ordering::Equal => {}
                         std::cmp::Ordering::Less => {
-                            let target: &str = &format!("Docker Desktop version is less than the minimum supported version. Consider upgrading to at least '{MIN_DOCKER_DESKTOP_VERSION}'");
+                            let target: &str = &format!(
+                                "Docker Desktop version is less than the minimum supported version. Consider upgrading to at least '{MIN_DOCKER_DESKTOP_VERSION}'"
+                            );
                             println!("{target}");
                             return Ok(docker);
                         }
@@ -125,7 +127,9 @@ pub async fn get_docker() -> Result<bollard::Docker, ContainerError> {
             match compare_versions(&daemon_version, MIN_DOCKER_VERSION) {
                 std::cmp::Ordering::Greater | std::cmp::Ordering::Equal => {}
                 std::cmp::Ordering::Less => {
-                    let target: &str = &format!("Docker daemon version is less than the minimum supported version. Consider upgrading Docker daemon to at least '{MIN_DOCKER_VERSION}'");
+                    let target: &str = &format!(
+                        "Docker daemon version is less than the minimum supported version. Consider upgrading Docker daemon to at least '{MIN_DOCKER_VERSION}'"
+                    );
                     println!("{target}");
                 }
             }

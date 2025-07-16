@@ -1,12 +1,12 @@
 use crate::task::utils::relative_to_git_root;
 
 use super::{
+    ProjectEnv, TestEnv,
     task_seq::CommandFn,
     utils::{
         maybe_normalize_schema_name, maybe_normalize_slashes, maybe_normalize_time,
         normalize_version,
     },
-    ProjectEnv, TestEnv,
 };
 use itertools::Itertools;
 use once_cell::sync::Lazy;
@@ -20,9 +20,8 @@ use std::{
 use dbt_test_primitives::is_update_golden_files_mode;
 
 use dbt_common::{
-    err,
+    ErrorCode, FsResult, err,
     stdfs::{self},
-    ErrorCode, FsResult,
 };
 
 // Snowflake prompt for our REPL
@@ -39,11 +38,7 @@ fn postprocess_actual(content: String, sort_output: bool) -> String {
     .iter()
     .fold(content, |acc, transform| transform(acc));
 
-    if sort_output {
-        sort_lines(res)
-    } else {
-        res
-    }
+    if sort_output { sort_lines(res) } else { res }
 }
 
 fn postprocess_golden(content: String, sort_output: bool) -> String {
@@ -55,11 +50,7 @@ fn postprocess_golden(content: String, sort_output: bool) -> String {
     .iter()
     .fold(content, |acc, transform| transform(acc));
 
-    if sort_output {
-        sort_lines(res)
-    } else {
-        res
-    }
+    if sort_output { sort_lines(res) } else { res }
 }
 
 fn assert_output(channel: &str, actual: String, goldie_path: &Path, sort_output: bool) {

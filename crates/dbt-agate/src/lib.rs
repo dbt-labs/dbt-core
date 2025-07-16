@@ -5,7 +5,7 @@ use std::sync::Arc;
 use minijinja::arg_utils::ArgsIter;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Object, ObjectRepr};
-use minijinja::{assert_nullary_args, Error as MinijinjaError, ErrorKind, State, Value};
+use minijinja::{Error as MinijinjaError, ErrorKind, State, Value, assert_nullary_args};
 
 mod column;
 mod columns;

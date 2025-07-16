@@ -1,14 +1,14 @@
 //! Utility functions for the resolver
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use dbt_common::io_args::IoArgs;
-use dbt_common::{fs_err, show_error, ErrorCode, FsError, FsResult};
+use dbt_common::{ErrorCode, FsError, FsResult, fs_err, show_error};
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_jinja_utils::utils::{generate_component_name, generate_relation_name};
-use dbt_schemas::schemas::common::{normalize_quoting, DbtMaterialization, ResolvedQuoting};
+use dbt_schemas::schemas::InternalDbtNodeAttributes;
+use dbt_schemas::schemas::common::{DbtMaterialization, ResolvedQuoting, normalize_quoting};
 use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::properties::ModelProperties;
-use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use minijinja::compiler::ast::{MacroKind, Stmt};
 use minijinja::compiler::parser::Parser;
 use minijinja::machinery::WhitespaceConfig;

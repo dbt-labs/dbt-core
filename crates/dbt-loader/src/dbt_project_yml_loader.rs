@@ -1,5 +1,5 @@
 use dbt_common::io_args::IoArgs;
-use dbt_common::{io_utils::try_read_yml_to_str, unexpected_fs_err, FsResult};
+use dbt_common::{FsResult, io_utils::try_read_yml_to_str, unexpected_fs_err};
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnvironment,
     phases::{load::RenderProjectScope, parse::build_resolve_context},

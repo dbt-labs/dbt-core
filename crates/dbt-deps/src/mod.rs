@@ -14,12 +14,13 @@ pub mod utils;
 use dbt_common::fsinfo;
 use dbt_common::io_args::IoArgs;
 use dbt_common::{
+    ErrorCode, FsResult,
     constants::{FETCHING, INSTALLING, LOADING},
-    err, show_progress, stdfs, ErrorCode, FsResult,
+    err, show_progress, stdfs,
 };
 use dbt_jinja_utils::{jinja_environment::JinjaEnvironment, phases::load::RenderSecretScope};
 use dbt_schemas::schemas::packages::{DbtPackagesLock, UpstreamProject};
-use hub_client::{HubClient, DBT_HUB_URL};
+use hub_client::{DBT_HUB_URL, HubClient};
 use std::{collections::BTreeMap, path::Path};
 use steps::{
     compute_package_lock, install_packages, load_dbt_packages, try_load_valid_dbt_packages_lock,

@@ -1,14 +1,14 @@
 use super::utils::{base_tests_inner, column_tests_inner};
 use crate::args::ResolveArgs;
-use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use dbt_common::FsError;
 use dbt_common::FsResult;
-use dbt_common::{err, ErrorCode};
+use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
+use dbt_common::{ErrorCode, err};
 use dbt_common::{fs_err, stdfs};
 use dbt_frontend_common::Dialect;
 use dbt_jinja_utils::serde::check_single_expression_without_whitepsace_control;
-use dbt_schemas::schemas::common::normalize_quote;
 use dbt_schemas::schemas::common::Versions;
+use dbt_schemas::schemas::common::normalize_quote;
 use dbt_schemas::schemas::data_tests::{
     AcceptedValuesTestProperties, DataTests, NotNullTestProperties, RelationshipsTestProperties,
     UniqueTestProperties,

@@ -10,6 +10,9 @@ use std::{
 use crate::{
     dbt_utils::get_dbt_schema_version,
     schemas::{
+        CommonAttributes, DbtModel, DbtModelAttr, DbtSeed, DbtSnapshot, DbtSource, DbtTest,
+        DbtUnitTest, DbtUnitTestAttr, InternalDbtNode, IntrospectionKind, NodeBaseAttributes,
+        Nodes,
         common::{DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn},
         macros::{DbtDocsMacro, DbtMacro},
         manifest::manifest_nodes::{
@@ -17,9 +20,6 @@ use crate::{
             ManifestSource, ManifestUnitTest,
         },
         nodes::{DbtSeedAttr, DbtSnapshotAttr, DbtSourceAttr, DbtTestAttr},
-        CommonAttributes, DbtModel, DbtModelAttr, DbtSeed, DbtSnapshot, DbtSource, DbtTest,
-        DbtUnitTest, DbtUnitTestAttr, InternalDbtNode, IntrospectionKind, NodeBaseAttributes,
-        Nodes,
     },
     state::ResolverState,
 };

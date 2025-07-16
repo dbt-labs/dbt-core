@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use dbt_common::{fs_err, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_schemas::state::DbtVars;
 
 // Load vars

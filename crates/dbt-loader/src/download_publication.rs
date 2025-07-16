@@ -1,5 +1,5 @@
 use dbt_common::io_args::IoArgs;
-use dbt_common::{fs_err, fsinfo, show_progress, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, fs_err, fsinfo, show_progress};
 use dbt_schemas::schemas::{packages::UpstreamProject, project::ProjectDbtCloudConfig};
 use std::time::SystemTime;
 
@@ -59,10 +59,12 @@ pub(crate) async fn download_publication_artifacts(
     // If all artifacts are recent, we can skip the download process
     #[allow(clippy::disallowed_methods)]
     if all_artifacts_recent {
-        std::env::set_var(
-            "DBT_CLOUD_PUBLICATIONS_DIR",
-            default_dir.display().to_string(),
-        );
+        unsafe {
+            std::env::set_var(
+                "DBT_CLOUD_PUBLICATIONS_DIR",
+                default_dir.display().to_string(),
+            );
+        }
         return Ok(());
     }
     // remove all files in the default_dir
@@ -265,11 +267,13 @@ pub(crate) async fn download_publication_artifacts(
     }
 
     // Set environment variable to the download directory
-    #[allow(clippy::disallowed_methods)]
-    std::env::set_var(
-        "DBT_CLOUD_PUBLICATIONS_DIR",
-        default_dir.display().to_string(),
-    );
+    unsafe {
+        #[allow(clippy::disallowed_methods)]
+        std::env::set_var(
+            "DBT_CLOUD_PUBLICATIONS_DIR",
+            default_dir.display().to_string(),
+        );
+    }
 
     Ok(())
 }

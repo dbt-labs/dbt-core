@@ -1,4 +1,4 @@
-use dbt_common::{err, fs_err, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_schemas::schemas::packages::PrivatePackage;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -49,19 +49,19 @@ pub fn get_resolved_url(private_package: &PrivatePackage) -> FsResult<String> {
                 return Ok(format!(
                     "git@github.com:{}.git",
                     private_package.private.deref()
-                ))
+                ));
             }
             "gitlab" if parts.len() > 1 => {
                 return Ok(format!(
                     "git@gitlab.com:{}.git",
                     private_package.private.deref()
-                ))
+                ));
             }
             "ado" if parts.len() == 3 => {
                 return Ok(format!(
                     "git@ssh.dev.azure.com:v3/{}",
                     private_package.private.deref()
-                ))
+                ));
             }
             _ => {
                 return err!(
@@ -69,7 +69,7 @@ pub fn get_resolved_url(private_package: &PrivatePackage) -> FsResult<String> {
                     r#"Invalid private package configuration: '{}' provider: '{}'"#,
                     private_package.private.deref(),
                     private_package.provider.as_deref().unwrap_or_default()
-                )
+                );
             }
         };
     }
@@ -128,8 +128,10 @@ mod tests {
                 }
             ]"#;
 
-        #[allow(clippy::disallowed_methods)]
-        std::env::set_var("DBT_ENV_PRIVATE_GIT_PROVIDER_INFO", json_provider_str);
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::set_var("DBT_ENV_PRIVATE_GIT_PROVIDER_INFO", json_provider_str);
+        }
 
         let provider_info = get_provider_info();
         let provider = &provider_info.get("dbt-labs").unwrap()[0];
@@ -155,8 +157,10 @@ mod tests {
     #[test]
     fn test_local_private_packages_github() {
         // Make sure the variable is not set as we want to simulate a local run.
-        #[allow(clippy::disallowed_methods)]
-        std::env::remove_var("DBT_ENV_PRIVATE_GIT_PROVIDER_INFO");
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_ENV_PRIVATE_GIT_PROVIDER_INFO");
+        }
 
         let private_package = PrivatePackage {
             private: "dbt-labs/dbt-integration-project".to_string().into(),
@@ -177,8 +181,10 @@ mod tests {
     #[test]
     fn test_local_private_packages_gitlab() {
         // Make sure the variable is not set as we want to simulate a local run.
-        #[allow(clippy::disallowed_methods)]
-        std::env::remove_var("DBT_ENV_PRIVATE_GIT_PROVIDER_INFO");
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_ENV_PRIVATE_GIT_PROVIDER_INFO");
+        }
 
         let private_package = PrivatePackage {
             private: "dbt-labs/unrestricted/nesting/allowed/dbt-integration-project"
@@ -201,8 +207,10 @@ mod tests {
     #[test]
     fn test_local_private_packages_azure() {
         // Make sure the variable is not set as we want to simulate a local run.
-        #[allow(clippy::disallowed_methods)]
-        std::env::remove_var("DBT_ENV_PRIVATE_GIT_PROVIDER_INFO");
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_ENV_PRIVATE_GIT_PROVIDER_INFO");
+        }
 
         let private_package = PrivatePackage {
             private: "dbt-labs/dbt-integration-project/some-repo"
@@ -225,8 +233,10 @@ mod tests {
     #[test]
     fn test_local_private_packages_error() {
         // Make sure the variable is not set as we want to simulate a local run.
-        #[allow(clippy::disallowed_methods)]
-        std::env::remove_var("DBT_ENV_PRIVATE_GIT_PROVIDER_INFO");
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var("DBT_ENV_PRIVATE_GIT_PROVIDER_INFO");
+        }
 
         let private_package = PrivatePackage {
             private: "dbt-labs/dbt-integration-project/some-repo"

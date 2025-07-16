@@ -1,7 +1,7 @@
 // This code was generated from dbt-make-dbt-schemas/json_schemas/dbt_project.json on 2025-03-31T06:22:06. Do not edit.
 
-use std::collections::btree_map::Iter;
 use std::collections::HashMap;
+use std::collections::btree_map::Iter;
 use std::fmt::Debug;
 
 use dbt_serde_yaml::JsonSchema;
@@ -15,8 +15,8 @@ use serde_with::skip_serializing_none;
 use strum::{Display, EnumString};
 
 use crate::schemas::common::DbtQuoting;
-use crate::schemas::project::configs::saved_queries_config::ProjectSavedQueriesConfig;
 use crate::schemas::project::ProjectSemanticModelConfig;
+use crate::schemas::project::configs::saved_queries_config::ProjectSavedQueriesConfig;
 use crate::schemas::serde::FloatOrString;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::StringOrInteger;

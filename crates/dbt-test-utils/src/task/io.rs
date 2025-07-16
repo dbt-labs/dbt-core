@@ -12,11 +12,11 @@ use arrow::datatypes::DataType;
 use arrow::record_batch::RecordBatch;
 use async_trait::async_trait;
 use dbt_common::{
-    stdfs::{self, File},
     FsResult,
+    stdfs::{self, File},
 };
-use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::arrow::ArrowWriter;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::file::properties::WriterProperties;
 use regex::Regex;
 

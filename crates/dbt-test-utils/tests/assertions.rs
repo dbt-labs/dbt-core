@@ -1,4 +1,4 @@
-use dbt_common::{current_function_name, FsResult};
+use dbt_common::{FsResult, current_function_name};
 use dbt_test_utils::task::{
     AssertDirExistsTask, AssertFileContainsTask, AssertFileExistsTask, ProjectEnv, TaskSeq,
 };

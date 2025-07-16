@@ -4,8 +4,8 @@ use dbt_serde_yaml::ShouldBe;
 use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-use std::collections::btree_map::Iter;
 use std::collections::BTreeMap;
+use std::collections::btree_map::Iter;
 
 use crate::default_to;
 use crate::schemas::common::DbtMaterialization;
@@ -16,19 +16,19 @@ use crate::schemas::common::Hooks;
 use crate::schemas::common::PersistDocsConfig;
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfigLegacy};
-use crate::schemas::project::configs::common::default_hooks;
-use crate::schemas::project::configs::common::default_meta_and_tags;
-use crate::schemas::project::configs::common::default_quoting;
-use crate::schemas::project::configs::common::default_to_grants;
-use crate::schemas::project::configs::common::RedshiftNodeConfig;
 use crate::schemas::project::BigQueryNodeConfig;
 use crate::schemas::project::DatabricksNodeConfig;
 use crate::schemas::project::DefaultTo;
 use crate::schemas::project::IterChildren;
 use crate::schemas::project::SnowflakeNodeConfig;
+use crate::schemas::project::configs::common::RedshiftNodeConfig;
+use crate::schemas::project::configs::common::default_hooks;
+use crate::schemas::project::configs::common::default_meta_and_tags;
+use crate::schemas::project::configs::common::default_quoting;
+use crate::schemas::project::configs::common::default_to_grants;
+use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::bool_or_string_bool;
 use crate::schemas::serde::u64_or_string_u64;
-use crate::schemas::serde::StringOrArrayOfStrings;
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
@@ -565,36 +565,36 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
 
     fn default_to(&mut self, parent: &SnapshotConfig) {
         let SnapshotConfig {
-            ref mut database,
-            ref mut schema,
-            ref mut alias,
-            ref mut materialized,
-            ref mut strategy,
-            ref mut unique_key,
-            ref mut check_cols,
-            ref mut updated_at,
-            ref mut dbt_valid_to_current,
-            ref mut snapshot_meta_column_names,
-            ref mut hard_deletes,
-            ref mut enabled,
-            ref mut tags,
-            ref mut pre_hook,
-            ref mut post_hook,
-            ref mut persist_docs,
-            ref mut grants,
-            ref mut event_time,
-            ref mut quoting,
-            ref mut meta,
-            ref mut group,
-            ref mut quote_columns,
-            ref mut invalidate_hard_deletes,
-            ref mut docs,
-            ref mut static_analysis,
+            database,
+            schema,
+            alias,
+            materialized,
+            strategy,
+            unique_key,
+            check_cols,
+            updated_at,
+            dbt_valid_to_current,
+            snapshot_meta_column_names,
+            hard_deletes,
+            enabled,
+            tags,
+            pre_hook,
+            post_hook,
+            persist_docs,
+            grants,
+            event_time,
+            quoting,
+            meta,
+            group,
+            quote_columns,
+            invalidate_hard_deletes,
+            docs,
+            static_analysis,
             // Flattened configs
-            snowflake_node_config: ref mut snowflake_model_config,
-            bigquery_node_config: ref mut bigquery_model_config,
-            databricks_node_config: ref mut databricks_model_config,
-            redshift_node_config: ref mut redshift_model_config,
+            snowflake_node_config: snowflake_model_config,
+            bigquery_node_config: bigquery_model_config,
+            databricks_node_config: databricks_model_config,
+            redshift_node_config: redshift_model_config,
         } = self;
 
         // Handle flattened configs

@@ -1,7 +1,7 @@
 use dbt_common::constants::DBT_SNAPSHOTS_DIR_NAME;
 use dbt_common::error::AbstractLocation;
 use dbt_common::io_args::StaticAnalysisKind;
-use dbt_common::{fs_err, show_error, show_warning, stdfs, unexpected_fs_err, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, fs_err, show_error, show_warning, stdfs, unexpected_fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
@@ -22,9 +22,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{init_project_config, RootProjectConfigs};
-use crate::renderer::{render_unresolved_sql_files, SqlFileRenderResult};
-use crate::utils::{update_node_relation_components, RelationComponents};
+use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
+use crate::renderer::{SqlFileRenderResult, render_unresolved_sql_files};
+use crate::utils::{RelationComponents, update_node_relation_components};
 
 use super::resolve_properties::MinimalPropertiesEntry;
 

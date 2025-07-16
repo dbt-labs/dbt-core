@@ -1,5 +1,5 @@
 use crate::stdfs::File;
-use crate::{err, fs_err, stdfs::canonicalize, ErrorCode, FsError, FsResult};
+use crate::{ErrorCode, FsError, FsResult, err, fs_err, stdfs::canonicalize};
 use pathdiff::diff_paths;
 use regex::Regex;
 use std::{
@@ -145,19 +145,22 @@ pub fn determine_project_dir(inputs: &[String], project_file: &str) -> FsResult<
                 if !inputs.is_empty() {
                     err!(
                         ErrorCode::IoError,
-                        "Invalid value '{}' for <TARGETS>: Please pass a path that points to or into a dbt project directory", inputs[0]
+                        "Invalid value '{}' for <TARGETS>: Please pass a path that points to or into a dbt project directory",
+                        inputs[0]
                     )
                 } else {
                     err!(
                         ErrorCode::IoError,
-                        "The current directory is not a dbt project directory; cd into it or pass a <path> to it via --project-dir <path>"                )
+                        "The current directory is not a dbt project directory; cd into it or pass a <path> to it via --project-dir <path>"
+                    )
                 }
             } else {
                 let relative_path =
                     diff_paths(search_start, env::current_dir()?).unwrap_or(env::current_dir()?);
                 err!(
                     ErrorCode::IoError,
-                    "Invalid value '{}' for <TARGETS>: Please pass a path that points to or into a dbt project directory", relative_path.display()
+                    "Invalid value '{}' for <TARGETS>: Please pass a path that points to or into a dbt project directory",
+                    relative_path.display()
                 )
             }
         }

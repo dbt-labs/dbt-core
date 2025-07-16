@@ -6,17 +6,17 @@ use core::fmt;
 use std::sync::Arc;
 
 use adbc_core::{
+    Optionable, PartitionedResult, Statement as _,
     driver_manager::ManagedStatement as ManagedAdbcStatement,
     error::Result,
     options::{OptionStatement, OptionValue},
-    Optionable, PartitionedResult, Statement as _,
 };
 use arrow_array::{RecordBatch, RecordBatchReader};
 use arrow_schema::Schema;
 
 #[cfg(feature = "odbc")]
 use crate::odbc::ManagedOdbcStatement;
-use crate::{semaphore::Semaphore, Backend, QueryCtx};
+use crate::{Backend, QueryCtx, semaphore::Semaphore};
 
 /// XDBC Statement.
 ///

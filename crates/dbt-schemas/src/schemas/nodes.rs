@@ -2,9 +2,9 @@ use core::fmt;
 use std::str::FromStr;
 use std::{any::Any, collections::BTreeMap, fmt::Display, path::PathBuf, sync::Arc};
 
-use dbt_common::{err, io_args::StaticAnalysisKind, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, err, io_args::StaticAnalysisKind};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use serde_with::skip_serializing_none;
 
 use crate::schemas::{
@@ -983,6 +983,42 @@ impl Nodes {
                 self.analyses
                     .get(unique_id)
                     .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
+            })
+    }
+
+    pub fn get_node_owned(&self, unique_id: &str) -> Option<Arc<dyn InternalDbtNodeAttributes>> {
+        self.models
+            .get(unique_id)
+            .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
+            .or_else(|| {
+                self.seeds
+                    .get(unique_id)
+                    .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
+            })
+            .or_else(|| {
+                self.tests
+                    .get(unique_id)
+                    .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
+            })
+            .or_else(|| {
+                self.unit_tests
+                    .get(unique_id)
+                    .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
+            })
+            .or_else(|| {
+                self.sources
+                    .get(unique_id)
+                    .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
+            })
+            .or_else(|| {
+                self.snapshots
+                    .get(unique_id)
+                    .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
+            })
+            .or_else(|| {
+                self.analyses
+                    .get(unique_id)
+                    .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
             })
     }
 

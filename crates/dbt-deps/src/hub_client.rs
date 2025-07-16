@@ -1,9 +1,9 @@
-use dbt_common::{err, fs_err, ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_schemas::schemas::packages::DbtPackageEntry;
 use reqwest::{Client, StatusCode};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{
-    policies::ExponentialBackoff as RetryExponentialBackoff, RetryTransientMiddleware,
+    RetryTransientMiddleware, policies::ExponentialBackoff as RetryExponentialBackoff,
 };
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};

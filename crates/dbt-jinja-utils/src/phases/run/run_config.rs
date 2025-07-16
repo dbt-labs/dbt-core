@@ -3,10 +3,10 @@
 use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
 use minijinja::{
+    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value,
     arg_utils::ArgParser,
     listener::RenderingEventListener,
     value::{Enumerator, Object},
-    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value,
 };
 
 /// A struct that represents a runtime config object to be used during runtime
@@ -79,7 +79,7 @@ impl Object for RunConfig {
                         return Err(MinijinjaError::new(
                             MinijinjaErrorKind::InvalidOperation,
                             "persist_docs must be a dictionary".to_string(),
-                        ))
+                        ));
                     }
                 };
 
@@ -99,7 +99,7 @@ impl Object for RunConfig {
                         return Err(MinijinjaError::new(
                             MinijinjaErrorKind::InvalidOperation,
                             "persist_docs must be a dictionary".to_string(),
-                        ))
+                        ));
                     }
                 };
 

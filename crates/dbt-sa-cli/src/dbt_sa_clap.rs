@@ -1,4 +1,4 @@
-use clap::{builder::BoolishValueParser, ArgAction};
+use clap::{ArgAction, builder::BoolishValueParser};
 use console::Style;
 use dbt_common::logging::LogFormat;
 use dbt_serde_yaml::Value;
@@ -12,15 +12,15 @@ use std::{
 use strum::IntoEnumIterator;
 
 use dbt_common::io_args::{
-    check_selector, check_var, ClapResourceType, DisplayFormat, EvalArgs, IoArgs, JsonSchemaTypes,
-    Phases, ShowOptions, SystemArgs,
+    ClapResourceType, DisplayFormat, EvalArgs, IoArgs, JsonSchemaTypes, Phases, ShowOptions,
+    SystemArgs, check_selector, check_var,
 };
 use dbt_common::row_limit::RowLimit;
 
 use clap::arg;
 use clap::{Parser, Subcommand};
 
-use dbt_common::node_selector::{parse_model_specifiers, IndirectSelection};
+use dbt_common::node_selector::{IndirectSelection, parse_model_specifiers};
 
 const DEFAULT_LIMIT: &str = "10";
 static DEFAULT_FORMAT: LazyLock<String> = LazyLock::new(|| DisplayFormat::Table.to_string());

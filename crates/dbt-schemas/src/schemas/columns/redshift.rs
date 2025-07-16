@@ -2,8 +2,8 @@ use std::any::Any;
 
 use dbt_adapter_proc_macros::{BaseColumnObject, StaticBaseColumnObject};
 use dbt_common::current_function_name;
-use minijinja::arg_utils::check_num_args;
 use minijinja::arg_utils::ArgParser;
+use minijinja::arg_utils::check_num_args;
 use minijinja::value::Enumerator;
 use minijinja::{Error as MinijinjaError, Value};
 use serde::{Deserialize, Serialize};

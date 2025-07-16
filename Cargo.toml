@@ -35,7 +35,7 @@ resolver = "2"
 [workspace.package]
 authors = ["dbt Labs <info@getdbt.com>"]
 description = "Fusion: A fast dbt engine, SQL compiler, local development framework, and in-memory analytical database"
-edition = "2021"
+edition = "2024"
 homepage = "https://getdbt.com"
 keywords = ["sql", "parquet", "json", "csv", "dbt"]
 license = "<>"
