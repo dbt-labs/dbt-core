@@ -1,3 +1,0 @@
-kind: Features
-body: Support overriding the dbt package hub url using DBT_PACKAGE_HUB_URL
-time: 2025-07-13T23:29:47.54001+02:00
