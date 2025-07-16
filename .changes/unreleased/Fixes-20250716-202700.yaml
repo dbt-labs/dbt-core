@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix trailing comma bug in unit test CTE injection that caused invalid SQL syntax when injecting CTEs into SQL with empty WITH clauses
+time: 2025-07-16T20:27:00.000000-00:00
+custom:
+    Author: byapparov
+    Issue: "unit-test-trailing-comma"
