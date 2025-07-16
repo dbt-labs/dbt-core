@@ -815,15 +815,34 @@ def inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:
         parsed.insert_after(with_token, injected_ctes_token)
         # [with][joined_ctes][original_sql]
     else:
-        # with stmt exists so we don't need to add one, but we do need to add a comma
-        # between the injected ctes and the original sql
+        # with stmt exists, check if there are existing CTEs after it
         # [with][original_sql]
+        
+        # Check if there are existing CTEs after WITH
+        # A CTE should be an identifier followed by "as" or contain "as" token
+        has_existing_ctes = False
+        found_with = False
+        for token in parsed.tokens:
+            if token.is_keyword and token.normalized in ("WITH", "RECURSIVE"):
+                found_with = True
+                continue
+            elif found_with and not token.is_whitespace:
+                # Check if this token looks like a CTE (contains "as" or is not a main SQL keyword)
+                token_str = str(token).lower()
+                if ("as" in token_str or 
+                    (not token.is_keyword or token.normalized not in ("SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "ALTER"))):
+                    has_existing_ctes = True
+                break
+        
         injected_ctes = ", ".join(c.sql for c in ctes)
         injected_ctes_token = sqlparse.sql.Token(sqlparse.tokens.Keyword, injected_ctes)
         parsed.insert_after(with_stmt, injected_ctes_token)
         # [with][joined_ctes][original_sql]
-        comma_token = sqlparse.sql.Token(sqlparse.tokens.Punctuation, ", ")
-        parsed.insert_after(injected_ctes_token, comma_token)
-        # [with][joined_ctes][, ][original_sql]
+        
+        # Only add comma if there are existing CTEs after the WITH
+        if has_existing_ctes:
+            comma_token = sqlparse.sql.Token(sqlparse.tokens.Punctuation, ", ")
+            parsed.insert_after(injected_ctes_token, comma_token)
+            # [with][joined_ctes][, ][original_sql]
 
     return str(parsed)
