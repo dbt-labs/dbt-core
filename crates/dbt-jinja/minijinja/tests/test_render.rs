@@ -24,6 +24,25 @@ fn test_set_unwarp() {
 }
 
 #[test]
+fn test_set_append() {
+    let env = Environment::new();
+    let rv = env
+        .render_str(
+            r#"
+    {%- set my_list = ['x'] -%}
+{{ my_list.append('y') }}
+{{ my_list }}
+    "#,
+            context! {},
+            &[],
+        )
+        .unwrap();
+    // would be None in dbt-core but this should be just cosmetic
+    assert_snapshot!(rv, @r"none
+['x', 'y']");
+}
+
+#[test]
 fn test_macro_namespace_lookup() {
     let mut env = Environment::new();
     let mut macro_namespace_registry: BTreeMap<Value, Value> = BTreeMap::new();

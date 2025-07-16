@@ -376,7 +376,7 @@ fn test_mutable_vec_in_set_stmt() {
     let rv = minijinja::render!(
         in env,
         "{% set my_arr = [1, 2, 3] %}
-         {% for v in my_arr %}{% set my_arr = my_arr.append(v) %}{% endfor %}
+         {% for v in my_arr %}{% do my_arr.append(v) %}{% endfor %}
          {{ my_arr }}",
     );
     assert_snapshot!(rv, @"[1, 2, 3, 1, 2, 3]");

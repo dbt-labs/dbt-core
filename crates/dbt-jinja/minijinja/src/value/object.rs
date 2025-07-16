@@ -940,6 +940,8 @@ mod preserve_order_impls {
 pub mod mutable_vec {
     use std::sync::RwLock;
 
+    use crate::value::ValueRepr;
+
     use super::*;
 
     macro_rules! lock_write {
@@ -1189,7 +1191,7 @@ pub mod mutable_vec {
         match args {
             [value] => {
                 vec.push(value.clone());
-                Ok(Value::from_dyn_object(vec.clone()))
+                Ok(ValueRepr::None.into())
             }
             _ if args.len() > 1 => Err(Error::new(
                 ErrorKind::TooManyArguments,

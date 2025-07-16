@@ -252,10 +252,7 @@ impl JinjaEnvironmentBuilder {
 
         self.env
             .add_filter("as_bool", |value: Value| match value.kind() {
-                ValueKind::Undefined => Err(MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
-                    "Failed applying 'as_bool' filter to undefined value",
-                )),
+                ValueKind::Undefined => Ok(Value::UNDEFINED),
                 ValueKind::None => Ok(Value::from(false)),
                 ValueKind::Bool | ValueKind::Number => Ok(value),
 
@@ -303,10 +300,7 @@ impl JinjaEnvironmentBuilder {
 
         self.env
             .add_filter("as_number", |value: Value| match value.kind() {
-                ValueKind::Undefined => Err(MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
-                    "Failed applying 'as_number' filter to undefined value",
-                )),
+                ValueKind::Undefined => Ok(Value::UNDEFINED),
                 ValueKind::None => Ok(Value::from(0)),
                 ValueKind::Bool => Ok(value),
                 ValueKind::Number => Ok(value),
@@ -398,6 +392,28 @@ mod tests {
             sql: sql.to_string(),
         }
     }
+
+    #[test]
+    fn test_filter_none() {
+        let mut builder = JinjaEnvironmentBuilder::new();
+        builder.register_filters();
+        let env = builder.build();
+        let rv = env
+            .render_str(
+                r#"
+    {%- set x = y | as_bool -%}
+    {%- set x = y | as_number -%}   
+    all okay!
+    "#,
+                context! {},
+                &[],
+            )
+            .unwrap();
+        assert_snapshot!(rv, @r"
+
+all okay!");
+    }
+
     #[test]
     fn test_dispatch_mode() {
         THREAD_LOCAL_DEPENDENCIES
