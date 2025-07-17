@@ -95,6 +95,9 @@ float-abs: 42.5
 int-round: 42
 float-round: 43.0
 float-round-prec2: 42.51
+float-round-ceil: 43.0
+float-round-floor: 42.0
+float-round-common: 43.0
 select-odd: (1, 3, 5)
 select-truthy: (42, 23, 'aha')
 reject-truthy: (undefined, undefined, 0, '')

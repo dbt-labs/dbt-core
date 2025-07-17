@@ -837,18 +837,42 @@ mod builtins {
     /// {{ 42.55|round }}
     ///   -> 43.0
     /// ```
+    ///
+    /// It also supports the `method` parameter to specify the rounding method.
+    ///
+    /// ```jinja
+    /// {{ 42.55|round(0, method="ceil") }}
+    ///   -> 43.0
+    /// ```
+    ///
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     pub fn round(args: &[Value]) -> Result<Value, Error> {
         let mut arg_parser = ArgParser::new(args, None);
         let value: Value = arg_parser.next_positional()?;
         let precision: Option<i32> = arg_parser.get_optional("precision");
+        let method: Option<String> = arg_parser.get_optional("method");
+
         match value.0 {
             ValueRepr::I64(_) | ValueRepr::I128(_) | ValueRepr::U64(_) | ValueRepr::U128(_) => {
                 Ok(value)
             }
             ValueRepr::F64(val) => {
                 let x = 10f64.powi(precision.unwrap_or(0));
-                Ok(Value::from((x * val).round() / x))
+                let scaled_val = x * val;
+
+                let rounded = match method.as_deref() {
+                    Some("ceil") => scaled_val.ceil(),
+                    Some("floor") => scaled_val.floor(),
+                    Some("common") | None => scaled_val.round(), // default behavior
+                    Some(other) => {
+                        return Err(Error::new(
+                            ErrorKind::InvalidOperation,
+                            format!("invalid rounding method '{other}', expected 'ceil', 'floor', or 'common'"),
+                        ));
+                    }
+                };
+
+                Ok(Value::from(rounded / x))
             }
             _ => Err(Error::new(
                 ErrorKind::InvalidOperation,

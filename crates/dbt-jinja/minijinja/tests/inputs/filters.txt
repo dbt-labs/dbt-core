@@ -87,6 +87,9 @@ float-abs: {{ -42.5|abs }}
 int-round: {{ 42|round }}
 float-round: {{ 42.5|round }}
 float-round-prec2: {{ 42.512345|round(2) }}
+float-round-ceil: {{ 42.512345|round(0, 'ceil') }}
+float-round-floor: {{ 42.512345|round(0, 'floor') }}
+float-round-common: {{ 42.512345|round(0, 'common') }}
 select-odd: {{ [1, 2, 3, 4, 5, 6]|select("odd") }}
 select-truthy: {{ [undefined, null, 0, 42, 23, "", "aha"]|select }}
 reject-truthy: {{ [undefined, null, 0, 42, 23, "", "aha"]|reject }}
