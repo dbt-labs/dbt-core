@@ -31,10 +31,36 @@ pub trait MetadataProcessor {
     fn to_arrow_schema(&self) -> AdapterResult<Arc<Schema>>;
 }
 
-// XXX: we should unify relation representaion as Arrow schemas across the codebase
+/// This represents a UDF downloaded from a remote data warehouse
+#[derive(Debug, Clone)]
+pub struct UDF {
+    pub name: String,
+    pub description: String,
+    pub signature: String,
+    pub adapter_type: AdapterType,
+    pub kind: UDFKind,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum UDFKind {
+    Scalar,
+    Aggregate,
+    Table,
+}
+
+// XXX: we should unify relation representation as Arrow schemas across the codebase
 
 /// Adapter that supports metadata query
 pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
+    /// List UDFs under a given set of catalog and schemas
+    fn list_user_defined_functions(
+        &self,
+        _catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
+    ) -> AsyncAdapterResult<Vec<UDF>> {
+        let future = async move { Ok(vec![]) };
+        Box::pin(future)
+    }
+
     /// List relations and their schemas
     fn list_relations_schemas(
         &self,
