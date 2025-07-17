@@ -18,6 +18,11 @@ pub const MAX_CONNECTIONS: usize = 128;
 /// The two ways of representing a relation in a pair.
 pub type RelationSchemaPair = (Arc<dyn BaseRelation>, Arc<Schema>);
 
+pub struct MetadataFreshness {
+    pub last_altered: i128,
+    pub is_view: bool,
+}
+
 /// Allows serializing record batches into maps and Arrow schemas
 pub trait MetadataProcessor {
     // Implementers can choose the map key/value
@@ -92,7 +97,7 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
     fn freshness(
         &self,
         relations: &[Arc<dyn BaseRelation>],
-    ) -> AsyncAdapterResult<BTreeMap<String, i128>>;
+    ) -> AsyncAdapterResult<BTreeMap<String, MetadataFreshness>>;
 }
 
 /// Create catalogs or schemas if they don't exist
