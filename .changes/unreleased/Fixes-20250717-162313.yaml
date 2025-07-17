@@ -1,0 +1,3 @@
+kind: Fixes
+body: apply project level configs to sources correctly
+time: 2025-07-17T16:23:13.274818056-07:00

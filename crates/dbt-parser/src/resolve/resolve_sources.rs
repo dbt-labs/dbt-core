@@ -83,11 +83,23 @@ pub fn resolve_sources(
             .unwrap_or(database.to_owned());
         let schema = source.schema.clone().unwrap_or(source.name.clone());
 
-        let global_config =
-            local_project_config.get_config_for_path(&mpe.relative_path, package_name, &[]);
+        // sources exist within the context of the model paths so we need to pass this into get config for path to get the config relative to the model paths
+        let model_resource_paths = package
+            .dbt_project
+            .model_paths
+            .as_ref()
+            .unwrap_or(&vec![])
+            .clone();
+
+        let global_config = local_project_config.get_config_for_path(
+            &mpe.relative_path,
+            package_name,
+            &model_resource_paths,
+        );
+
         let mut project_config = root_project_configs
             .sources
-            .get_config_for_path(&mpe.relative_path, package_name, &[])
+            .get_config_for_path(&mpe.relative_path, package_name, &model_resource_paths)
             .clone();
         project_config.default_to(global_config);
 
