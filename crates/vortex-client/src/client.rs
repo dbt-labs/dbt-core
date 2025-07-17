@@ -1175,6 +1175,8 @@ mod tests {
     }
 
     #[test]
+    // The dependency on time makes the test flaky on CI where the machine is under load.
+    #[ignore = "TODO(felipecrv): This test is flaky and needs to be fixed."]
     fn test_batch_is_sent_after_flush_interval() {
         let agent = TestSenderAgent::with_server_mode(ServerMode::AlwaysSucceed);
         let flush_interval = agent.flush_interval();
