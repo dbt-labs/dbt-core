@@ -18,6 +18,7 @@ from dbt.exceptions import (
     TestTypeError,
     UnexpectedTestNamePatternError,
 )
+from dbt.flags import get_flags
 from dbt.parser.common import Testable
 from dbt.utils import md5
 from dbt_common.exceptions.macros import UndefinedMacroError
@@ -227,6 +228,21 @@ class TestBuilder(Generic[Testable]):
         test_args = deepcopy(test_args)
         if name is not None:
             test_args["column_name"] = name
+
+        # Handle when args are nested under 'args' separately from 'config'
+        if get_flags().require_generic_test_args:
+            args = test_args.pop("args", {})
+            test_args = {**test_args, **args}
+        elif "args" in test_args:
+            pass
+            # TODO: raise deprecation
+            # deprecations.warn(
+
+            # )
+
+        # TODO: raise deprecation if args other than config are not nested under args
+        # if not args and any(k != "config" for k in test_args.keys()):
+
         return test_name, test_args
 
     def tags(self) -> List[str]:
