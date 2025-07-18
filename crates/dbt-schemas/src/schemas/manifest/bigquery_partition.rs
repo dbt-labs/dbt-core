@@ -227,11 +227,7 @@ impl BigqueryPartitionConfig {
         Ok(MinijinjaValue::from(result))
     }
 
-    /// Wrap the partitioning column when time involved to ensure it is properly cast to matching time
-    pub fn render_wrapped(
-        &self,
-        args: &[MinijinjaValue],
-    ) -> Result<MinijinjaValue, MinijinjaError> {
+    fn get_alias(&self, args: &[MinijinjaValue]) -> Result<Option<String>, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         parser.check_num_args(current_function_name!(), 0, 1)?;
 
@@ -246,6 +242,25 @@ impl BigqueryPartitionConfig {
                 })
             })
             .transpose()?;
+
+        Ok(alias)
+    }
+
+    // Because this method will be used under a `impl Object` trait block,
+    // and a method named `render` with a default impl already exists there,
+    // a different name must be chosen here to make sure self.render resolves to the correct method
+    pub fn render_(&self, args: &[MinijinjaValue]) -> Result<MinijinjaValue, MinijinjaError> {
+        let alias = self.get_alias(args)?;
+
+        self.render(alias)
+    }
+
+    /// Wrap the partitioning column when time involved to ensure it is properly cast to matching time
+    pub fn render_wrapped(
+        &self,
+        args: &[MinijinjaValue],
+    ) -> Result<MinijinjaValue, MinijinjaError> {
+        let alias = self.get_alias(args)?;
 
         if (self.data_type == "date"
             || self.data_type == "timestamp"
@@ -294,6 +309,7 @@ impl Object for BigqueryPartitionConfig {
             "data_type_for_partition" => self.data_type_for_partition(),
             "reject_partition_field_column" => self.reject_partition_field_column(args),
             "time_partitioning_field" => self.time_partitioning_field(),
+            "render" => self.render_(args),
             "render_wrapped" => self.render_wrapped(args),
             _ => Err(MinijinjaError::new(
                 MinijinjaErrorKind::InvalidOperation,

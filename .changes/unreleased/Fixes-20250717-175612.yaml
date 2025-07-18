@@ -1,0 +1,3 @@
+kind: Fixes
+body: Enable render method for Big Query PartitionConfig
+time: 2025-07-17T17:56:12.647266785-07:00
