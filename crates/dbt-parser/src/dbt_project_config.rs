@@ -116,10 +116,16 @@ pub fn recur_build_dbt_project_config<T: DefaultTo<T>, S: Into<T> + IterChildren
         let child_config_variant = match maybe_child_config_variant {
             ShouldBe::AndIs(config) => config,
             ShouldBe::ButIsnt { raw, .. } => {
+                let trimmed_key = key.trim();
+                let suggestion = if !trimmed_key.starts_with("+") {
+                    format!(" Try '+{trimmed_key}' instead.")
+                } else {
+                    "".to_string()
+                };
                 let err = fs_err!(
                     code => ErrorCode::UnusedConfigKey,
                     loc => raw.as_ref().map(|r| r.span()).unwrap_or_default(),
-                    "Ignored unexpected key `{:?}`. YAML path: `{}`.", key.trim(), key_path
+                    "Ignored unexpected key '{trimmed_key}'.{suggestion} YAML path: '{key_path}'."
                 );
                 if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
                     show_error!(io, err);

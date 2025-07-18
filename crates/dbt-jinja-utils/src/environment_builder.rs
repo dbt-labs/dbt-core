@@ -244,10 +244,19 @@ impl JinjaEnvBuilder {
                 ValueKind::String => Ok(value),
                 ValueKind::Number => Ok(Value::from(format!("{value}"))),
                 ValueKind::None => Ok(Value::from("")),
-                _ => Err(MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
-                    format!("Failed applying 'as_text' filter to {}", value.kind()),
-                )),
+                _ => {
+                    // Try to see if Value is an Object - use debug to render if so
+                    if let Some(object) = value.as_object() {
+                        // Call the render method on the object
+                        let debug = format!("{object:?}");
+                        Ok(Value::from(debug))
+                    } else {
+                        Err(MinijinjaError::new(
+                            MinijinjaErrorKind::InvalidOperation,
+                            format!("Failed applying 'as_text' filter to {}", value.kind()),
+                        ))
+                    }
+                }
             });
 
         self.env

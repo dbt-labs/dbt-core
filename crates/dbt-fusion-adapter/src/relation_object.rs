@@ -20,7 +20,7 @@ use std::{fmt, ops::Deref};
 
 /// A Wrapper type for BaseRelation
 /// for any concrete Relation type to be used as Object in Jinja
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RelationObject(Arc<dyn BaseRelation>);
 
 impl RelationObject {
@@ -34,6 +34,12 @@ impl RelationObject {
 
     pub fn inner(&self) -> Arc<dyn BaseRelation> {
         self.0.clone()
+    }
+}
+
+impl fmt::Debug for RelationObject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.render_self().expect("could not render self"))
     }
 }
 
