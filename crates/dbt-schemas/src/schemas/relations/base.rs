@@ -114,6 +114,11 @@ pub trait BaseRelationProperties {
 
 /// Base trait for all fs adapter objects
 pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug {
+    /// Whether the relation is a system table or not
+    fn is_system(&self) -> bool {
+        false
+    }
+
     /// as_any
     fn as_any(&self) -> &dyn Any;
 

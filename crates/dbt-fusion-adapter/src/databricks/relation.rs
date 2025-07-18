@@ -17,6 +17,11 @@ use std::sync::Arc;
 /// Default databricks database
 pub const DEFAULT_DATABRICKS_DATABASE: &str = "hive_metastore";
 
+/// https://docs.databricks.com/aws/en/admin/system-tables/
+pub const SYSTEM_DATABASE: &str = "system";
+/// https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-information-schema
+pub const INFORMATION_SCHEMA_SCHEMA: &str = "information_schema";
+
 /// A struct representing the relation type for use with static methods
 #[derive(Clone, Debug)]
 pub struct DatabricksRelationType(pub ResolvedQuoting);
@@ -161,6 +166,14 @@ impl DatabricksRelation {
 }
 
 impl BaseRelation for DatabricksRelation {
+    /// It might be relation under a `information_schema` schema or a `system` catalog
+    /// For example, system.billing.list_prices or [database].information_schema.tables are both system tables
+    fn is_system(&self) -> bool {
+        self.path.database.as_ref().map(|s| s.to_lowercase()) == Some(SYSTEM_DATABASE.to_string())
+            || self.path.schema.as_ref().map(|s| s.to_lowercase())
+                == Some(INFORMATION_SCHEMA_SCHEMA.to_string())
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -289,5 +302,112 @@ mod tests {
             relation.inner().render_self().unwrap().as_str().unwrap(),
             "`s`.`i`"
         );
+    }
+
+    #[test]
+    fn test_is_system() {
+        // Test system database (lowercase)
+        let relation = DatabricksRelation::new(
+            Some("system".to_string()),
+            Some("schema".to_string()),
+            Some("table".to_string()),
+            Some(RelationType::Table),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+            None,
+            false,
+        );
+        assert!(relation.is_system());
+
+        // Test system database (uppercase - case insensitive)
+        let relation = DatabricksRelation::new(
+            Some("SYSTEM".to_string()),
+            Some("schema".to_string()),
+            Some("table".to_string()),
+            Some(RelationType::Table),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+            None,
+            false,
+        );
+        assert!(relation.is_system());
+
+        // Test information_schema schema (lowercase)
+        let relation = DatabricksRelation::new(
+            Some("database".to_string()),
+            Some("information_schema".to_string()),
+            Some("table".to_string()),
+            Some(RelationType::Table),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+            None,
+            false,
+        );
+        assert!(relation.is_system());
+
+        // Test information_schema schema (uppercase - case insensitive)
+        let relation = DatabricksRelation::new(
+            Some("database".to_string()),
+            Some("INFORMATION_SCHEMA".to_string()),
+            Some("table".to_string()),
+            Some(RelationType::Table),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+            None,
+            false,
+        );
+        assert!(relation.is_system());
+
+        // Test neither system database nor information_schema schema
+        let relation = DatabricksRelation::new(
+            Some("regular_database".to_string()),
+            Some("regular_schema".to_string()),
+            Some("table".to_string()),
+            Some(RelationType::Table),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+            None,
+            false,
+        );
+        assert!(!relation.is_system());
+
+        // Test with None database and non-information_schema schema
+        let relation = DatabricksRelation::new(
+            None,
+            Some("regular_schema".to_string()),
+            Some("table".to_string()),
+            Some(RelationType::Table),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+            None,
+            false,
+        );
+        assert!(!relation.is_system());
+
+        // Test with non-system database and None schema
+        let relation = DatabricksRelation::new(
+            Some("regular_database".to_string()),
+            None,
+            Some("table".to_string()),
+            Some(RelationType::Table),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+            None,
+            false,
+        );
+        assert!(!relation.is_system());
+
+        // Test both system database and information_schema schema (should still be true)
+        let relation = DatabricksRelation::new(
+            Some("system".to_string()),
+            Some("information_schema".to_string()),
+            Some("table".to_string()),
+            Some(RelationType::Table),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+            None,
+            false,
+        );
+        assert!(relation.is_system());
     }
 }
