@@ -12,7 +12,7 @@ fn test_datetimeformat() {
     minijinja_contrib::add_to_environment(&mut env);
 
     let expr = env
-        .compile_expression("1687624642.5|datetimeformat(format=format)")
+        .compile_expression("1687624642.5|datetimeformat(format=format)", &[])
         .unwrap();
 
     assert_eq!(
@@ -53,7 +53,7 @@ fn test_datetimeformat() {
     );
 
     let expr = env
-        .compile_expression("1687624642|datetimeformat(tz='Europe/Moscow')")
+        .compile_expression("1687624642|datetimeformat(tz='Europe/Moscow')", &[])
         .unwrap();
     assert_eq!(expr.eval((), &[]).unwrap().to_string(), "19:37");
 }
@@ -65,7 +65,7 @@ fn test_datetimeformat_iso_negative() {
     minijinja_contrib::add_to_environment(&mut env);
 
     let expr = env
-        .compile_expression("1687624642.5|datetimeformat(format='iso')")
+        .compile_expression("1687624642.5|datetimeformat(format='iso')", &[])
         .unwrap();
     assert_eq!(
         expr.eval((), &[]).unwrap().to_string(),
@@ -81,7 +81,7 @@ fn test_datetimeformat_time_rs() {
     minijinja_contrib::add_to_environment(&mut env);
 
     let expr = env
-        .compile_expression("d|datetimeformat(format=format)")
+        .compile_expression("d|datetimeformat(format=format)", &[])
         .unwrap();
 
     let d = time::OffsetDateTime::from_unix_timestamp(1687624642).unwrap();
@@ -101,7 +101,7 @@ fn test_datetimeformat_chrono() {
     minijinja_contrib::add_to_environment(&mut env);
 
     let expr = env
-        .compile_expression("d|datetimeformat(format=format)")
+        .compile_expression("d|datetimeformat(format=format)", &[])
         .unwrap();
 
     let d = chrono::DateTime::parse_from_rfc3339("2023-06-24T16:37:00Z").unwrap();
@@ -121,7 +121,7 @@ fn test_dateformat() {
     minijinja_contrib::add_to_environment(&mut env);
 
     let expr = env
-        .compile_expression("1687624642.5|dateformat(format=format)")
+        .compile_expression("1687624642.5|dateformat(format=format)", &[])
         .unwrap();
 
     assert_eq!(
@@ -150,7 +150,7 @@ fn test_dateformat() {
     );
 
     let expr = env
-        .compile_expression("1687624642|dateformat(tz='Europe/Moscow')")
+        .compile_expression("1687624642|dateformat(tz='Europe/Moscow')", &[])
         .unwrap();
     assert_eq!(expr.eval((), &[]).unwrap().to_string(), "2023-06");
 }
@@ -163,7 +163,7 @@ fn test_dateformat_time_rs() {
     minijinja_contrib::add_to_environment(&mut env);
 
     let expr = env
-        .compile_expression("d|dateformat(format=format)")
+        .compile_expression("d|dateformat(format=format)", &[])
         .unwrap();
 
     let d = time::Date::from_ordinal_date(2023, 42).unwrap();
@@ -183,7 +183,7 @@ fn test_dateformat_chrono_rs() {
     minijinja_contrib::add_to_environment(&mut env);
 
     let expr = env
-        .compile_expression("d|dateformat(format=format)")
+        .compile_expression("d|dateformat(format=format)", &[])
         .unwrap();
 
     let d = chrono::NaiveDate::from_num_days_from_ce_opt(739073);
@@ -213,7 +213,7 @@ fn test_datetime_format_naive() {
         .unwrap();
 
     let expr = env
-        .compile_expression("d|datetimeformat(format=format, tz='Europe/Brussels')")
+        .compile_expression("d|datetimeformat(format=format, tz='Europe/Brussels')", &[])
         .unwrap();
     assert_eq!(
         expr.eval(
@@ -240,7 +240,7 @@ fn test_timeformat() {
     minijinja_contrib::add_to_environment(&mut env);
 
     let expr = env
-        .compile_expression("1687624642.5|timeformat(format=format)")
+        .compile_expression("1687624642.5|timeformat(format=format)", &[])
         .unwrap();
 
     assert_eq!(
@@ -281,7 +281,7 @@ fn test_timeformat() {
     );
 
     let expr = env
-        .compile_expression("1687624642|timeformat(tz='Europe/Moscow')")
+        .compile_expression("1687624642|timeformat(tz='Europe/Moscow')", &[])
         .unwrap();
     assert_eq!(expr.eval((), &[]).unwrap().to_string(), "19:37");
 }

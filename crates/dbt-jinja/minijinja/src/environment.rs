@@ -175,8 +175,13 @@ impl<'source> Environment<'source> {
         feature = "loader",
         doc = "To address this restriction use [`add_template_owned`](Self::add_template_owned)."
     )]
-    pub fn add_template(&mut self, name: &'source str, source: &'source str) -> Result<(), Error> {
-        self.templates.insert(name, source)
+    pub fn add_template(
+        &mut self,
+        name: &'source str,
+        source: &'source str,
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<(), Error> {
+        self.templates.insert(name, source, listeners)
     }
 
     /// Adds a template without borrowing.
@@ -199,13 +204,14 @@ impl<'source> Environment<'source> {
         name: N,
         source: S,
         filename: Option<String>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<(), Error>
     where
         N: Into<Cow<'source, str>>,
         S: Into<Cow<'source, str>>,
     {
         self.templates
-            .insert_cow(name.into(), source.into(), filename)
+            .insert_cow(name.into(), source.into(), filename, listeners)
     }
 
     /// Register a template loader as source of templates.
@@ -413,8 +419,12 @@ impl<'source> Environment<'source> {
     /// let tmpl = env.get_template("hello.txt").unwrap();
     /// println!("{}", tmpl.render(context!{ name => "World" }, &[Rc::new(DefaultRenderingEventListener::default())]).unwrap());
     /// ```
-    pub fn get_template(&self, name: &str) -> Result<Template<'_, '_>, Error> {
-        let compiled = ok!(self.templates.get(name));
+    pub fn get_template(
+        &self,
+        name: &str,
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<Template<'_, '_>, Error> {
+        let compiled = ok!(self.templates.get(name, listeners));
         Ok(Template::new(self, CompiledTemplateRef::Borrowed(compiled)))
     }
 
@@ -435,6 +445,7 @@ impl<'source> Environment<'source> {
         &self,
         name: &'source str,
         source: &'source str,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Template<'_, 'source>, Error> {
         Ok(Template::new(
             self,
@@ -444,6 +455,7 @@ impl<'source> Environment<'source> {
                 &self.templates.template_config,
                 None,
                 self.profile,
+                listeners,
             )))),
         ))
     }
@@ -452,8 +464,12 @@ impl<'source> Environment<'source> {
     ///
     /// This is a shortcut to [`template_from_named_str`](Self::template_from_named_str)
     /// with name set to `<string>`.
-    pub fn template_from_str(&self, source: &'source str) -> Result<Template<'_, 'source>, Error> {
-        self.template_from_named_str("<string>", source)
+    pub fn template_from_str(
+        &self,
+        source: &'source str,
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<Template<'_, 'source>, Error> {
+        self.template_from_named_str("<string>", source, listeners)
     }
 
     /// Parses and renders a template from a string in one go with name.
@@ -485,7 +501,7 @@ impl<'source> Environment<'source> {
         ctx: S,
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<String, Error> {
-        ok!(self.template_from_named_str(name, source)).render(ctx, listeners)
+        ok!(self.template_from_named_str(name, source, listeners)).render(ctx, listeners)
     }
 
     /// Parses and renders a template from a string in one go.
@@ -506,7 +522,7 @@ impl<'source> Environment<'source> {
     ) -> Result<String, Error> {
         // reduce total amount of code falling under mono morphization into
         // this function, and share the rest in _eval.
-        ok!(self.template_from_str(source)).render(ctx, listeners)
+        ok!(self.template_from_str(source, listeners)).render(ctx, listeners)
     }
 
     /// Sets a new function to select the default auto escaping.
@@ -704,8 +720,12 @@ impl<'source> Environment<'source> {
     /// receive the output.  This lets one use the expressions of the language
     /// be used as a minimal scripting language.  For more information and an
     /// example see [`Expression`].
-    pub fn compile_expression(&self, expr: &'source str) -> Result<Expression<'_, 'source>, Error> {
-        self._compile_expression(expr)
+    pub fn compile_expression(
+        &self,
+        expr: &'source str,
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<Expression<'_, 'source>, Error> {
+        self._compile_expression(expr, listeners)
             .map(|instr| Expression::new(self, instr))
     }
 
@@ -715,21 +735,29 @@ impl<'source> Environment<'source> {
     /// lets you pass an owned string without capturing the lifetime.
     #[cfg(feature = "loader")]
     #[cfg_attr(docsrs, doc(cfg(feature = "loader")))]
-    pub fn compile_expression_owned<E>(&self, expr: E) -> Result<Expression<'_, 'source>, Error>
+    pub fn compile_expression_owned<E>(
+        &self,
+        expr: E,
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<Expression<'_, 'source>, Error>
     where
         E: Into<Cow<'source, str>>,
     {
         crate::loader::OwnedInstructions::try_new(Box::from(expr.into()), |expr| {
-            self._compile_expression(expr)
+            self._compile_expression(expr, listeners)
         })
         .map(|instr| Expression::new_owned(self, instr))
     }
 
-    fn _compile_expression<'expr>(&self, expr: &'expr str) -> Result<Instructions<'expr>, Error> {
+    fn _compile_expression<'expr>(
+        &self,
+        expr: &'expr str,
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<Instructions<'expr>, Error> {
         attach_basic_debug_info(
             parse_expr(expr).map(|ast| {
                 let mut gen = CodeGenerator::new("<expression>", expr, self.profile);
-                gen.compile_expr(&ast);
+                gen.compile_expr(&ast, listeners);
                 gen.finish().0
             }),
             expr,

@@ -7,7 +7,10 @@ use similar_asserts::assert_eq;
 fn eval_expr(expr: &str) -> Value {
     let mut env = Environment::new();
     env.set_unknown_method_callback(unknown_method_callback);
-    env.compile_expression(expr).unwrap().eval((), &[]).unwrap()
+    env.compile_expression(expr, &[])
+        .unwrap()
+        .eval((), &[])
+        .unwrap()
 }
 
 #[test]
@@ -137,7 +140,7 @@ fn test_list_index_errors() {
 
     // Test index method error when item not found
     let result = env
-        .compile_expression("[1, 2, 3].index(5)")
+        .compile_expression("[1, 2, 3].index(5)", &[])
         .unwrap()
         .eval((), &[]);
     assert!(result.is_err());
@@ -146,7 +149,7 @@ fn test_list_index_errors() {
 
     // Test index method error when item not in range
     let result = env
-        .compile_expression("[1, 2, 3, 4].index(1, 2)")
+        .compile_expression("[1, 2, 3, 4].index(1, 2)", &[])
         .unwrap()
         .eval((), &[]);
     assert!(result.is_err());

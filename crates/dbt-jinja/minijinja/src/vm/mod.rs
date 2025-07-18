@@ -429,7 +429,7 @@ impl<'env> Vm<'env> {
                     // check if it is a regular variable in state first
                     // Somehow a macro try to set all varibale it uses to undefined
                     } else if let Some(template_name) =
-                        macro_namespace_template_resolver(state, name, &mut Vec::new())
+                        macro_namespace_template_resolver(state, name, &mut Vec::new(), listeners)
                     {
                         if let Some((pkg, macro_name)) = template_name.split_once('.') {
                             stack.push(Value::from_object(DispatchObject {
@@ -834,18 +834,23 @@ impl<'env> Vm<'env> {
                         recurse_loop!(true);
                     } else if (*name == "ref" || *name == "source") && {
                         // we only consider the ref source override in root package
-                        let template_result = self.env.get_template(name).or_else(|_| {
-                            self.env
-                                .get_template(&format!("{}.{}", root_package_name, *name))
-                        });
+                        let template_result =
+                            self.env.get_template(name, listeners).or_else(|_| {
+                                self.env.get_template(
+                                    &format!("{}.{}", root_package_name, *name),
+                                    listeners,
+                                )
+                            });
                         template_result.is_ok()
                     } {
                         let template = self
                             .env
-                            .get_template(name)
+                            .get_template(name, listeners)
                             .or_else(|_| {
-                                self.env
-                                    .get_template(&format!("{}.{}", root_package_name, *name))
+                                self.env.get_template(
+                                    &format!("{}.{}", root_package_name, *name),
+                                    listeners,
+                                )
                             })
                             .unwrap();
                         let inner_state: State<'_, '_> = template
@@ -921,10 +926,10 @@ impl<'env> Vm<'env> {
                         rv
                     // Resolve the template using the dbt macro namespace resolution logic
                     } else if let Some(template_name) =
-                        macro_namespace_template_resolver(state, name, &mut Vec::new())
+                        macro_namespace_template_resolver(state, name, &mut Vec::new(), listeners)
                     {
                         // The template was found, now get and execute it
-                        let template = self.env.get_template(&template_name)?;
+                        let template = self.env.get_template(&template_name, listeners)?;
                         let mut new_state = template.eval_to_state_with_outer_stack_depth(
                             state.get_base_context(),
                             listeners,
@@ -988,7 +993,7 @@ impl<'env> Vm<'env> {
                         rv
                     } else if *name == "render" {
                         let raw = args[0].as_str().unwrap_or_default();
-                        let template = state.env().template_from_str(raw)?;
+                        let template = state.env().template_from_str(raw, listeners)?;
                         let rendered_sql = template.render(state.get_base_context(), listeners)?;
                         Value::from(rendered_sql)
                     } else {
@@ -1029,7 +1034,9 @@ impl<'env> Vm<'env> {
                         let args = &args[1..];
                         // if not found, attempt to lookup the template and function using name stripped of test_
                         // see generate_test_macro in resolve_generic_tests.rs -> a subset of generated macro names are prefixed with test_
-                        let Ok(template) = self.env.get_template(&format!("{ns_name}.{name}"))
+                        let Ok(template) = self
+                            .env
+                            .get_template(&format!("{ns_name}.{name}"), listeners)
                         else {
                             bail!(Error::new(
                                 ErrorKind::UnknownFunction,
@@ -1187,7 +1194,7 @@ impl<'env> Vm<'env> {
                             "tried to extend a second time in a template"
                         ));
                     }
-                    parent_instructions = Some(ctx_ok!(self.load_blocks(a, state)));
+                    parent_instructions = Some(ctx_ok!(self.load_blocks(a, state, listeners)));
                     out.begin_capture(CaptureMode::Discard);
                 }
                 #[cfg(feature = "multi_template")]
@@ -1317,27 +1324,6 @@ impl<'env> Vm<'env> {
                         });
                     }
                 }
-                Instruction::ModelReference(
-                    name,
-                    start_line,
-                    start_col,
-                    start_offset,
-                    end_line,
-                    end_col,
-                    end_offset,
-                ) => {
-                    listeners.iter().for_each(|listener| {
-                        listener.on_model_reference(
-                            name,
-                            start_line,
-                            start_col,
-                            start_offset,
-                            end_line,
-                            end_col,
-                            end_offset,
-                        )
-                    });
-                }
                 Instruction::MacroName(_) => {
                     // no-op, we don't need to do anything here
                 }
@@ -1378,7 +1364,7 @@ impl<'env> Vm<'env> {
                     "template name was not a string",
                 )
             }));
-            let tmpl = match state.get_template(name) {
+            let tmpl = match state.get_template(name, listeners) {
                 Ok(tmpl) => tmpl,
                 Err(err) => {
                     if err.kind() == ErrorKind::TemplateNotFound {
@@ -1508,6 +1494,7 @@ impl<'env> Vm<'env> {
         &self,
         name: Value,
         state: &mut State<'_, 'env>,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<&'env Instructions<'env>, Error> {
         let name = match name.as_str() {
             Some(name) => name,
@@ -1524,7 +1511,7 @@ impl<'env> Vm<'env> {
                 format!("cycle in template inheritance. {name:?} was referenced more than once"),
             ));
         }
-        let tmpl = ok!(state.get_template(name));
+        let tmpl = ok!(state.get_template(name, listeners));
         let (new_instructions, new_blocks) = ok!(tmpl.instructions_and_blocks());
         state.loaded_templates.insert(new_instructions.name());
         for (name, instr) in new_blocks.iter() {

@@ -13,7 +13,11 @@ use minijinja::{
 /// Trait for creating and destroying rendering event listeners
 pub trait ListenerFactory: Send + Sync {
     /// Creates a new rendering event listener
-    fn create_listeners(&self, filename: &Path) -> Vec<Rc<dyn RenderingEventListener>>;
+    fn create_listeners(
+        &self,
+        filename: &Path,
+        offset: &dbt_frontend_common::error::CodeLocation,
+    ) -> Vec<Rc<dyn RenderingEventListener>>;
 
     /// Destroys a rendering event listener
     fn destroy_listener(&self, _filename: &Path, _listener: Rc<dyn RenderingEventListener>);
@@ -31,7 +35,11 @@ pub struct DefaultListenerFactory {
 
 impl ListenerFactory for DefaultListenerFactory {
     /// Creates a new rendering event listener
-    fn create_listeners(&self, _filename: &Path) -> Vec<Rc<dyn RenderingEventListener>> {
+    fn create_listeners(
+        &self,
+        _filename: &Path,
+        _offset: &dbt_frontend_common::error::CodeLocation,
+    ) -> Vec<Rc<dyn RenderingEventListener>> {
         vec![Rc::new(DefaultRenderingEventListener::default())]
     }
 

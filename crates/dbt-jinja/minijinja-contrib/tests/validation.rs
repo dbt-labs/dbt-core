@@ -1,6 +1,6 @@
 use minijinja::{Environment, Error, Value};
 fn eval_expr(env: &Environment, expr: &str) -> Result<Value, Error> {
-    env.compile_expression(expr).unwrap().eval((), &[])
+    env.compile_expression(expr, &[]).unwrap().eval((), &[])
 }
 
 #[test]

@@ -96,6 +96,7 @@ mod tests {
             &invocation_args,
             BTreeSet::from(["common".to_string()]),
             IoArgs::default(),
+            None,
         )
         .unwrap();
 

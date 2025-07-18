@@ -367,14 +367,14 @@ mod tests {
 
         // Create a template that uses date and strftime
         let template = env
-            .template_from_str("{{ date(2023, 5, 15).strftime('%Y-%m-%d') }}")
+            .template_from_str("{{ date(2023, 5, 15).strftime('%Y-%m-%d') }}", &[])
             .unwrap();
         let result = template.render(context!(), &[]).unwrap();
         assert_eq!(result, "2023-05-15");
 
         // Test with a different format
         let template = env
-            .template_from_str("{{ date(2023, 5, 15).strftime('%d/%m/%Y') }}")
+            .template_from_str("{{ date(2023, 5, 15).strftime('%d/%m/%Y') }}", &[])
             .unwrap();
         let result = template.render(context!(), &[]).unwrap();
         assert_eq!(result, "15/05/2023");
@@ -477,21 +477,27 @@ mod tests {
 
         // Test adding days
         let template = env
-            .template_from_str("{{ (date(2023, 5, 15) + timedelta(days=5)).strftime('%Y-%m-%d') }}")
+            .template_from_str(
+                "{{ (date(2023, 5, 15) + timedelta(days=5)).strftime('%Y-%m-%d') }}",
+                &[],
+            )
             .unwrap();
         let result = template.render(context!(), &[]).unwrap();
         assert_eq!(result, "2023-05-20");
 
         // Test subtracting days
         let template = env
-            .template_from_str("{{ (date(2023, 5, 15) - timedelta(days=3)).strftime('%Y-%m-%d') }}")
+            .template_from_str(
+                "{{ (date(2023, 5, 15) - timedelta(days=3)).strftime('%Y-%m-%d') }}",
+                &[],
+            )
             .unwrap();
         let result = template.render(context!(), &[]).unwrap();
         assert_eq!(result, "2023-05-12");
 
         // Test date subtraction
         let template = env
-            .template_from_str("{{ (date(2023, 5, 20) - date(2023, 5, 15)).days }}")
+            .template_from_str("{{ (date(2023, 5, 20) - date(2023, 5, 15)).days }}", &[])
             .unwrap();
         let result = template.render(context!(), &[]).unwrap();
         assert_eq!(result, "5");

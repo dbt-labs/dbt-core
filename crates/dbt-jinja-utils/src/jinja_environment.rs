@@ -126,9 +126,11 @@ impl JinjaEnv {
 
     /// Compile an expression.
     pub fn compile_expression<'a>(&self, expr: &'a str) -> FsResult<JinjaExpression<'_, 'a>> {
-        Ok(JinjaExpression(self.env.compile_expression(expr).map_err(
-            |e| FsError::from_jinja_err(e, "Failed to compile Jinja expression"),
-        )?))
+        Ok(JinjaExpression(
+            self.env
+                .compile_expression(expr, &[])
+                .map_err(|e| FsError::from_jinja_err(e, "Failed to compile Jinja expression"))?,
+        ))
     }
 
     /// Set the adapter
@@ -168,7 +170,7 @@ impl JinjaEnv {
 
     /// Check if a template exists.
     pub fn has_template(&self, name: &str) -> bool {
-        self.env.get_template(name).is_ok()
+        self.env.get_template(name, &[]).is_ok()
     }
 
     /// Get a template from the environment.
@@ -182,7 +184,7 @@ impl JinjaEnv {
         }
         let result = self
             .env
-            .get_template(name)
+            .get_template(name, &[])
             .map_err(|e| FsError::from_jinja_err(e, "Failed to get template"))?;
         Ok(JinjaTemplate(result))
     }

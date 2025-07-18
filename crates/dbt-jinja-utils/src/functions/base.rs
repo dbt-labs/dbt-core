@@ -622,7 +622,7 @@ pub fn render_fn() -> impl Fn(&State, &[Value], Kwargs) -> Result<Value, Error> 
 
         let env = state.env();
 
-        let template = env.template_from_str(sql)?;
+        let template = env.template_from_str(sql, &[])?;
         let rendered = template.render(state.get_base_context(), &[])?;
         Ok(Value::from(rendered))
     }
@@ -1239,7 +1239,7 @@ mod tests {
         {{ result | sort | join(',') }}
         "#;
 
-        let tmpl = env.template_from_str(template_source).unwrap();
+        let tmpl = env.template_from_str(template_source, &[]).unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
 
         // Should contain all unique elements from both sets: 1,2,3,4
@@ -1261,7 +1261,7 @@ mod tests {
         {{ result | length }}
         "#;
 
-        let tmpl = env.template_from_str(template_source).unwrap();
+        let tmpl = env.template_from_str(template_source, &[]).unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
 
         // Should have 6 unique elements
@@ -1281,7 +1281,7 @@ mod tests {
         {{ result | sort | join(',') }}
         "#;
 
-        let tmpl = env.template_from_str(template_source).unwrap();
+        let tmpl = env.template_from_str(template_source, &[]).unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
 
         // Should remove duplicates: 1,2,3,4,5

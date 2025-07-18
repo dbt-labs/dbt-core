@@ -52,6 +52,7 @@ pub async fn resolve(
     arg: &ResolveArgs,
     invocation_args: &InvocationArgs,
     dbt_state: Arc<DbtState>,
+    listener_factory: Option<Arc<dyn dbt_jinja_utils::listener::ListenerFactory>>,
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
     let _pb = with_progress!(arg.io, spinner => RESOLVING);
 
@@ -104,6 +105,7 @@ pub async fn resolve(
             .map(|p| p.dbt_project.name.clone())
             .collect(),
         arg.io.clone(),
+        listener_factory,
     )?);
 
     // Compute final selectors

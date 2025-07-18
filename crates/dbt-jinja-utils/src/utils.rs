@@ -227,7 +227,7 @@ pub fn render_sql(
     listener_factory: &dyn ListenerFactory,
     filename: &Path,
 ) -> FsResult<String> {
-    let listeners = listener_factory.create_listeners(filename);
+    let listeners = listener_factory.create_listeners(filename, &CodeLocation::start_of_file());
     let result = env
         .as_ref()
         .render_named_str(filename.to_str().unwrap(), sql, ctx, &listeners)

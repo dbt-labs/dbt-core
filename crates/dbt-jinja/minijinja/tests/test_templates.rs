@@ -43,16 +43,16 @@ fn test_vm() {
 
         for (path, source) in &refs {
             let ref_filename = path.file_name().unwrap().to_str().unwrap();
-            env.add_template(ref_filename, source).unwrap();
+            env.add_template(ref_filename, source, &[]).unwrap();
         }
 
         let content = iter.next().unwrap();
-        let rendered = if let Err(err) = env.add_template(filename, content) {
+        let rendered = if let Err(err) = env.add_template(filename, content, &[]) {
             let mut rendered = format!("!!!SYNTAX ERROR!!!\n\n{err:#?}\n\n");
             writeln!(rendered, "{err:#}").unwrap();
             rendered
         } else {
-            let template = env.get_template(filename).unwrap();
+            let template = env.get_template(filename, &[]).unwrap();
 
             let actual_context = context! {
                 one_shot_iterator => Value::make_one_shot_iterator(0..3),
@@ -113,16 +113,16 @@ fn test_vm_block_fragments() {
 
         for (path, source) in &refs {
             let ref_filename = path.file_name().unwrap().to_str().unwrap();
-            env.add_template(ref_filename, source).unwrap();
+            env.add_template(ref_filename, source, &[]).unwrap();
         }
 
         let content = iter.next().unwrap();
-        let rendered = if let Err(err) = env.add_template(filename, content) {
+        let rendered = if let Err(err) = env.add_template(filename, content, &[]) {
             let mut rendered = format!("!!!SYNTAX ERROR!!!\n\n{err:#?}\n\n");
             writeln!(rendered, "{err:#}").unwrap();
             rendered
         } else {
-            let template = env.get_template(filename).unwrap();
+            let template = env.get_template(filename, &[]).unwrap();
 
             match template
                 .eval_to_state(&ctx, &[])
@@ -169,8 +169,8 @@ fn test_custom_filter() {
 
     let mut env = Environment::new();
     env.add_filter("test", test_filter);
-    env.add_template("test", "{{ var|test }}").unwrap();
-    let tmpl = env.get_template("test").unwrap();
+    env.add_template("test", "{{ var|test }}", &[]).unwrap();
+    let tmpl = env.get_template("test", &[]).unwrap();
     let rv = tmpl.render(&ctx, &[]).unwrap();
     assert_eq!(rv, "[42]");
 }
@@ -232,8 +232,9 @@ fn test_urlencode_with_struct() {
 #[test]
 fn test_single() {
     let mut env = Environment::new();
-    env.add_template("simple", "Hello {{ name }}!").unwrap();
-    let tmpl = env.get_template("simple").unwrap();
+    env.add_template("simple", "Hello {{ name }}!", &[])
+        .unwrap();
+    let tmpl = env.get_template("simple", &[]).unwrap();
     let rv = tmpl.render(context!(name => "Peter"), &[]).unwrap();
     assert_eq!(rv, "Hello Peter!");
 }
@@ -241,39 +242,41 @@ fn test_single() {
 #[test]
 fn test_values_scientific_notation() {
     let mut env = Environment::new();
-    env.add_template("sci1", "VALUE = {{ value or -12.4E-4 }}")
+    env.add_template("sci1", "VALUE = {{ value or -12.4E-4 }}", &[])
         .unwrap();
-    let tmpl = env.get_template("sci1").unwrap();
+    let tmpl = env.get_template("sci1", &[]).unwrap();
     let rv = tmpl.render(context!(value => -12.4E-3), &[]).unwrap();
     assert_eq!(rv, "VALUE = -0.0124");
     let rv = tmpl.render(context!(), &[]);
     // assert_eq!(rv, "VALUE = -0.00124");
     assert!(rv.is_ok());
 
-    env.add_template("sci2", "VALUE = {{ value or 1.4E4 }}")
+    env.add_template("sci2", "VALUE = {{ value or 1.4E4 }}", &[])
         .unwrap();
-    let tmpl = env.get_template("sci2").unwrap();
+    let tmpl = env.get_template("sci2", &[]).unwrap();
     let rv = tmpl.render(context!(), &[]);
     assert!(rv.is_ok());
 
-    env.add_template("sci3", "VALUE = {{ value or 1.4e+4}}")
+    env.add_template("sci3", "VALUE = {{ value or 1.4e+4}}", &[])
         .unwrap();
-    let tmpl = env.get_template("sci3").unwrap();
+    let tmpl = env.get_template("sci3", &[]).unwrap();
     let rv = tmpl.render(context!(), &[]);
     assert!(rv.is_ok());
 
-    env.add_template("sci4", "VALUE = {{ 1.4+4}}").unwrap();
-    let tmpl = env.get_template("sci4").unwrap();
+    env.add_template("sci4", "VALUE = {{ 1.4+4}}", &[]).unwrap();
+    let tmpl = env.get_template("sci4", &[]).unwrap();
     let rv = tmpl.render(context!(), &[]);
     assert!(rv.is_ok());
 
-    env.add_template("sci5", "VALUE = {{ 1.4+1E-1}}").unwrap();
-    let tmpl = env.get_template("sci5").unwrap();
+    env.add_template("sci5", "VALUE = {{ 1.4+1E-1}}", &[])
+        .unwrap();
+    let tmpl = env.get_template("sci5", &[]).unwrap();
     let rv = tmpl.render(context!(), &[]);
     assert!(rv.is_ok());
 
-    env.add_template("sci6", "VALUE = {{ 1.0E0+1.0}}").unwrap();
-    let tmpl = env.get_template("sci6").unwrap();
+    env.add_template("sci6", "VALUE = {{ 1.0E0+1.0}}", &[])
+        .unwrap();
+    let tmpl = env.get_template("sci6", &[]).unwrap();
     let rv = tmpl.render(context!(), &[]);
     assert!(rv.is_ok());
 }
@@ -281,15 +284,15 @@ fn test_values_scientific_notation() {
 #[test]
 fn test_auto_escaping() {
     let mut env = Environment::new();
-    env.add_template("index.html", "{{ var }}").unwrap();
+    env.add_template("index.html", "{{ var }}", &[]).unwrap();
     #[cfg(feature = "json")]
     {
-        env.add_template("index.js", "{{ var }}").unwrap();
+        env.add_template("index.js", "{{ var }}", &[]).unwrap();
     }
-    env.add_template("index.txt", "{{ var }}").unwrap();
+    env.add_template("index.txt", "{{ var }}", &[]).unwrap();
 
     // html
-    let tmpl = env.get_template("index.html").unwrap();
+    let tmpl = env.get_template("index.html", &[]).unwrap();
     let rv = tmpl.render(context!(var => "<script>"), &[]).unwrap();
     insta::assert_snapshot!(rv, @"&lt;script&gt;");
 
@@ -297,7 +300,7 @@ fn test_auto_escaping() {
     #[cfg(feature = "json")]
     {
         use minijinja::value::Value;
-        let tmpl = env.get_template("index.js").unwrap();
+        let tmpl = env.get_template("index.js", &[]).unwrap();
         let rv = tmpl.render(context!(var => "foo\"bar'baz"), &[]).unwrap();
         insta::assert_snapshot!(rv, @r###""foo\"bar'baz""###);
         let rv = tmpl
@@ -310,7 +313,7 @@ fn test_auto_escaping() {
     }
 
     // Text
-    let tmpl = env.get_template("index.txt").unwrap();
+    let tmpl = env.get_template("index.txt", &[]).unwrap();
     let rv = tmpl.render(context!(var => "foo\"bar'baz"), &[]).unwrap();
     insta::assert_snapshot!(rv, @r###"foo"bar'baz"###);
 }
@@ -449,9 +452,10 @@ fn test_undeclared_variables() {
     env.add_template(
         "demo",
         "{% set x = foo %}{{ x }}{{ bar.baz }}{{ bar.blub }}",
+        &[],
     )
     .unwrap();
-    let tmpl = env.get_template("demo").unwrap();
+    let tmpl = env.get_template("demo", &[]).unwrap();
     let undeclared = tmpl.undeclared_variables(false);
     assert_eq!(
         undeclared,
@@ -479,9 +483,10 @@ fn test_undeclared_variables_bug() {
           {{ item.name }}  // this used to cause a loop
         {% endfor %}
     "#,
+        &[],
     )
     .unwrap();
-    let tmpl = env.get_template("demo").unwrap();
+    let tmpl = env.get_template("demo", &[]).unwrap();
     let undeclared = tmpl.undeclared_variables(true);
     assert_eq!(
         undeclared,
@@ -498,9 +503,10 @@ fn test_block_fragments() {
     env.add_template(
         "demo",
         "I am outside the fragment{% block foo %}foo{% endblock %}So am I!",
+        &[],
     )
     .unwrap();
-    let tmpl = env.get_template("demo").unwrap();
+    let tmpl = env.get_template("demo", &[]).unwrap();
 
     let rv_a = tmpl.render((), &[]).unwrap();
     let rv_b = tmpl
@@ -523,9 +529,10 @@ fn test_state() {
         {% macro something() %}{{ global }}{% endmacro %}
         {% block baz %}[{{ global }}]{% endblock %}
     "#,
+        &[],
     )
     .unwrap();
-    let template = env.get_template("foo.html").unwrap();
+    let template = env.get_template("foo.html", &[]).unwrap();
     let mut state = template
         .eval_to_state(
             context! {
@@ -550,7 +557,10 @@ fn test_render_and_return_state() {
         env.set_fuel(Some(100));
     }
     let tmpl = env
-        .template_from_str("{% for x in range(3) %}Hello {{ name }}!\n{% endfor %}{% set x = 1 %}")
+        .template_from_str(
+            "{% for x in range(3) %}Hello {{ name }}!\n{% endfor %}{% set x = 1 %}",
+            &[],
+        )
         .unwrap();
     let (rv, state) = tmpl
         .render_and_return_state(context! { name => "Foo" }, &[])
@@ -568,7 +578,10 @@ fn test_render_and_return_state() {
 fn test_render_to_write_state() {
     let env = Environment::new();
     let tmpl = env
-        .template_from_str("{% set foo = 42 %}{% macro bar() %}x{% endmacro %}root")
+        .template_from_str(
+            "{% set foo = 42 %}{% macro bar() %}x{% endmacro %}root",
+            &[],
+        )
         .unwrap();
     let mut out = Vec::<u8>::new();
     let state = tmpl.render_to_write((), &mut out, &[]).unwrap();
@@ -614,7 +627,7 @@ fn test_invalid_value_iteration() {
     }
 
     let t = env
-        .template_from_str("{% for item in iter %}[{{ item }}]{% endfor %}")
+        .template_from_str("{% for item in iter %}[{{ item }}]{% endfor %}", &[])
         .unwrap();
     let err = t
         .render_to_write(
@@ -632,20 +645,22 @@ fn test_invalid_value_iteration() {
 #[test]
 fn test_multiple_extended_includes_in_loop() {
     let mut env = Environment::new();
-    env.add_template("dummy.txt", "{% block blk %}{% endblock %}")
+    env.add_template("dummy.txt", "{% block blk %}{% endblock %}", &[])
         .unwrap();
     env.add_template(
         "include.txt",
         "{% extends 'dummy.txt' %}{% block blk %}{{ item }}{% endblock %}",
+        &[],
     )
     .unwrap();
     env.add_template(
         "main.txt",
         "{% for item in range(3) %}{% include 'include.txt' %}{% endfor %}",
+        &[],
     )
     .unwrap();
     let rv = env
-        .get_template("main.txt")
+        .get_template("main.txt", &[])
         .unwrap()
         .render((), &[])
         .unwrap();
@@ -656,15 +671,16 @@ fn test_multiple_extended_includes_in_loop() {
 #[test]
 fn test_filter_caching() {
     let mut env = Environment::new();
-    env.add_template("parent.txt", "{{ 'Hello Foo' | lower }}")
+    env.add_template("parent.txt", "{{ 'Hello Foo' | lower }}", &[])
         .unwrap();
     env.add_template(
         "child.txt",
         "{% extends 'parent.txt' %}{% set dummy = 'a' | upper %}",
+        &[],
     )
     .unwrap();
     let rv = env
-        .get_template("child.txt")
+        .get_template("child.txt", &[])
         .unwrap()
         .render((), &[])
         .unwrap();
@@ -675,14 +691,16 @@ fn test_filter_caching() {
 #[test]
 fn test_test_caching() {
     let mut env = Environment::new();
-    env.add_template("parent.txt", "{{ 42 is odd }}").unwrap();
+    env.add_template("parent.txt", "{{ 42 is odd }}", &[])
+        .unwrap();
     env.add_template(
         "child.txt",
         "{% extends 'parent.txt' %}{% set dummy = 23 is even %}",
+        &[],
     )
     .unwrap();
     let rv = env
-        .get_template("child.txt")
+        .get_template("child.txt", &[])
         .unwrap()
         .render((), &[])
         .unwrap();

@@ -187,7 +187,7 @@ pub fn execute_macro_with_package(
     package: &str,
 ) -> Result<Value, AdapterError> {
     let template_name = format!("{package}.{macro_name}");
-    let template = state.env().get_template(&template_name)?;
+    let template = state.env().get_template(&template_name, &[])?;
     let base_ctx = state.get_base_context();
     let state = template.eval_to_state(base_ctx, &[])?;
     let func = state

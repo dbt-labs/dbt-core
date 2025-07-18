@@ -8,9 +8,9 @@ fn test_basic() {
     assert_eq!(env.fuel(), None);
     env.set_fuel(Some(100));
     assert_eq!(env.fuel(), Some(100));
-    env.add_template("test", "{% for x in seq %}{{ x }}\n{% endfor %}")
+    env.add_template("test", "{% for x in seq %}{{ x }}\n{% endfor %}", &[])
         .unwrap();
-    let t = env.get_template("test").unwrap();
+    let t = env.get_template("test", &[]).unwrap();
 
     // this will still manage to run with 100 fuel
     let rv = t
@@ -38,9 +38,10 @@ fn test_macro_fuel() {
         {% macro x() %}{% for item in range(5) %}...{% endfor %}{% endmacro %}
         {% for count in range(macros) %}{{ x() }}{% endfor %}
     ",
+        &[],
     )
     .unwrap();
-    let t = env.get_template("test").unwrap();
+    let t = env.get_template("test", &[]).unwrap();
 
     // this should succeed
     t.render(context!(macros => 3), &[]).unwrap();

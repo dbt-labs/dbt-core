@@ -665,7 +665,7 @@ mod test {
 
         // Create a template that uses the source function
         let template = env
-            .template_from_str("{{ source('my_source', 'my_table').render() }}")
+            .template_from_str("{{ source('my_source', 'my_table').render() }}", &[])
             .unwrap();
 
         // Render the template

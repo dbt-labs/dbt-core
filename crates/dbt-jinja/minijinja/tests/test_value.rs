@@ -557,8 +557,8 @@ fn test_value_cmp() {
 #[test]
 fn test_call_kwargs() {
     let mut env = Environment::new();
-    env.add_template("foo", "").unwrap();
-    let tmpl = env.get_template("foo").unwrap();
+    env.add_template("foo", "", &[]).unwrap();
+    let tmpl = env.get_template("foo", &[]).unwrap();
     let state = tmpl.new_state();
     let val = Value::from_function(|kwargs: Kwargs| kwargs.get::<i32>("foo"));
     let rv = val

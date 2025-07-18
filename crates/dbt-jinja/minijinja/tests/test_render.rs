@@ -59,7 +59,7 @@ fn test_macro_namespace_lookup() {
         MACRO_NAMESPACE_REGISTRY,
         Value::from_object(macro_namespace_registry),
     );
-    let _ = env.add_template("test_2.two", "{% macro two() %}two{% endmacro %}");
+    let _ = env.add_template("test_2.two", "{% macro two() %}two{% endmacro %}", &[]);
     let rv = env
         .render_str(
             r#"

@@ -246,8 +246,6 @@ pub enum Instruction<'source> {
     MacroStart(u32, u32, u32, u32, u32, u32),
     MacroStop(u32, u32, u32),
 
-    ModelReference(String, u32, u32, u32, u32, u32, u32),
-
     // A label instruction to indicate the start of a macro
     // After MacroName, there will be a series of StoreLocal instructions for parameters
     // If the macro is not pre-defined, the number of StoreLocal instructions is unknown at this point
@@ -502,5 +500,5 @@ impl fmt::Debug for Instructions<'_> {
 #[test]
 #[cfg(target_pointer_width = "64")]
 fn test_sizes() {
-    assert_eq!(std::mem::size_of::<Instruction>(), 56);
+    assert_eq!(std::mem::size_of::<Instruction>(), 48);
 }

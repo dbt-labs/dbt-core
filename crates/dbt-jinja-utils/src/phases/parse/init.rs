@@ -28,6 +28,7 @@ use crate::{
     functions::ConfiguredVar,
     invocation_args::InvocationArgs,
     jinja_environment::JinjaEnv,
+    listener::ListenerFactory,
     phases::utils::build_target_context_map,
 };
 
@@ -48,6 +49,7 @@ pub fn initialize_parse_jinja_environment(
     invocation_args: &InvocationArgs,
     all_package_names: BTreeSet<String>,
     io_args: IoArgs,
+    listener_factory: Option<Arc<dyn ListenerFactory>>,
 ) -> FsResult<JinjaEnv> {
     // Set the thread local dependencies
     THREAD_LOCAL_DEPENDENCIES.get_or_init(|| Mutex::new(all_package_names));
@@ -112,7 +114,7 @@ pub fn initialize_parse_jinja_environment(
         .with_root_package(project_name.to_string())
         .with_globals(globals)
         .with_io_args(io_args)
-        .try_with_macros(MacroUnitsWrapper::new(macro_units))?
+        .try_with_macros(MacroUnitsWrapper::new(macro_units), listener_factory)?
         .build();
     env.set_undefined_behavior(UndefinedBehavior::Dbt);
     Ok(env)

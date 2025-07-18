@@ -106,7 +106,7 @@ fn test_args() {
 fn test_macro_passing() {
     let env = Environment::new();
     let tmpl = env
-        .template_from_str("{% macro m(a) %}{{ a }}{% endmacro %}")
+        .template_from_str("{% macro m(a) %}{{ a }}{% endmacro %}", &[])
         .unwrap();
     let (_, state) = tmpl.render_and_return_state((), &[]).unwrap();
     let m = state.lookup("m").unwrap();
@@ -147,7 +147,7 @@ fn test_no_leak() {
         x => Value::from_object(X(dropped.clone())),
     };
     let mut env = Environment::new();
-    env.add_template("x", "{% macro meh() %}{{ x }}{{ meh }}{% endmacro %}")
+    env.add_template("x", "{% macro meh() %}{{ x }}{{ meh }}{% endmacro %}", &[])
         .unwrap();
     let rv = env
         .render_str(
@@ -272,6 +272,7 @@ fn test_unenclosed_resolve_with_template() {
     env.add_template(
         "dbt.wrapper",
         "{%- macro wrapper(a, b) %}{{a}}|{{ caller() }}|{{b}}{% endmacro %}",
+        &[],
     )
     .unwrap();
     let rv = env
@@ -313,6 +314,7 @@ fn test_unenclosed_resolve_with_template_with_args() {
     env.add_template(
         "dbt.wrapper",
         "{%- macro wrapper(a, b) %}{{a}}|{{ caller(a) }}|{{b}}{% endmacro %}",
+        &[],
     )
     .unwrap();
     let rv = env
@@ -388,6 +390,7 @@ fn test_ref_override() {
                 {{ builtins.ref(modelname, packagename_override, version=version_override) }}
             {% endif %}
         {% endmacro %}"#,
+        &[],
     )
     .unwrap();
 

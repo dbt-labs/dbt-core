@@ -435,9 +435,10 @@ impl<'source> CompiledTemplate<'source> {
         config: &TemplateConfig,
         filename: Option<String>,
         profile: CodeGenerationProfile,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<CompiledTemplate<'source>, Error> {
         attach_basic_debug_info(
-            Self::_new_impl(name, source, config, filename, profile),
+            Self::_new_impl(name, source, config, filename, profile, listeners),
             source,
         )
     }
@@ -448,6 +449,7 @@ impl<'source> CompiledTemplate<'source> {
         config: &TemplateConfig,
         filename: Option<String>,
         profile: CodeGenerationProfile,
+        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<CompiledTemplate<'source>, Error> {
         // the parser/compiler combination can create constants in which case
         // we can probably benefit from the value optimization a bit.
@@ -459,7 +461,7 @@ impl<'source> CompiledTemplate<'source> {
             config.ws_config
         ));
         let mut gen = CodeGenerator::new_with_filename(name, source, filename, profile);
-        gen.compile_stmt(&ast);
+        gen.compile_stmt(&ast, listeners);
         let buffer_size_hint = gen.buffer_size_hint();
         let (instructions, blocks) = gen.finish();
         Ok(CompiledTemplate {

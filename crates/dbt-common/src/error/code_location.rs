@@ -104,6 +104,22 @@ impl CodeLocation {
             ..self
         }
     }
+
+    pub fn with_offset(self, offset: dbt_frontend_common::error::CodeLocation) -> Self {
+        let line = self.line + offset.line - 1;
+        let col = if self.line == 1 {
+            self.col + offset.col - 1
+        } else {
+            self.col
+        };
+        let index = self.index + offset.index;
+        CodeLocation {
+            line,
+            col,
+            index,
+            ..self
+        }
+    }
 }
 
 impl From<PathBuf> for CodeLocation {
@@ -211,6 +227,13 @@ impl Span {
         Span {
             start: self.start.with_macro_spans(spans, expanded_file.to_owned()),
             stop: self.stop.with_macro_spans(spans, expanded_file),
+        }
+    }
+
+    pub fn with_offset(self, offset: dbt_frontend_common::error::CodeLocation) -> Self {
+        Span {
+            start: self.start.with_offset(offset),
+            stop: self.stop.with_offset(offset),
         }
     }
 }

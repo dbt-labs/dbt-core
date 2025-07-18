@@ -1,4 +1,6 @@
-use crate::{functions::register_base_functions, jinja_environment::JinjaEnv};
+use crate::{
+    functions::register_base_functions, jinja_environment::JinjaEnv, listener::ListenerFactory,
+};
 use dbt_common::{FsError, FsResult, io_args::IoArgs, unexpected_fs_err};
 use dbt_fusion_adapter::BaseAdapter;
 use minijinja::{
@@ -13,7 +15,7 @@ use minijinja::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 type PackageName = String;
 
@@ -83,7 +85,11 @@ impl JinjaEnvBuilder {
     }
 
     /// Register macros with the environment.
-    pub fn try_with_macros(mut self, macros: MacroUnitsWrapper) -> FsResult<Self> {
+    pub fn try_with_macros(
+        mut self,
+        macros: MacroUnitsWrapper,
+        listener_factory: Option<Arc<dyn ListenerFactory>>,
+    ) -> FsResult<Self> {
         let adapter = self.adapter.as_ref().ok_or_else(|| {
             unexpected_fs_err!("try_with_macros requires adapter configuration to be set")
         })?;
@@ -132,6 +138,16 @@ impl JinjaEnvBuilder {
             }
 
             for macro_unit in macro_units {
+                let filename = macro_unit.info.path.to_string_lossy().to_string();
+                let offset = dbt_frontend_common::error::CodeLocation::new(
+                    macro_unit.info.span.start_line as usize,
+                    macro_unit.info.span.start_col as usize,
+                    macro_unit.info.span.start_offset as usize,
+                );
+                let listeners = listener_factory
+                    .as_ref()
+                    .map(|factory| factory.create_listeners(Path::new(&filename), &offset))
+                    .unwrap_or_default();
                 let macro_name = macro_unit.info.name.clone();
                 let template_name = format!("{package_name}.{macro_name}");
 
@@ -140,9 +156,15 @@ impl JinjaEnvBuilder {
                     .add_template_owned(
                         template_name.clone(),
                         macro_unit.sql.clone(),
-                        Some(macro_unit.info.path.to_string_lossy().to_string()),
+                        Some(filename.clone()),
+                        &listeners,
                     )
                     .map_err(|e| FsError::from_jinja_err(e, "Failed to add template"))?;
+                for listener in listeners {
+                    if let Some(factory) = listener_factory.as_ref() {
+                        factory.destroy_listener(Path::new(&filename), listener)
+                    };
+                }
 
                 macro_template_registry.insert(
                     Value::from(template_name),
@@ -486,7 +508,7 @@ all okay!");
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
             .with_adapter(create_parse_adapter("postgres", DEFAULT_DBT_QUOTING).unwrap())
             .with_root_package("test_package".to_string())
-            .try_with_macros(macro_units)
+            .try_with_macros(macro_units, None)
             .expect("Failed to register macros");
         let env = builder.build();
         // one exists in test_package, dbt_postgres, and dbt
@@ -566,7 +588,7 @@ all okay!");
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
             .with_adapter(create_parse_adapter("postgres", DEFAULT_DBT_QUOTING).unwrap())
             .with_root_package("test_package".to_string())
-            .try_with_macros(macro_units)
+            .try_with_macros(macro_units, None)
             .expect("Failed to register macros");
         let env = builder.build();
 
@@ -648,7 +670,8 @@ all okay!");
                         sql: "{% macro macro_b() %}{%- set small_macro_name = some_macro -%} {{ small_macro_name() }}{% endmacro %}".to_string(),
                     },
                 ],
-            )])))
+            )]),
+        ), None)
             .unwrap()
             .build();
         // Test assigning macro to variable and using it
@@ -727,7 +750,7 @@ all okay!");
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
             .with_adapter(create_parse_adapter("postgres", DEFAULT_DBT_QUOTING).unwrap())
             .with_root_package("empty_root".to_string())
-            .try_with_macros(macro_units)
+            .try_with_macros(macro_units, None)
             .expect("Failed to register macros");
 
         let env = builder.build();

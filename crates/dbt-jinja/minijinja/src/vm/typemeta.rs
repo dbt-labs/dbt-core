@@ -1470,18 +1470,6 @@ impl<'src> TypeChecker<'src> {
                     // TYPECHECK: NO
                     // Nothing to do with the stack
                 }
-                Instruction::ModelReference(
-                    _name,
-                    _start_line,
-                    _start_col,
-                    _start_offset,
-                    _end_line,
-                    _end_col,
-                    _end_offset,
-                ) => {
-                    // TYPECHECK: NO
-                    // Nothing to do with the stack
-                }
                 Instruction::MacroName(_name) => {
                     // TYPECHECK: NO
                     typestate.stack.push(Type::Parameters(0));
