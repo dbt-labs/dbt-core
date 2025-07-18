@@ -38,7 +38,7 @@ use minijinja::{
 };
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
 
-use crate::{jinja_environment::JinjaEnvironment, phases::MacroLookupContext};
+use crate::{jinja_environment::JinjaEnv, phases::MacroLookupContext};
 
 use super::sql_resource::SqlResource;
 
@@ -627,7 +627,7 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
 
 /// Render a reference or source string and return the corresponding SqlResource
 pub fn render_extract_ref_or_source_expr<T: DefaultTo<T>>(
-    jinja_env: &JinjaEnvironment<'static>,
+    jinja_env: &JinjaEnv,
     resolve_model_context: &BTreeMap<String, MinijinjaValue>,
     sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
     ref_str: &str,

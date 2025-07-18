@@ -29,6 +29,7 @@ ignore = { version = "0.4" }
 itertools = { workspace = true }
 libc = "0.2.170"
 merge = { workspace = true }
+minijinja = { workspace = true }
 once_cell = { workspace = true }
 parquet = { workspace = true }
 pretty_assertions = { version = "1.4.1" }

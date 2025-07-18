@@ -1,7 +1,6 @@
 use dbt_common::FsResult;
 use dbt_common::io_args::IoArgs;
-use dbt_jinja_utils::invocation_args::InvocationArgs;
-use dbt_jinja_utils::phases::load::RenderSecretScope;
+use dbt_jinja_utils::phases::load::LoadContext;
 use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
 use dbt_jinja_utils::serde::from_yaml_error;
 use dbt_loader::args::LoadArgs;
@@ -61,17 +60,17 @@ pub fn load_db_config<P: AsRef<Path>>(
     profile_path: P,
 ) -> FsResult<DbConfig> {
     let arg = LoadArgs::default();
-    let iarg = InvocationArgs::default();
 
     // Get all the profiles
-    let mut env = initialize_load_profile_jinja_environment(&iarg)?;
-    let profile_render_scope = RenderSecretScope::new(&mut env, arg.vars);
+    let env = initialize_load_profile_jinja_environment();
+
+    let load_context = LoadContext::new(arg.vars);
 
     let (_, mut db_config) = read_profiles_and_extract_db_config(
         &IoArgs::default(),
         &Some(target.to_string()),
-        profile_render_scope.jinja_env,
-        &(),
+        &env,
+        &load_context,
         TEST_PROFILE,
         profile_path.as_ref().to_path_buf(),
     )?;

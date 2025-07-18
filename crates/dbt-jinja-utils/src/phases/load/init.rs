@@ -14,15 +14,13 @@ use minijinja::value::Value as MinijinjaValue;
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
 
 use crate::{
-    environment_builder::JinjaEnvironmentBuilder, invocation_args::InvocationArgs,
-    jinja_environment::JinjaEnvironment, phases::utils::build_target_context_map,
+    environment_builder::JinjaEnvBuilder, jinja_environment::JinjaEnv,
+    phases::utils::build_target_context_map,
 };
 
 /// Initialize load_profile jinja environment
-pub fn initialize_load_profile_jinja_environment(
-    _iarg: &InvocationArgs,
-) -> FsResult<JinjaEnvironment<'static>> {
-    Ok(JinjaEnvironmentBuilder::new().build())
+pub fn initialize_load_profile_jinja_environment() -> JinjaEnv {
+    JinjaEnvBuilder::new().build()
 }
 
 /// Initialize a Jinja environment for the load phase.
@@ -34,7 +32,7 @@ pub fn initialize_load_jinja_environment(
     run_started_at: DateTime<Tz>,
     flags: &BTreeMap<String, minijinja::Value>,
     io_args: IoArgs,
-) -> FsResult<JinjaEnvironment<'static>> {
+) -> FsResult<JinjaEnv> {
     let target_context = TargetContext::try_from(db_config.clone())
         .map_err(|e| fs_err!(ErrorCode::InvalidConfig, "{}", &e))?;
     let target_context = Arc::new(build_target_context_map(profile, target, target_context));
@@ -55,7 +53,7 @@ pub fn initialize_load_jinja_environment(
 
     let package_quoting = resolve_package_quoting(None, adapter_type);
 
-    Ok(JinjaEnvironmentBuilder::new()
+    Ok(JinjaEnvBuilder::new()
         .with_adapter(create_parse_adapter(adapter_type, package_quoting)?)
         .with_root_package("dbt".to_string())
         .with_io_args(io_args)

@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use crate::functions::build_flat_graph;
-use crate::jinja_environment::JinjaEnvironment;
+use crate::jinja_environment::JinjaEnv;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_fusion_adapter::BaseAdapter;
 use dbt_fusion_adapter::load_store::ResultStore;
@@ -23,7 +23,7 @@ use std::rc::Rc;
 
 /// Configure the Jinja environment for the compile phase.
 pub fn configure_compile_and_run_jinja_environment(
-    env: &mut JinjaEnvironment<'static>,
+    env: &mut JinjaEnv,
     adapter: Arc<dyn BaseAdapter>,
 ) {
     env.set_adapter(adapter);

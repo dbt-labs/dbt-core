@@ -23,11 +23,11 @@ use minijinja::{
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
 
 use crate::{
-    environment_builder::{JinjaEnvironmentBuilder, MacroUnitsWrapper},
+    environment_builder::{JinjaEnvBuilder, MacroUnitsWrapper},
     flags::Flags,
     functions::ConfiguredVar,
     invocation_args::InvocationArgs,
-    jinja_environment::JinjaEnvironment,
+    jinja_environment::JinjaEnv,
     phases::utils::build_target_context_map,
 };
 
@@ -48,7 +48,7 @@ pub fn initialize_parse_jinja_environment(
     invocation_args: &InvocationArgs,
     all_package_names: BTreeSet<String>,
     io_args: IoArgs,
-) -> FsResult<JinjaEnvironment<'static>> {
+) -> FsResult<JinjaEnv> {
     // Set the thread local dependencies
     THREAD_LOCAL_DEPENDENCIES.get_or_init(|| Mutex::new(all_package_names));
     let target_context = TargetContext::try_from(db_config.clone())
@@ -107,7 +107,7 @@ pub fn initialize_parse_jinja_environment(
         ),
     ]);
 
-    let mut env = JinjaEnvironmentBuilder::new()
+    let mut env = JinjaEnvBuilder::new()
         .with_adapter(create_parse_adapter(adapter_type, package_quoting)?)
         .with_root_package(project_name.to_string())
         .with_globals(globals)

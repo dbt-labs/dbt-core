@@ -6,7 +6,7 @@ use crate::utils::{
 use dbt_common::io_args::IoArgs;
 use dbt_common::{ErrorCode, FsResult, fs_err, show_error, stdfs};
 use dbt_frontend_common::Dialect;
-use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_schemas::dbt_utils::validate_delimeter;
@@ -38,7 +38,7 @@ pub fn resolve_seeds(
     schema: &str,
     adapter_type: &str,
     package_name: &str,
-    jinja_env: &JinjaEnvironment<'static>,
+    jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     collected_tests: &mut Vec<DbtAsset>,
     refs_and_sources: &mut RefsAndSources,

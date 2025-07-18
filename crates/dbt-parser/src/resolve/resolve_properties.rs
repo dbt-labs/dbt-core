@@ -5,7 +5,7 @@ use dbt_common::{
     ErrorCode, FsResult, constants::PARSING, fs_err, fsinfo, show_error, show_progress,
     show_warning,
 };
-use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::{into_typed_raw, into_typed_with_jinja, value_from_file};
 use dbt_schemas::schemas::properties::{
     DbtPropertiesFileValues, MinimalSchemaValue, MinimalTableValue,
@@ -46,7 +46,7 @@ impl MinimalProperties {
         &mut self,
         io_args: &IoArgs,
         other: DbtPropertiesFileValues,
-        jinja_env: &JinjaEnvironment<'static>,
+        jinja_env: &JinjaEnv,
         properties_path: &Path,
         base_ctx: &BTreeMap<String, MinijinjaValue>,
     ) -> FsResult<()> {
@@ -329,7 +329,7 @@ fn validate_resource_name(name: &str) -> FsResult<String> {
 pub fn resolve_minimal_properties(
     arg: &ResolveArgs,
     package: &DbtPackage,
-    jinja_env: &JinjaEnvironment<'static>,
+    jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
 ) -> FsResult<MinimalProperties> {
     let mut minimal_resolved_properties = MinimalProperties::default();

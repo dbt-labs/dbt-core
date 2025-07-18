@@ -13,7 +13,7 @@ use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::schemas::macros::build_macro_units;
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 
-use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::state::RenderResults;
 use dbt_schemas::state::{DbtPackage, Macros};
 use dbt_schemas::state::{DbtRuntimeConfig, Operations};
@@ -52,7 +52,7 @@ pub async fn resolve(
     arg: &ResolveArgs,
     invocation_args: &InvocationArgs,
     dbt_state: Arc<DbtState>,
-) -> FsResult<(ResolverState, JinjaEnvironment<'static>)> {
+) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
     let _pb = with_progress!(arg.io, spinner => RESOLVING);
 
     // Get the root project name
@@ -85,7 +85,7 @@ pub async fn resolve(
         &dbt_state.dbt_profile.db_config.adapter_type(),
     );
 
-    let jinja_env = initialize_parse_jinja_environment(
+    let jinja_env = Arc::new(initialize_parse_jinja_environment(
         root_project_name,
         &dbt_state.dbt_profile.profile,
         &dbt_state.dbt_profile.target,
@@ -104,7 +104,7 @@ pub async fn resolve(
             .map(|p| p.dbt_project.name.clone())
             .collect(),
         arg.io.clone(),
-    )?;
+    )?);
 
     // Compute final selectors
     let resolved_selectors = resolve_final_selectors(root_project_name, &jinja_env, arg)?;
@@ -139,7 +139,7 @@ pub async fn resolve(
                 root_project_configs.clone(),
                 &adapter_type,
                 &macros,
-                &jinja_env,
+                jinja_env.clone(),
                 &mut refs_and_sources,
                 &mut all_runtime_configs,
             )
@@ -161,7 +161,7 @@ pub async fn resolve(
                 root_project_configs.clone(),
                 &adapter_type,
                 &macros,
-                &jinja_env,
+                jinja_env.clone(),
                 &mut refs_and_sources,
                 &mut all_runtime_configs,
             )
@@ -235,7 +235,7 @@ pub async fn resolve_inner(
     root_project_configs: &RootProjectConfigs,
     adapter_type: &str,
     macros: &Macros,
-    jinja_env: &JinjaEnvironment<'static>,
+    jinja_env: Arc<JinjaEnv>,
     refs_and_sources: &mut RefsAndSources,
     runtime_config: Arc<DbtRuntimeConfig>,
 ) -> FsResult<(Nodes, Nodes, RenderResults, RefsAndSources)> {
@@ -255,7 +255,7 @@ pub async fn resolve_inner(
         DISPATCH_CONFIG.get().unwrap().read().unwrap().clone(),
     );
     // Resolve the dbt properties (schema.yml) files
-    let mut min_properties = resolve_minimal_properties(arg, package, jinja_env, &base_ctx)?;
+    let mut min_properties = resolve_minimal_properties(arg, package, &jinja_env, &base_ctx)?;
 
     let package_name = package.dbt_project.name.as_str();
 
@@ -274,7 +274,7 @@ pub async fn resolve_inner(
         database,
         adapter_type,
         &base_ctx,
-        jinja_env,
+        &jinja_env,
         &mut collected_tests,
         refs_and_sources,
     )?;
@@ -293,7 +293,7 @@ pub async fn resolve_inner(
         schema,
         adapter_type,
         package_name,
-        jinja_env,
+        &jinja_env,
         &base_ctx,
         &mut collected_tests,
         refs_and_sources,
@@ -313,7 +313,7 @@ pub async fn resolve_inner(
         database,
         schema,
         adapter_type,
-        jinja_env,
+        jinja_env.clone(),
         &base_ctx,
         runtime_config.clone(),
         refs_and_sources,
@@ -334,7 +334,7 @@ pub async fn resolve_inner(
         schema,
         adapter_type,
         package_name,
-        jinja_env,
+        jinja_env.clone(),
         &base_ctx,
         runtime_config.clone(),
         &mut collected_tests,
@@ -355,7 +355,7 @@ pub async fn resolve_inner(
         schema,
         adapter_type,
         package_name,
-        jinja_env,
+        jinja_env.clone(),
         &base_ctx,
         runtime_config.clone(),
         refs_and_sources,
@@ -373,7 +373,7 @@ pub async fn resolve_inner(
         database,
         schema,
         adapter_type,
-        jinja_env,
+        jinja_env.clone(),
         &base_ctx,
         runtime_config.clone(),
         &collected_tests,
@@ -391,7 +391,7 @@ pub async fn resolve_inner(
         root_project_configs,
         adapter_type,
         package_name,
-        jinja_env,
+        &jinja_env,
         &base_ctx,
         &min_properties.models,
         runtime_config,
@@ -452,7 +452,7 @@ async fn resolve_package(
     root_project_configs: Arc<RootProjectConfigs>,
     adapter_type: String,
     macros: Macros,
-    jinja_env: JinjaEnvironment<'static>,
+    jinja_env: Arc<JinjaEnv>,
     refs_and_sources: RefsAndSources,
     all_runtime_configs: BTreeMap<String, Arc<DbtRuntimeConfig>>,
 ) -> FsResult<(
@@ -497,7 +497,7 @@ async fn resolve_package(
             &root_project_configs,
             &adapter_type,
             &macros,
-            &jinja_env,
+            jinja_env.clone(),
             &mut refs_and_sources.clone(),
             runtime_config.clone(),
         )
@@ -524,7 +524,7 @@ async fn resolve_packages_sequentially(
     root_project_configs: Arc<RootProjectConfigs>,
     adapter_type: &str,
     macros: &Macros,
-    jinja_env: &JinjaEnvironment<'static>,
+    jinja_env: Arc<JinjaEnv>,
     refs_and_sources: &mut RefsAndSources,
     all_runtime_configs: &mut BTreeMap<String, Arc<DbtRuntimeConfig>>,
 ) -> FsResult<(Nodes, Nodes, RenderResults)> {
@@ -587,7 +587,7 @@ async fn resolve_packages_parallel(
     root_project_configs: Arc<RootProjectConfigs>,
     adapter_type: &str,
     macros: &Macros,
-    jinja_env: &JinjaEnvironment<'static>,
+    jinja_env: Arc<JinjaEnv>,
     refs_and_sources: &mut RefsAndSources,
     all_runtime_configs: &mut BTreeMap<String, Arc<DbtRuntimeConfig>>,
 ) -> FsResult<(Nodes, Nodes, RenderResults)> {

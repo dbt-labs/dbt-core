@@ -11,7 +11,7 @@ use dbt_common::error::AbstractLocation;
 use dbt_common::fs_err;
 use dbt_common::io_args::IoArgs;
 use dbt_common::io_args::StaticAnalysisKind;
-use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::parse::build_resolve_model_context;
 use dbt_jinja_utils::phases::parse::render_extract_ref_or_source_expr;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
@@ -54,7 +54,7 @@ pub fn resolve_unit_tests(
     root_project_configs: &RootProjectConfigs,
     adapter_type: &str,
     package_name: &str,
-    jinja_env: &JinjaEnvironment<'static>,
+    jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     model_properties: &BTreeMap<String, MinimalPropertiesEntry>,
     runtime_config: Arc<DbtRuntimeConfig>,

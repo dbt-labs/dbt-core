@@ -1,12 +1,16 @@
 use dbt_serde_yaml::Verbatim;
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::Path,
+};
 
 use dbt_common::{
     ErrorCode, FsResult, constants::DBT_PROJECT_YML, err, io_args::IoArgs,
     io_utils::try_read_yml_to_str, unexpected_fs_err,
 };
 use dbt_jinja_utils::{
-    jinja_environment::JinjaEnvironment,
+    jinja_environment::JinjaEnv,
+    phases::load::LoadContext,
     serde::{from_yaml_raw, into_typed_with_jinja},
 };
 use dbt_schemas::schemas::{
@@ -71,13 +75,15 @@ impl UnpinnedPackage {
 
 pub struct PackageListing {
     pub io_args: IoArgs,
+    pub vars: BTreeMap<String, dbt_serde_yaml::Value>,
     pub packages: HashMap<String, UnpinnedPackage>,
 }
 
 impl PackageListing {
-    pub fn new(io_args: IoArgs) -> Self {
+    pub fn new(io_args: IoArgs, vars: BTreeMap<String, dbt_serde_yaml::Value>) -> Self {
         Self {
             io_args,
+            vars,
             packages: HashMap::new(),
         }
     }
@@ -89,7 +95,7 @@ impl PackageListing {
     pub fn hydrate_dbt_packages(
         &mut self,
         packages: &DbtPackages,
-        jinja_env: &JinjaEnvironment<'static>,
+        jinja_env: &JinjaEnv,
     ) -> FsResult<()> {
         for package in packages.packages.iter() {
             self.incorporate(package.clone(), jinja_env)?;
@@ -100,7 +106,7 @@ impl PackageListing {
     pub fn hydrate_dbt_packages_lock(
         &mut self,
         dbt_packages_lock: &DbtPackagesLock,
-        jinja_env: &JinjaEnvironment<'static>,
+        jinja_env: &JinjaEnv,
     ) -> FsResult<()> {
         for package in dbt_packages_lock.packages.iter() {
             self.incorporate(package.clone().into(), jinja_env)?;
@@ -108,18 +114,22 @@ impl PackageListing {
         Ok(())
     }
 
-    fn incorporate(
-        &mut self,
-        package: DbtPackageEntry,
-        jinja_env: &JinjaEnvironment<'static>,
-    ) -> FsResult<()> {
+    fn incorporate(&mut self, package: DbtPackageEntry, jinja_env: &JinjaEnv) -> FsResult<()> {
+        let deps_context = LoadContext::new(self.vars.clone());
         match package {
             DbtPackageEntry::Hub(hub_package) => {
                 let hub_package: HubPackage = {
                     let value = dbt_serde_yaml::to_value(&hub_package).map_err(|e| {
                         unexpected_fs_err!("Failed to serialize hub package spec: {e}")
                     })?;
-                    into_typed_with_jinja(Some(&self.io_args), value, true, jinja_env, &(), &[])
+                    into_typed_with_jinja(
+                        Some(&self.io_args),
+                        value,
+                        true,
+                        jinja_env,
+                        &deps_context,
+                        &[],
+                    )
                 }?;
                 if let Some(unpinned_package) = self.packages.get_mut(&hub_package.package) {
                     match unpinned_package {
@@ -147,13 +157,27 @@ impl PackageListing {
                     let value = dbt_serde_yaml::to_value(&git_package).map_err(|e| {
                         unexpected_fs_err!("Failed to serialize git package spec: {e}")
                     })?;
-                    into_typed_with_jinja(Some(&self.io_args), value, true, jinja_env, &(), &[])
+                    into_typed_with_jinja(
+                        Some(&self.io_args),
+                        value,
+                        true,
+                        jinja_env,
+                        &deps_context,
+                        &[],
+                    )
                 }?;
                 let git_package_url: String = {
                     let value = dbt_serde_yaml::to_value(&git_package.git).map_err(|e| {
                         unexpected_fs_err!("Failed to serialize git package URL: {e}")
                     })?;
-                    into_typed_with_jinja(Some(&self.io_args), value, true, jinja_env, &(), &[])
+                    into_typed_with_jinja(
+                        Some(&self.io_args),
+                        value,
+                        true,
+                        jinja_env,
+                        &deps_context,
+                        &[],
+                    )
                 }?;
 
                 // Create key that includes subdirectory if present
@@ -185,7 +209,14 @@ impl PackageListing {
                     let value = dbt_serde_yaml::to_value(&local_package).map_err(|e| {
                         unexpected_fs_err!("Failed to serialize local package spec: {e}")
                     })?;
-                    into_typed_with_jinja(Some(&self.io_args), value, true, jinja_env, &(), &[])
+                    into_typed_with_jinja(
+                        Some(&self.io_args),
+                        value,
+                        true,
+                        jinja_env,
+                        &deps_context,
+                        &[],
+                    )
                 }?;
                 // Get absolute path of local package
                 let full_path = get_local_package_full_path(self.in_dir(), &local_package);
@@ -215,14 +246,28 @@ impl PackageListing {
                     let value = dbt_serde_yaml::to_value(&private_package).map_err(|e| {
                         unexpected_fs_err!("Failed to serialize private package spec: {e}")
                     })?;
-                    into_typed_with_jinja(Some(&self.io_args), value, true, jinja_env, &(), &[])
+                    into_typed_with_jinja(
+                        Some(&self.io_args),
+                        value,
+                        true,
+                        jinja_env,
+                        &deps_context,
+                        &[],
+                    )
                 }?;
                 let private_package_private: String = {
                     let value =
                         dbt_serde_yaml::to_value(&private_package.private).map_err(|e| {
                             unexpected_fs_err!("Failed to serialize private package URL: {e}")
                         })?;
-                    into_typed_with_jinja(Some(&self.io_args), value, true, jinja_env, &(), &[])
+                    into_typed_with_jinja(
+                        Some(&self.io_args),
+                        value,
+                        true,
+                        jinja_env,
+                        &deps_context,
+                        &[],
+                    )
                 }?;
 
                 private_package.private = Verbatim::from(private_package_private);
@@ -259,14 +304,28 @@ impl PackageListing {
                     let value = dbt_serde_yaml::to_value(&tarball_package).map_err(|e| {
                         unexpected_fs_err!("Failed to serialize tarball package spec: {e}")
                     })?;
-                    into_typed_with_jinja(Some(&self.io_args), value, true, jinja_env, &(), &[])
+                    into_typed_with_jinja(
+                        Some(&self.io_args),
+                        value,
+                        true,
+                        jinja_env,
+                        &deps_context,
+                        &[],
+                    )
                 }?;
                 let tarball_url: String = {
                     let value =
                         dbt_serde_yaml::to_value(&tarball_package.tarball).map_err(|e| {
                             unexpected_fs_err!("Failed to serialize tarball package URL: {e}")
                         })?;
-                    into_typed_with_jinja(Some(&self.io_args), value, true, jinja_env, &(), &[])
+                    into_typed_with_jinja(
+                        Some(&self.io_args),
+                        value,
+                        true,
+                        jinja_env,
+                        &deps_context,
+                        &[],
+                    )
                 }?;
 
                 self.handle_remote_package(
@@ -461,7 +520,7 @@ impl PackageListing {
     pub fn update_from(
         &mut self,
         packages: &Vec<DbtPackageEntry>,
-        jinja_env: &JinjaEnvironment<'static>,
+        jinja_env: &JinjaEnv,
     ) -> FsResult<()> {
         for package in packages {
             self.incorporate(package.clone(), jinja_env)?;
@@ -479,7 +538,7 @@ mod tests {
     #[test]
     fn test_handle_remote_package_with_subdirectory() {
         let io_args = IoArgs::default();
-        let mut package_listing = PackageListing::new(io_args);
+        let mut package_listing = PackageListing::new(io_args, BTreeMap::new());
 
         // Create two git packages with the same URL but different subdirectories
         let git_package_1 = UnpinnedPackage::Git(GitUnpinnedPackage {
@@ -549,7 +608,7 @@ mod tests {
     #[test]
     fn test_handle_remote_package_same_url_no_subdirectory() {
         let io_args = IoArgs::default();
-        let mut package_listing = PackageListing::new(io_args);
+        let mut package_listing = PackageListing::new(io_args, BTreeMap::new());
 
         // Create two git packages with the same URL and no subdirectory
         let git_package_1 = UnpinnedPackage::Git(GitUnpinnedPackage {

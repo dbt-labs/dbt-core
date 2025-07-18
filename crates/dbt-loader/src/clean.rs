@@ -26,7 +26,7 @@ pub async fn execute_clean_command(arg: &EvalArgs, files: &[String]) -> FsResult
 
     let arg = arg.with_threads(num_threads);
 
-    let mut env = initialize_load_jinja_environment(
+    let env = initialize_load_jinja_environment(
         &dbt_state.dbt_profile.profile,
         &dbt_state.dbt_profile.target,
         &dbt_state.dbt_profile.db_config.adapter_type(),
@@ -37,7 +37,7 @@ pub async fn execute_clean_command(arg: &EvalArgs, files: &[String]) -> FsResult
     )?;
 
     let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);
-    let dbt_project = load_project_yml(&arg.io, &mut env, &dbt_project_path, arg.vars.clone())?;
+    let dbt_project = load_project_yml(&arg.io, &env, &dbt_project_path, arg.vars.clone())?;
 
     let protected_paths = collect_protected_paths(&dbt_project)
         .iter()

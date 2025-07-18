@@ -4,7 +4,7 @@ use crate::utils::get_node_fqn;
 
 use dbt_common::io_args::{IoArgs, StaticAnalysisKind};
 use dbt_common::{ErrorCode, FsResult, err, show_error};
-use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
 use dbt_jinja_utils::serde::{Omissible, into_typed_with_jinja};
 use dbt_jinja_utils::utils::generate_relation_name;
@@ -36,7 +36,7 @@ pub fn resolve_sources(
     database: &str,
     adapter_type: &str,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
-    jinja_env: &JinjaEnvironment<'static>,
+    jinja_env: &JinjaEnv,
     collected_tests: &mut Vec<DbtAsset>,
     refs_and_sources: &mut RefsAndSources,
 ) -> FsResult<(

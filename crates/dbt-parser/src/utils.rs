@@ -2,7 +2,7 @@
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use dbt_common::io_args::IoArgs;
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err, show_error};
-use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_jinja_utils::utils::{generate_component_name, generate_relation_name};
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
@@ -193,7 +193,7 @@ pub fn trigger_duplicate_errors(io: &IoArgs, duplicate_errors: &mut Vec<FsError>
 /// Returns components that can be used to update a node
 /// https://github.com/dbt-labs/dbt-core/blob/a1958c119399f765ad43e49b8b12c88cf3ec1245/core/dbt/parser/base.py#L287
 pub fn generate_relation_components(
-    env: &JinjaEnvironment<'static>,
+    env: &JinjaEnv,
     root_project_name: &str,
     current_project_name: &str,
     base_ctx: &BTreeMap<String, minijinja::Value>,
@@ -304,7 +304,7 @@ pub struct RelationComponents {
 /// This consolidates a common pattern across resolver modules.
 pub fn update_node_relation_components(
     node: &mut dyn InternalDbtNodeAttributes,
-    jinja_env: &JinjaEnvironment<'static>,
+    jinja_env: &JinjaEnv,
     root_project_name: &str,
     package_name: &str,
     base_ctx: &BTreeMap<String, minijinja::Value>,

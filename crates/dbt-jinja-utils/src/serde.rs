@@ -83,7 +83,7 @@ use minijinja::listener::RenderingEventListener;
 use regex::Regex;
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::{jinja_environment::JinjaEnvironment, phases::load::secret_renderer::render_secrets};
+use crate::{jinja_environment::JinjaEnv, phases::load::secret_renderer::render_secrets};
 
 pub use dbt_common::serde_utils::Omissible;
 
@@ -193,7 +193,7 @@ pub fn into_typed_with_jinja<T, S>(
     io_args: Option<&IoArgs>,
     value: Value,
     should_render_secrets: bool,
-    env: &JinjaEnvironment<'static>,
+    env: &JinjaEnv,
     ctx: &S,
     listeners: &[Rc<dyn RenderingEventListener>],
 ) -> FsResult<T>
@@ -222,7 +222,7 @@ where
 pub fn into_typed_with_jinja_error<T, S>(
     value: Value,
     should_render_secrets: bool,
-    env: &JinjaEnvironment<'static>,
+    env: &JinjaEnv,
     ctx: &S,
     listeners: &[Rc<dyn RenderingEventListener>],
 ) -> FsResult<(T, Vec<FsError>)>
@@ -290,7 +290,7 @@ where
 fn render_jinja_str<S: Serialize>(
     s: &str,
     should_render_secrets: bool,
-    env: &JinjaEnvironment,
+    env: &JinjaEnv,
     ctx: &S,
     listeners: &[Rc<dyn RenderingEventListener>],
 ) -> FsResult<Value> {
@@ -330,7 +330,7 @@ pub fn from_yaml_jinja<T, S: Serialize>(
     io_args: Option<&IoArgs>,
     input: &str,
     should_render_secrets: bool,
-    env: &JinjaEnvironment<'static>,
+    env: &JinjaEnv,
     ctx: &S,
     listeners: &[Rc<dyn RenderingEventListener>],
     error_display_path: Option<&Path>,

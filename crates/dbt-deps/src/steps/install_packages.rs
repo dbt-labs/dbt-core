@@ -3,9 +3,10 @@ use dbt_common::stdfs::File;
 use dbt_common::{
     ErrorCode, FsResult, constants::DBT_PACKAGES_LOCK_FILE, err, fs_err, show_warning, stdfs,
 };
-use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::packages::DbtPackagesLock;
 use flate2::read::GzDecoder;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use vortex_events::package_install_event;
 
@@ -20,8 +21,9 @@ use crate::{
 
 pub async fn install_packages(
     io_args: &IoArgs,
+    vars: &BTreeMap<String, dbt_serde_yaml::Value>,
     hub_registry: &mut HubClient,
-    jinja_env: &JinjaEnvironment<'static>,
+    jinja_env: &JinjaEnv,
     dbt_packages_lock: &DbtPackagesLock,
     packages_install_path: &Path,
 ) -> FsResult<()> {
@@ -57,7 +59,7 @@ pub async fn install_packages(
     if dbt_packages_lock.packages.is_empty() {
         return Ok(());
     }
-    let mut package_listing = PackageListing::new(io_args.clone());
+    let mut package_listing = PackageListing::new(io_args.clone(), vars.clone());
     package_listing.hydrate_dbt_packages_lock(dbt_packages_lock, jinja_env)?;
 
     for package in package_listing.packages.values() {

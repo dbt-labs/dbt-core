@@ -17,7 +17,7 @@ use std::{
     sync::Mutex,
 };
 
-use crate::{jinja_environment::JinjaEnvironment, listener::ListenerFactory};
+use crate::{jinja_environment::JinjaEnv, listener::ListenerFactory};
 
 /// The prefix for environment variables that contain secrets
 pub const SECRET_ENV_VAR_PREFIX: &str = "DBT_ENV_SECRET";
@@ -220,16 +220,13 @@ pub async fn inject_and_persist_ephemeral_models(
 
 /// Renders SQL with Jinja macros
 #[allow(clippy::too_many_arguments)]
-pub fn render_sql<'a, E>(
+pub fn render_sql(
     sql: &str,
-    env: E,
+    env: &JinjaEnv,
     ctx: &BTreeMap<String, Value>,
     listener_factory: &dyn ListenerFactory,
     filename: &Path,
-) -> FsResult<String>
-where
-    E: AsRef<JinjaEnvironment<'a>>,
-{
+) -> FsResult<String> {
     let listeners = listener_factory.create_listeners(filename);
     let result = env
         .as_ref()
@@ -293,7 +290,7 @@ pub fn get_method(args: &[Value], map: &BTreeMap<String, Value>) -> Result<Value
 
 /// Generate a component name using the specified macro
 pub fn generate_component_name(
-    env: &JinjaEnvironment,
+    env: &JinjaEnv,
     component: &str,
     root_project_name: &str,
     current_project_name: &str,
@@ -347,7 +344,7 @@ pub fn clear_template_cache() {
 
 /// Find a generate macro by name (database, schema, or alias)
 pub fn find_generate_macro_template(
-    env: &JinjaEnvironment,
+    env: &JinjaEnv,
     component: &str,
     root_project_name: &str,
     current_project_name: &str,

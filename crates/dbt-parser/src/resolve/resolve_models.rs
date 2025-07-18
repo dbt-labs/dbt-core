@@ -1,6 +1,8 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::RootProjectConfigs;
 use crate::dbt_project_config::init_project_config;
+use crate::renderer::RenderCtx;
+use crate::renderer::RenderCtxInner;
 use crate::renderer::SqlFileRenderResult;
 use crate::renderer::collect_adapter_identifiers_detect_unsafe;
 use crate::renderer::render_unresolved_sql_files;
@@ -17,7 +19,7 @@ use dbt_common::fs_err;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::show_error;
 use dbt_common::show_warning;
-use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
 use dbt_schemas::schemas::CommonAttributes;
 use dbt_schemas::schemas::DbtModel;
@@ -62,7 +64,7 @@ pub async fn resolve_models(
     schema: &str,
     adapter_type: &str,
     package_name: &str,
-    env: &JinjaEnvironment<'static>,
+    env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     runtime_config: Arc<DbtRuntimeConfig>,
     collected_tests: &mut Vec<DbtAsset>,
@@ -91,28 +93,35 @@ pub async fn resolve_models(
             },
         )?
     };
-    let mut model_sql_resources_map: Vec<SqlFileRenderResult<ModelConfig, ModelProperties>> =
-        render_unresolved_sql_files::<ModelConfig, ModelProperties>(
-            arg,
-            &package.model_sql_files,
-            package_name,
+
+    let render_ctx = RenderCtx {
+        inner: Arc::new(RenderCtxInner {
+            args: arg.clone(),
+            root_project_name: root_project.name.clone(),
+            root_project_config: root_project_configs.models.clone(),
             package_quoting,
-            adapter_type,
-            database,
-            schema,
-            env,
-            base_ctx,
-            model_properties,
-            root_project.name.as_str(),
-            &root_project_configs.models,
-            &local_project_config,
-            runtime_config.clone(),
-            &package
+            base_ctx: base_ctx.clone(),
+            package_name: package_name.to_string(),
+            adapter_type: adapter_type.to_string(),
+            database: database.to_string(),
+            schema: schema.to_string(),
+            local_project_config: local_project_config.clone(),
+            resource_paths: package
                 .dbt_project
                 .model_paths
                 .as_ref()
                 .unwrap_or(&vec![])
                 .clone(),
+        }),
+        jinja_env: env.clone(),
+        runtime_config: runtime_config.clone(),
+    };
+
+    let mut model_sql_resources_map: Vec<SqlFileRenderResult<ModelConfig, ModelProperties>> =
+        render_unresolved_sql_files::<ModelConfig, ModelProperties>(
+            &render_ctx,
+            &package.model_sql_files,
+            model_properties,
         )
         .await?;
     // make deterministic
@@ -316,7 +325,7 @@ pub async fn resolve_models(
         // update model components using the generate_relation_components function
         update_node_relation_components(
             &mut dbt_model,
-            env,
+            &env,
             &root_project.name,
             package_name,
             base_ctx,

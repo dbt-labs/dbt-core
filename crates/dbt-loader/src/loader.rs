@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
-use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::load::init::initialize_load_jinja_environment;
 use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
 use dbt_jinja_utils::serde::from_yaml_error;
@@ -52,7 +52,7 @@ pub async fn load(
     let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);
 
     let raw_dbt_project_in_val = value_from_file(None, &dbt_project_path)?;
-    let env = initialize_load_profile_jinja_environment(iarg)?;
+    let env = initialize_load_profile_jinja_environment();
     let ctx: BTreeMap<String, minijinja::Value> = BTreeMap::from([
         (
             "env_var".to_owned(),
@@ -175,7 +175,7 @@ pub async fn load(
     )?;
     let flags: BTreeMap<String, minijinja::Value> = iarg.to_dict();
 
-    let mut env = initialize_load_jinja_environment(
+    let env = initialize_load_jinja_environment(
         &dbt_state.dbt_profile.profile,
         &dbt_state.dbt_profile.target,
         &dbt_state.dbt_profile.db_config.adapter_type(),
@@ -187,7 +187,7 @@ pub async fn load(
 
     let (packages_lock, upstream_projects) = get_or_install_packages(
         &arg.io,
-        &mut env,
+        &env,
         &packages_install_path,
         arg.install_deps,
         arg.add_package.clone(),
@@ -213,7 +213,7 @@ pub async fn load(
 
         let packages = load_packages(
             &arg,
-            &mut env,
+            &env,
             &mut collected_vars,
             &lookup_map,
             &packages_install_path,
@@ -227,7 +227,7 @@ pub async fn load(
 
         let packages = load_internal_packages(
             &arg,
-            &mut env,
+            &env,
             &mut collected_vars,
             &internal_packages_install_path,
         )
@@ -240,7 +240,7 @@ pub async fn load(
 
 pub async fn load_inner(
     arg: &LoadArgs,
-    env: &mut JinjaEnvironment<'static>,
+    env: &JinjaEnv,
     package_path: &Path,
     package_lookup_map: &BTreeMap<String, String>,
     collected_vars: &mut Vec<(String, BTreeMap<String, DbtVars>)>,

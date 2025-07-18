@@ -1,6 +1,8 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::RootProjectConfigs;
 use crate::dbt_project_config::init_project_config;
+use crate::renderer::RenderCtx;
+use crate::renderer::RenderCtxInner;
 use crate::renderer::SqlFileRenderResult;
 use crate::renderer::render_unresolved_sql_files;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
@@ -15,7 +17,7 @@ use dbt_common::error::AbstractLocation;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_utils::try_read_yml_to_str;
 use dbt_common::stdfs;
-use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::DbtTestAttr;
 use dbt_schemas::schemas::common::DbtChecksum;
 use dbt_schemas::schemas::common::DbtContract;
@@ -54,7 +56,7 @@ pub async fn resolve_data_tests(
     database: &str,
     schema: &str,
     adapter_type: &str,
-    env: &JinjaEnvironment<'static>,
+    env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     runtime_config: Arc<DbtRuntimeConfig>,
     collected_tests: &Vec<DbtAsset>,
@@ -87,32 +89,35 @@ pub async fn resolve_data_tests(
 
     let mut test_assets_to_render = package.test_files.clone();
     test_assets_to_render.extend(collected_tests.to_owned());
-    // Note (Ani):Tests have a different jinja context, need to render them separately
 
-    let mut test_sql_resources_map =
-        render_unresolved_sql_files::<DataTestConfig, DataTestProperties>(
-            arg,
-            &test_assets_to_render,
-            package_name,
+    let render_ctx = RenderCtx {
+        inner: Arc::new(RenderCtxInner {
+            args: arg.clone(),
+            root_project_name: root_project.name.clone(),
+            root_project_config: root_project_configs.tests.clone(),
             package_quoting,
-            adapter_type,
-            database,
-            schema,
-            env,
-            base_ctx,
-            test_properties,
-            root_project.name.as_str(),
-            &root_project_configs.tests,
-            &local_project_config,
-            runtime_config.clone(),
-            &package
+            base_ctx: base_ctx.clone(),
+            package_name: package_name.to_string(),
+            adapter_type: adapter_type.to_string(),
+            database: database.to_string(),
+            schema: schema.to_string(),
+            local_project_config,
+            resource_paths: package
                 .dbt_project
                 .test_paths
                 .as_ref()
                 .unwrap_or(&vec![])
                 .clone(),
-        )
-        .await?;
+        }),
+        jinja_env: env.clone(),
+        runtime_config: runtime_config.clone(),
+    };
+
+    let mut test_sql_resources_map = render_unresolved_sql_files::<
+        DataTestConfig,
+        DataTestProperties,
+    >(&render_ctx, &test_assets_to_render, test_properties)
+    .await?;
     // make deterministic
     test_sql_resources_map.sort_by(|a, b| {
         a.asset
@@ -254,7 +259,7 @@ pub async fn resolve_data_tests(
         // Update with relation components
         update_node_relation_components(
             &mut dbt_test,
-            env,
+            &env,
             &root_project.name,
             package_name,
             base_ctx,

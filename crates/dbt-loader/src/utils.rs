@@ -12,7 +12,7 @@ use std::{
 };
 
 use dbt_jinja_utils::{
-    jinja_environment::JinjaEnvironment,
+    jinja_environment::JinjaEnv,
     serde::{from_yaml_raw, into_typed_with_jinja},
 };
 use dbt_schemas::schemas::{
@@ -111,7 +111,7 @@ pub fn get_db_config(
 pub fn read_profiles_and_extract_db_config<S: Serialize>(
     io_args: &IoArgs,
     dbt_target_override: &Option<String>,
-    jinja_env: &JinjaEnvironment<'static>,
+    jinja_env: &JinjaEnv,
     ctx: &S,
     profile_str: &str,
     profile_path: PathBuf,

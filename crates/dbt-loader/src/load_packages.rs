@@ -1,4 +1,4 @@
-use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -26,7 +26,7 @@ mod assets {
 
 pub async fn load_packages(
     arg: &LoadArgs,
-    env: &mut JinjaEnvironment<'static>,
+    env: &JinjaEnv,
     collected_vars: &mut Vec<(String, BTreeMap<String, DbtVars>)>,
     lookup_map: &BTreeMap<String, String>,
     packages_install_path: &Path,
@@ -54,7 +54,7 @@ pub async fn load_packages(
 
 pub async fn load_internal_packages(
     arg: &LoadArgs,
-    env: &mut JinjaEnvironment<'static>,
+    env: &JinjaEnv,
     collected_vars: &mut Vec<(String, BTreeMap<String, DbtVars>)>,
     internal_packages_install_path: &Path,
 ) -> FsResult<Vec<DbtPackage>> {
@@ -129,7 +129,7 @@ pub fn persist_internal_packages(
 
 async fn collect_packages(
     arg: &LoadArgs,
-    env: &mut JinjaEnvironment<'static>,
+    env: &JinjaEnv,
     collected_vars: &mut Vec<(String, BTreeMap<String, DbtVars>)>,
     package_paths: Vec<PathBuf>,
     lookup_map: &BTreeMap<String, String>,

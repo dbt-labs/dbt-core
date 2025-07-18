@@ -1,4 +1,4 @@
-use crate::{functions::register_base_functions, jinja_environment::JinjaEnvironment};
+use crate::{functions::register_base_functions, jinja_environment::JinjaEnv};
 use dbt_common::{FsError, FsResult, io_args::IoArgs, unexpected_fs_err};
 use dbt_fusion_adapter::BaseAdapter;
 use minijinja::{
@@ -34,7 +34,7 @@ impl MacroUnitsWrapper {
 /// A builder struct that configures and returns a Minijinja Environment.
 /// You can add additional fields and methods as needed.
 // Default Jinja Env Behaves differently than Envirornment::new()
-pub struct JinjaEnvironmentBuilder {
+pub struct JinjaEnvBuilder {
     env: Environment<'static>,
     adapter: Option<Arc<dyn BaseAdapter>>,
     globals: BTreeMap<String, Value>,
@@ -42,8 +42,8 @@ pub struct JinjaEnvironmentBuilder {
     io_args: IoArgs,
 }
 
-impl JinjaEnvironmentBuilder {
-    /// Create a new JinjaEnvironmentBuilder with a default Environment.
+impl JinjaEnvBuilder {
+    /// Create a new JinjaEnvBuilder with a default Environment.
     pub fn new() -> Self {
         Self {
             env: Environment::new(),
@@ -199,7 +199,7 @@ impl JinjaEnvironmentBuilder {
     }
 
     /// Build the Minijinja Environment with all configured settings.
-    pub fn build(mut self) -> JinjaEnvironment<'static> {
+    pub fn build(mut self) -> JinjaEnv {
         // Register filters (as_bool, as_number, as_native, as_text)
         // These are used to convert values to the appropriate type that might be
         // expected by the jinja template.
@@ -225,7 +225,7 @@ impl JinjaEnvironmentBuilder {
         self.env
             .set_unknown_method_callback(minijinja_contrib::pycompat::unknown_method_callback);
 
-        let mut jinja_env = JinjaEnvironment::new(self.env);
+        let mut jinja_env = JinjaEnv::new(self.env);
         if let Some(adapter) = self.adapter {
             jinja_env.set_adapter(adapter);
         }
@@ -356,7 +356,7 @@ impl JinjaEnvironmentBuilder {
     }
 }
 
-impl Default for JinjaEnvironmentBuilder {
+impl Default for JinjaEnvBuilder {
     fn default() -> Self {
         Self::new()
     }
@@ -395,7 +395,7 @@ mod tests {
 
     #[test]
     fn test_filter_none() {
-        let mut builder = JinjaEnvironmentBuilder::new();
+        let mut builder = JinjaEnvBuilder::new();
         builder.register_filters();
         let env = builder.build();
         let rv = env
@@ -474,7 +474,7 @@ all okay!");
                 "{% macro default__one() %}test_package one{% endmacro %}",
             )],
         );
-        let builder: JinjaEnvironmentBuilder = JinjaEnvironmentBuilder::new()
+        let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
             .with_adapter(create_parse_adapter("postgres", DEFAULT_DBT_QUOTING).unwrap())
             .with_root_package("test_package".to_string())
             .try_with_macros(macro_units)
@@ -554,7 +554,7 @@ all okay!");
                 ),
             ],
         );
-        let builder: JinjaEnvironmentBuilder = JinjaEnvironmentBuilder::new()
+        let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
             .with_adapter(create_parse_adapter("postgres", DEFAULT_DBT_QUOTING).unwrap())
             .with_root_package("test_package".to_string())
             .try_with_macros(macro_units)
@@ -609,7 +609,7 @@ all okay!");
 
     #[test]
     fn test_macro_assignment() {
-        let env = JinjaEnvironmentBuilder::new()
+        let env = JinjaEnvBuilder::new()
             .with_root_package("test_package".to_string())
             .with_adapter(create_parse_adapter("postgres", DEFAULT_DBT_QUOTING).unwrap())
             .try_with_macros(MacroUnitsWrapper::new(BTreeMap::from([(
@@ -651,7 +651,7 @@ all okay!");
     }
     #[test]
     fn test_date_format() {
-        let env = JinjaEnvironmentBuilder::new().build();
+        let env = JinjaEnvBuilder::new().build();
         let rv = env
             .render_str(
                 "{{modules.pytz.utc}} {{- modules.datetime.datetime.now(modules.pytz.utc).isoformat() -}}",
@@ -665,7 +665,7 @@ all okay!");
     }
     #[test]
     fn test_datetime_strftime_with_timedelta() {
-        let env = JinjaEnvironmentBuilder::new().build();
+        let env = JinjaEnvBuilder::new().build();
         let rv = env
             .render_str(
                 "
@@ -715,7 +715,7 @@ all okay!");
         // Root package has no macros
 
         // Build environment with the empty root package
-        let builder: JinjaEnvironmentBuilder = JinjaEnvironmentBuilder::new()
+        let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
             .with_adapter(create_parse_adapter("postgres", DEFAULT_DBT_QUOTING).unwrap())
             .with_root_package("empty_root".to_string())
             .try_with_macros(macro_units)

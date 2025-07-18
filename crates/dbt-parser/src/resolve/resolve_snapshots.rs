@@ -2,7 +2,7 @@ use dbt_common::constants::DBT_SNAPSHOTS_DIR_NAME;
 use dbt_common::error::AbstractLocation;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::{ErrorCode, FsResult, fs_err, show_error, show_warning, stdfs, unexpected_fs_err};
-use dbt_jinja_utils::jinja_environment::JinjaEnvironment;
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_schemas::schemas::common::{DbtMaterialization, DbtQuoting, NodeDependsOn};
@@ -23,7 +23,9 @@ use std::sync::Arc;
 
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
-use crate::renderer::{SqlFileRenderResult, render_unresolved_sql_files};
+use crate::renderer::{
+    RenderCtx, RenderCtxInner, SqlFileRenderResult, render_unresolved_sql_files,
+};
 use crate::utils::{RelationComponents, update_node_relation_components};
 
 use super::resolve_properties::MinimalPropertiesEntry;
@@ -40,7 +42,7 @@ pub async fn resolve_snapshots(
     database: &str,
     schema: &str,
     adapter_type: &str,
-    jinja_env: &JinjaEnvironment<'static>,
+    jinja_env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     runtime_config: Arc<DbtRuntimeConfig>,
     refs_and_sources: &mut RefsAndSources,
@@ -100,7 +102,7 @@ pub async fn resolve_snapshots(
                 Some(&arg.io),
                 schema_value,
                 false,
-                jinja_env,
+                &jinja_env,
                 base_ctx,
                 &[],
             )?;
@@ -136,31 +138,37 @@ pub async fn resolve_snapshots(
         }
     }
 
-    // Render the snapshots
-    let mut snapshot_sql_resources_map =
-        render_unresolved_sql_files::<SnapshotConfig, SnapshotProperties>(
-            arg,
-            &snapshot_files,
-            &package_name,
+    let render_ctx = RenderCtx {
+        inner: Arc::new(RenderCtxInner {
+            args: arg.clone(),
+            root_project_name: root_project.name.clone(),
+            root_project_config: root_project_configs.snapshots.clone(),
             package_quoting,
-            adapter_type,
-            database,
-            schema,
-            jinja_env,
-            base_ctx,
-            &mut snapshot_properties,
-            root_project.name.as_str(),
-            &root_project_configs.snapshots,
-            &local_project_config,
-            runtime_config.clone(),
-            &package
+            base_ctx: base_ctx.clone(),
+            package_name: package_name.to_string(),
+            adapter_type: adapter_type.to_string(),
+            database: database.to_string(),
+            schema: schema.to_string(),
+            local_project_config,
+            resource_paths: package
                 .dbt_project
                 .snapshot_paths
                 .as_ref()
                 .unwrap_or(&vec![])
                 .clone(),
-        )
-        .await?;
+        }),
+        jinja_env: jinja_env.clone(),
+        runtime_config: runtime_config.clone(),
+    };
+
+    // Render the snapshots
+    let mut snapshot_sql_resources_map = render_unresolved_sql_files::<
+        SnapshotConfig,
+        SnapshotProperties,
+    >(
+        &render_ctx, &snapshot_files, &mut snapshot_properties
+    )
+    .await?;
 
     // make deterministic
     snapshot_sql_resources_map.sort_by(|a, b| {
@@ -292,7 +300,7 @@ pub async fn resolve_snapshots(
             // Update with relation components
             update_node_relation_components(
                 &mut dbt_snapshot,
-                jinja_env,
+                &jinja_env,
                 &root_project.name,
                 &package_name,
                 base_ctx,

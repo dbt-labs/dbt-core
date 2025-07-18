@@ -8,7 +8,7 @@ use minijinja::{
     value::{ValueMap, mutable_map::MutableMap},
 };
 use serde::Serialize;
-use std::{borrow::Cow, collections::BTreeMap, rc::Rc, sync::Arc};
+use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 use tracy_client::span;
 
 /// A struct that wraps a Minijinja Expression.
@@ -54,20 +54,20 @@ impl<'env: 'source, 'source> JinjaTemplate<'env, 'source> {
 
 /// A struct that wraps a Minijinja Environment.
 #[derive(Clone)]
-pub struct JinjaEnvironment<'source> {
-    env: Environment<'source>,
+pub struct JinjaEnv {
+    env: Environment<'static>,
     sql_engine: Option<Arc<SqlEngine>>,
 }
 
-impl<'a> AsRef<JinjaEnvironment<'a>> for JinjaEnvironment<'a> {
-    fn as_ref(&self) -> &JinjaEnvironment<'a> {
+impl AsRef<JinjaEnv> for JinjaEnv {
+    fn as_ref(&self) -> &JinjaEnv {
         self
     }
 }
 
-impl<'source> JinjaEnvironment<'source> {
-    /// Create a new JinjaEnvironment.
-    pub fn new(env: Environment<'source>) -> Self {
+impl JinjaEnv {
+    /// Create a new JinjaEnv.
+    pub fn new(env: Environment<'static>) -> Self {
         Self {
             env,
             sql_engine: None,
@@ -119,43 +119,13 @@ impl<'source> JinjaEnvironment<'source> {
         self.sql_engine.as_ref()
     }
 
-    /// Adds a global variable.
-    pub fn add_global<N, V>(&mut self, name: N, value: V)
-    where
-        N: Into<Cow<'source, str>>,
-        V: Into<Value>,
-    {
-        self.env.add_global(name, value);
-    }
-
     /// Get a global variable.
     pub fn get_global(&self, name: &str) -> Option<Value> {
         self.env.get_global(name)
     }
 
-    /// Remove a global variable.
-    pub(crate) fn remove_global(&mut self, name: &str) {
-        self.env.remove_global(name);
-    }
-
-    /// Add a function to the environment.
-    pub(crate) fn add_function<N, F, Rv, Args>(&mut self, name: N, f: F)
-    where
-        N: Into<Cow<'source, str>>,
-        // the crazy bounds here exist to enable borrowing in closures
-        F: minijinja::functions::Function<Rv, Args>
-            + for<'a> minijinja::functions::Function<
-                Rv,
-                <Args as minijinja::value::FunctionArgs<'a>>::Output,
-            >,
-        Rv: minijinja::value::FunctionResult,
-        Args: for<'a> minijinja::value::FunctionArgs<'a>,
-    {
-        self.env.add_function(name, f);
-    }
-
     /// Compile an expression.
-    pub fn compile_expression(&self, expr: &'source str) -> FsResult<JinjaExpression<'_, 'source>> {
+    pub fn compile_expression<'a>(&self, expr: &'a str) -> FsResult<JinjaExpression<'_, 'a>> {
         Ok(JinjaExpression(self.env.compile_expression(expr).map_err(
             |e| FsError::from_jinja_err(e, "Failed to compile Jinja expression"),
         )?))
