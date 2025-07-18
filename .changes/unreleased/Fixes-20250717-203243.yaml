@@ -1,0 +1,3 @@
+kind: Fixes
+body: '[Redshift] Fix installation and URI handling for login'
+time: 2025-07-17T20:32:43.443751926-07:00

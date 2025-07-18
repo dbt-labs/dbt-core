@@ -273,6 +273,7 @@ pub fn driver_parameters(
         Backend::BigQuery => ("bigquery", BIGQUERY_DRIVER_VERSION),
         Backend::Postgres => ("postgresql", POSTGRES_DRIVER_VERSION),
         Backend::Databricks => ("databricks", DATABRICKS_DRIVER_VERSION),
+        Backend::Redshift => ("postgresql", POSTGRES_DRIVER_VERSION),
         _ => unreachable!("driver_parameters() called with backend={:?}", backend),
     };
     (backend_name, version, OS)
