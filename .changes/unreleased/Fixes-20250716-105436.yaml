@@ -1,3 +1,0 @@
-kind: Fixes
-body: Fix jinja inconsistency for list.append and filter behavior for undefined
-time: 2025-07-16T10:54:36.315966236-07:00

@@ -1,6 +1,0 @@
-kind: Features
-body: Freshness on view w/o loaded_at_field warns about missing loaded_at_field.
-time: 2025-07-08T10:24:53.931772546-07:00
-custom:
-  PR: dbt-labs/fs#4319
-  Issues: "dbt-labs/fs#4026"

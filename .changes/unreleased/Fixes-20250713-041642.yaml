@@ -1,3 +1,0 @@
-kind: Fixes
-body: '[Bigquery] Change Change bigquery job_*_seconds types from string to int'
-time: 2025-07-13T04:16:42.288502+02:00
