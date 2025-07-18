@@ -18,7 +18,7 @@ use crate::listener::RenderingEventListener;
 use crate::machinery::Span;
 use crate::output::{CaptureMode, Output};
 use crate::output_tracker::OutputTrackerLocation;
-use crate::utils::{untrusted_size_hint, AutoEscape, UndefinedBehavior};
+use crate::utils::{untrusted_size_hint, AutoEscape};
 use crate::value::mutable_vec::MutableVec;
 use crate::value::namespace_name::NamespaceName;
 use crate::value::namespace_object::Namespace;
@@ -510,9 +510,6 @@ impl<'env> Vm<'env> {
                     let stop = stack.pop();
                     b = stack.pop();
                     a = stack.pop();
-                    if a.is_undefined() && matches!(undefined_behavior, UndefinedBehavior::Strict) {
-                        bail!(Error::from(ErrorKind::UndefinedError));
-                    }
                     stack.push(ctx_ok!(ops::slice(a, b, stop, step)));
                 }
                 Instruction::LoadConst(value) => {
