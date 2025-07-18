@@ -223,8 +223,11 @@ fn create_schema_sql(adapter: &Arc<dyn MetadataAdapter>, catalog: &str, schema: 
     let schema = adapter.quote_component(schema, ComponentName::Schema);
     let adapter_type = adapter.adapter_type();
     match adapter_type {
-        AdapterType::Snowflake => format!("CREATE SCHEMA IF NOT EXISTS {catalog}.{schema}"),
-        AdapterType::Databricks => format!("CREATE SCHEMA IF NOT EXISTS {catalog}.{schema}"),
+        AdapterType::Snowflake | AdapterType::Databricks => {
+            format!("CREATE SCHEMA IF NOT EXISTS {catalog}.{schema}")
+        }
+        // Redshift connetions are always to a specific database
+        AdapterType::Redshift => format!("CREATE SCHEMA IF NOT EXISTS {schema}"),
         _ => unimplemented!("create_schema_sql for adapter type: {}", adapter_type),
     }
 }
