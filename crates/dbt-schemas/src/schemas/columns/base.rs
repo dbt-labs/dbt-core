@@ -41,9 +41,14 @@ pub trait StaticBaseColumn {
     }
 
     /// Translate the column type
+    // https://github.com/dbt-labs/dbt-adapters/blob/fed0e2e7a2e252175dcc9caccbdd91d354ac6a9d/dbt-adapters/src/dbt/adapters/base/column.py#L24
     fn translate_type(args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut args = ArgParser::new(args, None);
         let column_type: String = args.get("dtype")?;
+        let column_type = match column_type.to_uppercase().as_str() {
+            "STRING" => "TEXT",
+            _ => &column_type,
+        };
         Ok(Value::from(column_type))
     }
 
