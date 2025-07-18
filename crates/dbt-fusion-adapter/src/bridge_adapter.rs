@@ -504,7 +504,7 @@ impl BaseAdapter for BridgeAdapter {
         let kwargs = Kwargs::from_iter([("database", Value::from(database))]);
 
         let result = execute_macro_wrapper(state, &[Value::from(kwargs)], "list_schemas")?;
-        let result = self.typed_adapter.list_schemas(result);
+        let result = self.typed_adapter.list_schemas(result)?;
 
         Ok(Value::from_iter(result))
     }

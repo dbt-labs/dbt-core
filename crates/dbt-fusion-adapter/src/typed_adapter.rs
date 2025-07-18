@@ -163,7 +163,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn quote(&self, identifier: &str) -> String;
 
     /// List schemas
-    fn list_schemas(&self, result: Arc<RecordBatch>) -> Vec<String>;
+    fn list_schemas(&self, result: Arc<RecordBatch>) -> AdapterResult<Vec<String>>;
 
     /// Get relation that represents (database, schema, identifier)
     /// tuple. This function checks that the warehouse has the
@@ -468,8 +468,8 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     ) -> AdapterResult<BTreeMap<String, Vec<String>>> {
         let record_batch = grants_table.to_record_batch();
 
-        let grantee_cols = get_column_values::<StringArray>(&record_batch, "grantee");
-        let privilege_cols = get_column_values::<StringArray>(&record_batch, "privilege_type");
+        let grantee_cols = get_column_values::<StringArray>(&record_batch, "grantee")?;
+        let privilege_cols = get_column_values::<StringArray>(&record_batch, "privilege_type")?;
 
         let mut result = BTreeMap::new();
         for i in 0..record_batch.num_rows() {
@@ -570,10 +570,10 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         let record_batch = table.to_record_batch();
 
         let identifier_column_values =
-            get_column_values::<StringArray>(&record_batch, "IDENTIFIER");
-        let schema_column_values = get_column_values::<StringArray>(&record_batch, "SCHEMA");
+            get_column_values::<StringArray>(&record_batch, "IDENTIFIER")?;
+        let schema_column_values = get_column_values::<StringArray>(&record_batch, "SCHEMA")?;
         let last_modified_column_values =
-            get_column_values::<TimestampMillisecondArray>(&record_batch, "LAST_MODIFIED");
+            get_column_values::<TimestampMillisecondArray>(&record_batch, "LAST_MODIFIED")?;
 
         let mut result = BTreeMap::new();
         for i in 0..record_batch.num_rows() {
