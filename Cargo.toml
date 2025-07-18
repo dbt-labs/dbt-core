@@ -49,7 +49,7 @@ version = "2.0.0-beta.44"
 [patch.crates-io]
 datafusion = { git = "https://github.com/sdf-labs/arrow-datafusion", rev = "09350586040a748931f07931ca395df6ef627756" } # @ sdf/45
 # OR, when working locally
-#datafusion = { path = "../arrow-datafusion/datafusion/core" }
+# datafusion = { path = "../arrow-datafusion/datafusion/core" }
 
 # All arrow dependencies (run `cargo tree --prefix none | grep ^arrow | cut -d ' ' -f1 | sort -u` to get this list)
 arrow = { git = "https://github.com/sdf-labs/arrow-rs", rev = "ad6ab6fcf06156ae084de4d49625ca52c66b310f" } # @ sdf/54.2.1
@@ -67,20 +67,20 @@ arrow-schema = { git = "https://github.com/sdf-labs/arrow-rs", rev = "ad6ab6fcf0
 arrow-select = { git = "https://github.com/sdf-labs/arrow-rs", rev = "ad6ab6fcf06156ae084de4d49625ca52c66b310f" } # @ sdf/54.2.1
 arrow-string = { git = "https://github.com/sdf-labs/arrow-rs", rev = "ad6ab6fcf06156ae084de4d49625ca52c66b310f" } # @ sdf/54.2.1
 # OR, when working locally
-#arrow = { path = "../arrow-rs/arrow" }
-#arrow-arith = { path = "../arrow-rs/arrow-arith" }
-#arrow-array = { path = "../arrow-rs/arrow-array" }
-#arrow-buffer = { path = "../arrow-rs/arrow-buffer" }
-#arrow-cast = { path = "../arrow-rs/arrow-cast" }
-#arrow-csv = { path = "../arrow-rs/arrow-csv" }
-#arrow-data = { path = "../arrow-rs/arrow-data" }
-#arrow-ipc = { path = "../arrow-rs/arrow-ipc" }
-#arrow-json = { path = "../arrow-rs/arrow-json" }
-#arrow-ord = { path = "../arrow-rs/arrow-ord" }
-#arrow-row = { path = "../arrow-rs/arrow-row" }
-#arrow-schema = { path = "../arrow-rs/arrow-schema" }
-#arrow-select = { path = "../arrow-rs/arrow-select" }
-#arrow-string = { path = "../arrow-rs/arrow-string" }
+# arrow = { path = "../arrow-rs/arrow" }
+# arrow-arith = { path = "../arrow-rs/arrow-arith" }
+# arrow-array = { path = "../arrow-rs/arrow-array" }
+# arrow-buffer = { path = "../arrow-rs/arrow-buffer" }
+# arrow-cast = { path = "../arrow-rs/arrow-cast" }
+# arrow-csv = { path = "../arrow-rs/arrow-csv" }
+# arrow-data = { path = "../arrow-rs/arrow-data" }
+# arrow-ipc = { path = "../arrow-rs/arrow-ipc" }
+# arrow-json = { path = "../arrow-rs/arrow-json" }
+# arrow-ord = { path = "../arrow-rs/arrow-ord" }
+# arrow-row = { path = "../arrow-rs/arrow-row" }
+# arrow-schema = { path = "../arrow-rs/arrow-schema" }
+# arrow-select = { path = "../arrow-rs/arrow-select" }
+# arrow-string = { path = "../arrow-rs/arrow-string" }
 
 [profile.dev.package."*"]
 # Enable basic optimizations for all non-member dependencies. This greatly
