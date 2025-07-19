@@ -1,0 +1,3 @@
+kind: Fixes
+body: Change Snowflake auth concurrency control to avoid spamming users with too many tabs for externalbrowserauth
+time: 2025-07-14T13:04:04.454819-03:00
