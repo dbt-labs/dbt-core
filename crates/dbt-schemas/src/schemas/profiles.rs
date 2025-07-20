@@ -95,6 +95,13 @@ impl DbConfig {
         matches!(self.get_execute_mode(), Execute::Local)
     }
 
+    pub fn get_execution_timezone(&self) -> Option<String> {
+        match self {
+            DbConfig::Snowflake(config) => config.execution_timezone.clone(),
+            _ => None,
+        }
+    }
+
     pub fn get_credential_value(&self) -> serde_json::Value {
         match self {
             DbConfig::Snowflake(config) => serde_json::to_value(config).unwrap(),
@@ -482,6 +489,8 @@ pub struct SnowflakeDbConfig {
     #[serde(default, skip_serializing_if = "Execute::is_default")]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub execute: Execute,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_timezone: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub oauth_client_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
