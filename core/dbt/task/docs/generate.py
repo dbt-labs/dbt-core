@@ -3,6 +3,7 @@ import shutil
 from dataclasses import replace
 from datetime import datetime, timezone
 from itertools import chain
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import agate
@@ -213,6 +214,15 @@ def get_unique_id_mapping(
 
 
 class GenerateTask(CompileTask):
+
+    def get_docs_index_file_path(self, ) -> str:
+        for docs_dir in self.config.docs_paths:
+            index_html = Path(self.config.project_root).joinpath(docs_dir).joinpath("index.html")
+            if index_html.is_file() and index_html.exists():
+                # click.echo(f"Using user provided documentation page: {index_html.as_posix()}")
+                return index_html.as_posix()
+        return DOCS_INDEX_FILE_PATH
+
     def run(self) -> CatalogArtifact:
         compile_results = None
         if self.args.compile:
@@ -228,7 +238,7 @@ class GenerateTask(CompileTask):
                 )
 
         shutil.copyfile(
-            DOCS_INDEX_FILE_PATH, os.path.join(self.config.project_target_path, "index.html")
+            self.get_docs_index_file_path(), os.path.join(self.config.project_target_path, "index.html")
         )
 
         for asset_path in self.config.asset_paths:
@@ -328,7 +338,7 @@ class GenerateTask(CompileTask):
             read_catalog_data = load_file_contents(catalog_path)
 
             # Create new static index file contents
-            index_data = load_file_contents(DOCS_INDEX_FILE_PATH)
+            index_data = load_file_contents(self.get_docs_index_file_path())
             index_data = index_data.replace('"MANIFEST.JSON INLINE DATA"', read_manifest_data)
             index_data = index_data.replace('"CATALOG.JSON INLINE DATA"', read_catalog_data)
 
