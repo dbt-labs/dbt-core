@@ -199,7 +199,6 @@ antlr-rust = { git = "https://github.com/sdf-labs/antlr4", rev = "b8179d265532a5
 
 # datafusion
 datafusion = { version = "45.0.0", default-features = false, features = [
-  "compression",
   "crypto_expressions",
   "datetime_expressions",
   "encoding_expressions",
