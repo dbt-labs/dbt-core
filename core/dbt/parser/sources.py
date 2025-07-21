@@ -132,13 +132,8 @@ class SourcePatcher:
         source_description = source.description or ""
 
         quoting = source.quoting.merged(table.quoting)
-        # path = block.path.original_file_path
-        table_meta = table.meta or {}
-        source_meta = source.meta or {}
-        meta = {**source_meta, **table_meta}
-
-        # make sure we don't do duplicate tags from source + table
-        tags = sorted(set(itertools.chain(source.tags, table.tags)))
+        # Retain original source meta prior to merge with table meta
+        source_meta = {**source.meta, **source.config.get("meta", {})}
 
         config = self._generate_source_config(
             target=target,
@@ -176,7 +171,7 @@ class SourcePatcher:
             source_name=source.name,
             source_description=source_description,
             source_meta=source_meta,
-            meta=meta,
+            meta=config.meta,
             loader=source.loader,
             loaded_at_field=config.loaded_at_field,
             loaded_at_query=config.loaded_at_query,
@@ -184,7 +179,7 @@ class SourcePatcher:
             quoting=quoting,
             resource_type=NodeType.Source,
             fqn=target.fqn,
-            tags=tags,
+            tags=config.tags,
             config=config,
             unrendered_config=unrendered_config,
         )
@@ -312,6 +307,13 @@ class SourcePatcher:
         )
         precedence_configs["loaded_at_field"] = precedence_loaded_at_field
         precedence_configs["loaded_at_query"] = precedence_loaded_at_query
+
+        # Handle merges across source, table, and config for meta and tags
+        precedence_meta = self.calculate_meta_from_raw_target(target)
+        precedence_configs["meta"] = precedence_meta
+
+        precedence_tags = self.calculate_tags_from_raw_target(target)
+        precedence_configs["tags"] = precedence_tags
 
         # Because freshness is a "object" config, the freshness from the dbt_project.yml and the freshness
         # from the schema file _won't_ get merged by this process. The result will be that the freshness will
@@ -471,6 +473,34 @@ class SourcePatcher:
                 )
 
         return loaded_at_field, loaded_at_query
+
+    def calculate_meta_from_raw_target(self, target: UnpatchedSourceDefinition) -> Dict[str, Any]:
+        source_meta = target.source.meta or {}
+        source_config_meta = target.source.config.get("meta", {})
+        source_config_meta = source_config_meta if isinstance(source_config_meta, dict) else {}
+
+        table_meta = target.table.meta or {}
+        table_config_meta = target.table.config.get("meta", {})
+        table_config_meta = table_config_meta if isinstance(table_config_meta, dict) else {}
+
+        return {**source_meta, **source_config_meta, **table_meta, **table_config_meta}
+
+    def calculate_tags_from_raw_target(self, target: UnpatchedSourceDefinition) -> List[str]:
+        source_tags = target.source.tags or []
+        source_config_tags = target.source.config.get("tags", [])
+        source_config_tags = (
+            source_config_tags if isinstance(source_config_tags, list) else [source_config_tags]
+        )
+
+        table_tags = target.table.tags or []
+        table_config_tags = target.table.config.get("tags", [])
+        table_config_tags = (
+            table_config_tags if isinstance(table_config_tags, list) else [table_config_tags]
+        )
+
+        return sorted(
+            set(itertools.chain(source_tags, source_config_tags, table_tags, table_config_tags))
+        )
 
 
 def merge_freshness_time_thresholds(

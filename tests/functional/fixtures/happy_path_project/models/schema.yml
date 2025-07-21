@@ -141,7 +141,8 @@ sources:
       event_time: column_name
       loaded_at_field: column_name
       meta:
-        test: 1
+        source_meta: 1
+      tags: ["source_tag"]
       freshness:
         warn_after:
           count: 1
@@ -187,14 +188,14 @@ sources:
             config:
               meta:
                 test: 1
-                tags: ["tags"]
+              tags: ["column_tag"]
         config:
           enabled: true
           event_time: column_name
           loaded_at_field: column_name
           meta:
-            test: 1
-          tags: ["tag"]
+            table_meta: 1
+          tags: ["table_tag"]
           freshness:
             warn_after:
               count: 1
