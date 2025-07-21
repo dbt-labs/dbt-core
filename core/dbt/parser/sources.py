@@ -477,8 +477,12 @@ class SourcePatcher:
     def calculate_meta_from_raw_target(self, target: UnpatchedSourceDefinition) -> Dict[str, Any]:
         source_meta = target.source.meta or {}
         source_config_meta = target.source.config.get("meta", {})
+        source_config_meta = source_config_meta if isinstance(source_config_meta, dict) else {}
+
         table_meta = target.table.meta or {}
         table_config_meta = target.table.config.get("meta", {})
+        table_config_meta = table_config_meta if isinstance(table_config_meta, dict) else {}
+
         return {**source_meta, **source_config_meta, **table_meta, **table_config_meta}
 
     def calculate_tags_from_raw_target(self, target: UnpatchedSourceDefinition) -> List[str]:
