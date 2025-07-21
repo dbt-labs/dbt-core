@@ -230,8 +230,8 @@ class TestBuilder(Generic[Testable]):
         if name is not None:
             test_args["column_name"] = name
 
-        # Extract kwargs when they are nested under new 'arguments' property separately from 'config' if require_generic_test_arguments is enabled
-        if get_flags().require_generic_test_arguments:
+        # Extract kwargs when they are nested under new 'arguments' property separately from 'config' if require_generic_test_arguments_property is enabled
+        if get_flags().require_generic_test_arguments_property:
             arguments = test_args.pop("arguments", {})
             if not arguments and any(k not in ("config", "column_name") for k in test_args.keys()):
                 deprecations.warn(

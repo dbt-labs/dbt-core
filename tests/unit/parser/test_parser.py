@@ -67,7 +67,7 @@ set_from_args(
     Namespace(
         warn_error=False,
         state_modified_compare_more_unrendered_values=False,
-        require_generic_test_arguments=False,
+        require_generic_test_arguments_property=False,
     ),
     None,
 )
@@ -108,7 +108,7 @@ class BaseParserTest(unittest.TestCase):
             Namespace(
                 warn_error=True,
                 state_modified_compare_more_unrendered_values=False,
-                require_generic_test_arguments=False,
+                require_generic_test_arguments_property=False,
             ),
             None,
         )
@@ -514,7 +514,7 @@ class SchemaParserTest(BaseParserTest):
             Namespace(
                 warn_error=False,
                 state_modified_compare_more_unrendered_values=False,
-                require_generic_test_arguments=False,
+                require_generic_test_arguments_property=False,
             ),
             None,
         )

@@ -747,7 +747,7 @@ class TestArgumentsPropertyInGenericTestDeprecationBehaviorChange:
         return {
             "config-version": 2,
             "flags": {
-                "require_generic_test_arguments": True,
+                "require_generic_test_arguments_property": True,
             },
         }
 
@@ -773,7 +773,7 @@ class TestMissingArgumentsPropertyInGenericTestDeprecation:
         return {
             "config-version": 2,
             "flags": {
-                "require_generic_test_arguments": True,
+                "require_generic_test_arguments_property": True,
             },
         }
 
