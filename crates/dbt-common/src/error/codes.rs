@@ -106,6 +106,7 @@ pub enum ErrorCode {
 
     DependencyWarning = 1065,
 
+    AccessDenied = 1066,
     // --------------------------------------------------------------------------------------------
     // Jinja
     MacroUnsupportedValueType = 1500,

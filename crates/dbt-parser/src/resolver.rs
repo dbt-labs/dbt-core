@@ -10,6 +10,7 @@ use dbt_jinja_utils::phases::parse::build_resolve_context;
 use dbt_jinja_utils::phases::parse::init::initialize_parse_jinja_environment;
 use dbt_jinja_utils::refs_and_sources::{RefsAndSources, resolve_dependencies};
 use dbt_schemas::dbt_utils::resolve_package_quoting;
+use dbt_schemas::schemas::common::Access;
 use dbt_schemas::schemas::macros::build_macro_units;
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 
@@ -205,6 +206,10 @@ pub async fn resolve(
         .unwrap();
 
     resolve_dependencies(&arg.io, &mut nodes, &mut disabled_nodes, &refs_and_sources);
+
+    // Check access
+    check_access(arg, &nodes, &all_runtime_configs);
+
     Ok((
         ResolverState {
             root_project_name: root_project_name.to_string(),
@@ -225,6 +230,51 @@ pub async fn resolve(
         },
         jinja_env,
     ))
+}
+
+// Check that models accessing other models (dependecies) can do so.
+fn check_access(
+    arg: &ResolveArgs,
+    nodes: &Nodes,
+    all_runtime_configs: &BTreeMap<String, Arc<DbtRuntimeConfig>>,
+) {
+    for (unique_id, node) in nodes.models.iter() {
+        for (target_unique_id, location) in &node.base().depends_on.nodes_with_ref_location {
+            if let Some(target_node) = nodes.models.get(target_unique_id) {
+                let restricted_access = all_runtime_configs
+                    .get(&target_node.common().package_name)
+                    .is_some_and(|config| config.inner.restrict_access.unwrap_or(false));
+
+                let diffent_packages = target_node.common().package_name
+                    != node.common().package_name
+                    && restricted_access;
+
+                if target_node.model_attr.access == Access::Private
+                    && (node.model_attr.group != target_node.model_attr.group || diffent_packages)
+                {
+                    let err = fs_err!(
+                        code => ErrorCode::AccessDenied,
+                        loc => location.clone(),
+                        "Node '{}' attempted to reference node '{}', which is not allowed because the referenced node is private to the '{}' group",
+                        unique_id,
+                        target_unique_id,
+                        target_node.model_attr.group.as_deref().unwrap_or(""),
+                    );
+                    show_error!(arg.io, err);
+                } else if target_node.model_attr.access == Access::Protected && diffent_packages {
+                    let err = fs_err!(
+                        code => ErrorCode::AccessDenied,
+                        loc => location.clone(),
+                        "Node '{}' attempted to reference node '{}', which is not allowed because the referenced node is protected to the '{}' package",
+                        unique_id,
+                        target_unique_id,
+                        target_node.common().package_name,
+                    );
+                    show_error!(arg.io, err);
+                }
+            }
+        }
+    }
 }
 
 /// Inner resolve function that resolves a single package.
