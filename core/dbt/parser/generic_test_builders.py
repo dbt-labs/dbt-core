@@ -2,6 +2,7 @@ import re
 from copy import deepcopy
 from typing import Any, Dict, Generic, List, Optional, Tuple
 
+from dbt import deprecations
 from dbt.artifacts.resources import NodeVersion
 from dbt.clients.jinja import GENERIC_TEST_KWARGS_NAME, get_rendered
 from dbt.contracts.graph.nodes import UnpatchedSourceDefinition
@@ -229,19 +230,12 @@ class TestBuilder(Generic[Testable]):
         if name is not None:
             test_args["column_name"] = name
 
-        # Handle when args are nested under 'args' separately from 'config'
-        if get_flags().require_generic_test_args:
-            args = test_args.pop("args", {})
+        # Handle when kwargs are nested under 'arguments' separately from 'config'
+        if get_flags().require_generic_test_arguments:
+            args = test_args.pop("arguments", {})
             test_args = {**test_args, **args}
-        elif "args" in test_args:
-            pass
-            # TODO: raise deprecation
-            # deprecations.warn(
-
-            # )
-
-        # TODO: raise deprecation if args other than config are not nested under args
-        # if not args and any(k != "config" for k in test_args.keys()):
+        elif "arguments" in test_args:
+            deprecations.warn("arguments-property-in-generic-test-deprecation")
 
         return test_name, test_args
 
