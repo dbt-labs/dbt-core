@@ -691,6 +691,101 @@
       },
       "additionalProperties": false
     },
+    "CustomTest": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/CustomTestMultiKey"
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/CustomTestInner"
+          }
+        }
+      ]
+    },
+    "CustomTestInner": {
+      "type": "object",
+      "properties": {
+        "args": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AnyValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DataTestConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "CustomTestMultiKey": {
+      "type": "object",
+      "required": [
+        "test_name"
+      ],
+      "properties": {
+        "args": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AnyValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DataTestConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "test_name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "DataTestConfig": {
       "type": "object",
       "properties": {
@@ -1030,7 +1125,6 @@
           ]
         },
         "require_partition_filter": {
-          "default": false,
           "type": [
             "boolean",
             "null"
@@ -1225,7 +1319,9 @@
         {
           "$ref": "#/definitions/AcceptedValuesTest"
         },
-        true
+        {
+          "$ref": "#/definitions/CustomTest"
+        }
       ]
     },
     "DbtBatchSize": {
@@ -2234,13 +2330,9 @@
           ]
         },
         "offset_window": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/MetricTimeWindow"
-            },
-            {
-              "type": "null"
-            }
+          "type": [
+            "string",
+            "null"
           ]
         }
       },
@@ -2282,23 +2374,6 @@
           ]
         },
         "name": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "MetricTimeWindow": {
-      "type": "object",
-      "required": [
-        "count",
-        "granularity"
-      ],
-      "properties": {
-        "count": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "granularity": {
           "type": "string"
         }
       },
@@ -3004,7 +3079,6 @@
           ]
         },
         "require_partition_filter": {
-          "default": false,
           "type": [
             "boolean",
             "null"
@@ -3207,6 +3281,16 @@
           "anyOf": [
             {
               "$ref": "#/definitions/FreshnessRules"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updates_on": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/UpdatesOn"
             },
             {
               "type": "null"
@@ -4139,7 +4223,6 @@
           ]
         },
         "require_partition_filter": {
-          "default": false,
           "type": [
             "boolean",
             "null"
@@ -4854,7 +4937,6 @@
           ]
         },
         "require_partition_filter": {
-          "default": false,
           "type": [
             "boolean",
             "null"
@@ -5430,7 +5512,6 @@
           ]
         },
         "require_partition_filter": {
-          "default": false,
           "type": [
             "boolean",
             "null"
@@ -6149,7 +6230,6 @@
           ]
         },
         "require_partition_filter": {
-          "default": false,
           "type": [
             "boolean",
             "null"
@@ -6337,6 +6417,13 @@
         "versions": true
       },
       "additionalProperties": false
+    },
+    "UpdatesOn": {
+      "type": "string",
+      "enum": [
+        "any",
+        "all"
+      ]
     },
     "Versions": {
       "type": "object",

@@ -2,6 +2,7 @@ import re
 from copy import deepcopy
 from typing import Any, Dict, Generic, List, Optional, Tuple
 
+from dbt import deprecations
 from dbt.artifacts.resources import NodeVersion
 from dbt.clients.jinja import GENERIC_TEST_KWARGS_NAME, get_rendered
 from dbt.contracts.graph.nodes import UnpatchedSourceDefinition
@@ -18,6 +19,7 @@ from dbt.exceptions import (
     TestTypeError,
     UnexpectedTestNamePatternError,
 )
+from dbt.flags import get_flags
 from dbt.parser.common import Testable
 from dbt.utils import md5
 from dbt_common.exceptions.macros import UndefinedMacroError
@@ -227,6 +229,20 @@ class TestBuilder(Generic[Testable]):
         test_args = deepcopy(test_args)
         if name is not None:
             test_args["column_name"] = name
+
+        # Extract kwargs when they are nested under new 'arguments' property separately from 'config' if require_generic_test_arguments_property is enabled
+        if get_flags().require_generic_test_arguments_property:
+            arguments = test_args.pop("arguments", {})
+            if not arguments and any(k not in ("config", "column_name") for k in test_args.keys()):
+                deprecations.warn(
+                    "missing-arguments-property-in-generic-test-deprecation", test_name=test_name
+                )
+            test_args = {**test_args, **arguments}
+        elif "arguments" in test_args:
+            deprecations.warn(
+                "arguments-property-in-generic-test-deprecation", test_name=test_name
+            )
+
         return test_name, test_args
 
     def tags(self) -> List[str]:
