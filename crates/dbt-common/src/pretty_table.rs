@@ -228,7 +228,7 @@ pub fn pretty_data_table(
             if limit.is_some_and(|l| row_count >= l) {
                 if include_ellipsis {
                     out.push_str(&format!(
-                        "{} rows, {} columns, showing only {} rows and only {} columns. Run with --limit 0 to show all rows. Run with a terminal width of at least {} to show all columns.",
+                        "{} rows, {} columns, showing only {} rows and only {} columns. Run with --limit -1 to show all rows. Run with a terminal width of at least {} to show all columns.",
                         row_count,
                         column_names.len(),
                         limit.expect("is some"),
@@ -237,7 +237,7 @@ pub fn pretty_data_table(
                     ));
                 } else {
                     out.push_str(&format!(
-                        "{} rows, showing only {} rows. Run with --limit 0 to show all rows.",
+                        "{} rows, showing only {} rows. Run with --limit -1 to show all rows.",
                         row_count,
                         limit.expect("is some")
                     ));
