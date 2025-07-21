@@ -89,7 +89,7 @@ opt-level = 1
 
 [profile.dev.build-override]
 # Some libraries (e.g. syn, proc-macro2 and all their dependencies) are compiled
-# *for* the build, and also dependend by tests (because we have proc-macro crates).
+# *for* the build, and also depended-on by tests (because we have proc-macro crates).
 # Tests compile with debug symbols enabled, otherwise debug symbols are disabled by default.
 # Force debug symbols to be always enabled to increase cache reuse between `cargo xtask`
 # and `cargo build/run --bin` invocations.
