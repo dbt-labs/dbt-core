@@ -188,7 +188,7 @@ pub fn find_macro_signatures(
                 let (args, returns) = parse(func_sign).map_err(|e| {
                     crate::Error::new(
                         crate::error::ErrorKind::InvalidOperation,
-                        format!("failed to parse funcsign: {e}"),
+                        format!("failed to parse funcsign in {path:?}: {e}"),
                     )
                 })?;
                 funcsigns.insert(

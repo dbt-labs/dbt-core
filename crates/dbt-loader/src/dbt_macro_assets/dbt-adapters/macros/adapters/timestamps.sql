@@ -1,20 +1,25 @@
+-- funcsign: () -> string
 {%- macro current_timestamp() -%}
     {{ adapter.dispatch('current_timestamp', 'dbt')() }}
 {%- endmacro -%}
 
+-- funcsign: () -> string
 {% macro default__current_timestamp() -%}
   {{ exceptions.raise_not_implemented(
     'current_timestamp macro not implemented for adapter ' + adapter.type()) }}
 {%- endmacro %}
 
+-- funcsign: () -> string
 {%- macro snapshot_get_time() -%}
     {{ adapter.dispatch('snapshot_get_time', 'dbt')() }}
 {%- endmacro -%}
 
+-- funcsign: () -> string
 {% macro default__snapshot_get_time() %}
     {{ current_timestamp() }}
 {% endmacro %}
 
+-- funcsign: () -> optional[string]
 {% macro get_snapshot_get_time_data_type() %}
     {% set snapshot_time = adapter.dispatch('snapshot_get_time', 'dbt')() %}
     {% set time_data_type_sql = 'select ' ~ snapshot_time ~ ' as dbt_snapshot_time' %}
@@ -35,18 +40,22 @@
     continue to use this macro to guarantee identical behavior on those two databases.
 #} */
 
+-- funcsign: () -> string
 {% macro current_timestamp_backcompat() %}
     {{ return(adapter.dispatch('current_timestamp_backcompat', 'dbt')()) }}
 {% endmacro %}
 
+-- funcsign: () -> string
 {% macro default__current_timestamp_backcompat() %}
     current_timestamp::timestamp
 {% endmacro %}
 
+-- funcsign: () -> string
 {% macro current_timestamp_in_utc_backcompat() %}
     {{ return(adapter.dispatch('current_timestamp_in_utc_backcompat', 'dbt')()) }}
 {% endmacro %}
 
+-- funcsign: () -> string
 {% macro default__current_timestamp_in_utc_backcompat() %}
     {{ return(adapter.dispatch('current_timestamp_backcompat', 'dbt')()) }}
 {% endmacro %}

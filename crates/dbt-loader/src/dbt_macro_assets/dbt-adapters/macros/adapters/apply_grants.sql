@@ -75,7 +75,7 @@
     {{ return(adapter.dispatch('get_grant_sql', 'dbt')(relation, privilege, grantees)) }}
 {% endmacro %}
 
--- funcsign: (relation, string, list[string]) -> none
+-- funcsign: (relation, string, list[string]) -> string
 {%- macro default__get_grant_sql(relation, privilege, grantees) -%}
     grant {{ privilege }} on {{ relation.render() }} to {{ grantees | join(', ') }}
 {%- endmacro -%}
@@ -121,12 +121,12 @@
     {{ return(dcl_statements) }}
 {%- endmacro %}
 
--- funcsign: (list[string]) -> none
+-- funcsign: (list[string]) -> string
 {% macro call_dcl_statements(dcl_statement_list) %}
     {{ return(adapter.dispatch("call_dcl_statements", "dbt")(dcl_statement_list)) }}
 {% endmacro %}
 
--- funcsign: (list[string]) -> none
+-- funcsign: (list[string]) -> string
 {% macro default__call_dcl_statements(dcl_statement_list) %}
     {#
       -- By default, supply all grant + revoke statements in a single semicolon-separated block,
@@ -143,12 +143,12 @@
 {% endmacro %}
 
 
--- funcsign: (relation, dict[string, list[string]], (relation, bool) -> bool) -> none
+-- funcsign: (relation, dict[string, list[string]], (relation, bool) -> bool) -> string
 {% macro apply_grants(relation, grant_config, should_revoke) %}
     {{ return(adapter.dispatch("apply_grants", "dbt")(relation, grant_config, should_revoke)) }}
 {% endmacro %}
 
--- funcsign: (relation, dict[string, list[string]], (relation, bool) -> bool) -> none
+-- funcsign: (relation, dict[string, list[string]], (relation, bool) -> bool) -> string
 {% macro default__apply_grants(relation, grant_config, should_revoke) %}
     {#-- If grant_config is {} or None, this is a no-op --#}
     {% if grant_config %}

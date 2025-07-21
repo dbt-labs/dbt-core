@@ -1,16 +1,21 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::compiler::ast;
 use crate::compiler::instructions::{
     Instruction, Instructions, LocalId, LOOP_FLAG_RECURSIVE, LOOP_FLAG_WITH_LOOP_VAR, MAX_LOCALS,
 };
 use crate::compiler::tokens::Span;
+use crate::compiler::typecheck::FunctionRegistry;
 use crate::listener::RenderingEventListener;
 use crate::output::CaptureMode;
+use crate::types::builtin::Type;
+use crate::types::function::UserDefinedFunctionType;
 use crate::value::ops::neg;
 use crate::value::{Kwargs, Value, ValueMap};
 
+use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use similar_asserts::assert_eq;
 
@@ -48,9 +53,9 @@ enum PendingBlock {
     },
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum CodeGenerationProfile {
-    TypeCheck,
+    TypeCheck(Arc<FunctionRegistry>),
     Render,
 }
 
@@ -154,7 +159,7 @@ impl<'source> CodeGenerator<'source> {
             self.instructions.name(),
             self.instructions.source(),
             Some(self.instructions.filename()),
-            self.profile,
+            self.profile.clone(),
         );
         sub.current_line = self.current_line;
         sub.span_stack = self.span_stack.last().cloned().into_iter().collect();
@@ -240,16 +245,28 @@ impl<'source> CodeGenerator<'source> {
     }
 
     /// Emits a short-circuited bool operator.
-    pub fn sc_bool(&mut self, and: bool, span: Span) {
+    pub fn sc_bool(&mut self, and: bool, span: Span, type_constraints: Vec<TypeConstraint>) {
         if let Some(PendingBlock::ScBool {
             ref mut jump_instrs,
         }) = self.pending_block.last_mut()
         {
-            jump_instrs.push(self.instructions.add(if and {
-                Instruction::JumpIfFalseOrPop(!0, span)
+            if and {
+                jump_instrs.push(
+                    self.instructions
+                        .add(Instruction::JumpIfFalseOrPop(!0, span)),
+                );
+                for type_constraint in type_constraints {
+                    self.add(Instruction::TypeConstraint(type_constraint, true));
+                }
             } else {
-                Instruction::JumpIfTrueOrPop(!0, span)
-            }));
+                jump_instrs.push(
+                    self.instructions
+                        .add(Instruction::JumpIfTrueOrPop(!0, span)),
+                );
+                for type_constraint in type_constraints {
+                    self.add(Instruction::TypeConstraint(type_constraint, false));
+                }
+            }
         } else {
             unreachable!();
         }
@@ -513,7 +530,7 @@ impl<'source> CodeGenerator<'source> {
         use crate::compiler::instructions::MACRO_CALLER;
         self.set_line_from_span(macro_decl.span());
         let instr = self.add(Instruction::Jump(!0));
-        self.add(Instruction::MacroName(macro_decl.name));
+        self.add(Instruction::MacroName(macro_decl.name, macro_decl.span()));
         // dbt function parameters support lateral variables, e.g.
         // {% macro foo(a, b=a+1, c=b+1) %}
         // So we have to evaluate the defaults from left to right
@@ -521,7 +538,7 @@ impl<'source> CodeGenerator<'source> {
         for (i, arg) in macro_decl.args.iter().enumerate() {
             if i >= macro_decl.args.len() - macro_decl.defaults.len() {
                 let default = defaults_iter.next().unwrap();
-                match self.profile {
+                match &self.profile {
                     CodeGenerationProfile::Render => {
                         self.add(Instruction::DupTop);
                         self.add(Instruction::IsUndefined);
@@ -530,12 +547,41 @@ impl<'source> CodeGenerator<'source> {
                         self.compile_expr(default, listeners);
                         self.end_if();
                     }
-                    CodeGenerationProfile::TypeCheck => {}
+                    CodeGenerationProfile::TypeCheck(function_registry) => {
+                        if let Some(signature) = function_registry.get(macro_decl.name) {
+                            if let Some(udf) = signature.downcast_ref::<UserDefinedFunctionType>() {
+                                let type_ = &udf.args[i];
+                                // the parameter has default value, so we need to exclude the none from arg type and check with the default
+                                let type_ = type_.get_non_optional_type();
+                                self.add(Instruction::LoadType(Value::from_object(type_)));
+                                self.compile_expr(default, listeners);
+                                self.add(Instruction::UnionType);
+                            } else {
+                                self.add(Instruction::LoadType(Value::from_object(Type::Any {
+                                    hard: false,
+                                })));
+                            }
+                        } else {
+                            panic!("Function signature not found for macro {}", macro_decl.name);
+                        }
+                    }
+                }
+            } else if let CodeGenerationProfile::TypeCheck(function_registry) = &self.profile {
+                if let Some(signature) = function_registry.get(macro_decl.name) {
+                    if let Some(udf) = signature.downcast_ref::<UserDefinedFunctionType>() {
+                        let type_ = &udf.args[i];
+                        self.add(Instruction::LoadType(Value::from_object(type_.clone())));
+                    } else {
+                        self.add(Instruction::LoadType(Value::from_object(Type::Any {
+                            hard: false,
+                        })));
+                    }
+                } else {
+                    panic!("Function signature not found for macro {}", macro_decl.name);
                 }
             }
             self.compile_assignment(arg, listeners);
         }
-        self.add(Instruction::FinishedParameterLoading);
         let span = macro_decl.span();
 
         for node in &macro_decl.body {
@@ -572,7 +618,12 @@ impl<'source> CodeGenerator<'source> {
             span.end_offset,
         ));
 
-        self.add(Instruction::BuildMacro(macro_decl.name, instr + 1, flags));
+        self.add(Instruction::BuildMacro(
+            macro_decl.name,
+            instr + 1,
+            flags,
+            span,
+        ));
         self.add(Instruction::MacroStop(
             span.end_line,
             span.end_col,
@@ -629,15 +680,27 @@ impl<'source> CodeGenerator<'source> {
             span.end_col,
             span.end_offset,
         ));
+
         self.compile_expr(&if_cond.expr, listeners);
+        let type_constraints = self.get_type_constraints(&if_cond.expr);
         self.start_if();
+        for type_constraint in &type_constraints {
+            self.add(Instruction::TypeConstraint(type_constraint.clone(), true));
+        }
         for node in &if_cond.true_body {
             self.compile_stmt(node, listeners);
         }
-        if !if_cond.false_body.is_empty() {
+        if !if_cond.false_body.is_empty()
+            || matches!(self.profile, CodeGenerationProfile::TypeCheck(_))
+        {
             self.start_else();
-            for node in &if_cond.false_body {
-                self.compile_stmt(node, listeners);
+            for type_constraint in &type_constraints {
+                self.add(Instruction::TypeConstraint(type_constraint.clone(), false));
+            }
+            if !if_cond.false_body.is_empty() {
+                for node in &if_cond.false_body {
+                    self.compile_stmt(node, listeners);
+                }
             }
         }
         self.end_if();
@@ -859,9 +922,16 @@ impl<'source> CodeGenerator<'source> {
             ast::Expr::IfExpr(i) => {
                 self.set_line_from_span(i.span());
                 self.compile_expr(&i.test_expr, listeners);
+                let type_constraints = self.get_type_constraints(&i.test_expr);
                 self.start_if();
+                for type_constraint in &type_constraints {
+                    self.add(Instruction::TypeConstraint(type_constraint.clone(), true));
+                }
                 self.compile_expr(&i.true_expr, listeners);
                 self.start_else();
+                for type_constraint in &type_constraints {
+                    self.add(Instruction::TypeConstraint(type_constraint.clone(), false));
+                }
                 if let Some(ref false_expr) = i.false_expr {
                     self.compile_expr(false_expr, listeners);
                 } else {
@@ -929,7 +999,7 @@ impl<'source> CodeGenerator<'source> {
                 for item in &t.items {
                     self.compile_expr(item, listeners);
                 }
-                self.add(Instruction::BuildTuple(Some(t.items.len())));
+                self.add(Instruction::BuildTuple(Some(t.items.len()), t.span()));
             }
         }
     }
@@ -1005,10 +1075,12 @@ impl<'source> CodeGenerator<'source> {
                     pending_args += 1;
                 }
                 ast::CallArg::PosSplat(_expr)
-                    if matches!(self.profile, CodeGenerationProfile::TypeCheck) =>
+                    if matches!(self.profile, CodeGenerationProfile::TypeCheck(_)) =>
                 {
                     // Type check mode, we need to push a placeholder for the any type
-                    self.add(Instruction::LoadConst(Value::from("__sdf_any")));
+                    self.add(Instruction::LoadType(Value::from_object(Type::Any {
+                        hard: true,
+                    })));
                     pending_args += 1;
                 }
                 ast::CallArg::PosSplat(expr) => {
@@ -1122,7 +1194,16 @@ impl<'source> CodeGenerator<'source> {
             ast::BinOpKind::ScAnd | ast::BinOpKind::ScOr => {
                 self.start_sc_bool();
                 self.compile_expr(&c.left, listeners);
-                self.sc_bool(matches!(c.op, ast::BinOpKind::ScAnd), span);
+                let type_constraints = if matches!(c.op, ast::BinOpKind::ScAnd) {
+                    self.get_type_constraints(&c.left)
+                } else {
+                    vec![]
+                };
+                self.sc_bool(
+                    matches!(c.op, ast::BinOpKind::ScAnd),
+                    span,
+                    type_constraints,
+                );
                 self.compile_expr(&c.right, listeners);
                 self.end_sc_bool();
                 self.pop_span();
@@ -1164,5 +1245,153 @@ impl<'source> CodeGenerator<'source> {
     ) {
         assert!(self.pending_block.is_empty());
         (self.instructions, self.blocks)
+    }
+
+    pub fn get_type_constraints(&self, expr: &ast::Expr<'source>) -> Vec<TypeConstraint> {
+        if matches!(self.profile, CodeGenerationProfile::TypeCheck(_)) {
+            expr.try_into().unwrap_or_default()
+        } else {
+            vec![]
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct TypeConstraint {
+    pub name: Variable,
+    pub operation: TypeConstraintOperation,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum TypeConstraintOperation {
+    NotNull(bool),
+    Is(String, bool),
+}
+
+impl TypeConstraintOperation {
+    pub fn not(&self) -> Self {
+        match self {
+            TypeConstraintOperation::NotNull(b) => TypeConstraintOperation::NotNull(!b),
+            TypeConstraintOperation::Is(s, b) => TypeConstraintOperation::Is(s.clone(), !b),
+        }
+    }
+}
+
+impl<'source> TryFrom<&'source ast::Expr<'source>> for Vec<TypeConstraint> {
+    type Error = ();
+
+    fn try_from(expr: &'source ast::Expr<'source>) -> Result<Self, Self::Error> {
+        match expr {
+            ast::Expr::Var(_) => Ok(vec![TypeConstraint {
+                name: expr.try_into()?,
+                operation: TypeConstraintOperation::NotNull(true),
+            }]),
+            ast::Expr::GetAttr(_) => Ok(vec![TypeConstraint {
+                name: expr.try_into()?,
+                operation: TypeConstraintOperation::NotNull(true),
+            }]),
+            ast::Expr::Test(spanned) => {
+                let test_name = spanned.name.to_string();
+                (&spanned.expr).try_into().map(|variable| {
+                    vec![TypeConstraint {
+                        name: variable,
+                        operation: TypeConstraintOperation::Is(test_name, true),
+                    }]
+                })
+            }
+            ast::Expr::BinOp(bin_op) => {
+                match bin_op.op {
+                    ast::BinOpKind::ScAnd => (&bin_op.left).try_into().and_then(
+                        |mut constraints: Vec<TypeConstraint>| {
+                            let right_constraints: Vec<TypeConstraint> =
+                                (&bin_op.right).try_into()?;
+                            constraints.extend(right_constraints);
+                            Ok(constraints)
+                        },
+                    ),
+                    _ => Ok(vec![]),
+                }
+            }
+            ast::Expr::UnaryOp(unary_op) if matches!(unary_op.op, ast::UnaryOpKind::Not) => {
+                (&unary_op.expr)
+                    .try_into()
+                    .map(|constraints: Vec<TypeConstraint>| {
+                        constraints
+                            .iter()
+                            .map(|constraint| TypeConstraint {
+                                name: constraint.name.clone(),
+                                operation: constraint.operation.not(),
+                            })
+                            .collect()
+                    })
+            }
+            _ => Ok(vec![]),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Variable {
+    String(String),
+    GetAttr(Vec<String>),
+}
+
+impl Variable {
+    pub fn get_attribute(&self, name: &str) -> Variable {
+        match self {
+            Variable::String(base) => Variable::GetAttr(vec![base.clone(), name.to_string()]),
+            Variable::GetAttr(items) => Variable::GetAttr(
+                items
+                    .iter()
+                    .cloned()
+                    .chain(std::iter::once(name.to_string()))
+                    .collect(),
+            ),
+        }
+    }
+}
+
+impl<'source> TryFrom<&ast::Expr<'source>> for Variable {
+    type Error = ();
+
+    fn try_from(expr: &ast::Expr<'source>) -> Result<Self, Self::Error> {
+        match expr {
+            ast::Expr::Var(spanned) => Ok(Variable::String(spanned.id.to_string())),
+            ast::Expr::GetAttr(spanned) => {
+                let variable: Variable = (&spanned.expr).try_into()?;
+                Ok(variable.get_attribute(spanned.name))
+            }
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<String> for Variable {
+    fn from(s: String) -> Self {
+        Variable::String(s)
+    }
+}
+
+impl From<&str> for Variable {
+    fn from(s: &str) -> Self {
+        Variable::String(s.to_string())
+    }
+}
+
+impl From<&Variable> for Variable {
+    fn from(v: &Variable) -> Self {
+        v.clone()
+    }
+}
+
+impl From<&String> for Variable {
+    fn from(s: &String) -> Self {
+        Variable::String(s.clone())
+    }
+}
+
+impl From<&&str> for Variable {
+    fn from(s: &&str) -> Self {
+        Variable::String(s.to_string())
     }
 }

@@ -13,24 +13,26 @@
 
 #}
 
+-- funcsign: (optional[string], optional[node]) -> string
 {% macro generate_alias_name(custom_alias_name=none, node=none) -%}
     {% do return(adapter.dispatch('generate_alias_name', 'dbt')(custom_alias_name, node)) %}
 {%- endmacro %}
 
+-- funcsign: (optional[string], optional[node]) -> string
 {% macro default__generate_alias_name(custom_alias_name=none, node=none) -%}
 
     {%- if custom_alias_name -%}
 
         {{ custom_alias_name | trim }}
 
-    {%- elif node.version -%}
+    {%- elif node -%}
 
-        {{ return(node.name ~ "_v" ~ (node.version | replace(".", "_"))) }}
-
-    {%- else -%}
-
-        {{ node.name }}
-
+        {% if node.version -%}
+            {{ node.name ~ "_v" ~ (node.version | replace(".", "_")) }}
+        {%- else -%}
+            {{ node.name }}
+        {%- endif -%}
+    
     {%- endif -%}
 
 {%- endmacro %}

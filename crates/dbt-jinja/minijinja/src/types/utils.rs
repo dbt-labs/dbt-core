@@ -21,13 +21,7 @@ pub fn infer_type_from_const_value(val: &Value) -> Type {
         }
 
         ValueKind::Bool => Type::Bool,
-        ValueKind::String => {
-            if val.as_str().unwrap_or_default() == "__sdf_any" {
-                Type::Any { hard: true }
-            } else {
-                Type::String(val.as_str().map(|s| s.to_string()))
-            }
-        }
+        ValueKind::String => Type::String(val.as_str().map(|s| s.to_string())),
         ValueKind::Bytes => Type::Bytes,
         ValueKind::Seq => {
             let element_type = {

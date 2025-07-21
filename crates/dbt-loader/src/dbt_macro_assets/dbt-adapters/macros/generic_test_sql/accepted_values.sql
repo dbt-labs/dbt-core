@@ -1,3 +1,4 @@
+-- funcsign: (model, string, list[string], bool) -> string
 {% macro default__test_accepted_values(model, column_name, values, quote=True) %}
 
 with all_values as (

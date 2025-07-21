@@ -13,10 +13,12 @@
 
 #}
 
+-- funcsign: (optional[string], optional[node]) -> string
 {% macro generate_database_name(custom_database_name=none, node=none) -%}
     {% do return(adapter.dispatch('generate_database_name', 'dbt')(custom_database_name, node)) %}
 {%- endmacro %}
 
+-- funcsign: (optional[string], optional[node]) -> string
 {% macro default__generate_database_name(custom_database_name=none, node=none) -%}
     {%- set default_database = target.database -%}
     {%- if custom_database_name is none -%}

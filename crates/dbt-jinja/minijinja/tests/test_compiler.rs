@@ -39,9 +39,9 @@ fn test_bool_ops() {
 
     c.start_sc_bool();
     c.add(Instruction::Lookup("first", Span::default()));
-    c.sc_bool(true, Span::default());
+    c.sc_bool(true, Span::default(), vec![]);
     c.add(Instruction::Lookup("second", Span::default()));
-    c.sc_bool(false, Span::default());
+    c.sc_bool(false, Span::default(), vec![]);
     c.add(Instruction::Lookup("third", Span::default()));
     c.end_sc_bool();
 

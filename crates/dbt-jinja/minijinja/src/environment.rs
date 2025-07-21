@@ -107,7 +107,7 @@ impl<'source> Environment<'source> {
         Environment {
             templates: TemplateStore::new(
                 TemplateConfig::new(Arc::new(defaults::default_auto_escape_callback)),
-                profile,
+                profile.clone(),
             ),
             filters: defaults::get_builtin_filters(),
             tests: defaults::get_builtin_tests(),
@@ -454,7 +454,7 @@ impl<'source> Environment<'source> {
                 source,
                 &self.templates.template_config,
                 None,
-                self.profile,
+                self.profile.clone(),
                 listeners,
             )))),
         ))
@@ -756,7 +756,7 @@ impl<'source> Environment<'source> {
     ) -> Result<Instructions<'expr>, Error> {
         attach_basic_debug_info(
             parse_expr(expr).map(|ast| {
-                let mut gen = CodeGenerator::new("<expression>", expr, self.profile);
+                let mut gen = CodeGenerator::new("<expression>", expr, self.profile.clone());
                 gen.compile_expr(&ast, listeners);
                 gen.finish().0
             }),

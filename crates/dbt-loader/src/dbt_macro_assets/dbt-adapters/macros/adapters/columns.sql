@@ -40,12 +40,12 @@
     limit 0
 {% endmacro %}
 
--- funcsign: (list[api_column]) -> none
+-- funcsign: (dict[string, api_column]) -> string
 {% macro get_empty_schema_sql(columns) -%}
   {{ return(adapter.dispatch('get_empty_schema_sql', 'dbt')(columns)) }}
 {% endmacro %}
 
--- funcsign: (dict[string, api_column]) -> none
+-- funcsign: (dict[string, api_column]) -> string
 {% macro default__get_empty_schema_sql(columns) %}
     {%- set col_err = [] -%}
     {%- set col_naked_numeric = [] -%}
@@ -91,12 +91,12 @@
     {{ return(load_result('get_columns_in_query').table.columns | map(attribute='name') | list) }}
 {% endmacro %}
 
--- funcsign: (relation, string, string) -> none
+-- funcsign: (relation, string, string) -> string
 {% macro alter_column_type(relation, column_name, new_column_type) -%}
   {{ return(adapter.dispatch('alter_column_type', 'dbt')(relation, column_name, new_column_type)) }}
 {% endmacro %}
 
--- funcsign: (relation, string, string) -> none
+-- funcsign: (relation, string, string) -> string
 {% macro default__alter_column_type(relation, column_name, new_column_type) -%}
   {#
     1. Create a new column (w/ temp name and correct type)
@@ -116,12 +116,12 @@
 {% endmacro %}
 
 
--- funcsign: (relation, optional[list[api_column]], optional[list[api_column]]) -> none
+-- funcsign: (relation, optional[list[api_column]], optional[list[api_column]]) -> string
 {% macro alter_relation_add_remove_columns(relation, add_columns = none, remove_columns = none) -%}
   {{ return(adapter.dispatch('alter_relation_add_remove_columns', 'dbt')(relation, add_columns, remove_columns)) }}
 {% endmacro %}
 
--- funcsign: (relation, optional[list[api_column]], optional[list[api_column]]) -> none
+-- funcsign: (relation, optional[list[api_column]], optional[list[api_column]]) -> string
 {% macro default__alter_relation_add_remove_columns(relation, add_columns, remove_columns) %}
 
   {% if add_columns is none %}

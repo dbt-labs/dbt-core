@@ -1,8 +1,9 @@
+-- funcsign: (config) -> string
 {% macro set_sql_header(config) -%}
   {{ config.set('sql_header', caller()) }}
 {%- endmacro %}
 
-
+-- funcsign: () -> bool
 {% macro should_full_refresh() %}
   {% set config_full_refresh = config.get('full_refresh') %}
   {% if config_full_refresh is none %}
@@ -11,7 +12,8 @@
   {% do return(config_full_refresh) %}
 {% endmacro %}
 
-
+-- ai
+-- funcsign: () -> bool
 {% macro should_store_failures() %}
   {% set config_store_failures = config.get('store_failures') %}
   {% if config_store_failures is none %}

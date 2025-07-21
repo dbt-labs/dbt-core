@@ -8,12 +8,12 @@
   {% do return(None) %}
 {% endmacro %}
 
--- funcsign: (relation) -> none
+-- funcsign: (relation) -> string
 {% macro create_indexes(relation) -%}
   {{ adapter.dispatch('create_indexes', 'dbt')(relation) }}
 {%- endmacro %}
 
--- funcsign: (relation) -> none
+-- funcsign: (relation) -> string
 {% macro default__create_indexes(relation) -%}
   {%- set _indexes = config.get('indexes', default=[]) -%}
 
@@ -30,7 +30,7 @@
     {{ adapter.dispatch('get_drop_index_sql', 'dbt')(relation, index_name) }}
 {%- endmacro %}
 
--- funcsign: (relation, string) -> none
+-- funcsign: (relation, string) -> string
 {% macro default__get_drop_index_sql(relation, index_name) -%}
     {{ exceptions.raise_compiler_error("`get_drop_index_sql has not been implemented for this adapter.") }}
 {%- endmacro %}

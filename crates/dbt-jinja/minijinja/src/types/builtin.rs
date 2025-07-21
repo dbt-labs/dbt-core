@@ -3,12 +3,18 @@ use crate::types::dict::DictType;
 use crate::types::function::{DynFunctionType, UserDefinedFunctionType};
 use crate::types::iterable::IterableType;
 use crate::types::list::ListType;
-use crate::types::string::{StringLowerFunction, StringStripFunction, StringUpperFunction};
+use crate::types::modules::PyTimeDeltaType;
+use crate::types::string::{
+    StringFormatFunction, StringLowerFunction, StringReplaceFunction, StringSplitFunction,
+    StringStripFunction, StringUpperFunction,
+};
 use crate::types::struct_::StructType;
+use crate::types::timestamp::PyDateTimeStrftimeFunction;
 use crate::types::tuple::TupleType;
 use crate::types::union::UnionType;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::str::FromStr;
 use std::sync::Arc;
 
 /// Represents the type of a value in the type system.
@@ -19,6 +25,7 @@ pub enum Type {
     Float,
     Bool,
     Bytes,
+    TimeStamp,
     Tuple(TupleType),
     List(ListType),
     Struct(StructType),
@@ -28,6 +35,7 @@ pub enum Type {
     None,
     Undefined,
     Invalid,
+    Exception,
     Union(UnionType),
     // soft any types are likely to be a implementation bug will be reported
     // hard any types means the type is dynamic, we won't be able to get it in the compile time
@@ -42,10 +50,6 @@ pub enum Type {
     Function(DynFunctionType),
 
     StdColumn,
-    // A special type to represent the parameters of a macro
-    // It is used to indicate that the parameters of a macro are not yet known
-    // StoreLocal will not consume this type, and FinishedParameterLoading will consume it
-    Parameters(usize),
 }
 
 impl fmt::Debug for Type {
@@ -58,6 +62,7 @@ impl fmt::Debug for Type {
             Self::Float => write!(f, "Float"),
             Self::Bool => write!(f, "Bool"),
             Self::Bytes => write!(f, "Bytes"),
+            Self::TimeStamp => write!(f, "TimeStamp"),
             Self::Tuple(tuple) => write!(f, "Tuple({tuple:?})"),
             Self::List(list) => write!(f, "List({:?})", list.element),
             Self::Struct(struct_) => write!(f, "Struct({struct_:?})"),
@@ -67,6 +72,7 @@ impl fmt::Debug for Type {
             Self::None => write!(f, "None"),
             Self::Undefined => write!(f, "Undefined"),
             Self::Invalid => write!(f, "Invalid"),
+            Self::Exception => write!(f, "Exception"),
             Self::Union(arg0) => f.debug_tuple("Union").field(arg0).finish(),
             Self::Any { hard } => write!(f, "Any({hard})"),
             Self::Kwargs(arg0) => f.debug_tuple("Kwargs").field(arg0).finish(),
@@ -74,7 +80,6 @@ impl fmt::Debug for Type {
             Self::Class(arg0) => f.write_fmt(format_args!("{arg0:?}")),
             Self::Function(arg0) => f.write_fmt(format_args!("{arg0:?}")),
             Self::StdColumn => write!(f, "StdColumn"),
-            Self::Parameters(index) => write!(f, "Parameters({index})"),
         }
     }
 }
@@ -101,6 +106,24 @@ impl Type {
                 )))),
                 "upper" => Ok(Type::Function(DynFunctionType::new(Arc::new(
                     StringUpperFunction::default(),
+                )))),
+                "replace" => Ok(Type::Function(DynFunctionType::new(Arc::new(
+                    StringReplaceFunction::default(),
+                )))),
+                "split" => Ok(Type::Function(DynFunctionType::new(Arc::new(
+                    StringSplitFunction::default(),
+                )))),
+                "format" => Ok(Type::Function(DynFunctionType::new(Arc::new(
+                    StringFormatFunction::default(),
+                )))),
+                _ => Err(crate::Error::new(
+                    crate::error::ErrorKind::InvalidOperation,
+                    format!("{self:?}.{name} is not supported"),
+                )),
+            },
+            Type::TimeStamp => match name {
+                "strftime" => Ok(Type::Function(DynFunctionType::new(Arc::new(
+                    PyDateTimeStrftimeFunction::default(),
                 )))),
                 _ => Err(crate::Error::new(
                     crate::error::ErrorKind::InvalidOperation,
@@ -133,6 +156,7 @@ impl Type {
             Type::Iterable(iterable) => iterable.subscript(index),
             Type::Tuple(tuple) => tuple.subscript(index),
             Type::Class(class) => class.subscript(index),
+            Type::Any { hard: true } => Ok(Type::Any { hard: true }),
             _ => Err(crate::Error::new(
                 crate::error::ErrorKind::InvalidOperation,
                 "Type does not support subscript",
@@ -189,8 +213,8 @@ impl Type {
     /// ```
     pub fn is_subtype_of(&self, other: &Type) -> bool {
         match (self, other) {
-            // Any is only a subtype of Any itself
             (Type::Any { hard: true }, _) => true,
+
             // All types are subtypes of Any
             (_, Type::Any { hard: true }) => true,
 
@@ -283,8 +307,23 @@ impl Type {
                         .types
                         .iter()
                         .all(|member| other_type.can_compare_with(member, op)),
-                    // All other types can compare for equality
-                    _ => true,
+                    // Same types can be ordered
+                    (a, b) if a == b => true,
+
+                    // Numeric types can be compared with each other
+                    (Type::Integer(_), Type::Float) | (Type::Float, Type::Integer(_)) => true,
+
+                    // Integer can be compared with each other
+                    (Type::Integer(_), Type::Integer(_)) => true,
+
+                    // String types can be compared with each other
+                    (Type::String(_), Type::String(_)) => true,
+
+                    // Bool can be compared with bool
+                    (Type::Bool, Type::Bool) => true,
+
+                    // Default: no ordering possible
+                    _ => false,
                 }
             }
 
@@ -351,41 +390,54 @@ impl Type {
 
     #[allow(clippy::only_used_in_recursion)]
     pub fn can_binary_op_with(&self, other: &Type, op: &'static str) -> Option<Type> {
-        match (self, other) {
+        match (self, other, op) {
             // Any type can do binary operations with anything, result is Any
-            (Type::Any { hard: true }, _) | (_, Type::Any { hard: true }) => {
+            (Type::Any { hard: true }, _, _) | (_, Type::Any { hard: true }, _) => {
                 Some(Type::Any { hard: true })
             }
 
             // None type binary operations are generally not supported
-            (Type::None, _) | (_, Type::None) => None,
+            (Type::None, _, _) | (_, Type::None, _) => None,
 
             // Union types are complex, return None for now
-            (Type::Union(_), _) | (_, Type::Union(_)) => None,
+            (Type::Union(_), _, _) | (_, Type::Union(_), _) => None,
 
             // String operations
-            (Type::String(_), Type::String(_)) if op == "+" => Some(Type::String(None)),
+            (Type::String(_), Type::String(_), "+") => Some(Type::String(None)),
 
             // Integer operations
-            (Type::Integer(_), Type::Integer(_)) => match op {
-                "+" | "-" | "*" | "/" | "//" | "%" | "**" => Some(Type::Integer(None)),
-                _ => None,
-            },
+            (Type::Integer(_), Type::Integer(_), "+" | "-" | "*" | "/" | "//" | "%" | "**") => {
+                Some(Type::Integer(None))
+            }
 
             // Float operations
-            (Type::Float, Type::Float) => match op {
-                "+" | "-" | "*" | "/" | "//" | "%" | "**" => Some(Type::Float),
-                _ => None,
-            },
+            (Type::Float, Type::Float, "+" | "-" | "*" | "/" | "//" | "%" | "**") => {
+                Some(Type::Float)
+            }
 
             // Mixed integer/float operations
-            (Type::Integer(_), Type::Float) | (Type::Float, Type::Integer(_)) => match op {
-                "+" | "-" | "*" | "/" | "//" | "%" | "**" => Some(Type::Float),
-                _ => None,
-            },
+            (Type::Integer(_), Type::Float, "+" | "-" | "*" | "/" | "//" | "%" | "**")
+            | (Type::Float, Type::Integer(_), "+" | "-" | "*" | "/" | "//" | "%" | "**") => {
+                Some(Type::Float)
+            }
 
             // String formatting (% operator)
-            (Type::String(_), Type::List(_)) if op == "%" => Some(Type::String(None)),
+            (Type::String(_), Type::List(_), "%") => Some(Type::String(None)),
+
+            (Type::TimeStamp, Type::TimeStamp, "-") => Some(Type::Class(DynClassType::new(
+                Arc::new(PyTimeDeltaType::default()),
+            ))),
+
+            (Type::TimeStamp, Type::Class(class), "+")
+                if class.type_debug() == "modules.datetime.timedelta" =>
+            {
+                Some(Type::TimeStamp)
+            }
+            (Type::Class(class), Type::TimeStamp, "+")
+                if class.type_debug() == "modules.datetime.timedelta" =>
+            {
+                Some(Type::TimeStamp)
+            }
 
             // Default: check if types are equal
             _ => {
@@ -399,16 +451,7 @@ impl Type {
     }
 
     pub fn is_condition(&self) -> bool {
-        match self {
-            Type::Bool
-            | Type::Any { hard: true }
-            | Type::Struct(_)
-            | Type::Dict(_)
-            | Type::List(_)
-            | Type::Iterable(_) => true,
-            Type::Union(union_type) => union_type.types.iter().any(|ty| ty.is_condition()),
-            _ => false,
-        }
+        !matches!(self, Type::Any { hard: false })
     }
 
     pub fn is_none(&self) -> bool {
@@ -441,6 +484,22 @@ impl Type {
                 Type::Any { hard: true }
             }
 
+            (Type::List(ListType { element }), Type::List(_))
+                if matches!(element.as_ref(), Type::Any { hard: true }) =>
+            {
+                Type::List(ListType {
+                    element: Box::new(Type::Any { hard: true }),
+                })
+            }
+
+            (Type::List(_), Type::List(ListType { element }))
+                if matches!(element.as_ref(), Type::Any { hard: true }) =>
+            {
+                Type::List(ListType {
+                    element: Box::new(Type::Any { hard: true }),
+                })
+            }
+
             // If self is a union, use its union method
             (Type::Union(self_union), other_type) => self_union.union(other_type),
 
@@ -461,6 +520,32 @@ impl Type {
             _ => None,
         }
     }
+
+    pub fn is_optional(&self) -> bool {
+        if let Type::Union(union) = self {
+            union.is_optional()
+        } else {
+            false
+        }
+    }
+
+    pub fn get_non_optional_type(&self) -> Type {
+        if let Type::Union(union) = self {
+            union.get_non_optional_type()
+        } else {
+            self.clone()
+        }
+    }
+
+    pub fn exclude(&self, other: &Type) -> Type {
+        if let Type::Union(union) = self {
+            union.exclude(other)
+        } else if other == self {
+            Type::None
+        } else {
+            self.clone()
+        }
+    }
 }
 
 /// Implements the Display trait for the Type enum
@@ -469,4 +554,29 @@ impl std::fmt::Display for Type {
         // same as Debug
         write!(f, "{self:?}")
     }
+}
+
+impl FromStr for Type {
+    fn from_str(s: &str) -> Result<Self, crate::Error> {
+        match s {
+            "string" => Ok(Type::String(None)),
+            "integer" => Ok(Type::Integer(None)),
+            "float" => Ok(Type::Float),
+            "bool" => Ok(Type::Bool),
+            "bytes" => Ok(Type::Bytes),
+            "timestamp" => Ok(Type::TimeStamp),
+            "none" => Ok(Type::None),
+            "defined" => Ok(Type::Any { hard: true }),
+            "sequence" => Ok(Type::List(ListType::new(Type::Any { hard: true }))),
+            "iterable" => Ok(Type::Iterable(IterableType::new(Type::Any { hard: true }))),
+            "callable" => Ok(Type::Any { hard: true }),
+            "mapping" => Ok(Type::Any { hard: true }),
+            _ => Err(crate::Error::new(
+                crate::error::ErrorKind::InvalidOperation,
+                format!("Invalid type: {s}"),
+            )),
+        }
+    }
+
+    type Err = crate::Error;
 }

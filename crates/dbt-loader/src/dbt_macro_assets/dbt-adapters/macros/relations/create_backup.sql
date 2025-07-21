@@ -1,9 +1,10 @@
+-- funcsign: (relation) -> string
 {%- macro get_create_backup_sql(relation) -%}
     {{- log('Applying CREATE BACKUP to: ' ~ relation) -}}
     {{- adapter.dispatch('get_create_backup_sql', 'dbt')(relation) -}}
 {%- endmacro -%}
 
-
+-- funcsign: (relation) -> string
 {%- macro default__get_create_backup_sql(relation) -%}
 
     -- get the standard backup name

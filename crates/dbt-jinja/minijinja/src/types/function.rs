@@ -1,9 +1,13 @@
 use crate::types::builtin::Type;
+use crate::types::class::DynClassType;
+use crate::types::column_schema::ColumnSchemaType;
 use crate::types::iterable::IterableType;
 use crate::types::list::ListType;
+use crate::types::model::ModelType;
 use crate::types::utils::CodeLocation;
 use std::fmt;
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 // Import the type_erase macro
 use super::type_erase::type_erase;
@@ -37,7 +41,7 @@ pub trait FunctionType: Send + Sync + std::fmt::Debug {
                     // Use positional argument if available
                     sorted_args.push(args[positional_index].clone());
                     positional_index += 1;
-                } else if let Some(val) = kwargs_map.get(&name) {
+                } else if let Some(val) = kwargs_map.get(&format!("String({name})")) {
                     // Use kwarg if available
                     sorted_args.push(val.clone());
                 } else {
@@ -235,6 +239,20 @@ impl FunctionType for LoadResultFunctionType {
 }
 
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct EnvVarFunctionType;
+
+impl FunctionType for EnvVarFunctionType {
+    fn _resolve_arguments(&self, _actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        // TODO: check args and return the result type
+        Ok(Type::String(None))
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["value".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub struct StoreRawResultFunctionType;
 
 impl FunctionType for StoreRawResultFunctionType {
@@ -424,6 +442,8 @@ impl FunctionType for MapFunctionType {
             Ok(Type::Iterable(IterableType::new(
                 element.get_attribute(key.as_str())?,
             )))
+        } else if matches!(actual_arguments[1], Type::Any { hard: true }) {
+            Ok(Type::Any { hard: true })
         } else {
             Err(crate::Error::new(
                 crate::error::ErrorKind::TypeError,
@@ -453,6 +473,9 @@ impl FunctionType for ListFunctionType {
         }
         let element = match &actual_arguments[0] {
             Type::List(ListType { element }) | Type::Iterable(IterableType { element }) => element,
+            Type::Any { hard: true } => {
+                return Ok(Type::List(ListType::new(Type::Any { hard: true })))
+            }
             _ => {
                 return Err(crate::Error::new(
                     crate::error::ErrorKind::TypeError,
@@ -499,5 +522,486 @@ impl FunctionType for CastFunctionType {
 
     fn arg_names(&self) -> Vec<String> {
         vec!["type".to_string(), "value".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct TrimFunctionType;
+
+impl FunctionType for TrimFunctionType {
+    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
+        // args[0] is necessary, args[1] is optional
+        if args.is_empty() || args.len() > 2 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "trim requires 1 or 2 arguments",
+            ));
+        }
+        if !args[0].is_subtype_of(&Type::String(None)) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                format!(
+                    "trim requires a string argument as the first argument, got {:?}",
+                    args[0]
+                ),
+            ));
+        }
+        if args.len() == 2 && !args[1].is_subtype_of(&Type::String(None)) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                format!(
+                    "trim requires a string argument as the second argument, got {:?}",
+                    args[1]
+                ),
+            ));
+        }
+        Ok(Type::String(None))
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["s".to_string(), "chars".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct UpperFunctionType;
+
+impl FunctionType for UpperFunctionType {
+    fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        if actual_arguments.len() != 1 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "upper requires exactly 1 argument",
+            ));
+        }
+        if !matches!(actual_arguments[0], Type::String(_))
+            && !matches!(actual_arguments[0], Type::Any { hard: true })
+        {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "upper requires a string argument as the first argument",
+            ));
+        }
+        Ok(Type::String(None))
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["v".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct LowerFunctionType;
+
+impl FunctionType for LowerFunctionType {
+    fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        if actual_arguments.len() != 1 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "lower requires exactly 1 argument",
+            ));
+        }
+        if !matches!(actual_arguments[0], Type::String(_))
+            && !matches!(actual_arguments[0], Type::Any { hard: true })
+        {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "lower requires a string argument as the first argument",
+            ));
+        }
+        Ok(Type::String(None))
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["v".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct RangeFunctionType;
+
+impl FunctionType for RangeFunctionType {
+    fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        // accepts one or two integer arguments, returns a list of integers
+        if actual_arguments.is_empty() || actual_arguments.len() > 2 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "range requires 1 or 2 arguments",
+            ));
+        }
+        for arg in actual_arguments {
+            if !matches!(arg, Type::Integer(_) | Type::Any { hard: true }) {
+                return Err(crate::Error::new(
+                    crate::error::ErrorKind::TypeError,
+                    "range requires integer arguments",
+                ));
+            }
+        }
+        Ok(Type::List(ListType::new(Type::Integer(None))))
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["arg1".to_string(), "arg2".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct StringFunctionType;
+
+impl FunctionType for StringFunctionType {
+    fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        // accepts one arguments, returns a string
+        if actual_arguments.len() != 1 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "string requires exactly 1 argument",
+            ));
+        }
+
+        Ok(Type::String(None))
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["value".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct ReplaceFunctionType;
+
+impl FunctionType for ReplaceFunctionType {
+    fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        // accepts three or four arguments, returns a string
+        // actual_arguments[0,1,2] is necessary, actual_arguments[3] is optional
+        if actual_arguments.len() < 3 || actual_arguments.len() > 4 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "replace requires 3 or 4 arguments",
+            ));
+        }
+        if actual_arguments.len() == 4 {
+            if !actual_arguments[3].is_subtype_of(&Type::Integer(None))
+                || !actual_arguments[2].is_subtype_of(&Type::String(None))
+                || !actual_arguments[1].is_subtype_of(&Type::String(None))
+                || !actual_arguments[0].is_subtype_of(&Type::String(None))
+            {
+                return Err(crate::Error::new(
+                    crate::error::ErrorKind::TypeError,
+                    "replace requires a integer argument as the fourth argument",
+                ));
+            }
+        } else if actual_arguments.len() == 3
+            && (!actual_arguments[2].is_subtype_of(&Type::String(None))
+                || !actual_arguments[1].is_subtype_of(&Type::String(None))
+                || !actual_arguments[0].is_subtype_of(&Type::String(None)))
+        {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "replace requires a string arguments as the first three arguments",
+            ));
+        }
+        Ok(Type::String(None))
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["value".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct GetColumnSchemaFromQueryFunction;
+
+impl FunctionType for GetColumnSchemaFromQueryFunction {
+    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
+        if args.len() != 1 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "Expected 1 argument for get_column_schema_from_query function",
+            ));
+        }
+        if !args[0].is_subtype_of(&Type::String(None)) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "Expected a string argument for get_column_schema_from_query function",
+            ));
+        }
+        Ok(Type::List(ListType::new(Type::Class(DynClassType::new(
+            Arc::new(ColumnSchemaType::default()),
+        )))))
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["sql".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Eq, PartialEq)]
+pub struct TryOrCompilerErrorFunctionType;
+
+impl fmt::Debug for TryOrCompilerErrorFunctionType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "try_or_compiler_error")
+    }
+}
+
+impl FunctionType for TryOrCompilerErrorFunctionType {
+    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
+        if args.len() <= 2 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "Expected at least 2 arguments for try_or_compiler_error function",
+            ));
+        }
+        if !args[0].is_subtype_of(&Type::String(None)) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "Expected a string argument for try_or_compiler_error function",
+            ));
+        }
+        if let Type::Function(_func) = &args[1] {
+            // It is not possible to resolve the arguments of the function,
+            // because the function args are not known.
+            // let rest_args = args[2..].to_vec();
+            // func.resolve_arguments(&rest_args)
+        } else {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                format!(
+                    "Expected a function argument for try_or_compiler_error function, got {:?}",
+                    args[1]
+                ),
+            ));
+        }
+        Ok(Type::Any { hard: true })
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec![
+            "message_if_exception".to_string(),
+            "func".to_string(),
+            "args".to_string(),
+            // TODO: arg number depends on the function
+        ]
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
+pub struct CallerFunctionType;
+
+impl FunctionType for CallerFunctionType {
+    fn _resolve_arguments(&self, _args: &[Type]) -> Result<Type, crate::Error> {
+        Ok(Type::String(None))
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec![]
+    }
+}
+
+#[derive(Default, Clone, Eq, PartialEq)]
+pub struct WriteFunctionType;
+
+impl fmt::Debug for WriteFunctionType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("write")
+    }
+}
+
+impl FunctionType for WriteFunctionType {
+    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
+        if args.len() != 1 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "Expected 1 argument for write function",
+            ));
+        }
+        if !args[0].is_subtype_of(&Type::String(None)) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "Expected a string argument for write function",
+            ));
+        }
+        Ok(Type::None)
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["value".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Eq, PartialEq)]
+pub struct SubmitPythonJobFunctionType;
+
+impl fmt::Debug for SubmitPythonJobFunctionType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("submit_python_job")
+    }
+}
+
+impl FunctionType for SubmitPythonJobFunctionType {
+    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
+        if args.len() != 2 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "Expected 2 arguments for submit_python_job function",
+            ));
+        }
+        if !args[0].is_subtype_of(&Type::Class(DynClassType::new(Arc::new(
+            ModelType::default(),
+        )))) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "Expected a model argument for submit_python_job function",
+            ));
+        }
+        if !args[1].is_subtype_of(&Type::String(None)) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "Expected a string argument for submit_python_job function",
+            ));
+        }
+        // TODO: the response type
+        Ok(Type::Any { hard: false })
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["model".to_string(), "compiled_code".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Eq, PartialEq)]
+pub struct SelectAttrFunctionType;
+
+impl fmt::Debug for SelectAttrFunctionType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("selectattr")
+    }
+}
+
+impl FunctionType for SelectAttrFunctionType {
+    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
+        if args.len() != 4 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "Expected 4 arguments for selectattr function",
+            ));
+        }
+        if !args[0].is_subtype_of(&Type::List(ListType::new(Type::Any { hard: true }))) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                format!(
+                    "Expected a list argument for selectattr function, got {:?}",
+                    args[0]
+                ),
+            ));
+        }
+        if !args[1].is_subtype_of(&Type::String(None)) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                format!(
+                    "Expected a string argument for selectattr function, got {:?}",
+                    args[1]
+                ),
+            ));
+        }
+        if !args[2].is_subtype_of(&Type::String(None)) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                format!(
+                    "Expected a string argument for selectattr function, got {:?}",
+                    args[2]
+                ),
+            ));
+        }
+        if !args[3].is_subtype_of(&Type::Bool) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                format!(
+                    "Expected a boolean argument for selectattr function, got {:?}",
+                    args[3]
+                ),
+            ));
+        }
+        Ok(args[0].clone())
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec![
+            "list".to_string(),
+            "name".to_string(),
+            "value".to_string(),
+            "inside_transaction".to_string(),
+        ]
+    }
+}
+
+#[derive(Default, Clone, Eq, PartialEq)]
+pub struct ToJsonFunctionType;
+
+impl fmt::Debug for ToJsonFunctionType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("tojson")
+    }
+}
+
+impl FunctionType for ToJsonFunctionType {
+    fn _resolve_arguments(&self, _args: &[Type]) -> Result<Type, crate::Error> {
+        // TODO: check the arguments
+        Ok(Type::Any { hard: true })
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["value".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Eq, PartialEq)]
+pub struct RenderFunctionType;
+
+impl fmt::Debug for RenderFunctionType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("render")
+    }
+}
+
+impl FunctionType for RenderFunctionType {
+    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
+        if args.len() != 1 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "Expected 1 argument for render function",
+            ));
+        }
+        if !args[0].is_subtype_of(&Type::String(None)) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "Expected a string argument for render function",
+            ));
+        }
+        Ok(Type::String(None))
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["value".to_string()]
+    }
+}
+
+#[derive(Default, Clone, Eq, PartialEq)]
+pub struct PrintFunctionType;
+
+impl fmt::Debug for PrintFunctionType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("print")
+    }
+}
+
+impl FunctionType for PrintFunctionType {
+    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
+        println!("print: {args:?}");
+        Ok(Type::None)
+    }
+
+    fn arg_names(&self) -> Vec<String> {
+        vec!["value".to_string()]
     }
 }

@@ -575,7 +575,7 @@ impl<'env> Vm<'env> {
                     let v = mutable_vec::MutableVec::from(v);
                     stack.push(Value::from_object(v))
                 }
-                Instruction::BuildTuple(count) => {
+                Instruction::BuildTuple(count, _span) => {
                     let count = count.unwrap_or_else(|| stack.pop().try_into().unwrap());
                     let mut v = Vec::with_capacity(untrusted_size_hint(count));
                     for _ in 0..count {
@@ -1219,7 +1219,7 @@ impl<'env> Vm<'env> {
                     stack.push(Value::from_object(module));
                 }
                 #[cfg(feature = "macros")]
-                Instruction::BuildMacro(name, offset, flags) => {
+                Instruction::BuildMacro(name, offset, flags, _) => {
                     listeners
                         .iter()
                         .for_each(|listener| listener.on_definition(name));
@@ -1324,11 +1324,17 @@ impl<'env> Vm<'env> {
                         });
                     }
                 }
-                Instruction::MacroName(_) => {
+                Instruction::MacroName(_, _) => {
                     // no-op, we don't need to do anything here
                 }
-                Instruction::FinishedParameterLoading => {
-                    // TODO
+                Instruction::TypeConstraint(_type_constraint, _is_true) => {
+                    // no-op, we don't need to do anything here
+                }
+                Instruction::LoadType(_type) => {
+                    // no-op, we don't need to do anything here
+                }
+                Instruction::UnionType => {
+                    // no-op, we don't need to do anything here
                 }
             }
             pc += 1;

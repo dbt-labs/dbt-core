@@ -14,10 +14,12 @@
     node: The node the schema is being generated for
 
 #}
+-- funcsign: (optional[string], optional[node]) -> string
 {% macro generate_schema_name(custom_schema_name=none, node=none) -%}
     {{ return(adapter.dispatch('generate_schema_name', 'dbt')(custom_schema_name, node)) }}
 {% endmacro %}
 
+-- funcsign: (optional[string], optional[node]) -> string
 {% macro default__generate_schema_name(custom_schema_name, node) -%}
 
     {%- set default_schema = target.schema -%}
@@ -44,6 +46,7 @@
     node: The node the schema is being generated for
 
 #}
+-- funcsign: (optional[string], optional[node]) -> string
 {% macro generate_schema_name_for_env(custom_schema_name, node) -%}
 
     {%- set default_schema = target.schema -%}

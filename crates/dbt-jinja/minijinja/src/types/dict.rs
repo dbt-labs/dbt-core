@@ -39,6 +39,7 @@ impl ClassType for DictType {
     fn subscript(&self, index: &Type) -> Result<Type, crate::Error> {
         match index {
             Type::String(_) | Type::Integer(_) => Ok(*self.value.clone()),
+            Type::Any { hard: true } => Ok(Type::Any { hard: true }),
             _ => Err(crate::Error::new(
                 crate::error::ErrorKind::InvalidOperation,
                 format!("Failed to subscript {self:?} with {index:?}"),

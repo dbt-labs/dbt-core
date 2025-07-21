@@ -1,3 +1,4 @@
+-- funcsign: (string, string) -> string
 {% macro snowflake__cast(field, type) %}
     {% if (type|upper == "GEOGRAPHY") -%}
         to_geography({{field}})

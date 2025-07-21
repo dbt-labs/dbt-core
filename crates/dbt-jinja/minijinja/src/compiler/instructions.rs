@@ -1,6 +1,7 @@
 #[cfg(feature = "internal_debug")]
 use std::fmt;
 
+use crate::compiler::codegen::TypeConstraint;
 use crate::compiler::tokens::Span;
 use crate::output::CaptureMode;
 use crate::value::Value;
@@ -67,7 +68,7 @@ pub enum Instruction<'source> {
     BuildList(Option<usize>, Span),
 
     /// Builds a tuple of the last n pairs on the stack.
-    BuildTuple(Option<usize>),
+    BuildTuple(Option<usize>, Span),
 
     /// Unpacks a list into N stack items.
     UnpackList(usize, Span),
@@ -225,7 +226,7 @@ pub enum Instruction<'source> {
 
     /// Builds a macro on the stack.
     #[cfg(feature = "macros")]
-    BuildMacro(&'source str, usize, u8),
+    BuildMacro(&'source str, usize, u8, Span),
 
     /// Breaks from the interpreter loop (exists a function)
     #[cfg(feature = "macros")]
@@ -248,13 +249,17 @@ pub enum Instruction<'source> {
 
     // A label instruction to indicate the start of a macro
     // After MacroName, there will be a series of StoreLocal instructions for parameters
-    // If the macro is not pre-defined, the number of StoreLocal instructions is unknown at this point
-    // We need to push a special type to the stack.
-    // This special type cannot be consumed by StoreLocal until FinishedParameterLoading is called
-    MacroName(&'source str),
+    // We need to push parameter types to the stack.
+    MacroName(&'source str, Span),
 
-    // A label instruction to indicate the end of parameter loading of a macro
-    FinishedParameterLoading,
+    /// Type constraint is used to tell type checker to mutate the type of the variable
+    TypeConstraint(TypeConstraint, bool),
+
+    /// Load a type to the stack
+    LoadType(Value),
+
+    /// Union the top two types
+    UnionType,
 }
 
 #[derive(Copy, Clone)]
@@ -500,5 +505,5 @@ impl fmt::Debug for Instructions<'_> {
 #[test]
 #[cfg(target_pointer_width = "64")]
 fn test_sizes() {
-    assert_eq!(std::mem::size_of::<Instruction>(), 48);
+    assert_eq!(std::mem::size_of::<Instruction>(), 72);
 }

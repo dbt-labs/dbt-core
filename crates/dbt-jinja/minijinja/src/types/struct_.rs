@@ -36,6 +36,7 @@ impl ClassType for StructType {
         match index {
             Type::String(Some(index)) => self.get_attribute(index),
             Type::String(None) => Ok(Type::Any { hard: true }),
+            Type::Any { hard: true } => Ok(Type::Any { hard: true }),
             _ => Err(crate::Error::new(
                 crate::error::ErrorKind::InvalidOperation,
                 format!("Failed to subscript {self:?} with {index:?}"),

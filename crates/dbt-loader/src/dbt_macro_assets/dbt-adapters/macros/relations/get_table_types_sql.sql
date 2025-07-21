@@ -1,7 +1,9 @@
+-- funcsign: () -> string
 {%- macro get_table_types_sql() -%}
   {{ return(adapter.dispatch('get_table_types_sql')()) }}
 {%- endmacro -%}
 
+-- funcsign: () -> string
 {% macro default__get_table_types_sql() %}
             case table_type
                 when 'BASE TABLE' then 'table'
@@ -11,7 +13,7 @@
             end as {{ adapter.quote('table_type') }}
 {% endmacro %}
 
-
+-- funcsign: () -> string
 {% macro postgres__get_table_types_sql() %}
             case table_type
                 when 'BASE TABLE' then 'table'
@@ -21,7 +23,7 @@
             end as {{ adapter.quote('table_type') }}
 {% endmacro %}
 
-
+-- funcsign: () -> string
 {% macro databricks__get_table_types_sql() %}
             case table_type
                 when 'MANAGED' then 'table'

@@ -112,7 +112,7 @@ impl<'source> LoaderStore<'source> {
                         source,
                         &self.template_config,
                         filename,
-                        self.profile,
+                        self.profile.clone(),
                         listeners,
                     ))),
                 );
@@ -126,7 +126,7 @@ impl<'source> LoaderStore<'source> {
                         name,
                         source.to_string(),
                         filename,
-                        self.profile,
+                        self.profile.clone(),
                         listeners,
                     )),
                 );
@@ -166,7 +166,7 @@ impl<'source> LoaderStore<'source> {
                         name,
                         ok!(loader_result),
                         None,
-                        self.profile,
+                        self.profile.clone(),
                         listeners,
                     )
                 })

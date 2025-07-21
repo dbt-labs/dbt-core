@@ -6,11 +6,17 @@ use crate::types::{
     api::{ApiColumnType, ApiType},
     builtin::Type,
     class::DynClassType,
+    config::ConfigType,
     dict::DictType,
     function::{DynFunctionType, UserDefinedFunctionType},
+    hook::HookType,
+    information_schema::InformationSchemaType,
     list::ListType,
+    model::ModelType,
+    node::NodeType,
     relation::RelationType,
     struct_::StructType,
+    tuple::TupleType,
     union::UnionType,
 };
 
@@ -283,6 +289,10 @@ fn parse_type(tokens: &[Token], index: usize) -> Result<(Type, usize), ParseErro
                     ))
                 }
             }
+            "tuple" => {
+                let (elements, consumed) = parse_list(tokens, index + 1)?;
+                Ok((Type::Tuple(TupleType::new(elements)), 1 + consumed))
+            }
             "struct" => {
                 let (fields, consumed) = parse_fields(tokens, index + 1)?;
                 Ok((Type::Struct(StructType::new(fields)), 1 + consumed))
@@ -322,8 +332,31 @@ fn parse_type(tokens: &[Token], index: usize) -> Result<(Type, usize), ParseErro
                 Type::Class(DynClassType::new(Arc::new(AgateTableType::default()))),
                 1,
             )),
+            "model" => Ok((
+                Type::Class(DynClassType::new(Arc::new(ModelType::default()))),
+                1,
+            )),
             "none" => Ok((Type::None, 1)),
             "any" => Ok((Type::Any { hard: false }, 1)),
+            "information_schema" => Ok((
+                Type::Class(DynClassType::new(
+                    Arc::new(InformationSchemaType::default()),
+                )),
+                1,
+            )),
+            "timestamp" => Ok((Type::TimeStamp, 1)),
+            "config" => Ok((
+                Type::Class(DynClassType::new(Arc::new(ConfigType::default()))),
+                1,
+            )),
+            "hook" => Ok((
+                Type::Class(DynClassType::new(Arc::new(HookType::default()))),
+                1,
+            )),
+            "node" => Ok((
+                Type::Class(DynClassType::new(Arc::new(NodeType::default()))),
+                1,
+            )),
 
             _ => Err(ParseError::new(
                 format!("Unknown type: {id}"),

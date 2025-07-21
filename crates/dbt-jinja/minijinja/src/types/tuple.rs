@@ -31,6 +31,7 @@ impl ClassType for TupleType {
                 Ok(self.fields[*index as usize].clone())
             }
             Type::Integer(None) => Ok(Type::Any { hard: true }),
+            Type::Any { hard: true } => Ok(Type::Any { hard: true }),
             _ => Err(crate::Error::new(
                 crate::error::ErrorKind::InvalidOperation,
                 format!("Failed to subscript {self:?} with {index:?}"),

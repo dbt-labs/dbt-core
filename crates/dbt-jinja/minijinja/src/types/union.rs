@@ -86,4 +86,24 @@ impl UnionType {
 
         result
     }
+
+    pub fn is_optional(&self) -> bool {
+        self.types.iter().any(|t| *t == Type::None)
+    }
+
+    pub fn exclude(&self, other: &Type) -> Type {
+        let mut types = self.types.clone();
+        types.remove(other);
+        if types.is_empty() {
+            panic!("UnionType::exclude: types is empty");
+        } else if types.len() == 1 {
+            types.into_iter().next().unwrap()
+        } else {
+            Type::Union(UnionType { types })
+        }
+    }
+
+    pub fn get_non_optional_type(&self) -> Type {
+        self.exclude(&Type::None)
+    }
 }

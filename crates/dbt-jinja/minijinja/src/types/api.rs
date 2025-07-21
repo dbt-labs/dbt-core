@@ -2,6 +2,7 @@ use crate::error::Error;
 use crate::types::builtin::Type;
 use crate::types::class::{ClassType, DynClassType};
 use crate::types::function::{DynFunctionType, FunctionType};
+use crate::types::relation::RelationType;
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -19,6 +20,9 @@ impl ClassType for ApiType {
         match key {
             "Column" => Ok(Type::Class(DynClassType::new(Arc::new(
                 ApiColumnType::default(),
+            )))),
+            "Relation" => Ok(Type::Class(DynClassType::new(Arc::new(
+                RelationType::default(),
             )))),
             _ => Err(crate::Error::new(
                 crate::error::ErrorKind::InvalidOperation,

@@ -47,6 +47,7 @@
   {% do return(columns) %}
 {% endmacro %}
 
+-- funcsign: (relation) -> agate_table
 {% macro snowflake__show_object_metadata(relation) %}
   {%- set sql -%}
     show objects in {{ relation.include(identifier=False) }} starts with '{{ relation.identifier }}' limit 1
@@ -56,6 +57,7 @@
   {{ return(result) }}
 {% endmacro %}
 
+-- funcsign: (string) -> agate_table
 {% macro snowflake__list_schemas(database) -%}
   {# 10k limit from here: https://docs.snowflake.net/manuals/sql-reference/sql/show-schemas.html#usage-notes #}
   {% set maximum = 10000 %}
@@ -85,13 +87,14 @@
   {{ return(load_result('check_schema_exists').table) }}
 {%- endmacro %}
 
-
+-- funcsign: (relation, string, string) -> string
 {% macro snowflake__alter_column_type(relation, column_name, new_column_type) -%}
   {% call statement('alter_column_type') %}
     alter {{ relation.get_ddl_prefix_for_alter() }} table {{ relation.render() }} alter {{ adapter.quote(column_name) }} set data type {{ new_column_type }};
   {% endcall %}
 {% endmacro %}
 
+-- funcsign: (relation, string) -> string
 {% macro snowflake__alter_relation_comment(relation, relation_comment) -%}
     {%- if relation.is_dynamic_table -%}
         {%- set relation_type = 'dynamic table' -%}
@@ -211,7 +214,7 @@
 
 {% endmacro %}
 
-
+-- funcsign: (relation) -> string
 {% macro snowflake__truncate_relation(relation) -%}
   {% set truncate_dml %}
     truncate table {{ relation.render() }}

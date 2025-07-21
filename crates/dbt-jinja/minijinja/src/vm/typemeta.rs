@@ -1,4 +1,5 @@
 use crate::compiler::cfg::CFG;
+use crate::compiler::codegen::{TypeConstraintOperation, Variable};
 use crate::compiler::instructions::Instruction;
 use crate::compiler::typecheck::FunctionRegistry;
 use crate::types::adapter::AdapterType;
@@ -6,44 +7,282 @@ use crate::types::agate_table::AgateTableType;
 use crate::types::api::{ApiColumnType, ApiType};
 use crate::types::builtin::Type;
 use crate::types::class::DynClassType;
-use crate::types::dict::DictType;
+use crate::types::config::ConfigType;
+use crate::types::dbt::DbtType;
 use crate::types::exceptions::ExceptionsType;
+use crate::types::flags::FlagsType;
 use crate::types::function::{
-    CastFunctionType, DiffOfTwoDictsFunctionType, DynFunctionType, FunctionType, JoinFunctionType,
-    LengthFunctionType, ListFunctionType, LoadResultFunctionType, LogFunctionType, MapFunctionType,
-    RefFunctionType, SourceFunctionType, StoreRawResultFunctionType, StoreResultFunctionType,
-    UserDefinedFunctionType,
+    CastFunctionType, DiffOfTwoDictsFunctionType, DynFunctionType, EnvVarFunctionType,
+    FunctionType, GetColumnSchemaFromQueryFunction, JoinFunctionType, LengthFunctionType,
+    ListFunctionType, LoadResultFunctionType, LogFunctionType, LowerFunctionType, MapFunctionType,
+    PrintFunctionType, RangeFunctionType, RefFunctionType, RenderFunctionType, ReplaceFunctionType,
+    SelectAttrFunctionType, SourceFunctionType, StoreRawResultFunctionType,
+    StoreResultFunctionType, StringFunctionType, SubmitPythonJobFunctionType, ToJsonFunctionType,
+    TrimFunctionType, TryOrCompilerErrorFunctionType, UpperFunctionType, UserDefinedFunctionType,
+    WriteFunctionType,
 };
+use crate::types::hook::HookType;
 use crate::types::internal_func::InternalCaller;
 use crate::types::list::ListType;
 use crate::types::loop_::LoopType;
+use crate::types::model::ModelType;
+use crate::types::modules::ModulesType;
 use crate::types::relation::RelationType;
 use crate::types::struct_::StructType;
+use crate::types::tuple::TupleType;
 use crate::types::utils::{infer_type_from_const_value, instr_name, CodeLocation};
 use crate::vm::listeners::TypecheckingEventListener;
-use crate::Value;
-use std::collections::{BTreeMap, VecDeque};
+use crate::{ErrorKind, Value};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
 use std::hash::Hash;
+use std::ops::RangeBounds;
 use std::rc::Rc;
+use std::str::FromStr;
 use std::sync::Arc;
 
+#[derive(Clone, Debug)]
+pub struct TypeWithConstraint {
+    pub inner: Type,
+    pub constraint: BTreeMap<String, TypeWithConstraint>,
+}
+
+impl std::fmt::Display for TypeWithConstraint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.inner)
+    }
+}
+
+impl From<Type> for TypeWithConstraint {
+    fn from(type_: Type) -> Self {
+        TypeWithConstraint {
+            inner: type_,
+            constraint: BTreeMap::new(),
+        }
+    }
+}
+
+impl TypeWithConstraint {
+    pub fn get_attribute(&self, name: &str) -> Result<TypeWithConstraint, crate::Error> {
+        if let Some(constraint) = self.constraint.get(name) {
+            Ok(constraint.clone())
+        } else {
+            self.inner.get_attribute(name).map(TypeWithConstraint::from)
+        }
+    }
+
+    pub fn subscript(
+        &self,
+        index: &TypeWithConstraint,
+    ) -> Result<TypeWithConstraint, crate::Error> {
+        self.inner
+            .subscript(&index.inner)
+            .map(TypeWithConstraint::from)
+    }
+
+    pub fn is_subtype_of(&self, other: &TypeWithConstraint) -> bool {
+        // TODO: do we need to check the constraint?
+        self.inner.is_subtype_of(&other.inner)
+    }
+
+    pub fn union(&self, other: &TypeWithConstraint) -> TypeWithConstraint {
+        TypeWithConstraint {
+            inner: self.inner.union(&other.inner),
+            constraint: BTreeMap::new(),
+        }
+    }
+
+    pub fn can_binary_op_with(
+        &self,
+        other: &TypeWithConstraint,
+        op: &'static str,
+    ) -> Option<TypeWithConstraint> {
+        self.inner
+            .can_binary_op_with(&other.inner, op)
+            .map(TypeWithConstraint::from)
+    }
+
+    pub fn can_compare_with(&self, other: &TypeWithConstraint, op: &'static str) -> bool {
+        self.inner.can_compare_with(&other.inner, op)
+    }
+
+    pub fn is_condition(&self) -> bool {
+        self.inner.is_condition()
+    }
+
+    pub fn is_any(&self) -> bool {
+        self.inner.is_any()
+    }
+
+    pub fn call(&self, args: &[TypeWithConstraint]) -> Result<Type, crate::Error> {
+        let inner_args: Vec<Type> = args.iter().map(|arg| arg.inner.clone()).collect();
+        self.inner.call(&inner_args)
+    }
+
+    pub fn is_optional(&self) -> bool {
+        self.inner.is_optional()
+    }
+
+    pub fn get_non_optional_type(&self) -> Type {
+        self.inner.get_non_optional_type()
+    }
+
+    pub fn exclude(&self, other: &Type) -> Type {
+        self.inner.exclude(other)
+    }
+
+    #[allow(unconditional_recursion)]
+    pub fn insert(&mut self, path: &[String], type_: Type) {
+        if let Some((item, rest)) = path.split_first() {
+            if let Some(attribute_type) = self.constraint.get_mut(item) {
+                attribute_type.insert(rest, type_);
+            } else if let Ok(mut attribute_type) = self.get_attribute(item) {
+                attribute_type.insert(rest, type_);
+                self.constraint.insert(item.to_string(), attribute_type);
+            } else {
+                let mut attribute_type: TypeWithConstraint = Type::Any { hard: false }.into();
+                attribute_type.insert(rest, type_);
+                self.constraint.insert(item.to_string(), attribute_type);
+            }
+        } else {
+            self.inner = type_;
+        }
+    }
+}
+
 /// symbol table mapping local variable names to their types
-type SymbolTable = BTreeMap<String, Type>;
+#[derive(Clone, Debug)]
+pub struct SymbolTable(BTreeMap<String, TypeWithConstraint>);
+
+impl SymbolTable {
+    pub fn get(&self, variable: impl Into<Variable>) -> Result<TypeWithConstraint, crate::Error> {
+        let variable = variable.into();
+        match variable {
+            Variable::String(name) => self.0.get(&name).cloned().ok_or_else(|| {
+                crate::Error::new(
+                    ErrorKind::InvalidOperation,
+                    format!("Variable not found: {name}"),
+                )
+            }),
+            Variable::GetAttr(path) => {
+                let mut type_ = self.0.get(&path[0]).cloned().ok_or_else(|| {
+                    crate::Error::new(
+                        ErrorKind::InvalidOperation,
+                        format!("Variable not found: {}", path[0]),
+                    )
+                })?;
+                for name in path.iter().skip(1) {
+                    type_ = type_.get_attribute(name)?;
+                }
+                Ok(type_)
+            }
+        }
+    }
+
+    pub fn insert(
+        &mut self,
+        variable: impl Into<Variable>,
+        value: Type,
+    ) -> Result<(), crate::Error> {
+        let variable = variable.into();
+        match variable {
+            Variable::String(name) => {
+                self.0.insert(name, value.into());
+                Ok(())
+            }
+            Variable::GetAttr(path) => {
+                let type_ = self.0.get_mut(&path[0]).ok_or_else(|| {
+                    crate::Error::new(
+                        ErrorKind::InvalidOperation,
+                        format!("Variable not found: {}", path[0]),
+                    )
+                })?;
+                type_.insert(&path[1..], value);
+                Ok(())
+            }
+        }
+    }
+
+    pub fn keys(&self) -> impl Iterator<Item = &String> {
+        self.0.keys()
+    }
+
+    pub fn get_mut(&mut self, name: &str) -> Option<&mut TypeWithConstraint> {
+        self.0.get_mut(name)
+    }
+
+    pub fn get_ref(&self, name: &str) -> Option<&TypeWithConstraint> {
+        self.0.get(name)
+    }
+}
+
+impl<const N: usize> From<[(String, Type); N]> for SymbolTable {
+    fn from(array: [(String, Type); N]) -> Self {
+        SymbolTable(BTreeMap::from_iter(array.iter().map(|(name, type_)| {
+            (
+                name.clone(),
+                TypeWithConstraint {
+                    inner: type_.clone(),
+                    constraint: BTreeMap::new(),
+                },
+            )
+        })))
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct TypecheckStack(Vec<TypeWithConstraint>);
+
+impl TypecheckStack {
+    pub fn push(&mut self, type_: impl Into<TypeWithConstraint>) {
+        self.0.push(type_.into());
+    }
+
+    pub fn truncate(&mut self, n: usize) {
+        self.0.truncate(n);
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn last(&self) -> Option<&TypeWithConstraint> {
+        self.0.last()
+    }
+
+    pub fn drain<R>(&mut self, range: R) -> std::vec::Drain<TypeWithConstraint>
+    where
+        R: RangeBounds<usize>,
+    {
+        self.0.drain(range)
+    }
+
+    pub fn pop(&mut self) -> Option<TypeWithConstraint> {
+        self.0.pop()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+    pub fn get(&self, index: usize) -> Option<&TypeWithConstraint> {
+        self.0.get(index)
+    }
+}
 
 /// The states of the type checker
 #[derive(Clone, Debug)]
 pub struct TypecheckState {
-    pub stack: Vec<Type>,
+    pub stack: TypecheckStack,
     pub locals: SymbolTable,
     pub frame_base: usize,
     pub cur_loop_obj_type: Option<Type>,
+    pub single_branch_definition_vars: BTreeSet<String>,
 }
 
 impl TypecheckState {
     pub fn new() -> Self {
         TypecheckState {
-            stack: Vec::new(),
+            stack: TypecheckStack::default(),
             locals: SymbolTable::from([
                 (
                     "this".to_string(),
@@ -54,17 +293,11 @@ impl TypecheckState {
                 ("identifier".to_string(), Type::String(None)),
                 (
                     "config".to_string(),
-                    Type::Struct(StructType::new(BTreeMap::from_iter(vec![(
-                        "indexes".to_string(),
-                        Type::List(ListType::new(Type::Dict(DictType::new(
-                            Type::String(None),
-                            Type::String(None),
-                        )))),
-                    )]))),
+                    Type::Class(DynClassType::new(Arc::new(ConfigType::default()))),
                 ),
                 (
                     "model".to_string(),
-                    Type::List(ListType::new(Type::Any { hard: false })),
+                    Type::Class(DynClassType::new(Arc::new(ModelType::default()))),
                 ),
                 (
                     "store_result".to_string(),
@@ -137,16 +370,135 @@ impl TypecheckState {
                     Type::Function(DynFunctionType::new(Arc::new(ListFunctionType::default()))),
                 ),
                 (
+                    "string".to_string(),
+                    Type::Function(DynFunctionType::new(
+                        Arc::new(StringFunctionType::default()),
+                    )),
+                ),
+                (
+                    "replace".to_string(),
+                    Type::Function(DynFunctionType::new(Arc::new(
+                        ReplaceFunctionType::default(),
+                    ))),
+                ),
+                (
                     "cast".to_string(),
                     Type::Function(DynFunctionType::new(Arc::new(CastFunctionType::default()))),
+                ),
+                (
+                    "trim".to_string(),
+                    Type::Function(DynFunctionType::new(Arc::new(TrimFunctionType::default()))),
+                ),
+                (
+                    "upper".to_string(),
+                    Type::Function(DynFunctionType::new(Arc::new(UpperFunctionType::default()))),
+                ),
+                (
+                    "lower".to_string(),
+                    Type::Function(DynFunctionType::new(Arc::new(LowerFunctionType::default()))),
                 ),
                 (
                     "loop".to_string(),
                     Type::Class(DynClassType::new(Arc::new(LoopType::default()))),
                 ),
+                (
+                    "env_var".to_string(),
+                    Type::Function(DynFunctionType::new(
+                        Arc::new(EnvVarFunctionType::default()),
+                    )),
+                ),
+                (
+                    "pre_hooks".to_string(),
+                    Type::List(ListType::new(Type::Class(DynClassType::new(Arc::new(
+                        HookType::default(),
+                    ))))),
+                ),
+                (
+                    "post_hooks".to_string(),
+                    Type::List(ListType::new(Type::Class(DynClassType::new(Arc::new(
+                        HookType::default(),
+                    ))))),
+                ),
+                ("sql".to_string(), Type::String(None)),
+                (
+                    "target".to_string(),
+                    Type::Class(DynClassType::new(Arc::new(RelationType::default()))),
+                ),
+                ("compiled_code".to_string(), Type::String(None)),
+                (
+                    "modules".to_string(),
+                    Type::Class(DynClassType::new(Arc::new(ModulesType::default()))),
+                ),
+                (
+                    "range".to_string(),
+                    Type::Function(DynFunctionType::new(Arc::new(RangeFunctionType::default()))),
+                ),
+                ("execute".to_string(), Type::Bool),
+                (
+                    "context".to_string(),
+                    Type::List(ListType::new(Type::Any { hard: true })),
+                ),
+                (
+                    "defer_relation".to_string(),
+                    Type::Class(DynClassType::new(Arc::new(RelationType::default()))),
+                ),
+                (
+                    "dbt".to_string(),
+                    Type::Class(DynClassType::new(Arc::new(DbtType::default()))),
+                ),
+                ("null".to_string(), Type::None),
+                (
+                    "get_column_schema_from_query".to_string(),
+                    Type::Function(DynFunctionType::new(Arc::new(
+                        GetColumnSchemaFromQueryFunction::default(),
+                    ))),
+                ),
+                (
+                    "try_or_compiler_error".to_string(),
+                    Type::Function(DynFunctionType::new(Arc::new(
+                        TryOrCompilerErrorFunctionType::default(),
+                    ))),
+                ),
+                (
+                    "write".to_string(),
+                    Type::Function(DynFunctionType::new(Arc::new(WriteFunctionType::default()))),
+                ),
+                (
+                    "submit_python_job".to_string(),
+                    Type::Function(DynFunctionType::new(Arc::new(
+                        SubmitPythonJobFunctionType::default(),
+                    ))),
+                ),
+                (
+                    "flags".to_string(),
+                    Type::Class(DynClassType::new(Arc::new(FlagsType::default()))),
+                ),
+                (
+                    "selectattr".to_string(),
+                    Type::Function(DynFunctionType::new(Arc::new(
+                        SelectAttrFunctionType::default(),
+                    ))),
+                ),
+                (
+                    "tojson".to_string(),
+                    Type::Function(DynFunctionType::new(
+                        Arc::new(ToJsonFunctionType::default()),
+                    )),
+                ),
+                (
+                    "render".to_string(),
+                    Type::Function(DynFunctionType::new(
+                        Arc::new(RenderFunctionType::default()),
+                    )),
+                ),
+                (
+                    "print".to_string(),
+                    Type::Function(DynFunctionType::new(Arc::new(PrintFunctionType::default()))),
+                ),
             ]),
             frame_base: 0,
             cur_loop_obj_type: None,
+            single_branch_definition_vars: BTreeSet::new(),
         }
     }
 
@@ -155,7 +507,7 @@ impl TypecheckState {
     }
 
     #[track_caller]
-    pub fn peek(&self) -> &Type {
+    pub fn peek(&self) -> &TypeWithConstraint {
         self.stack.last().unwrap()
     }
 
@@ -163,7 +515,7 @@ impl TypecheckState {
         self.frame_base = self.stack.len();
     }
 
-    pub fn get_call_args(&mut self, n: u16) -> Vec<Type> {
+    pub fn get_call_args(&mut self, n: u16) -> Vec<TypeWithConstraint> {
         // get n items from the stack
         self.stack
             .drain(self.stack.len().saturating_sub(n as usize)..)
@@ -225,7 +577,6 @@ impl<'src> TypeChecker<'src> {
         &mut self,
         warning_printer: Rc<dyn TypecheckingEventListener>,
     ) -> Result<(), crate::Error> {
-        // println!("{}", self.cfg.dump_blocks(self.instr));
         let mut worklist = VecDeque::new();
         let mut visited = vec![false; self.cfg.blocks.len()];
         let mut first_merge = vec![true; self.cfg.blocks.len()];
@@ -251,16 +602,43 @@ impl<'src> TypeChecker<'src> {
                             first_merge[*succ] = false;
                             true
                         } else {
-                            Self::merge_into(&mut self.in_states[*succ], &out_state)
+                            Self::merge_into(&mut self.in_states[*succ], &out_state, visited[*succ])
                         };
                         if !visited[*succ] || changed {
                             worklist.push_back(*succ);
                             visited[*succ] = true;
                         }
                     }
+                    if let Some(macro_block) = self.cfg.get_block(bb_id) {
+                        // find the last block in a macro
+                        if macro_block.successor.is_empty() {
+                            if let Some(macro_name) = macro_block.current_macro.as_ref() {
+                                if let Some(funcsign) = self.function_registry.get(macro_name) {
+                                    if let Some(user_defined_func) =
+                                        funcsign.downcast_ref::<UserDefinedFunctionType>()
+                                    {
+                                        let expected_ret_type = user_defined_func.ret_type.clone();
+                                        if !expected_ret_type.is_subtype_of(&Type::String(None)) {
+                                            warning_printer.warn(
+                                                &macro_block.span.unwrap_or_default(),
+                                                &format!("Type mismatch: expected return type {expected_ret_type}, got String"),
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 Err(e) => match e.try_abrupt_return() {
                     Some(rv) => {
+                        let rv_type = rv
+                            .downcast_object_ref::<Type>()
+                            .cloned()
+                            .unwrap_or(Type::Any { hard: false });
+                        if matches!(rv_type, Type::Exception) {
+                            continue;
+                        }
                         if let Some(macro_block) = self.cfg.get_block(bb_id) {
                             if let Some(macro_name) = macro_block.current_macro.as_ref() {
                                 if let Some(funcsign) = self.function_registry.get(macro_name) {
@@ -352,30 +730,7 @@ impl<'src> TypeChecker<'src> {
                 }
                 Instruction::StoreLocal(name, span) => {
                     // TYPECHECK: NO
-                    let value_type = match typestate.stack.pop() {
-                        Some(Type::Parameters(index)) => {
-                            typestate.stack.push(Type::Parameters(index + 1));
-                            // if we know the signature, we can obtain the type of the {index}th parameter
-                            // otherwise, we can only push Any
-                            let function_name =
-                                self.cfg.blocks[bb_id].current_macro.as_ref().unwrap();
-                            if let Some(funcsign) = self.function_registry.get(function_name) {
-                                if let Some(user_defined_func) =
-                                    funcsign.downcast_ref::<UserDefinedFunctionType>()
-                                {
-                                    if index < user_defined_func.args.len() {
-                                        user_defined_func.args[index].clone()
-                                    } else {
-                                        warning_printer.warn(span, "parameter index out of bounds");
-                                        Type::Any { hard: false }
-                                    }
-                                } else {
-                                    Type::Any { hard: false }
-                                }
-                            } else {
-                                Type::Any { hard: false }
-                            }
-                        }
+                    let value_type = match typestate.stack.pop().map(|t| t.inner) {
                         Some(val) => val,
                         None => {
                             return Err(crate::Error::new(
@@ -384,18 +739,23 @@ impl<'src> TypeChecker<'src> {
                             ));
                         }
                     };
-                    typestate.locals.insert(name.to_string(), value_type);
+                    typestate
+                        .locals
+                        .insert(name.to_string(), value_type.clone())?;
                 }
                 Instruction::Lookup(name, span) => {
                     // TYPECHECK: NO
                     let name_str: &str = name;
                     // first try to search in self.cfg.get_block(bb_id).type_narrow
-                    if let Some(ty) = self.cfg.blocks[bb_id].type_constraints.get(name_str) {
-                        typestate.stack.push(ty.clone());
+                    if let Ok(ty) = typestate.locals.get(name_str) {
+                        if typestate.single_branch_definition_vars.contains(name_str) {
+                            warning_printer.warn(span, &format!("Variable '{name_str}' is not defined in one of its predecessor blocks."));
+                            typestate.stack.push(Type::Any { hard: false });
+                        } else {
+                            typestate.stack.push(ty.clone());
+                        }
                     } else if let Some(function) = self.function_registry.get(name_str) {
                         typestate.stack.push(Type::Function(function.clone()));
-                    } else if let Some(typeset) = typestate.locals.get(name_str) {
-                        typestate.stack.push(typeset.clone());
                     } else {
                         warning_printer.warn(
                             span,
@@ -417,7 +777,9 @@ impl<'src> TypeChecker<'src> {
                         }
                     };
                     match value_type.get_attribute(name) {
-                        Ok(rv) => typestate.stack.push(rv),
+                        Ok(rv) => {
+                            typestate.stack.push(rv);
+                        }
                         Err(e) => {
                             warning_printer.warn(
                                 span,
@@ -520,7 +882,7 @@ impl<'src> TypeChecker<'src> {
                     };
 
                     for (name, slice_type) in [("b", &b), ("stop", &stop), ("step", &step)] {
-                        if !slice_type.is_subtype_of(&Type::Integer(None)) {
+                        if !slice_type.is_subtype_of(&Type::Integer(None).into()) {
                             warning_printer.warn(
                                 span,
                                 &format!("Type mismatch for slice {name}: type = {slice_type}"),
@@ -538,15 +900,6 @@ impl<'src> TypeChecker<'src> {
                     // TYPECHECK: NO
                     let mut args_map = BTreeMap::new();
                     for _ in 0..*pair_count {
-                        let k = match typestate.stack.pop() {
-                            Some(val) => val,
-                            None => {
-                                return Err(crate::Error::new(
-                                    crate::error::ErrorKind::InvalidOperation,
-                                    "Stack underflow on build map key",
-                                ))
-                            }
-                        };
                         let v = match typestate.stack.pop() {
                             Some(val) => val,
                             None => {
@@ -556,8 +909,17 @@ impl<'src> TypeChecker<'src> {
                                 ))
                             }
                         };
+                        let k = match typestate.stack.pop() {
+                            Some(val) => val,
+                            None => {
+                                return Err(crate::Error::new(
+                                    crate::error::ErrorKind::InvalidOperation,
+                                    "Stack underflow on build map key",
+                                ))
+                            }
+                        };
 
-                        args_map.insert(k.to_string(), v);
+                        args_map.insert(k.to_string(), v.inner);
                     }
                     typestate
                         .stack
@@ -567,16 +929,16 @@ impl<'src> TypeChecker<'src> {
                     // TYPECHECK: NO
                     let mut args_map = BTreeMap::new();
                     for _ in 0..*pair_count {
-                        let key = match typestate.stack.pop() {
-                            Some(val) => val,
-                            None => Type::Any { hard: false },
-                        };
                         let value = match typestate.stack.pop() {
                             Some(val) => val,
-                            None => Type::Any { hard: false },
+                            None => Type::Any { hard: false }.into(),
+                        };
+                        let key = match typestate.stack.pop() {
+                            Some(val) => val,
+                            None => Type::Any { hard: false }.into(),
                         };
 
-                        args_map.insert(key.to_string(), Box::new(value));
+                        args_map.insert(key.to_string(), Box::new(value.inner));
                     }
                     typestate.stack.push(Type::Kwargs(args_map));
                 }
@@ -594,7 +956,7 @@ impl<'src> TypeChecker<'src> {
                             }
                         };
                         // get the map from the kwargs type
-                        if let Type::Kwargs(kwargs_map) = kwargs {
+                        if let Type::Kwargs(kwargs_map) = kwargs.inner {
                             for (k, v) in kwargs_map {
                                 args_map.insert(k, v);
                             }
@@ -629,7 +991,9 @@ impl<'src> TypeChecker<'src> {
                                 };
                                 item_type = item_type.union(&other);
                             }
-                            typestate.stack.push(Type::List(ListType::new(item_type)));
+                            typestate
+                                .stack
+                                .push(Type::List(ListType::new(item_type.inner)));
                         } else {
                             return Err(crate::Error::new(
                                 crate::error::ErrorKind::InvalidOperation,
@@ -638,51 +1002,32 @@ impl<'src> TypeChecker<'src> {
                         }
                     }
                 }
-                Instruction::BuildTuple(n) => {
-                    // TODO
-                    // I checked and there's no BuildTuple reference using the None
-                    // Could easily modify it to a 'usize
-                    let list_type = typestate.peek().clone();
-
-                    if list_type.is_union() {
-                        if let Some(count) = n {
-                            // currently not support n == None
-                            // pop the items from the stack
-                            for _ in 0..*count {
-                                let _item_type = match typestate.stack.pop() {
-                                    Some(val) => val,
-                                    None => {
-                                        return Err(crate::Error::new(
-                                            crate::error::ErrorKind::InvalidOperation,
-                                            "Stack underflow on build tuple",
-                                        ))
-                                    }
-                                };
-                            }
-                        }
-                        typestate
-                            .stack
-                            .push(Type::List(ListType::new(Type::Any { hard: false })));
-                        continue;
-                    }
-                    if let Some(count) = n {
-                        // currently not support n == None
-                        // pop the items from the stack
-                        for _ in 0..*count {
-                            let _item_type = match typestate.stack.pop() {
+                Instruction::BuildTuple(n, span) => {
+                    if let Some(n) = n {
+                        let mut item_types = Vec::new();
+                        for _ in 0..*n {
+                            let item_type = match typestate.stack.pop() {
                                 Some(val) => val,
                                 None => {
                                     return Err(crate::Error::new(
                                         crate::error::ErrorKind::InvalidOperation,
                                         "Stack underflow on build tuple",
-                                    ))
+                                    ));
                                 }
                             };
+                            item_types.push(item_type.inner);
                         }
+                        item_types.reverse();
+                        typestate
+                            .stack
+                            .push(Type::Tuple(TupleType::new(item_types)));
+                    } else {
+                        warning_printer.warn(
+                            span,
+                            "Type mismatch for build tuple: expected tuple with a fixed number of elements, got None",
+                        );
+                        typestate.stack.push(Type::Any { hard: false });
                     }
-                    typestate
-                        .stack
-                        .push(Type::List(ListType::new(list_type.clone())));
                 }
                 Instruction::UnpackList(count, span) => {
                     let tuple_type = match typestate.stack.pop() {
@@ -695,7 +1040,7 @@ impl<'src> TypeChecker<'src> {
                         }
                     };
                     // if tuple_type is not a Tuple, we have a type error
-                    match &tuple_type {
+                    match &tuple_type.inner {
                         Type::Tuple(tuple) if tuple.fields.len() == *count => {
                             for field_type in tuple.fields.iter().rev() {
                                 typestate.stack.push(field_type.clone());
@@ -784,10 +1129,13 @@ impl<'src> TypeChecker<'src> {
                     };
 
                     // Check for string formatting case: lhs = String, rhs = Seq
-                    if !lhs_type.is_subtype_of(&Type::String(None))
-                        && rhs_type.is_subtype_of(&Type::List(ListType {
-                            element: Box::new(Type::None),
-                        }))
+                    if !lhs_type.is_subtype_of(&Type::String(None).into())
+                        && rhs_type.is_subtype_of(
+                            &Type::List(ListType {
+                                element: Box::new(Type::None),
+                            })
+                            .into(),
+                        )
                     {
                         typestate.stack.push(Type::String(None));
                         continue;
@@ -880,7 +1228,7 @@ impl<'src> TypeChecker<'src> {
 
                     typestate.stack.push(Type::String(
                         if let (Type::String(Some(lhs_value)), Type::String(Some(rhs_value))) =
-                            (lhs_type, rhs_type)
+                            (lhs_type.inner, rhs_type.inner)
                         {
                             Some(format!("{lhs_value}{rhs_value}"))
                         } else {
@@ -953,7 +1301,7 @@ impl<'src> TypeChecker<'src> {
                 }
                 Instruction::PushLoop(_flags, span) => {
                     // TYPECHECK: NO
-                    if let Some(iterable) = typestate.stack.pop() {
+                    if let Some(iterable) = typestate.stack.pop().map(|t| t.inner) {
                         let element_type = match iterable {
                             Type::List(list) => *list.element.clone(),
                             Type::Iterable(iterable) => *iterable.element.clone(),
@@ -1023,12 +1371,6 @@ impl<'src> TypeChecker<'src> {
                             &format!("Type mismatch for jump condition: type = {a}"),
                         );
                     }
-
-                    let path_true = typestate.clone(); // cond == true
-                    let mut path_false = typestate; // reuse cur => cond == false
-
-                    Self::merge_into(&mut path_false, &path_true);
-                    typestate = path_false;
                 }
                 Instruction::JumpIfTrueOrPop(_jump_target, span) => {
                     // TYPECHECK: YES
@@ -1041,12 +1383,6 @@ impl<'src> TypeChecker<'src> {
                             &format!("Type mismatch for jump condition: type = {a}"),
                         );
                     }
-
-                    let path_false = typestate.clone(); // cond == false
-                    let mut path_true = typestate; // reuse cur => cond == true
-
-                    Self::merge_into(&mut path_true, &path_false);
-                    typestate = path_true;
                 }
                 #[cfg(feature = "multi_template")]
                 Instruction::CallBlock(_name) => {
@@ -1068,7 +1404,7 @@ impl<'src> TypeChecker<'src> {
                         }
                     };
 
-                    if !a.is_subtype_of(&Type::String(None)) {
+                    if !a.is_subtype_of(&Type::String(None).into()) {
                         warning_printer
                             .warn(span, &format!("Type mismatch for auto escape: type = {a}"));
                     }
@@ -1088,10 +1424,16 @@ impl<'src> TypeChecker<'src> {
                 Instruction::ApplyFilter(name, arg_count, _local_id, span) => {
                     // TYPECHECK: NO
 
-                    if let Some(Type::Function(funcsign)) = typestate.locals.get(*name) {
+                    if let Ok(Type::Function(funcsign)) =
+                        typestate.locals.get(name).map(|t| t.inner)
+                    {
                         if let Some(arg_cnt) = arg_count {
                             let funcsign = funcsign.clone();
-                            let args = typestate.get_call_args(*arg_cnt);
+                            let args = typestate
+                                .get_call_args(*arg_cnt)
+                                .into_iter()
+                                .map(|t| t.inner)
+                                .collect::<Vec<_>>();
 
                             match funcsign.resolve_arguments(&args) {
                                 Ok(ret_type) => {
@@ -1147,7 +1489,7 @@ impl<'src> TypeChecker<'src> {
                     if *name == "return" {
                         if let Some(arg) = typestate.stack.pop() {
                             return Err(crate::Error::abrupt_return(
-                                Value::from_object(arg),
+                                Value::from_object(arg.inner),
                                 *span,
                             ));
                         }
@@ -1160,7 +1502,11 @@ impl<'src> TypeChecker<'src> {
                         if let Some(block) = self.cfg.get_block(bb_id) {
                             if let Some(macro_name) = &block.current_macro {
                                 if let Some(arg_cnt) = arg_count {
-                                    let args = typestate.get_call_args(*arg_cnt);
+                                    let args = typestate
+                                        .get_call_args(*arg_cnt)
+                                        .into_iter()
+                                        .map(|t| t.inner)
+                                        .collect::<Vec<_>>();
 
                                     match InternalCaller::default().resolve_arguments(&args) {
                                         Ok(ret_type) => {
@@ -1191,7 +1537,11 @@ impl<'src> TypeChecker<'src> {
                         }
                     } else if *name == "source" || *name == "ref" {
                         if let Some(arg_cnt) = arg_count {
-                            let args = typestate.get_call_args(*arg_cnt);
+                            let args = typestate
+                                .get_call_args(*arg_cnt)
+                                .into_iter()
+                                .map(|t| t.inner)
+                                .collect::<Vec<_>>();
                             let function_type = match *name {
                                 "source" => {
                                     DynFunctionType::new(Arc::new(SourceFunctionType::default()))
@@ -1212,10 +1562,16 @@ impl<'src> TypeChecker<'src> {
                                 }
                             }
                         }
-                    } else if let Some(Type::Function(funcsign)) = typestate.locals.get(*name) {
+                    } else if let Ok(Type::Function(funcsign)) =
+                        typestate.locals.get(name).map(|t| t.inner)
+                    {
                         if let Some(arg_cnt) = arg_count {
                             let funcsign = funcsign.clone();
-                            let args = typestate.get_call_args(*arg_cnt);
+                            let args = typestate
+                                .get_call_args(*arg_cnt)
+                                .into_iter()
+                                .map(|t| t.inner)
+                                .collect::<Vec<_>>();
 
                             match funcsign.resolve_arguments(&args) {
                                 Ok(ret_type) => {
@@ -1230,9 +1586,13 @@ impl<'src> TypeChecker<'src> {
                                 }
                             }
                         }
-                    } else if let Some(funcsign) = self.function_registry.get(*name) {
+                    } else if let Some(funcsign) = self.function_registry.get(name.to_owned()) {
                         if let Some(arg_cnt) = arg_count {
-                            let args = typestate.get_call_args(*arg_cnt);
+                            let args = typestate
+                                .get_call_args(*arg_cnt)
+                                .into_iter()
+                                .map(|t| t.inner)
+                                .collect::<Vec<_>>();
 
                             match funcsign.resolve_arguments(&args) {
                                 Ok(ret_type) => {
@@ -1304,7 +1664,20 @@ impl<'src> TypeChecker<'src> {
                         }
 
                         let result = match function.call(&method_args) {
-                            Ok(rv) => rv,
+                            Ok(rv) => {
+                                if *name == "raise_not_implemented"
+                                    || *name == "raise_compiler_error"
+                                    || *name == "column_type_missing"
+                                    || *name == "warn"
+                                {
+                                    return Err(crate::Error::abrupt_return(
+                                        Value::from_object(Type::Exception),
+                                        *span,
+                                    ));
+                                } else {
+                                    rv
+                                }
+                            }
                             Err(e) => {
                                 warning_printer.warn(
                                     span,
@@ -1404,7 +1777,7 @@ impl<'src> TypeChecker<'src> {
                         }
                     };
 
-                    if !a.is_subtype_of(&Type::String(None)) {
+                    if !a.is_subtype_of(&Type::String(None).into()) {
                         warning_printer
                             .warn(span, &format!("Type mismatch for block name: type = {a}"));
                     }
@@ -1429,7 +1802,7 @@ impl<'src> TypeChecker<'src> {
                     typestate.stack.push(Type::Any { hard: false });
                 }
                 #[cfg(feature = "macros")]
-                Instruction::BuildMacro(_name, _offset, _flags) => {
+                Instruction::BuildMacro(name, _offset, _flags, span) => {
                     // TYPECHECK: NO?
                     // BuildMacro consume the parameter names in the stack
                     if typestate.stack.pop().is_none() {
@@ -1445,7 +1818,24 @@ impl<'src> TypeChecker<'src> {
                             "Stack underflow on build macro",
                         ));
                     }
-                    typestate.stack.push(Type::Any { hard: false });
+                    // look up the function in the function registry
+                    if let Some(function) = self.function_registry.get(*name) {
+                        typestate.stack.push(Type::Function(function.clone()));
+                    } else if *name == "caller" {
+                        use crate::types::function::CallerFunctionType;
+
+                        typestate
+                            .stack
+                            .push(Type::Function(DynFunctionType::new(Arc::new(
+                                CallerFunctionType::default(),
+                            ))));
+                    } else {
+                        warning_printer.warn(
+                            span,
+                            &format!("Function '{name}' is not defined in the function registry."),
+                        );
+                        typestate.stack.push(Type::Any { hard: false });
+                    }
                 }
                 #[cfg(feature = "macros")]
                 Instruction::Return => {
@@ -1470,17 +1860,81 @@ impl<'src> TypeChecker<'src> {
                     // TYPECHECK: NO
                     // Nothing to do with the stack
                 }
-                Instruction::MacroName(_name) => {
+                Instruction::MacroName(_name, _span) => {
                     // TYPECHECK: NO
-                    typestate.stack.push(Type::Parameters(0));
                 }
-                Instruction::FinishedParameterLoading => {
-                    if !matches!(typestate.stack.pop(), Some(Type::Parameters(_))) {
+                Instruction::TypeConstraint(type_constraint, true_branch) => {
+                    let name = &type_constraint.name;
+                    match &type_constraint.operation {
+                        TypeConstraintOperation::NotNull(is_true) => {
+                            if is_true ^ true_branch {
+                                if let Ok(type_) = typestate.locals.get(name) {
+                                    if type_.is_optional() {
+                                        typestate.locals.insert(name, Type::None)?;
+                                    }
+                                }
+                            } else if let Ok(type_) = typestate.locals.get(name) {
+                                if type_.is_optional() {
+                                    let non_optional_type = type_.get_non_optional_type();
+                                    typestate.locals.insert(name, non_optional_type)?;
+                                }
+                            }
+                        }
+                        TypeConstraintOperation::Is(test_name, is_true) => {
+                            let test_type = Type::from_str(test_name)?;
+                            if is_true ^ true_branch {
+                                if let Ok(type_) = typestate.locals.get(name) {
+                                    if type_.is_optional() {
+                                        typestate.locals.insert(name, type_.exclude(&test_type))?;
+                                    }
+                                }
+                            } else if let Ok(type_) = typestate.locals.get(name) {
+                                if type_.is_optional() {
+                                    typestate.locals.insert(name, test_type)?;
+                                }
+                            }
+                        }
+                    }
+                }
+                Instruction::LoadType(value) => {
+                    if let Some(object) = value.as_object() {
+                        if let Some(type_) = object.downcast_ref::<Type>() {
+                            let type_: TypeWithConstraint = type_.clone().into();
+                            typestate.stack.push(type_);
+                        } else {
+                            return Err(crate::Error::new(
+                                crate::error::ErrorKind::InvalidOperation,
+                                "Invalid type",
+                            ));
+                        }
+                    } else {
                         return Err(crate::Error::new(
                             crate::error::ErrorKind::InvalidOperation,
-                            "Stack underflow on finished parameter loading",
+                            "Invalid type",
                         ));
                     }
+                }
+                Instruction::UnionType => {
+                    let a = match typestate.stack.pop() {
+                        Some(val) => val,
+                        None => {
+                            return Err(crate::Error::new(
+                                crate::error::ErrorKind::InvalidOperation,
+                                "Stack underflow on union type",
+                            ));
+                        }
+                    };
+                    let b = match typestate.stack.pop() {
+                        Some(val) => val,
+                        None => {
+                            return Err(crate::Error::new(
+                                crate::error::ErrorKind::InvalidOperation,
+                                "Stack underflow on union type",
+                            ));
+                        }
+                    };
+                    let union_type = a.union(&b);
+                    typestate.stack.push(union_type);
                 }
             }
         }
@@ -1488,7 +1942,7 @@ impl<'src> TypeChecker<'src> {
     }
 
     /// Merges the source typecheck state into the destination state at the merge point.
-    fn merge_into(dst: &mut TypecheckState, src: &TypecheckState) -> bool {
+    fn merge_into(dst: &mut TypecheckState, src: &TypecheckState, visited: bool) -> bool {
         let mut changed = false;
 
         let min_len = dst.stack.len().min(src.stack.len());
@@ -1506,10 +1960,10 @@ impl<'src> TypeChecker<'src> {
         }
 
         for i in 0..min_len {
-            let dst_type = dst.stack[i].clone();
+            let dst_type = dst.stack.get(i).unwrap().clone();
 
-            let union_type = dst_type.union(&src.stack[i]);
-            if union_type != dst_type {
+            let union_type = dst_type.union(&src.stack.get(i).unwrap().clone());
+            if union_type.inner != dst_type.inner {
                 changed = true;
             }
         }
@@ -1523,17 +1977,22 @@ impl<'src> TypeChecker<'src> {
             .collect();
 
         for name in all_keys {
-            match (dst.locals.get_mut(&name), src.locals.get(&name)) {
+            match (dst.locals.get_mut(&name), src.locals.get_ref(&name)) {
                 (Some(dst_type), Some(src_type)) => {
                     let union_type = dst_type.union(src_type);
-                    if union_type != *dst_type {
+                    if union_type.inner != dst_type.inner {
                         *dst_type = union_type;
                         changed = true;
                     }
                 }
                 (Some(_), None) => {}
-                (None, Some(src_type)) => {
-                    dst.locals.insert(name.clone(), src_type.clone());
+                (None, Some(_src_type)) => {
+                    if !visited {
+                        dst.single_branch_definition_vars.insert(name.clone());
+                    }
+                    dst.locals
+                        .insert(name.clone(), Type::Any { hard: true })
+                        .unwrap();
                     changed = true;
                 }
                 (None, None) => {}
