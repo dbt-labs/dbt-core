@@ -38,6 +38,10 @@ pub const CLIENT_CONFIG_FILE: &str = "adbc.snowflake.sql.client_option.config_fi
 pub const CLIENT_CACHE_MFA_TOKEN: &str = "adbc.snowflake.sql.client_option.cache_mfa_token";
 pub const CLIENT_STORE_TEMP_CREDS: &str = "adbc.snowflake.sql.client_option.store_temp_creds";
 
+// Session Param Keys
+// https://docs.snowflake.com/en/sql-reference/parameters
+pub const S3_STAGE_VPCE_DNS_NAME_PARAM_KEY: &str = "s3_stage_vpce_dns_name";
+
 pub mod auth_type {
     /// General username password authentication
     pub const DEFAULT: &str = "auth_snowflake";

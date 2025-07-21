@@ -497,6 +497,8 @@ pub struct SnowflakeDbConfig {
     pub oauth_client_secret: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub s3_stage_vpce_dns_name: Option<String>,
     #[serde(flatten)]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub ignored_properties: HashMap<String, serde_json::Value>,
