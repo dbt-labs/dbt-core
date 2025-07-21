@@ -456,16 +456,23 @@ impl<'source> CodeGenerator<'source> {
             }
             #[cfg(feature = "loop_controls")]
             ast::Stmt::Break(brk) => {
-                self.set_line_from_span(brk.span());
-                let instr = self.add(Instruction::Jump(0));
-                for pending_block in self.pending_block.iter_mut().rev() {
-                    if let PendingBlock::Loop {
-                        ref mut jump_instrs,
-                        ..
-                    } = pending_block
-                    {
-                        jump_instrs.push(instr);
-                        break;
+                match &self.profile {
+                    CodeGenerationProfile::Render => {
+                        self.set_line_from_span(brk.span());
+                        let instr = self.add(Instruction::Jump(0));
+                        for pending_block in self.pending_block.iter_mut().rev() {
+                            if let PendingBlock::Loop {
+                                ref mut jump_instrs,
+                                ..
+                            } = pending_block
+                            {
+                                jump_instrs.push(instr);
+                                break;
+                            }
+                        }
+                    }
+                    CodeGenerationProfile::TypeCheck(_) => {
+                        // do nothing
                     }
                 }
             }
