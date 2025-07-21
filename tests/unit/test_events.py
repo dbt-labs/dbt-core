@@ -174,6 +174,7 @@ sample_values = [
     core_types.EnvironmentVariableNamespaceDeprecation(env_var="", reserved_prefix=""),
     core_types.MissingPlusPrefixDeprecation(key="", key_path="", file=""),
     core_types.ArgumentsPropertyInGenericTestDeprecation(test_name=""),
+    core_types.MissingArgumentsPropertyInGenericTestDeprecation(test_name=""),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),

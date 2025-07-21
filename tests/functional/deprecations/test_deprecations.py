@@ -20,6 +20,7 @@ from dbt.events.types import (
     DuplicateYAMLKeysDeprecation,
     EnvironmentVariableNamespaceDeprecation,
     GenericJSONSchemaValidationDeprecation,
+    MissingArgumentsPropertyInGenericTestDeprecation,
     MissingPlusPrefixDeprecation,
     ModelParamUsageDeprecation,
     PackageRedirectDeprecation,
@@ -37,6 +38,7 @@ from tests.functional.deprecations.fixtures import (
     invalid_deprecation_date_yaml,
     models_trivial__model_sql,
     multiple_custom_keys_in_config_yaml,
+    test_missing_arguments_property_yaml,
     test_with_arguments_yaml,
 )
 from tests.utils import EventCatcher
@@ -736,7 +738,7 @@ class TestArgumentsPropertyInGenericTestDeprecation:
             ["parse", "--no-partial-parse", "--show-all-deprecations"],
             callbacks=[event_catcher.catch],
         )
-        assert len(event_catcher.caught_events) == 2
+        assert len(event_catcher.caught_events) == 4
 
 
 class TestArgumentsPropertyInGenericTestDeprecationBehaviorChange:
@@ -763,3 +765,29 @@ class TestArgumentsPropertyInGenericTestDeprecationBehaviorChange:
             callbacks=[event_catcher.catch],
         )
         assert len(event_catcher.caught_events) == 0
+
+
+class TestMissingArgumentsPropertyInGenericTestDeprecation:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "flags": {
+                "require_generic_test_arguments": True,
+            },
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models_trivial.sql": models_trivial__model_sql,
+            "models.yml": test_missing_arguments_property_yaml,
+        }
+
+    def test_missing_arguments_property_in_generic_test_deprecation(self, project):
+        event_catcher = EventCatcher(MissingArgumentsPropertyInGenericTestDeprecation)
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 4
