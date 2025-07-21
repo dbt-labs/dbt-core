@@ -99,7 +99,13 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             AdapterError::new(AdapterErrorKind::Internal, "Missing query in the context")
         })?;
 
-        let statements = self.self_split_statements(&sql, dialect);
+        // BigQuery API supports multi-statement
+        // https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language
+        let statements = if self.adapter_type() == AdapterType::Bigquery {
+            vec![sql]
+        } else {
+            self.self_split_statements(&sql, dialect)
+        };
         let mut last_batch = None;
         for statement in statements {
             last_batch = Some(execute_query_with_retry(
