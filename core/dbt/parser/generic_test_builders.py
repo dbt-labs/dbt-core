@@ -235,7 +235,9 @@ class TestBuilder(Generic[Testable]):
             args = test_args.pop("arguments", {})
             test_args = {**test_args, **args}
         elif "arguments" in test_args:
-            deprecations.warn("arguments-property-in-generic-test-deprecation")
+            deprecations.warn(
+                "arguments-property-in-generic-test-deprecation", test_name=test_name
+            )
 
         return test_name, test_args
 
