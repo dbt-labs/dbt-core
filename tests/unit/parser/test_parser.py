@@ -64,7 +64,12 @@ from tests.unit.utils import (
 )
 
 set_from_args(
-    Namespace(warn_error=False, state_modified_compare_more_unrendered_values=False), None
+    Namespace(
+        warn_error=False,
+        state_modified_compare_more_unrendered_values=False,
+        require_generic_test_arguments_property=False,
+    ),
+    None,
 )
 
 
@@ -100,7 +105,11 @@ class BaseParserTest(unittest.TestCase):
 
     def setUp(self):
         set_from_args(
-            Namespace(warn_error=True, state_modified_compare_more_unrendered_values=False),
+            Namespace(
+                warn_error=True,
+                state_modified_compare_more_unrendered_values=False,
+                require_generic_test_arguments_property=False,
+            ),
             None,
         )
         # HACK: this is needed since tracking events can
@@ -502,7 +511,11 @@ class SchemaParserTest(BaseParserTest):
         super().setUp()
         # Reset `warn_error` to False so we don't raise warnigns about top level freshness as errors
         set_from_args(
-            Namespace(warn_error=False, state_modified_compare_more_unrendered_values=False),
+            Namespace(
+                warn_error=False,
+                state_modified_compare_more_unrendered_values=False,
+                require_generic_test_arguments_property=False,
+            ),
             None,
         )
 

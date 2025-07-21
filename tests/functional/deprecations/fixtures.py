@@ -185,3 +185,78 @@ models:
     deprecation_date: 1999-01-01 00:00:00.00+00:00
     my_custom_property: "It's over, I have the high ground"
 """
+
+test_with_arguments_yaml = """
+models:
+  - name: models_trivial
+    tests:
+      - test_name: unique
+        arguments:
+          custom: arg
+      - custom_test:
+          arguments:
+            custom: arg
+      - unique
+      - not_null:
+          where: "1=1"
+"""
+
+
+test_with_arguments_yaml = """
+models:
+  - name: models_trivial
+    tests:
+      - test_name: unique
+        arguments:
+          custom: arg
+      - custom_test:
+          arguments:
+            custom: arg
+      - unique
+      - not_null:
+          where: "1=1"
+    columns:
+      - name: column
+        tests:
+          - test_name: unique
+            arguments:
+              custom: arg
+          - custom_test:
+              arguments:
+                custom: arg
+          - custom_test2_valid:
+              column_name: id
+              config:
+                where: "1=1"
+              custom: arg
+"""
+
+
+test_missing_arguments_property_yaml = """
+models:
+  - name: models_trivial
+    tests:
+      - test_name: unique
+        custom: arg
+      - custom_test:
+          custom: arg
+      - custom_test2_valid:
+          column_name: id
+          config:
+            where: "1=1"
+          arguments:
+            custom: arg
+    columns:
+      - name: column
+        tests:
+          - test_name: unique
+            custom: arg
+          - custom_test:
+              custom: arg
+          - custom_test2_valid:
+              column_name: id
+              config:
+                where: "1=1"
+              arguments:
+                custom: arg
+      """

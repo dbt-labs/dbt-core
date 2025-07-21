@@ -12,6 +12,7 @@ from dbt import deprecations
 from dbt.cli.main import dbtRunner
 from dbt.clients.registry import _get_cached
 from dbt.events.types import (
+    ArgumentsPropertyInGenericTestDeprecation,
     CustomKeyInConfigDeprecation,
     CustomKeyInObjectDeprecation,
     CustomOutputPathInSourceFreshnessDeprecation,
@@ -19,6 +20,7 @@ from dbt.events.types import (
     DuplicateYAMLKeysDeprecation,
     EnvironmentVariableNamespaceDeprecation,
     GenericJSONSchemaValidationDeprecation,
+    MissingArgumentsPropertyInGenericTestDeprecation,
     MissingPlusPrefixDeprecation,
     ModelParamUsageDeprecation,
     PackageRedirectDeprecation,
@@ -36,6 +38,8 @@ from tests.functional.deprecations.fixtures import (
     invalid_deprecation_date_yaml,
     models_trivial__model_sql,
     multiple_custom_keys_in_config_yaml,
+    test_missing_arguments_property_yaml,
+    test_with_arguments_yaml,
 )
 from tests.utils import EventCatcher
 
@@ -718,3 +722,72 @@ class TestJsonSchemaValidationGating:
             callbacks=[event_catcher.catch],
         )
         assert len(event_catcher.caught_events) == expected_events
+
+
+class TestArgumentsPropertyInGenericTestDeprecation:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models_trivial.sql": models_trivial__model_sql,
+            "models.yml": test_with_arguments_yaml,
+        }
+
+    def test_arguments_property_in_generic_test_deprecation(self, project):
+        event_catcher = EventCatcher(ArgumentsPropertyInGenericTestDeprecation)
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 4
+
+
+class TestArgumentsPropertyInGenericTestDeprecationBehaviorChange:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "flags": {
+                "require_generic_test_arguments_property": True,
+            },
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models_trivial.sql": models_trivial__model_sql,
+            "models.yml": test_with_arguments_yaml,
+        }
+
+    def test_arguments_property_in_generic_test_deprecation(self, project):
+        event_catcher = EventCatcher(ArgumentsPropertyInGenericTestDeprecation)
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 0
+
+
+class TestMissingArgumentsPropertyInGenericTestDeprecation:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "flags": {
+                "require_generic_test_arguments_property": True,
+            },
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models_trivial.sql": models_trivial__model_sql,
+            "models.yml": test_missing_arguments_property_yaml,
+        }
+
+    def test_missing_arguments_property_in_generic_test_deprecation(self, project):
+        event_catcher = EventCatcher(MissingArgumentsPropertyInGenericTestDeprecation)
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 4
