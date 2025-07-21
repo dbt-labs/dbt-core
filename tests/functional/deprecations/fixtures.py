@@ -185,3 +185,18 @@ models:
     deprecation_date: 1999-01-01 00:00:00.00+00:00
     my_custom_property: "It's over, I have the high ground"
 """
+
+test_with_arguments_yaml = """
+models:
+  - name: models_trivial
+    tests:
+      - test_name: unique
+        arguments:
+          custom: arg
+      - custom_test:
+          arguments:
+            custom: arg
+      - unique
+      - not_null:
+          where: "1=1"
+"""
