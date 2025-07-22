@@ -226,5 +226,5 @@ def _get_adapter_plugin_names() -> Iterator[str]:
             yield plugin_name
 
 
-__version__ = "1.10.4"
+__version__ = "1.10.5"
 installed = get_installed_version()
