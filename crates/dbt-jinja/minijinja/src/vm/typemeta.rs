@@ -131,6 +131,11 @@ impl TypeWithConstraint {
         self.inner.exclude(other)
     }
 
+    // Add convenient method to extract inner Type
+    pub fn into_inner(self) -> Type {
+        self.inner
+    }
+
     #[allow(unconditional_recursion)]
     pub fn insert(&mut self, path: &[String], type_: Type) {
         if let Some((item, rest)) = path.split_first() {
@@ -259,6 +264,11 @@ impl TypecheckStack {
 
     pub fn pop(&mut self) -> Option<TypeWithConstraint> {
         self.0.pop()
+    }
+
+    // Add convenient method to pop inner Type directly
+    pub fn pop_inner(&mut self) -> Option<Type> {
+        self.0.pop().map(|t| t.inner)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -521,6 +531,11 @@ impl TypecheckState {
             .drain(self.stack.len().saturating_sub(n as usize)..)
             .collect()
     }
+
+    // Add convenient method to get call args as inner types directly
+    pub fn get_call_args_inner(&mut self, n: u16) -> Vec<Type> {
+        self.get_call_args(n).into_iter().map(|t| t.inner).collect()
+    }
 }
 
 impl Default for TypecheckState {
@@ -730,7 +745,7 @@ impl<'src> TypeChecker<'src> {
                 }
                 Instruction::StoreLocal(name, span) => {
                     // TYPECHECK: NO
-                    let value_type = match typestate.stack.pop().map(|t| t.inner) {
+                    let value_type = match typestate.stack.pop_inner() {
                         Some(val) => val,
                         None => {
                             return Err(crate::Error::new(
@@ -900,7 +915,7 @@ impl<'src> TypeChecker<'src> {
                     // TYPECHECK: NO
                     let mut args_map = BTreeMap::new();
                     for _ in 0..*pair_count {
-                        let v = match typestate.stack.pop() {
+                        let v = match typestate.stack.pop_inner() {
                             Some(val) => val,
                             None => {
                                 return Err(crate::Error::new(
@@ -919,7 +934,7 @@ impl<'src> TypeChecker<'src> {
                             }
                         };
 
-                        args_map.insert(k.to_string(), v.inner);
+                        args_map.insert(k.to_string(), v);
                     }
                     typestate
                         .stack
@@ -929,16 +944,16 @@ impl<'src> TypeChecker<'src> {
                     // TYPECHECK: NO
                     let mut args_map = BTreeMap::new();
                     for _ in 0..*pair_count {
-                        let value = match typestate.stack.pop() {
+                        let value = match typestate.stack.pop_inner() {
                             Some(val) => val,
-                            None => Type::Any { hard: false }.into(),
+                            None => Type::Any { hard: false },
                         };
                         let key = match typestate.stack.pop() {
                             Some(val) => val,
                             None => Type::Any { hard: false }.into(),
                         };
 
-                        args_map.insert(key.to_string(), Box::new(value.inner));
+                        args_map.insert(key.to_string(), Box::new(value));
                     }
                     typestate.stack.push(Type::Kwargs(args_map));
                 }
@@ -946,7 +961,7 @@ impl<'src> TypeChecker<'src> {
                     // TYPECHECK: NO
                     let mut args_map = BTreeMap::new();
                     for _ in 0..*count {
-                        let kwargs = match typestate.stack.pop() {
+                        let kwargs = match typestate.stack.pop_inner() {
                             Some(val) => val,
                             None => {
                                 return Err(crate::Error::new(
@@ -956,7 +971,7 @@ impl<'src> TypeChecker<'src> {
                             }
                         };
                         // get the map from the kwargs type
-                        if let Type::Kwargs(kwargs_map) = kwargs.inner {
+                        if let Type::Kwargs(kwargs_map) = kwargs {
                             for (k, v) in kwargs_map {
                                 args_map.insert(k, v);
                             }
@@ -993,7 +1008,7 @@ impl<'src> TypeChecker<'src> {
                             }
                             typestate
                                 .stack
-                                .push(Type::List(ListType::new(item_type.inner)));
+                                .push(Type::List(ListType::new(item_type.into_inner())));
                         } else {
                             return Err(crate::Error::new(
                                 crate::error::ErrorKind::InvalidOperation,
@@ -1006,7 +1021,7 @@ impl<'src> TypeChecker<'src> {
                     if let Some(n) = n {
                         let mut item_types = Vec::new();
                         for _ in 0..*n {
-                            let item_type = match typestate.stack.pop() {
+                            let item_type = match typestate.stack.pop_inner() {
                                 Some(val) => val,
                                 None => {
                                     return Err(crate::Error::new(
@@ -1015,7 +1030,7 @@ impl<'src> TypeChecker<'src> {
                                     ));
                                 }
                             };
-                            item_types.push(item_type.inner);
+                            item_types.push(item_type);
                         }
                         item_types.reverse();
                         typestate
@@ -1030,7 +1045,7 @@ impl<'src> TypeChecker<'src> {
                     }
                 }
                 Instruction::UnpackList(count, span) => {
-                    let tuple_type = match typestate.stack.pop() {
+                    let tuple_type = match typestate.stack.pop_inner() {
                         Some(val) => val,
                         None => {
                             return Err(crate::Error::new(
@@ -1040,7 +1055,7 @@ impl<'src> TypeChecker<'src> {
                         }
                     };
                     // if tuple_type is not a Tuple, we have a type error
-                    match &tuple_type.inner {
+                    match &tuple_type {
                         Type::Tuple(tuple) if tuple.fields.len() == *count => {
                             for field_type in tuple.fields.iter().rev() {
                                 typestate.stack.push(field_type.clone());
@@ -1207,7 +1222,7 @@ impl<'src> TypeChecker<'src> {
                 Instruction::StringConcat(_) => {
                     // TYPECHECK: NO
                     // Stringconcat can actually concat any two types
-                    let rhs_type = match typestate.stack.pop() {
+                    let rhs_type = match typestate.stack.pop_inner() {
                         Some(val) => val,
                         None => {
                             return Err(crate::Error::new(
@@ -1216,7 +1231,7 @@ impl<'src> TypeChecker<'src> {
                             ))
                         }
                     };
-                    let lhs_type = match typestate.stack.pop() {
+                    let lhs_type = match typestate.stack.pop_inner() {
                         Some(val) => val,
                         None => {
                             return Err(crate::Error::new(
@@ -1228,7 +1243,7 @@ impl<'src> TypeChecker<'src> {
 
                     typestate.stack.push(Type::String(
                         if let (Type::String(Some(lhs_value)), Type::String(Some(rhs_value))) =
-                            (lhs_type.inner, rhs_type.inner)
+                            (lhs_type, rhs_type)
                         {
                             Some(format!("{lhs_value}{rhs_value}"))
                         } else {
@@ -1301,7 +1316,7 @@ impl<'src> TypeChecker<'src> {
                 }
                 Instruction::PushLoop(_flags, span) => {
                     // TYPECHECK: NO
-                    if let Some(iterable) = typestate.stack.pop().map(|t| t.inner) {
+                    if let Some(iterable) = typestate.stack.pop_inner() {
                         let element_type = match iterable {
                             Type::List(list) => *list.element.clone(),
                             Type::Iterable(iterable) => *iterable.element.clone(),
@@ -1487,9 +1502,9 @@ impl<'src> TypeChecker<'src> {
                     // check the parameter types
 
                     if *name == "return" {
-                        if let Some(arg) = typestate.stack.pop() {
+                        if let Some(arg) = typestate.stack.pop_inner() {
                             return Err(crate::Error::abrupt_return(
-                                Value::from_object(arg.inner),
+                                Value::from_object(arg),
                                 *span,
                             ));
                         }
@@ -1537,11 +1552,7 @@ impl<'src> TypeChecker<'src> {
                         }
                     } else if *name == "source" || *name == "ref" {
                         if let Some(arg_cnt) = arg_count {
-                            let args = typestate
-                                .get_call_args(*arg_cnt)
-                                .into_iter()
-                                .map(|t| t.inner)
-                                .collect::<Vec<_>>();
+                            let args = typestate.get_call_args_inner(*arg_cnt);
                             let function_type = match *name {
                                 "source" => {
                                     DynFunctionType::new(Arc::new(SourceFunctionType::default()))
@@ -1588,11 +1599,7 @@ impl<'src> TypeChecker<'src> {
                         }
                     } else if let Some(funcsign) = self.function_registry.get(name.to_owned()) {
                         if let Some(arg_cnt) = arg_count {
-                            let args = typestate
-                                .get_call_args(*arg_cnt)
-                                .into_iter()
-                                .map(|t| t.inner)
-                                .collect::<Vec<_>>();
+                            let args = typestate.get_call_args_inner(*arg_cnt);
 
                             match funcsign.resolve_arguments(&args) {
                                 Ok(ret_type) => {
