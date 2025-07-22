@@ -26,7 +26,7 @@ pub async fn read_to_string<P: AsRef<Path>>(path: P) -> FsResult<String> {
     let path = path.as_ref();
     tokio::fs::read_to_string(path)
         .await
-        .lift(ectx!("Failed to read file: {}", path.display()))
+        .lift(ectx!("Failed to read file -7-: {}", path.display()))
 }
 
 /// Wrapper around [`tokio::fs::read`] that returns a useful error in case of failure.
@@ -34,7 +34,7 @@ pub async fn read(path: impl AsRef<Path>) -> FsResult<Vec<u8>> {
     let path = path.as_ref();
     tokio::fs::read(path)
         .await
-        .lift(ectx!("Failed to read file: {}", path.display()))
+        .lift(ectx!("Failed to read file -8-: {}", path.display()))
 }
 
 /// Wrapper around [`tokio::fs::write`] that returns a useful error in case of failure.

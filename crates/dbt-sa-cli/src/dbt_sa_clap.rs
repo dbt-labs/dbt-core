@@ -411,8 +411,8 @@ impl InitArgs {
                 trace_path: self.common_args.trace_path.clone(),
                 show_timings: arg.from_main,
                 build_cache_mode: arg.io.build_cache_mode,
-                build_cache_url: arg.io.build_cache_url.clone(),
-                build_cache_cas_url: arg.io.build_cache_cas_url.clone(),
+                build_cache_url: arg.io.build_cache_url,
+                build_cache_cas_url: arg.io.build_cache_cas_url,
             },
             ..Default::default()
         }
@@ -495,7 +495,7 @@ impl CommonArgs {
                 trace_path: self.trace_path.clone(),
                 show_timings: arg.from_main,
                 build_cache_mode: arg.io.build_cache_mode,
-                build_cache_url: arg.io.build_cache_url.clone(),
+                build_cache_url: arg.io.build_cache_url,
                 build_cache_cas_url: arg.io.build_cache_cas_url,
             },
             profiles_dir: self.profiles_dir.clone(),

@@ -17,6 +17,8 @@ use dbt_common::{
     tracing::init_tracing,
 };
 
+use dbt_schemas::schemas::Nodes;
+use dbt_schemas::state::Macros;
 #[allow(unused_imports)]
 use git_version::git_version;
 
@@ -212,6 +214,8 @@ async fn execute_all_phases(
         &resolve_args,
         &invocation_args,
         arc_dbt_state,
+        Macros::default(),
+        Nodes::default(),
         Some(Arc::new(
             dbt_jinja_utils::listener::DefaultListenerFactory::default(),
         )),

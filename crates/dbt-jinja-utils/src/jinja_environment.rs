@@ -55,8 +55,10 @@ impl<'env: 'source, 'source> JinjaTemplate<'env, 'source> {
 /// A struct that wraps a Minijinja Environment.
 #[derive(Clone)]
 pub struct JinjaEnv {
-    env: Environment<'static>,
-    sql_engine: Option<Arc<SqlEngine>>,
+    /// The Minijinja Environment instance.
+    pub env: Environment<'static>,
+    /// An optional SqlEngine instance.
+    pub sql_engine: Option<Arc<SqlEngine>>,
 }
 
 impl AsRef<JinjaEnv> for JinjaEnv {

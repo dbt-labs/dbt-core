@@ -38,7 +38,7 @@ pub fn remove_dir_all<P: AsRef<Path>>(path: P) -> FsResult<()> {
 /// Wrapper around [`std::fs::read_to_string`] that returns a useful error in case of failure.
 pub fn read_to_string<P: AsRef<Path>>(path: P) -> FsResult<String> {
     let path = path.as_ref();
-    std::fs::read_to_string(path).lift(ectx!("Failed to read file: {}", path.display()))
+    std::fs::read_to_string(path).lift(ectx!("Failed to read file -5-: {}", path.display()))
 }
 
 /// Wrapper around [`std::fs::exists`] that returns a useful error in case of failure.
@@ -104,7 +104,7 @@ pub fn last_modified<P: AsRef<Path>>(path: P) -> FsResult<SystemTime> {
 /// Wrapper around [`std::fs::read`] that returns a useful error in case of failure.
 pub fn read<P: AsRef<Path>>(path: P) -> FsResult<Vec<u8>> {
     let path = path.as_ref();
-    std::fs::read(path).lift(ectx!("Failed to read file: {}", path.display()))
+    std::fs::read(path).lift(ectx!("Failed to read file -6-: {}", path.display()))
 }
 
 /// Wrapper around [`std::fs::read_dir`] that returns a useful error in case of failure.

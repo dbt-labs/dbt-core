@@ -54,6 +54,8 @@ pub async fn resolve(
     arg: &ResolveArgs,
     invocation_args: &InvocationArgs,
     dbt_state: Arc<DbtState>,
+    macros: Macros,
+    nodes: Nodes,
     listener_factory: Option<Arc<dyn dbt_jinja_utils::listener::ListenerFactory>>,
     token: &CancellationToken,
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
@@ -63,7 +65,9 @@ pub async fn resolve(
     let root_project_name = dbt_state.root_project_name();
     let adapter_type = dbt_state.dbt_profile.db_config.adapter_type();
 
-    let mut macros = Macros::default();
+    // let mut macros = Macros::default();
+    let mut macros = macros;
+    let mut nodes = nodes;
 
     // First, resolve all of the macros from each package
     for package in &dbt_state.packages {
@@ -118,7 +122,7 @@ pub async fn resolve(
     // Create a map to store full runtime configs for ALL packages
     let mut all_runtime_configs: BTreeMap<String, Arc<DbtRuntimeConfig>> = BTreeMap::new();
 
-    let mut nodes = Nodes::default();
+    // let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
     let root_project_configs =
         build_root_project_configs(&arg.io, dbt_state.root_project(), root_project_quoting)?;

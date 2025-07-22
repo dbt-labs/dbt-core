@@ -406,26 +406,91 @@ pub struct ResolvedNodes {
 // - whether the deps are the same e.g. (i.e dependencies.yml, package.lock and all dbt_packages)
 // files are represented by their relative path to the project root
 #[derive(Debug, Clone, Default)]
-pub struct Changeset {
-    pub same: HashSet<String>,
-    pub different: HashSet<String>,
-    pub missing_in_fs: HashSet<String>,
-    pub missing_in_cas: HashSet<String>,
-    pub are_deps_the_same: bool,
+pub struct FileChanges {
+    pub unchanged_files: HashSet<String>,
+    // updated files
+    pub changed_files: HashSet<String>,
+    // deleted files
+    pub deleted_files: HashSet<String>,
+    // new files
+    pub new_files: HashSet<String>,
 }
-impl Changeset {
+impl FileChanges {
     pub fn no_change(&self) -> bool {
-        self.different.is_empty()
-            && self.missing_in_fs.is_empty()
-            && self.missing_in_cas.is_empty()
-            && !self.same.is_empty()
+        self.changed_files.is_empty()
+            && self.deleted_files.is_empty()
+            && self.new_files.is_empty()
+            && !self.unchanged_files.is_empty()
+    }
+    pub fn has_changes(&self) -> bool {
+        !self.changed_files.is_empty() || !self.new_files.is_empty()
+    }
+}
+/// Represents the execution state of a node in the dbt project.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum NodeExecutionState {
+    #[default]
+    NotProcessed,
+    Parsed,
+    Compiled,
+    Run,
+}
+impl NodeExecutionState {
+    /// Converts a command string to a NodeExecutionState
+    pub fn from_cmd(cmd: &str) -> Self {
+        match cmd {
+            "parse" => NodeExecutionState::Parsed,
+            "compile" => NodeExecutionState::Compiled,
+            "run" | "build" | "test" | "snapshot" | "seed" => NodeExecutionState::Run,
+            _ => NodeExecutionState::NotProcessed,
+        }
+    }
+}
+impl fmt::Display for NodeExecutionState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+/// Represents the status of a phase in the execution of a node.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum NodeExecutionStatus {
+    #[default]
+    Success,
+    Error,
+    Skipped,
+    Aborted, // e.g. interrupted by user.
+    Reused,
+    Passed, // For test nodes.
+    Failed, // For test nodes.
+}
+impl fmt::Display for NodeExecutionStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct NodeStatus {
+    pub latest_state: Option<NodeExecutionState>,
+    pub latest_status: Option<NodeExecutionStatus>,
+    pub latest_time: Option<String>,
+    pub latest_message: Option<String>,
+}
+
 #[derive(Debug, Clone, Default)]
-pub struct NodesWithChangeset {
-    pub changeset: Changeset,
+pub struct CacheState {
+    pub file_changes: FileChanges,
+    // only the resolved nodes which input files are unchanged
     pub resolved_nodes: ResolvedNodes,
+    // updated nodes which input files are changed
+    pub unchanged_node_statuses: HashMap<String, NodeStatus>,
+}
+impl CacheState {
+    pub fn has_changes(&self) -> bool {
+        self.file_changes.has_changes()
+    }
 }
 #[derive(Debug, Clone, Default)]
 pub struct RenderResults {
