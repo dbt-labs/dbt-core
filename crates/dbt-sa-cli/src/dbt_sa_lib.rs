@@ -1,4 +1,5 @@
 use crate::dbt_sa_clap::{Cli, Commands};
+use dbt_common::cancellation::CancellationToken;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_loader::clean::execute_clean_command;
 use dbt_schemas::man::execute_man_command;
@@ -37,13 +38,13 @@ fn init_logging_and_tracing(io: IoArgs) -> FsResult<()> {
     Ok(())
 }
 
-pub async fn execute_fs(arg: SystemArgs, cli: Cli) -> FsResult<i32> {
+pub async fn execute_fs(arg: SystemArgs, cli: Cli, token: CancellationToken) -> FsResult<i32> {
     init_logging_and_tracing(arg.io.clone())?;
-    do_execute_fs(arg, cli).await
+    do_execute_fs(arg, cli, token).await
 }
 
 #[allow(clippy::cognitive_complexity)]
-async fn do_execute_fs(arg: SystemArgs, cli: Cli) -> FsResult<i32> {
+async fn do_execute_fs(arg: SystemArgs, cli: Cli, token: CancellationToken) -> FsResult<i32> {
     let start = SystemTime::now();
 
     if let Commands::Man(cmd) = &cli.command {
@@ -98,7 +99,7 @@ async fn do_execute_fs(arg: SystemArgs, cli: Cli) -> FsResult<i32> {
     }
 
     // Handle project specific commands
-    match execute_setup_and_all_phases(arg.clone(), cli.clone(), &start).await {
+    match execute_setup_and_all_phases(arg.clone(), cli.clone(), &start, &token).await {
         Ok(code) => Ok(code),
         Err(e) => {
             show_error!(&arg.io, e);
@@ -112,6 +113,7 @@ async fn execute_setup_and_all_phases(
     system_arg: SystemArgs,
     cli: Cli,
     start: &SystemTime,
+    token: &CancellationToken,
 ) -> FsResult<i32> {
     let from_main = system_arg.from_main;
 
@@ -161,7 +163,7 @@ async fn execute_setup_and_all_phases(
 
     // Check if the command is `Clean`
     if let Commands::Clean(ref clean_args) = cli.command {
-        match execute_clean_command(&arg, &clean_args.files).await {
+        match execute_clean_command(&arg, &clean_args.files, token).await {
             Ok(code) => Ok(code),
             Err(e) => {
                 show_error!(&arg.io, e);
@@ -170,7 +172,7 @@ async fn execute_setup_and_all_phases(
         }
     } else {
         // Execute all steps of all other commands, if any throws an error we stop
-        match execute_all_phases(&arg, &cli).await {
+        match execute_all_phases(&arg, &cli, token).await {
             Ok(code) => Ok(code),
             Err(e) => {
                 show_error!(&arg.io, e);
@@ -181,13 +183,17 @@ async fn execute_setup_and_all_phases(
 }
 
 #[allow(clippy::cognitive_complexity)]
-async fn execute_all_phases(arg: &EvalArgs, _cli: &Cli) -> FsResult<i32> {
+async fn execute_all_phases(
+    arg: &EvalArgs,
+    _cli: &Cli,
+    token: &CancellationToken,
+) -> FsResult<i32> {
     let start = SystemTime::now();
 
     // Loads all .yml files + collects all included files
     let load_args = LoadArgs::from_eval_args(arg);
     let invocation_args = InvocationArgs::from_eval_args(arg);
-    let (dbt_state, num_threads, _dbt_cloud) = load(&load_args, &invocation_args).await?;
+    let (dbt_state, num_threads, _dbt_cloud) = load(&load_args, &invocation_args, token).await?;
 
     let arg = arg
         .with_target(dbt_state.dbt_profile.target.to_string())
@@ -209,6 +215,7 @@ async fn execute_all_phases(arg: &EvalArgs, _cli: &Cli) -> FsResult<i32> {
         Some(Arc::new(
             dbt_jinja_utils::listener::DefaultListenerFactory::default(),
         )),
+        token,
     )
     .await?;
 

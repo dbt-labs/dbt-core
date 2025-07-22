@@ -12,6 +12,7 @@ use crate::utils::get_node_fqn;
 use crate::utils::get_original_file_path;
 use crate::utils::update_node_relation_components;
 use dbt_common::FsResult;
+use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use dbt_common::error::AbstractLocation;
 use dbt_common::io_args::StaticAnalysisKind;
@@ -60,6 +61,7 @@ pub async fn resolve_data_tests(
     base_ctx: &BTreeMap<String, minijinja::Value>,
     runtime_config: Arc<DbtRuntimeConfig>,
     collected_tests: &Vec<DbtAsset>,
+    token: &CancellationToken,
 ) -> FsResult<(HashMap<String, Arc<DbtTest>>, HashMap<String, Arc<DbtTest>>)> {
     let mut nodes: HashMap<String, Arc<DbtTest>> = HashMap::new();
     let mut disabled_tests: HashMap<String, Arc<DbtTest>> = HashMap::new();
@@ -116,7 +118,9 @@ pub async fn resolve_data_tests(
     let mut test_sql_resources_map = render_unresolved_sql_files::<
         DataTestConfig,
         DataTestProperties,
-    >(&render_ctx, &test_assets_to_render, test_properties)
+    >(
+        &render_ctx, &test_assets_to_render, test_properties, token
+    )
     .await?;
     // make deterministic
     test_sql_resources_map.sort_by(|a, b| {

@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
+use dbt_common::cancellation::CancellationToken;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -45,6 +46,7 @@ use dbt_jinja_utils::var_fn;
 pub async fn load(
     arg: &LoadArgs,
     iarg: &InvocationArgs,
+    token: &CancellationToken,
 ) -> FsResult<(DbtState, Option<usize>, Option<ProjectDbtCloudConfig>)> {
     let _pb = with_progress!(arg.io, spinner => LOADING);
 
@@ -192,6 +194,7 @@ pub async fn load(
         arg.install_deps,
         arg.add_package.clone(),
         arg.vars.clone(),
+        token,
     )
     .await?;
     // get publication artifact for each upstream project
@@ -217,6 +220,7 @@ pub async fn load(
             &mut collected_vars,
             &lookup_map,
             &packages_install_path,
+            token,
         )
         .await?;
         dbt_state.packages = packages;
@@ -230,6 +234,7 @@ pub async fn load(
             &env,
             &mut collected_vars,
             &internal_packages_install_path,
+            token,
         )
         .await?;
         dbt_state.packages.extend(packages);

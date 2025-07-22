@@ -1,3 +1,4 @@
+use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::IoArgs;
 use dbt_common::{ErrorCode, FsResult, err, fs_err, stdfs};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -24,6 +25,7 @@ pub async fn compute_package_lock(
     jinja_env: &JinjaEnv,
     hub_registry: &mut HubClient,
     dbt_packages: &DbtPackages,
+    token: &CancellationToken,
 ) -> FsResult<DbtPackagesLock> {
     let sha1_hash = sha1_hash_packages(&dbt_packages.packages);
     // First step, is to flatten into a single list of packages
@@ -39,6 +41,7 @@ pub async fn compute_package_lock(
         &mut final_listing,
         &mut package_listing,
         jinja_env,
+        token,
     )
     .await?;
     for package in final_listing.packages.values() {
@@ -140,10 +143,11 @@ async fn resolve_packages(
     final_listing: &mut PackageListing,
     package_listing: &mut PackageListing,
     jinja_env: &JinjaEnv,
+    token: &CancellationToken,
 ) -> FsResult<()> {
     let mut next_listing = PackageListing::new(io.clone(), vars.clone());
     for unpinned_package in package_listing.packages.values_mut() {
-        dbt_common::check_cancellation!(io.should_cancel_compilation)?;
+        token.check_cancellation()?;
         match unpinned_package {
             UnpinnedPackage::Hub(hub_unpinned_package) => {
                 let pinned_package = hub_unpinned_package.resolved(hub_registry).await?;
@@ -257,6 +261,7 @@ async fn resolve_packages(
             final_listing,
             &mut next_listing,
             jinja_env,
+            token,
         ))
         .await?;
     }

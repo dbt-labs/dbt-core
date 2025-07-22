@@ -2,6 +2,7 @@ use clap::Error;
 use clap::Parser;
 use clap::error::ErrorKind;
 
+use dbt_common::cancellation::CancellationTokenSource;
 use dbt_common::{constants::PANIC, pretty_string::GREEN, pretty_string::RED};
 use dbt_sa_lib::dbt_sa_clap::Cli;
 use dbt_sa_lib::dbt_sa_clap::from_main;
@@ -19,6 +20,10 @@ const FS_DEFAULT_STACK_SIZE: usize = 8 * 1024 * 1024;
 const FS_DEFAULT_MAX_BLOCKING_THREADS: usize = 512;
 
 fn main() -> ExitCode {
+    let cst = CancellationTokenSource::new();
+    // TODO(felipecrv): cancel the token (through the cst) on Ctrl-C
+    let token = cst.token();
+
     let cli = match Cli::try_parse() {
         Ok(cli) => {
             // Continue as normal
@@ -87,7 +92,8 @@ fn main() -> ExitCode {
         }));
     }
     // Run
-    let result = tokio_rt.block_on(async { tokio_rt.spawn(execute_fs(arg, cli)).await.unwrap() });
+    let future = Box::pin(execute_fs(arg, cli, token));
+    let result = tokio_rt.block_on(async { tokio_rt.spawn(future).await.unwrap() });
     // Remove the panic hook
     let _ = std::panic::take_hook();
 

@@ -1,6 +1,7 @@
 //! Module containing the entrypoint for the resolve phase.
 #[allow(unused_imports)]
 use dbt_common::FsError;
+use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{DBT_GENERIC_TESTS_DIR_NAME, RESOLVING};
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::{ErrorCode, FsResult, err, fs_err, show_error, with_progress};
@@ -54,6 +55,7 @@ pub async fn resolve(
     invocation_args: &InvocationArgs,
     dbt_state: Arc<DbtState>,
     listener_factory: Option<Arc<dyn dbt_jinja_utils::listener::ListenerFactory>>,
+    token: &CancellationToken,
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
     let _pb = with_progress!(arg.io, spinner => RESOLVING);
 
@@ -65,7 +67,7 @@ pub async fn resolve(
 
     // First, resolve all of the macros from each package
     for package in &dbt_state.packages {
-        dbt_common::check_cancellation!(arg.io.should_cancel_compilation)?;
+        token.check_cancellation()?;
 
         let macro_files = package.macro_files.iter().chain(&package.snapshot_files);
         let resolved_macros = resolve_macros(&arg.io, macro_files.collect::<Vec<_>>().as_slice())?;
@@ -145,6 +147,7 @@ pub async fn resolve(
                 jinja_env.clone(),
                 &mut refs_and_sources,
                 &mut all_runtime_configs,
+                token,
             )
             .await?;
 
@@ -167,6 +170,7 @@ pub async fn resolve(
                 jinja_env.clone(),
                 &mut refs_and_sources,
                 &mut all_runtime_configs,
+                token,
             )
             .await?;
 
@@ -290,6 +294,7 @@ pub async fn resolve_inner(
     jinja_env: Arc<JinjaEnv>,
     refs_and_sources: &mut RefsAndSources,
     runtime_config: Arc<DbtRuntimeConfig>,
+    token: &CancellationToken,
 ) -> FsResult<(Nodes, Nodes, RenderResults, RefsAndSources)> {
     let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
@@ -307,7 +312,8 @@ pub async fn resolve_inner(
         DISPATCH_CONFIG.get().unwrap().read().unwrap().clone(),
     );
     // Resolve the dbt properties (schema.yml) files
-    let mut min_properties = resolve_minimal_properties(arg, package, &jinja_env, &base_ctx)?;
+    let mut min_properties =
+        resolve_minimal_properties(arg, package, &jinja_env, &base_ctx, token)?;
 
     let package_name = package.dbt_project.name.as_str();
 
@@ -369,6 +375,7 @@ pub async fn resolve_inner(
         &base_ctx,
         runtime_config.clone(),
         refs_and_sources,
+        token,
     )
     .await?;
     nodes.snapshots.extend(snapshots);
@@ -391,6 +398,7 @@ pub async fn resolve_inner(
         runtime_config.clone(),
         &mut collected_tests,
         refs_and_sources,
+        token,
     )
     .await?;
     nodes.models.extend(models);
@@ -411,6 +419,7 @@ pub async fn resolve_inner(
         &base_ctx,
         runtime_config.clone(),
         refs_and_sources,
+        token,
     )
     .await?;
     nodes.analyses.extend(analyses);
@@ -429,6 +438,7 @@ pub async fn resolve_inner(
         &base_ctx,
         runtime_config.clone(),
         &collected_tests,
+        token,
     )
     .await?;
     nodes.tests.extend(data_tests);
@@ -507,6 +517,7 @@ async fn resolve_package(
     jinja_env: Arc<JinjaEnv>,
     refs_and_sources: RefsAndSources,
     all_runtime_configs: BTreeMap<String, Arc<DbtRuntimeConfig>>,
+    token: &CancellationToken,
 ) -> FsResult<(
     String,
     Arc<DbtRuntimeConfig>,
@@ -552,6 +563,7 @@ async fn resolve_package(
             jinja_env.clone(),
             &mut refs_and_sources.clone(),
             runtime_config.clone(),
+            token,
         )
         .await?;
 
@@ -579,6 +591,7 @@ async fn resolve_packages_sequentially(
     jinja_env: Arc<JinjaEnv>,
     refs_and_sources: &mut RefsAndSources,
     all_runtime_configs: &mut BTreeMap<String, Arc<DbtRuntimeConfig>>,
+    token: &CancellationToken,
 ) -> FsResult<(Nodes, Nodes, RenderResults)> {
     let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
@@ -587,7 +600,7 @@ async fn resolve_packages_sequentially(
     };
 
     for package_wave in package_waves {
-        dbt_common::check_cancellation!(arg.io.should_cancel_compilation)?;
+        token.check_cancellation()?;
 
         for package_name in package_wave {
             let result = resolve_package(
@@ -601,6 +614,7 @@ async fn resolve_packages_sequentially(
                 jinja_env.clone(),
                 refs_and_sources.clone(),
                 all_runtime_configs.clone(),
+                token,
             )
             .await?;
 
@@ -642,6 +656,7 @@ async fn resolve_packages_parallel(
     jinja_env: Arc<JinjaEnv>,
     refs_and_sources: &mut RefsAndSources,
     all_runtime_configs: &mut BTreeMap<String, Arc<DbtRuntimeConfig>>,
+    token: &CancellationToken,
 ) -> FsResult<(Nodes, Nodes, RenderResults)> {
     let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
@@ -650,7 +665,7 @@ async fn resolve_packages_parallel(
     };
 
     for package_wave in package_waves {
-        dbt_common::check_cancellation!(arg.io.should_cancel_compilation)?;
+        token.check_cancellation()?;
 
         let mut handles = Vec::new();
         for package_name in package_wave {
@@ -664,6 +679,7 @@ async fn resolve_packages_parallel(
             let refs_and_sources = refs_and_sources.clone();
             let all_runtime_configs = all_runtime_configs.clone(); // read-only for this wave
             let dbt_state = dbt_state.clone();
+            let token = token.clone();
             handles.push(tokio::spawn(async move {
                 resolve_package(
                     package_name,
@@ -676,6 +692,7 @@ async fn resolve_packages_parallel(
                     jinja_env,
                     refs_and_sources,
                     all_runtime_configs,
+                    &token,
                 )
                 .await
                 .map_err(|e| *e)

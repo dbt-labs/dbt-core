@@ -1,4 +1,5 @@
 use crate::args::ResolveArgs;
+use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::IoArgs;
 use dbt_common::show_warning_soon_to_be_error;
 use dbt_common::{
@@ -331,10 +332,11 @@ pub fn resolve_minimal_properties(
     package: &DbtPackage,
     jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
+    token: &CancellationToken,
 ) -> FsResult<MinimalProperties> {
     let mut minimal_resolved_properties = MinimalProperties::default();
     for dbt_asset in package.dbt_properties.iter().dedup() {
-        dbt_common::check_cancellation!(arg.io.should_cancel_compilation)?;
+        token.check_cancellation()?;
         let absolute_path = dbt_asset.base_path.join(&dbt_asset.path);
         show_progress!(
             arg.io,

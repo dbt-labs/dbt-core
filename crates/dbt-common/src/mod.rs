@@ -3,6 +3,7 @@ pub mod macros;
 
 pub mod adapter;
 pub mod atomic;
+pub mod cancellation;
 pub mod constants;
 pub mod error;
 pub mod error_counter;

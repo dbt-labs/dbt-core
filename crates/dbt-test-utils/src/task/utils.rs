@@ -1,6 +1,9 @@
 use super::TestResult;
 use clap::Parser;
-use dbt_common::logging::dbt_compat_log::LogEntry;
+use dbt_common::{
+    cancellation::{CancellationToken, never_cancels},
+    logging::dbt_compat_log::LogEntry,
+};
 use std::{
     fs::File,
     future::Future,
@@ -226,12 +229,13 @@ pub async fn exec_fs<Fut, P: Parser>(
     project_dir: PathBuf,
     stdout_file: File,
     stderr_file: File,
-    execute_fs: impl FnOnce(SystemArgs, P) -> Fut,
+    execute_fs: impl FnOnce(SystemArgs, P, CancellationToken) -> Fut,
     from_lib: impl FnOnce(&P) -> SystemArgs,
 ) -> FsResult<i32>
 where
     Fut: Future<Output = FsResult<i32>>,
 {
+    let token = never_cancels();
     // Check if project_dir has a .env.conformance file
     // NOTE: this has to be done before we parse Cli
     let conformance_file = project_dir.join(".env.conformance");
@@ -249,7 +253,7 @@ where
     let cli = P::parse_from(cmd_vec);
     let arg = from_lib(&cli);
 
-    execute_fs(arg, cli).await
+    execute_fs(arg, cli, token).await
 }
 
 /// The purpose of this guard is two fold:

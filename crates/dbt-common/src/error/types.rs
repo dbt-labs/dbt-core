@@ -1,4 +1,5 @@
 use crate::{
+    cancellation::CancelledError,
     error::{
         code_location::AbstractLocation,
         name_candidate::{NameCandidate, format_candidates},
@@ -644,6 +645,18 @@ impl From<dbt_frontend_common::error::WrappedError> for WrappedError {
 //         WrappedError::Antlr(e.to_string())
 //     }
 // }
+
+impl From<CancelledError> for FsError {
+    fn from(_: CancelledError) -> Self {
+        FsError::new(ErrorCode::OperationCanceled, "Operation cancelled")
+    }
+}
+
+impl From<CancelledError> for Box<FsError> {
+    fn from(value: CancelledError) -> Self {
+        Box::new(value.into())
+    }
+}
 
 impl From<arrow::error::ArrowError> for FsError {
     fn from(e: arrow::error::ArrowError) -> Self {

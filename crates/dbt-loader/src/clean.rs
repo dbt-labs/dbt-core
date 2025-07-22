@@ -7,6 +7,7 @@ use std::{collections::BTreeMap, path::Path, time::SystemTime};
 
 use dbt_common::{
     ErrorCode, FsResult,
+    cancellation::CancellationToken,
     constants::{DBT_PROJECT_YML, REMOVING},
     err, fs_err, fsinfo,
     io_args::{EvalArgs, IoArgs},
@@ -16,12 +17,16 @@ use dbt_jinja_utils::{
     invocation_args::InvocationArgs, phases::load::init::initialize_load_jinja_environment,
 };
 
-pub async fn execute_clean_command(arg: &EvalArgs, files: &[String]) -> FsResult<i32> {
+pub async fn execute_clean_command(
+    arg: &EvalArgs,
+    files: &[String],
+    token: &CancellationToken,
+) -> FsResult<i32> {
     let start = SystemTime::now();
 
     let load_args = LoadArgs::from_eval_args(arg);
     let invocation_args = InvocationArgs::from_eval_args(arg);
-    let (dbt_state, num_threads, _dbt_cloud) = load(&load_args, &invocation_args).await?;
+    let (dbt_state, num_threads, _dbt_cloud) = load(&load_args, &invocation_args, token).await?;
     let flags: BTreeMap<String, minijinja::Value> = invocation_args.to_dict();
 
     let arg = arg.with_threads(num_threads);

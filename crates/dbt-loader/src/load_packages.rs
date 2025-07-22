@@ -1,3 +1,4 @@
+use dbt_common::cancellation::CancellationToken;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 
 use std::collections::BTreeMap;
@@ -30,6 +31,7 @@ pub async fn load_packages(
     collected_vars: &mut Vec<(String, BTreeMap<String, DbtVars>)>,
     lookup_map: &BTreeMap<String, String>,
     packages_install_path: &Path,
+    token: &CancellationToken,
 ) -> FsResult<Vec<DbtPackage>> {
     let mut dirs = if packages_install_path.exists() {
         stdfs::read_dir(packages_install_path)?
@@ -49,7 +51,7 @@ pub async fn load_packages(
     // Add root package to the front of the list
     dirs.insert(0, arg.io.in_dir.clone());
 
-    collect_packages(arg, env, collected_vars, dirs, lookup_map).await
+    collect_packages(arg, env, collected_vars, dirs, lookup_map, token).await
 }
 
 pub async fn load_internal_packages(
@@ -57,6 +59,7 @@ pub async fn load_internal_packages(
     env: &JinjaEnv,
     collected_vars: &mut Vec<(String, BTreeMap<String, DbtVars>)>,
     internal_packages_install_path: &Path,
+    token: &CancellationToken,
 ) -> FsResult<Vec<DbtPackage>> {
     let mut dbt_internal_packages_dirs: Vec<PathBuf> =
         stdfs::read_dir(internal_packages_install_path)?
@@ -71,6 +74,7 @@ pub async fn load_internal_packages(
         collected_vars,
         dbt_internal_packages_dirs,
         &BTreeMap::new(),
+        token,
     )
     .await
 }
@@ -133,10 +137,11 @@ async fn collect_packages(
     collected_vars: &mut Vec<(String, BTreeMap<String, DbtVars>)>,
     package_paths: Vec<PathBuf>,
     lookup_map: &BTreeMap<String, String>,
+    token: &CancellationToken,
 ) -> FsResult<Vec<DbtPackage>> {
     let mut packages = vec![];
     for package_path in package_paths {
-        dbt_common::check_cancellation!(arg.io.should_cancel_compilation)?;
+        token.check_cancellation()?;
         if package_path.is_dir() {
             if package_path.join(DBT_PROJECT_YML).exists() {
                 let package =

@@ -1,3 +1,4 @@
+use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_SNAPSHOTS_DIR_NAME;
 use dbt_common::error::AbstractLocation;
 use dbt_common::io_args::StaticAnalysisKind;
@@ -46,6 +47,7 @@ pub async fn resolve_snapshots(
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     runtime_config: Arc<DbtRuntimeConfig>,
     refs_and_sources: &mut RefsAndSources,
+    token: &CancellationToken,
 ) -> FsResult<(
     HashMap<String, Arc<DbtSnapshot>>,
     HashMap<String, Arc<DbtSnapshot>>,
@@ -162,13 +164,14 @@ pub async fn resolve_snapshots(
     };
 
     // Render the snapshots
-    let mut snapshot_sql_resources_map = render_unresolved_sql_files::<
-        SnapshotConfig,
-        SnapshotProperties,
-    >(
-        &render_ctx, &snapshot_files, &mut snapshot_properties
-    )
-    .await?;
+    let mut snapshot_sql_resources_map =
+        render_unresolved_sql_files::<SnapshotConfig, SnapshotProperties>(
+            &render_ctx,
+            &snapshot_files,
+            &mut snapshot_properties,
+            token,
+        )
+        .await?;
 
     // make deterministic
     snapshot_sql_resources_map.sort_by(|a, b| {

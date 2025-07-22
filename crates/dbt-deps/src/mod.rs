@@ -11,6 +11,7 @@ mod tarball_client;
 pub mod types;
 pub mod utils;
 
+use dbt_common::cancellation::CancellationToken;
 use dbt_common::fsinfo;
 use dbt_common::io_args::IoArgs;
 use dbt_common::{
@@ -35,6 +36,7 @@ pub async fn get_or_install_packages(
     install_deps: bool,
     add_package: Option<String>,
     vars: BTreeMap<String, dbt_serde_yaml::Value>,
+    token: &CancellationToken,
 ) -> FsResult<(DbtPackagesLock, Vec<UpstreamProject>)> {
     let hub_url_from_env = std::env::var("DBT_PACKAGE_HUB_URL");
     let hub_url = hub_url_from_env
@@ -72,7 +74,7 @@ pub async fn get_or_install_packages(
             dbt_packages_lock
         } else {
             show_progress!(io, fsinfo!(FETCHING.into(), package_yml_name.to_string()));
-            compute_package_lock(io, &vars, env, &mut hub_registry, dbt_packages).await?
+            compute_package_lock(io, &vars, env, &mut hub_registry, dbt_packages, token).await?
         }
     } else {
         DbtPackagesLock::default()

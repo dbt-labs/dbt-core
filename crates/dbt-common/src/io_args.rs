@@ -9,7 +9,7 @@ use std::{
     collections::{BTreeMap, HashSet},
     fmt::{self, Display},
     path::{Path, PathBuf},
-    sync::{Arc, atomic::AtomicBool},
+    sync::Arc,
 };
 use strum::EnumIter;
 use strum_macros::Display;
@@ -44,7 +44,6 @@ pub struct IoArgs {
     /// Optional status reporter for reporting status messages during execution
     pub status_reporter: Option<Arc<dyn StatusReporter>>,
     pub send_anonymous_usage_stats: bool,
-    pub should_cancel_compilation: Option<Arc<AtomicBool>>,
 
     // internal fields
     pub show_timings: bool, // whether to show timings in the status messages
@@ -76,7 +75,6 @@ impl Clone for IoArgs {
             log_level: self.log_level,
             status_reporter: self.status_reporter.clone(),
             send_anonymous_usage_stats: self.send_anonymous_usage_stats,
-            should_cancel_compilation: self.should_cancel_compilation.clone(),
             show_timings: self.show_timings,
             build_cache_url: self.build_cache_url.clone(),
             build_cache_cas_url: self.build_cache_cas_url.clone(),

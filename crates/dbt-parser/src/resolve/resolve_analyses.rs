@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::{collections::BTreeMap, sync::Arc};
 
+use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::show_error;
 use dbt_common::{FsResult, error::AbstractLocation};
@@ -49,6 +50,7 @@ pub async fn resolve_analyses(
     base_ctx: &BTreeMap<String, minijinja::Value>,
     runtime_config: Arc<DbtRuntimeConfig>,
     refs_and_sources: &mut RefsAndSources,
+    token: &CancellationToken,
 ) -> FsResult<(
     HashMap<String, Arc<DbtModel>>,
     HashMap<String, (String, MacroSpans)>,
@@ -98,6 +100,7 @@ pub async fn resolve_analyses(
             &render_ctx,
             &package.analysis_files,
             model_properties,
+            token,
         )
         .await?;
     // make deterministic

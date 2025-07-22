@@ -14,6 +14,7 @@ use crate::utils::update_node_relation_components;
 
 use dbt_common::ErrorCode;
 use dbt_common::FsResult;
+use dbt_common::cancellation::CancellationToken;
 use dbt_common::error::AbstractLocation;
 use dbt_common::fs_err;
 use dbt_common::io_args::StaticAnalysisKind;
@@ -69,6 +70,7 @@ pub async fn resolve_models(
     runtime_config: Arc<DbtRuntimeConfig>,
     collected_tests: &mut Vec<DbtAsset>,
     refs_and_sources: &mut RefsAndSources,
+    token: &CancellationToken,
 ) -> FsResult<(
     HashMap<String, Arc<DbtModel>>,
     HashMap<String, (String, MacroSpans)>,
@@ -122,6 +124,7 @@ pub async fn resolve_models(
             &render_ctx,
             &package.model_sql_files,
             model_properties,
+            token,
         )
         .await?;
     // make deterministic
@@ -419,6 +422,7 @@ pub async fn resolve_models(
         package_name,
         &root_project.name,
         runtime_config,
+        token,
     )
     .await?;
     models.extend(models_with_execute);

@@ -903,11 +903,19 @@ macro_rules! show_progress_exit {
 
 #[macro_export]
 macro_rules! maybe_interactive_or_exit {
-    ( $arg:expr, $start_time:expr, $resolver_state:expr, $db:expr, $map_compiled_sql:expr, $jinja_env:expr) => {
+    ( $arg:expr, $start_time:expr, $resolver_state:expr, $db:expr, $map_compiled_sql:expr, $jinja_env:expr, $token:expr) => {
         if !$arg.interactive {
             show_progress_exit!($arg, $start_time)
         } else {
-            repl::run($resolver_state, &$arg, $db, $map_compiled_sql, $jinja_env).await
+            repl::run(
+                $resolver_state,
+                &$arg,
+                $db,
+                $map_compiled_sql,
+                $jinja_env,
+                $token,
+            )
+            .await
         }
     };
 }
@@ -926,7 +934,7 @@ macro_rules! checkpoint_maybe_exit {
 
 #[macro_export]
 macro_rules! checkpoint_maybe_interactive_or_exit {
-    ( $phase:expr, $arg:expr, $start_time:expr, $resolver_state:expr, $db:expr, $map_compiled_sql:expr, $jinja_env:expr) => {
+    ( $phase:expr, $arg:expr, $start_time:expr, $resolver_state:expr, $db:expr, $map_compiled_sql:expr, $jinja_env:expr, $cancel_token:expr) => {
         if $arg.phase <= $phase
             || $crate::error_counter::get_error_counter($arg.io.invocation_id.to_string().as_str())
                 > 0
@@ -937,52 +945,11 @@ macro_rules! checkpoint_maybe_interactive_or_exit {
                 $resolver_state,
                 $db,
                 $map_compiled_sql,
-                $jinja_env
+                $jinja_env,
+                $cancel_token
             );
         }
     };
-}
-
-#[macro_export]
-macro_rules! check_cancellation {
-    ($cancel_flag:expr) => {{
-        if let Some(flag) = &$cancel_flag {
-            if flag.load(std::sync::atomic::Ordering::Relaxed) {
-                Err($crate::fs_err!(
-                    $crate::ErrorCode::OperationCanceled,
-                    "Operation cancelled"
-                ))
-            } else {
-                Ok(())
-            }
-        } else {
-            Ok(())
-        }
-    }};
-    (flag: $cancel_flag:expr) => {{
-        if $cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
-            Err($crate::fs_err!(
-                $crate::ErrorCode::OperationCanceled,
-                "Operation cancelled"
-            ))
-        } else {
-            Ok(())
-        }
-    }};
-    ($cancel_flag:expr, $message:expr) => {{
-        if let Some(flag) = &$cancel_flag {
-            if flag.load(std::sync::atomic::Ordering::Relaxed) {
-                Err($crate::fs_err!(
-                    $crate::ErrorCode::OperationCanceled,
-                    $message
-                ))
-            } else {
-                Ok(())
-            }
-        } else {
-            Ok(())
-        }
-    }};
 }
 
 #[cfg(test)]

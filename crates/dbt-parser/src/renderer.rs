@@ -3,6 +3,7 @@ use crate::dbt_project_config::DbtProjectConfig;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::sql_file_info::SqlFileInfo;
 use crate::utils::{get_node_fqn, register_duplicate_resource, trigger_duplicate_errors};
+use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::PARSING;
 use dbt_common::io_args::IoArgs;
 use dbt_common::tokiofs::read_to_string;
@@ -128,6 +129,7 @@ pub async fn render_unresolved_sql_files_sequentially<
     render_ctx: &RenderCtx<T>,
     model_sql_files: &[DbtAsset],
     node_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
+    token: &CancellationToken,
 ) -> FsResult<Vec<SqlFileRenderResult<T, S>>> {
     let RenderCtx {
         inner,
@@ -157,7 +159,7 @@ pub async fn render_unresolved_sql_files_sequentially<
     }
 
     for dbt_asset in model_sql_files {
-        dbt_common::check_cancellation!(args.io.should_cancel_compilation).map_err(|e| *e)?;
+        token.check_cancellation()?;
 
         let ref_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
         let (maybe_model, maybe_version_config) = {
@@ -406,6 +408,7 @@ pub async fn render_unresolved_sql_files<T: DefaultTo<T> + 'static, S: GetConfig
     render_ctx: &RenderCtx<T>,
     model_sql_files: &[DbtAsset],
     node_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
+    token: &CancellationToken,
 ) -> FsResult<Vec<SqlFileRenderResult<T, S>>> {
     let mut model_sql_resources_map = Vec::new();
     let mut duplicate_errors = Vec::new();
@@ -420,6 +423,7 @@ pub async fn render_unresolved_sql_files<T: DefaultTo<T> + 'static, S: GetConfig
             render_ctx,
             model_sql_files,
             node_properties,
+            token,
         )
         .await;
     }
@@ -450,6 +454,7 @@ pub async fn render_unresolved_sql_files<T: DefaultTo<T> + 'static, S: GetConfig
 
     for (chunk, mut chunk_node_properties) in chunked_files.into_iter().zip(chunked_node_props) {
         let render_ctx = render_ctx.clone();
+        let token = token.clone();
         tasks.push(tokio::spawn(async move {
             let RenderCtx {
                 inner,
@@ -475,8 +480,7 @@ pub async fn render_unresolved_sql_files<T: DefaultTo<T> + 'static, S: GetConfig
             let mut local_duplicate_errors: Vec<FsError> = Vec::new();
 
             for dbt_asset in chunk {
-                dbt_common::check_cancellation!(args.io.should_cancel_compilation)
-                    .map_err(|e| *e)?;
+                token.check_cancellation()?;
 
                 let ref_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
                 let (maybe_model, maybe_version_config) = {
@@ -732,6 +736,7 @@ pub async fn collect_adapter_identifiers_detect_unsafe(
     package_name: &str,
     root_project_name: &str,
     runtime_config: Arc<DbtRuntimeConfig>,
+    token: &CancellationToken,
 ) -> FsResult<()> {
     if models.is_empty() {
         return Ok(());
@@ -765,6 +770,7 @@ pub async fn collect_adapter_identifiers_detect_unsafe(
             runtime_config,
             parse_adapter,
             chunk_size,
+            token,
         )
         .await?
     } else {
@@ -779,6 +785,7 @@ pub async fn collect_adapter_identifiers_detect_unsafe(
             runtime_config,
             parse_adapter,
             chunk_size,
+            token,
         )
         .await?
     };
@@ -806,6 +813,7 @@ async fn process_model_chunk_for_unsafe_detection(
     root_project_name: String,
     runtime_config: Arc<DbtRuntimeConfig>,
     parse_adapter: Arc<dbt_fusion_adapter::ParseAdapter>,
+    token: &CancellationToken,
 ) -> FsResult<Vec<String>> {
     let mut unsafe_ids = Vec::new();
     let mut render_base_context = build_compile_and_run_base_context(
@@ -817,8 +825,8 @@ async fn process_model_chunk_for_unsafe_detection(
     silence_base_context(&mut render_base_context);
 
     for (_key, arc_model) in chunk {
+        token.check_cancellation()?;
         let model = (*arc_model).clone();
-        dbt_common::check_cancellation!(arg.io.should_cancel_compilation)?;
 
         let absolute_path = arg.io.in_dir.join(&model.common().original_file_path);
         let sql = read_to_string(&absolute_path).await?;
@@ -886,6 +894,7 @@ async fn collect_adapter_identifiers_sequential(
     runtime_config: Arc<DbtRuntimeConfig>,
     parse_adapter: Arc<dbt_fusion_adapter::ParseAdapter>,
     chunk_size: usize,
+    token: &CancellationToken,
 ) -> FsResult<Vec<String>> {
     let mut all_unsafe_ids = Vec::new();
 
@@ -901,6 +910,7 @@ async fn collect_adapter_identifiers_sequential(
             root_project_name.to_string(),
             runtime_config.clone(),
             parse_adapter.clone(),
+            token,
         )
         .await?;
         all_unsafe_ids.extend(unsafe_ids);
@@ -922,6 +932,7 @@ async fn collect_adapter_identifiers_parallel(
     runtime_config: Arc<DbtRuntimeConfig>,
     parse_adapter: Arc<dbt_fusion_adapter::ParseAdapter>,
     chunk_size: usize,
+    token: &CancellationToken,
 ) -> FsResult<Vec<String>> {
     let mut tasks = Vec::new();
 
@@ -936,6 +947,7 @@ async fn collect_adapter_identifiers_parallel(
         let runtime_config = runtime_config.clone();
         let parse_adapter = parse_adapter.clone();
 
+        let token = token.clone();
         tasks.push(tokio::spawn(async move {
             process_model_chunk_for_unsafe_detection(
                 chunk,
@@ -947,6 +959,7 @@ async fn collect_adapter_identifiers_parallel(
                 root_project_name,
                 runtime_config,
                 parse_adapter,
+                &token,
             )
             .await
             .map_err(|e| *e)
