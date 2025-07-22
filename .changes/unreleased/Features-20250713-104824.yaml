@@ -1,5 +1,0 @@
-kind: Features
-body: Performance improvements with cloning jinja and manifest serialization fix
-time: 2025-07-13T10:48:24.103391135-07:00
-custom:
-  PR: dbt-labs/fs#4413

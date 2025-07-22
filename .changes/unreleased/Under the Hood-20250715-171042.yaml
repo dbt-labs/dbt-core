@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: (adapter/databricks) Improve source schemas download logics
-time: 2025-07-15T17:10:42.521649818-07:00
-custom:
-  PR: dbt-labs/fs#4469
-  Issues: "dbt-labs/dbt-fusion#378"
