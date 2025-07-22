@@ -1,5 +1,6 @@
 use dbt_common::current_function_name;
 use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize};
+use minijinja::value::Enumerator;
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
 use minijinja::{
     arg_utils::ArgParser,
@@ -7,10 +8,12 @@ use minijinja::{
     value::{Object, Value as MinijinjaValue},
 };
 use serde::{Deserialize, Serialize};
-use std::{rc::Rc, sync::Arc};
-use strum::{Display, EnumString};
+use strum::{AsRefStr, Display, EnumIter, EnumString, IntoEnumIterator};
 
-use crate::schemas::columns::base::StdColumn;
+use crate::schemas::columns::bigquery::BigqueryColumn;
+
+use std::convert::AsRef;
+use std::{rc::Rc, sync::Arc};
 
 /// dbt-core allows either of the variants for the `partition_by` in the model config
 /// but the bigquery-adapter throws RunTime error
@@ -33,13 +36,11 @@ pub struct BigqueryPartitionConfig {
     #[serde(flatten)]
     pub inner: BigqueryPartitionConfigInner,
     #[serde(default)]
-    pub time_ingestion_partitioning: bool,
-    #[serde(default)]
     pub copy_partitions: bool,
 }
 
 /// Enum representing all field names in BigqueryPartitionConfig
-#[derive(Debug, Clone, EnumString, Display)]
+#[derive(Debug, Clone, EnumString, Display, EnumIter, AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 enum PartitionConfigField {
     Field,
@@ -63,6 +64,11 @@ pub enum BigqueryPartitionConfigInner {
 pub struct TimeConfig {
     #[serde(default = "BigqueryPartitionConfig::default_granularity")]
     pub granularity: String,
+    /// When this is true, the [`BigqueryPartitionConfig::field`] will be used as the `_PARTITIONTIME` pseudo column
+    /// _PARTITIONTIME: https://cloud.google.com/bigquery/docs/partitioned-tables#ingestion_time
+    /// https://docs.getdbt.com/reference/resource-configs/bigquery-configs#partitioning-by-an-ingestion-date-or-timestamp
+    #[serde(default)]
+    pub time_ingestion_partitioning: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
@@ -100,11 +106,21 @@ impl BigqueryPartitionConfigLegacy {
 
 impl BigqueryPartitionConfig {
     const PARTITION_DATE: &str = "_PARTITIONDATE";
-    const PARTITION_TIME: &str = "_PARTITIONTIME";
+    pub const PARTITION_TIME: &str = "_PARTITIONTIME";
+
+    pub fn time_ingestion_partitioning(&self) -> bool {
+        match &self.inner {
+            BigqueryPartitionConfigInner::Time(TimeConfig {
+                time_ingestion_partitioning,
+                ..
+            }) => *time_ingestion_partitioning,
+            BigqueryPartitionConfigInner::Range(_) => false,
+        }
+    }
 
     pub fn granularity(&self) -> Result<String, MinijinjaError> {
         match &self.inner {
-            BigqueryPartitionConfigInner::Time(TimeConfig { granularity }) => {
+            BigqueryPartitionConfigInner::Time(TimeConfig { granularity, .. }) => {
                 Ok(granularity.to_string())
             }
             BigqueryPartitionConfigInner::Range(_) => Err(MinijinjaError::new(
@@ -135,7 +151,7 @@ impl BigqueryPartitionConfig {
     /// Return the data type of partitions for replacement.
     /// When time_ingestion_partitioning is enabled, the data type supported are date & timestamp.
     pub fn data_type_for_partition(&self) -> Result<MinijinjaValue, MinijinjaError> {
-        let data_type = if !self.time_ingestion_partitioning || self.data_type == "date" {
+        let data_type = if !self.time_ingestion_partitioning() || self.data_type == "date" {
             self.data_type.as_str()
         } else {
             "timestamp"
@@ -151,16 +167,22 @@ impl BigqueryPartitionConfig {
         parser.check_num_args(current_function_name!(), 0, 1)?;
 
         let columns = parser.get::<MinijinjaValue>("columns")?;
-        if let Some(columns) = columns.downcast_object::<Vec<StdColumn>>() {
+        if let Ok(columns) = Vec::<BigqueryColumn>::deserialize(columns) {
             let columns = columns
-                .iter()
-                .filter(|c| c.name.to_uppercase() != self.field.to_uppercase())
+                .into_iter()
+                .filter_map(|c| {
+                    if c.name.to_uppercase() == self.field.to_uppercase() {
+                        None
+                    } else {
+                        Some(MinijinjaValue::from_object(c))
+                    }
+                })
                 .collect::<Vec<_>>();
-            Ok(MinijinjaValue::from_serialize(columns))
+            Ok(MinijinjaValue::from(columns))
         } else {
             Err(MinijinjaError::new(
                 MinijinjaErrorKind::InvalidArgument,
-                "columns must be a list of StdColumn",
+                "columns must be a list of BigqueryColumn",
             ))
         }
     }
@@ -170,7 +192,7 @@ impl BigqueryPartitionConfig {
         !(self.data_type == "int64"
             || (self.data_type == "date"
                 && match &self.inner {
-                    BigqueryPartitionConfigInner::Time(TimeConfig { granularity }) => {
+                    BigqueryPartitionConfigInner::Time(TimeConfig { granularity, .. }) => {
                         granularity == "day"
                     }
                     BigqueryPartitionConfigInner::Range(_) => {
@@ -198,7 +220,7 @@ impl BigqueryPartitionConfig {
 
     /// Render the partition expression
     pub fn render(&self, alias: Option<String>) -> Result<MinijinjaValue, MinijinjaError> {
-        let column = if !self.time_ingestion_partitioning {
+        let column = if !self.time_ingestion_partitioning() {
             self.field.to_owned()
         } else {
             self.time_partitioning_field()?
@@ -266,7 +288,7 @@ impl BigqueryPartitionConfig {
             || self.data_type == "timestamp"
             || self.data_type == "datetime")
             && !self.data_type_should_be_truncated()
-            && !(self.time_ingestion_partitioning && self.data_type == "date")
+            && !(self.time_ingestion_partitioning() && self.data_type == "date")
         {
             Ok(MinijinjaValue::from(format!(
                 "{}({})",
@@ -289,7 +311,7 @@ impl Object for BigqueryPartitionConfig {
             PartitionConfigField::DataType => Some(MinijinjaValue::from(self.data_type.clone())),
             PartitionConfigField::Granularity => self.granularity().map(MinijinjaValue::from).ok(),
             PartitionConfigField::TimeIngestionPartitioning => {
-                Some(MinijinjaValue::from(self.time_ingestion_partitioning))
+                Some(MinijinjaValue::from(self.time_ingestion_partitioning()))
             }
             PartitionConfigField::CopyPartitions => {
                 Some(MinijinjaValue::from(self.copy_partitions))
@@ -311,11 +333,19 @@ impl Object for BigqueryPartitionConfig {
             "time_partitioning_field" => self.time_partitioning_field(),
             "render" => self.render_(args),
             "render_wrapped" => self.render_wrapped(args),
+            "insertable_time_partitioning_field" => self.insertable_time_partitioning_field(),
             _ => Err(MinijinjaError::new(
                 MinijinjaErrorKind::InvalidOperation,
                 format!("Unknown method on PartitionConfig object: '{name}'"),
             )),
         }
+    }
+
+    fn enumerate(self: &Arc<Self>) -> Enumerator {
+        let fields = PartitionConfigField::iter()
+            .map(|f| MinijinjaValue::from(f.as_ref()))
+            .collect::<Vec<_>>();
+        Enumerator::Iter(Box::new(fields.into_iter()))
     }
 }
 
@@ -328,7 +358,43 @@ pub struct GrantAccessToTarget {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use minijinja::value::Value as MinijinjaValue;
     use serde_json::json;
+
+    #[test]
+    fn test_bigquery_partition_config_legacy_deserialize_from_jinja_values() {
+        // Test String variant
+        let string_value = MinijinjaValue::from("partition_field");
+        let result = BigqueryPartitionConfigLegacy::deserialize(string_value).unwrap();
+        assert!(
+            matches!(result, BigqueryPartitionConfigLegacy::String(s) if s == "partition_field")
+        );
+
+        // Test List variant
+        let list_value = MinijinjaValue::from(vec!["field1", "field2"]);
+        let result = BigqueryPartitionConfigLegacy::deserialize(list_value).unwrap();
+        assert!(
+            matches!(result, BigqueryPartitionConfigLegacy::List(ref list) if list == &vec!["field1".to_string(), "field2".to_string()])
+        );
+
+        // Test BigqueryPartitionConfig variant with time partitioning
+        let config_json = json!({
+            "field": "partition_date",
+            "data_type": "date",
+            "granularity": "day",
+            "time_ingestion_partitioning": true
+        });
+        let config_value = MinijinjaValue::from_serialize(&config_json);
+        let result = BigqueryPartitionConfigLegacy::deserialize(config_value).unwrap();
+        if let BigqueryPartitionConfigLegacy::BigqueryPartitionConfig(config) = result {
+            assert_eq!(config.field, "partition_date");
+            assert_eq!(config.data_type, "date");
+            assert!(config.time_ingestion_partitioning());
+            assert_eq!(config.granularity().unwrap(), "day");
+        } else {
+            panic!("Expected BigqueryPartitionConfig variant");
+        }
+    }
 
     #[test]
     fn test_deserialize_time_partition_config() {
@@ -362,7 +428,7 @@ mod tests {
             config.inner,
             BigqueryPartitionConfigInner::Range(_)
         ));
-        assert!(!config.time_ingestion_partitioning);
+        assert!(!config.time_ingestion_partitioning());
         assert!(!config.copy_partitions);
     }
 
@@ -376,9 +442,9 @@ mod tests {
         assert_eq!(config.field, "created_at");
         assert_eq!(config.data_type, "date"); // default
         assert!(
-            matches!(config.inner, BigqueryPartitionConfigInner::Time(TimeConfig { granularity }) if granularity == "day")
+            matches!(config.inner, BigqueryPartitionConfigInner::Time(TimeConfig { ref granularity, .. }) if granularity == "day")
         ); // default
-        assert!(!config.time_ingestion_partitioning); // default
+        assert!(!config.time_ingestion_partitioning()); // default
         assert!(!config.copy_partitions); // default
     }
 
@@ -390,8 +456,8 @@ mod tests {
             data_type: "date".to_string(),
             inner: BigqueryPartitionConfigInner::Time(TimeConfig {
                 granularity: "day".to_string(),
+                time_ingestion_partitioning: false,
             }),
-            time_ingestion_partitioning: false,
             copy_partitions: false,
         };
 
@@ -424,7 +490,6 @@ mod tests {
                     interval: 10,
                 },
             }),
-            time_ingestion_partitioning: true,
             copy_partitions: true,
         };
 
@@ -449,8 +514,8 @@ mod tests {
             data_type: "timestamp".to_string(),
             inner: BigqueryPartitionConfigInner::Time(TimeConfig {
                 granularity: "hour".to_string(),
+                time_ingestion_partitioning: true,
             }),
-            time_ingestion_partitioning: true,
             copy_partitions: false,
         });
 
@@ -497,7 +562,6 @@ mod tests {
                     interval: 10,
                 },
             }),
-            time_ingestion_partitioning: false,
             copy_partitions: true,
         });
 

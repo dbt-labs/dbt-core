@@ -1,0 +1,3 @@
+kind: Fixes
+body: (fix adapter/bigquery) support time_ingestion_partitioning partition_by config
+time: 2025-07-21T18:00:41.013648667-07:00
