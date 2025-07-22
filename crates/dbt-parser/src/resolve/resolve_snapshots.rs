@@ -314,6 +314,15 @@ pub async fn resolve_snapshots(
                 }
             }
 
+            if final_config.unique_key.is_none() || final_config.strategy.is_none() {
+                let e = fs_err!(
+                    code => ErrorCode::InvalidConfig,
+                    loc => dbt_asset.path.clone(),
+                    "Snapshot '{}' must be configured with a 'strategy' and 'unique_key'",
+                    snapshot_name
+                );
+                show_error!(&arg.io, e);
+            }
             match status {
                 ModelStatus::Enabled => {
                     snapshots.insert(unique_id, Arc::new(dbt_snapshot));

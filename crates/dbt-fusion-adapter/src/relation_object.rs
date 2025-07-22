@@ -258,7 +258,7 @@ impl Object for StaticBaseRelationObject {
     ) -> Result<Value, MinijinjaError> {
         match name {
             "create" => self.create(args),
-            "scd_args" => Ok(Value::from(self.scd_args(args))),
+            "scd_args" => self.scd_args(args),
             _ => Err(minijinja::Error::new(
                 minijinja::ErrorKind::InvalidOperation,
                 format!("Unknown method on StaticBaseRelationObject: '{name}'"),
@@ -311,7 +311,7 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
     }
 
     /// Get the SCD arguments for the relation
-    fn scd_args(&self, args: &[Value]) -> Vec<String> {
+    fn scd_args(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut args = ArgParser::new(args, None);
         let primary_key: Value = args.get("primary_key").unwrap();
         let updated_at: String = args.get("updated_at").unwrap();
@@ -333,10 +333,15 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
                 scd_args.push(primary_key.as_str().unwrap().to_string());
             }
             _ => {
-                panic!("Invalid primary key type");
+                return Err(minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidOperation,
+                    format!(
+                        "'primary_key' has a wrong type in StaticBaseRelationObject: '{primary_key}'"
+                    ),
+                ));
             }
         }
         scd_args.push(updated_at);
-        scd_args
+        Ok(Value::from(scd_args))
     }
 }
