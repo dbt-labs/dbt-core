@@ -6,6 +6,7 @@ use crate::response::ResultObject;
 use dbt_agate::AgateTable;
 
 use arrow::array::RecordBatch;
+use minijinja::arg_utils::ArgsIter;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::ValueKind;
 use minijinja::value::mutable_vec::MutableVec;
@@ -27,8 +28,51 @@ pub fn dispatch_adapter_calls(
 ) -> Result<Value, MinijinjaError> {
     match name {
         "dispatch" => adapter.dispatch(state, args),
-        "execute" => adapter.execute(state, args),
-        "add_query" => adapter.add_query(state, args),
+        "execute" => {
+            // sql: str, auto_begin: bool = False, fetch: bool = False, limit: Optional[int] = None
+            let iter = ArgsIter::new(name, &["sql"], args);
+            let sql = iter.next_arg::<&str>()?;
+            let auto_begin = iter
+                .next_kwarg::<Option<bool>>("auto_begin")?
+                .unwrap_or(false);
+            let fetch = iter.next_kwarg::<Option<bool>>("fetch")?.unwrap_or(false);
+            let limit = iter.next_kwarg::<Option<i64>>("limit")?;
+            let (response, table) = adapter.execute(state, sql, auto_begin, fetch, limit)?;
+            Ok(Value::from_iter([
+                Value::from_object(response),
+                Value::from_object(table),
+            ]))
+        }
+        "add_query" => {
+            // sql: str,
+            // auto_begin: bool = True,
+            // bindings: Optional[Any] = None,
+            // abridge_sql_log: bool = False,
+            // retryable_exceptions: Tuple[Type[Exception], ...] = tuple(),
+            // retry_limit: int = 1,
+            let iter = ArgsIter::new(name, &["sql"], args);
+            let sql = iter.next_arg::<&str>()?;
+            let auto_begin = iter
+                .next_kwarg::<Option<bool>>("auto_begin")?
+                .unwrap_or(true);
+            let bindings = iter.next_kwarg::<Option<&Value>>("bindings")?;
+            let abridge_sql_log = iter
+                .next_kwarg::<Option<bool>>("abridge_sql_log")?
+                .unwrap_or(false);
+            let _retryable_exceptions =
+                iter.next_kwarg::<Option<&Value>>("retryable_exceptions")?;
+            let _retry_limit = iter.next_kwarg::<Option<i64>>("retry_limit")?.unwrap_or(1);
+            adapter.add_query(
+                state,
+                sql,
+                auto_begin,
+                bindings,
+                abridge_sql_log,
+                // _retryable_exceptions,
+                // _retry_limit,
+            )?;
+            Ok(Value::from(()))
+        }
         "get_relation" => adapter.get_relation(state, args),
         "get_columns_in_relation" => adapter.get_columns_in_relation(state, args),
         "type" => Ok(Value::from(adapter.adapter_type().to_string())),

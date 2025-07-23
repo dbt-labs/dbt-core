@@ -141,7 +141,7 @@ pub fn create_catalogs_schema_if_not_exists(
         // use SHOW DATABASES but this query doesn't return the databases a user doesn't have access to
         // https://github.com/dbt-labs/fs/issues/2789
         let adapter_clone = adapter.clone();
-        match adapter_clone.execute(conn, &query_ctx, None, None, None) {
+        match adapter_clone.exec_stmt(conn, &query_ctx, false) {
             Ok(_) => Ok(Ok(())),
             Err(e) => {
                 if is_tolerable(&e, adapter_type) {

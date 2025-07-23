@@ -91,9 +91,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         engine: Arc<SqlEngine>,
         conn: &'_ mut dyn Connection,
         query_ctx: &QueryCtx,
-        _auto_begin: Option<bool>,
-        _fetch: Option<bool>,
-        _limit: Option<u32>,
+        _auto_begin: bool,
+        _fetch: bool,
+        _limit: Option<i64>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         let sql = query_ctx.sql().ok_or_else(|| {
             AdapterError::new(AdapterErrorKind::Internal, "Missing query in the context")
@@ -133,35 +133,74 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         Ok((response, table))
     }
 
-    /// Execute a query
+    /// Query execution implementation for a specific adapter.
     fn execute(
         &self,
         conn: &'_ mut dyn Connection,
         query_ctx: &QueryCtx,
-        auto_begin: Option<bool>,
-        fetch: Option<bool>,
-        limit: Option<u32>,
+        auto_begin: bool,
+        fetch: bool,
+        limit: Option<i64>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)>;
+
+    /// Execute a statement, expect no results.
+    fn exec_stmt(
+        &self,
+        conn: &'_ mut dyn Connection,
+        query_ctx: &QueryCtx,
+        auto_begin: bool,
+    ) -> AdapterResult<AdapterResponse> {
+        // default values are the same as in dispatch_adapter_calls()
+        let (response, _) = self.execute(
+            conn,       // connection
+            query_ctx,  // sql string wrapper
+            auto_begin, // auto_begin
+            false,      // fetch
+            None,       // limit
+        )?;
+        Ok(response)
+    }
+
+    /// Execute a query and get results in an [AgateTable].
+    fn query(
+        &self,
+        conn: &'_ mut dyn Connection,
+        query_ctx: &QueryCtx,
+        limit: Option<i64>,
+    ) -> AdapterResult<(AdapterResponse, AgateTable)> {
+        self.execute(
+            conn,      // connection
+            query_ctx, // sql string wrapper
+            false,     // auto_begin
+            true,      // fetch
+            limit,     // limit
+        )
+    }
 
     /// Execute a query with a new connection
     fn execute_with_new_connection(
         &self,
         query_ctx: &QueryCtx,
-        auto_begin: Option<bool>,
-        fetch: Option<bool>,
-        limit: Option<u32>,
+        auto_begin: bool,
+        fetch: bool,
+        limit: Option<i64>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         let mut conn = self.new_connection()?;
         self.execute(&mut *conn, query_ctx, auto_begin, fetch, limit)
     }
 
-    /// Add a query to run
+    /// Add a query to run.
+    ///
+    /// ```python
+    /// def add_query(self, sql, auto_begin=True, bindings=None, abridge_sql_log=False):
+    /// ```
     #[allow(clippy::too_many_arguments)]
     fn add_query(
         &self,
         conn: &'_ mut dyn Connection,
         query_ctx: &QueryCtx,
         auto_begin: bool,
+        _bindings: Option<&Value>,
         abridge_sql_log: bool,
     ) -> AdapterResult<()>;
 

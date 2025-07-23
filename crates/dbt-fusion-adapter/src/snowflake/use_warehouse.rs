@@ -46,6 +46,6 @@ pub fn use_warehouse_inner(
         .with_node_id(node_id);
     adapter
         .typed_adapter
-        .execute(conn.as_mut(), &query_ctx, None, None, None)?;
+        .exec_stmt(conn.as_mut(), &query_ctx, false)?;
     Ok(())
 }

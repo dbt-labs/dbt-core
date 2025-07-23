@@ -1,4 +1,3 @@
-use crate::SqlEngine;
 use crate::base_adapter::{AdapterType, AdapterTyping, BaseAdapter};
 use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::funcs::{
@@ -10,6 +9,7 @@ use crate::parse::relation::EmptyRelation;
 use crate::relation_object::{RelationObject, create_relation};
 use crate::response::AdapterResponse;
 use crate::typed_adapter::TypedBaseAdapter;
+use crate::{AdapterResult, SqlEngine};
 
 use dashmap::{DashMap, DashSet};
 use dbt_agate::AgateTable;
@@ -150,15 +150,14 @@ impl BaseAdapter for ParseAdapter {
         unimplemented!("new_connection is not implemented for ParseAdapter")
     }
 
-    fn execute(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 4)?;
-
-        let sql = parser.get::<String>("sql")?;
-        let _ = parser.get_optional::<bool>("auto_begin");
-        let _ = parser.get_optional::<bool>("fetch");
-        let _ = parser.get_optional::<u32>("limit");
-
+    fn execute(
+        &self,
+        state: &State,
+        sql: &str,
+        _auto_begin: bool,
+        _fetch: bool,
+        _limit: Option<i64>,
+    ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         let response = AdapterResponse::default();
         let table = AgateTable::default();
 
@@ -171,17 +170,21 @@ impl BaseAdapter for ParseAdapter {
                         .to_string(),
                 );
             }
-            self.execute_sqls.insert(sql);
+            self.execute_sqls.insert(sql.to_string());
         }
 
-        Ok(Value::from_iter([
-            Value::from_object(response),
-            Value::from_object(table),
-        ]))
+        Ok((response, table))
     }
 
-    fn add_query(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
-        Ok(none_value())
+    fn add_query(
+        &self,
+        _state: &State,
+        _sql: &str,
+        _auto_begin: bool,
+        _bindings: Option<&Value>,
+        _abridge_sql_log: bool,
+    ) -> AdapterResult<()> {
+        Ok(())
     }
 
     fn get_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {

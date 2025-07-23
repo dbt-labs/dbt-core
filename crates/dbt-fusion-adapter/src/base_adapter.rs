@@ -1,7 +1,9 @@
 use crate::metadata::MetadataAdapter;
 use crate::sql_engine::SqlEngine;
 use crate::typed_adapter::TypedBaseAdapter;
+use crate::{AdapterResponse, AdapterResult};
 
+use dbt_agate::AgateTable;
 use dbt_common::FsResult;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::ComponentName;
@@ -146,11 +148,82 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
         args: &[Value],
     ) -> Result<Value, MinijinjaError>;
 
-    /// Execute.
-    fn execute(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;
+    /// Execute the given SQL. This is a thin wrapper around [SqlEngine.execute].
+    ///
+    /// ```python
+    /// def execute(
+    ///     self,
+    ///     sql: str,
+    ///     auto_begin: bool = False,
+    ///     fetch: bool = False,
+    ///     limit: Optional[int] = None,
+    /// ) -> Tuple[AdapterResponse, "agate.Table"]:
+    ///     """
+    ///     :param str sql: The sql to execute.
+    ///     :param bool auto_begin: If set, and dbt is not currently inside a transaction,
+    ///                             automatically begin one.
+    ///     :param bool fetch: If set, fetch results.
+    ///     :param Optional[int] limit: If set, only fetch n number of rows
+    ///     :return: A tuple of the query status and results (empty if fetch=False).
+    ///     :rtype: Tuple[AdapterResponse, "agate.Table"]
+    ///     """
+    /// ```
+    fn execute(
+        &self,
+        state: &State,
+        sql: &str,
+        auto_begin: bool,
+        fetch: bool,
+        limit: Option<i64>,
+    ) -> AdapterResult<(AdapterResponse, AgateTable)>;
+
+    /// Execute a statement, expect no results.
+    fn exec_stmt(
+        &self,
+        state: &State,
+        sql: &str,
+        auto_begin: bool,
+    ) -> AdapterResult<AdapterResponse> {
+        let (response, _) = self.execute(
+            state, sql, auto_begin, false, // fetch
+            None,  // limit
+        )?;
+        Ok(response)
+    }
+
+    /// Execute a query and get results in an [AgateTable].
+    fn query(
+        &self,
+        state: &State,
+        sql: &str,
+        limit: Option<i64>,
+    ) -> AdapterResult<(AdapterResponse, AgateTable)> {
+        self.execute(state, sql, false, true, limit)
+    }
 
     /// Add Query
-    fn add_query(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/9f39ba3d94b02eeb3aef40fe161af844e15944e4/dbt-adapters/src/dbt/adapters/sql/connections.py#L69
+    ///
+    /// ```python
+    /// def add_query(
+    ///    self,
+    ///    sql: str,
+    ///    auto_begin: bool = True,
+    ///    bindings: Optional[Any] = None,
+    ///    abridge_sql_log: bool = False,
+    ///    retryable_exceptions: Tuple[Type[Exception], ...] = tuple(),
+    ///    retry_limit: int = 1,
+    /// ) -> Tuple[Connection, Any]:
+    /// ```
+    fn add_query(
+        &self,
+        state: &State,
+        sql: &str,
+        auto_begin: bool,
+        bindings: Option<&Value>,
+        abridge_sql_log: bool,
+    ) -> AdapterResult<()>;
 
     /// Drop relation.
     fn drop_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;
