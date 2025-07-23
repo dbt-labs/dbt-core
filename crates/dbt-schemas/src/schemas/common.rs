@@ -16,7 +16,6 @@ use strum::{Display, EnumIter, EnumString};
 use crate::dbt_types::RelationType;
 
 use super::serde::StringOrArrayOfStrings;
-#[skip_serializing_none]
 #[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
 pub struct FreshnessRules {
     pub count: Option<i64>,
@@ -70,14 +69,30 @@ impl std::fmt::Display for FreshnessPeriod {
     }
 }
 
-#[skip_serializing_none]
+// We don't skip serializing none here because dbt project evaluator checks for the presence of either error_after or warn_after
+// https://github.com/dbt-labs/dbt-project-evaluator/blob/94768b117573705e95a9456273de8e358efadb00/macros/unpack/get_source_values.sql#L27-L28
 #[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
 pub struct FreshnessDefinition {
-    #[serde(default)]
+    #[serde(default, serialize_with = "serialize_freshness_rule")]
     pub error_after: Option<FreshnessRules>,
-    #[serde(default)]
+    #[serde(default, serialize_with = "serialize_freshness_rule")]
     pub warn_after: Option<FreshnessRules>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub filter: Option<String>,
+}
+
+/// Custom serializer to ensure FreshnessRules are always objects, never null
+fn serialize_freshness_rule<S>(
+    rule: &Option<FreshnessRules>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match rule {
+        Some(rule) => rule.serialize(serializer),
+        None => FreshnessRules::default().serialize(serializer),
+    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
