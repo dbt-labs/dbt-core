@@ -195,7 +195,7 @@ pub async fn resolve_data_tests(
                 unique_id: unique_id.clone(),
                 fqn,
                 description: properties.description.clone(),
-                checksum: DbtChecksum::hash(rendered_sql.as_bytes()),
+                checksum: DbtChecksum::hash(rendered_sql.trim().as_bytes()),
                 raw_code: Some("".to_string()),
                 language: None,
                 tags: test_config

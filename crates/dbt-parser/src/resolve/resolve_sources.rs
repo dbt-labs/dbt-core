@@ -125,7 +125,7 @@ pub fn resolve_sources(
         let fqn = get_node_fqn(
             package_name,
             mpe.relative_path.clone(),
-            vec![table_name.to_owned()],
+            vec![source_name.to_owned(), table_name.to_owned()],
         );
 
         let merged_loaded_at_field = Some(

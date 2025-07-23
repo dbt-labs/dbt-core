@@ -70,9 +70,13 @@ impl PreviousState {
 
     // Check if a node exists in the previous state
     pub fn exists(&self, node: &dyn InternalDbtNode) -> bool {
-        self.nodes
-            .get_node(node.common().unique_id.as_str())
-            .is_some()
+        if node.is_test() {
+            true
+        } else {
+            self.nodes
+                .get_node(node.common().unique_id.as_str())
+                .is_some()
+        }
     }
 
     // Check if a node is new (doesn't exist in previous state)
@@ -121,7 +125,8 @@ impl PreviousState {
             .get_node(current_node.common().unique_id.as_str())
         {
             Some(node) => node,
-            None => return true, // If previous node doesn't exist, consider it modified
+            // TODO test is currently ignored in the state selector because fusion generate test name different from dbt-mantle.
+            None => return !current_node.is_test(), // If previous node doesn't exist, consider it modified
         };
 
         !current_node.has_same_content(previous_node)

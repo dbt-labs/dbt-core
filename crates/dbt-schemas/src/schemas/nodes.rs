@@ -446,12 +446,9 @@ impl InternalDbtNode for DbtTest {
         }
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
-        if let Some(other) = other.as_any().downcast_ref::<DbtTest>() {
-            self.common().fqn == other.common().fqn
-        } else {
-            false
-        }
+    fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
+        // TODO: test currently is not supported for state selector due to the difference of test name generation between fusion and dbt-mantle.
+        true
     }
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
         panic!("DbtTest does not support setting detected_unsafe");
@@ -521,7 +518,15 @@ impl InternalDbtNode for DbtUnitTest {
 
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other) = other.as_any().downcast_ref::<DbtUnitTest>() {
-            self.common().fqn == other.common().fqn
+            let same_fqn = self.common().fqn == other.common().fqn;
+            if !same_fqn {
+                println!(
+                    "FQN differs: self={:?}, other={:?}",
+                    self.common().fqn,
+                    other.common().fqn
+                );
+            }
+            same_fqn
         } else {
             false
         }
@@ -599,8 +604,9 @@ impl InternalDbtNode for DbtSource {
                 && self.common_attr.name == other_source.common_attr.name
                 && self.source_attr.identifier == other_source.source_attr.identifier
                 && self.common_attr.fqn == other_source.common_attr.fqn
-                && self.deprecated_config == other_source.deprecated_config
-                && self.base_attr.quoting == other_source.base_attr.quoting
+                //TODO: uncomment this when we have a way to compare the config
+                // && self.deprecated_config == other_source.deprecated_config
+                // && self.base_attr.quoting == other_source.base_attr.quoting
                 && self.source_attr.loader == other_source.source_attr.loader
         } else {
             false
@@ -667,12 +673,14 @@ impl InternalDbtNode for DbtSnapshot {
             false
         }
     }
-    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
-        if let Some(other_snapshot) = other.as_any().downcast_ref::<DbtSnapshot>() {
-            self.common_attr.checksum == other_snapshot.common_attr.checksum
-        } else {
-            false
-        }
+    fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
+        // TODO: support snapshot state comparison by generate the same hash.
+        true
+        // if let Some(other_snapshot) = other.as_any().downcast_ref::<DbtSnapshot>() {
+        //     self.common_attr.checksum == other_snapshot.common_attr.checksum
+        // } else {
+        //     false
+        // }
     }
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
         panic!("DbtSnapshot does not support setting detected_unsafe");

@@ -268,7 +268,7 @@ pub async fn render_unresolved_sql_files_sequentially<
                     let sql_resources_locked = sql_resources_cloned.lock().unwrap();
                     SqlFileInfo::from_sql_resources(
                         sql_resources_locked.clone(),
-                        DbtChecksum::hash(sql.as_bytes()),
+                        DbtChecksum::hash(sql.trim().as_bytes()),
                         execute_exists.load(atomic::Ordering::Relaxed),
                     )
                 };
@@ -286,7 +286,7 @@ pub async fn render_unresolved_sql_files_sequentially<
                 let sql_resources_locked = sql_resources_cloned.lock().unwrap();
                 let sql_file_info = SqlFileInfo::from_sql_resources(
                     sql_resources_locked.clone(),
-                    DbtChecksum::hash(sql.as_bytes()),
+                    DbtChecksum::hash(sql.trim().as_bytes()),
                     execute_exists.load(atomic::Ordering::Relaxed),
                 );
 
@@ -318,7 +318,7 @@ pub async fn render_unresolved_sql_files_sequentially<
                 let sql_resources_locked = sql_resources_cloned.lock().unwrap().clone();
                 let sql_file_info = SqlFileInfo::from_sql_resources(
                     sql_resources_locked.clone(),
-                    DbtChecksum::hash(sql.as_bytes()),
+                    DbtChecksum::hash(sql.trim().as_bytes()),
                     execute_exists.load(atomic::Ordering::Relaxed),
                 );
                 match err.code {
@@ -596,7 +596,7 @@ pub async fn render_unresolved_sql_files<T: DefaultTo<T> + 'static, S: GetConfig
                             let sql_resources_locked = sql_resources_cloned.lock().unwrap().clone();
                             SqlFileInfo::from_sql_resources(
                                 sql_resources_locked.clone(),
-                                DbtChecksum::hash(sql.as_bytes()),
+                                DbtChecksum::hash(sql.trim().as_bytes()),
                                 execute_exists.load(atomic::Ordering::Relaxed),
                             )
                         };
@@ -615,7 +615,7 @@ pub async fn render_unresolved_sql_files<T: DefaultTo<T> + 'static, S: GetConfig
                         let sql_resources_locked = sql_resources_cloned.lock().unwrap().clone();
                         let sql_file_info = SqlFileInfo::from_sql_resources(
                             sql_resources_locked.clone(),
-                            DbtChecksum::hash(sql.as_bytes()),
+                            DbtChecksum::hash(sql.trim().as_bytes()),
                             execute_exists.load(atomic::Ordering::Relaxed),
                         );
 
@@ -648,7 +648,7 @@ pub async fn render_unresolved_sql_files<T: DefaultTo<T> + 'static, S: GetConfig
                         let sql_resources_locked = sql_resources_cloned.lock().unwrap().clone();
                         let sql_file_info = SqlFileInfo::from_sql_resources(
                             sql_resources_locked.clone(),
-                            DbtChecksum::hash(sql.as_bytes()),
+                            DbtChecksum::hash(sql.trim().as_bytes()),
                             execute_exists.load(atomic::Ordering::Relaxed),
                         );
                         match err.code {

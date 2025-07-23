@@ -42,7 +42,7 @@ fn new_operation(
                     original_file_path: PathBuf::from("./dbt_project.yml"),
                     unique_id,
                     fqn: vec![project_name.to_string(), "hooks".to_string(), name],
-                    checksum: DbtChecksum::hash(operation_sql.as_bytes()),
+                    checksum: DbtChecksum::hash(operation_sql.trim().as_bytes()),
                     raw_code: Some(operation_sql.to_string()),
                     language: Some("sql".to_string()),
                     ..Default::default()
