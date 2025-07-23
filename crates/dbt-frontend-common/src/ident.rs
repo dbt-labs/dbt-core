@@ -95,6 +95,34 @@ impl Default for Qualified<'static> {
     }
 }
 
+impl PartialOrd for Qualified<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Qualified<'_> {
+    fn cmp<'a>(&'a self, other: &'a Self) -> std::cmp::Ordering {
+        // Compare them as if tuples of (catalog, schema, table)
+        let cmp_value =
+            |qualified: &'a Self| -> (Option<&'a Ident<'_>>, Option<&'a Ident<'_>>, &'a Ident<'_>) {
+                match qualified {
+                    Qualified::Full {
+                        catalog,
+                        schema,
+                        table,
+                    } => (Some(catalog), Some(schema), table),
+                    Qualified::Partial { schema, table } => (None, Some(schema), table),
+                    Qualified::Bare { table } => (None, None, table),
+                }
+            };
+
+        let self_tuple = cmp_value(self);
+        let other_tuple = cmp_value(other);
+        self_tuple.cmp(&other_tuple)
+    }
+}
+
 impl<'de> Deserialize<'de> for Qualified<'static> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where

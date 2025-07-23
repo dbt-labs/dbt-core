@@ -1,13 +1,6 @@
-use crate::{
-    cancellation::CancelledError,
-    error::{
-        code_location::AbstractLocation,
-        name_candidate::{NameCandidate, format_candidates},
-    },
-    is_sdf_debug,
-};
+use crate::{cancellation::CancelledError, error::code_location::AbstractLocation, is_sdf_debug};
 use datafusion::{arrow, error::DataFusionError, logical_expr::Expr, parquet};
-use dbt_frontend_common::error::{FrontendError, FrontendResult};
+use dbt_frontend_common::error::{FrontendError, FrontendResult, NameCandidate, format_candidates};
 use itertools::Itertools as _;
 use regex::Regex;
 use std::{

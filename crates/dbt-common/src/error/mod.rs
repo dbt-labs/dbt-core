@@ -1,6 +1,5 @@
 mod code_location;
 mod codes;
-mod name_candidate;
 mod preprocessor_location;
 mod types;
 

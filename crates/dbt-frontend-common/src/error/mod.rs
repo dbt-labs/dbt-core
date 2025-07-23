@@ -35,11 +35,14 @@
 
 mod code_location;
 mod codes;
+mod name_candidate;
 
 use std::{backtrace::Backtrace, sync::Arc};
 
 pub use code_location::CodeLocation;
 pub use codes::ErrorCode;
+pub use name_candidate::NameCandidate;
+pub use name_candidate::format_candidates;
 
 pub type FrontendResult<T, E = Box<FrontendError>> = Result<T, E>;
 
