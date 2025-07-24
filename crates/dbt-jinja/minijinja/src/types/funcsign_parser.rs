@@ -6,9 +6,10 @@ use crate::types::{
     api::{ApiColumnType, ApiType},
     builtin::Type,
     class::DynClassType,
+    column_schema::ColumnSchemaType,
     config::ConfigType,
     dict::DictType,
-    function::{DynFunctionType, UserDefinedFunctionType},
+    function::{DynFunctionType, LambdaType},
     hook::HookType,
     information_schema::InformationSchemaType,
     list::ListType,
@@ -242,14 +243,9 @@ fn parse_type(tokens: &[Token], index: usize) -> Result<(Type, usize), ParseErro
         Some(Token::OpenParen(_)) => {
             let (args, ret_type, consumed) = parse_lambda(tokens, index)?;
             Ok((
-                Type::Function(DynFunctionType::new(Arc::new(
-                    UserDefinedFunctionType::new(
-                        "lambda",
-                        args,
-                        ret_type,
-                        crate::CodeLocation::default(),
-                    ),
-                ))),
+                Type::Function(DynFunctionType::new(Arc::new(LambdaType::new(
+                    args, ret_type,
+                )))),
                 consumed,
             ))
         }
@@ -326,6 +322,10 @@ fn parse_type(tokens: &[Token], index: usize) -> Result<(Type, usize), ParseErro
             )),
             "api_column" => Ok((
                 Type::Class(DynClassType::new(Arc::new(ApiColumnType::default()))),
+                1,
+            )),
+            "column_schema" => Ok((
+                Type::Class(DynClassType::new(Arc::new(ColumnSchemaType::default()))),
                 1,
             )),
             "agate_table" => Ok((
@@ -791,7 +791,7 @@ mod tests {
         // Third arg should be a function type: (relation, string, list[string]) -> string
         matches!(args[2], Type::Function(_));
         if let Type::Function(func) = &args[2] {
-            let func = func.downcast_ref::<UserDefinedFunctionType>().unwrap();
+            let func = func.downcast_ref::<LambdaType>().unwrap();
 
             // Function should have 3 args: relation, string, list[string]
             assert_eq!(func.args.len(), 3);

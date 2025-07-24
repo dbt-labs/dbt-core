@@ -1,6 +1,6 @@
 use crate::types::class::{ClassType, DynClassType};
 use crate::types::dict::DictType;
-use crate::types::function::{DynFunctionType, UserDefinedFunctionType};
+use crate::types::function::{DynFunctionType, LambdaType, UserDefinedFunctionType};
 use crate::types::iterable::IterableType;
 use crate::types::list::ListType;
 use crate::types::modules::PyTimeDeltaType;
@@ -137,10 +137,14 @@ impl Type {
         }
     }
 
-    pub fn call(&self, args: &[Type]) -> Result<Type, crate::Error> {
+    pub fn call(
+        &self,
+        positional_args: &[Type],
+        kwargs: &BTreeMap<String, Type>,
+    ) -> Result<Type, crate::Error> {
         match self {
-            Type::Function(func) => func.resolve_arguments(args),
-            Type::Class(class) => class.constructor(args),
+            Type::Function(func) => func.resolve_arguments(positional_args, kwargs),
+            Type::Class(class) => class.constructor(positional_args, kwargs),
             _ => Err(crate::Error::new(
                 crate::error::ErrorKind::InvalidOperation,
                 "Type does not support method calls",
@@ -267,11 +271,23 @@ impl Type {
             // None type handling
             (Type::None, Type::None) => true,
 
-            (Type::Function(a), Type::Function(b))
-                if a.is::<UserDefinedFunctionType>() && b.is::<UserDefinedFunctionType>() =>
-            {
-                let a = a.downcast_ref::<UserDefinedFunctionType>().unwrap();
-                let b = b.downcast_ref::<UserDefinedFunctionType>().unwrap();
+            (Type::Function(a), Type::Function(b)) => {
+                let a: LambdaType = if let Some(a) = a.downcast_ref::<UserDefinedFunctionType>() {
+                    a.clone().into()
+                } else if let Some(a) = a.downcast_ref::<LambdaType>() {
+                    a.clone()
+                } else {
+                    return false;
+                };
+
+                let b: LambdaType = if let Some(b) = b.downcast_ref::<UserDefinedFunctionType>() {
+                    b.clone().into()
+                } else if let Some(b) = b.downcast_ref::<LambdaType>() {
+                    b.clone()
+                } else {
+                    return false;
+                };
+
                 if a.args.len() != b.args.len() {
                     return false;
                 }

@@ -42,7 +42,7 @@
     {{ return(True) }}
 {%- endmacro -%}
 
--- funcsign: (relation, bool) -> bool
+-- funcsign: (optional[relation], optional[bool]) -> bool
 {% macro should_revoke(existing_relation, full_refresh_mode=True) %}
 
     {% if not existing_relation %}
@@ -143,12 +143,12 @@
 {% endmacro %}
 
 
--- funcsign: (relation, dict[string, list[string]], (relation, bool) -> bool) -> string
+-- funcsign: (relation, optional[dict[string, list[string]]], bool) -> string
 {% macro apply_grants(relation, grant_config, should_revoke) %}
     {{ return(adapter.dispatch("apply_grants", "dbt")(relation, grant_config, should_revoke)) }}
 {% endmacro %}
 
--- funcsign: (relation, dict[string, list[string]], (relation, bool) -> bool) -> string
+-- funcsign: (relation, optional[dict[string, list[string]]], bool) -> string
 {% macro default__apply_grants(relation, grant_config, should_revoke) %}
     {#-- If grant_config is {} or None, this is a no-op --#}
     {% if grant_config %}

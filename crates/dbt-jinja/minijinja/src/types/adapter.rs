@@ -2,7 +2,7 @@ use crate::compiler::typecheck::FunctionRegistry;
 use crate::types::agate_table::AgateTableType;
 use crate::types::builtin::Type;
 use crate::types::class::{ClassType, DynClassType};
-use crate::types::function::{DynFunctionType, FunctionType};
+use crate::types::function::{ArgSpec, DynFunctionType, FunctionType};
 use crate::types::relation::RelationType;
 use crate::types::struct_::StructType;
 use crate::types::tuple::TupleType;
@@ -79,11 +79,11 @@ impl FunctionType for AdapterGetRelationFunction {
         ])))
     }
 
-    fn arg_names(&self) -> Vec<String> {
+    fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![
-            "database".to_string(),
-            "schema".to_string(),
-            "identifier".to_string(),
+            ArgSpec::new("database", false),
+            ArgSpec::new("schema", false),
+            ArgSpec::new("identifier", false),
         ]
     }
 }
@@ -167,8 +167,8 @@ impl FunctionType for AdapterDispatchFunction {
         }
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["name".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("name", false)]
     }
 }
 
@@ -214,8 +214,8 @@ impl FunctionType for AdapterStandardizeGrantsDictFunction {
         )]))))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["grants_dict".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("grants_dict", false)]
     }
 }
 
@@ -239,7 +239,7 @@ impl FunctionType for AdapterTypeFunction {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
+    fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![]
     }
 }
@@ -255,23 +255,38 @@ impl std::fmt::Debug for AdapterGetColumnSchemaFromQueryFunction {
 
 impl FunctionType for AdapterGetColumnSchemaFromQueryFunction {
     fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
-        if args.len() != 1 {
+        if args.len() != 2 {
             return Err(crate::Error::new(
                 crate::error::ErrorKind::InvalidOperation,
-                "Expected 1 argument for adapter.get_column_schema_from_query",
+                format!(
+                    "Expected 2 arguments for adapter.get_column_schema_from_query, got {}",
+                    args.len()
+                ),
             ));
         }
-        if !matches!(args.get(0), Some(Type::String(_))) {
+        if !args[0].is_subtype_of(&Type::String(None)) {
             return Err(crate::Error::new(
                 crate::error::ErrorKind::InvalidOperation,
-                "Expected string for first argument of adapter.get_column_schema_from_query",
+                format!(
+                    "Expected string for first argument of adapter.get_column_schema_from_query, got {:?}",
+                    args[0]
+                ),
+            ));
+        }
+        if !args[1].is_subtype_of(&Type::String(None)) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::InvalidOperation,
+                format!("Expected string for second argument of adapter.get_column_schema_from_query, got {:?}", args[1]),
             ));
         }
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["select_sql".to_string(), "select_sql_header".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![
+            ArgSpec::new("select_sql", false),
+            ArgSpec::new("select_sql_header", true),
+        ]
     }
 }
 
@@ -304,8 +319,8 @@ impl FunctionType for AdapterQuoteFunction {
         Ok(Type::String(Some(args[0].to_string())))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["name".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("value", false)]
     }
 }
 
@@ -329,7 +344,7 @@ impl FunctionType for AdapterCommitFunction {
         Ok(Type::None)
     }
 
-    fn arg_names(&self) -> Vec<String> {
+    fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![]
     }
 }
@@ -360,7 +375,7 @@ impl FunctionType for AdapterGetColumnsInRelationFunction {
         Ok(Type::StdColumn)
     }
 
-    fn arg_names(&self) -> Vec<String> {
+    fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![]
     }
 }
@@ -396,8 +411,11 @@ impl FunctionType for AdapterRenameRelationFunction {
         Ok(Type::None)
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["arg1".to_string(), "arg2".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![
+            ArgSpec::new("relation", false),
+            ArgSpec::new("new_name", false),
+        ]
     }
 }
 
@@ -443,11 +461,11 @@ impl FunctionType for AdapterExecuteFunction {
         ])))
     }
 
-    fn arg_names(&self) -> Vec<String> {
+    fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![
-            "compiled_code".to_string(),
-            "auto_begin".to_string(),
-            "fetch".to_string(),
+            ArgSpec::new("compiled_code", false),
+            ArgSpec::new("auto_begin", true),
+            ArgSpec::new("fetch", true),
         ]
     }
 }

@@ -8,7 +8,9 @@ use crate::compiler::ast;
 use crate::compiler::cfg::build_cfg;
 use crate::compiler::instructions::Instructions;
 use crate::types::funcsign_parser::parse;
-use crate::types::function::{DynFunctionType, UndefinedFunctionType, UserDefinedFunctionType};
+use crate::types::function::{
+    Argument, DynFunctionType, UndefinedFunctionType, UserDefinedFunctionType,
+};
 use crate::vm::listeners::TypecheckingEventListener;
 use crate::vm::typemeta::TypeChecker;
 
@@ -176,21 +178,51 @@ pub fn find_macro_signatures(
                 *last_func_sign = None;
             }
         }
-        ast::Stmt::Macro(macro_decl) => {
-            let macro_name = macro_decl.0.name;
+        ast::Stmt::Macro((macro_decl, _, _)) => {
+            let macro_name = macro_decl.name;
             if let Some((span, func_sign)) = last_func_sign {
-                if span.start_line >= macro_decl.0.span.start_line {
+                if span.start_line >= macro_decl.span.start_line {
                     return Err(crate::Error::new(
                         crate::error::ErrorKind::InvalidOperation,
                         "[BUG] funcsign is after macro declaration",
                     ));
                 }
-                let (args, returns) = parse(func_sign).map_err(|e| {
+                let (arg_types, returns) = parse(func_sign).map_err(|e| {
                     crate::Error::new(
                         crate::error::ErrorKind::InvalidOperation,
                         format!("failed to parse funcsign in {path:?}: {e}"),
                     )
                 })?;
+
+                if arg_types.len() != macro_decl.args.len() {
+                    return Err(crate::Error::new(
+                        crate::error::ErrorKind::InvalidOperation,
+                        format!(
+                            "{}: funcsign has {} args, but macro has {} args",
+                            macro_name,
+                            arg_types.len(),
+                            macro_decl.args.len()
+                        ),
+                    ));
+                }
+
+                let non_optional_args_len = macro_decl.args.len() - macro_decl.defaults.len();
+
+                let args = macro_decl
+                    .args
+                    .iter()
+                    .zip(arg_types.iter())
+                    .enumerate()
+                    .map(|(i, (arg, arg_type))| match arg {
+                        ast::Expr::Var(spanned) => Argument {
+                            name: spanned.id.to_string(),
+                            type_: arg_type.clone(),
+                            is_optional: i >= non_optional_args_len,
+                        },
+                        _ => todo!(),
+                    })
+                    .collect::<Vec<_>>();
+
                 funcsigns.insert(
                     macro_name.to_string(),
                     DynFunctionType::new(Arc::new(UserDefinedFunctionType::new(
@@ -198,20 +230,21 @@ pub fn find_macro_signatures(
                         args,
                         returns,
                         CodeLocation {
-                            line: macro_decl.0.span.start_line,
-                            col: macro_decl.0.span.start_col,
+                            line: macro_decl.span.start_line,
+                            col: macro_decl.span.start_col,
                             file: path.to_path_buf(),
                         },
                     ))),
                 );
+                *last_func_sign = None;
             } else if !funcsigns.contains_key(macro_name) {
                 funcsigns.insert(
                     macro_name.to_string(),
                     DynFunctionType::new(Arc::new(UndefinedFunctionType::new(
                         macro_name,
                         CodeLocation {
-                            line: macro_decl.0.span.start_line,
-                            col: macro_decl.0.span.start_col,
+                            line: macro_decl.span.start_line,
+                            col: macro_decl.span.start_col,
                             file: path.to_path_buf(),
                         },
                     ))),

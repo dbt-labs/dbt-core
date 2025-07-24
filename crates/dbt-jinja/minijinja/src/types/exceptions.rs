@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::types::builtin::Type;
 use crate::types::class::{ClassType, DynClassType};
-use crate::types::function::{DynFunctionType, FunctionType};
+use crate::types::function::{ArgSpec, DynFunctionType, FunctionType};
 use crate::types::model::ModelType;
 
 #[derive(Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -64,8 +64,8 @@ impl FunctionType for RaiseNotImplementedFunctionType {
         Ok(Type::None)
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["message".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("message", false)]
     }
 }
 
@@ -105,8 +105,8 @@ impl FunctionType for RaiseCompilerErrorFunctionType {
         Ok(Type::None)
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["message".to_string(), "model".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("message", false), ArgSpec::new("model", true)]
     }
 }
 
@@ -139,8 +139,8 @@ impl FunctionType for ColumnTypeMissingFunctionType {
         Ok(Type::None)
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["column_names".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("column_names", false)]
     }
 }
 
@@ -170,7 +170,7 @@ impl FunctionType for WarnFunctionType {
         Ok(Type::None)
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["message".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("message", false)]
     }
 }

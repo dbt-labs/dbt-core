@@ -1,4 +1,7 @@
-use crate::types::{builtin::Type, function::FunctionType};
+use crate::types::{
+    builtin::Type,
+    function::{ArgSpec, FunctionType},
+};
 
 #[derive(Default, Clone, Eq, PartialEq)]
 pub struct PyDateTimeStrftimeFunction {}
@@ -26,7 +29,7 @@ impl FunctionType for PyDateTimeStrftimeFunction {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["format".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("format", false)]
     }
 }

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::types::{
     builtin::Type,
     class::ClassType,
-    function::{DynFunctionType, FunctionType},
+    function::{ArgSpec, DynFunctionType, FunctionType},
 };
 
 #[derive(Default, Eq, PartialEq, Clone)]
@@ -58,7 +58,7 @@ impl FunctionType for HookGetFunction {
         }
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["key".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("key", false)]
     }
 }

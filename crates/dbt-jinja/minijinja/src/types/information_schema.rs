@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::types::{
     builtin::Type,
     class::{ClassType, DynClassType},
-    function::{DynFunctionType, FunctionType},
+    function::{ArgSpec, DynFunctionType, FunctionType},
 };
 
 #[derive(Debug, Default, Eq, PartialEq, Clone)]
@@ -35,7 +35,7 @@ impl FunctionType for InformationSchemaReplaceFunction {
         ))))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["information_schema_view".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("information_schema_view", false)]
     }
 }

@@ -1,8 +1,9 @@
 use crate::error::Error;
 use crate::types::builtin::Type;
 use crate::types::class::{ClassType, DynClassType};
-use crate::types::function::{DynFunctionType, FunctionType};
+use crate::types::function::{ArgSpec, DynFunctionType, FunctionType};
 use crate::types::relation::RelationType;
+use std::collections::BTreeMap;
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -59,7 +60,11 @@ impl ClassType for ApiColumnType {
         }
     }
 
-    fn constructor(&self, _args: &[Type]) -> Result<Type, crate::Error> {
+    fn constructor(
+        &self,
+        _args: &[Type],
+        _kwargs: &BTreeMap<String, Type>,
+    ) -> Result<Type, crate::Error> {
         // TODO: args
         Ok(Type::Class(DynClassType::new(Arc::new(
             ApiColumnType::default(),
@@ -101,8 +106,11 @@ impl FunctionType for ApiColumnFromDescriptionFunction {
         Ok(Type::StdColumn)
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["name".to_string(), "raw_data_type".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![
+            ArgSpec::new("description", false),
+            ArgSpec::new("raw_data_type", false),
+        ]
     }
 }
 
@@ -138,7 +146,7 @@ impl FunctionType for ApiColumnGetFunction {
         }
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["name".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("name", false)]
     }
 }

@@ -1,24 +1,34 @@
-use crate::types::{builtin::Type, function::FunctionType, list::ListType};
+use crate::types::{
+    builtin::Type,
+    function::{ArgSpec, FunctionType},
+    list::ListType,
+};
 
 #[derive(Debug, Default, Eq, PartialEq, Clone)]
 pub struct StringStripFunction {}
 
 impl FunctionType for StringStripFunction {
     fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
-        if !args.is_empty() {
+        if args.iter().len() != 1 {
             return Err(crate::Error::new(
                 crate::error::ErrorKind::TypeError,
                 format!(
-                    "args type mismatch: expected 0 argument, got {}",
+                    "args type mismatch: expected 1 argument, got {}",
                     args.len()
                 ),
+            ));
+        }
+        if !args[0].is_subtype_of(&Type::String(None)) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "Expected a string argument for strip function",
             ));
         }
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["str".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("value", true)]
     }
 }
 
@@ -39,8 +49,8 @@ impl FunctionType for StringLowerFunction {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["str".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![]
     }
 }
 
@@ -61,8 +71,8 @@ impl FunctionType for StringUpperFunction {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["str".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![]
     }
 }
 
@@ -98,8 +108,12 @@ impl FunctionType for StringReplaceFunction {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["str".to_string(), "old".to_string(), "new".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![
+            ArgSpec::new("value", false),
+            ArgSpec::new("old", false),
+            ArgSpec::new("new", false),
+        ]
     }
 }
 
@@ -132,8 +146,8 @@ impl FunctionType for StringSplitFunction {
         Ok(Type::List(ListType::new(Type::String(None))))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["sep".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("sep", false)]
     }
 }
 
@@ -147,11 +161,26 @@ impl std::fmt::Debug for StringFormatFunction {
 }
 
 impl FunctionType for StringFormatFunction {
-    fn _resolve_arguments(&self, _args: &[Type]) -> Result<Type, crate::Error> {
+    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
+        if args.len() != 1 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                format!(
+                    "args type mismatch: expected 1 argument, got {}",
+                    args.len()
+                ),
+            ));
+        }
+        if !args[0].is_subtype_of(&Type::String(None)) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "Expected a string argument for format function",
+            ));
+        }
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["format_string".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("format_string", false)]
     }
 }

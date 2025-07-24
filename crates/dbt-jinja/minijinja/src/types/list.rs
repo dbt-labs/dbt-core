@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::types::{
     builtin::Type,
     class::ClassType,
-    function::{DynFunctionType, FunctionType},
+    function::{ArgSpec, DynFunctionType, FunctionType},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -58,7 +58,7 @@ impl FunctionType for ListAppendFunctionType {
         Ok(Type::None)
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["item".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("value", false)]
     }
 }

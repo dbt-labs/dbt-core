@@ -1,7 +1,7 @@
 use crate::error::Error;
 use crate::types::builtin::Type;
 use crate::types::class::ClassType;
-use crate::types::function::{DynFunctionType, FunctionType};
+use crate::types::function::{ArgSpec, DynFunctionType, FunctionType};
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -53,8 +53,8 @@ impl FunctionType for DbtStringLiteralFunction {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["s".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("value", false)]
     }
 }
 
@@ -85,7 +85,7 @@ impl FunctionType for DbtEscapeSingleQuotesFunction {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["s".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("value", false)]
     }
 }

@@ -1,4 +1,4 @@
--- funcsign: (relation, relation) -> string
+-- funcsign: (relation) -> string
 {%- macro get_rename_intermediate_sql(relation) -%}
     {{- log('Applying RENAME INTERMEDIATE to: ' ~ relation) -}}
     {{- adapter.dispatch('get_rename_intermediate_sql', 'dbt')(relation) -}}

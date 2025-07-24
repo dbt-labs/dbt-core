@@ -4,7 +4,7 @@ use crate::types::{
     builtin::Type,
     class::ClassType,
     dict::DictType,
-    function::{DynFunctionType, FunctionType},
+    function::{ArgSpec, DynFunctionType, FunctionType},
     list::ListType,
 };
 
@@ -51,7 +51,7 @@ impl FunctionType for ConfigPersistRelationDocsFunction {
         Ok(Type::Bool)
     }
 
-    fn arg_names(&self) -> Vec<String> {
+    fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![]
     }
 }
@@ -61,11 +61,11 @@ pub struct ConfigGetFunction {}
 
 impl FunctionType for ConfigGetFunction {
     fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
-        if args.len() != 1 {
+        if args.len() != 2 {
             return Err(crate::Error::new(
                 crate::error::ErrorKind::TypeError,
                 format!(
-                    "args type mismatch: expected 1 argument, got {}",
+                    "args type mismatch: expected 2 arguments, got {}",
                     args.len()
                 ),
             ));
@@ -91,8 +91,8 @@ impl FunctionType for ConfigGetFunction {
         }
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["key".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("key", false), ArgSpec::new("default", true)]
     }
 }
 
@@ -113,7 +113,7 @@ impl FunctionType for ConfigPersistColumnDocsFunction {
         Ok(Type::Bool)
     }
 
-    fn arg_names(&self) -> Vec<String> {
+    fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![]
     }
 }
@@ -153,7 +153,7 @@ impl FunctionType for ConfigSetFunction {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["key".to_string(), "value".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("key", false), ArgSpec::new("value", false)]
     }
 }

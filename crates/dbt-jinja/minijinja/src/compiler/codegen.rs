@@ -263,8 +263,13 @@ impl<'source> CodeGenerator<'source> {
                     self.instructions
                         .add(Instruction::JumpIfTrueOrPop(!0, span)),
                 );
-                for type_constraint in type_constraints {
-                    self.add(Instruction::TypeConstraint(type_constraint, false));
+                if type_constraints.len() == 1 {
+                    // if there is only one type constraint, we can just add it to the else block
+                    // if there is more than one, we don't have constraints
+                    self.add(Instruction::TypeConstraint(
+                        type_constraints[0].clone(),
+                        false,
+                    ));
                 }
             }
         } else {
@@ -557,7 +562,7 @@ impl<'source> CodeGenerator<'source> {
                     CodeGenerationProfile::TypeCheck(function_registry) => {
                         if let Some(signature) = function_registry.get(macro_decl.name) {
                             if let Some(udf) = signature.downcast_ref::<UserDefinedFunctionType>() {
-                                let type_ = &udf.args[i];
+                                let type_ = &udf.args[i].type_;
                                 // the parameter has default value, so we need to exclude the none from arg type and check with the default
                                 let type_ = type_.get_non_optional_type();
                                 self.add(Instruction::LoadType(Value::from_object(type_)));
@@ -576,7 +581,7 @@ impl<'source> CodeGenerator<'source> {
             } else if let CodeGenerationProfile::TypeCheck(function_registry) = &self.profile {
                 if let Some(signature) = function_registry.get(macro_decl.name) {
                     if let Some(udf) = signature.downcast_ref::<UserDefinedFunctionType>() {
-                        let type_ = &udf.args[i];
+                        let type_ = &udf.args[i].type_;
                         self.add(Instruction::LoadType(Value::from_object(type_.clone())));
                     } else {
                         self.add(Instruction::LoadType(Value::from_object(Type::Any {
@@ -701,8 +706,13 @@ impl<'source> CodeGenerator<'source> {
             || matches!(self.profile, CodeGenerationProfile::TypeCheck(_))
         {
             self.start_else();
-            for type_constraint in &type_constraints {
-                self.add(Instruction::TypeConstraint(type_constraint.clone(), false));
+            if type_constraints.len() == 1 {
+                // if there is only one type constraint, we can just add it to the else block
+                // if there is more than one, we don't have constraints
+                self.add(Instruction::TypeConstraint(
+                    type_constraints[0].clone(),
+                    false,
+                ));
             }
             if !if_cond.false_body.is_empty() {
                 for node in &if_cond.false_body {
@@ -936,8 +946,13 @@ impl<'source> CodeGenerator<'source> {
                 }
                 self.compile_expr(&i.true_expr, listeners);
                 self.start_else();
-                for type_constraint in &type_constraints {
-                    self.add(Instruction::TypeConstraint(type_constraint.clone(), false));
+                if type_constraints.len() == 1 {
+                    // if there is only one type constraint, we can just add it to the else block
+                    // if there is more than one, we don't have constraints
+                    self.add(Instruction::TypeConstraint(
+                        type_constraints[0].clone(),
+                        false,
+                    ));
                 }
                 if let Some(ref false_expr) = i.false_expr {
                     self.compile_expr(false_expr, listeners);

@@ -1,7 +1,8 @@
 use crate::error::Error;
 use crate::types::builtin::Type;
 use crate::types::class::{ClassType, DynClassType};
-use crate::types::function::{DynFunctionType, FunctionType};
+use crate::types::function::{ArgSpec, DynFunctionType, FunctionType};
+use std::collections::BTreeMap;
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -142,7 +143,11 @@ impl ClassType for PyTimeDeltaType {
         }
     }
 
-    fn constructor(&self, _args: &[Type]) -> Result<Type, crate::Error> {
+    fn constructor(
+        &self,
+        _args: &[Type],
+        _kwargs: &BTreeMap<String, Type>,
+    ) -> Result<Type, crate::Error> {
         // TODO: check _args
         Ok(Type::Class(DynClassType::new(Arc::new(
             PyTimeDeltaType::default(),
@@ -192,8 +197,11 @@ impl FunctionType for PyDateTimeStrptimeFunction {
         Ok(Type::TimeStamp)
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["date_str".to_string(), "date_fmt".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![
+            ArgSpec::new("date_str", false),
+            ArgSpec::new("date_fmt", false),
+        ]
     }
 }
 
@@ -217,7 +225,7 @@ impl FunctionType for PyDateTimeNowFunction {
         Ok(Type::TimeStamp)
     }
 
-    fn arg_names(&self) -> Vec<String> {
+    fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![]
     }
 }

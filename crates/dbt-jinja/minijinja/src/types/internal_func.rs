@@ -1,5 +1,5 @@
 use crate::types::builtin::Type;
-use crate::types::function::FunctionType;
+use crate::types::function::{ArgSpec, FunctionType};
 
 #[derive(Clone, Debug, Default)]
 pub struct InternalCaller {}
@@ -15,7 +15,7 @@ impl FunctionType for InternalCaller {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
+    fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![]
     }
 }

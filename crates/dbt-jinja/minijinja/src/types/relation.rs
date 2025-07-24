@@ -1,7 +1,7 @@
 use crate::error::Error;
 use crate::types::builtin::Type;
 use crate::types::class::{ClassType, DynClassType};
-use crate::types::function::{DynFunctionType, FunctionType};
+use crate::types::function::{ArgSpec, DynFunctionType, FunctionType};
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -74,11 +74,11 @@ impl FunctionType for RelationIncludeFunction {
         ))))
     }
 
-    fn arg_names(&self) -> Vec<String> {
+    fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![
-            "database".to_string(),
-            "schema".to_string(),
-            "identifier".to_string(),
+            ArgSpec::new("database", true),
+            ArgSpec::new("schema", true),
+            ArgSpec::new("identifier", true),
         ]
     }
 }
@@ -103,7 +103,7 @@ impl FunctionType for RelationRenderFunction {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
+    fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![]
     }
 }
@@ -113,7 +113,7 @@ pub struct RelationIncorporateFunction {}
 
 impl std::fmt::Debug for RelationIncorporateFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("relation.incorporate").finish()
+        f.write_str("relation.incorporate")
     }
 }
 
@@ -145,8 +145,8 @@ impl FunctionType for RelationIncorporateFunction {
         ))))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["path".to_string(), "type".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("path", true), ArgSpec::new("type", true)]
     }
 }
 
@@ -196,12 +196,12 @@ impl FunctionType for RelationCreateFunction {
         ))))
     }
 
-    fn arg_names(&self) -> Vec<String> {
+    fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![
-            "database".to_string(),
-            "schema".to_string(),
-            "identifier".to_string(),
-            "type".to_string(),
+            ArgSpec::new("database", true),
+            ArgSpec::new("schema", true),
+            ArgSpec::new("identifier", true),
+            ArgSpec::new("type", true),
         ]
     }
 }
@@ -228,7 +228,7 @@ impl FunctionType for RelationWithoutIdentifierFunction {
         ))))
     }
 
-    fn arg_names(&self) -> Vec<String> {
+    fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![]
     }
 }

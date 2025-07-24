@@ -1,5 +1,8 @@
 use crate::types::builtin::Type;
-use std::hash::{Hash, Hasher};
+use std::{
+    collections::BTreeMap,
+    hash::{Hash, Hasher},
+};
 
 // Import the type_erase macro
 use super::type_erase::type_erase;
@@ -12,7 +15,11 @@ pub trait ClassType: Send + Sync + std::fmt::Debug {
         ))
     }
 
-    fn constructor(&self, _args: &[Type]) -> Result<Type, crate::Error> {
+    fn constructor(
+        &self,
+        _args: &[Type],
+        _kwargs: &BTreeMap<String, Type>,
+    ) -> Result<Type, crate::Error> {
         Err(crate::Error::new(
             crate::error::ErrorKind::InvalidOperation,
             format!("{self:?} does not support constructor"),
@@ -31,7 +38,7 @@ pub trait ClassType: Send + Sync + std::fmt::Debug {
 type_erase! {
     pub trait ClassType => DynClassType {
         fn get_attribute(&self, key: &str) -> Result<Type, crate::Error>;
-        fn constructor(&self, args: &[Type]) -> Result<Type, crate::Error>;
+        fn constructor(&self, args: &[Type], kwargs: &BTreeMap<String, Type>) -> Result<Type, crate::Error>;
         fn subscript(&self, index: &Type) -> Result<Type, crate::Error>;
     }
 }

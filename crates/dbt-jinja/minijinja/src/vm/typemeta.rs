@@ -9,17 +9,18 @@ use crate::types::builtin::Type;
 use crate::types::class::DynClassType;
 use crate::types::config::ConfigType;
 use crate::types::dbt::DbtType;
+use crate::types::dict::DictType;
 use crate::types::exceptions::ExceptionsType;
 use crate::types::flags::FlagsType;
 use crate::types::function::{
     CastFunctionType, DiffOfTwoDictsFunctionType, DynFunctionType, EnvVarFunctionType,
-    FunctionType, GetColumnSchemaFromQueryFunction, JoinFunctionType, LengthFunctionType,
-    ListFunctionType, LoadResultFunctionType, LogFunctionType, LowerFunctionType, MapFunctionType,
-    PrintFunctionType, RangeFunctionType, RefFunctionType, RenderFunctionType, ReplaceFunctionType,
-    SelectAttrFunctionType, SourceFunctionType, StoreRawResultFunctionType,
-    StoreResultFunctionType, StringFunctionType, SubmitPythonJobFunctionType, ToJsonFunctionType,
-    TrimFunctionType, TryOrCompilerErrorFunctionType, UpperFunctionType, UserDefinedFunctionType,
-    WriteFunctionType,
+    FirstFunctionType, FunctionType, GetColumnSchemaFromQueryFunction, JoinFunctionType,
+    LengthFunctionType, ListFunctionType, LoadResultFunctionType, LogFunctionType,
+    LowerFunctionType, MapFunctionType, PrintFunctionType, RangeFunctionType, RefFunctionType,
+    RenderFunctionType, ReplaceFunctionType, SelectAttrFunctionType, SourceFunctionType,
+    StoreRawResultFunctionType, StoreResultFunctionType, StringFunctionType,
+    SubmitPythonJobFunctionType, ToJsonFunctionType, TrimFunctionType,
+    TryOrCompilerErrorFunctionType, UpperFunctionType, UserDefinedFunctionType, WriteFunctionType,
 };
 use crate::types::hook::HookType;
 use crate::types::internal_func::InternalCaller;
@@ -114,9 +115,12 @@ impl TypeWithConstraint {
         self.inner.is_any()
     }
 
-    pub fn call(&self, args: &[TypeWithConstraint]) -> Result<Type, crate::Error> {
-        let inner_args: Vec<Type> = args.iter().map(|arg| arg.inner.clone()).collect();
-        self.inner.call(&inner_args)
+    pub fn call(
+        &self,
+        positional_args: &[Type],
+        kwargs: &BTreeMap<String, Type>,
+    ) -> Result<Type, crate::Error> {
+        self.inner.call(positional_args, kwargs)
     }
 
     pub fn is_optional(&self) -> bool {
@@ -446,7 +450,7 @@ impl TypecheckState {
                 ("execute".to_string(), Type::Bool),
                 (
                     "context".to_string(),
-                    Type::List(ListType::new(Type::Any { hard: true })),
+                    Type::Dict(DictType::new(Type::String(None), Type::Any { hard: true })),
                 ),
                 (
                     "defer_relation".to_string(),
@@ -505,6 +509,10 @@ impl TypecheckState {
                     "print".to_string(),
                     Type::Function(DynFunctionType::new(Arc::new(PrintFunctionType::default()))),
                 ),
+                (
+                    "first".to_string(),
+                    Type::Function(DynFunctionType::new(Arc::new(FirstFunctionType::default()))),
+                ),
             ]),
             frame_base: 0,
             cur_loop_obj_type: None,
@@ -525,16 +533,31 @@ impl TypecheckState {
         self.frame_base = self.stack.len();
     }
 
-    pub fn get_call_args(&mut self, n: u16) -> Vec<TypeWithConstraint> {
+    pub fn get_call_args(&mut self, n: u16) -> (Vec<Type>, BTreeMap<String, Type>) {
         // get n items from the stack
-        self.stack
+        let all_args = self
+            .stack
             .drain(self.stack.len().saturating_sub(n as usize)..)
-            .collect()
-    }
-
-    // Add convenient method to get call args as inner types directly
-    pub fn get_call_args_inner(&mut self, n: u16) -> Vec<Type> {
-        self.get_call_args(n).into_iter().map(|t| t.inner).collect()
+            .collect::<Vec<_>>();
+        if let Some(Type::Kwargs(kwargs)) = all_args.last().cloned().map(|t| t.inner) {
+            let len = all_args.len();
+            (
+                all_args
+                    .into_iter()
+                    .take(len - 1)
+                    .map(|t| t.inner)
+                    .collect::<Vec<_>>(),
+                kwargs
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.as_ref().clone()))
+                    .collect(),
+            )
+        } else {
+            (
+                all_args.into_iter().map(|t| t.inner).collect::<Vec<_>>(),
+                BTreeMap::new(),
+            )
+        }
     }
 }
 
@@ -948,12 +971,13 @@ impl<'src> TypeChecker<'src> {
                             Some(val) => val,
                             None => Type::Any { hard: false },
                         };
-                        let key = match typestate.stack.pop() {
+                        let key = match typestate.stack.pop_inner() {
                             Some(val) => val,
-                            None => Type::Any { hard: false }.into(),
+                            None => Type::Any { hard: false },
                         };
-
-                        args_map.insert(key.to_string(), Box::new(value));
+                        if let Type::String(Some(key)) = key {
+                            args_map.insert(key.to_string(), Box::new(value));
+                        }
                     }
                     typestate.stack.push(Type::Kwargs(args_map));
                 }
@@ -1444,13 +1468,9 @@ impl<'src> TypeChecker<'src> {
                     {
                         if let Some(arg_cnt) = arg_count {
                             let funcsign = funcsign.clone();
-                            let args = typestate
-                                .get_call_args(*arg_cnt)
-                                .into_iter()
-                                .map(|t| t.inner)
-                                .collect::<Vec<_>>();
+                            let (args, kwargs) = typestate.get_call_args(*arg_cnt);
 
-                            match funcsign.resolve_arguments(&args) {
+                            match funcsign.resolve_arguments(&args, &kwargs) {
                                 Ok(ret_type) => {
                                     typestate.stack.push(ret_type.clone());
                                 }
@@ -1517,13 +1537,11 @@ impl<'src> TypeChecker<'src> {
                         if let Some(block) = self.cfg.get_block(bb_id) {
                             if let Some(macro_name) = &block.current_macro {
                                 if let Some(arg_cnt) = arg_count {
-                                    let args = typestate
-                                        .get_call_args(*arg_cnt)
-                                        .into_iter()
-                                        .map(|t| t.inner)
-                                        .collect::<Vec<_>>();
+                                    let (args, kwargs) = typestate.get_call_args(*arg_cnt);
 
-                                    match InternalCaller::default().resolve_arguments(&args) {
+                                    match InternalCaller::default()
+                                        .resolve_arguments(&args, &kwargs)
+                                    {
                                         Ok(ret_type) => {
                                             typestate.stack.push(ret_type);
                                         }
@@ -1552,7 +1570,7 @@ impl<'src> TypeChecker<'src> {
                         }
                     } else if *name == "source" || *name == "ref" {
                         if let Some(arg_cnt) = arg_count {
-                            let args = typestate.get_call_args_inner(*arg_cnt);
+                            let (args, kwargs) = typestate.get_call_args(*arg_cnt);
                             let function_type = match *name {
                                 "source" => {
                                     DynFunctionType::new(Arc::new(SourceFunctionType::default()))
@@ -1560,7 +1578,7 @@ impl<'src> TypeChecker<'src> {
                                 "ref" => DynFunctionType::new(Arc::new(RefFunctionType::default())),
                                 _ => unreachable!(),
                             };
-                            match function_type.resolve_arguments(&args) {
+                            match function_type.resolve_arguments(&args, &kwargs) {
                                 Ok(ret_type) => {
                                     typestate.stack.push(ret_type.clone());
                                 }
@@ -1578,13 +1596,9 @@ impl<'src> TypeChecker<'src> {
                     {
                         if let Some(arg_cnt) = arg_count {
                             let funcsign = funcsign.clone();
-                            let args = typestate
-                                .get_call_args(*arg_cnt)
-                                .into_iter()
-                                .map(|t| t.inner)
-                                .collect::<Vec<_>>();
+                            let (args, kwargs) = typestate.get_call_args(*arg_cnt);
 
-                            match funcsign.resolve_arguments(&args) {
+                            match funcsign.resolve_arguments(&args, &kwargs) {
                                 Ok(ret_type) => {
                                     typestate.stack.push(ret_type.clone());
                                 }
@@ -1597,11 +1611,15 @@ impl<'src> TypeChecker<'src> {
                                 }
                             }
                         }
+                    } else if let Ok(Type::Any { hard: true }) =
+                        typestate.locals.get(name).map(|t| t.inner)
+                    {
+                        typestate.stack.push(Type::Any { hard: true });
                     } else if let Some(funcsign) = self.function_registry.get(name.to_owned()) {
                         if let Some(arg_cnt) = arg_count {
-                            let args = typestate.get_call_args_inner(*arg_cnt);
+                            let (args, kwargs) = typestate.get_call_args(*arg_cnt);
 
-                            match funcsign.resolve_arguments(&args) {
+                            match funcsign.resolve_arguments(&args, &kwargs) {
                                 Ok(ret_type) => {
                                     typestate.stack.push(ret_type.clone());
                                 }
@@ -1615,7 +1633,7 @@ impl<'src> TypeChecker<'src> {
                             }
                         }
                     } else if let Some(arg_cnt) = arg_count {
-                        let _args = typestate.get_call_args(*arg_cnt);
+                        let _ = typestate.get_call_args(*arg_cnt);
                         warning_printer.warn(
                             span,
                             &format!("Potential TypeError: Function '{name}' is not defined."),
@@ -1636,7 +1654,7 @@ impl<'src> TypeChecker<'src> {
                     let count = arg_count.unwrap_or(0);
                     if count > 0 {
                         // Pop (arg_count - 1) arguments
-                        let method_args = typestate.get_call_args(count - 1);
+                        let (method_args, kwargs) = typestate.get_call_args(count - 1);
                         // Pop the last one as 'self'
                         let self_type = match typestate.stack.pop() {
                             Some(val) => val,
@@ -1670,7 +1688,7 @@ impl<'src> TypeChecker<'src> {
                             continue;
                         }
 
-                        let result = match function.call(&method_args) {
+                        let result = match function.call(&method_args, &kwargs) {
                             Ok(rv) => {
                                 if *name == "raise_not_implemented"
                                     || *name == "raise_compiler_error"
@@ -1710,7 +1728,7 @@ impl<'src> TypeChecker<'src> {
                     let count = arg_count.unwrap_or(0);
                     if count > 0 {
                         // Pop (arg_count - 1) arguments
-                        let args = typestate.get_call_args(count - 1);
+                        let (args, kwargs) = typestate.get_call_args(count - 1);
                         // Pop the last one as 'self'
                         let self_type = match typestate.stack.pop() {
                             Some(val) => val,
@@ -1727,7 +1745,7 @@ impl<'src> TypeChecker<'src> {
                             continue;
                         }
 
-                        let result = match self_type.call(&args) {
+                        let result = match self_type.call(&args, &kwargs) {
                             Ok(rv) => rv,
                             Err(e) => {
                                 warning_printer.warn(

@@ -5,6 +5,7 @@ use crate::types::iterable::IterableType;
 use crate::types::list::ListType;
 use crate::types::model::ModelType;
 use crate::types::utils::CodeLocation;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -12,51 +13,72 @@ use std::sync::Arc;
 // Import the type_erase macro
 use super::type_erase::type_erase;
 
-pub trait FunctionType: Send + Sync + std::fmt::Debug {
-    fn resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error> {
-        let mut args = Vec::new();
-        let mut kwargs_map = std::collections::BTreeMap::new();
-        let mut has_kwargs = false;
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct ArgSpec {
+    pub name: String,
+    pub is_optional: bool,
+}
 
-        for arg in actual_arguments {
-            if let Type::Kwargs(kwargs) = arg {
-                has_kwargs = true;
-                for (k, v) in kwargs.iter() {
-                    kwargs_map.insert(k.clone(), v.as_ref().clone());
-                }
-            } else {
-                //positional arguments are always before kwargs
-                args.push(arg.clone());
-            }
-        }
-
-        if has_kwargs {
-            // Fill in positional arguments first, then fill from kwargs by arg_names order
-            let arg_names = self.arg_names();
-            let mut sorted_args = Vec::new();
-            let mut positional_index = 0;
-
-            for name in arg_names {
-                if positional_index < args.len() {
-                    // Use positional argument if available
-                    sorted_args.push(args[positional_index].clone());
-                    positional_index += 1;
-                } else if let Some(val) = kwargs_map.get(&format!("String({name})")) {
-                    // Use kwarg if available
-                    sorted_args.push(val.clone());
-                } else {
-                    // Missing argument, use Type::Any as fallback
-                    // This is for the case where the previous arguments have default values and users do not provide them
-                    sorted_args.push(Type::Any { hard: true });
-                }
-            }
-            self._resolve_arguments(&sorted_args)
-        } else {
-            self._resolve_arguments(&args)
+impl From<Argument> for ArgSpec {
+    fn from(arg: Argument) -> Self {
+        Self {
+            name: arg.name,
+            is_optional: arg.is_optional,
         }
     }
+}
+impl ArgSpec {
+    pub fn new(name: &str, is_optional: bool) -> Self {
+        Self {
+            name: name.to_string(),
+            is_optional,
+        }
+    }
+}
 
-    fn arg_names(&self) -> Vec<String>;
+pub trait FunctionType: Send + Sync + std::fmt::Debug {
+    fn resolve_arguments(
+        &self,
+        positional_args: &[Type],
+        kwargs: &BTreeMap<String, Type>,
+    ) -> Result<Type, crate::Error> {
+        let mut args = vec![];
+        let mut kwargs = kwargs.clone();
+
+        for (i, spec) in self.arg_specs().iter().enumerate() {
+            if i < positional_args.len() {
+                let name = spec.name.clone();
+                if kwargs.contains_key(&name) {
+                    return Err(crate::Error::new(
+                        crate::error::ErrorKind::TypeError,
+                        format!("Duplicate argument: {name}"),
+                    ));
+                }
+                args.push(positional_args[i].clone());
+            } else if let Some(value) = kwargs.get(&spec.name) {
+                args.push(value.clone());
+                kwargs.remove(&spec.name);
+            } else if spec.is_optional {
+                args.push(Type::Any { hard: true });
+            } else {
+                return Err(crate::Error::new(
+                    crate::error::ErrorKind::TypeError,
+                    format!("Missing required argument: {}", spec.name),
+                ));
+            }
+        }
+        // caller is a special argument, it is not in the arg_specs
+        kwargs.remove("caller");
+        if !kwargs.is_empty() {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                format!("Unknown arguments: {:?}", kwargs.keys()),
+            ));
+        }
+        self._resolve_arguments(&args)
+    }
+
+    fn arg_specs(&self) -> Vec<ArgSpec>;
 
     fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error>;
 }
@@ -64,8 +86,8 @@ pub trait FunctionType: Send + Sync + std::fmt::Debug {
 // Type-erased version of FunctionType
 type_erase! {
     pub trait FunctionType => DynFunctionType {
-        fn resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error>;
-        fn arg_names(&self) -> Vec<String>;
+        fn resolve_arguments(&self, positional_args: &[Type], kwargs: &BTreeMap<String, Type>) -> Result<Type, crate::Error>;
+        fn arg_specs(&self) -> Vec<ArgSpec>;
         fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error>;
     }
 }
@@ -113,9 +135,75 @@ unsafe impl Send for DynFunctionType {}
 unsafe impl Sync for DynFunctionType {}
 
 #[derive(Clone, Eq, PartialEq)]
+pub struct Argument {
+    pub name: String,
+    pub type_: Type,
+    pub is_optional: bool,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct LambdaType {
+    pub args: Vec<Type>,
+    pub ret_type: Type,
+}
+
+impl LambdaType {
+    pub fn new(args: Vec<Type>, ret_type: Type) -> Self {
+        Self { args, ret_type }
+    }
+}
+
+impl std::fmt::Debug for LambdaType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "LambdaType({:?}, {:?})", self.args, self.ret_type)
+    }
+}
+
+impl FunctionType for LambdaType {
+    fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error> {
+        if self.args.len() != actual_arguments.len() {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                format!(
+                    "Expected {} arguments, got {}",
+                    self.args.len(),
+                    actual_arguments.len()
+                ),
+            ));
+        }
+        for (arg, actual_arg) in self.args.iter().zip(actual_arguments.iter()) {
+            if !actual_arg.is_subtype_of(arg) {
+                return Err(crate::Error::new(
+                    crate::error::ErrorKind::TypeError,
+                    format!("Expected {arg}, got {actual_arg}"),
+                ));
+            }
+        }
+        Ok(self.ret_type.clone())
+    }
+
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        self.args
+            .iter()
+            .enumerate()
+            .map(|(i, _)| ArgSpec::new(&format!("arg{i}"), false))
+            .collect()
+    }
+}
+
+impl From<UserDefinedFunctionType> for LambdaType {
+    fn from(value: UserDefinedFunctionType) -> Self {
+        Self {
+            args: value.args.iter().map(|arg| arg.type_.clone()).collect(),
+            ret_type: value.ret_type.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Eq, PartialEq)]
 pub struct UserDefinedFunctionType {
     pub name: String,
-    pub args: Vec<Type>,
+    pub args: Vec<Argument>,
     pub ret_type: Type,
     pub location: CodeLocation,
 }
@@ -127,7 +215,7 @@ impl fmt::Debug for UserDefinedFunctionType {
 }
 
 impl UserDefinedFunctionType {
-    pub fn new(name: &str, args: Vec<Type>, ret_type: Type, location: CodeLocation) -> Self {
+    pub fn new(name: &str, args: Vec<Argument>, ret_type: Type, location: CodeLocation) -> Self {
         Self {
             name: name.to_string(),
             args,
@@ -151,11 +239,12 @@ impl FunctionType for UserDefinedFunctionType {
             ))
         } else {
             for (i, (expected, actual)) in self.args.iter().zip(actual_arguments).enumerate() {
-                if !actual.is_subtype_of(expected) {
+                if !actual.is_subtype_of(&expected.type_) {
                     return Err(crate::Error::new(
                         crate::error::ErrorKind::TypeError,
                         format!(
-                            "Argument type mismatch: expected {expected:?}, got {actual:?}, at index {i}"
+                            "Argument type mismatch: expected {:?}, got {actual:?}, at index {i}",
+                            expected.type_,
                         ),
                     ));
                 }
@@ -164,12 +253,8 @@ impl FunctionType for UserDefinedFunctionType {
         }
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        self.args
-            .iter()
-            .enumerate()
-            .map(|(i, _)| format!("arg{i}"))
-            .collect()
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        self.args.iter().map(|arg| arg.clone().into()).collect()
     }
 }
 
@@ -201,7 +286,7 @@ impl FunctionType for UndefinedFunctionType {
         ))
     }
 
-    fn arg_names(&self) -> Vec<String> {
+    fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![]
     }
 }
@@ -215,11 +300,11 @@ impl FunctionType for StoreResultFunctionType {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
+    fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![
-            "name".to_string(),
-            "response".to_string(),
-            "agate_table".to_string(),
+            ArgSpec::new("name", false),
+            ArgSpec::new("response", false),
+            ArgSpec::new("agate_table", false),
         ]
     }
 }
@@ -233,8 +318,8 @@ impl FunctionType for LoadResultFunctionType {
         Ok(Type::Any { hard: true })
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["name".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("name", false)]
     }
 }
 
@@ -247,8 +332,8 @@ impl FunctionType for EnvVarFunctionType {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["value".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("name", false)]
     }
 }
 
@@ -261,13 +346,13 @@ impl FunctionType for StoreRawResultFunctionType {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
+    fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![
-            "name".to_string(),
-            "message".to_string(),
-            "code".to_string(),
-            "rows_affected".to_string(),
-            "agate_table".to_string(),
+            ArgSpec::new("name", false),
+            ArgSpec::new("message", false),
+            ArgSpec::new("code", false),
+            ArgSpec::new("rows_affected", false),
+            ArgSpec::new("agate_table", false),
         ]
     }
 }
@@ -280,8 +365,8 @@ impl FunctionType for RefFunctionType {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["name".to_string(), "namespace".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("name", false), ArgSpec::new("value", true)]
     }
 }
 
@@ -293,8 +378,8 @@ impl FunctionType for SourceFunctionType {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["name".to_string(), "namespace".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("name", false), ArgSpec::new("value", true)]
     }
 }
 
@@ -307,8 +392,8 @@ impl FunctionType for DiffOfTwoDictsFunctionType {
         Ok(actual_arguments[0].clone())
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["dict_a".to_string(), "dict_b".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("dict1", false), ArgSpec::new("dict2", false)]
     }
 }
 
@@ -317,26 +402,41 @@ pub struct LogFunctionType;
 
 impl FunctionType for LogFunctionType {
     fn _resolve_arguments(&self, actual_arguments: &[Type]) -> Result<Type, crate::Error> {
-        if actual_arguments.len() != 1 {
+        if actual_arguments.len() != 2 {
             return Err(crate::Error::new(
                 crate::error::ErrorKind::TypeError,
-                "log requires exactly 1 argument",
+                "log requires exactly 2 arguments",
             ));
         }
         if !matches!(
             actual_arguments[0],
-            Type::String(_) | Type::Integer(_) | Type::Float | Type::Bool
+            Type::String(_)
+                | Type::Integer(_)
+                | Type::Float
+                | Type::Bool
+                | Type::Any { hard: true }
         ) {
             return Err(crate::Error::new(
                 crate::error::ErrorKind::TypeError,
                 "log requires a string argument",
             ));
         }
+
+        if !actual_arguments[1].is_subtype_of(&Type::Bool) {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                format!(
+                    "log info requires a boolean argument, got {:?}",
+                    actual_arguments[1]
+                ),
+            ));
+        }
+
         Ok(Type::None)
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["message".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("message", false), ArgSpec::new("info", true)]
     }
 }
 
@@ -370,8 +470,8 @@ impl FunctionType for LengthFunctionType {
         Ok(Type::Integer(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["value".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("value", false)]
     }
 }
 
@@ -407,8 +507,11 @@ impl FunctionType for JoinFunctionType {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["iterable".to_string(), "separator".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![
+            ArgSpec::new("iterable", false),
+            ArgSpec::new("separator", false),
+        ]
     }
 }
 
@@ -439,9 +542,7 @@ impl FunctionType for MapFunctionType {
                     ));
                 }
             }?;
-            Ok(Type::Iterable(IterableType::new(
-                element.get_attribute(key.as_str())?,
-            )))
+            Ok(Type::Iterable(IterableType::new(element)))
         } else if matches!(actual_arguments[1], Type::Any { hard: true }) {
             Ok(Type::Any { hard: true })
         } else {
@@ -455,8 +556,11 @@ impl FunctionType for MapFunctionType {
         }
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["iterable".to_string(), "attribute".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![
+            ArgSpec::new("iterable", false),
+            ArgSpec::new("attribute", false),
+        ]
     }
 }
 
@@ -489,8 +593,8 @@ impl FunctionType for ListFunctionType {
         Ok(Type::List(ListType::new(*element.clone())))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["iterable".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("iterable", false)]
     }
 }
 
@@ -520,8 +624,8 @@ impl FunctionType for CastFunctionType {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["type".to_string(), "value".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("type", false), ArgSpec::new("value", false)]
     }
 }
 
@@ -558,8 +662,8 @@ impl FunctionType for TrimFunctionType {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["s".to_string(), "chars".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("value", false), ArgSpec::new("chars", true)]
     }
 }
 
@@ -585,8 +689,8 @@ impl FunctionType for UpperFunctionType {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["v".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("value", false)]
     }
 }
 
@@ -612,8 +716,8 @@ impl FunctionType for LowerFunctionType {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["v".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("value", false)]
     }
 }
 
@@ -640,8 +744,8 @@ impl FunctionType for RangeFunctionType {
         Ok(Type::List(ListType::new(Type::Integer(None))))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["arg1".to_string(), "arg2".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("start", false), ArgSpec::new("end", false)]
     }
 }
 
@@ -661,8 +765,8 @@ impl FunctionType for StringFunctionType {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["value".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("value", false)]
     }
 }
 
@@ -703,8 +807,13 @@ impl FunctionType for ReplaceFunctionType {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["value".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![
+            ArgSpec::new("value", false),
+            ArgSpec::new("old", false),
+            ArgSpec::new("new", false),
+            ArgSpec::new("count", true),
+        ]
     }
 }
 
@@ -730,8 +839,8 @@ impl FunctionType for GetColumnSchemaFromQueryFunction {
         )))))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["sql".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("sql", false)]
     }
 }
 
@@ -775,12 +884,11 @@ impl FunctionType for TryOrCompilerErrorFunctionType {
         Ok(Type::Any { hard: true })
     }
 
-    fn arg_names(&self) -> Vec<String> {
+    fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![
-            "message_if_exception".to_string(),
-            "func".to_string(),
-            "args".to_string(),
-            // TODO: arg number depends on the function
+            ArgSpec::new("message_if_exception", false),
+            ArgSpec::new("func", false),
+            ArgSpec::new("args", false), // TODO: arg number depends on the function
         ]
     }
 }
@@ -793,7 +901,7 @@ impl FunctionType for CallerFunctionType {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
+    fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![]
     }
 }
@@ -824,8 +932,8 @@ impl FunctionType for WriteFunctionType {
         Ok(Type::None)
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["value".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("value", false)]
     }
 }
 
@@ -864,8 +972,11 @@ impl FunctionType for SubmitPythonJobFunctionType {
         Ok(Type::Any { hard: false })
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["model".to_string(), "compiled_code".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![
+            ArgSpec::new("model", false),
+            ArgSpec::new("compiled_code", false),
+        ]
     }
 }
 
@@ -913,24 +1024,17 @@ impl FunctionType for SelectAttrFunctionType {
                 ),
             ));
         }
-        if !args[3].is_subtype_of(&Type::Bool) {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::TypeError,
-                format!(
-                    "Expected a boolean argument for selectattr function, got {:?}",
-                    args[3]
-                ),
-            ));
-        }
+        // TODO check the args[3] based on the op
+
         Ok(args[0].clone())
     }
 
-    fn arg_names(&self) -> Vec<String> {
+    fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![
-            "list".to_string(),
-            "name".to_string(),
-            "value".to_string(),
-            "inside_transaction".to_string(),
+            ArgSpec::new("list", false),
+            ArgSpec::new("name", false),
+            ArgSpec::new("op", false),
+            ArgSpec::new("inside_transaction", true),
         ]
     }
 }
@@ -950,8 +1054,8 @@ impl FunctionType for ToJsonFunctionType {
         Ok(Type::Any { hard: true })
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["value".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("value", false)]
     }
 }
 
@@ -981,8 +1085,8 @@ impl FunctionType for RenderFunctionType {
         Ok(Type::String(None))
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["value".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("value", false)]
     }
 }
 
@@ -1001,7 +1105,38 @@ impl FunctionType for PrintFunctionType {
         Ok(Type::None)
     }
 
-    fn arg_names(&self) -> Vec<String> {
-        vec!["value".to_string()]
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("value", false)]
+    }
+}
+
+#[derive(Default, Clone, Eq, PartialEq)]
+pub struct FirstFunctionType;
+
+impl fmt::Debug for FirstFunctionType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("first")
+    }
+}
+
+impl FunctionType for FirstFunctionType {
+    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
+        if args.len() != 1 {
+            return Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "Expected 1 argument for first function",
+            ));
+        }
+        match &args[0] {
+            Type::List(ListType { element, .. }) => Ok(element.as_ref().clone()),
+            _ => Err(crate::Error::new(
+                crate::error::ErrorKind::TypeError,
+                "Expected a list argument for first function",
+            )),
+        }
+    }
+
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("iterable", false)]
     }
 }
