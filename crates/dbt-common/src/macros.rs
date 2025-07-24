@@ -175,18 +175,33 @@ macro_rules! ectx {
 
 #[macro_export]
 macro_rules! show_result {
-    ( $io:expr, $option:expr, $artifact:expr) => {{
+    ( $io:expr, $option:expr, $artifact:expr) => {
+        $crate::show_result!($io, $option, $artifact, columns = Option::<&[String]>::None)
+    };
+
+    ( $io:expr, $option:expr, $artifact:expr, columns = $columns:expr) => {{
         use $crate::io_args::ShowOptions;
         use dbt_common::constants::INLINE_NODE;
         use serde_json::json;
         if $io.should_show($option) {
             let output = format!("\n{}", $artifact);
             // this preview field and name is used by the dbt-cloud CLI to display the result
+            let mut data = json!({
+                "preview": $artifact.to_string(),
+                "unique_id": INLINE_NODE
+            });
+
+            // columns can be used to show column names when the resultset is empty, eg.
+            //   { "preview": "[]", "columns": ["column1", "column2"] }
+            if let Some(cols) = $columns {
+                data["columns"] = json!(cols);
+            }
+
             $crate::_log!(
                 $crate::macros::log_adapter::log::Level::Info,
                 _INVOCATION_ID_ = $io.invocation_id.as_u128(),
                 name= "ShowNode",
-                data:serde = json!({ "preview": $artifact.to_string(), "unique_id": INLINE_NODE });
+                data:serde = data;
                 "{}", output
             );
         }
