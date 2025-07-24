@@ -789,7 +789,9 @@ class ValidationWarning(WarnLevel):
         return "I009"
 
     def message(self) -> str:
-        return f"Field {self.field_name} is not valid for {self.resource_type} ({self.node_name})"
+        return warning_tag(
+            f"Field {self.field_name} is not valid for {self.resource_type} ({self.node_name})"
+        )
 
 
 class ParsePerfInfoPath(InfoLevel):

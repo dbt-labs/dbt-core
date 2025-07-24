@@ -26,7 +26,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedSourceDefinition,
     UnparsedSourceTableDefinition,
 )
-from dbt.events.types import FreshnessConfigProblem, UnusedTables
+from dbt.events.types import FreshnessConfigProblem, UnusedTables, ValidationWarning
 from dbt.exceptions import ParsingError
 from dbt.node_types import NodeType
 from dbt.parser.common import ParserRef
@@ -487,20 +487,36 @@ class SourcePatcher:
 
     def calculate_tags_from_raw_target(self, target: UnpatchedSourceDefinition) -> List[str]:
         source_tags = target.source.tags or []
-        source_config_tags = target.source.config.get("tags", [])
-        source_config_tags = (
-            source_config_tags if isinstance(source_config_tags, list) else [source_config_tags]
+        source_config_tags = self._get_config_tags(
+            target.source.config.get("tags", []), target.source.name
         )
 
         table_tags = target.table.tags or []
-        table_config_tags = target.table.config.get("tags", [])
-        table_config_tags = (
-            table_config_tags if isinstance(table_config_tags, list) else [table_config_tags]
+        table_config_tags = self._get_config_tags(
+            target.table.config.get("tags", []), target.table.name
         )
 
         return sorted(
             set(itertools.chain(source_tags, source_config_tags, table_tags, table_config_tags))
         )
+
+    def _get_config_tags(self, tags: Any, source_name: str) -> List[str]:
+        config_tags = tags if isinstance(tags, list) else [tags]
+
+        config_tags_valid: List[str] = []
+        for tag in config_tags:
+            if not isinstance(tag, str):
+                warn_or_error(
+                    ValidationWarning(
+                        field_name=f"`config.tags`: {tags}",
+                        resource_type=NodeType.Source.value,
+                        node_name=source_name,
+                    )
+                )
+            else:
+                config_tags_valid.append(tag)
+
+        return config_tags_valid
 
 
 def merge_freshness_time_thresholds(
