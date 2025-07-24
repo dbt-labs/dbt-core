@@ -1,3 +1,0 @@
-kind: Fixes
-body: add support for LIKE SOME/ANY/ALL in databricks dialect
-time: 2025-07-22T19:38:49.399545-04:00
