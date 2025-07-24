@@ -224,6 +224,8 @@ Code can be merged into the current development branch `main` by opening a pull 
 
 Automated tests run via GitHub Actions. If you're a first-time contributor, all tests (including code checks and unit tests) will require a maintainer to approve. Changes in the `dbt-core` repository trigger integration tests against Postgres. dbt Labs also provides CI environments in which to test changes to other adapters, triggered by PRs in those adapters' repositories, as well as periodic maintenance checks of each adapter in concert with the latest `dbt-core` code changes.
 
+We require signed git commits. See docs [here](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits) for setting up code signing.
+
 Once all tests are passing, all comments are resolved, and your PR has been approved, a `dbt-core` maintainer will merge your changes into the active development branch. And that's it! Happy developing :tada:
 
 ## Troubleshooting Tips
