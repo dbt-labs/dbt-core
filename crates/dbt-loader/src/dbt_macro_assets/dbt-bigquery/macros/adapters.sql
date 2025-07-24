@@ -184,14 +184,6 @@ having count(*) > 1
 
 {% endmacro %}
 
-{% macro bigquery__upload_file(local_file_path, database, table_schema, table_name) %}
-
-  {{ log("kwargs: " ~ kwargs) }}
-
-  {% do adapter.upload_file(local_file_path, database, table_schema, table_name, kwargs=kwargs) %}
-
-{% endmacro %}
-
 -- Fusion
 {% macro bigquery__create_schema(relation) -%}
   {%- call statement('create_schema') -%}
