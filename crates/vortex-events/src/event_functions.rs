@@ -15,15 +15,16 @@ use proto_rust::v1::public::events::fusion::{
 };
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use uuid::Uuid;
 
 use vortex_client::client::{ProducerError, log_proto, log_proto_and_shutdown};
 
 pub fn invocation_start_event(
-    invocation_id: String,
+    invocation_id: &Uuid,
     root_project_name: &str,
-    profile_path: PathBuf,
-    command: &str,
+    profile_path: Option<&Path>,
+    command: String,
 ) {
     let env = InternalEnv::global();
     // Some commands don't load dbt_project
@@ -35,7 +36,7 @@ pub fn invocation_start_event(
     // Create Invocation start message
     let message = Invocation {
         //  REQUIRED invocation_id - globally unique identifier
-        invocation_id: invocation_id.clone(),
+        invocation_id: invocation_id.to_string(),
         // REQUIRED  event_id - unique identifier for this event (uuid)
         event_id: uuid::Uuid::new_v4().to_string(),
         //  progress - start/end
@@ -45,9 +46,9 @@ pub fn invocation_start_event(
         //  project_id - MD5 hash of the project name
         project_id,
         //  user_id - UUID generated to identify a unique user (~/.dbt/.user.yml)
-        user_id: get_user_id(profile_path),
+        user_id: profile_path.map(get_user_id).unwrap_or("".to_string()),
         //  command - full string of the command that was run
-        command: command.to_string(),
+        command,
         //  result_type - ok/error.
         //  only provided on invocation_end
         result_type: "".to_string(),
@@ -63,7 +64,7 @@ pub fn invocation_start_event(
     // dbt-core: core/dbt/tracking.py::get_dbt_env_context
     let message = InvocationEnv {
         // REQUIRED invocation_id - globally unique identifier
-        invocation_id: invocation_id.clone(),
+        invocation_id: invocation_id.to_string(),
         // REQUIRED  event_id - unique identifier for this event (uuid)
         event_id: uuid::Uuid::new_v4().to_string(),
         // This is a string that indicates the environment in which the invocation is
@@ -324,11 +325,11 @@ pub fn resource_counts_event(args: InvocationArgs, manifest: &DbtManifest) {
     let _ = log_proto(message);
 }
 
-pub fn cloud_invocation_event(invocation_id: String) {
+pub fn cloud_invocation_event(invocation_id: &Uuid) {
     let env = InternalEnv::global();
     let message = CloudInvocation {
         // REQUIRED invocation_id - globally unique identifier
-        invocation_id,
+        invocation_id: invocation_id.to_string(),
         // REQUIRED Globally unique account identifier in which the invocation is run.
         // Comes from the DBT_CLOUD_ACCOUNT_IDENTIFIER environment variable.
         // e.g. act_0g9JY6ZTSUNAQPG6WvLNYYdmYHW
@@ -399,7 +400,7 @@ pub fn adapter_info_v2_event() {
 
 /// This looks for or creates a .user.yml file in the same directory
 /// as the profiles.yml file, which stores a uuid user_id.
-pub fn get_user_id(profile_path: PathBuf) -> String {
+pub fn get_user_id(profile_path: &Path) -> String {
     let profiles_dir = profile_path.parent();
     if let Some(profiles_dir) = profiles_dir {
         let cookie_path = profiles_dir.join(".user.yml");
