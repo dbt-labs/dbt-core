@@ -456,6 +456,12 @@ pub enum DisplayFormat {
     Json,
     NdJson,
     Yml,
+    /// Output nodes as selector strings (e.g. "source:pkg.source_name.table_name")
+    Selector,
+    /// Output nodes as search names (node.search_name)
+    Name,
+    /// Output nodes as file paths (node.original_file_path)
+    Path,
 }
 
 #[derive(Debug, Clone)]

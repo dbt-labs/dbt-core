@@ -130,7 +130,7 @@ pub struct ListArgs {
     #[arg(long, default_value=DEFAULT_LIMIT, allow_hyphen_values = true, hide = true)]
     pub limit: RowLimit,
 
-    /// Display rows in different formats, only table and json supported...
+    /// Display rows in different formats. Supports table, json, selector, name, and path formats.
     #[arg(global = true, long, aliases = ["format"])]
     pub output: Option<DisplayFormat>,
 

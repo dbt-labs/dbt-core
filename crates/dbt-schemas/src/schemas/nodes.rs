@@ -215,6 +215,26 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
         None
     }
 
+    /// Returns the search name for this node, following Python dbt patterns:
+    /// - Models: name (or name.v{version} if versioned)
+    /// - Sources: source_name.name  
+    /// - Others: name
+    fn search_name(&self) -> String;
+
+    /// Returns the selector string for this node, following Python dbt patterns:
+    /// - Models/Seeds/Tests/Snapshots: use fqn joined with "."
+    /// - Sources: "source:pkg.source_name.table_name"
+    /// - Unit tests: "unit_test:pkg.versioned_name"
+    fn selector_string(&self) -> String;
+
+    /// Returns the file path for this node
+    fn file_path(&self) -> String {
+        self.common()
+            .original_file_path
+            .to_string_lossy()
+            .to_string()
+    }
+
     // TO BE DEPRECATED
     fn serialized_config(&self) -> Value;
 }
@@ -324,6 +344,19 @@ impl InternalDbtNodeAttributes for DbtModel {
     fn get_group(&self) -> Option<String> {
         self.model_attr.group.clone()
     }
+
+    fn search_name(&self) -> String {
+        if let Some(version) = &self.model_attr.version {
+            format!("{}.v{}", self.common_attr.name, version)
+        } else {
+            self.common_attr.name.clone()
+        }
+    }
+
+    fn selector_string(&self) -> String {
+        self.common_attr.fqn.join(".")
+    }
+
     fn serialized_config(&self) -> Value {
         serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
     }
@@ -396,6 +429,15 @@ impl InternalDbtNodeAttributes for DbtSeed {
     fn meta(&self) -> BTreeMap<String, Value> {
         self.common_attr.meta.clone()
     }
+
+    fn search_name(&self) -> String {
+        self.common_attr.name.clone()
+    }
+
+    fn selector_string(&self) -> String {
+        self.common_attr.fqn.join(".")
+    }
+
     fn serialized_config(&self) -> Value {
         serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
     }
@@ -474,6 +516,15 @@ impl InternalDbtNodeAttributes for DbtTest {
     fn meta(&self) -> BTreeMap<String, Value> {
         self.common_attr.meta.clone()
     }
+
+    fn search_name(&self) -> String {
+        self.common_attr.name.clone()
+    }
+
+    fn selector_string(&self) -> String {
+        self.common_attr.fqn.join(".")
+    }
+
     fn serialized_config(&self) -> Value {
         serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
     }
@@ -555,6 +606,24 @@ impl InternalDbtNodeAttributes for DbtUnitTest {
     fn meta(&self) -> BTreeMap<String, Value> {
         self.common_attr.meta.clone()
     }
+
+    fn search_name(&self) -> String {
+        // Based on Python implementation, unit tests can have a versioned name
+        if let Some(version) = &self.unit_test_attr.version {
+            format!("{}_v{}", self.common_attr.name, version)
+        } else {
+            self.common_attr.name.clone()
+        }
+    }
+
+    fn selector_string(&self) -> String {
+        format!(
+            "unit_test:{}.{}",
+            self.common_attr.package_name,
+            self.search_name()
+        )
+    }
+
     fn serialized_config(&self) -> Value {
         serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
     }
@@ -639,6 +708,18 @@ impl InternalDbtNodeAttributes for DbtSource {
     fn meta(&self) -> BTreeMap<String, Value> {
         self.common_attr.meta.clone()
     }
+
+    fn search_name(&self) -> String {
+        format!("{}.{}", self.source_attr.source_name, self.common_attr.name)
+    }
+
+    fn selector_string(&self) -> String {
+        format!(
+            "source:{}.{}.{}",
+            self.common_attr.package_name, self.source_attr.source_name, self.common_attr.name
+        )
+    }
+
     fn serialized_config(&self) -> Value {
         serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
     }
@@ -709,6 +790,15 @@ impl InternalDbtNodeAttributes for DbtSnapshot {
     fn meta(&self) -> BTreeMap<String, Value> {
         self.common_attr.meta.clone()
     }
+
+    fn search_name(&self) -> String {
+        self.common_attr.name.clone()
+    }
+
+    fn selector_string(&self) -> String {
+        self.common_attr.fqn.join(".")
+    }
+
     fn serialized_config(&self) -> Value {
         serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
     }

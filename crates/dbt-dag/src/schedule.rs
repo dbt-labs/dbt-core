@@ -119,18 +119,26 @@ impl Schedule<String> {
             let node = nodes
                 .get_node(selected_id)
                 .expect("selected node not in manifest");
-            let fqn = node.common().fqn.join(".");
-            let node_value = node.serialize();
             match output_format {
                 DisplayFormat::Json => {
+                    let node_value = node.serialize();
                     let json_string = Self::generate_json_output(&node_value, output_keys);
                     res.push(json_string);
                 }
-                // Handle other DisplayFormat variants if necessary (Csv, Markdown, Html, Table)
-                // For now, maybe default them to Text output or return an error?
+                DisplayFormat::Selector => {
+                    res.push(node.selector_string());
+                }
+                DisplayFormat::Name => {
+                    res.push(node.search_name());
+                }
+                DisplayFormat::Path => {
+                    res.push(node.file_path());
+                }
+                // Handle other DisplayFormat variants if necessary (Csv, Tsv, Yml, Table)
+                // For now, default them to FQN output for backward compatibility
                 _ => {
-                    // Default to Text for other formats for now
-                    res.push(fqn);
+                    // Default to Selector for other formats for now
+                    res.push(node.selector_string());
                 }
             }
         }
