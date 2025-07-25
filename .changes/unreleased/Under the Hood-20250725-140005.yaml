@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Lazy import of include.jsonschemas to avoid local ModuleNotFoundError issues
+time: 2025-07-25T14:00:05.396192-04:00
+custom:
+    Author: michelleark
+    Issue: "11862"
