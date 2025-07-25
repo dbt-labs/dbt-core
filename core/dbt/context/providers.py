@@ -264,7 +264,7 @@ class BaseResolver(metaclass=abc.ABCMeta):
         if should_quote:
             return column.quoted
         else:
-            return column.name
+            return target.config.event_time
         
     def resolve_event_time_filter(self, target: ManifestNode) -> Optional[EventTimeFilter]:
         event_time_filter = None
