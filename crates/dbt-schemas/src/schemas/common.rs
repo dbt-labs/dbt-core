@@ -39,6 +39,73 @@ impl FreshnessRules {
         Ok(())
     }
 }
+
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdatesOn {
+    #[default]
+    Any,
+    All,
+}
+
+impl std::fmt::Display for UpdatesOn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UpdatesOn::Any => write!(f, "any"),
+            UpdatesOn::All => write!(f, "all"),
+        }
+    }
+}
+
+impl FromStr for UpdatesOn {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "any" => Ok(UpdatesOn::Any),
+            "all" => Ok(UpdatesOn::All),
+            _ => Err(format!("Unknown UpdatesOn value: {s}")),
+        }
+    }
+}
+
+#[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
+pub struct ModelFreshnessRules {
+    pub count: Option<i64>,
+    pub period: Option<FreshnessPeriod>,
+    pub updates_on: Option<UpdatesOn>,
+}
+
+impl ModelFreshnessRules {
+    pub fn validate(rule: Option<&Self>) -> FsResult<()> {
+        if rule.is_none() {
+            return Ok(());
+        }
+        let rule = rule.expect("rule should be Some now");
+        if rule.count.is_none() || rule.period.is_none() {
+            return Err(fs_err!(
+                ErrorCode::InvalidArgument,
+                "count and period are required when freshness is provided, count: {:?}, period: {:?}",
+                rule.count,
+                rule.period
+            ));
+        }
+        Ok(())
+    }
+
+    /// Convert the freshness duration to seconds
+    pub fn to_seconds(&self) -> i64 {
+        let count = self.count.expect("count is required");
+        let period = self.period.as_ref().expect("period is required");
+        count
+            * match period {
+                FreshnessPeriod::minute => 60,
+                FreshnessPeriod::hour => 60 * 60,
+                FreshnessPeriod::day => 60 * 60 * 24,
+            }
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum FreshnessPeriod {

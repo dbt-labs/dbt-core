@@ -134,7 +134,6 @@ pub mod schemas {
         pub use model_properties::ModelConstraint;
         pub use model_properties::ModelFreshness;
         pub use model_properties::ModelProperties;
-        pub use model_properties::UpdatesOn;
         pub use properties::{
             DbtPropertiesFile, DbtPropertiesFileValues, GetConfig, MinimalSchemaValue,
             MinimalTableValue,

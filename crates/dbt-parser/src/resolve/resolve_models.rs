@@ -29,7 +29,7 @@ use dbt_schemas::schemas::IntrospectionKind;
 use dbt_schemas::schemas::NodeBaseAttributes;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::DbtQuoting;
-use dbt_schemas::schemas::common::FreshnessRules;
+use dbt_schemas::schemas::common::ModelFreshnessRules;
 use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::project::DbtProject;
@@ -173,7 +173,7 @@ pub async fn resolve_models(
         model_config.enabled = Some(!(status == ModelStatus::Disabled));
 
         if let Some(freshness) = &model_config.freshness {
-            FreshnessRules::validate(freshness.build_after.as_ref()).map_err(|e| {
+            ModelFreshnessRules::validate(freshness.build_after.as_ref()).map_err(|e| {
                 fs_err!(
                     code => ErrorCode::InvalidConfig,
                     loc => dbt_asset.path.clone(),
@@ -233,7 +233,7 @@ pub async fn resolve_models(
         validate_merge_update_columns_xor(&model_config, &dbt_asset.path)?;
 
         if let Some(freshness) = &model_config.freshness {
-            FreshnessRules::validate(freshness.build_after.as_ref())?;
+            ModelFreshnessRules::validate(freshness.build_after.as_ref())?;
         }
 
         // Create the DbtModel with all properties already set
