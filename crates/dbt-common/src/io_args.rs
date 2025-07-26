@@ -255,7 +255,6 @@ pub struct EvalArgs {
     pub skip_unreferenced_table_check: bool,
     pub state: Option<PathBuf>,
     pub defer_state: Option<PathBuf>,
-    pub patterned_dangling_sources: bool,
     pub connection: bool,
     pub macro_name: String,
     pub macro_args: BTreeMap<String, Value>,

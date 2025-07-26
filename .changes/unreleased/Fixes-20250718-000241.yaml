@@ -1,0 +1,3 @@
+kind: Fixes
+body: Remove unused 'patterned_dangling_sources' logic + command line flag
+time: 2025-07-18T00:02:41.278358744-07:00

@@ -208,7 +208,8 @@ pub async fn resolve(
     let parse_adapter = jinja_env
         .get_parse_adapter()
         .expect("parse adapter must be initialized");
-    let (dangling_sources, patterned_dangling_sources) = parse_adapter.dangling_sources();
+    let (call_get_relation, call_get_columns_in_relation, patterned_dangling_sources) =
+        parse_adapter.relations_to_fetch();
     let root_runtime_config = all_runtime_configs
         .get(dbt_state.root_project_name())
         .unwrap();
@@ -230,9 +231,10 @@ pub async fn resolve(
             render_results: collector,
             run_started_at: dbt_state.run_started_at,
             refs_and_sources: Arc::new(refs_and_sources),
-            dangling_sources: dangling_sources?,
-            runtime_config: root_runtime_config.clone(),
+            get_relation_calls: call_get_relation?,
+            get_columns_in_relation_calls: call_get_columns_in_relation?,
             patterned_dangling_sources,
+            runtime_config: root_runtime_config.clone(),
             resolved_selectors,
             root_project_quoting: root_project_quoting.try_into()?,
         },

@@ -175,8 +175,6 @@ pub async fn resolve_data_tests(
             dbt_asset.path.to_owned(),
             vec![model_name.to_owned()],
         );
-        // merge schema_file_info
-        let columns_map = BTreeMap::new();
 
         // Errored models can be enabled, so enabled is set to the opposite of disabled
         test_config.enabled = Some(!(*status == ModelStatus::Disabled));
@@ -221,7 +219,7 @@ pub async fn resolve_data_tests(
                 materialized: DbtMaterialization::Test,
                 enabled: test_config.enabled.unwrap_or(true),
                 extended_model: false,
-                columns: columns_map,
+                columns: BTreeMap::new(),
                 depends_on: NodeDependsOn::default(),
                 refs: sql_file_info
                     .refs

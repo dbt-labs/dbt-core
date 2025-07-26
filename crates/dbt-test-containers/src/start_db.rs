@@ -24,7 +24,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = ContainerConfig {
         image_name_base: "postgres-fs-tests".to_string(),
         image_uri: None,
-        dockerfile_path: Some("crates/dbt-test-containers/docker/postgres/Dockerfile".into()),
+        dockerfile_path: Some("fs/sa/crates/dbt-test-containers/docker/postgres/Dockerfile".into()),
         ro_mount_paths: vec![],
         rw_mount_path: None,
         port_bindings: HashMap::from_iter([(
