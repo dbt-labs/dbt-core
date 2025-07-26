@@ -207,6 +207,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
             enabled: true,
             extended_model: false,
             quoting: ResolvedQuoting::trues(),
+            quoting_ignore_case: false,
             columns: BTreeMap::new(),
             depends_on: NodeDependsOn {
                 macros: vec![],

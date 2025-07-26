@@ -1423,6 +1423,8 @@ pub struct NodeBaseAttributes {
 
     // Resolved Quoting
     pub quoting: ResolvedQuoting,
+    // TODO: Potentially add ignore_case to ResolvedQuoting
+    pub quoting_ignore_case: bool,
     pub materialized: DbtMaterialization,
     pub static_analysis: StaticAnalysisKind,
     pub enabled: bool,

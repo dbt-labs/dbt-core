@@ -276,6 +276,7 @@ pub fn resolve_unit_tests(
                 enabled,
                 extended_model: false,
                 quoting: package_quoting.try_into()?,
+                quoting_ignore_case: package_quoting.snowflake_ignore_case.unwrap_or(false),
                 materialized: DbtMaterialization::Unit,
                 static_analysis: properties_config
                     .static_analysis

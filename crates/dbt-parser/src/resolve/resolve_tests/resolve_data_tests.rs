@@ -216,6 +216,11 @@ pub async fn resolve_data_tests(
                     .expect("quoting is required")
                     .try_into()
                     .expect("quoting is required"),
+                quoting_ignore_case: test_config
+                    .quoting
+                    .expect("quoting is required")
+                    .snowflake_ignore_case
+                    .unwrap_or(false),
                 materialized: DbtMaterialization::Test,
                 enabled: test_config.enabled.unwrap_or(true),
                 extended_model: false,

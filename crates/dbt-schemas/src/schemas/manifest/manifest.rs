@@ -401,6 +401,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 .unwrap_or(dbt_quoting)
                                 .try_into()
                                 .expect("DbtQuoting should be set"),
+                            quoting_ignore_case: false,
                             columns: model.base_attr.columns,
                             depends_on: model.base_attr.depends_on,
                             refs: model.base_attr.refs,
@@ -470,6 +471,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 .unwrap_or(dbt_quoting)
                                 .try_into()
                                 .expect("DbtQuoting should be set"),
+                            quoting_ignore_case: false,
                             columns: test.base_attr.columns,
                             depends_on: test.base_attr.depends_on,
                             refs: test.base_attr.refs,
@@ -534,6 +536,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 .unwrap_or(dbt_quoting)
                                 .try_into()
                                 .expect("DbtQuoting should be set"),
+                            quoting_ignore_case: false,
                             columns: snapshot.base_attr.columns,
                             depends_on: snapshot.base_attr.depends_on,
                             refs: snapshot.base_attr.refs,
@@ -596,6 +599,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 .unwrap_or(dbt_quoting)
                                 .try_into()
                                 .expect("DbtQuoting should be set"),
+                            quoting_ignore_case: false,
                             extended_model: false,
                             columns: seed.base_attr.columns,
                             depends_on: seed.base_attr.depends_on,
@@ -660,6 +664,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         .unwrap_or(dbt_quoting)
                         .try_into()
                         .expect("DbtQuoting should be set"),
+                    quoting_ignore_case: false,
                     columns: source.columns,
                     depends_on: NodeDependsOn::default(),
                     refs: vec![],
@@ -712,6 +717,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     materialized: DbtMaterialization::Table,
                     static_analysis: StaticAnalysisKind::On,
                     quoting: dbt_quoting.try_into().expect("DbtQuoting should be set"),
+                    quoting_ignore_case: false,
                     enabled: unit_test.config.enabled.unwrap_or(true),
                     extended_model: false,
                     columns: unit_test.base_attr.columns,

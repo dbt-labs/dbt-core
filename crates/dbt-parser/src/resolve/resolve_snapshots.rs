@@ -258,6 +258,11 @@ pub async fn resolve_snapshots(
                         .expect("quoting is required")
                         .try_into()
                         .expect("quoting is required"),
+                    quoting_ignore_case: final_config
+                        .quoting
+                        .unwrap_or_default()
+                        .snowflake_ignore_case
+                        .unwrap_or(false),
                     static_analysis: final_config
                         .static_analysis
                         .unwrap_or(StaticAnalysisKind::On),

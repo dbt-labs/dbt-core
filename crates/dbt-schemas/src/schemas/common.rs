@@ -365,6 +365,8 @@ pub struct DbtQuoting {
     pub database: Option<bool>,
     pub identifier: Option<bool>,
     pub schema: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snowflake_ignore_case: Option<bool>,
 }
 
 impl DbtQuoting {

@@ -167,6 +167,7 @@ pub fn resolve_sources(
 
         let mut table_quoting = table.quoting.unwrap_or_default();
         table_quoting.default_to(&source_quoting);
+        let quoting_ignore_case = table_quoting.snowflake_ignore_case.unwrap_or(false);
 
         let (database, schema, identifier, quoting) = normalize_quoting(
             &table_quoting.try_into()?,
@@ -238,6 +239,7 @@ pub fn resolve_sources(
                 alias: identifier.to_owned(),
                 relation_name: Some(relation_name),
                 quoting,
+                quoting_ignore_case,
                 enabled: is_enabled,
                 extended_model: false,
                 materialized: DbtMaterialization::External,

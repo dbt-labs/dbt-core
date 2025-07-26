@@ -183,6 +183,7 @@ pub async fn resolve_analyses(
                 extended_model: false,
                 materialized: DbtMaterialization::Analysis,
                 quoting: ResolvedQuoting::trues(),
+                quoting_ignore_case: false,
                 static_analysis: StaticAnalysisKind::On,
                 columns,
                 depends_on: NodeDependsOn::default(),

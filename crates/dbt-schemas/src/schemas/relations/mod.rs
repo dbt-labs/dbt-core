@@ -19,12 +19,14 @@ pub static DEFAULT_DBT_QUOTING: DbtQuoting = DbtQuoting {
     database: Some(true),
     schema: Some(true),
     identifier: Some(true),
+    snowflake_ignore_case: Some(false),
 };
 
 pub static SNOWFLAKE_DBT_QUOTING: DbtQuoting = DbtQuoting {
     database: Some(false),
     schema: Some(false),
     identifier: Some(false),
+    snowflake_ignore_case: Some(false),
 };
 
 pub static DEFAULT_DATABRICKS_DATABASE: &str = "hive_metastore";

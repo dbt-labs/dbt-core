@@ -392,6 +392,7 @@ impl From<DbtSource> for ManifestSource {
                 database: Some(source.base_attr.quoting.database),
                 schema: Some(source.base_attr.quoting.schema),
                 identifier: Some(source.base_attr.quoting.identifier),
+                snowflake_ignore_case: None,
             }),
             source_description: source.source_attr.source_description,
             unrendered_config: BTreeMap::new(),

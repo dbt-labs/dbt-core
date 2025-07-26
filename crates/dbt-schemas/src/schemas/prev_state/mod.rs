@@ -50,6 +50,7 @@ impl PreviousState {
             database: Some(root_project_quoting.database),
             schema: Some(root_project_quoting.schema),
             identifier: Some(root_project_quoting.identifier),
+            snowflake_ignore_case: None,
         };
         let quoting = if let Some(mut mantle_quoting) = manifest.metadata.quoting {
             mantle_quoting.default_to(&dbt_quoting);

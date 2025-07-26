@@ -294,6 +294,11 @@ pub async fn resolve_models(
                     .expect("quoting is required")
                     .try_into()
                     .expect("quoting is required"),
+                quoting_ignore_case: model_config
+                    .quoting
+                    .unwrap_or_default()
+                    .snowflake_ignore_case
+                    .unwrap_or(false),
                 static_analysis: model_config
                     .static_analysis
                     .unwrap_or(StaticAnalysisKind::On),
