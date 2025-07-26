@@ -508,6 +508,7 @@ sample_values = [
     core_types.ArtifactUploadSuccess(),
     core_types.ArtifactUploadError(),
     core_types.ArtifactUploadSkipped(),
+    core_types.OpenLineageException(),
 ]
 
 
