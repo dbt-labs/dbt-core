@@ -5,7 +5,7 @@
 //! this is only a partial implementation of Python's `re` spec, it demonstrates the
 //! pattern-oriented usage consistent with MiniJinja's function/value approach.
 
-use fancy_regex::Regex; // like python regex, fancy_regex supports lookadheds/lookbehinds
+use fancy_regex::{Captures, Expander, Regex}; // like python regex, fancy_regex supports lookadheds/lookbehinds
 use minijinja::{value::Object, Error, ErrorKind, Value};
 use std::{collections::BTreeMap, iter};
 
@@ -269,14 +269,17 @@ fn re_sub(args: &[Value]) -> Result<Value, Error> {
 
     let count = args.get(3).and_then(|v| v.as_i64()).unwrap_or(0);
 
+    let expander = Expander::python();
+    let replacer = |caps: &Captures| expander.expansion(&repl_text, caps);
+
     if count == 0 {
         Ok(Value::from(
-            regex.replace_all(text_arg, &repl_text).to_string(),
+            regex.replace_all(text_arg, replacer).to_string(),
         ))
     } else {
         Ok(Value::from(
             regex
-                .replacen(text_arg, count as usize, &repl_text)
+                .replacen(text_arg, count as usize, replacer)
                 .to_string(),
         ))
     }
@@ -356,5 +359,30 @@ impl Object for Capture {
                 format!("Method '{method}' not found"),
             ))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_re_sub() {
+        let result = re_sub(&[
+            Value::from("(A)".to_string()),
+            Value::from("_\\1_".to_string()),
+            Value::from("ABAB $1".to_string()),
+        ])
+        .unwrap();
+        assert_eq!(result.to_string(), "_A_B_A_B $1");
+
+        let result = re_sub(&[
+            Value::from("(A)".to_string()),
+            Value::from("_\\1_".to_string()),
+            Value::from("ABAB $1".to_string()),
+            Value::from(1),
+        ])
+        .unwrap();
+        assert_eq!(result.to_string(), "_A_BAB $1");
     }
 }
