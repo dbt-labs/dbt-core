@@ -98,6 +98,10 @@ pub struct RelationPath {
 }
 
 pub trait BaseRelationProperties {
+    fn is_database_relation(&self) -> bool {
+        true
+    }
+
     fn include_policy(&self) -> Policy;
 
     fn quote_policy(&self) -> Policy;

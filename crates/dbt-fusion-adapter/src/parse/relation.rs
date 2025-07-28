@@ -16,6 +16,10 @@ use std::sync::Arc;
 pub struct EmptyRelation {}
 
 impl BaseRelationProperties for EmptyRelation {
+    fn is_database_relation(&self) -> bool {
+        false
+    }
+
     fn include_policy(&self) -> Policy {
         unimplemented!("include policy is unavailable for EmptyRelation")
     }

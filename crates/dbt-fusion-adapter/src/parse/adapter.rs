@@ -254,6 +254,12 @@ impl BaseAdapter for ParseAdapter {
             .first()
             .expect("get_columns_in_relation requires one argument");
 
+        // validate the relation
+        let base_relation = downcast_value_to_dyn_base_relation(relation.clone())?;
+        if !base_relation.is_database_relation() {
+            return Ok(empty_vec_value());
+        }
+
         if state.is_execute() {
             if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID) {
                 self.call_get_columns_in_relation
