@@ -95,6 +95,12 @@ where
     Args::from_values(None, values)
 }
 
+/// Extract the "T" from "...::T" or "&T".
+#[inline(never)]
+pub(crate) fn type_name_suffix(full_name: &'static str) -> &'static str {
+    full_name.rsplit([':', '&']).next().unwrap_or(full_name)
+}
+
 /// A trait implemented by all filter/test argument types.
 ///
 /// This trait is used by [`FunctionArgs`].  It's implemented for many common
@@ -143,6 +149,14 @@ where
 pub trait ArgType<'a> {
     /// The output type of this argument.
     type Output;
+
+    #[doc(hidden)]
+    fn name() -> &'static str {
+        // Used to provide better error messages when downcasting a [Value] to
+        // an `Output: Object`.
+        let full_name = std::any::type_name::<Self::Output>();
+        type_name_suffix(full_name)
+    }
 
     #[doc(hidden)]
     fn from_value(value: Option<&'a Value>) -> Result<Self::Output, Error>;
@@ -605,9 +619,12 @@ impl<'a, T: Object + 'static> ArgType<'a> for &T {
     #[inline(always)]
     fn from_value(value: Option<&'a Value>) -> Result<Self::Output, Error> {
         match value {
-            Some(value) => value
-                .downcast_object_ref()
-                .ok_or_else(|| Error::new(ErrorKind::InvalidOperation, "expected object")),
+            Some(value) => value.downcast_object_ref().ok_or_else(|| {
+                Error::new(
+                    ErrorKind::InvalidOperation,
+                    format!("expected {}", Self::name()),
+                )
+            }),
             None => Err(Error::from(ErrorKind::MissingArgument)),
         }
     }
@@ -619,9 +636,12 @@ impl<'a, T: Object + 'static> ArgType<'a> for Arc<T> {
     #[inline(always)]
     fn from_value(value: Option<&'a Value>) -> Result<Self::Output, Error> {
         match value {
-            Some(value) => value
-                .downcast_object()
-                .ok_or_else(|| Error::new(ErrorKind::InvalidOperation, "expected object")),
+            Some(value) => value.downcast_object().ok_or_else(|| {
+                Error::new(
+                    ErrorKind::InvalidOperation,
+                    format!("expected {}", Self::name()),
+                )
+            }),
             None => Err(Error::from(ErrorKind::MissingArgument)),
         }
     }

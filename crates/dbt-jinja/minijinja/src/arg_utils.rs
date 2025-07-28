@@ -1,7 +1,9 @@
 use std::{cell::Cell, collections::BTreeMap};
 
 use crate::{
-    value::{value_map_with_capacity, ArgType, Kwargs, ValueMap},
+    value::{
+        argtypes::type_name_suffix, value_map_with_capacity, ArgType, Kwargs, ValueKind, ValueMap,
+    },
     Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, Value,
 };
 
@@ -470,8 +472,10 @@ impl<'a> ArgsIter<'a> {
 
         let arg = self._next();
         let idx = self.index.get() - 1;
+        let name = self.pos_params.get(idx);
         if arg.is_some() {
-            let rv = T::from_value(arg)?;
+            let rv = T::from_value(arg)
+                .map_err(|err| self._detail_from_value_err(Some(idx), name, arg, err))?;
             self._ensure_pos_arg_not_in_kwargs(idx)?;
             Ok(rv)
         } else {
@@ -495,7 +499,10 @@ impl<'a> ArgsIter<'a> {
                 // so we produce a better one.
                 self._missing_pos_arg(idx)
             } else {
-                err
+                // peek() the existing value (because it's not a missing argument error) as a
+                // [Value] to render the name of the type we got where T was expected instead.
+                let value = self.kwargs.peek::<Option<&'a Value>>(name).ok().flatten();
+                self._detail_from_value_err(None, Some(name), value, err)
             }
         })
     }
@@ -525,7 +532,8 @@ impl<'a> ArgsIter<'a> {
         T: ArgType<'a, Output = T>,
     {
         if let Some(arg) = self._next() {
-            let rv = T::from_value(Some(arg))?;
+            let rv = T::from_value(Some(arg))
+                .map_err(|err| self._detail_from_value_err(None, Some(name), Some(arg), err))?;
             self._ensure_not_in_kwargs(Some(name))?;
             return Ok(rv);
         }
@@ -687,6 +695,63 @@ were consumed from the iterator. You are misusing the ArgsIter API.",
         MinijinjaError::new(MinijinjaErrorKind::MissingArgument, msg)
     }
 
+    /// Add more detail to the errors returned by `T::from_value()` calls.
+    #[inline(never)]
+    fn _detail_from_value_err(
+        &self,
+        idx: Option<usize>,
+        name: Option<&str>,
+        value: Option<&'a Value>,
+        err: MinijinjaError,
+    ) -> MinijinjaError {
+        let kind = err.kind();
+        if kind == MinijinjaErrorKind::InvalidOperation {
+            // `got` is the name of the "type" of the value we've got. We try
+            // to determine the name that gets as closes as possible to the
+            // type of the value if this were Jinja in Python.
+            let got = value.map_or_else(
+                || "None".to_string(),
+                |v| {
+                    if let Some(obj) = v.as_object() {
+                        let full_name = obj.type_name();
+                        return type_name_suffix(full_name).to_string();
+                    }
+                    let kind = v.kind();
+                    match kind {
+                        ValueKind::None => "None".to_string(),
+                        _ => kind.to_string(),
+                    }
+                },
+            );
+            // `expected` contains the text produced by `T::from_value()` and it's
+            // usually something like:
+            // - "cannot convert string to i64"
+            // - "value is not a string"
+            // - "expected MyStruct"
+            let expected = err.detail().unwrap_or("invalid operation");
+            let detail = match (idx, name) {
+                (None, None) => format!(
+                    "argument to {}() has incompatible type {}; {}",
+                    self.fn_name, got, expected
+                ),
+                (Some(idx), None) => format!(
+                    "argument {} to {}() has incompatible type {}; {}",
+                    idx + 1,
+                    self.fn_name,
+                    got,
+                    expected
+                ),
+                (_, Some(name)) => format!(
+                    "argument '{}' to {}() has incompatible type {}; {}",
+                    name, self.fn_name, got, expected
+                ),
+            };
+            MinijinjaError::new(kind, detail)
+        } else {
+            err
+        }
+    }
+
     fn _ensure_pos_arg_not_in_kwargs(&'a self, idx: usize) -> Result<(), MinijinjaError> {
         let name = self.pos_params.get(idx);
         self._ensure_not_in_kwargs(name)
@@ -752,6 +817,8 @@ macro_rules! assert_nullary_args {
 
 #[cfg(test)]
 mod tests {
+    use crate::value::Object;
+
     use super::*;
     use std::collections::BTreeMap;
 
@@ -1386,5 +1453,122 @@ mod tests {
         assert_eq!(max_rows, 3);
         assert_eq!(kwargs.get::<i64>("x").unwrap(), 1337);
         assert!(kwargs.assert_all_used().is_ok());
+    }
+
+    #[test]
+    fn test_args_iter_type_matching_error() {
+        let args = [Value::from(42), Value::from("not a number")];
+        let e = f(&args).unwrap_err();
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "argument 'y' to f() has incompatible type string; cannot convert string to i64"
+        );
+
+        let args = [Value::from(1), Value::from_object(MyStruct { value: 2 })];
+        let e = f(&args).unwrap_err();
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "argument 'y' to f() has incompatible type MyStruct; cannot convert map to i64"
+        );
+    }
+
+    #[derive(Copy, Clone, Debug)]
+    struct MyStruct {
+        value: i32,
+    }
+
+    impl Object for MyStruct {}
+
+    #[derive(Copy, Clone, Debug)]
+    struct NotMyStruct {}
+
+    impl Object for NotMyStruct {}
+
+    fn unwrap_my_struct(args: &[Value]) -> Result<i32, MinijinjaError> {
+        let iter = ArgsIter::new("unwrap_my_struct", &["x"], args);
+        let my_struct = iter.next_arg::<&MyStruct>()?;
+        iter.finish()?;
+        Ok(my_struct.value)
+    }
+
+    fn take_unamed_args(args: &[Value]) -> Result<i32, MinijinjaError> {
+        let iter = ArgsIter::for_unnamed_pos_args("take_unamed_args", 2, args);
+        let my_struct = iter.next_arg::<&MyStruct>()?;
+        let _not_my_struct = iter.next_arg::<&NotMyStruct>()?;
+        iter.finish()?;
+        Ok(my_struct.value)
+    }
+
+    #[test]
+    fn test_args_iter_object_type_matching() {
+        let my = MyStruct { value: 42 };
+
+        let args = [Value::from_object(my)];
+        let x = unwrap_my_struct(&args).unwrap();
+        assert_eq!(x, 42);
+
+        let args = [Value::from(())];
+        let e = unwrap_my_struct(&args).unwrap_err();
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "argument 'x' to unwrap_my_struct() has incompatible type None; expected MyStruct"
+        );
+
+        let args = [Value::from(true)];
+        let e = unwrap_my_struct(&args).unwrap_err();
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "argument 'x' to unwrap_my_struct() has incompatible type bool; expected MyStruct"
+        );
+
+        let args = [Value::from("hello")];
+        let e = unwrap_my_struct(&args).unwrap_err();
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "argument 'x' to unwrap_my_struct() has incompatible type string; expected MyStruct"
+        );
+
+        let not_my = NotMyStruct {};
+        let args = [Value::from_object(not_my)];
+        let e = unwrap_my_struct(&args).unwrap_err();
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "argument 'x' to unwrap_my_struct() has incompatible type NotMyStruct; expected MyStruct"
+        );
+
+        let args = [Value::from(Kwargs::from_iter([(
+            "x".to_string(),
+            Value::from_object(my),
+        )]))];
+        let x = unwrap_my_struct(&args).unwrap();
+        assert_eq!(x, 42);
+
+        let args = [Value::from(Kwargs::from_iter([(
+            "x".to_string(),
+            Value::from_object(not_my),
+        )]))];
+        let e = unwrap_my_struct(&args).unwrap_err();
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "argument 'x' to unwrap_my_struct() has incompatible type NotMyStruct; expected MyStruct"
+        );
+
+        let args = [Value::from_object(my), Value::from_object(not_my)];
+        let x = take_unamed_args(&args).unwrap();
+        assert_eq!(x, 42);
+
+        let args = [Value::from_object(not_my), Value::from_object(my)];
+        let e = take_unamed_args(&args).unwrap_err();
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "argument 1 to take_unamed_args() has incompatible type NotMyStruct; expected MyStruct"
+        );
+
+        let args = [Value::from_object(my), Value::from_object(my)];
+        let e = take_unamed_args(&args).unwrap_err();
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "argument 2 to take_unamed_args() has incompatible type MyStruct; expected NotMyStruct"
+        )
     }
 }
