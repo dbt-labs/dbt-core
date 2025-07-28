@@ -175,6 +175,7 @@ sample_values = [
     core_types.MissingPlusPrefixDeprecation(key="", key_path="", file=""),
     core_types.ArgumentsPropertyInGenericTestDeprecation(test_name=""),
     core_types.MissingArgumentsPropertyInGenericTestDeprecation(test_name=""),
+    core_types.ModulesItertoolsUsageDeprecation(),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),

@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, Iterable, List, Mapping, NoReturn, Optio
 # approaches which will extend well to potentially many modules
 import pytz
 
+import dbt.deprecations as deprecations
 import dbt.flags as flags_module
 from dbt import tracking, utils
 from dbt.clients.jinja import get_rendered
@@ -85,8 +86,7 @@ def get_itertools_module_context() -> Dict[str, Any]:
 
     def deprecation_wrapper(fn):
         def deprecation_wrapper_inner():
-            # TODO: call dbt.deprecations.warn + plumb that through
-            print("deprecated!")
+            deprecations.warn("modules-itertools-usage-deprecation")
             return fn
 
         return deprecation_wrapper_inner
