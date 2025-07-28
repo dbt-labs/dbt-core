@@ -1,4 +1,4 @@
-use chrono::{Datelike, Local, NaiveDate, TimeZone};
+use chrono::{Datelike, Local, NaiveDate, NaiveDateTime, TimeZone};
 use minijinja::arg_utils::ArgParser;
 use minijinja::{value::Object, Error, ErrorKind, Value};
 use std::fmt;
@@ -174,7 +174,13 @@ impl PyDate {
                 "strftime requires one string argument",
             )
         })?;
-        Ok(Value::from(self.date.format(fmt).to_string()))
+
+        // Convert to datetime to allow format codes for hours, minutes and seconds like python does.
+        // See https://docs.python.org/3/library/datetime.html#datetime.date.strftime:
+        // "Format codes referring to hours, minutes or seconds will see 0 values"
+        let datetime: NaiveDateTime = self.date.into();
+
+        Ok(Value::from(datetime.format(fmt).to_string()))
     }
 
     /// Handle date + timedelta or date - timedelta or date - date operations
@@ -349,6 +355,9 @@ mod tests {
 
         let result = date_arc.strftime(&[Value::from("%A, %B %d, %Y")]).unwrap();
         assert_eq!(result.to_string(), "Monday, May 15, 2023");
+
+        let result = date_arc.strftime(&[Value::from("%H-%M-%S")]).unwrap();
+        assert_eq!(result.to_string(), "00-00-00");
 
         // Test error case - missing format argument
         let error = date_arc.strftime(&[]).unwrap_err();
