@@ -225,7 +225,6 @@ pub async fn load(
         .await?;
         dbt_state.packages = packages;
     }
-
     {
         let _pb = with_progress!( arg.io, spinner => LOADING, item => "internal packages" );
 
@@ -451,7 +450,6 @@ pub async fn load_inner(
         &["sql"],
         &all_files,
     );
-
     Ok(DbtPackage {
         dbt_project,
         dbt_properties,

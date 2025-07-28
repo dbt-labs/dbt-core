@@ -113,6 +113,9 @@ pub struct DefaultRenderingEventListener {
     /// inner Vec<MacroStart> means one evaluation
     /// Vec<Vec<MacroStart>> means nested evaluations
     macro_start_stack: RefCell<Vec<Vec<MacroStart>>>,
+
+    /// Set of macro names that were called during rendering
+    pub macro_calls: RefCell<std::collections::HashSet<String>>,
 }
 
 impl RenderingEventListener for DefaultRenderingEventListener {
@@ -220,5 +223,10 @@ impl RenderingEventListener for DefaultRenderingEventListener {
 
     fn on_exit_func_body(&self) {
         self.macro_start_stack.borrow_mut().pop();
+    }
+
+    fn on_reference(&self, name: &str) {
+        // Track all function/macro calls
+        self.macro_calls.borrow_mut().insert(name.to_string());
     }
 }

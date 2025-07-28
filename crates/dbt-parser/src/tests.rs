@@ -1,6 +1,12 @@
 //! Render tests for the dbt-parser crate
 
 #[cfg(test)]
+mod test_macro_dependency_integration;
+
+#[cfg(test)]
+mod test_namespaced_macro_tracking;
+
+#[cfg(test)]
 #[allow(clippy::module_inception)]
 mod tests {
     use dbt_common::{FsResult, io_args::IoArgs};

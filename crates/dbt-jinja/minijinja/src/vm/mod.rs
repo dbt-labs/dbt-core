@@ -1023,21 +1023,21 @@ impl<'env> Vm<'env> {
                     }
                 }
                 Instruction::CallMethod(name, arg_count, this_span) => {
-                    listeners
-                        .iter()
-                        .for_each(|listener| listener.on_reference(name));
                     let args = stack.get_call_args(*arg_count);
                     let arg_count = args.len();
 
                     let a = if let Some(ns) = args[0].downcast_object_ref::<NamespaceName>() {
                         let ns_name = ns.get_name();
                         let args = &args[1..];
+
+                        // For namespaced calls, report the full qualified name
+                        let qualified_name = format!("{ns_name}.{name}");
+                        listeners
+                            .iter()
+                            .for_each(|listener| listener.on_reference(&qualified_name));
                         // if not found, attempt to lookup the template and function using name stripped of test_
                         // see generate_test_macro in resolve_generic_tests.rs -> a subset of generated macro names are prefixed with test_
-                        let Ok(template) = self
-                            .env
-                            .get_template(&format!("{ns_name}.{name}"), listeners)
-                        else {
+                        let Ok(template) = self.env.get_template(&qualified_name, listeners) else {
                             bail!(Error::new(
                                 ErrorKind::UnknownFunction,
                                 format!("Jinja macro or function `{name}` is unknown"),
@@ -1046,7 +1046,7 @@ impl<'env> Vm<'env> {
 
                         let path_and_span_and_deltaline = if let Some((Some(path), Some(span))) =
                             template_registry
-                                .get(&Value::from(&format!("{ns_name}.{name}")))
+                                .get(&Value::from(&qualified_name))
                                 .map(|value| {
                                     (value.get_attr_fast("path"), value.get_attr_fast("span"))
                                 }) {
@@ -1102,6 +1102,11 @@ impl<'env> Vm<'env> {
                         }
                         rv
                     } else {
+                        // For non-namespaced calls, report just the name
+                        listeners
+                            .iter()
+                            .for_each(|listener| listener.on_reference(name));
+
                         let function_name = args[0]
                             .get_attr_fast("function_name")
                             .map(|x| x.to_string())

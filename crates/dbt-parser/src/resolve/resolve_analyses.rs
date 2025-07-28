@@ -29,7 +29,10 @@ use crate::utils::RelationComponents;
 use crate::{
     args::ResolveArgs,
     renderer::{SqlFileRenderResult, render_unresolved_sql_files},
-    utils::{get_node_fqn, get_original_file_path, get_unique_id, update_node_relation_components},
+    utils::{
+        convert_macro_names_to_unique_ids, get_node_fqn, get_original_file_path, get_unique_id,
+        update_node_relation_components,
+    },
 };
 
 use super::resolve_properties::MinimalPropertiesEntry;
@@ -117,6 +120,7 @@ pub async fn resolve_analyses(
         sql_file_info,
         rendered_sql,
         macro_spans,
+        macro_calls,
         properties: maybe_properties,
         status,
         patch_path,
@@ -186,7 +190,11 @@ pub async fn resolve_analyses(
                 quoting_ignore_case: false,
                 static_analysis: StaticAnalysisKind::On,
                 columns,
-                depends_on: NodeDependsOn::default(),
+                depends_on: NodeDependsOn {
+                    macros: convert_macro_names_to_unique_ids(&macro_calls),
+                    nodes: vec![],
+                    nodes_with_ref_location: vec![],
+                },
                 refs: sql_file_info
                     .refs
                     .iter()

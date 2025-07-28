@@ -29,7 +29,7 @@ use dbt_schemas::state::{DbtAsset, DbtRuntimeConfig, ModelStatus};
 
 use minijinja::constants::{TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID};
 use minijinja::{MacroSpans, Value as MinijinjaValue};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{self, AtomicBool};
 use std::sync::{Arc, Mutex};
@@ -50,6 +50,8 @@ pub struct SqlFileRenderResult<T: DefaultTo<T>, S> {
     pub rendered_sql: String,
     /// The macro spans for the rendered SQL
     pub macro_spans: MacroSpans,
+    /// The macro calls made during rendering
+    pub macro_calls: HashSet<String>,
     /// The properties for the model
     pub properties: Option<S>,
     /// The path to the properties file that defines this model
@@ -300,11 +302,14 @@ pub async fn render_unresolved_sql_files_sequentially<
                     ModelStatus::Disabled
                 };
 
+                let macro_spans = listener_factory.drain_macro_spans(&display_path);
+                let macro_calls = listener_factory.drain_macro_calls(&display_path);
                 model_sql_resources_map.push(SqlFileRenderResult {
                     asset: dbt_asset.clone(),
                     sql_file_info,
                     rendered_sql: rendered_sql_except_refs_and_sources,
-                    macro_spans: listener_factory.drain_macro_spans(&display_path),
+                    macro_spans,
+                    macro_calls,
                     properties: maybe_model,
                     status,
                     patch_path: node_properties
@@ -347,6 +352,7 @@ pub async fn render_unresolved_sql_files_sequentially<
                     sql_file_info,
                     rendered_sql: "".to_string(),
                     macro_spans: MacroSpans::default(),
+                    macro_calls: HashSet::new(),
                     properties: maybe_model,
                     status,
                     patch_path: node_properties
@@ -630,11 +636,14 @@ pub async fn render_unresolved_sql_files<T: DefaultTo<T> + 'static, S: GetConfig
                             ModelStatus::Disabled
                         };
 
+                        let macro_spans = listener_factory.drain_macro_spans(&display_path);
+                        let macro_calls = listener_factory.drain_macro_calls(&display_path);
                         local_results.push(SqlFileRenderResult {
                             asset: dbt_asset.clone(),
                             sql_file_info,
                             rendered_sql: rendered_sql_except_refs_and_sources,
-                            macro_spans: listener_factory.drain_macro_spans(&display_path),
+                            macro_spans,
+                            macro_calls,
                             properties: maybe_model,
                             status,
                             patch_path: chunk_node_properties
@@ -680,6 +689,7 @@ pub async fn render_unresolved_sql_files<T: DefaultTo<T> + 'static, S: GetConfig
                             sql_file_info,
                             rendered_sql: "".to_string(),
                             macro_spans: MacroSpans::default(),
+                            macro_calls: HashSet::new(),
                             properties: maybe_model,
                             status,
                             patch_path: chunk_node_properties

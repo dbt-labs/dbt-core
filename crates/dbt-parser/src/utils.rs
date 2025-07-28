@@ -14,7 +14,7 @@ use minijinja::compiler::parser::Parser;
 use minijinja::machinery::WhitespaceConfig;
 use minijinja::syntax::SyntaxConfig;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use std::path::Path;
 use std::path::PathBuf;
@@ -432,4 +432,23 @@ fn parse_macro_ast<T: DefaultTo<T>>(ast: &Stmt, sql_resources: &mut Vec<SqlResou
         }
         _ => {}
     }
+}
+
+/// Convert macro names to unique IDs
+/// For now, we'll use a simple heuristic to determine the package name
+/// In the future, this should be improved to look up macros in the macro registry
+pub fn convert_macro_names_to_unique_ids(macro_calls: &HashSet<String>) -> Vec<String> {
+    macro_calls
+        .iter()
+        .filter_map(|name| {
+            // Check if the macro name already contains a package prefix
+            if name.contains('.') {
+                // It's already in the format package.macro_name
+                Some(format!("macro.{name}"))
+            } else {
+                // If name doesn't contain '.', assume it's a function in context, don't collect
+                None
+            }
+        })
+        .collect()
 }

@@ -7,6 +7,7 @@ use crate::renderer::SqlFileRenderResult;
 use crate::renderer::render_unresolved_sql_files;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::utils::RelationComponents;
+use crate::utils::convert_macro_names_to_unique_ids;
 use crate::utils::generate_relation_components;
 use crate::utils::get_node_fqn;
 use crate::utils::get_original_file_path;
@@ -43,6 +44,7 @@ use minijinja::constants::DEFAULT_TEST_SCHEMA;
 use serde::de;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -143,6 +145,7 @@ pub async fn resolve_data_tests(
         sql_file_info,
         rendered_sql,
         macro_spans: _macro_spans,
+        macro_calls,
         properties: maybe_properties,
         status,
         patch_path,
@@ -225,7 +228,11 @@ pub async fn resolve_data_tests(
                 enabled: test_config.enabled.unwrap_or(true),
                 extended_model: false,
                 columns: BTreeMap::new(),
-                depends_on: NodeDependsOn::default(),
+                depends_on: NodeDependsOn {
+                    macros: convert_macro_names_to_unique_ids(macro_calls),
+                    nodes: vec![],
+                    nodes_with_ref_location: vec![],
+                },
                 refs: sql_file_info
                     .refs
                     .iter()

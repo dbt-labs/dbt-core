@@ -7,6 +7,7 @@ use crate::renderer::SqlFileRenderResult;
 use crate::renderer::collect_adapter_identifiers_detect_unsafe;
 use crate::renderer::render_unresolved_sql_files;
 use crate::utils::RelationComponents;
+use crate::utils::convert_macro_names_to_unique_ids;
 use crate::utils::get_node_fqn;
 use crate::utils::get_original_file_path;
 use crate::utils::get_unique_id;
@@ -43,9 +44,7 @@ use dbt_schemas::state::ModelStatus;
 use dbt_schemas::state::RefsAndSourcesTracker;
 use minijinja::MacroSpans;
 
-use std::collections::BTreeMap;
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -143,6 +142,7 @@ pub async fn resolve_models(
         sql_file_info,
         rendered_sql,
         macro_spans,
+        macro_calls,
         properties: maybe_properties,
         status,
         patch_path,
@@ -265,7 +265,11 @@ pub async fn resolve_models(
                 enabled: model_config.enabled.unwrap_or(true),
                 extended_model: false,
                 columns,
-                depends_on: NodeDependsOn::default(),
+                depends_on: NodeDependsOn {
+                    macros: convert_macro_names_to_unique_ids(&macro_calls),
+                    nodes: vec![],
+                    nodes_with_ref_location: vec![],
+                },
                 refs: sql_file_info
                     .refs
                     .iter()
