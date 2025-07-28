@@ -44,6 +44,22 @@ trait TupleRepr: fmt::Debug + Send + Sync {
 
     /// Clone this tuple representation (virtually-dispatched).
     fn clone_repr(&self) -> Box<dyn TupleRepr>;
+
+    /// Compare this tuple representation (virtually-dispatched).
+    ///
+    /// Can be specialized on specific tuple representations to
+    /// avoid copying every value.
+    fn eq(&self, other: &dyn TupleRepr) -> bool {
+        if self.len() != other.len() {
+            return false;
+        }
+        for i in 0..self.len() {
+            if self.get_item_by_index(i as isize) != other.get_item_by_index(i as isize) {
+                return false;
+            }
+        }
+        true
+    }
 }
 
 /// A tuple object that behaves like a Python tuple.
@@ -91,6 +107,12 @@ impl fmt::Display for Tuple {
     }
 }
 
+impl PartialEq for Tuple {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(&*other.0)
+    }
+}
+
 impl Object for Tuple {
     fn repr(self: &Arc<Self>) -> ObjectRepr {
         ObjectRepr::Seq
@@ -122,14 +144,14 @@ impl Object for Tuple {
     ) -> Result<Value, MinijinjaError> {
         match name {
             "count" => {
-                let iter = ArgsIter::for_unnamed_pos_args("tuple.count", 0, args);
+                let iter = ArgsIter::for_unnamed_pos_args("tuple.count", 1, args);
                 let value = iter.next_arg::<&Value>()?;
                 iter.finish()?;
                 let count = self.0.count_occurrences_of(value);
                 Ok(Value::from(count))
             }
             "index" => {
-                let iter = ArgsIter::for_unnamed_pos_args("tuple.index", 0, args);
+                let iter = ArgsIter::for_unnamed_pos_args("tuple.index", 1, args);
                 let value = iter.next_arg::<&Value>()?;
                 iter.finish()?;
                 let idx = self.0.index_of(value);
@@ -460,5 +482,223 @@ pub trait MappedSequence {
         }
         write!(f, ")>")?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use minijinja::Environment;
+    use minijinja::value::Kwargs;
+
+    use super::*;
+
+    #[derive(Debug, Clone)]
+    struct TestTupleRepr {
+        values: Arc<Vec<Value>>,
+    }
+
+    impl TestTupleRepr {
+        pub fn new(values: Arc<Vec<Value>>) -> Self {
+            Self { values }
+        }
+    }
+
+    impl TupleRepr for TestTupleRepr {
+        fn get_item_by_index(&self, idx: isize) -> Option<Value> {
+            self.values.get(idx as usize).cloned()
+        }
+
+        fn len(&self) -> usize {
+            self.values.len()
+        }
+
+        fn count_occurrences_of(&self, value: &Value) -> usize {
+            let mut count = 0;
+            for v in self.values.iter() {
+                if v == value {
+                    count += 1;
+                }
+            }
+            count
+        }
+
+        fn index_of(&self, value: &Value) -> Option<usize> {
+            for (i, v) in self.values.iter().enumerate() {
+                if v == value {
+                    return Some(i);
+                }
+            }
+            None
+        }
+
+        fn clone_repr(&self) -> Box<dyn TupleRepr> {
+            Box::new(TestTupleRepr {
+                values: Arc::clone(&self.values),
+            })
+        }
+    }
+
+    #[derive(Debug)]
+    struct TestMappedSequence {
+        keys: Arc<Vec<Value>>,
+        values: Arc<Vec<Value>>,
+    }
+
+    impl TestMappedSequence {
+        pub fn new(keys: Arc<Vec<Value>>, values: Arc<Vec<Value>>) -> Self {
+            debug_assert!(keys.is_empty() || keys.len() == values.len());
+            Self { keys, values }
+        }
+    }
+
+    impl MappedSequence for TestMappedSequence {
+        fn values(&self) -> Tuple {
+            let repr = Box::new(TestTupleRepr::new(Arc::clone(&self.values)));
+            Tuple(repr)
+        }
+
+        fn keys(&self) -> Option<Tuple> {
+            if self.keys.is_empty() {
+                None
+            } else {
+                let repr = Box::new(TestTupleRepr::new(Arc::clone(&self.keys)));
+                Some(Tuple(repr))
+            }
+        }
+    }
+
+    #[test]
+    fn test_tuple() {
+        let values = vec![Value::from(2), Value::from("biscoito")];
+        let tuple = Arc::new(Tuple(Box::new(TestTupleRepr::new(Arc::new(values)))));
+
+        let env = Environment::new();
+        let state = env.empty_state();
+
+        // tuple.count(2) => 1
+        // tuple.count("biscoito") => 1
+        // tuple.count(42) => 0
+        // tuple.count("cookie") => 0
+        let count = tuple
+            .call_method(&state, "count", &[Value::from(2)], &[])
+            .unwrap();
+        assert_eq!(count, Value::from(1));
+        let count = tuple
+            .call_method(&state, "count", &[Value::from("biscoito")], &[])
+            .unwrap();
+        assert_eq!(count, Value::from(1));
+        let count = tuple
+            .call_method(&state, "count", &[Value::from(42)], &[])
+            .unwrap();
+        assert_eq!(count, Value::from(0));
+        let count = tuple
+            .call_method(&state, "count", &[Value::from("cookie")], &[])
+            .unwrap();
+        assert_eq!(count, Value::from(0));
+
+        // tuple.index(2) => 0
+        // tuple.index("biscoito") => 1
+        // tuple.index(42) => None
+        // tuple.index("cookie") => None
+        let index = tuple
+            .call_method(&state, "index", &[Value::from(2)], &[])
+            .unwrap();
+        assert_eq!(index, Value::from(0));
+        let index = tuple
+            .call_method(&state, "index", &[Value::from("biscoito")], &[])
+            .unwrap();
+        assert_eq!(index, Value::from(1));
+        let index = tuple
+            .call_method(&state, "index", &[Value::from(42)], &[])
+            .unwrap();
+        assert_eq!(index, Value::from(()));
+        let index = tuple
+            .call_method(&state, "index", &[Value::from("cookie")], &[])
+            .unwrap();
+        assert_eq!(index, Value::from(()));
+    }
+
+    #[test]
+    fn test_mapped_sequence() {
+        let keys = Arc::new(vec![Value::from("count"), Value::from("name")]);
+        let values = Arc::new(vec![Value::from(2), Value::from("biscoito")]);
+        let sequence = Arc::new(TestMappedSequence::new(
+            Arc::clone(&keys),
+            Arc::clone(&values),
+        ));
+
+        let keys_repr = TestTupleRepr::new(Arc::clone(&keys));
+        let values_repr = TestTupleRepr::new(Arc::clone(&values));
+        let expected_keys = Tuple(Box::new(keys_repr.clone()));
+        let expected_values = Tuple(Box::new(values_repr.clone()));
+        let expected_items = Tuple(Box::new(ZippedTupleRepr::new(
+            Box::new(keys_repr),
+            Box::new(values_repr),
+        )));
+
+        let env = Environment::new();
+        let state = env.empty_state();
+
+        // sequence.keys() => ("count", "name")
+        let found_keys_as_value = sequence.call_method(&state, "keys", &[], &[]).unwrap();
+        let found_keys = found_keys_as_value.downcast_object_ref::<Tuple>().unwrap();
+        assert_eq!(*found_keys, expected_keys);
+
+        // sequence.values() => (2, "biscoito")
+        let found_values_as_value = sequence.call_method(&state, "values", &[], &[]).unwrap();
+        let found_values = found_values_as_value
+            .downcast_object_ref::<Tuple>()
+            .unwrap();
+        assert_eq!(*found_values, expected_values);
+
+        // sequence.items() => (("count", 2), ("name", "biscoito"))
+        let found_items_as_value = sequence.call_method(&state, "items", &[], &[]).unwrap();
+        let found_items = found_items_as_value.downcast_object_ref::<Tuple>().unwrap();
+        assert_eq!(*found_items, expected_items);
+
+        // sequence.get("count") => 2
+        // sequence.get("name") => "biscoito"
+        // sequence.get("unknown") => ()
+        let count_value = sequence
+            .call_method(&state, "get", &[Value::from("count")], &[])
+            .unwrap();
+        assert_eq!(count_value, Value::from(2));
+        let name_value = sequence
+            .call_method(&state, "get", &[Value::from("name")], &[])
+            .unwrap();
+        assert_eq!(name_value, Value::from("biscoito"));
+        let unknown_value = sequence
+            .call_method(&state, "get", &[Value::from("unknown")], &[])
+            .unwrap();
+        assert_eq!(unknown_value, Value::from(()));
+
+        // sequence.get("unknown", 42) => 42
+        // sequence.get("unknown", default=1337) => 1337
+        let default_value = sequence
+            .call_method(
+                &state,
+                "get",
+                &[Value::from("unknown"), Value::from(42)],
+                &[],
+            )
+            .unwrap();
+        assert_eq!(default_value, Value::from(42));
+        let default_value = sequence
+            .call_method(
+                &state,
+                "get",
+                &[
+                    Value::from("unknown"),
+                    Value::from(Kwargs::from_iter(vec![("default", Value::from(1337))])),
+                ],
+                &[],
+            )
+            .unwrap();
+        assert_eq!(default_value, Value::from(1337));
+
+        // sequence.dict() => OrderedDict({"count": 2, "name": "biscoito"})
+        let dict_value = sequence.call_method(&state, "dict", &[], &[]).unwrap();
+        let dict = dict_value.downcast_object_ref::<OrderedDict>().unwrap();
+        assert_eq!(dict.to_string(), "OrderedDict({count: 2, name: biscoito})");
     }
 }
