@@ -52,6 +52,11 @@ pub mod schemas {
         mod selector;
         mod semantic_model;
 
+        // Versioned manifest modules
+        pub mod v10;
+        pub mod v11;
+        pub mod v12;
+
         pub mod common;
         pub use bigquery_partition::{
             BigqueryClusterConfig, BigqueryPartitionConfig, BigqueryPartitionConfigInner,
@@ -72,6 +77,9 @@ pub mod schemas {
         pub use saved_query::DbtSavedQuery;
         pub use selector::DbtSelector;
         pub use semantic_model::DbtSemanticModel;
+        pub use v10::DbtManifestV10;
+        pub use v11::DbtManifestV11;
+        pub use v12::DbtManifestV12;
     }
     mod dbt_cloud;
     pub use dbt_cloud::{DbtCloudConfig, DbtCloudContext, DbtCloudProject};

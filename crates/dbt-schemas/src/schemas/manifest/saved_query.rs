@@ -48,7 +48,9 @@ pub struct DbtSavedQueryParams {
     pub where_clause: Option<Value>,
     #[serde(rename = "where")]
     pub where_condition: Option<Value>,
-    pub order_by: Vec<Value>,
+    // According to the the V12 JSON schema the `order_by` field is required, however in reality
+    // many manifests omit it. To allow these to be parsed the `order_by` field needs to be optional
+    pub order_by: Option<Vec<Value>>,
     pub limit: Option<Value>,
     #[serde(flatten)]
     pub other: BTreeMap<String, Value>,
