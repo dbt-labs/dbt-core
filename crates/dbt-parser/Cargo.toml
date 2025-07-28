@@ -26,6 +26,7 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 dbt-serde_yaml = { workspace = true }
 itertools = { workspace = true }
+md5 = { workspace = true }
 minijinja = { workspace = true }
 num_cpus = { workspace = true }
 regex = { workspace = true }

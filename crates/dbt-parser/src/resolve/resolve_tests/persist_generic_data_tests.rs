@@ -20,6 +20,7 @@ use dbt_schemas::schemas::properties::Tables;
 use dbt_schemas::schemas::properties::{ModelProperties, SeedProperties, SnapshotProperties};
 use dbt_schemas::state::DbtAsset;
 use itertools::Itertools; // For .sorted_by() on iterators
+use md5;
 use regex::Regex;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -449,12 +450,16 @@ fn generate_test_name(
         }
     };
 
-    // linux has 255 bytes limit on filename (255- 16 = 239 for file name extension .sql or .macro_spans.json)
-    if result.len() >= 239 {
-        let mut hasher = DefaultHasher::new();
-        result.as_str().hash(&mut hasher);
-        let hash = hasher.finish();
-        format!("t_{hash:X}") // Uppercase hex format is alphanumeric
+    // dbt-core truncates the test name to 63 characters, if the
+    // full name is too long. This is done by including the first
+    // 30 identifying chars plus a 32-character hash of the full contents
+    // See the function `synthesize_generic_test_name` in `dbt-core`:
+    // https://github.com/dbt-labs/dbt-core/blob/9010537499980743503ed3b462eb1952be4d2b38/core/dbt/parser/generic_test_builders.py
+    if result.len() >= 64 {
+        let test_trunc_identifier: String = test_identifier.chars().take(30).collect();
+        let hash = md5::compute(result.as_str());
+        let res: String = format!("{test_trunc_identifier}_{hash:x}");
+        res
     } else {
         result
     }
@@ -1297,10 +1302,11 @@ mod tests {
             &jinja_set_vars,
         );
 
-        // Verify that the test name contains parts of the original SQL, not the variable name
+        // Verify that the test name does not contain the variable name
+        // and that the original SQL is truncated from the final test name.
         assert!(
-            test_name.contains("SELECT"),
-            "Test name should contain part of the original SQL"
+            !test_name.contains("SELECT"),
+            "The original SQL should be truncated from the final test name"
         );
         assert!(
             !test_name.contains(set_var_name),
@@ -1319,10 +1325,10 @@ mod tests {
             &empty_set_vars,
         );
 
-        // In this case, the variable name should be used since there's no replacement
+        // set vars part of the name is truncated from the final test name due to length
         assert!(
-            test_name_no_vars.contains(set_var_name),
-            "Test name should contain the variable name when no set vars are provided"
+            !test_name_no_vars.contains(set_var_name),
+            "Set var name should be truncated from the final test name"
         );
     }
 
@@ -1352,6 +1358,69 @@ mod tests {
         assert!(
             test_name_no_vars.contains(custom_test_name),
             "Test name should contain the custom test name when provided"
+        );
+    }
+
+    #[test]
+    fn test_generate_test_name_with_name_longer_than_63_chars() {
+        //This test is to ensure that if the generated test name is longer than 63 characters
+        // it will be truncated to 30 characters and an md5 hash will be added to the end
+        // to create a unique name that is 63 characters or less.
+        use serde_json::json;
+        // Create test inputs
+        let test_config = GenericTestConfig {
+            resource_type: "model".to_string(),
+            resource_name: "my_model_with_a_long_name_beyond_64_chars_and_some_other_chars_aa"
+                .to_string(),
+            version_num: None,
+            model_tests: Some(vec![DataTests::CustomTest(json!({
+                "noop?=p+:": {
+                    "column_names": ["id"]
+                }
+            }))]),
+            column_tests: None,
+            source_name: None,
+        };
+        let mut kwargs = BTreeMap::new();
+
+        // The "id" in the "model_tests" above goes in tandem with the "id" in vector that
+        // forms the value part of the "column_names" key in the kwargs hashmap so that
+        // "id" gets added to the generated test name.
+        kwargs.insert(
+            "column_names".to_string(),
+            Value::Array(vec![Value::String("id".to_string())]),
+        );
+
+        kwargs.insert(
+            "model".to_string(),
+            Value::String("get_where_subquery(ref('main'))".to_string()),
+        );
+
+        let test_name_no_vars = generate_test_name(
+            "test_macro_name",
+            None,
+            "project_name",
+            &test_config,
+            &kwargs,
+            None,
+            &BTreeMap::new(),
+        );
+
+        // The generated test name will initially be over 64 characters and have the
+        // "id" column name in it at the end and so the `generate_test_name` will
+        // truncate to the first 30 characters and add an md5 hash
+        // to create a unique name that is 63 characters.
+        assert!(
+            test_name_no_vars.contains("test_macro_name_my_model_with__"),
+            "Test name should contain only the first 30 characters of the original generated name"
+        );
+        assert!(
+            test_name_no_vars.len() <= 63,
+            "Test name should be 63 characters or less"
+        );
+        assert!(
+            !test_name_no_vars.contains("id"),
+            "Test name should not contain the 'id' column name after truncation"
         );
     }
 
