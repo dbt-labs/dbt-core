@@ -148,6 +148,19 @@ proto-rust = { path = "crates/proto-rust" }
 vortex-client = { path = "crates/vortex-client" }
 vortex-events = { path = "crates/vortex-events" }
 
+# fs dbt metadata available dependencies
+dbt-meta-cli = { path = "fs/dbt-meta/crates/cli" }
+dbt-meta-common = { path = "fs/dbt-meta/crates/shared/common" }
+dbt-meta-db = { path = "fs/dbt-meta/crates/shared/db" }
+dbt-meta-db-derive = { path = "fs/dbt-meta/crates/shared/db-derive" }
+dbt-meta-environment = { path = "fs/dbt-meta/crates/commands/meta-environment" }
+dbt-meta-feature-flag = { path = "fs/dbt-meta/crates/shared/feature-flag" }
+dbt-meta-job = { path = "fs/dbt-meta/crates/commands/meta-job" }
+dbt-meta-metrics = { path = "fs/dbt-meta/crates/shared/metrics" }
+dbt-meta-migration = { path = "fs/dbt-meta/crates/shared/migration" }
+dbt-meta-object-store-clients = { path = "fs/dbt-meta/crates/shared/object-store-clients" }
+dbt-meta-rabbit = { path = "fs/dbt-meta/crates/shared/rabbit" }
+
 # jinja dependencies
 minijinja = { path = "crates/dbt-jinja/minijinja", features = [
   "loader",
@@ -286,6 +299,7 @@ async-trait = "0.1.83"
 crossbeam-queue = "0.3.12"
 futures = "0.3.31"
 futures-core = "0.3"
+futures-lite = "2.0"
 futures-util = "0.3"
 once_cell = "1.18"
 parking_lot = { version = "0.12.3" }
@@ -358,8 +372,18 @@ phf_shared = { version = "0.11" }
 
 # error handling
 anyhow = { version = "1.0.74" }
+thiserror = "1.0"
+
+# database / orms
+sea-orm = { version = "~1.1.13", features = [
+  "sqlx-postgres",
+  "runtime-async-std-native-tls",
+  "macros",
+] }
+sqlx = { version = "0.8", features = ["postgres", "runtime-tokio-native-tls"] }
 
 # logging
+env_logger = "0.10" # To be removed
 log = { version = "0.4.27", features = ["kv_serde"] }
 
 # tracing (observability)
