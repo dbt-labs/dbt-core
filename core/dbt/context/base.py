@@ -85,9 +85,9 @@ def get_itertools_module_context() -> Dict[str, Any]:
     ]
 
     def deprecation_wrapper(fn):
-        def deprecation_wrapper_inner():
+        def deprecation_wrapper_inner(*args, **kwargs):
             deprecations.warn("modules-itertools-usage-deprecation")
-            return fn
+            return fn(*args, **kwargs)
 
         return deprecation_wrapper_inner
 
