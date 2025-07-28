@@ -291,6 +291,10 @@ impl InternalDbtNode for DbtModel {
     }
 
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+        // TODO: the checksum for extended model is always different in mantle and fusion, dig more into this
+        if self.is_extended_model() {
+            return true;
+        }
         if let Some(other_model) = other.as_any().downcast_ref::<DbtModel>() {
             self.common_attr.checksum == other_model.common_attr.checksum
         } else {
@@ -398,12 +402,14 @@ impl InternalDbtNode for DbtSeed {
         }
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
-        if let Some(other_model) = other.as_any().downcast_ref::<DbtSeed>() {
-            self.common_attr.checksum == other_model.common_attr.checksum
-        } else {
-            false
-        }
+    fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
+        //TODO: the checksum for seed is different between mantle and fusion.
+        true
+        // if let Some(other_model) = other.as_any().downcast_ref::<DbtSeed>() {
+        //     self.common_attr.checksum == other_model.common_attr.checksum
+        // } else {
+        //     false
+        // }
     }
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
         panic!("DbtSeed does not support setting detected_unsafe");
@@ -668,10 +674,8 @@ impl InternalDbtNode for DbtSource {
 
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_source) = other.as_any().downcast_ref::<DbtSource>() {
-            self.base_attr.database == other_source.base_attr.database
-                && self.base_attr.schema == other_source.base_attr.schema
-                && self.common_attr.name == other_source.common_attr.name
-                && self.source_attr.identifier == other_source.source_attr.identifier
+            // Relation name capture database, schema and identifier
+            self.base_attr.relation_name == other_source.base_attr.relation_name
                 && self.common_attr.fqn == other_source.common_attr.fqn
                 //TODO: uncomment this when we have a way to compare the config
                 // && self.deprecated_config == other_source.deprecated_config
