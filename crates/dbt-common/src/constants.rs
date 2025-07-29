@@ -124,3 +124,4 @@ pub const NODES_RD: &str = "   Reading";
 pub const NODES_WR: &str = "   Writing";
 pub const COLUMNS_RD: &str = "   Reading";
 pub const COLUMNS_WR: &str = "   Writing";
+pub const COLUMN_LINEAGE_WR: &str = "   Writing";
