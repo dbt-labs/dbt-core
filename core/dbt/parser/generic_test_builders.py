@@ -240,7 +240,8 @@ class TestBuilder(Generic[Testable]):
             test_args = {**test_args, **arguments}
         elif "arguments" in test_args:
             deprecations.warn(
-                "arguments-property-in-generic-test-deprecation", test_name=test_name
+                "arguments-property-in-generic-test-deprecation",
+                test_name=f"`{test_name}` ({test_args['arguments']})",
             )
 
         return test_name, test_args
