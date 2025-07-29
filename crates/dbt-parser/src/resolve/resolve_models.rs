@@ -365,9 +365,9 @@ pub async fn resolve_models(
 
                 properties.as_testable().persist(
                     package_name,
-                    &arg.io.out_dir,
                     collected_tests,
                     adapter_type,
+                    &arg.io,
                 )?;
             }
             ModelStatus::Disabled => {

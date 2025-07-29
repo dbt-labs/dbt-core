@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use dbt_common::FsResult;
-use dbt_serde_yaml::{JsonSchema, Verbatim};
+use dbt_serde_yaml::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::skip_serializing_none;
@@ -33,8 +33,8 @@ pub struct ColumnProperties {
     pub data_type: Option<String>,
     pub description: Option<String>,
     pub constraints: Option<Vec<Constraint>>,
-    pub tests: Verbatim<Option<Vec<DataTests>>>,
-    pub data_tests: Verbatim<Option<Vec<DataTests>>>,
+    pub tests: Option<Vec<DataTests>>,
+    pub data_tests: Option<Vec<DataTests>>,
     pub granularity: Option<ColumnPropertiesGranularity>,
     pub policy_tags: Option<Vec<String>>,
     pub quote: Option<bool>,

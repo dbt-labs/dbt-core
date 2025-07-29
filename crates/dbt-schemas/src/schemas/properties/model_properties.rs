@@ -7,7 +7,6 @@ use crate::schemas::project::ModelConfig;
 use crate::schemas::properties::properties::GetConfig;
 use crate::schemas::serde::FloatOrString;
 use dbt_serde_yaml::JsonSchema;
-use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
@@ -37,13 +36,13 @@ pub struct ModelProperties {
     pub columns: Option<Vec<ColumnProperties>>,
     pub config: Option<ModelConfig>,
     pub constraints: Option<Vec<ModelConstraint>>,
-    pub data_tests: Verbatim<Option<Vec<DataTests>>>,
+    pub data_tests: Option<Vec<DataTests>>,
     pub deprecation_date: Option<String>,
     pub description: Option<String>,
     pub identifier: Option<String>,
     pub latest_version: Option<FloatOrString>,
     pub name: String,
-    pub tests: Verbatim<Option<Vec<DataTests>>>,
+    pub tests: Option<Vec<DataTests>>,
     pub time_spine: Option<ModelsTimeSpine>,
     pub versions: Option<Vec<Versions>>,
 }
@@ -55,12 +54,12 @@ impl ModelProperties {
             columns: None,
             config: None,
             constraints: None,
-            data_tests: Verbatim::from(None),
+            data_tests: None,
             deprecation_date: None,
             description: None,
             identifier: None,
             latest_version: None,
-            tests: Verbatim::from(None),
+            tests: None,
             time_spine: None,
             versions: None,
         }

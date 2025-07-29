@@ -3,6 +3,10 @@ use crate::args::ResolveArgs;
 use dbt_common::FsError;
 use dbt_common::FsResult;
 use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
+use dbt_common::io_args;
+use dbt_common::io_args::IoArgs;
+use dbt_common::show_error;
+use dbt_common::show_warning_soon_to_be_error;
 use dbt_common::{ErrorCode, err};
 use dbt_common::{fs_err, stdfs};
 use dbt_frontend_common::Dialect;
@@ -10,8 +14,8 @@ use dbt_jinja_utils::serde::check_single_expression_without_whitepsace_control;
 use dbt_schemas::schemas::common::Versions;
 use dbt_schemas::schemas::common::normalize_quote;
 use dbt_schemas::schemas::data_tests::{
-    AcceptedValuesTestProperties, DataTests, NotNullTestProperties, RelationshipsTestProperties,
-    UniqueTestProperties,
+    AcceptedValuesTestProperties, CustomTest, DataTests, NotNullTestProperties,
+    RelationshipsTestProperties, UniqueTestProperties,
 };
 
 use dbt_schemas::schemas::dbt_column::ColumnProperties;
@@ -19,9 +23,14 @@ use dbt_schemas::schemas::project::DataTestConfig;
 use dbt_schemas::schemas::properties::Tables;
 use dbt_schemas::schemas::properties::{ModelProperties, SeedProperties, SnapshotProperties};
 use dbt_schemas::state::DbtAsset;
-use itertools::Itertools; // For .sorted_by() on iterators
+use dbt_serde_yaml::ShouldBe;
+use dbt_serde_yaml::Spanned;
+use dbt_serde_yaml::Verbatim;
+use dbt_serde_yaml::{Span, to_value};
+use itertools::Itertools;
 use md5;
 use regex::Regex;
+use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::hash::DefaultHasher;
@@ -32,23 +41,6 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::LazyLock;
 
-const CONFIG_ARGS: &[&str] = &[
-    "severity",
-    "tags",
-    "enabled",
-    "where",
-    "limit",
-    "warn_if",
-    "error_if",
-    "fail_calc",
-    "store_failures",
-    "store_failures_as",
-    "meta",
-    "database",
-    "schema",
-    "alias",
-];
-
 pub struct TestableNode<'a, T: TestableNodeTrait> {
     inner: &'a T,
 }
@@ -57,9 +49,9 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
     pub fn persist(
         &self,
         project_name: &str,
-        out_dir: &Path,
         collected_tests: &mut Vec<DbtAsset>,
         adapter_type: &str,
+        io_args: &IoArgs,
     ) -> FsResult<()> {
         let test_configs: Vec<GenericTestConfig> = self.try_into()?;
         // Process tests for each version (or single resource)
@@ -69,7 +61,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
             // Handle model-level tests
             if let Some(tests) = &test_config.model_tests {
                 for test in tests {
-                    let dbt_asset = persist_inner(project_name, out_dir, &test_config, None, test)?;
+                    let dbt_asset = persist_inner(project_name, &test_config, None, test, io_args)?;
                     collected_tests.push(dbt_asset);
                 }
             }
@@ -93,10 +85,10 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                         };
                         let dbt_asset = persist_inner(
                             project_name,
-                            out_dir,
                             &test_config,
                             Some(&quoted_column_name),
                             test,
+                            io_args,
                         )?;
                         collected_tests.push(dbt_asset);
                     }
@@ -110,12 +102,12 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
 
 fn persist_inner(
     project_name: &str,
-    out_dir: &Path,
     test_config: &GenericTestConfig,
     column_name: Option<&str>,
     test: &DataTests,
+    io_args: &IoArgs,
 ) -> FsResult<DbtAsset> {
-    let details = get_test_details(test, test_config, column_name)?;
+    let details = get_test_details(test, test_config, column_name, io_args)?;
     let TestDetails {
         test_macro_name,
         custom_test_name,
@@ -135,7 +127,7 @@ fn persist_inner(
         &jinja_set_vars,
     );
     let path = PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join(format!("{full_name}.sql"));
-    let test_file = out_dir.join(&path);
+    let test_file = io_args.out_dir.join(&path);
     let generated_test_sql = generate_test_macro(
         test_macro_name.as_str(),
         &kwargs,
@@ -146,7 +138,7 @@ fn persist_inner(
     stdfs::write(&test_file, generated_test_sql)?;
     Ok(DbtAsset {
         path,
-        base_path: out_dir.to_path_buf(),
+        base_path: io_args.out_dir.to_path_buf(),
         package_name: project_name.to_string(),
     })
 }
@@ -157,7 +149,7 @@ struct TestDetails {
     custom_test_name: Option<String>,
     kwargs: BTreeMap<String, Value>,
     namespace: Option<String>,
-    config: BTreeMap<String, Value>,
+    config: Option<DataTestConfig>,
     jinja_set_vars: BTreeMap<String, String>,
 }
 
@@ -165,9 +157,10 @@ fn get_test_details(
     test: &DataTests,
     test_config: &GenericTestConfig,
     column_name: Option<&str>,
+    io_args: &IoArgs,
 ) -> FsResult<TestDetails> {
     let mut kwargs = BTreeMap::new();
-    let mut config = BTreeMap::new();
+    let mut config: Option<DataTestConfig> = None;
     let mut jinja_set_vars = BTreeMap::new();
 
     // Common kwargs for all tests
@@ -210,94 +203,115 @@ fn get_test_details(
         }
 
         DataTests::NotNullTest(test) => {
-            let (custom_test_name, test_macro_name) = parse_builtin_macro_name_and_test_name(
-                &mut kwargs,
-                &mut config,
-                &test.not_null,
-                "not_null",
+            config = merge_config_with_deprecated(
+                &test.not_null.config,
+                &test.not_null.deprecated_configs,
+                io_args,
             )?;
-            (test_macro_name, custom_test_name, None)
+
+            // Add test-specific kwargs
+            if let Some(column) = &test.not_null.column {
+                kwargs.insert("column".to_string(), Value::String(column.clone()));
+            }
+
+            let macro_name = "not_null".to_string();
+            let custom_name = test.not_null.name.clone();
+            (macro_name, custom_name, None)
         }
 
         DataTests::UniqueTest(test) => {
-            let (custom_test_name, test_macro_name) = parse_builtin_macro_name_and_test_name(
-                &mut kwargs,
-                &mut config,
-                &test.unique,
-                "unique",
+            config = merge_config_with_deprecated(
+                &test.unique.config,
+                &test.unique.deprecated_configs,
+                io_args,
             )?;
-            (test_macro_name, custom_test_name, None)
+
+            let macro_name = "unique".to_string();
+            let custom_name = test.unique.name.clone();
+            (macro_name, custom_name, None)
         }
 
         DataTests::AcceptedValuesTest(test) => {
-            let (custom_test_name, test_macro_name) = parse_builtin_macro_name_and_test_name(
-                &mut kwargs,
-                &mut config,
-                &test.accepted_values,
-                "accepted_values",
+            // Use typed fields directly - no need for JSON roundtrip!
+            config = merge_config_with_deprecated(
+                &test.accepted_values.config,
+                &test.accepted_values.deprecated_configs,
+                io_args,
             )?;
-            (test_macro_name, custom_test_name, None)
+
+            // Add test-specific kwargs
+            kwargs.insert(
+                "values".to_string(),
+                Value::Array(test.accepted_values.values.clone()),
+            );
+            if let Some(quote) = test.accepted_values.quote {
+                kwargs.insert("quote".to_string(), Value::Bool(quote));
+            }
+
+            let macro_name = "accepted_values".to_string();
+            let custom_name = test.accepted_values.name.clone();
+            (macro_name, custom_name, None)
         }
 
         DataTests::RelationshipsTest(test) => {
-            let (custom_test_name, test_macro_name) = parse_builtin_macro_name_and_test_name(
-                &mut kwargs,
-                &mut config,
-                &test.relationships,
-                "relationships",
+            // Use typed fields directly - no need for JSON roundtrip!
+            config = merge_config_with_deprecated(
+                &test.relationships.config,
+                &test.relationships.deprecated_configs,
+                io_args,
             )?;
-            (test_macro_name, custom_test_name, None)
+
+            // Add test-specific kwargs
+            kwargs.insert(
+                "field".to_string(),
+                Value::String(test.relationships.field.clone()),
+            );
+            kwargs.insert(
+                "to".to_string(),
+                Value::String(test.relationships.to.0.clone()),
+            );
+
+            let macro_name = "relationships".to_string();
+            let custom_name = test.relationships.name.clone();
+            (macro_name, custom_name, None)
         }
 
-        DataTests::CustomTest(custom_test) => {
-            if let Value::Object(map) = custom_test {
-                if map.len() == 1 {
-                    // Get the first key as the test name and the value are the test args
-                    let (test_macro_name, args) =
-                        map.iter().next().expect("CustomTest value is not empty");
-                    let (custom_test_name, namespace) =
-                        parse_test_name_and_namespace(test_macro_name);
-
-                    let args = args.as_object().ok_or(fs_err!(
-                        ErrorCode::SchemaError,
-                        "CustomTest value is not an object"
-                    ))?;
-
-                    let set_vars = extract_kwargs_and_config(args, &mut kwargs, &mut config)?;
-                    jinja_set_vars.extend(set_vars);
-
-                    (custom_test_name, None, namespace)
-                } else {
-                    let mut args = map.clone();
-                    let test_macro_name = args.remove("test_name").ok_or(fs_err!(
-                        ErrorCode::SchemaError,
-                        "CustomTest is missing test_name"
-                    ))?;
-
-                    let test_macro_name = test_macro_name.as_str().ok_or(fs_err!(
-                        ErrorCode::SchemaError,
-                        "CustomTest test_name is not a string"
-                    ))?;
-                    let (test_macro_name, namespace) =
-                        parse_test_name_and_namespace(test_macro_name);
-
-                    let custom_test_name: String = args
-                        .remove("name")
-                        .and_then(|v| v.as_str().map(String::from))
-                        .unwrap_or(test_macro_name.clone());
-
-                    let set_vars = extract_kwargs_and_config(&args, &mut kwargs, &mut config)?;
-                    jinja_set_vars.extend(set_vars);
-
-                    (test_macro_name, Some(custom_test_name), namespace)
-                }
-            } else {
-                return Err(Box::new(FsError::new(
-                    ErrorCode::SchemaError,
-                    "Custom test is not an object",
-                )));
+        DataTests::CustomTest(custom_test) => match custom_test {
+            CustomTest::MultiKey(mk) => {
+                let (test_name, namespace) = parse_test_name_and_namespace(&mk.test_name);
+                let extraction_result = extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
+                    &mk.arguments,
+                    &mk.deprecated_args_and_configs,
+                    &mk.config,
+                    io_args,
+                )?;
+                kwargs.extend(extraction_result.kwargs);
+                jinja_set_vars.extend(extraction_result.jinja_set_vars);
+                config = extraction_result.config;
+                (test_name, mk.name.clone(), namespace)
             }
-        }
+            CustomTest::SimpleKeyValue(sk) => {
+                if sk.len() != 1 {
+                    return err!(
+                        ErrorCode::SchemaError,
+                        "Simple key-value custom test must contain exactly one test"
+                    );
+                }
+                let (full_name, inner) = sk.iter().next().unwrap();
+                let (test_name, namespace) = parse_test_name_and_namespace(full_name);
+
+                let extraction_result = extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
+                    &inner.arguments,
+                    &inner.deprecated_args_and_configs,
+                    &inner.config,
+                    io_args,
+                )?;
+                kwargs.extend(extraction_result.kwargs);
+                jinja_set_vars.extend(extraction_result.jinja_set_vars);
+                config = extraction_result.config;
+                (test_name, inner.name.clone(), namespace)
+            }
+        },
     };
 
     Ok(TestDetails {
@@ -310,40 +324,318 @@ fn get_test_details(
     })
 }
 
-fn parse_builtin_macro_name_and_test_name<T>(
-    kwargs: &mut BTreeMap<String, Value>,
-    config: &mut BTreeMap<String, Value>,
-    test_inner: T,
-    macro_name: &str,
-) -> FsResult<(Option<String>, String)>
-where
-    T: serde::Serialize + std::fmt::Debug + Copy,
-{
-    let test_inner_value = serde_json::to_value(test_inner).map_err(|e| {
-        fs_err!(
+/// Result of extracting kwargs and jinja variables
+#[derive(Debug)]
+struct KwargsExtractionResult {
+    kwargs: BTreeMap<String, Value>,
+    jinja_set_vars: BTreeMap<String, String>,
+    config: Option<DataTestConfig>,
+}
+
+/// Simplified extraction of kwargs and Jinja variables for strongly typed custom tests
+fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
+    arguments: &Verbatim<Option<dbt_serde_yaml::Value>>,
+    deprecated_args_and_configs: &Verbatim<
+        Option<Spanned<BTreeMap<String, dbt_serde_yaml::Value>>>,
+    >,
+    existing_config: &Option<DataTestConfig>,
+    io_args: &IoArgs,
+) -> FsResult<KwargsExtractionResult> {
+    // Start with existing config
+    let mut final_config = existing_config.clone();
+    let mut combined_args = BTreeMap::new();
+    let mut config_from_deprecated = BTreeMap::new();
+
+    // Process arguments parameter
+    if let Some(args) = &arguments.0 {
+        let json_value = serde_json::to_value(args.clone()).unwrap_or(Value::Null);
+        if let Value::Object(map) = json_value {
+            combined_args.extend(map);
+        }
+    }
+
+    // Process deprecated_args_and_configs
+    if let Some(deprecated) = &deprecated_args_and_configs.0 {
+        if !deprecated.is_empty() {
+            let deprecated_map = deprecated.clone().into_inner();
+            let config_keys = extract_config_keys_from_map(&deprecated_map);
+            let arg_keys: Vec<String> = deprecated_map
+                .keys()
+                .filter(|key| !CONFIG_ARGS.contains(&key.as_str()))
+                .cloned()
+                .collect();
+
+            let message = if !config_keys.is_empty() && !arg_keys.is_empty() {
+                format!(
+                    "Deprecated test configs: {config_keys:?} and arguments: {arg_keys:?} at top-level detected. Please migrate to the new format: https://docs.getdbt.com/reference/deprecations#missingargumentspropertyingenerictestdeprecation."
+                )
+            } else if !config_keys.is_empty() {
+                format!(
+                    "Deprecated test configs: {config_keys:?} at top-level detected. Please migrate under the 'config' field."
+                )
+            } else {
+                format!(
+                    "Deprecated test arguments: {arg_keys:?} at top-level detected. Please migrate to the new format: https://docs.getdbt.com/reference/deprecations#missingargumentspropertyingenerictestdeprecation."
+                )
+            };
+
+            let schema_error = fs_err!(
+                code => ErrorCode::SchemaError,
+                loc => deprecated.span().clone(),
+                "{}",
+                message
+            );
+            // Show warning or error if deprecated fields are present
+            if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+                show_error!(io_args, schema_error);
+            } else {
+                show_warning_soon_to_be_error!(io_args, schema_error);
+            }
+        }
+        for (key, value) in deprecated.clone().into_inner() {
+            let json_value = serde_json::to_value(value.clone()).unwrap_or(Value::Null);
+
+            if CONFIG_ARGS.contains(&key.as_str()) {
+                config_from_deprecated.insert(key.clone(), json_value);
+            } else {
+                // It's an argument, add to combined args
+                combined_args.insert(key.clone(), json_value);
+            }
+        }
+    }
+
+    // Merge configs at JSON level, then deserialize once
+    if !config_from_deprecated.is_empty() {
+        // Convert existing config to JSON if it exists
+        let existing_config_json = if let Some(ref existing) = final_config {
+            serde_json::to_value(existing).unwrap_or(Value::Object(serde_json::Map::new()))
+        } else {
+            Value::Object(serde_json::Map::new())
+        };
+
+        // Check for conflicts at JSON level
+        if let Value::Object(existing_map) = &existing_config_json {
+            for key in config_from_deprecated.keys() {
+                if existing_map.contains_key(key) {
+                    return err!(
+                        ErrorCode::SchemaError,
+                        "Test cannot have the same key '{}' at the top-level and in config",
+                        key
+                    );
+                }
+            }
+        }
+
+        // Merge the JSON objects - deprecated config takes precedence
+        let mut merged_config_json = existing_config_json;
+        if let Value::Object(ref mut merged_map) = merged_config_json {
+            merged_map.extend(config_from_deprecated);
+        }
+
+        // Deserialize the final merged config
+        if let Ok(merged_config) = serde_json::from_value::<DataTestConfig>(merged_config_json) {
+            final_config = Some(merged_config);
+        }
+    }
+
+    // Check for reserved "model" argument in combined args
+    if combined_args.contains_key("model") {
+        return err!(
             ErrorCode::SchemaError,
-            "Failed to serialize test properties: {}",
-            e
-        )
-    })?;
-    let mut args = test_inner_value
-        .as_object()
-        .ok_or(fs_err!(
-            ErrorCode::SchemaError,
-            "{} test is not an object",
-            macro_name
-        ))?
-        .to_owned();
-    let custom_name = args
-        .remove("name")
-        .and_then(|v| v.as_str().map(String::from));
-    let (custom_name, macro_name) = if let Some(custom_name) = custom_name {
-        (Some(custom_name), macro_name.to_string())
+            "Test arguments include \"model\", which is a reserved argument",
+        );
+    }
+
+    let mut kwargs = BTreeMap::new();
+    let mut jinja_set_vars = BTreeMap::new();
+
+    // Process all combined args for jinja vars
+    for (key, value) in combined_args {
+        let (kwarg_value, jinja_var) = process_kwarg(&key, &value);
+        kwargs.insert(key, kwarg_value);
+        if let Some((var_name, var_value)) = jinja_var {
+            jinja_set_vars.insert(var_name, var_value);
+        }
+    }
+
+    Ok(KwargsExtractionResult {
+        kwargs,
+        jinja_set_vars,
+        config: final_config,
+    })
+}
+
+/// Config field names that can appear in test configurations
+static CONFIG_ARGS: &[&str] = &[
+    "enabled",
+    "severity",
+    "tags",
+    "warn_if",
+    "error_if",
+    "fail_calc",
+    "where",
+    "limit",
+    "alias",
+    "database",
+    "schema",
+    "group",
+    "meta",
+    "store_failures",
+    "store_failures_as",
+    "quoting",
+    "static_analysis",
+];
+
+/// Extract config keys from a BTreeMap, filtering to only include valid config fields
+fn extract_config_keys_from_map(
+    deprecated_map: &BTreeMap<String, dbt_serde_yaml::Value>,
+) -> Vec<String> {
+    deprecated_map
+        .keys()
+        .filter(|key| CONFIG_ARGS.contains(&key.as_str()))
+        .cloned()
+        .collect()
+}
+
+/// Merges regular config with deprecated top-level config, handling conflicts and warnings
+fn merge_config_with_deprecated(
+    config: &Option<DataTestConfig>,
+    deprecated_configs: &Spanned<Option<BTreeMap<String, dbt_serde_yaml::Value>>>,
+    io_args: &IoArgs,
+) -> FsResult<Option<DataTestConfig>> {
+    match (config, deprecated_configs.clone().into_inner()) {
+        (None, None) => Ok(None),
+        (Some(config), None) => Ok(Some(config.clone())),
+        (None, Some(deprecated)) => {
+            // Extract config keys and non-config keys separately
+            let present_config_keys = extract_config_keys_from_map(&deprecated);
+            let unused_keys: Vec<String> = deprecated
+                .keys()
+                .filter(|key| !CONFIG_ARGS.contains(&key.as_str()))
+                .cloned()
+                .collect();
+
+            // Show warning for deprecated config usage
+            if !present_config_keys.is_empty() {
+                let warning = fs_err!(
+                    code => ErrorCode::SchemaError,
+                    loc => deprecated_configs.span().clone(),
+                    "Detected top-level config keys: {present_config_keys:?}. Please move under the 'config' field."
+                );
+                if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+                    show_error!(io_args, warning);
+                } else {
+                    show_warning_soon_to_be_error!(io_args, warning);
+                }
+            }
+
+            // Show warning for unused/invalid keys
+            if !unused_keys.is_empty() {
+                let unused_warning = fs_err!(
+                    code => ErrorCode::SchemaError,
+                    loc => deprecated_configs.span().clone(),
+                    "Unused keys detected in test definition: {unused_keys:?}."
+                );
+                if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+                    show_error!(io_args, unused_warning);
+                } else {
+                    show_warning_soon_to_be_error!(io_args, unused_warning);
+                }
+            }
+
+            // Convert BTreeMap to DataTestConfig
+            let deprecated_json = serde_json::to_value(deprecated)?;
+            let deprecated_config = serde_json::from_value::<DataTestConfig>(deprecated_json)?;
+            Ok(Some(deprecated_config))
+        }
+        (Some(config), Some(deprecated)) => {
+            // Both exist - need to merge with conflict detection
+            let config_json = serde_json::to_value(config)?;
+            let deprecated_json = serde_json::to_value(deprecated)?;
+
+            // Check for conflicts at JSON level
+            if let (Value::Object(config_map), Value::Object(deprecated_map)) =
+                (&config_json, &deprecated_json)
+            {
+                for key in deprecated_map.keys() {
+                    if config_map.contains_key(key) {
+                        return err!(
+                            code => ErrorCode::SchemaError,
+                            loc => deprecated_configs.span().clone(),
+                            "Test cannot have the same config key '{}' in both 'config' and at the top-level",
+                            key
+                        );
+                    }
+                }
+            }
+
+            // Show warning for deprecated config usage, listing the keys in deprecated_json that should be moved
+            let top_level_keys: Vec<String> = match &deprecated_json {
+                Value::Object(map) => map.keys().cloned().collect(),
+                _ => vec![],
+            };
+            if !top_level_keys.is_empty() {
+                let warning = fs_err!(
+                    code => ErrorCode::SchemaError,
+                    loc => deprecated_configs.span().clone(),
+                    "Detected top-level config keys: {top_level_keys:?}. Please move under the 'config' field."
+                );
+                if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+                    show_error!(io_args, warning);
+                } else {
+                    show_warning_soon_to_be_error!(io_args, warning);
+                }
+            }
+            // Merge the JSON objects - regular config takes precedence
+            let mut merged_json = config_json;
+            if let (Value::Object(merged_map), Value::Object(deprecated_map)) =
+                (&mut merged_json, deprecated_json)
+            {
+                for (key, value) in deprecated_map {
+                    merged_map.entry(key).or_insert(value);
+                }
+            }
+
+            // Deserialize back to struct
+            let merged_config = serde_json::from_value::<DataTestConfig>(merged_json)?;
+            Ok(Some(merged_config))
+        }
+    }
+}
+
+/// Helper function to process a kwarg value and detect if it needs a Jinja set block
+/// Returns (kwarg_value, optional_jinja_var)
+fn process_kwarg(key: &str, value: &Value) -> (Value, Option<(String, String)>) {
+    if let Value::String(s) = value {
+        if needs_jinja_set_block(s) {
+            // Generate a unique var name based on the key with a prefix to avoid collisions
+            let var_name = format!("dbt_custom_arg_{key}");
+            let jinja_var = Some((var_name.clone(), s.clone()));
+            let kwarg_value = Value::String(var_name);
+            (kwarg_value, jinja_var)
+        } else {
+            // For simple values, just use the value directly
+            (value.clone(), None)
+        }
     } else {
-        (None, macro_name.to_string())
-    };
-    extract_kwargs_and_config(&args, kwargs, config)?;
-    Ok((custom_name, macro_name))
+        // For non-string values, use as is
+        (value.clone(), None)
+    }
+}
+
+/// Determines if a string value needs to be wrapped in a Jinja set block
+fn needs_jinja_set_block(value: &str) -> bool {
+    // Check for multi-line content
+    if value.contains('\n') {
+        return true;
+    }
+
+    // Check for Jinja expressions
+    if value.contains("{{") && value.contains("}}") {
+        return true;
+    }
+
+    false
 }
 
 fn parse_test_name_and_namespace(test_name: &str) -> (String, Option<String>) {
@@ -374,8 +666,8 @@ fn generate_test_name(
     // Flatten args (excluding 'model' and config args)
     let mut flat_args = Vec::new();
     for (arg_name, arg_val) in kwargs.iter().sorted_by(|a, b| a.0.cmp(b.0)) {
-        // Skip 'model' and any config arguments
-        if arg_name == "model" || CONFIG_ARGS.contains(&arg_name.as_str()) {
+        // Skip 'model' argument
+        if arg_name == "model" {
             continue;
         }
 
@@ -537,11 +829,12 @@ struct GenericTestConfig {
 }
 
 /// Generates the Jinja macro call for a generic test
+#[allow(clippy::too_many_arguments)]
 fn generate_test_macro(
     test_macro_name: &str,
     kwargs: &BTreeMap<String, Value>,
     namespace: Option<&str>,
-    config: &BTreeMap<String, Value>,
+    config: &Option<DataTestConfig>,
     jinja_set_vars: &BTreeMap<String, String>,
 ) -> FsResult<String> {
     let mut sql = String::new();
@@ -560,10 +853,12 @@ fn generate_test_macro(
         sql.push_str(&set_val);
     }
 
-    // Add config block if present
-    if !config.is_empty() {
-        // Convert config to a DataTestConfig and use its to_string method
-        let config_str = render_config_to_kwargs(config);
+    // ── serialize & emit the config block ────────────────
+    if let Some(cfg) = config {
+        // we write the config out as a JSON in {{ config(...) }}
+        let config_str = serde_json::to_string(&cfg)
+            .map_err(|e| fs_err!(ErrorCode::SchemaError, "Failed to serialize config: {}", e))?;
+
         sql.push_str(&format!("{{{{ config({config_str}) }}}}\n"));
     }
 
@@ -609,95 +904,6 @@ fn generate_test_macro(
         formatted_args.join(", ")
     ));
     Ok(sql)
-}
-
-fn render_config_to_kwargs(config: &BTreeMap<String, Value>) -> String {
-    let value = serde_json::to_value(config).unwrap();
-
-    // Convert to a map and filter out None values
-    if let Value::Object(map) = value {
-        let filtered_map: serde_json::Map<String, Value> =
-            map.into_iter().filter(|(_, v)| !v.is_null()).collect();
-
-        let output_str = serde_json::to_string(&Value::Object(filtered_map)).unwrap();
-
-        // Process Jinja expressions more robustly
-        process_jinja_expressions(&output_str)
-    } else {
-        // Fallback in case the value is not an object (shouldn't happen)
-        serde_json::to_string(&value).unwrap()
-    }
-}
-
-/// Processes a JSON string to find quoted Jinja expressions and remove the quotes
-/// while properly handling escaped content within the expressions
-fn process_jinja_expressions(input: &str) -> String {
-    let mut result = String::new();
-    let chars: Vec<char> = input.chars().collect();
-    let mut i = 0;
-
-    while i < chars.len() {
-        // Look for "{{
-        if i + 2 < chars.len() && chars[i] == '"' && chars[i + 1] == '{' && chars[i + 2] == '{' {
-            // Found start of a potential Jinja expression
-            let start_pos = i;
-            i += 1; // Move past the opening quote
-
-            let mut brace_count = 0;
-            let mut jinja_end = None;
-
-            // Find the matching }} and closing quote
-            while i < chars.len() {
-                if chars[i] == '{' && i + 1 < chars.len() && chars[i + 1] == '{' {
-                    brace_count += 1;
-                    i += 2;
-                } else if chars[i] == '}' && i + 1 < chars.len() && chars[i + 1] == '}' {
-                    brace_count -= 1;
-                    i += 2;
-
-                    // Check if this completes the expression and has a closing quote
-                    if brace_count == 0 && i < chars.len() && chars[i] == '"' {
-                        jinja_end = Some(i);
-                        break;
-                    }
-                } else {
-                    i += 1;
-                }
-            }
-
-            if let Some(end_pos) = jinja_end {
-                // Extract the content between the quotes, excluding the outer {{ and }}
-                let full_content: String = chars[start_pos + 1..end_pos].iter().collect();
-
-                // Remove the outer {{ and }} braces
-                let inner_content =
-                    if full_content.starts_with("{{") && full_content.ends_with("}}") {
-                        &full_content[2..full_content.len() - 2]
-                    } else {
-                        &full_content
-                    };
-
-                // Remove escape sequences within the Jinja expression
-                let unescaped_content = inner_content
-                    .replace("\\\"", "\"") // Unescape double quotes
-                    .replace("\\\\", "\\") // Unescape backslashes
-                    .replace("\\{", "{") // Unescape opening braces
-                    .replace("\\}", "}"); // Unescape closing braces
-
-                result.push_str(&unescaped_content);
-                i = end_pos + 1; // Move past the closing quote
-            } else {
-                // Not a valid Jinja expression, add the original character and continue
-                result.push(chars[start_pos]);
-                i = start_pos + 1;
-            }
-        } else {
-            result.push(chars[i]);
-            i += 1;
-        }
-    }
-
-    result
 }
 
 impl<T> TryFrom<&TestableNode<'_, T>> for Vec<GenericTestConfig>
@@ -961,100 +1167,6 @@ impl TestableNodeTrait for TestableTable<'_> {
     }
 }
 
-/// Extracts the kwargs and config for a generic test
-fn extract_kwargs_and_config(
-    source: &serde_json::Map<String, Value>,
-    kwargs: &mut BTreeMap<String, Value>,
-    config: &mut BTreeMap<String, Value>,
-) -> FsResult<BTreeMap<String, String>> {
-    // Check for reserved "model" argument first
-    if source.contains_key("model") {
-        return err!(
-            ErrorCode::SchemaError,
-            "Test arguments include \"model\", which is a reserved argument",
-        );
-    }
-
-    let config_block = source.get("config").and_then(|v| v.as_object());
-    let mut jinja_set_vars = BTreeMap::new();
-
-    // Process all map entries in a single pass
-    for (key, value) in source {
-        match key.as_str() {
-            "config" => continue,      // Skip config block, we'll process it at the end
-            "description" => continue, // Skip description as per TODO
-            // TODO: handle descriptions across all nodes
-            // generic tests are particularly tricky becauase the node isn't created till resolve_singular tests
-            "model" => unreachable!(), // We checked this above
-            key if CONFIG_ARGS.contains(&key) => {
-                // Check for duplicate config keys
-                if let Some(config_map) = &config_block {
-                    if config_map.contains_key(key) {
-                        return err!(
-                            ErrorCode::SchemaError,
-                            "Test cannot have the same key at the top-level and in config",
-                        );
-                    }
-                }
-                config.insert(key.to_string(), value.clone());
-
-                // Process value for config args just like regular kwargs
-                process_kwarg(key, value, &mut jinja_set_vars, kwargs);
-            }
-            _ => {
-                // Process value for regular kwargs
-                process_kwarg(key, value, &mut jinja_set_vars, kwargs);
-            }
-        }
-    }
-
-    // Add config block values last so they take precedence
-    if let Some(config_map) = config_block {
-        config.extend(config_map.iter().map(|(k, v)| (k.clone(), v.clone())));
-    }
-
-    Ok(jinja_set_vars)
-}
-
-/// Helper function to process a kwarg value and detect if it needs a Jinja set block
-fn process_kwarg(
-    key: &str,
-    value: &Value,
-    jinja_set_vars: &mut BTreeMap<String, String>,
-    kwargs: &mut BTreeMap<String, Value>,
-) {
-    if let Value::String(s) = value {
-        if needs_jinja_set_block(s) {
-            // Generate a unique var name based on the key with a prefix to avoid collisions
-            // Add a random suffix to ensure uniqueness even with the same key name
-            let var_name = format!("dbt_custom_arg_{key}");
-            jinja_set_vars.insert(var_name.clone(), s.clone());
-            kwargs.insert(key.to_string(), Value::String(var_name));
-        } else {
-            // For simple values, just use the value directly
-            kwargs.insert(key.to_string(), value.clone());
-        }
-    } else {
-        // For non-string values, use as is
-        kwargs.insert(key.to_string(), value.clone());
-    }
-}
-
-/// Determines if a string value needs to be wrapped in a Jinja set block
-fn needs_jinja_set_block(value: &str) -> bool {
-    // Check for multi-line content
-    if value.contains('\n') {
-        return true;
-    }
-
-    // Check for Jinja expressions
-    if value.contains("{{") && value.contains("}}") {
-        return true;
-    }
-
-    false
-}
-
 /// Normalizes a test name following the existing dbt behavior
 /// https://github.com/dbt-labs/dbt-core/blob/main/core/dbt/parser/generic_test_builders.py#L121-L122
 fn normalize_test_name(input: &str) -> FsResult<String> {
@@ -1069,6 +1181,7 @@ fn normalize_test_name(input: &str) -> FsResult<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dbt_schemas::schemas::data_tests::{CustomTestInner, CustomTestMultiKey};
     use serde_json::Value;
     use std::collections::BTreeMap;
 
@@ -1129,22 +1242,20 @@ mod tests {
             Value::String("source('src', 'tbl')".to_string()),
         );
 
-        let config = BTreeMap::new();
         let test_name = "unique";
         let namespace = None;
         let jinja_set_vars = BTreeMap::new();
 
-        // Generate test macros
         let result1 =
-            generate_test_macro(test_name, &kwargs1, namespace, &config, &jinja_set_vars).unwrap();
+            generate_test_macro(test_name, &kwargs1, namespace, &None, &jinja_set_vars).unwrap();
         let result2 =
-            generate_test_macro(test_name, &kwargs2, namespace, &config, &jinja_set_vars).unwrap();
+            generate_test_macro(test_name, &kwargs2, namespace, &None, &jinja_set_vars).unwrap();
         let result3 =
-            generate_test_macro(test_name, &kwargs3, namespace, &config, &jinja_set_vars).unwrap();
+            generate_test_macro(test_name, &kwargs3, namespace, &None, &jinja_set_vars).unwrap();
         let result4 =
-            generate_test_macro(test_name, &kwargs4, namespace, &config, &jinja_set_vars).unwrap();
+            generate_test_macro(test_name, &kwargs4, namespace, &None, &jinja_set_vars).unwrap();
         let result5 =
-            generate_test_macro(test_name, &kwargs5, namespace, &config, &jinja_set_vars).unwrap();
+            generate_test_macro(test_name, &kwargs5, namespace, &None, &jinja_set_vars).unwrap();
 
         // Verify results - note that BTreeMap sorts keys alphabetically, so arg1 comes before model
         assert_eq!(
@@ -1216,11 +1327,26 @@ mod tests {
         test_args.insert("upstream_filter".to_string(), Value::Null);
         test_args.insert("severity".to_string(), Value::String("warn".to_string()));
 
-        // Process the args
-        let mut kwargs = BTreeMap::new();
-        let mut config = BTreeMap::new();
-        let jinja_set_vars =
-            extract_kwargs_and_config(&test_args, &mut kwargs, &mut config).unwrap();
+        // Process the args using the new simplified function
+        // Convert serde_json::Map to BTreeMap for the new function
+        let test_args_btree: BTreeMap<String, Value> = test_args.into_iter().collect();
+
+        // Convert to dbt_serde_yaml::Value using the to_value function
+        let yaml_value = to_value(&test_args_btree).unwrap();
+        let verbatim_wrapper = Verbatim::from(Some(yaml_value));
+        let empty_deprecated = Verbatim::from(None);
+        let existing_config = None;
+        let io_args = IoArgs::default();
+
+        let extraction_result = extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
+            &verbatim_wrapper,
+            &empty_deprecated,
+            &existing_config,
+            &io_args,
+        )
+        .unwrap();
+        let kwargs = extraction_result.kwargs;
+        let jinja_set_vars = extraction_result.jinja_set_vars;
 
         // Verify that the complex SQL was extracted
         assert!(
@@ -1373,11 +1499,21 @@ mod tests {
             resource_name: "my_model_with_a_long_name_beyond_64_chars_and_some_other_chars_aa"
                 .to_string(),
             version_num: None,
-            model_tests: Some(vec![DataTests::CustomTest(json!({
-                "noop?=p+:": {
-                    "column_names": ["id"]
-                }
-            }))]),
+            model_tests: Some(vec![DataTests::CustomTest(CustomTest::MultiKey(Box::new(
+                CustomTestMultiKey {
+                    arguments: Verbatim::from(Some(
+                        to_value(json!({
+                            "column_names": ["id"]
+                        }))
+                        .unwrap(),
+                    )),
+                    config: None,
+                    deprecated_args_and_configs: None.into(),
+                    name: Some("noop?=p+:".to_string()),
+                    test_name: "noop?=p+:".to_string(),
+                    description: None,
+                },
+            )))]),
             column_tests: None,
             source_name: None,
         };

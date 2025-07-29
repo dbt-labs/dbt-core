@@ -26,6 +26,7 @@ use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::properties::GetConfig;
 use dbt_schemas::schemas::{DbtModel, InternalDbtNode, IntrospectionKind, Nodes};
 use dbt_schemas::state::{DbtAsset, DbtRuntimeConfig, ModelStatus};
+use std::fmt::Debug;
 
 use minijinja::constants::{TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID};
 use minijinja::{MacroSpans, Value as MinijinjaValue};
@@ -59,7 +60,7 @@ pub struct SqlFileRenderResult<T: DefaultTo<T>, S> {
 }
 
 /// Extracts model and version configuration from node properties
-fn extract_model_and_version_config<T: DefaultTo<T>, S: GetConfig<T>>(
+fn extract_model_and_version_config<T: DefaultTo<T>, S: GetConfig<T> + Debug>(
     ref_name: &str,
     mpe: &mut MinimalPropertiesEntry,
     duplicate_errors: &mut Vec<FsError>,
@@ -126,7 +127,7 @@ fn extract_model_and_version_config<T: DefaultTo<T>, S: GetConfig<T>>(
 #[allow(clippy::too_many_arguments)]
 pub async fn render_unresolved_sql_files_sequentially<
     T: DefaultTo<T> + 'static,
-    S: GetConfig<T>,
+    S: GetConfig<T> + Debug,
 >(
     render_ctx: &RenderCtx<T>,
     model_sql_files: &[DbtAsset],
@@ -410,7 +411,10 @@ pub struct RenderCtx<T: DefaultTo<T>> {
 /// iterate over all the sql files passed in, generate the local config, initailize the sql render env, and render the sql
 /// and return the sql resources (deps) found while rendering the files
 #[allow(clippy::too_many_arguments)]
-pub async fn render_unresolved_sql_files<T: DefaultTo<T> + 'static, S: GetConfig<T> + 'static>(
+pub async fn render_unresolved_sql_files<
+    T: DefaultTo<T> + 'static,
+    S: GetConfig<T> + 'static + Debug,
+>(
     render_ctx: &RenderCtx<T>,
     model_sql_files: &[DbtAsset],
     node_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
