@@ -369,7 +369,7 @@ pub fn tojson_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
                         }
                     }
                 }
-                Ok(Value::from(json_str))
+                Ok(Value::from_safe_string(json_str))
             }
             Err(err) => match default {
                 Some(default_value) => Ok(default_value),
@@ -478,7 +478,7 @@ pub fn toyaml_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
         }
 
         match dbt_serde_yaml::to_string(&json_value) {
-            Ok(yaml_str) => Ok(Value::from(yaml_str)),
+            Ok(yaml_str) => Ok(Value::from_safe_string(yaml_str)),
             Err(err) => Err(Error::new(
                 ErrorKind::InvalidOperation,
                 format!("Failed to convert value to YAML: {err}"),
@@ -1286,5 +1286,71 @@ mod tests {
 
         // Should remove duplicates: 1,2,3,4,5
         assert_eq!(output.trim(), "1,2,3,4,5");
+    }
+
+    #[test]
+    fn test_tojson_simple_dict() {
+        let mut env = Environment::new();
+        env.add_function("tojson", tojson_fn());
+
+        let template_source = r#"{{ tojson({'a': 1, 'b': 'hello'}) }}"#;
+        let tmpl = env.template_from_str(template_source, &[]).unwrap();
+        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+        assert_eq!(output.trim(), r#"{"a":1,"b":"hello"}"#);
+    }
+
+    #[test]
+    fn test_tojson_nested_dict() {
+        let mut env = Environment::new();
+        env.add_function("tojson", tojson_fn());
+
+        let template_source = r#"{{ tojson({'a': 1, 'b': {'c': 3}}) }}"#;
+        let tmpl = env.template_from_str(template_source, &[]).unwrap();
+        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+        assert_eq!(output.trim(), r#"{"a":1,"b":{"c":3}}"#);
+    }
+
+    #[test]
+    fn test_tojson_with_sort_keys() {
+        let mut env = Environment::new();
+        env.add_function("tojson", tojson_fn());
+
+        let template_source = r#"{{ tojson({'b': 2, 'a': 1}, sort_keys=True) }}"#;
+        let tmpl = env.template_from_str(template_source, &[]).unwrap();
+        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+        assert_eq!(output.trim(), r#"{"a":1,"b":2}"#);
+    }
+
+    #[test]
+    fn test_toyaml_simple_dict() {
+        let mut env = Environment::new();
+        env.add_function("toyaml", toyaml_fn());
+
+        let template_source = r#"{{ toyaml({'a': 1, 'b': 'hello'}) }}"#;
+        let tmpl = env.template_from_str(template_source, &[]).unwrap();
+        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+        assert_eq!(output.trim(), "a: 1\nb: hello");
+    }
+
+    #[test]
+    fn test_toyaml_nested_dict() {
+        let mut env = Environment::new();
+        env.add_function("toyaml", toyaml_fn());
+
+        let template_source = r#"{{ toyaml({'a': 1, 'b': {'c': 3}}) }}"#;
+        let tmpl = env.template_from_str(template_source, &[]).unwrap();
+        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+        assert_eq!(output.trim(), "a: 1\nb:\n  c: 3");
+    }
+
+    #[test]
+    fn test_toyaml_with_sort_keys() {
+        let mut env = Environment::new();
+        env.add_function("toyaml", toyaml_fn());
+
+        let template_source = r#"{{ toyaml({'b': 2, 'a': 1}, sort_keys=True) }}"#;
+        let tmpl = env.template_from_str(template_source, &[]).unwrap();
+        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+        assert_eq!(output.trim(), "a: 1\nb: 2");
     }
 }
