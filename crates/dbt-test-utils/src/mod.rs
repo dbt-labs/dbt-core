@@ -4,7 +4,9 @@ use dbt_test_primitives::is_update_golden_files_mode;
 
 pub mod profiles;
 pub mod task;
-pub mod testing;
+pub mod test_env_guard;
+
+pub use test_env_guard::TestEnvGuard;
 
 mod schema;
 pub use schema::random_schema;

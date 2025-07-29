@@ -121,9 +121,18 @@ impl TaskSeq {
 
     /// Executes this sequence in the given environment.
     pub async fn execute_in(&self, project_env: &ProjectEnv) -> TestResult<()> {
+        self.execute_in_with_env(project_env, &[]).await
+    }
+
+    /// Executes this sequence in the given environment with optional environment variables.
+    pub async fn execute_in_with_env(
+        &self,
+        project_env: &ProjectEnv,
+        set_env: &[(&'static str, &'static str)],
+    ) -> TestResult<()> {
         let test_env = project_env.create_test_env()?;
         let _cwd_guard = CurrentWorkingDirGuard::new(&project_env.absolute_project_dir);
-        run_test_tasks(&self.tasks, project_env, &test_env).await?;
+        run_test_tasks(&self.tasks, project_env, &test_env, set_env).await?;
 
         Ok(())
     }
@@ -151,7 +160,21 @@ async fn run_test_tasks(
     tasks: &[Box<dyn Task + '_>],
     project_env: &ProjectEnv,
     test_env: &TestEnv,
+    set_env: &[(&'static str, &'static str)],
 ) -> TestResult<()> {
+    use crate::test_env_guard::TestEnvGuard;
+
+    // Create environment guard to isolate tests from external environment variables
+    let _env_guard = TestEnvGuard::default();
+
+    // Set provided environment variables (may be empty)
+    for (key, value) in set_env {
+        #[allow(clippy::disallowed_methods)]
+        unsafe {
+            std::env::set_var(key, value)
+        };
+    }
+
     check_set_user_env_var();
 
     let mut index = 0;
