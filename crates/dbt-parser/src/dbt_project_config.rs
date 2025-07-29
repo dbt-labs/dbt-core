@@ -183,6 +183,7 @@ pub fn recur_build_dbt_project_config<T: DefaultTo<T>, S: Into<T> + IterChildren
 }
 
 /// Config wrapping propagated configs for the root project
+#[derive(Debug)]
 pub struct RootProjectConfigs {
     /// Model configs
     pub models: DbtProjectConfig<ModelConfig>,
