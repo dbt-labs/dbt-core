@@ -715,6 +715,17 @@ class ModelParamUsageDeprecation(WarnLevel):
         return line_wrap_message(deprecation_tag(description))
 
 
+class ModulesItertoolsUsageDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D034"
+
+    def message(self) -> str:
+        description = (
+            "Usage of itertools modules is deprecated. Please use the built-in functions instead."
+        )
+        return line_wrap_message(deprecation_tag(description))
+
+
 class SourceOverrideDeprecation(WarnLevel):
     def code(self) -> str:
         return "D035"
