@@ -225,6 +225,11 @@ class MissingArgumentsPropertyInGenericTestDeprecation(DBTDeprecation):
     _event = "MissingArgumentsPropertyInGenericTestDeprecation"
 
 
+class ModulesItertoolsUsageDeprecation(DBTDeprecation):
+    _name = "modules-itertools-usage-deprecation"
+    _event = "ModulesItertoolsUsageDeprecation"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -310,6 +315,7 @@ deprecations_list: List[DBTDeprecation] = [
     MissingPlusPrefixDeprecation(),
     ArgumentsPropertyInGenericTestDeprecation(),
     MissingArgumentsPropertyInGenericTestDeprecation(),
+    ModulesItertoolsUsageDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}
