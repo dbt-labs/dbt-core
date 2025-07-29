@@ -1,3 +1,0 @@
-kind: Fixes
-body: Fix crash when calling count/index for tuples from Agate tables (e.g. column names)
-time: 2025-07-27T11:58:57.06173-03:00

@@ -1,3 +1,0 @@
-kind: Fixes
-body: Allow hours, minutes and seconds format codes in strftime() on a date
-time: 2025-07-27T20:29:44.167208+02:00
