@@ -23,10 +23,11 @@ from dbt.events.types import (
     MissingArgumentsPropertyInGenericTestDeprecation,
     MissingPlusPrefixDeprecation,
     ModelParamUsageDeprecation,
+    ModulesItertoolsUsageDeprecation,
     PackageRedirectDeprecation,
     WEOIncludeExcludeDeprecation,
 )
-from dbt.tests.util import run_dbt, run_dbt_and_capture, write_file
+from dbt.tests.util import read_file, run_dbt, run_dbt_and_capture, write_file
 from dbt_common.events.types import Note
 from dbt_common.exceptions import EventCompilationError
 from tests.functional.deprecations.fixtures import (
@@ -506,6 +507,52 @@ class TestWEOIncludeExcludeDeprecation:
                 assert "exclude" in event_catcher.caught_events[0].info.msg
             else:
                 assert "exclude" not in event_catcher.caught_events[0].info.msg
+
+
+class TestModulesItertoolsDeprecation:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models_itertools.sql": """
+            {%- set A = [1] -%}
+            {%- set B = ['x'] -%}
+            {%- set AB_cartesian = modules.itertools.product(A, B) -%}
+
+            {%- for item in AB_cartesian %}
+              select {{ item[0] }}
+            {%- endfor -%}
+            """,
+        }
+
+    def test_models_itertools(self, project):
+        event_catcher = EventCatcher(ModulesItertoolsUsageDeprecation)
+
+        run_dbt(["run", "--no-partial-parse"], callbacks=[event_catcher.catch])
+
+        assert len(event_catcher.caught_events) == 1
+        assert (
+            "Usage of itertools modules is deprecated" in event_catcher.caught_events[0].info.msg
+        )
+
+        assert (
+            read_file("target/compiled/test/models/models_itertools.sql").strip()
+            == "select 1".strip()
+        )
+
+
+class TestNoModulesItertoolsDeprecation:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models_itertools.sql": "select {{ modules.datetime.datetime.now() }}",
+        }
+
+    def test_models_itertools(self, project):
+        event_catcher = EventCatcher(ModulesItertoolsUsageDeprecation)
+
+        run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
+
+        assert len(event_catcher.caught_events) == 0
 
 
 class TestModelsParamUsageDeprecation:

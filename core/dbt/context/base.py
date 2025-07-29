@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, Iterable, List, Mapping, NoReturn, Optio
 # approaches which will extend well to potentially many modules
 import pytz
 
+import dbt.deprecations as deprecations
 import dbt.flags as flags_module
 from dbt import tracking, utils
 from dbt.clients.jinja import get_rendered
@@ -83,7 +84,14 @@ def get_itertools_module_context() -> Dict[str, Any]:
         "combinations_with_replacement",
     ]
 
-    return {name: getattr(itertools, name) for name in context_exports}
+    def deprecation_wrapper(fn):
+        def deprecation_wrapper_inner(*args, **kwargs):
+            deprecations.warn("modules-itertools-usage-deprecation")
+            return fn(*args, **kwargs)
+
+        return deprecation_wrapper_inner
+
+    return {name: deprecation_wrapper(getattr(itertools, name)) for name in context_exports}
 
 
 def get_context_modules() -> Dict[str, Dict[str, Any]]:
