@@ -156,6 +156,12 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
             .iter()
             .map(|(id, source)| (id.clone(), (**source).clone().into()))
             .collect(),
+        exposures: resolver_state
+            .nodes
+            .exposures
+            .iter()
+            .map(|(id, exposure)| (id.clone(), (**exposure).clone().into()))
+            .collect(),
         unit_tests: resolver_state
             .nodes
             .unit_tests
@@ -501,6 +507,55 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 },
                 deprecated_config: source.config,
                 other: source.other,
+            }),
+        );
+    }
+    for (unique_id, exposure) in manifest.exposures {
+        nodes.exposures.insert(
+            unique_id,
+            Arc::new(crate::schemas::nodes::DbtExposure {
+                common_attr: CommonAttributes {
+                    name: exposure.common_attr.name,
+                    package_name: exposure.common_attr.package_name,
+                    path: exposure.common_attr.path,
+                    original_file_path: exposure.common_attr.original_file_path,
+                    patch_path: None,
+                    unique_id: exposure.common_attr.unique_id,
+                    fqn: exposure.common_attr.fqn,
+                    description: exposure.common_attr.description,
+                    checksum: Default::default(),
+                    language: None,
+                    raw_code: None,
+                    tags: vec![],
+                    meta: BTreeMap::new(),
+                },
+                base_attr: NodeBaseAttributes {
+                    database: "".to_string(),
+                    schema: "".to_string(),
+                    alias: "".to_string(),
+                    relation_name: None,
+                    quoting: Default::default(),
+                    materialized: Default::default(),
+                    static_analysis: Default::default(),
+                    enabled: true,
+                    extended_model: false,
+                    columns: BTreeMap::new(),
+                    refs: exposure.base_attr.refs,
+                    sources: exposure.base_attr.sources,
+                    metrics: exposure.base_attr.metrics,
+                    depends_on: exposure.base_attr.depends_on,
+                    quoting_ignore_case: false,
+                },
+                exposure_attr: crate::schemas::nodes::DbtExposureAttr {
+                    owner: exposure.owner,
+                    label: exposure.label,
+                    maturity: exposure.maturity,
+                    type_: exposure.type_,
+                    url: exposure.url,
+                    unrendered_config: exposure.base_attr.unrendered_config,
+                    created_at: exposure.base_attr.created_at,
+                },
+                deprecated_config: exposure.config,
             }),
         );
     }

@@ -31,6 +31,7 @@ use crate::resolve::resolve_operations::resolve_operations;
 use crate::utils::{self};
 
 use crate::resolve::resolve_analyses::resolve_analyses;
+use crate::resolve::resolve_exposures::resolve_exposures;
 use crate::resolve::resolve_macros::resolve_docs_macros;
 use crate::resolve::resolve_macros::resolve_macros;
 use crate::resolve::resolve_models::resolve_models;
@@ -214,6 +215,7 @@ pub async fn resolve(
         .get(dbt_state.root_project_name())
         .unwrap();
 
+    // take refs and sources, resolve them to a unique_id and put in depends_on
     resolve_dependencies(&arg.io, &mut nodes, &mut disabled_nodes, &refs_and_sources);
 
     // Check access
@@ -248,40 +250,83 @@ fn check_access(
     nodes: &Nodes,
     all_runtime_configs: &BTreeMap<String, Arc<DbtRuntimeConfig>>,
 ) {
+    // Check access for models
     for (unique_id, node) in nodes.models.iter() {
-        for (target_unique_id, location) in &node.base().depends_on.nodes_with_ref_location {
-            if let Some(target_node) = nodes.models.get(target_unique_id) {
-                let restricted_access = all_runtime_configs
-                    .get(&target_node.common().package_name)
-                    .is_some_and(|config| config.inner.restrict_access.unwrap_or(false));
+        check_node_access(
+            arg,
+            unique_id,
+            &node.base().depends_on.nodes_with_ref_location,
+            &node.common().package_name,
+            nodes,
+            all_runtime_configs,
+            |target_node, diffent_packages| {
+                // Models can access private models if they're in the same group and same package
+                node.model_attr.group != target_node.model_attr.group || diffent_packages
+            },
+        );
+    }
 
-                let diffent_packages = target_node.common().package_name
-                    != node.common().package_name
-                    && restricted_access;
+    // Check access for exposures
+    for (unique_id, node) in nodes.exposures.iter() {
+        check_node_access(
+            arg,
+            unique_id,
+            &node.base().depends_on.nodes_with_ref_location,
+            &node.common().package_name,
+            nodes,
+            all_runtime_configs,
+            |target_node, diffent_packages| {
+                // Exposures don't have groups, so they can't access private models
+                // unless the private model has no group and they're in the same package
+                target_node.model_attr.group.is_some() || diffent_packages
+            },
+        );
+    }
+}
 
-                if target_node.model_attr.access == Access::Private
-                    && (node.model_attr.group != target_node.model_attr.group || diffent_packages)
-                {
-                    let err = fs_err!(
-                        code => ErrorCode::AccessDenied,
-                        loc => location.clone(),
-                        "Node '{}' attempted to reference node '{}', which is not allowed because the referenced node is private to the '{}' group",
-                        unique_id,
-                        target_unique_id,
-                        target_node.model_attr.group.as_deref().unwrap_or(""),
-                    );
-                    show_error!(arg.io, err);
-                } else if target_node.model_attr.access == Access::Protected && diffent_packages {
-                    let err = fs_err!(
-                        code => ErrorCode::AccessDenied,
-                        loc => location.clone(),
-                        "Node '{}' attempted to reference node '{}', which is not allowed because the referenced node is protected to the '{}' package",
-                        unique_id,
-                        target_unique_id,
-                        target_node.common().package_name,
-                    );
-                    show_error!(arg.io, err);
-                }
+/// Helper function to check access for a node referencing other models
+fn check_node_access<F>(
+    arg: &ResolveArgs,
+    unique_id: &str,
+    node_dependencies: &[(String, dbt_common::CodeLocation)],
+    node_package_name: &str,
+    nodes: &Nodes,
+    all_runtime_configs: &BTreeMap<String, Arc<DbtRuntimeConfig>>,
+    should_deny_private_access: F,
+) where
+    F: Fn(&dbt_schemas::schemas::nodes::DbtModel, bool) -> bool,
+{
+    for (target_unique_id, location) in node_dependencies {
+        if let Some(target_node) = nodes.models.get(target_unique_id) {
+            let restricted_access = all_runtime_configs
+                .get(&target_node.common().package_name)
+                .is_some_and(|config| config.inner.restrict_access.unwrap_or(false));
+
+            let diffent_packages =
+                target_node.common().package_name != node_package_name && restricted_access;
+
+            if target_node.model_attr.access == Access::Private
+                && should_deny_private_access(target_node, diffent_packages)
+            {
+                let err = fs_err!(
+                    code => ErrorCode::AccessDenied,
+                    loc => location.clone(),
+                    "Node '{}' attempted to reference node '{}', which is not allowed because the referenced node is private to the '{}' group",
+                    unique_id,
+                    target_unique_id,
+                    target_node.model_attr.group.as_deref().unwrap_or(""),
+                );
+                show_error!(arg.io, err);
+            } else if target_node.model_attr.access == Access::Protected && diffent_packages {
+                let err = fs_err!(
+                    code => ErrorCode::AccessDenied,
+                    loc => location.clone(),
+                    "Node '{}' attempted to reference node '{}', which is not allowed because the referenced node is protected to the '{}' package",
+                    unique_id,
+                    target_unique_id,
+                    target_node.common().package_name,
+                );
+                show_error!(arg.io, err);
             }
         }
     }
@@ -429,6 +474,23 @@ pub async fn resolve_inner(
     )
     .await?;
     nodes.analyses.extend(analyses);
+
+    let (exposures, disabled_exposures) = resolve_exposures(
+        arg,
+        &mut min_properties.exposures,
+        package,
+        dbt_state.root_project(),
+        root_project_configs,
+        database,
+        schema,
+        adapter_type,
+        package_name,
+        &jinja_env,
+        &base_ctx,
+    )
+    .await?;
+    nodes.exposures.extend(exposures);
+    disabled_nodes.exposures.extend(disabled_exposures);
 
     let (data_tests, disabled_tests) = resolve_data_tests(
         arg,

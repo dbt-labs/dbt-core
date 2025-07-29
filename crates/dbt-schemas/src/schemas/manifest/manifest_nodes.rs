@@ -5,16 +5,17 @@ use serde_json::Value;
 use serde_with::skip_serializing_none;
 
 use crate::schemas::{
-    DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest,
+    DbtExposure, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest,
     common::{
         DbtChecksum, DbtContract, DbtQuoting, Expect, FreshnessDefinition, Given, IncludeExclude,
         NodeDependsOn,
     },
     dbt_column::DbtColumn,
-    manifest::DbtOperation,
+    manifest::{DbtOperation, common::DbtOwner},
     nodes::TestMetadata,
     project::{
-        DataTestConfig, ModelConfig, SeedConfig, SnapshotConfig, SourceConfig, UnitTestConfig,
+        DataTestConfig, ExposureConfig, ModelConfig, SeedConfig, SnapshotConfig, SourceConfig,
+        UnitTestConfig,
     },
     properties::{ModelConstraint, UnitTestOverrides},
     ref_and_source::{DbtRef, DbtSourceWrapper},
@@ -509,6 +510,102 @@ impl From<DbtOperation> for ManifestOperation {
             },
             base_attr: ManifestNodeBaseAttributes::default(),
             other: operation.other,
+        }
+    }
+}
+
+// Exposures don't have "schema" fields, which are not
+// optional in the base ManifestCommonAttributes class
+// and causes an error reading exposures without a schema field.
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct ManifestExposureCommonAttributes {
+    // Identifiers
+    pub unique_id: String,
+    pub name: String,
+    pub package_name: String,
+    pub fqn: Vec<String>,
+
+    // Paths
+    pub path: PathBuf,
+    pub original_file_path: PathBuf,
+
+    // Meta
+    pub description: Option<String>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct ManifestExposureNodeBaseAttributes {
+    // Derived
+    pub depends_on: NodeDependsOn,
+    #[serde(default)]
+    pub refs: Vec<DbtRef>,
+    #[serde(default)]
+    pub sources: Vec<DbtSourceWrapper>,
+
+    #[serde(default)]
+    pub unrendered_config: BTreeMap<String, Value>,
+
+    // Metadata
+    #[serde(default)]
+    pub metrics: Vec<Vec<String>>,
+    #[serde(default)]
+    pub created_at: Option<f64>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ManifestExposure {
+    #[serde(flatten)]
+    pub common_attr: ManifestExposureCommonAttributes,
+
+    #[serde(flatten)]
+    pub base_attr: ManifestExposureNodeBaseAttributes,
+
+    // Exposure Specific Attributes
+    pub owner: DbtOwner,
+    pub label: Option<String>,
+    pub maturity: Option<String>,
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub url: Option<String>,
+    pub config: ExposureConfig,
+
+    #[serde(flatten)]
+    pub other: BTreeMap<String, Value>,
+}
+
+impl From<DbtExposure> for ManifestExposure {
+    fn from(exposure: DbtExposure) -> Self {
+        Self {
+            common_attr: ManifestExposureCommonAttributes {
+                unique_id: exposure.common_attr.unique_id,
+                name: exposure.common_attr.name,
+                package_name: exposure.common_attr.package_name,
+                fqn: exposure.common_attr.fqn,
+                path: exposure.common_attr.path,
+                original_file_path: exposure.common_attr.original_file_path,
+                description: exposure.common_attr.description,
+            },
+            base_attr: ManifestExposureNodeBaseAttributes {
+                depends_on: exposure.base_attr.depends_on,
+                refs: exposure.base_attr.refs,
+                sources: exposure.base_attr.sources,
+                metrics: exposure.base_attr.metrics,
+                unrendered_config: exposure.exposure_attr.unrendered_config,
+                created_at: None,
+            },
+            owner: exposure.exposure_attr.owner,
+            label: exposure.exposure_attr.label,
+            maturity: exposure.exposure_attr.maturity,
+            type_: exposure.exposure_attr.type_,
+            url: exposure.exposure_attr.url,
+            config: exposure.deprecated_config,
+            other: Default::default(),
         }
     }
 }

@@ -2,11 +2,11 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-use super::{DbtExposure, DbtGroup, DbtSelector};
+use super::{DbtGroup, DbtSelector};
 use crate::schemas::{
     common::{Dimension, SemanticModelDependsOn},
     macros::{DbtDocsMacro, DbtMacro},
-    manifest::{DbtNode, ManifestMetadata, manifest_nodes::ManifestSource},
+    manifest::{DbtNode, ManifestExposure, ManifestMetadata, manifest_nodes::ManifestSource},
     project::SemanticModelConfig,
     ref_and_source::DbtRef,
 };
@@ -158,7 +158,7 @@ pub struct DbtManifestV10 {
     pub macros: BTreeMap<String, DbtMacro>,
     pub docs: BTreeMap<String, DbtDocsMacro>,
     pub semantic_models: BTreeMap<String, DbtSemanticModelV10>,
-    pub exposures: BTreeMap<String, DbtExposure>,
+    pub exposures: BTreeMap<String, ManifestExposure>,
     pub metrics: BTreeMap<String, DbtMetricV10>,
     pub child_map: BTreeMap<String, Vec<String>>,
     pub parent_map: BTreeMap<String, Vec<String>>,

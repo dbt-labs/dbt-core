@@ -38,6 +38,7 @@ pub struct MinimalProperties {
     pub snapshots: BTreeMap<String, MinimalPropertiesEntry>,
     pub unit_tests: BTreeMap<String, MinimalPropertiesEntry>,
     pub tests: BTreeMap<String, MinimalPropertiesEntry>,
+    pub exposures: BTreeMap<String, MinimalPropertiesEntry>,
 }
 
 // impl try extend from MinimalResolvedProperties
@@ -219,6 +220,29 @@ impl MinimalProperties {
                         },
                     );
                 }
+            }
+        }
+        if let Some(exposures) = other.exposures {
+            for exposure_value in exposures {
+                let exposure = into_typed_with_jinja::<MinimalSchemaValue, _>(
+                    Some(io_args),
+                    exposure_value.clone(),
+                    false,
+                    jinja_env,
+                    base_ctx,
+                    &[],
+                )?;
+                self.exposures.insert(
+                    exposure.name.clone(),
+                    MinimalPropertiesEntry {
+                        name: validate_resource_name(&exposure.name)?,
+                        relative_path: properties_path.to_path_buf(),
+                        schema_value: exposure_value,
+                        table_value: None,
+                        version_info: None,
+                        duplicate_paths: vec![],
+                    },
+                );
             }
         }
         if let Some(unit_tests) = other.unit_tests {

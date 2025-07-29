@@ -1,7 +1,9 @@
+use crate::schemas::project::IterChildren;
 use dbt_serde_yaml::{JsonSchema, ShouldBe};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
+use std::collections::btree_map::Iter;
 
 use crate::{
     default_to,
@@ -12,7 +14,7 @@ use crate::{
 };
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq)]
 pub struct ProjectExposureConfig {
     #[serde(rename = "+meta")]
     pub meta: Option<BTreeMap<String, serde_json::Value>>,
@@ -24,8 +26,14 @@ pub struct ProjectExposureConfig {
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectExposureConfig>>,
 }
 
+impl IterChildren<ProjectExposureConfig> for ProjectExposureConfig {
+    fn iter_children(&self) -> Iter<String, ShouldBe<Self>> {
+        self.__additional_properties__.iter()
+    }
+}
+
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, Default, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, Default, JsonSchema, PartialEq)]
 pub struct ExposureConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,

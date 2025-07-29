@@ -13,7 +13,7 @@ use std::{
 
 use chrono::TimeZone;
 use chrono_tz::{Europe::London, Tz};
-use dbt_common::{FsResult, io_args::StaticAnalysisKind, serde_utils::convert_json_to_map};
+use dbt_common::{io_args::StaticAnalysisKind, serde_utils::convert_json_to_map};
 use dbt_frontend_common::error::CodeLocation;
 use dbt_fusion_adapter::{load_store::ResultStore, relation_object::create_relation};
 use dbt_schemas::schemas::{
@@ -38,7 +38,7 @@ use minijinja::{
 };
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
 
-use crate::{jinja_environment::JinjaEnv, phases::MacroLookupContext};
+use crate::phases::MacroLookupContext;
 
 use super::sql_resource::SqlResource;
 
@@ -624,21 +624,6 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
             )),
         }
     }
-}
-
-/// Render a reference or source string and return the corresponding SqlResource
-pub fn render_extract_ref_or_source_expr<T: DefaultTo<T>>(
-    jinja_env: &JinjaEnv,
-    resolve_model_context: &BTreeMap<String, MinijinjaValue>,
-    sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
-    ref_str: &str,
-) -> FsResult<SqlResource<T>> {
-    let expr = jinja_env.compile_expression(ref_str)?;
-    let _ = expr.eval(resolve_model_context, &[])?;
-    // Remove from Mutex and return last item
-    let mut sql_resources = sql_resources.lock().unwrap();
-    let sql_resource = sql_resources.pop().unwrap();
-    Ok(sql_resource)
 }
 
 #[cfg(test)]

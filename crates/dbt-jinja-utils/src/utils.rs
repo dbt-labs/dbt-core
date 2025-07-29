@@ -4,6 +4,7 @@ use dbt_frontend_common::{error::CodeLocation, span::Span};
 use dbt_fusion_adapter::relation_object::create_relation_internal;
 use dbt_fusion_adapter::{AdapterTyping, ParseAdapter};
 use dbt_schemas::schemas::common::ResolvedQuoting;
+use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::{DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, InternalDbtNode};
 use minijinja::arg_utils::ArgParser;
 use minijinja::{Error, ErrorKind, MacroSpans, State, Value, functions::debug, value::Rest};
@@ -17,7 +18,10 @@ use std::{
     sync::Mutex,
 };
 
-use crate::{jinja_environment::JinjaEnv, listener::ListenerFactory};
+use crate::{
+    jinja_environment::JinjaEnv, listener::ListenerFactory,
+    phases::parse::sql_resource::SqlResource,
+};
 
 /// The prefix for environment variables that contain secrets
 pub const SECRET_ENV_VAR_PREFIX: &str = "DBT_ENV_SECRET";
@@ -458,4 +462,19 @@ pub fn node_metadata_from_state(state: &State) -> Option<(NodeId, PathBuf)> {
         }
         None => None,
     }
+}
+
+/// Render a reference or source string and return the corresponding SqlResource
+pub fn render_extract_ref_or_source_expr<T: DefaultTo<T>>(
+    jinja_env: &JinjaEnv,
+    resolve_model_context: &BTreeMap<String, Value>,
+    sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
+    ref_str: &str,
+) -> FsResult<SqlResource<T>> {
+    let expr = jinja_env.compile_expression(ref_str)?;
+    let _ = expr.eval(resolve_model_context, &[])?;
+    // Remove from Mutex and return last item
+    let mut sql_resources = sql_resources.lock().unwrap();
+    let sql_resource = sql_resources.pop().unwrap();
+    Ok(sql_resource)
 }

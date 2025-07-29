@@ -14,10 +14,11 @@ use crate::schemas::{
     },
     dbt_column::DbtColumn,
     macros::DbtMacro,
-    manifest::{DbtExposure, DbtMetric, DbtSavedQuery, DbtSemanticModel},
+    manifest::common::DbtOwner,
+    manifest::{DbtMetric, DbtSavedQuery, DbtSemanticModel},
     project::{
-        DataTestConfig, ModelConfig, SeedConfig, SnapshotConfig, SnapshotMetaColumnNames,
-        SourceConfig, UnitTestConfig,
+        DataTestConfig, ExposureConfig, ModelConfig, SeedConfig, SnapshotConfig,
+        SnapshotMetaColumnNames, SourceConfig, UnitTestConfig,
     },
     properties::{ModelConstraint, ModelFreshness, UnitTestOverrides},
     ref_and_source::{DbtRef, DbtSourceWrapper},
@@ -847,16 +848,16 @@ impl InternalDbtNode for DbtSemanticModel {
 
 impl InternalDbtNode for DbtExposure {
     fn common(&self) -> &CommonAttributes {
-        unimplemented!()
+        &self.common_attr
     }
     fn base(&self) -> &NodeBaseAttributes {
-        unimplemented!()
+        &self.base_attr
     }
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
-        unimplemented!()
+        &mut self.base_attr
     }
     fn common_mut(&mut self) -> &mut CommonAttributes {
-        unimplemented!()
+        &mut self.common_attr
     }
     fn resource_type(&self) -> &str {
         "exposure"
@@ -867,15 +868,54 @@ impl InternalDbtNode for DbtExposure {
     fn serialize_inner(&self) -> Value {
         serde_json::to_value(self).expect("Failed to serialize DbtExposure")
     }
-    fn has_same_config(&self, _other: &dyn InternalDbtNode) -> bool {
-        unimplemented!()
+    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
+        if let Some(other_exposure) = other.as_any().downcast_ref::<DbtExposure>() {
+            self.deprecated_config == other_exposure.deprecated_config
+        } else {
+            false
+        }
     }
 
-    fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
-        unimplemented!()
+    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+        if let Some(other_exposure) = other.as_any().downcast_ref::<DbtExposure>() {
+            self.common_attr.name == other_exposure.common_attr.name
+                && self.common_attr.fqn == other_exposure.common_attr.fqn
+        } else {
+            false
+        }
     }
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
         panic!("DbtExposure does not support setting detected_unsafe");
+    }
+}
+
+impl InternalDbtNodeAttributes for DbtExposure {
+    fn materialized(&self) -> DbtMaterialization {
+        self.base_attr.materialized.clone()
+    }
+    fn quoting(&self) -> ResolvedQuoting {
+        self.base_attr.quoting
+    }
+    fn set_quoting(&mut self, quoting: ResolvedQuoting) {
+        self.base_attr.quoting = quoting;
+    }
+    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
+        self.base_attr.static_analysis = static_analysis;
+    }
+    fn tags(&self) -> Vec<String> {
+        self.common_attr.tags.clone()
+    }
+    fn meta(&self) -> BTreeMap<String, Value> {
+        self.common_attr.meta.clone()
+    }
+    fn serialized_config(&self) -> Value {
+        serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtExposure")
+    }
+    fn search_name(&self) -> String {
+        self.common_attr.name.clone()
+    }
+    fn selector_string(&self) -> String {
+        self.common_attr.fqn.join(".")
     }
 }
 
@@ -991,6 +1031,7 @@ pub struct Nodes {
     pub sources: BTreeMap<String, Arc<DbtSource>>,
     pub snapshots: BTreeMap<String, Arc<DbtSnapshot>>,
     pub analyses: BTreeMap<String, Arc<DbtModel>>,
+    pub exposures: BTreeMap<String, Arc<DbtExposure>>,
 }
 
 impl Nodes {
@@ -1030,6 +1071,11 @@ impl Nodes {
             .iter()
             .map(|(id, node)| (id.clone(), Arc::new((**node).clone())))
             .collect();
+        let exposures = self
+            .exposures
+            .iter()
+            .map(|(id, node)| (id.clone(), Arc::new((**node).clone())))
+            .collect();
         Nodes {
             models,
             seeds,
@@ -1038,6 +1084,7 @@ impl Nodes {
             sources,
             snapshots,
             analyses,
+            exposures,
         }
     }
 
@@ -1242,6 +1289,10 @@ impl Nodes {
             .analyses
             .values_mut()
             .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes);
+        let map_exposures = self
+            .exposures
+            .values_mut()
+            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes);
 
         map_models
             .chain(map_seeds)
@@ -1250,6 +1301,7 @@ impl Nodes {
             .chain(map_sources)
             .chain(map_snapshots)
             .chain(map_analyses)
+            .chain(map_exposures)
     }
 
     pub fn get_value_mut(&mut self, unique_id: &str) -> Option<&mut dyn InternalDbtNodeAttributes> {
@@ -1283,6 +1335,11 @@ impl Nodes {
             })
             .or_else(|| {
                 self.analyses
+                    .get_mut(unique_id)
+                    .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes)
+            })
+            .or_else(|| {
+                self.exposures
                     .get_mut(unique_id)
                     .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes)
             })
@@ -1348,6 +1405,7 @@ impl Nodes {
         self.sources.extend(other.sources);
         self.snapshots.extend(other.snapshots);
         self.analyses.extend(other.analyses);
+        self.exposures.extend(other.exposures);
     }
 
     pub fn warn_on_custom_materializations(&self) -> FsResult<()> {
@@ -1485,6 +1543,38 @@ pub struct DbtSeedAttr {
 
 fn is_false(b: &bool) -> bool {
     !b
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct DbtExposure {
+    #[serde(flatten)]
+    pub common_attr: CommonAttributes,
+
+    #[serde(flatten)]
+    pub base_attr: NodeBaseAttributes,
+
+    #[serde(flatten)]
+    pub exposure_attr: DbtExposureAttr,
+
+    // To be deprecated
+    #[serde(rename = "config")]
+    pub deprecated_config: ExposureConfig,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct DbtExposureAttr {
+    pub owner: DbtOwner,
+    pub label: Option<String>,
+    pub maturity: Option<String>,
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub url: Option<String>,
+    pub unrendered_config: BTreeMap<String, Value>,
+    pub created_at: Option<f64>,
 }
 
 #[skip_serializing_none]

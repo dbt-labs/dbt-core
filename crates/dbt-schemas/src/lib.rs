@@ -30,18 +30,17 @@ pub mod schemas {
         RelationConfigFactory,
     };
 
-    mod nodes;
+    pub mod nodes;
     pub use nodes::{
-        CommonAttributes, DbtModel, DbtModelAttr, DbtSeed, DbtSeedAttr, DbtSnapshot,
-        DbtSnapshotAttr, DbtSource, DbtSourceAttr, DbtTest, DbtTestAttr, DbtUnitTest,
-        DbtUnitTestAttr, InternalDbtNode, InternalDbtNodeAttributes, InternalDbtNodeWrapper,
-        IntrospectionKind, NodeBaseAttributes, Nodes, TestMetadata,
+        CommonAttributes, DbtExposure, DbtExposureAttr, DbtModel, DbtModelAttr, DbtSeed,
+        DbtSeedAttr, DbtSnapshot, DbtSnapshotAttr, DbtSource, DbtSourceAttr, DbtTest, DbtTestAttr,
+        DbtUnitTest, DbtUnitTestAttr, InternalDbtNode, InternalDbtNodeAttributes,
+        InternalDbtNodeWrapper, IntrospectionKind, NodeBaseAttributes, Nodes, TestMetadata,
     };
 
     pub use sources::{FreshnessResultsArtifact, FreshnessResultsMetadata, FreshnessResultsNode};
     pub mod manifest {
         mod bigquery_partition;
-        mod exposure;
         mod group;
         #[allow(clippy::module_inception)]
         mod manifest;
@@ -62,15 +61,14 @@ pub mod schemas {
             BigqueryClusterConfig, BigqueryPartitionConfig, BigqueryPartitionConfigInner,
             BigqueryPartitionConfigLegacy, GrantAccessToTarget, Range, RangeConfig, TimeConfig,
         };
-        pub use exposure::DbtExposure;
         pub use group::DbtGroup;
         pub use manifest::{
             BaseMetadata, DbtManifest, DbtNode, ManifestMetadata, build_manifest,
             nodes_from_dbt_manifest,
         };
         pub use manifest_nodes::{
-            ManifestDataTest, ManifestModel, ManifestSeed, ManifestSnapshot, ManifestSource,
-            ManifestUnitTest,
+            ManifestDataTest, ManifestExposure, ManifestModel, ManifestSeed, ManifestSnapshot,
+            ManifestSource, ManifestUnitTest,
         };
         pub use metric::DbtMetric;
         pub use operation::DbtOperation;

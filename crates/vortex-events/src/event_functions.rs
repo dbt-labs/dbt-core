@@ -278,9 +278,9 @@ pub fn resource_counts_event(args: InvocationArgs, manifest: &DbtManifest) {
     let macro_count = manifest.macros.len() as i32;
     let group_count = manifest.groups.len() as i32;
     let unit_test_count = manifest.unit_tests.len() as i32;
+    let exposure_count = manifest.exposures.len() as i32;
 
     // to-be-implemented
-    let exposure_count = 0;
     let metric_count = 0;
     let semantic_model_count = 0;
     let saved_query_count = 0;
