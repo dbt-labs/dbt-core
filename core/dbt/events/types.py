@@ -758,7 +758,7 @@ class ArgumentsPropertyInGenericTestDeprecation(WarnLevel):
         return "D038"
 
     def message(self) -> str:
-        description = f"Found `arguments` property in test definition of `{self.test_name}` without usage of `require_generic_test_arguments_property` behavior change flag. The `arguments` property is deprecated for custom usage and will be used to nest keyword arguments in future versions of dbt."
+        description = f"Found `arguments` property in test definition of {self.test_name} without usage of `require_generic_test_arguments_property` behavior change flag. The `arguments` property is deprecated for custom usage and will be used to nest keyword arguments in future versions of dbt."
         return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
