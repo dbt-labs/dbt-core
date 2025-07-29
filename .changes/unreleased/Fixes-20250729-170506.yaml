@@ -1,0 +1,3 @@
+kind: Fixes
+body: Avoid printing debug messages when executing sql
+time: 2025-07-29T17:05:06.067342-04:00
