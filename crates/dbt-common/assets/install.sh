@@ -28,6 +28,104 @@ need() {
     fi
 }
 
+# Function to install jq automatically
+install_jq() {
+    local jq_version="1.7.1"
+    local jq_url=""
+    local jq_binary_name="jq"
+    local temp_dir=""
+    
+    log_grey "jq not found, installing automatically..."
+    
+    # Detect platform for jq download
+    local os=$(uname -s | tr '[:upper:]' '[:lower:]')
+    local arch=$(uname -m)
+    
+    case "$os" in
+        linux)
+            case "$arch" in
+                x86_64)
+                    jq_url="https://github.com/jqlang/jq/releases/download/jq-${jq_version}/jq-linux-amd64"
+                    ;;
+                aarch64|arm64)
+                    jq_url="https://github.com/jqlang/jq/releases/download/jq-${jq_version}/jq-linux-arm64"
+                    ;;
+                *)
+                    log_grey "Unsupported architecture for automatic jq installation: $arch"
+                    log_grey "Please install jq manually and re-run this script"
+                    return 1
+                    ;;
+            esac
+            ;;
+        darwin)
+            case "$arch" in
+                x86_64)
+                    jq_url="https://github.com/jqlang/jq/releases/download/jq-${jq_version}/jq-macos-amd64"
+                    ;;
+                arm64)
+                    jq_url="https://github.com/jqlang/jq/releases/download/jq-${jq_version}/jq-macos-arm64"
+                    ;;
+                *)
+                    log_grey "Unsupported architecture for automatic jq installation: $arch"
+                    log_grey "Please install jq manually and re-run this script"
+                    return 1
+                    ;;
+            esac
+            ;;
+        *)
+            log_grey "Unsupported OS for automatic jq installation: $os"
+            log_grey "Please install jq manually and re-run this script"
+            return 1
+            ;;
+    esac
+    
+    # Create temporary directory for jq installation
+    temp_dir=$(mktemp -d || mktemp -d -t tmp)
+    
+    # Download jq
+    log_grey "Downloading jq from: $jq_url"
+    if ! curl -sL -f -o "$temp_dir/jq" "$jq_url"; then
+        rm -rf "$temp_dir"
+        log_grey "Failed to download jq. Please install jq manually and re-run this script"
+        return 1
+    fi
+    
+    # Make jq executable
+    chmod +x "$temp_dir/jq"
+    
+    # Determine where to install jq
+    local jq_install_dir=""
+    if [ -w "/usr/local/bin" ] 2>/dev/null; then
+        jq_install_dir="/usr/local/bin"
+    elif [ -d "$HOME/.local/bin" ]; then
+        jq_install_dir="$HOME/.local/bin"
+        # Ensure it's in PATH for this session
+        export PATH="$HOME/.local/bin:$PATH"
+    else
+        mkdir -p "$HOME/.local/bin"
+        jq_install_dir="$HOME/.local/bin"
+        export PATH="$HOME/.local/bin:$PATH"
+    fi
+    
+    # Install jq
+    if ! cp "$temp_dir/jq" "$jq_install_dir/jq"; then
+        rm -rf "$temp_dir"
+        log_grey "Failed to install jq to $jq_install_dir. Please install jq manually and re-run this script"
+        return 1
+    fi
+    
+    rm -rf "$temp_dir"
+    log_grey "Successfully installed jq to $jq_install_dir/jq"
+    
+    # Verify installation
+    if ! command -v jq >/dev/null 2>&1; then
+        log_grey "jq installed but not found in PATH. You may need to restart your terminal or update your PATH"
+        return 1
+    fi
+    
+    return 0
+}
+
 help() {
     echo "Usage: install.sh [options]"
     echo ""
@@ -81,7 +179,15 @@ need install
 need mkdir
 need mktemp
 need tar
-need jq
+
+# Check for jq and install if missing
+if ! command -v jq >/dev/null 2>&1; then
+    if ! install_jq; then
+        err "jq is required but could not be installed automatically. Please install jq manually and re-run this script."
+    fi
+else
+    log_grey "jq found: $(command -v jq)"
+fi
 
 # Optional dependencies
 if [ -z $version ] || [ -z $target ]; then
