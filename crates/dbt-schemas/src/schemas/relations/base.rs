@@ -632,7 +632,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     fn from_config(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
         jinja_err!(
             MinijinjaErrorKind::InvalidOperation,
-            "Only available for snowflake"
+            "from_config: Only available for Snowflake and Redshift"
         )
     }
 
@@ -643,6 +643,11 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
 
     fn is_hive_metastore(&self) -> Value {
         unimplemented!("Available only for databricks")
+    }
+
+    /// materialized_view_config_changeset
+    fn materialized_view_config_changeset(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+        unimplemented!("Available only for BigQuery and Redshift")
     }
 }
 

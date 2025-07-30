@@ -19,7 +19,8 @@
         {%- if autorefresh -%}{{- log('Applying UPDATE AUTOREFRESH to: ' ~ relation) -}}{%- endif -%}
 
         alter materialized view {{ relation }}
-            auto refresh {% if autorefresh.context %}yes{% else %}no{% endif %}
+            -- intentional divergence: autorefresh is already a bool
+            auto refresh {% if autorefresh %}yes{% else %}no{% endif %}
 
     {%- endif -%}
 

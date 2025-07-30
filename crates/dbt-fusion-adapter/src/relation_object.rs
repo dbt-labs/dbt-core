@@ -78,6 +78,8 @@ impl Object for RelationObject {
             "from_config" => self.from_config(args),
             // Below are available for Databricks
             "is_hive_metastore" => Ok(self.is_hive_metastore()),
+            // Below are available for BigQuery and Redshift
+            "materialized_view_config_changeset" => self.materialized_view_config_changeset(args),
             _ => Err(minijinja::Error::new(
                 minijinja::ErrorKind::InvalidOperation,
                 format!("Unknown method on BaseRelationObject: '{name}'"),

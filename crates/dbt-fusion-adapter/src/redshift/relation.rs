@@ -1,15 +1,21 @@
 use crate::information_schema::InformationSchema;
+use crate::redshift::relation_configs::materialized_view_config::{
+    DescribeMaterializedViewResults, RedshiftMaterializedViewConfig,
+    RedshiftMaterializedViewConfigChangeset,
+};
 use crate::relation_object::{RelationObject, StaticBaseRelation};
 
 use arrow::array::RecordBatch;
 use dbt_common::{ErrorCode, FsResult, current_function_name, fs_err};
 use dbt_schemas::dbt_types::RelationType;
-use dbt_schemas::schemas::common::ResolvedQuoting;
+use dbt_schemas::schemas::common::{DbtMaterialization, ResolvedQuoting};
 use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath,
 };
-use minijinja::arg_utils::{ArgParser, check_num_args};
-use minijinja::{Error as MinijinjaError, State, Value};
+use dbt_schemas::schemas::{InternalDbtNodeWrapper, RelationChangeSet};
+use minijinja::arg_utils::{ArgParser, ArgsIter, check_num_args};
+use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
+use serde::Deserialize;
 
 use std::any::Any;
 use std::sync::Arc;
@@ -215,6 +221,113 @@ impl BaseRelation for RedshiftRelation {
         let result = InformationSchema::try_from_relation(database, view_name)?;
         Ok(RelationObject::new(Arc::new(result)).into_value())
     }
+
+    // https://github.com/dbt-labs/dbt-adapters/blob/f492c919d3bd415bf5065b3cd8cd1af23562feb0/dbt-redshift/src/dbt/adapters/redshift/relation.py#L34
+    fn can_be_renamed(&self) -> bool {
+        matches!(
+            self.relation_type(),
+            Some(RelationType::Table) | Some(RelationType::View)
+        )
+    }
+
+    // https://github.com/dbt-labs/dbt-adapters/blob/f492c919d3bd415bf5065b3cd8cd1af23562feb0/dbt-redshift/src/dbt/adapters/redshift/relation.py#L42
+    fn can_be_replaced(&self) -> bool {
+        matches!(self.relation_type(), Some(RelationType::View))
+    }
+
+    // https://github.com/dbt-labs/dbt-adapters/blob/f492c919d3bd415bf5065b3cd8cd1af23562feb0/dbt-redshift/src/dbt/adapters/redshift/relation.py#L67
+    fn from_config(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+        let iter = ArgsIter::new(current_function_name!(), &["config"], args);
+        let config_value = iter.next_arg::<&Value>()?;
+        iter.finish()?;
+
+        Ok(Value::from_object(
+            node_value_to_redshift_materialized_view(config_value)?,
+        ))
+    }
+
+    // https://github.com/dbt-labs/dbt-adapters/blob/f492c919d3bd415bf5065b3cd8cd1af23562feb0/dbt-redshift/src/dbt/adapters/redshift/relation.py#L78
+    fn materialized_view_config_changeset(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+        let iter = ArgsIter::new(
+            current_function_name!(),
+            &["relation_results", "relation_config"],
+            args,
+        );
+
+        let relation_results_value = iter.next_arg::<&Value>()?;
+        let new_config_value = iter.next_arg::<&Value>()?;
+        iter.finish()?;
+
+        let relation_results = DescribeMaterializedViewResults::try_from(relation_results_value)
+            .map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError,
+                    format!(
+                        "from_config: Failed to serialized DescribeMaterializedViewResults: {e}"
+                    ),
+                )
+            })?;
+
+        let existing_config = RedshiftMaterializedViewConfig::try_from(relation_results)
+        .map_err(|e| {
+            MinijinjaError::new(
+                MinijinjaErrorKind::SerdeDeserializeError,
+                format!("materialized_view_config_changeset: Failed to deserialize RedshiftMaterializedViewConfig: {e}"),
+            )
+        })?;
+
+        let new_materialized_view_config =
+            node_value_to_redshift_materialized_view(new_config_value)?;
+
+        let changeset = RedshiftMaterializedViewConfigChangeset::new(
+            existing_config,
+            new_materialized_view_config,
+        );
+
+        if changeset.has_changes() {
+            Ok(Value::from_object(changeset))
+        } else {
+            Ok(Value::from(None::<()>))
+        }
+    }
+}
+
+fn node_value_to_redshift_materialized_view(
+    node_value: &Value,
+) -> Result<RedshiftMaterializedViewConfig, MinijinjaError> {
+    let config_wrapper = InternalDbtNodeWrapper::deserialize(node_value).map_err(|e| {
+        MinijinjaError::new(
+            MinijinjaErrorKind::SerdeDeserializeError,
+            format!("Failed to deserialize InternalDbtNodeWrapper: {e}"),
+        )
+    })?;
+
+    let model = match config_wrapper {
+        InternalDbtNodeWrapper::Model(model) => model,
+        _ => {
+            return Err(MinijinjaError::new(
+                MinijinjaErrorKind::InvalidOperation,
+                "Expected a model node",
+            ));
+        }
+    };
+
+    if model.base_attr.materialized != DbtMaterialization::MaterializedView {
+        return Err(MinijinjaError::new(
+            MinijinjaErrorKind::InvalidOperation,
+            format!(
+                "Unsupported operation for materialization type {}",
+                &model.base_attr.materialized
+            ),
+        ));
+    }
+
+    RedshiftMaterializedViewConfig::try_from(&*model).map_err(|e| {
+        MinijinjaError::new(
+            MinijinjaErrorKind::SerdeDeserializeError,
+            format!("Failed to deserialize RedshiftMaterializedViewConfig: {e}"),
+        )
+    })
 }
 
 #[cfg(test)]
