@@ -148,18 +148,6 @@ proto-rust = { path = "crates/proto-rust" }
 vortex-client = { path = "crates/vortex-client" }
 vortex-events = { path = "crates/vortex-events" }
 
-# fs dbt metadata available dependencies
-dbt-meta-cli = { path = "fs/dbt-meta/crates/cli" }
-dbt-meta-common = { path = "fs/dbt-meta/crates/shared/common" }
-dbt-meta-db = { path = "fs/dbt-meta/crates/shared/db" }
-dbt-meta-db-derive = { path = "fs/dbt-meta/crates/shared/db-derive" }
-dbt-meta-environment = { path = "fs/dbt-meta/crates/commands/meta-environment" }
-dbt-meta-feature-flag = { path = "fs/dbt-meta/crates/shared/feature-flag" }
-dbt-meta-job = { path = "fs/dbt-meta/crates/commands/meta-job" }
-dbt-meta-metrics = { path = "fs/dbt-meta/crates/shared/metrics" }
-dbt-meta-migration = { path = "fs/dbt-meta/crates/shared/migration" }
-dbt-meta-object-store-clients = { path = "fs/dbt-meta/crates/shared/object-store-clients" }
-dbt-meta-rabbit = { path = "fs/dbt-meta/crates/shared/rabbit" }
 
 # jinja dependencies
 minijinja = { path = "crates/dbt-jinja/minijinja", features = [
