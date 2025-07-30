@@ -702,7 +702,7 @@ pub struct PostgresTargetEnv {
 
 #[derive(Serialize, JsonSchema)]
 pub struct SnowflakeTargetEnv {
-    pub warehouse: String,
+    pub warehouse: Option<String>,
     pub user: String,
     pub role: Option<String>,
     pub account: String,
@@ -780,7 +780,7 @@ impl TryFrom<DbConfig> for TargetContext {
             DbConfig::Snowflake(config) => {
                 let database = config.database.ok_or_else(|| missing("database"))?;
                 Ok(TargetContext::Snowflake(SnowflakeTargetEnv {
-                    warehouse: config.warehouse.ok_or_else(|| missing("warehouse"))?,
+                    warehouse: config.warehouse,
                     user: config.user.ok_or_else(|| missing("user"))?,
                     role: config.role.clone(),
                     account: config.account.ok_or_else(|| missing("account"))?,

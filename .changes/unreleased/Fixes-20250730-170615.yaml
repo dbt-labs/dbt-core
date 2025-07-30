@@ -1,0 +1,3 @@
+kind: Fixes
+body: Fixes Snowflake `profiles.yml` requiring `warehouse` key. It is now optional.
+time: 2025-07-30T17:06:15.801764+02:00
