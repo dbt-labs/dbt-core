@@ -755,4 +755,55 @@ mod tests {
         // All nodes are in a cycle, so no levels can be formed
         assert_eq!(levels, Vec::<Vec<&str>>::new());
     }
+
+    #[test]
+    fn test_get_all_upstream_deps() {
+        // Create a dependency graph
+        // a -> b -> c
+        // d -> b
+        // e (isolated)
+        let mut deps: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+        deps.insert("a", BTreeSet::from(["b"]));
+        deps.insert("b", BTreeSet::from(["c"]));
+        deps.insert("c", BTreeSet::new());
+        deps.insert("d", BTreeSet::from(["b"]));
+        deps.insert("e", BTreeSet::new());
+
+        // Test case 1: Get upstream deps starting from a single node
+        let subset = BTreeSet::from(["a"]);
+        let result = get_all_upstream_deps(&deps, &subset);
+        assert_eq!(result.len(), 3); // Should include a, b, c
+        assert!(result.contains_key("a"));
+        assert!(result.contains_key("b"));
+        assert!(result.contains_key("c"));
+        assert!(!result.contains_key("d"));
+        assert!(!result.contains_key("e"));
+
+        // Test case 2: Get upstream deps starting from multiple nodes
+        let subset = BTreeSet::from(["a", "d"]);
+        let result = get_all_upstream_deps(&deps, &subset);
+        assert_eq!(result.len(), 4); // Should include a, b, c, d
+        assert!(result.contains_key("a"));
+        assert!(result.contains_key("b"));
+        assert!(result.contains_key("c"));
+        assert!(result.contains_key("d"));
+        assert!(!result.contains_key("e"));
+
+        // Test case 3: Get upstream deps for an isolated node
+        let subset = BTreeSet::from(["e"]);
+        let result = get_all_upstream_deps(&deps, &subset);
+        assert_eq!(result.len(), 1); // Should only include e
+        assert!(result.contains_key("e"));
+
+        // Test case 4: Get upstream deps for a leaf node
+        let subset = BTreeSet::from(["c"]);
+        let result = get_all_upstream_deps(&deps, &subset);
+        assert_eq!(result.len(), 1); // Should only include c
+        assert!(result.contains_key("c"));
+
+        // Test case 5: Empty subset
+        let subset = BTreeSet::new();
+        let result = get_all_upstream_deps(&deps, &subset);
+        assert_eq!(result.len(), 0); // Should be empty
+    }
 }

@@ -137,6 +137,13 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
                     .iter()
                     .map(|(id, node)| (id.clone(), DbtNode::Test((**node).clone().into()))),
             )
+            .chain(
+                resolver_state
+                    .nodes
+                    .analyses
+                    .iter()
+                    .map(|(id, node)| (id.clone(), DbtNode::Analysis((**node).clone().into()))),
+            )
             .chain(resolver_state.operations.on_run_start.iter().map(|node| {
                 (
                     node.common_attr.unique_id.clone(),
@@ -444,7 +451,80 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 );
             }
             DbtNode::Operation(_) => {}
-            DbtNode::Analysis(_) => {}
+            DbtNode::Analysis(analysis) => {
+                nodes.analyses.insert(
+                    unique_id,
+                    Arc::new(DbtModel {
+                        common_attr: CommonAttributes {
+                            unique_id: analysis.common_attr.unique_id,
+                            name: analysis.common_attr.name,
+                            package_name: analysis.common_attr.package_name,
+                            path: analysis.common_attr.path,
+                            original_file_path: analysis.common_attr.original_file_path,
+                            patch_path: analysis.common_attr.patch_path,
+                            fqn: analysis.common_attr.fqn,
+                            description: analysis.common_attr.description,
+                            raw_code: analysis.base_attr.raw_code,
+                            checksum: analysis.base_attr.checksum,
+                            language: analysis.base_attr.language,
+                            tags: analysis
+                                .config
+                                .tags
+                                .clone()
+                                .map(|tags| tags.into())
+                                .unwrap_or_default(),
+                            meta: analysis.config.meta.clone().unwrap_or_default(),
+                        },
+                        base_attr: NodeBaseAttributes {
+                            database: analysis.common_attr.database,
+                            schema: analysis.common_attr.schema,
+                            alias: analysis.base_attr.alias,
+                            relation_name: analysis.base_attr.relation_name,
+                            materialized: analysis
+                                .config
+                                .materialized
+                                .clone()
+                                .unwrap_or(DbtMaterialization::View),
+                            static_analysis: StaticAnalysisKind::On,
+                            enabled: analysis.config.enabled.unwrap_or(true),
+                            extended_model: false,
+                            quoting: analysis
+                                .config
+                                .quoting
+                                .map(|mut quoting| {
+                                    quoting.default_to(&dbt_quoting);
+                                    quoting
+                                })
+                                .unwrap_or(dbt_quoting)
+                                .try_into()
+                                .expect("DbtQuoting should be set"),
+                            quoting_ignore_case: false,
+                            columns: analysis.base_attr.columns,
+                            depends_on: analysis.base_attr.depends_on,
+                            refs: analysis.base_attr.refs,
+                            sources: analysis.base_attr.sources,
+                            metrics: analysis.base_attr.metrics,
+                        },
+                        model_attr: DbtModelAttr {
+                            access: analysis.config.access.clone().unwrap_or_default(),
+                            group: analysis.config.group.clone(),
+                            contract: analysis.config.contract.clone(),
+                            incremental_strategy: analysis.config.incremental_strategy.clone(),
+                            freshness: analysis.config.freshness.clone(),
+                            introspection: IntrospectionKind::None,
+                            version: analysis.version,
+                            latest_version: analysis.latest_version,
+                            constraints: analysis.constraints.unwrap_or_default(),
+                            deprecation_date: analysis.deprecation_date,
+                            primary_key: analysis.primary_key.unwrap_or_default(),
+                            time_spine: analysis.time_spine,
+                            event_time: analysis.config.event_time.clone(),
+                        },
+                        deprecated_config: analysis.config,
+                        other: analysis.other,
+                    }),
+                );
+            }
         }
     }
     for (unique_id, source) in manifest.sources {
