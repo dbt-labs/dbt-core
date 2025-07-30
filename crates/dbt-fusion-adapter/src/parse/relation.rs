@@ -50,7 +50,7 @@ impl BaseRelation for EmptyRelation {
         self
     }
     fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, MinijinjaError> {
-        unimplemented!()
+        unimplemented!("relation creation from Jinja values")
     }
 
     fn database(&self) -> Value {

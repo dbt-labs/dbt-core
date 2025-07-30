@@ -107,8 +107,8 @@ impl ReplState {
                     .with_named_option(TOKEN, token)?;
                 Ok(builder)
             }
-            Backend::Generic { .. } => unimplemented!(),
-            _ => unimplemented!(),
+            Backend::Generic { .. } => unimplemented!("generic backend REPL configuration"),
+            _ => unimplemented!("unsupported backend REPL configuration"),
         }?;
         if backend == Backend::Snowflake {
             database_builder

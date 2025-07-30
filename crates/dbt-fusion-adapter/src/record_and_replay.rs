@@ -330,15 +330,15 @@ impl Connection for ReplayEngineConnection {
     }
 
     fn cancel(&mut self) -> AdbcResult<()> {
-        unimplemented!()
+        unimplemented!("ADBC connection cancellation in replay engine")
     }
 
     fn commit(&mut self) -> AdbcResult<()> {
-        unimplemented!()
+        unimplemented!("ADBC connection commit in replay engine")
     }
 
     fn rollback(&mut self) -> AdbcResult<()> {
-        unimplemented!()
+        unimplemented!("ADBC connection rollback in replay engine")
     }
 
     fn get_table_schema(
@@ -347,7 +347,7 @@ impl Connection for ReplayEngineConnection {
         _db_schema: Option<&str>,
         _table_name: &str,
     ) -> AdbcResult<Schema> {
-        unimplemented!()
+        unimplemented!("ADBC table schema retrieval in replay engine")
     }
 }
 

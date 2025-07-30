@@ -52,6 +52,6 @@ fn override_with(original: &mut DbConfig, override_: &DbConfig) {
         (DbConfig::Bigquery(self_bigquery), DbConfig::Bigquery(other_bigquery)) => {
             self_bigquery.merge(other_bigquery.clone());
         }
-        _ => unimplemented!(),
+        _ => unimplemented!("database config override for non-BigQuery adapters"),
     }
 }

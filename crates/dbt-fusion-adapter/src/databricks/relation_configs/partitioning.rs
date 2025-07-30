@@ -43,6 +43,6 @@ impl DatabricksComponentProcessor for PartitionedByProcessor {
         &self,
         _relation_config: &dyn InternalDbtNodeAttributes,
     ) -> AdapterResult<Option<DatabricksComponentConfig>> {
-        todo!()
+        todo!("from_relation_config")
     }
 }

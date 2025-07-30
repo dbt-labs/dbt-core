@@ -179,7 +179,7 @@ impl BaseRelation for DatabricksRelation {
     }
 
     fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, MinijinjaError> {
-        unimplemented!()
+        unimplemented!("Databricks relation creation from Jinja values")
     }
 
     fn database(&self) -> Value {

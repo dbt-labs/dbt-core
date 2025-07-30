@@ -55,7 +55,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
 
     /// Get DB config by key
     fn get_db_config(&self, _key: &str) -> Option<String> {
-        unimplemented!()
+        unimplemented!("typed adapter method implementation")
     }
 
     /// The set of standard builtin strategies which this adapter supports out-of-the-box.

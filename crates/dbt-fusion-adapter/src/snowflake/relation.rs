@@ -133,7 +133,7 @@ impl BaseRelation for SnowflakeRelation {
 
     /// Creates a new Snowflake relation from a state and a list of values
     fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, MinijinjaError> {
-        unimplemented!()
+        unimplemented!("Snowflake relation creation from Jinja values")
     }
 
     /// Returns the database name

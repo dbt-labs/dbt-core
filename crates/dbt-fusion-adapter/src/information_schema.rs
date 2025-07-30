@@ -63,11 +63,11 @@ impl BaseRelationProperties for InformationSchema {
 
 impl BaseRelation for InformationSchema {
     fn as_any(&self) -> &dyn Any {
-        unimplemented!()
+        unimplemented!("information schema as_any trait downcasting")
     }
 
     fn create_from(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
-        unimplemented!()
+        unimplemented!("information schema relation creation from Jinja values")
     }
 
     fn database(&self) -> Value {
@@ -83,7 +83,7 @@ impl BaseRelation for InformationSchema {
     }
 
     fn adapter_type(&self) -> Option<String> {
-        unimplemented!()
+        unimplemented!("information schema adapter type detection")
     }
 
     fn as_value(&self) -> Value {

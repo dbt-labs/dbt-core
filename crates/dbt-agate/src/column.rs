@@ -141,7 +141,7 @@ impl Object for Column {
                     .column_name(self.index as isize)
                     .map(Value::from),
                 // An instance of `AgateDataType`.
-                "data_type" => todo!(),
+                "data_type" => todo!("data type get_value for column"),
                 _ => MappedSequence::get_value(self, key),
             }
         } else {

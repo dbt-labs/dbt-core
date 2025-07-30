@@ -145,7 +145,7 @@ impl BaseRelation for BigqueryRelation {
     }
 
     fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, MinijinjaError> {
-        unimplemented!()
+        unimplemented!("BigQuery relation creation from Jinja values")
     }
 
     fn database(&self) -> Value {

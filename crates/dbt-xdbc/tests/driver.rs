@@ -149,7 +149,7 @@ mod tests {
                     .with_password(token);
                 Ok(builder)
             }
-            Backend::Generic { .. } => unimplemented!(),
+            Backend::Generic { .. } => unimplemented!("generic backend database builder in tests"),
         }?;
         if backend == Backend::Snowflake {
             database_builder

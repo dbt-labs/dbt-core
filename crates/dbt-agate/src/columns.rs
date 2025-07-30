@@ -78,12 +78,12 @@ impl TupleRepr for ColumnsAsTuple {
 
     fn count_occurrences_of(&self, _needle: &Value) -> usize {
         // these are very unlikely to be used, so they will remain unimplemented
-        unimplemented!()
+        unimplemented!("column value occurrence counting in tuple representation")
     }
 
     fn index_of(&self, _needle: &Value) -> Option<usize> {
         // these are very unlikely to be used, so they will remain unimplemented
-        unimplemented!()
+        unimplemented!("column value index lookup in tuple representation")
     }
 
     fn clone_repr(&self) -> Box<dyn TupleRepr> {

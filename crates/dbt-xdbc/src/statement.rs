@@ -113,23 +113,23 @@ pub trait Statement: Send {
 
     /// Set a post-init option.
     fn set_option(&mut self, _key: OptionStatement, _value: OptionValue) -> Result<()> {
-        unimplemented!()
+        unimplemented!("ADBC statement option setting")
     }
     /// Get a string option value by key.
     fn get_option_string(&self, _key: OptionStatement) -> Result<String> {
-        unimplemented!()
+        unimplemented!("ADBC statement string option retrieval")
     }
     /// Get a bytes option value by key.
     fn get_option_bytes(&self, _key: OptionStatement) -> Result<Vec<u8>> {
-        unimplemented!()
+        unimplemented!("ADBC statement bytes option retrieval")
     }
     /// Get an integer option value by key.
     fn get_option_int(&self, _key: OptionStatement) -> Result<i64> {
-        unimplemented!()
+        unimplemented!("ADBC statement integer option retrieval")
     }
     /// Get a float option value by key.
     fn get_option_double(&self, _key: OptionStatement) -> Result<f64> {
-        unimplemented!()
+        unimplemented!("ADBC statement float option retrieval")
     }
 
     /// [Debug](std::fmt::Debug) implementation for Connection.

@@ -74,7 +74,7 @@ pub trait Connection: Send {
         &'a self,
         _codes: Option<HashSet<options::InfoCode>>,
     ) -> Result<Box<dyn RecordBatchReader + Send + 'a>> {
-        unimplemented!()
+        unimplemented!("ADBC connection info retrieval")
     }
 
     /// Get a hierarchical view of all catalogs, database schemas, tables, and
@@ -185,7 +185,7 @@ pub trait Connection: Send {
         _table_type: Option<Vec<&'a str>>,
         _column_name: Option<&'a str>,
     ) -> Result<Box<dyn RecordBatchReader + Send + 'a>> {
-        unimplemented!()
+        unimplemented!("ADBC hierarchical object retrieval")
     }
 
     /// Get the Arrow schema of a table.
@@ -201,7 +201,7 @@ pub trait Connection: Send {
         _db_schema: Option<&str>,
         _table_name: &str,
     ) -> Result<Schema> {
-        unimplemented!()
+        unimplemented!("ADBC table schema retrieval")
     }
 
     /// Get a list of table types in the database.
@@ -214,7 +214,7 @@ pub trait Connection: Send {
     /// ---------------|--------------
     /// table_type     | utf8 not null
     fn get_table_types<'a>(&'a self) -> Result<Box<dyn RecordBatchReader + Send + 'a>> {
-        unimplemented!()
+        unimplemented!("ADBC table types retrieval")
     }
 
     /// Get the names of statistics specific to this driver.
@@ -231,7 +231,7 @@ pub trait Connection: Send {
     /// # Since
     /// ADBC API revision 1.1.0
     fn get_statistic_names<'a>(&'a self) -> Result<Box<dyn RecordBatchReader + Send + 'a>> {
-        unimplemented!()
+        unimplemented!("ADBC statistic names retrieval")
     }
 
     /// Get statistics about the data distribution of table(s).
@@ -300,7 +300,7 @@ pub trait Connection: Send {
         _table_name: Option<&'a str>,
         _approximate: bool,
     ) -> Result<Box<dyn RecordBatchReader + Send + 'a>> {
-        unimplemented!()
+        unimplemented!("ADBC statistics retrieval")
     }
 
     /// Commit any pending transactions. Only used if autocommit is disabled.
@@ -325,30 +325,30 @@ pub trait Connection: Send {
         // NOTE(felipecrv): adbc_core should annotate partition with '_ instead
         _partition: &'a [u8],
     ) -> Result<Box<dyn RecordBatchReader + Send + 'a>> {
-        unimplemented!()
+        unimplemented!("ADBC partition-based data reading")
     }
 
     // adbc_core::Optionable<Option = OptionConnection> functions ----------------------------
 
     /// Set a post-init option.
     fn set_option(&mut self, _key: OptionConnection, _value: OptionValue) -> Result<()> {
-        unimplemented!()
+        unimplemented!("ADBC connection option setting")
     }
     /// Get a string option value by key.
     fn get_option_string(&self, _key: OptionConnection) -> Result<String> {
-        unimplemented!()
+        unimplemented!("ADBC connection string option retrieval")
     }
     /// Get a bytes option value by key.
     fn get_option_bytes(&self, _key: OptionConnection) -> Result<Vec<u8>> {
-        unimplemented!()
+        unimplemented!("ADBC connection bytes option retrieval")
     }
     /// Get an integer option value by key.
     fn get_option_int(&self, _key: OptionConnection) -> Result<i64> {
-        unimplemented!()
+        unimplemented!("ADBC connection integer option retrieval")
     }
     /// Get a float option value by key.
     fn get_option_double(&self, _key: OptionConnection) -> Result<f64> {
-        unimplemented!()
+        unimplemented!("ADBC connection float option retrieval")
     }
 
     /// [Debug](std::fmt::Debug) implementation for Connection.

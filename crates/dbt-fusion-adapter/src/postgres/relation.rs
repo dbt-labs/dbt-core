@@ -154,7 +154,7 @@ impl BaseRelation for PostgresRelation {
     }
 
     fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, MinijinjaError> {
-        unimplemented!()
+        unimplemented!("PostgreSQL relation creation from Jinja values")
     }
 
     fn database(&self) -> Value {

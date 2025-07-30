@@ -160,32 +160,32 @@ impl TableRepr {
     /// Return a single-column table with the distinct values in this column.
     pub fn column_distinct(&self, col_idx: isize) -> Self {
         let _col = self.single_column_table(col_idx).unwrap();
-        todo!()
+        todo!("column distinct values extraction")
     }
 
     pub fn column_without_nulls(&self, col_idx: isize) -> Self {
         let _col = self.single_column_table(col_idx).unwrap();
-        todo!()
+        todo!("column null value filtering")
     }
 
     pub fn column_sorted(&self, col_idx: isize) -> Self {
         let _col = self.single_column_table(col_idx).unwrap();
-        todo!()
+        todo!("column sorting")
     }
 
     pub fn column_without_nulls_sorted(&self, col_idx: isize) -> Self {
         let _col = self.single_column_table(col_idx).unwrap();
-        todo!()
+        todo!("column null filtering and sorting")
     }
 
     pub fn count_occurrences_of_value_in_column(&self, _needle: &Value, col_idx: isize) -> usize {
         let _col = self.single_column_table(col_idx).unwrap();
-        todo!()
+        todo!("column value occurrence counting")
     }
 
     pub fn index_of_value_in_column(&self, _needle: &Value, col_idx: isize) -> Option<usize> {
         let _col = self.single_column_table(col_idx).unwrap();
-        todo!()
+        todo!("column value index lookup")
     }
 
     fn with_renamed_columns(&self, renamed_columns: Vec<String>) -> Self {
@@ -232,21 +232,21 @@ impl TableRepr {
     }
 
     pub fn count_occurrences_of_row(&self, _needle: &Value) -> usize {
-        todo!()
+        todo!("row occurrence counting")
     }
 
     pub fn index_of_row(&self, _needle: &Value) -> Option<usize> {
-        todo!()
+        todo!("row index lookup")
     }
 
     pub fn count_occurrences_of_value_in_row(&self, _needle: &Value, row_idx: isize) -> usize {
         let _row = self.row_by_index(row_idx).unwrap();
-        todo!()
+        todo!("row value occurrence counting")
     }
 
     pub fn index_of_value_in_row(&self, _needle: &Value, row_idx: isize) -> Option<usize> {
         let _row = self.row_by_index(row_idx).unwrap();
-        todo!()
+        todo!("row value index lookup")
     }
 
     // Cells ------------------------------------------------------------------

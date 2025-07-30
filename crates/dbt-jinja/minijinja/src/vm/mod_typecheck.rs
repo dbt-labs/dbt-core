@@ -219,7 +219,7 @@ pub fn find_macro_signatures(
                             type_: arg_type.clone(),
                             is_optional: i >= non_optional_args_len,
                         },
-                        _ => todo!(),
+                        _ => todo!("non-variable macro argument type checking"),
                     })
                     .collect::<Vec<_>>();
 

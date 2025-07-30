@@ -428,7 +428,7 @@ impl InternalDbtNodeAttributes for DbtSeed {
         self.base_attr.quoting = quoting;
     }
     fn set_static_analysis(&mut self, _static_analysis: StaticAnalysisKind) {
-        unimplemented!()
+        unimplemented!("static analysis metadata setting for schema nodes")
     }
     fn tags(&self) -> Vec<String> {
         self.common_attr.tags.clone()
@@ -811,16 +811,16 @@ impl InternalDbtNodeAttributes for DbtSnapshot {
 
 impl InternalDbtNode for DbtSemanticModel {
     fn common(&self) -> &CommonAttributes {
-        unimplemented!()
+        unimplemented!("semantic model common attributes access")
     }
     fn base(&self) -> &NodeBaseAttributes {
-        unimplemented!()
+        unimplemented!("semantic model base attributes access")
     }
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
-        unimplemented!()
+        unimplemented!("semantic model base attributes mutation")
     }
     fn common_mut(&mut self) -> &mut CommonAttributes {
-        unimplemented!()
+        unimplemented!("semantic model common attributes mutation")
     }
     fn resource_type(&self) -> &str {
         "semantic_model"
@@ -839,7 +839,7 @@ impl InternalDbtNode for DbtSemanticModel {
         }
     }
     fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
-        unimplemented!()
+        unimplemented!("semantic model content comparison")
     }
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
         panic!("DbtSemanticModel does not support setting detected_unsafe");
@@ -921,16 +921,16 @@ impl InternalDbtNodeAttributes for DbtExposure {
 
 impl InternalDbtNode for DbtSavedQuery {
     fn common(&self) -> &CommonAttributes {
-        unimplemented!()
+        unimplemented!("saved query common attributes access")
     }
     fn base(&self) -> &NodeBaseAttributes {
-        unimplemented!()
+        unimplemented!("saved query base attributes access")
     }
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
-        unimplemented!()
+        unimplemented!("saved query base attributes mutation")
     }
     fn common_mut(&mut self) -> &mut CommonAttributes {
-        unimplemented!()
+        unimplemented!("saved query common attributes mutation")
     }
     fn resource_type(&self) -> &str {
         "saved_query"
@@ -949,7 +949,7 @@ impl InternalDbtNode for DbtSavedQuery {
         }
     }
     fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
-        unimplemented!()
+        unimplemented!("semantic model content comparison")
     }
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
         panic!("DbtSavedQuery does not support setting detected_unsafe");
@@ -958,16 +958,16 @@ impl InternalDbtNode for DbtSavedQuery {
 
 impl InternalDbtNode for DbtMetric {
     fn common(&self) -> &CommonAttributes {
-        unimplemented!()
+        unimplemented!("metric common attributes access")
     }
     fn base(&self) -> &NodeBaseAttributes {
-        unimplemented!()
+        unimplemented!("metric base attributes access")
     }
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
-        unimplemented!()
+        unimplemented!("metric base attributes mutation")
     }
     fn common_mut(&mut self) -> &mut CommonAttributes {
-        unimplemented!()
+        unimplemented!("metric common attributes mutation")
     }
     fn resource_type(&self) -> &str {
         "metric"
@@ -979,10 +979,10 @@ impl InternalDbtNode for DbtMetric {
         serde_json::to_value(self).expect("Failed to serialize DbtMetric")
     }
     fn has_same_config(&self, _other: &dyn InternalDbtNode) -> bool {
-        unimplemented!()
+        unimplemented!("metric config comparison")
     }
     fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
-        unimplemented!()
+        unimplemented!("metric content comparison")
     }
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
         panic!("DbtMetric does not support setting detected_unsafe");
@@ -991,16 +991,16 @@ impl InternalDbtNode for DbtMetric {
 
 impl InternalDbtNode for DbtMacro {
     fn common(&self) -> &CommonAttributes {
-        unimplemented!()
+        unimplemented!("macro common attributes access")
     }
     fn base(&self) -> &NodeBaseAttributes {
-        unimplemented!()
+        unimplemented!("macro base attributes access")
     }
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
-        unimplemented!()
+        unimplemented!("macro base attributes mutation")
     }
     fn common_mut(&mut self) -> &mut CommonAttributes {
-        unimplemented!()
+        unimplemented!("macro common attributes mutation")
     }
     fn resource_type(&self) -> &str {
         "macro"
@@ -1012,10 +1012,10 @@ impl InternalDbtNode for DbtMacro {
         serde_json::to_value(self).expect("Failed to serialize DbtMacro")
     }
     fn has_same_config(&self, _other: &dyn InternalDbtNode) -> bool {
-        unimplemented!()
+        unimplemented!("macro config comparison")
     }
     fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
-        unimplemented!()
+        unimplemented!("macro content comparison")
     }
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
         panic!("DbtMacro does not support setting detected_unsafe");

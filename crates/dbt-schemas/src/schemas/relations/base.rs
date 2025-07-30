@@ -740,7 +740,7 @@ mod tests {
             _relation_type: Option<RelationType>,
             _quote_policy: Policy,
         ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
-            unimplemented!()
+            unimplemented!("base relation creation from components")
         }
 
         fn information_schema_inner(

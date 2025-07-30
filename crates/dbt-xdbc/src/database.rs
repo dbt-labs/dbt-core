@@ -599,7 +599,7 @@ impl OdbcDatabase {
                     }
                     OptionDatabase::Username => OptionConnection::Other("UID".to_string()),
                     OptionDatabase::Password => OptionConnection::Other("PWD".to_string()),
-                    _ => todo!(),
+                    _ => todo!("unsupported OptionDatabase variant for ODBC"),
                 };
                 (option_connection, v)
             })
@@ -701,7 +701,7 @@ impl Database for OdbcDatabase {
                     conn_string.push_str(&format!("{k}={s};"));
                     Ok(())
                 }
-                _ => unimplemented!(),
+                _ => unimplemented!("non-string ODBC connection option handling"),
             }
         };
         for opt in self.options.iter() {
@@ -719,23 +719,23 @@ impl Database for OdbcDatabase {
     }
 
     fn set_option(&mut self, _key: OptionDatabase, _value: OptionValue) -> Result<()> {
-        todo!()
+        todo!("ODBC database option setting")
     }
 
     fn get_option_string(&self, _key: OptionDatabase) -> Result<String> {
-        todo!()
+        todo!("ODBC database string option retrieval")
     }
 
     fn get_option_bytes(&self, _key: OptionDatabase) -> Result<Vec<u8>> {
-        todo!()
+        todo!("ODBC database bytes option retrieval")
     }
 
     fn get_option_int(&self, _key: OptionDatabase) -> Result<i64> {
-        todo!()
+        todo!("ODBC database integer option retrieval")
     }
 
     fn get_option_double(&self, _key: OptionDatabase) -> Result<f64> {
-        todo!()
+        todo!("ODBC database float option retrieval")
     }
 
     fn clone_box(&self) -> Box<dyn Database> {
@@ -746,7 +746,7 @@ impl Database for OdbcDatabase {
 #[cfg(feature = "odbc")]
 impl DatabaseInfo for OdbcDatabase {
     fn get_info(&mut self, _info_code: InfoCode) -> Result<Arc<dyn Array>> {
-        todo!()
+        todo!("ODBC database info retrieval")
     }
 }
 

@@ -146,7 +146,7 @@ impl BaseRelation for RedshiftRelation {
     }
 
     fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, MinijinjaError> {
-        unimplemented!()
+        unimplemented!("Redshift relation creation from Jinja values")
     }
 
     fn database(&self) -> Value {
