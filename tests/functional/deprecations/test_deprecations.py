@@ -858,5 +858,4 @@ class TestPropertyMovedToConfigDeprecation:
             ["parse", "--no-partial-parse", "--show-all-deprecations"],
             callbacks=[event_catcher.catch],
         )
-        assert len(event_catcher.caught_events) == 1
-        assert event_catcher.caught_events[0].data.key == "access"
+        assert len(event_catcher.caught_events) == 5

@@ -113,17 +113,22 @@ def _get_allowed_config_fields_from_error_path(
     if len(error_path) < 2:
         return None
 
-    node_type = error_path[-2]
+    property_field_name = None
+    node_schema = yml_schema["properties"]
+    for part in error_path:
+        if isinstance(part, str):
+            if part in node_schema:
+                property_field_name = node_schema[part]["items"]["$ref"].split("/")[-1]
 
-    if not isinstance(node_type, str):
+                if "items" not in node_schema[part]:
+                    break
+
+                # Jump to the next level of the schema
+                item_definition = node_schema[part]["items"]["$ref"].split("/")[-1]
+                node_schema = yml_schema["definitions"][item_definition]["properties"]
+
+    if not property_field_name:
         return None
-
-    # Only "data_tests" is a valid top-level node type with a config field in jsonschemas
-    node_type = "data_tests" if node_type == "tests" else node_type
-    if node_type not in yml_schema["properties"]:
-        return None
-
-    property_field_name = yml_schema["properties"][node_type]["items"]["$ref"].split("/")[-1]
 
     if "config" not in yml_schema["definitions"][property_field_name]["properties"]:
         return None
