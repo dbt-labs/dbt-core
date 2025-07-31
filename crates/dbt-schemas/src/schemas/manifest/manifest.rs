@@ -133,13 +133,6 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
             .chain(
                 resolver_state
                     .nodes
-                    .tests
-                    .iter()
-                    .map(|(id, node)| (id.clone(), DbtNode::Test((**node).clone().into()))),
-            )
-            .chain(
-                resolver_state
-                    .nodes
                     .analyses
                     .iter()
                     .map(|(id, node)| (id.clone(), DbtNode::Analysis((**node).clone().into()))),
