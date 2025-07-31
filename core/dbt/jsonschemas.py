@@ -3,7 +3,7 @@ import os
 import re
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Union
 
 import jsonschema
 from jsonschema import ValidationError
@@ -107,7 +107,19 @@ def _validate_with_schema(
     return validator.iter_errors(json)
 
 
-def _get_config_fields_for_node(yml_schema: Dict[str, Any], node_type: str) -> Optional[List[str]]:
+def _get_allowed_config_fields_from_error_path(
+    yml_schema: Dict[str, Any], error_path: List[Union[str, int]]
+) -> Optional[List[str]]:
+    if len(error_path) < 2:
+        return None
+
+    node_type = error_path[-2]
+
+    if not isinstance(node_type, str):
+        return None
+
+    # Only "data_tests" is a valid top-level node type with a config field in jsonschemas
+    node_type = "data_tests" if node_type == "tests" else node_type
     if node_type not in yml_schema["properties"]:
         return None
 
@@ -161,11 +173,8 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                             file=file_path,
                         )
                     else:
-                        node_type = error_path[0]
-                        allowed_config_fields = (
-                            _get_config_fields_for_node(schema, node_type)
-                            if isinstance(node_type, str)
-                            else None
+                        allowed_config_fields = _get_allowed_config_fields_from_error_path(
+                            schema, error_path
                         )
                         if allowed_config_fields and key in allowed_config_fields:
                             deprecations.warn(

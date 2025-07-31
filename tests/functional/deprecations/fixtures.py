@@ -186,6 +186,13 @@ models:
     my_custom_property: "It's over, I have the high ground"
 """
 
+property_moved_to_config_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    access: public
+"""
+
 test_with_arguments_yaml = """
 models:
   - name: models_trivial
