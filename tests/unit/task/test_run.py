@@ -386,7 +386,7 @@ class TestRunTask:
         except BaseException as e:
             assert not isinstance(expected_result, RunStatus)
             assert issubclass(expected_result, BaseException)
-            assert isinstance(expected_result, e)
+            assert type(e) == expected_result
 
 
 class TestHookPrioritization(unittest.TestCase):
