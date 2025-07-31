@@ -47,6 +47,7 @@ impl AdapterConfig {
     }
 
     /// Get a value from a map or return an error.
+    /// TODO: return &str instead String
     pub fn get_str(&self, key: &str) -> AdapterResult<String> {
         if let Some(s) = self.maybe_get_str(key)? {
             Ok(s)
