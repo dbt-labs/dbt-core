@@ -1,11 +1,13 @@
 use std::{
     error::Error,
-    fmt,
+    fmt, panic,
     sync::{
         Arc, LazyLock, Weak,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
+
+use tokio::task::JoinError;
 
 static NEVER_CANCELS_CST: LazyLock<CancellationTokenSource> =
     LazyLock::new(CancellationTokenSource::new);
@@ -48,6 +50,18 @@ impl<E> From<CancelledError> for Cancellable<E> {
 impl<E: Error> From<E> for Cancellable<E> {
     fn from(err: E) -> Self {
         Cancellable::Error(err)
+    }
+}
+
+impl From<JoinError> for Cancellable<minijinja::Error> {
+    fn from(err: JoinError) -> Self {
+        if err.is_cancelled() {
+            Cancellable::Cancelled
+        } else if err.is_panic() {
+            panic::resume_unwind(err.into_panic());
+        } else {
+            unreachable!("JoinError's are either due to cancellation or panic");
+        }
     }
 }
 

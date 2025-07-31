@@ -7,6 +7,7 @@
 
 use futures::stream::{FuturesUnordered, StreamExt};
 use tokio::sync::mpsc;
+use tokio::task::JoinError;
 use tracy_client::span;
 
 use std::ffi::c_char;
@@ -92,7 +93,7 @@ where
     Key: Sized + Send,
     Value: Sized + Send + 'static,
     Acc: Sized + Default + Send + 'static,
-    Error: Send,
+    Error: From<JoinError> + Send,
 {
     /// Function to create a new connection.
     new_connection_f: NewConnectionF<Error>,
@@ -116,7 +117,7 @@ where
     K: Sized + Send,
     V: Sized + Send + 'static,
     Acc: Sized + Default + Send + 'static,
-    E: Send + 'static,
+    E: From<JoinError> + Send + 'static,
 {
     #[inline(never)]
     fn new_connection(&self) -> Result<Box<dyn Connection>, E> {
@@ -193,7 +194,7 @@ where
     Key: Sized + Clone + Send + Sync + 'static,
     Value: Sized + Send + 'static,
     Acc: Sized + Default + Send + 'static,
-    Error: Send + 'static,
+    Error: From<JoinError> + Send + 'static,
 {
     inner: Arc<MapReduceInner<Key, Value, Acc, Error>>,
     max_connections: usize,
@@ -204,7 +205,7 @@ where
     K: Sized + Clone + Send + Sync + 'static,
     V: Sized + Send + 'static,
     Acc: Sized + Default + Send + 'static,
-    E: Send + 'static,
+    E: From<JoinError> + Send + 'static,
 {
     pub fn new(
         new_connection_f: NewConnectionF<E>,
@@ -235,9 +236,10 @@ where
     ) -> Pin<Box<dyn Future<Output = Result<Box<dyn Connection>, E>> + Send>> {
         let inner = self.inner.clone(); // clone needed to move it into lambda
         let future = async move {
-            tokio::task::spawn_blocking(move || inner.new_connection())
-                .await
-                .unwrap()
+            match tokio::task::spawn_blocking(move || inner.new_connection()).await {
+                Ok(res) => res,
+                Err(join_err) => Err(E::from(join_err)),
+            }
         };
         Box::pin(future)
     }

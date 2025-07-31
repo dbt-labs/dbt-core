@@ -2,10 +2,11 @@ use adbc_core::error::Status;
 use arrow_schema::ArrowError;
 use dbt_common::{ErrorCode, FsError};
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind};
-use std::fmt;
 use std::future::Future;
 use std::io;
 use std::pin::Pin;
+use std::{fmt, panic};
+use tokio::task::JoinError;
 
 /// Adapter result.
 pub type AdapterResult<T> = Result<T, AdapterError>;
@@ -29,6 +30,8 @@ pub enum AdapterErrorKind {
     UnexpectedResult,
     /// Unexpected Database Ref
     UnexpectedDbReference,
+    /// Cancelled operation
+    Cancelled,
     /// Missing information
     Incomplete,
     /// Unsupported type
@@ -53,6 +56,7 @@ impl AdapterErrorKind {
             Self::Arrow => "Arrow error",
             Self::UnexpectedResult => "Unexpected result",
             Self::UnexpectedDbReference => "Unexpected database reference",
+            Self::Cancelled => "Operation was cancelled",
             Self::Incomplete => "Incomplete data",
             Self::UnsupportedType => "Unsupported type",
             Self::Io => "Input/output",
@@ -126,7 +130,11 @@ impl AdapterError {
 
 impl fmt::Display for AdapterError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {}", self.kind, self.message)?;
+        if self.message.is_empty() {
+            write!(f, "{}", self.kind)?;
+        } else {
+            write!(f, "{}: {}", self.kind, self.message)?;
+        }
         let sqlstate: &str = self.sqlstate();
         if sqlstate != "00000" || self.vendor_code.is_some() {
             write!(f, " (SQLSTATE: {sqlstate}")?;
@@ -214,6 +222,19 @@ impl From<parquet::errors::ParquetError> for AdapterError {
 impl From<serde_json::Error> for AdapterError {
     fn from(err: serde_json::Error) -> Self {
         AdapterError::new(AdapterErrorKind::SerdeJSON, err.to_string())
+    }
+}
+
+impl From<JoinError> for AdapterError {
+    fn from(err: JoinError) -> Self {
+        if err.is_cancelled() {
+            AdapterError::new(AdapterErrorKind::Cancelled, "")
+        } else if err.is_panic() {
+            panic::resume_unwind(err.into_panic());
+        } else {
+            // as of today, this is unreachable, but we keep it for future-proofing
+            AdapterError::new(AdapterErrorKind::Internal, err.to_string())
+        }
     }
 }
 
