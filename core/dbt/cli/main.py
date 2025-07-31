@@ -19,7 +19,6 @@ from dbt.contracts.graph.manifest import Manifest
 from dbt.mp_context import get_mp_context
 from dbt_common.events.base_types import EventMsg
 
-
 @dataclass
 class dbtRunnerResult:
     """Contains the result of an invocation of the dbtRunner"""
