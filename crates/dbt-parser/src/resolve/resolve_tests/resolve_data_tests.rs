@@ -39,6 +39,7 @@ use dbt_schemas::schemas::{CommonAttributes, DbtTest, InternalDbtNode, NodeBaseA
 use dbt_schemas::state::DbtRuntimeConfig;
 use dbt_schemas::state::ModelStatus;
 use dbt_schemas::state::{DbtAsset, DbtPackage};
+use md5;
 use minijinja::Value;
 use minijinja::constants::DEFAULT_TEST_SCHEMA;
 use serde::de;
@@ -172,7 +173,19 @@ pub async fn resolve_data_tests(
             &DataTestProperties::empty(model_name.to_owned())
         };
 
-        let unique_id = format!("test.{package_name}.{model_name}");
+        // To conform to the unique_id format in dbt-core, we need to hash the model name
+        // append the last 10 characters of the hash to the unique_id.
+        // See the `create_test_node` function in
+        // https://github.com/dbt-labs/dbt-core/blob/3de3b827bfffdc43845780f484d4d53011f20a37/core/dbt/parser/schema_generic_tests.py#L132
+        // Note that fusion does not produce the same hash as dbt-core since dbt-core
+        // performs a hash of serialized python data strutures whereas fusion
+        // performs a hash of soe of the contents of what was in the python data structs.
+        // See https://github.com/dbt-labs/fs/pull/4725#issuecomment-3133476096 for more details.
+        const HASH_LENGTH: usize = 10;
+        let hash_hex = format!("{:x}", md5::compute(&model_name));
+        let test_hash = hash_hex[hash_hex.len() - HASH_LENGTH..].to_string();
+
+        let unique_id = format!("test.{package_name}.{model_name}.{test_hash}");
         let fqn = get_node_fqn(
             package_name,
             dbt_asset.path.to_owned(),
