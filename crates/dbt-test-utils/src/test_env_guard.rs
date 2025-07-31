@@ -47,6 +47,8 @@ impl TestEnvGuard {
         "PATH",
         "PGPORT",
         "RUSTFLAGS",
+        "SSH_AGENT_PID",
+        "SSH_AUTH_SOCK",
         "TMPDIR",
         "USER",
     ];
