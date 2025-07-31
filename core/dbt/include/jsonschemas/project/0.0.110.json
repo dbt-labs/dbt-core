@@ -146,6 +146,18 @@
           "$ref": "#/definitions/StringOrArrayOfStrings"
         },
         {
+          "type": "object",
+          "properties": {
+            "sql": {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            "priority": {
+              "type": "integer"
+            }
+          },
+          "required": ["sql"]
+        },
+        {
           "type": "null"
         }
       ]
@@ -154,6 +166,18 @@
       "anyOf": [
         {
           "$ref": "#/definitions/StringOrArrayOfStrings"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "sql": {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            "priority": {
+              "type": "integer"
+            }
+          },
+          "required": ["sql"]
         },
         {
           "type": "null"
