@@ -36,6 +36,7 @@ pub struct DbtPropertiesFileValues {
     pub unit_tests: Option<Vec<dbt_serde_yaml::Value>>,
     pub tests: Option<Vec<dbt_serde_yaml::Value>>,
     pub data_tests: Option<Vec<dbt_serde_yaml::Value>>,
+    pub anchors: Verbatim<Option<Vec<dbt_serde_yaml::Value>>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -74,6 +75,7 @@ pub struct DbtPropertiesFile {
     pub metrics: Option<Vec<MetricsProperties>>,
     pub semantic_models: Option<Vec<SemanticModelsProperties>>,
     pub version: Option<FloatOrString>,
+    pub anchors: Verbatim<Option<Vec<dbt_serde_yaml::Value>>>,
 }
 
 // -- Additional Properties
