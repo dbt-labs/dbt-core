@@ -169,7 +169,7 @@
                   }
                 },
                 "required": [
-                  "priority"
+                  "sql"
                 ]
               }
             }
@@ -209,7 +209,7 @@
                   }
                 },
                 "required": [
-                  "priority"
+                  "sql"
                 ]
               }
             }

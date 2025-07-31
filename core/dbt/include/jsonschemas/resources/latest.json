@@ -2076,9 +2076,16 @@
             "boolean",
             "null"
           ]
+        },
+        "priority": {
+          "type": [
+            "integer",
+            "null"
+          ]
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "required": ["sql", "transaction"]
     },
     "Hooks": {
       "anyOf": [
