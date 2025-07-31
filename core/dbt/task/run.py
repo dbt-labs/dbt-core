@@ -26,6 +26,7 @@ from dbt.artifacts.schemas.run import RunResult
 from dbt.cli.flags import Flags
 from dbt.clients.jinja import MacroGenerator
 from dbt.config import RuntimeConfig
+from dbt.constants import DEFAULT_HOOK_PRIORITY, PROJECT_HOOK_PRIORITY
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import BatchContext, HookNode, ModelNode, ResultNode
@@ -58,7 +59,6 @@ from dbt_common.events.functions import fire_event, get_invocation_id
 from dbt_common.events.types import Formatting
 from dbt_common.exceptions import DbtValidationError
 from dbt_common.invocation import get_invocation_started_at
-from dbt.constants import DEFAULT_HOOK_PRIORITY, PROJECT_HOOK_PRIORITY
 
 
 @functools.total_ordering
@@ -930,7 +930,7 @@ class RunTask(CompileTask):
 
         return relation_exists
 
-    def _hook_keyfunc(self, hook: HookNode) -> Tuple[str, Optional[int]]:
+    def _hook_keyfunc(self, hook: HookNode) -> Tuple[int, str, Optional[int]]:
         """Sort hooks by priority, then package name, then index"""
         package_name = hook.package_name
 

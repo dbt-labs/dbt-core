@@ -13,6 +13,7 @@ from dbt.artifacts.resources.v1.model import (
     ModelBuildAfter,
     ModelFreshnessUpdatesOnOptions,
 )
+from dbt.constants import DEFAULT_HOOK_PRIORITY
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import FileHash, FilePath, SchemaSourceFile, SourceFile
 from dbt.contracts.graph.manifest import Manifest
@@ -28,7 +29,7 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.exceptions import CompilationError, ParsingError, SchemaConfigError
 from dbt.flags import set_from_args
-from dbt.node_types import NodeType
+from dbt.node_types import NodeType, RunHookType
 from dbt.parser import (
     AnalysisParser,
     GenericTestParser,
@@ -39,6 +40,7 @@ from dbt.parser import (
     SnapshotParser,
 )
 from dbt.parser.common import YamlBlock
+from dbt.parser.hooks import HookBlock, HookSearcher
 from dbt.parser.models import (
     _get_config_call_dict,
     _get_exp_sample_result,
@@ -2004,3 +2006,80 @@ class AnalysisParserTest(BaseParserTest):
         self.assertEqual(
             self.parser.manifest.files[file_id].nodes, ["analysis.snowplow.analysis_1"]
         )
+
+
+class TestHookPriorityParsing(unittest.TestCase):
+
+    def setUp(self):
+        # Mock project and source_file
+        self.mock_project = mock.MagicMock()
+        self.mock_project.project_name = "test_project"
+        self.mock_source_file = mock.MagicMock()
+
+    def test_hook_string_to_dict_with_priority(self):
+        """Test that string hooks are parsed correctly with default priority"""
+        self.mock_project.on_run_start = ["SELECT 1"]
+
+        searcher = HookSearcher(self.mock_project, self.mock_source_file, RunHookType.Start)
+        hooks = searcher.get_hook_defs()
+
+        self.assertEqual(len(hooks), 1)
+        self.assertIsInstance(hooks[0], dict)
+        self.assertEqual(hooks[0]["sql"], "SELECT 1")
+        self.assertEqual(hooks[0]["priority"], DEFAULT_HOOK_PRIORITY)
+
+    def test_hook_dict_with_custom_priority(self):
+        """Test that dict hooks with priority are parsed correctly"""
+        custom_priority = 10
+        self.mock_project.on_run_end = [{"sql": "SELECT 2", "priority": custom_priority}]
+
+        searcher = HookSearcher(self.mock_project, self.mock_source_file, RunHookType.End)
+        hooks = searcher.get_hook_defs()
+
+        self.assertEqual(len(hooks), 1)
+        self.assertIsInstance(hooks[0], dict)
+        self.assertEqual(hooks[0]["sql"], "SELECT 2")
+        self.assertEqual(hooks[0]["priority"], custom_priority)
+
+    def test_hook_mixed_formats(self):
+        """Test that mixed hook formats are all parsed correctly"""
+        custom_priority = 20
+        self.mock_project.on_run_end = [
+            "SELECT 4",
+            {"sql": "SELECT 5", "priority": custom_priority},
+            {"sql": "SELECT 6"},
+        ]
+
+        searcher = HookSearcher(self.mock_project, self.mock_source_file, RunHookType.End)
+        hooks = searcher.get_hook_defs()
+
+        self.assertEqual(len(hooks), 3)
+        self.assertEqual(hooks[0]["sql"], "SELECT 4")
+        self.assertEqual(hooks[0]["priority"], DEFAULT_HOOK_PRIORITY)
+        self.assertEqual(hooks[1]["sql"], "SELECT 5")
+        self.assertEqual(hooks[1]["priority"], custom_priority)
+        self.assertEqual(hooks[2]["sql"], "SELECT 6")
+        self.assertEqual(hooks[2]["priority"], DEFAULT_HOOK_PRIORITY)
+
+    def test_hook_block_creation_with_priority(self):
+        """Test that HookBlock objects are created with correct priority values"""
+        custom_priority = 30
+        self.mock_project.on_run_start = [
+            "SELECT 1",
+            {"sql": "SELECT 2", "priority": custom_priority},
+        ]
+
+        searcher = HookSearcher(self.mock_project, self.mock_source_file, RunHookType.Start)
+        blocks = list(searcher)
+
+        self.assertEqual(len(blocks), 2)
+        self.assertIsInstance(blocks[0], HookBlock)
+        self.assertEqual(blocks[0].value, "SELECT 1")
+        self.assertEqual(blocks[0].priority, DEFAULT_HOOK_PRIORITY)
+
+        self.assertIsInstance(blocks[1], HookBlock)
+        self.assertEqual(blocks[1].value, "SELECT 2")
+        self.assertEqual(blocks[1].priority, custom_priority)
+        self.assertEqual(blocks[1].project, "test_project")
+        self.assertEqual(blocks[1].index, 1)
+        self.assertEqual(blocks[1].hook_type, RunHookType.Start)

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
-from typing import Iterable, Iterator, List, Tuple, Union, Dict
+from typing import Any, Dict, Iterable, Iterator, List, Tuple, Union
 
+from dbt.constants import DEFAULT_HOOK_PRIORITY
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import FilePath
 from dbt.contracts.graph.nodes import HookNode
@@ -9,7 +10,6 @@ from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock
 from dbt.utils import get_pseudo_hook_path
 from dbt_common.exceptions import DbtInternalError
-from dbt.constants import DEFAULT_HOOK_PRIORITY
 
 
 @dataclass
@@ -35,7 +35,9 @@ class HookSearcher(Iterable[HookBlock]):
         self.source_file = source_file
         self.hook_type = hook_type
 
-    def _hook_list(self, hooks: Union[str, List[Union[str, Dict]], Tuple[Union[str, Dict], ...]]) -> List[Union[str, Dict]]:
+    def _hook_list(
+        self, hooks: Union[str, List[Union[str, Dict]], Tuple[Union[str, Dict], ...]]
+    ) -> List[Dict[str, Any]]:
         """Convert hook definitions to a standardized list format."""
         if isinstance(hooks, tuple):
             hooks = list(hooks)
@@ -52,7 +54,7 @@ class HookSearcher(Iterable[HookBlock]):
                 # Ensure required keys exist with defaults
                 hook_dict = {
                     "sql": hook["sql"],
-                    "priority": hook.get("priority", DEFAULT_HOOK_PRIORITY)
+                    "priority": hook.get("priority", DEFAULT_HOOK_PRIORITY),
                 }
                 result.append(hook_dict)
             elif isinstance(hook, dict):
@@ -61,7 +63,7 @@ class HookSearcher(Iterable[HookBlock]):
 
         return result
 
-    def get_hook_defs(self) -> List[str]:
+    def get_hook_defs(self) -> List[Dict[str, Any]]:
         if self.hook_type == RunHookType.Start:
             hooks = self.project.on_run_start
         elif self.hook_type == RunHookType.End:
@@ -92,7 +94,7 @@ class HookSearcher(Iterable[HookBlock]):
                 value=sql,
                 index=index,
                 hook_type=self.hook_type,
-                priority=priority
+                priority=priority,
             )
 
 
