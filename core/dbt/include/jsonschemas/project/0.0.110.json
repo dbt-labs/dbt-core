@@ -146,16 +146,34 @@
           "$ref": "#/definitions/StringOrArrayOfStrings"
         },
         {
-          "type": "object",
-          "properties": {
-            "sql": {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
+          "anyOf": [
+            {
+              "type": "string"
             },
-            "priority": {
-              "type": "integer"
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "sql": {
+                    "type": "string"
+                  },
+                  "priority": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "priority"
+                ]
+              }
             }
-          },
-          "required": ["sql"]
+          ]
         },
         {
           "type": "null"
@@ -168,16 +186,34 @@
           "$ref": "#/definitions/StringOrArrayOfStrings"
         },
         {
-          "type": "object",
-          "properties": {
-            "sql": {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
+          "anyOf": [
+            {
+              "type": "string"
             },
-            "priority": {
-              "type": "integer"
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "sql": {
+                    "type": "string"
+                  },
+                  "priority": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "priority"
+                ]
+              }
             }
-          },
-          "required": ["sql"]
+          ]
         },
         {
           "type": "null"
