@@ -411,6 +411,8 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
     def load_projects(self, paths: Iterable[Path]) -> Iterator[Tuple[str, "RuntimeConfig"]]:
         for path in paths:
             try:
+                import logging
+                logging.info("HEY HEY THIS IS A PLACEHOLDER")
                 project = self.new_project(str(path))
             except DbtProjectError as e:
                 raise DbtProjectError(

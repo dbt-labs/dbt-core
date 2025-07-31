@@ -79,9 +79,6 @@ class ProjectPostprocessor(Dict[Keypath, Callable[[Any], Any]]):
     def __init__(self) -> None:
         super().__init__()
 
-        import logging
-        logging.info("HEY HEY THIS IS A PLACEHOLDER")
-
         self[("on-run-start",)] = _list_if_none_or_string
         self[("on-run-end",)] = _list_if_none_or_string
 
