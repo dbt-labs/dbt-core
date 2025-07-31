@@ -110,18 +110,16 @@ def _validate_with_schema(
 def _get_allowed_config_fields_from_error_path(
     yml_schema: Dict[str, Any], error_path: List[Union[str, int]]
 ) -> Optional[List[str]]:
-    if len(error_path) < 2:
-        return None
-
     property_field_name = None
     node_schema = yml_schema["properties"]
     for part in error_path:
         if isinstance(part, str):
             if part in node_schema:
-                property_field_name = node_schema[part]["items"]["$ref"].split("/")[-1]
-
                 if "items" not in node_schema[part]:
                     break
+
+                # Update property field name
+                property_field_name = node_schema[part]["items"]["$ref"].split("/")[-1]
 
                 # Jump to the next level of the schema
                 item_definition = node_schema[part]["items"]["$ref"].split("/")[-1]
