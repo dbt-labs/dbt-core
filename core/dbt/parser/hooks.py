@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Iterable, Iterator, List, Tuple, Union
+from typing import Iterable, Iterator, List, Tuple, Union, Dict
 
 from dbt.context.context_config import ContextConfig
 from dbt.contracts.files import FilePath
@@ -9,6 +9,7 @@ from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock
 from dbt.utils import get_pseudo_hook_path
 from dbt_common.exceptions import DbtInternalError
+from dbt.constants import DEFAULT_HOOK_PRIORITY
 
 
 @dataclass
@@ -17,6 +18,7 @@ class HookBlock(FileBlock):
     value: str
     index: int
     hook_type: RunHookType
+    priority: int = DEFAULT_HOOK_PRIORITY
 
     @property
     def contents(self):
@@ -33,12 +35,31 @@ class HookSearcher(Iterable[HookBlock]):
         self.source_file = source_file
         self.hook_type = hook_type
 
-    def _hook_list(self, hooks: Union[str, List[str], Tuple[str, ...]]) -> List[str]:
+    def _hook_list(self, hooks: Union[str, List[Union[str, Dict]], Tuple[Union[str, Dict], ...]]) -> List[Union[str, Dict]]:
+        """Convert hook definitions to a standardized list format."""
         if isinstance(hooks, tuple):
             hooks = list(hooks)
         elif not isinstance(hooks, list):
             hooks = [hooks]
-        return hooks
+
+        # Standardize format - ensure all hooks have a consistent structure
+        result = []
+        for hook in hooks:
+            if isinstance(hook, str):
+                # Convert string to dict format with default priority
+                result.append({"sql": hook, "priority": DEFAULT_HOOK_PRIORITY})
+            elif isinstance(hook, dict) and "sql" in hook:
+                # Ensure required keys exist with defaults
+                hook_dict = {
+                    "sql": hook["sql"],
+                    "priority": hook.get("priority", DEFAULT_HOOK_PRIORITY)
+                }
+                result.append(hook_dict)
+            elif isinstance(hook, dict):
+                # Backward compatibility for any other dict format
+                result.append({"sql": str(hook), "priority": DEFAULT_HOOK_PRIORITY})
+
+        return result
 
     def get_hook_defs(self) -> List[str]:
         if self.hook_type == RunHookType.Start:
@@ -56,12 +77,22 @@ class HookSearcher(Iterable[HookBlock]):
     def __iter__(self) -> Iterator[HookBlock]:
         hooks = self.get_hook_defs()
         for index, hook in enumerate(hooks):
+            # Extract SQL and priority
+            if isinstance(hook, dict):
+                sql = hook.get("sql", "")
+                priority = hook.get("priority", DEFAULT_HOOK_PRIORITY)
+            else:
+                # Fallback for any unexpected format
+                sql = str(hook)
+                priority = DEFAULT_HOOK_PRIORITY
+
             yield HookBlock(
                 file=self.source_file,
                 project=self.project.project_name,
-                value=hook,
+                value=sql,
                 index=index,
                 hook_type=self.hook_type,
+                priority=priority
             )
 
 
@@ -98,7 +129,8 @@ class HookParser(SimpleParser[HookBlock, HookNode]):
         **kwargs,
     ) -> HookNode:
 
-        return super()._create_parsetime_node(
+        # Create the node using the parent method
+        node = super()._create_parsetime_node(
             block=block,
             path=path,
             config=config,
@@ -107,6 +139,13 @@ class HookParser(SimpleParser[HookBlock, HookNode]):
             name=name,
             tags=[str(block.hook_type)],
         )
+
+        # Store the priority in the node's meta
+        if not node.config.meta:
+            node.config.meta = {}
+        node.config.meta["hook_priority"] = block.priority
+
+        return node
 
     @property
     def resource_type(self) -> NodeType:
