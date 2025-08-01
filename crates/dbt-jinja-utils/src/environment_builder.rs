@@ -397,6 +397,7 @@ impl Default for JinjaEnvBuilder {
 mod tests {
     use std::{collections::BTreeSet, path::PathBuf, sync::Mutex};
 
+    use dbt_common::cancellation::never_cancels;
     use dbt_fusion_adapter::parse::adapter::create_parse_adapter;
     use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
     use minijinja::{
@@ -506,7 +507,9 @@ all okay!");
             )],
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
-            .with_adapter(create_parse_adapter("postgres", DEFAULT_DBT_QUOTING).unwrap())
+            .with_adapter(
+                create_parse_adapter("postgres", DEFAULT_DBT_QUOTING, never_cancels()).unwrap(),
+            )
             .with_root_package("test_package".to_string())
             .try_with_macros(macro_units, None)
             .expect("Failed to register macros");
@@ -586,7 +589,9 @@ all okay!");
             ],
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
-            .with_adapter(create_parse_adapter("postgres", DEFAULT_DBT_QUOTING).unwrap())
+            .with_adapter(
+                create_parse_adapter("postgres", DEFAULT_DBT_QUOTING, never_cancels()).unwrap(),
+            )
             .with_root_package("test_package".to_string())
             .try_with_macros(macro_units, None)
             .expect("Failed to register macros");
@@ -642,7 +647,7 @@ all okay!");
     fn test_macro_assignment() {
         let env = JinjaEnvBuilder::new()
             .with_root_package("test_package".to_string())
-            .with_adapter(create_parse_adapter("postgres", DEFAULT_DBT_QUOTING).unwrap())
+            .with_adapter(create_parse_adapter("postgres", DEFAULT_DBT_QUOTING, never_cancels()).unwrap())
             .try_with_macros(MacroUnitsWrapper::new(BTreeMap::from([(
                 "test_package".to_string(),
                 vec![
@@ -748,7 +753,9 @@ all okay!");
 
         // Build environment with the empty root package
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
-            .with_adapter(create_parse_adapter("postgres", DEFAULT_DBT_QUOTING).unwrap())
+            .with_adapter(
+                create_parse_adapter("postgres", DEFAULT_DBT_QUOTING, never_cancels()).unwrap(),
+            )
             .with_root_package("empty_root".to_string())
             .try_with_macros(macro_units, None)
             .expect("Failed to register macros");

@@ -5,9 +5,10 @@
 )]
 #![doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/README.md"))]
 
-use dbt_cancel::Cancellable;
+use dbt_cancel::{Cancellable, CancellationToken, CancelledError};
 use futures::stream::{FuturesUnordered, StreamExt};
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::error::SendError;
 use tokio::task::JoinError;
 use tracy_client::span;
 
@@ -253,8 +254,10 @@ where
         conn: Box<dyn Connection>,
         tx: mpsc::UnboundedSender<(K, V)>,
         keys: Arc<Vec<K>>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        token: &CancellationToken,
+    ) -> Pin<Box<dyn Future<Output = Result<(), CancelledError>> + Send>> {
         let inner = self.inner.clone(); // clone needed to move it into lambda
+        let token = token.clone(); // clone needed to move it into lambda
         let future = async move {
             let mut conn = conn;
             loop {
@@ -262,7 +265,7 @@ where
                 let keys_for_task = keys.clone();
                 let i = inner.key_counter.fetch_add(1, Ordering::SeqCst);
                 if i >= keys.len() {
-                    return;
+                    return Ok(());
                 }
                 let handle = tokio::task::spawn_blocking(move || {
                     let key = &keys_for_task[i];
@@ -271,12 +274,29 @@ where
                 });
                 // unwrap() fails only when the task code above panics, so calling
                 // it makes the code no more panic-prone than it alerady is
-                let conn_value = handle.await.unwrap();
+                let conn_value = match handle.await {
+                    Ok(conn_value) => conn_value,
+                    Err(join_error) => {
+                        let err = cancelled_from_join_error(join_error);
+                        return Err(err);
+                    }
+                };
                 conn = conn_value.0;
                 let value = conn_value.1;
 
                 let key = keys[i].clone();
-                tx.send((key, value)).unwrap();
+                match tx.send((key, value)) {
+                    Ok(()) => (),
+                    Err(SendError(_)) => {
+                        // The receiver has been dropped (due to cancellation),
+                        // so we fail with a CancelledError.
+                        return Err(CancelledError);
+                    }
+                }
+
+                if token.is_cancelled() {
+                    return Err(CancelledError);
+                }
             }
         };
         Box::pin(future)
@@ -288,7 +308,11 @@ where
     }
 
     /// Run all tasks in parallel with at most `max_connections` connections.
-    async fn do_run(self, keys: Arc<Vec<K>>) -> Result<Acc, Cancellable<E>> {
+    async fn do_run(
+        self,
+        keys: Arc<Vec<K>>,
+        token: CancellationToken,
+    ) -> Result<Acc, Cancellable<E>> {
         let mut acc = Acc::default();
         if keys.is_empty() {
             return Ok(acc);
@@ -316,12 +340,12 @@ where
         // Even if all the other connections fail, we can still keep making progress by
         // reusing the first connection.
         let conn = conn_futures.next().await.unwrap()?;
-        let worker = tokio::spawn(self.worker(conn, tx.clone(), keys.clone()));
+        let worker = tokio::spawn(self.worker(conn, tx.clone(), keys.clone(), &token));
         workers.push(worker);
 
         while self.inner.key_counter.load(Ordering::SeqCst) < keys.len() {
             if let Some(Ok(conn)) = conn_futures.next().await {
-                let worker = tokio::spawn(self.worker(conn, tx.clone(), keys.clone()));
+                let worker = tokio::spawn(self.worker(conn, tx.clone(), keys.clone(), &token));
                 workers.push(worker);
             }
             if n_conns < max_conns {
@@ -356,17 +380,23 @@ where
                 let duration = Duration::from_micros(us).min(Duration::from_secs(1));
                 tokio::time::sleep(duration).await;
             }
+
+            token.check_cancellation()?;
         }
         drop(tx);
 
         // Wait for all the workers to finish...
         while let Some(res) = workers.next().await {
             match res {
-                Ok(()) => (),
+                Ok(Ok(())) => (),
+                Ok(Err(CancelledError)) => {
+                    return Err(CancelledError.into());
+                }
                 Err(join_error) => {
                     return Err(cancellable_from_join_error(join_error));
                 }
             }
+            token.check_cancellation()?;
         }
         // ...and reduce their results.
         loop {
@@ -378,6 +408,7 @@ where
                 let (key, value) = recv_buffer.pop().unwrap();
                 self.reduce(&mut acc, key, value)?;
             }
+            token.check_cancellation()?;
         }
 
         Ok(acc)
@@ -386,18 +417,23 @@ where
     pub fn run(
         self,
         keys: Arc<Vec<K>>,
+        token: CancellationToken,
     ) -> Pin<Box<dyn Future<Output = Result<Acc, Cancellable<E>>> + Send>> {
-        let future = self.do_run(keys);
+        let future = self.do_run(keys, token);
         Box::pin(future)
     }
 }
 
-fn cancellable_from_join_error<T>(err: JoinError) -> Cancellable<T> {
+fn cancelled_from_join_error(err: JoinError) -> CancelledError {
     if err.is_cancelled() {
-        Cancellable::Cancelled
+        CancelledError
     } else if err.is_panic() {
         panic::resume_unwind(err.into_panic());
     } else {
         unreachable!("JoinError's are either due to cancellation or panic");
     }
+}
+
+fn cancellable_from_join_error<T>(err: JoinError) -> Cancellable<T> {
+    cancelled_from_join_error(err).into()
 }

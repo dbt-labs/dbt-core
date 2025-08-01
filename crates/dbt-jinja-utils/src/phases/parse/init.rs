@@ -7,7 +7,7 @@ use std::{
 
 use chrono::DateTime;
 use chrono_tz::Tz;
-use dbt_common::{ErrorCode, FsResult, fs_err, io_args::IoArgs};
+use dbt_common::{ErrorCode, FsResult, cancellation::CancellationToken, fs_err, io_args::IoArgs};
 use dbt_fusion_adapter::parse::adapter::create_parse_adapter;
 use dbt_schemas::{
     schemas::{
@@ -50,6 +50,7 @@ pub fn initialize_parse_jinja_environment(
     all_package_names: BTreeSet<String>,
     io_args: IoArgs,
     listener_factory: Option<Arc<dyn ListenerFactory>>,
+    token: CancellationToken,
 ) -> FsResult<JinjaEnv> {
     // Set the thread local dependencies
     THREAD_LOCAL_DEPENDENCIES.get_or_init(|| Mutex::new(all_package_names));
@@ -110,7 +111,7 @@ pub fn initialize_parse_jinja_environment(
     ]);
 
     let mut env = JinjaEnvBuilder::new()
-        .with_adapter(create_parse_adapter(adapter_type, package_quoting)?)
+        .with_adapter(create_parse_adapter(adapter_type, package_quoting, token)?)
         .with_root_package(project_name.to_string())
         .with_globals(globals)
         .with_io_args(io_args)

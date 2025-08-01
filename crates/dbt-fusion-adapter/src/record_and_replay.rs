@@ -8,6 +8,7 @@ use arrow::array::{RecordBatch, RecordBatchIterator, RecordBatchReader};
 use arrow_json::writer::LineDelimitedWriter;
 use arrow_schema::{ArrowError, Field, Schema};
 use dashmap::DashMap;
+use dbt_common::cancellation::CancellationToken;
 use dbt_xdbc::{Connection, QueryCtx, Statement};
 use once_cell::sync::Lazy;
 use parquet::arrow::ArrowWriter;
@@ -104,6 +105,10 @@ impl RecordEngine {
 
     pub fn config(&self, key: &str) -> AdapterResult<Option<String>> {
         self.0.engine.config(key)
+    }
+
+    pub fn cancellation_token(&self) -> CancellationToken {
+        self.0.engine.cancellation_token()
     }
 }
 
@@ -288,6 +293,8 @@ struct ReplayEngineInner {
     path: PathBuf,
     /// Adapter config
     config: AdapterConfig,
+    /// Global CLI cancellation token
+    cancellation_token: CancellationToken,
 }
 
 impl ReplayEngineInner {
@@ -300,8 +307,12 @@ impl ReplayEngineInner {
 pub struct ReplayEngine(Arc<ReplayEngineInner>);
 
 impl ReplayEngine {
-    pub fn new(path: PathBuf, config: AdapterConfig) -> Self {
-        let inner = ReplayEngineInner { path, config };
+    pub fn new(path: PathBuf, config: AdapterConfig, token: CancellationToken) -> Self {
+        let inner = ReplayEngineInner {
+            path,
+            config,
+            cancellation_token: token,
+        };
         ReplayEngine(Arc::new(inner))
     }
 
@@ -312,6 +323,10 @@ impl ReplayEngine {
 
     pub fn config(&self, key: &str) -> AdapterResult<Option<String>> {
         self.0.config.maybe_get_str(key)
+    }
+
+    pub fn cancellation_token(&self) -> CancellationToken {
+        self.0.cancellation_token.clone()
     }
 }
 

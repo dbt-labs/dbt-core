@@ -5,6 +5,7 @@ use crate::{AdapterResponse, AdapterResult};
 
 use dbt_agate::AgateTable;
 use dbt_common::FsResult;
+use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::ComponentName;
 use dbt_xdbc::Connection;
@@ -54,6 +55,8 @@ pub trait AdapterTyping {
             identifier.to_string()
         }
     }
+
+    fn cancellation_token(&self) -> CancellationToken;
 }
 
 /// Base adapter

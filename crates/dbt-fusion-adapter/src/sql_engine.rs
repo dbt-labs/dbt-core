@@ -6,6 +6,7 @@ use arrow::array::RecordBatch;
 use arrow::compute::concat_batches;
 use arrow_schema::Schema;
 use core::result::Result;
+use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::EXECUTING;
 use dbt_xdbc::semaphore::Semaphore;
 use dbt_xdbc::{Connection, Database, QueryCtx, connection, database, driver};
@@ -71,10 +72,12 @@ pub struct ActualEngine {
     configured_databases: RwLock<DatabaseMap>,
     /// Semaphore for limiting the number of concurrent connections
     semaphore: Arc<Semaphore>,
+    /// Global CLI cancellation token
+    cancellation_token: CancellationToken,
 }
 
 impl ActualEngine {
-    pub fn new(auth: Arc<dyn Auth>, config: AdapterConfig) -> Self {
+    pub fn new(auth: Arc<dyn Auth>, config: AdapterConfig, token: CancellationToken) -> Self {
         let threads = config
             .get_str("threads")
             .ok()
@@ -87,6 +90,7 @@ impl ActualEngine {
             config,
             configured_databases: RwLock::new(DatabaseMap::default()),
             semaphore: Arc::new(Semaphore::new(permits)),
+            cancellation_token: token,
         }
     }
 
@@ -146,6 +150,10 @@ impl ActualEngine {
         // (no need to reconfigure the default database)
         self.new_connection_with_config(&self.config)
     }
+
+    fn cancellation_token(&self) -> CancellationToken {
+        self.cancellation_token.clone()
+    }
 }
 
 /// A simple bridge between adapters and the drivers.
@@ -162,14 +170,18 @@ pub enum SqlEngine {
 
 impl SqlEngine {
     /// Create a new [`SqlEngine::Warehouse`] based on the given configuration.
-    pub fn new(auth: Arc<dyn Auth>, config: AdapterConfig) -> Arc<Self> {
-        let engine = ActualEngine::new(auth, config);
+    pub fn new(auth: Arc<dyn Auth>, config: AdapterConfig, token: CancellationToken) -> Arc<Self> {
+        let engine = ActualEngine::new(auth, config, token);
         Arc::new(SqlEngine::Warehouse(Arc::new(engine)))
     }
 
     /// Create a new [`SqlEngine::Replay`] based on the given path and adapter type.
-    pub fn new_for_replaying(path: PathBuf, config: AdapterConfig) -> Arc<Self> {
-        let engine = ReplayEngine::new(path, config);
+    pub fn new_for_replaying(
+        path: PathBuf,
+        config: AdapterConfig,
+        token: CancellationToken,
+    ) -> Arc<Self> {
+        let engine = ReplayEngine::new(path, config, token);
         Arc::new(SqlEngine::Replay(engine))
     }
 
@@ -258,6 +270,14 @@ impl SqlEngine {
             Self::Warehouse(actual_engine) => actual_engine.config.maybe_get_str(key),
             Self::Record(record_engine) => record_engine.config(key),
             Self::Replay(replay_engine) => replay_engine.config(key),
+        }
+    }
+
+    pub fn cancellation_token(&self) -> CancellationToken {
+        match self {
+            Self::Warehouse(actual_engine) => actual_engine.cancellation_token(),
+            Self::Record(record_engine) => record_engine.cancellation_token(),
+            Self::Replay(replay_engine) => replay_engine.cancellation_token(),
         }
     }
 }

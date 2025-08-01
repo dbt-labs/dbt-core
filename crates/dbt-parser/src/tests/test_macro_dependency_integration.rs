@@ -4,6 +4,7 @@
 mod tests {
     use chrono::{DateTime, Utc};
     use chrono_tz::Tz;
+    use dbt_common::cancellation::never_cancels;
     use dbt_common::io_args::IoArgs;
     use dbt_jinja_utils::invocation_args::InvocationArgs;
     use dbt_jinja_utils::listener::{DefaultListenerFactory, ListenerFactory};
@@ -44,6 +45,7 @@ mod tests {
             BTreeSet::from(["test_project".to_string()]),
             IoArgs::default(),
             None,
+            never_cancels(),
         )
         .unwrap()
     }

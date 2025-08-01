@@ -9,6 +9,7 @@ mod test_namespaced_macro_tracking;
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod tests {
+    use dbt_common::cancellation::never_cancels;
     use dbt_common::{FsResult, io_args::IoArgs};
     use dbt_frontend_common::error::CodeLocation;
     use dbt_fusion_adapter::parse::adapter::create_parse_adapter;
@@ -104,6 +105,7 @@ mod tests {
             BTreeSet::from(["common".to_string()]),
             IoArgs::default(),
             None,
+            never_cancels(),
         )
         .unwrap();
 
@@ -282,7 +284,8 @@ mod tests {
             ctx: S,
         ) -> Result<String, Error> {
             let mut env = Environment::new();
-            let adapter = create_parse_adapter("postgres", DEFAULT_DBT_QUOTING).unwrap();
+            let adapter =
+                create_parse_adapter("postgres", DEFAULT_DBT_QUOTING, never_cancels()).unwrap();
             env.add_global("adapter", adapter.as_value());
             let empty_blocks = BTreeMap::new();
             let vm = Vm::new(&env);

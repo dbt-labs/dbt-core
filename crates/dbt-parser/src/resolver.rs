@@ -127,6 +127,7 @@ pub async fn resolve(
             .collect(),
         arg.io.clone(),
         listener_factory,
+        token.clone(),
     )?);
 
     // Compute final selectors

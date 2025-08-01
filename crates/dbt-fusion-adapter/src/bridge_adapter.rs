@@ -19,6 +19,7 @@ use crate::{AdapterResponse, AdapterResult, BaseAdapter, SqlEngine};
 use dbt_agate::AgateTable;
 use dbt_common::adapter::SchemaRegistry;
 use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
+use dbt_common::cancellation::CancellationToken;
 use dbt_common::{FsError, FsResult, current_function_name};
 use dbt_schemas::schemas::InternalDbtNodeWrapper;
 use dbt_schemas::schemas::columns::base::StdColumn;
@@ -220,6 +221,10 @@ impl AdapterTyping for BridgeAdapter {
 
     fn quoting(&self) -> ResolvedQuoting {
         self.typed_adapter.quoting()
+    }
+
+    fn cancellation_token(&self) -> CancellationToken {
+        self.typed_adapter.cancellation_token()
     }
 }
 

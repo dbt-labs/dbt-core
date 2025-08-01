@@ -5,7 +5,7 @@ use crate::typed_adapter::TypedBaseAdapter;
 
 use arrow::array::RecordBatch;
 use arrow_schema::Schema;
-use dbt_common::cancellation::Cancellable;
+use dbt_common::cancellation::{Cancellable, CancellationToken};
 use dbt_schemas::schemas::relations::DEFAULT_DATABRICKS_DATABASE;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, RelationPattern};
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
@@ -114,6 +114,7 @@ pub fn create_catalogs_schema_if_not_exists(
     adapter: Arc<dyn MetadataAdapter>,
     catalog_schemas: Vec<(String, Option<String>)>,
     adapter_type: AdapterType,
+    token: CancellationToken,
 ) -> AsyncAdapterResult<'static, Vec<(String, Option<String>, AdapterResult<()>)>> {
     type Acc = Vec<(String, Option<String>, AdapterResult<()>)>;
     let adapter_clone = adapter.clone();
@@ -168,7 +169,7 @@ pub fn create_catalogs_schema_if_not_exists(
         Box::new(reduce_f),
         MAX_CONNECTIONS,
     );
-    map_reduce.run(Arc::new(catalog_schemas))
+    map_reduce.run(Arc::new(catalog_schemas), token)
 }
 
 /// A helper that transforms the input of [`MetadataAdapter::create_catalogs_if_not_exists`] to what is required by [`create_catalogs_schema_if_not_exists`]

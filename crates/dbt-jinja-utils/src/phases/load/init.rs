@@ -4,7 +4,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use chrono::DateTime;
 use chrono_tz::Tz;
-use dbt_common::{ErrorCode, FsResult, fs_err, io_args::IoArgs};
+use dbt_common::{ErrorCode, FsResult, cancellation::CancellationToken, fs_err, io_args::IoArgs};
 use dbt_fusion_adapter::parse::adapter::create_parse_adapter;
 use dbt_schemas::{
     dbt_utils::resolve_package_quoting,
@@ -24,6 +24,7 @@ pub fn initialize_load_profile_jinja_environment() -> JinjaEnv {
 }
 
 /// Initialize a Jinja environment for the load phase.
+#[allow(clippy::too_many_arguments)]
 pub fn initialize_load_jinja_environment(
     profile: &str,
     target: &str,
@@ -32,6 +33,7 @@ pub fn initialize_load_jinja_environment(
     run_started_at: DateTime<Tz>,
     flags: &BTreeMap<String, minijinja::Value>,
     io_args: IoArgs,
+    token: CancellationToken,
 ) -> FsResult<JinjaEnv> {
     let target_context = TargetContext::try_from(db_config.clone())
         .map_err(|e| fs_err!(ErrorCode::InvalidConfig, "{}", &e))?;
@@ -54,7 +56,7 @@ pub fn initialize_load_jinja_environment(
     let package_quoting = resolve_package_quoting(None, adapter_type);
 
     Ok(JinjaEnvBuilder::new()
-        .with_adapter(create_parse_adapter(adapter_type, package_quoting)?)
+        .with_adapter(create_parse_adapter(adapter_type, package_quoting, token)?)
         .with_root_package("dbt".to_string())
         .with_io_args(io_args)
         .with_globals(globals)

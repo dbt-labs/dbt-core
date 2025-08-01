@@ -14,6 +14,7 @@ use crate::{AdapterResult, SqlEngine};
 use dashmap::{DashMap, DashSet};
 use dbt_agate::AgateTable;
 use dbt_common::behavior_flags::Behavior;
+use dbt_common::cancellation::CancellationToken;
 use dbt_common::{FsError, FsResult, current_function_name};
 use dbt_schemas::schemas::columns::base::StdColumnType;
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
@@ -52,6 +53,8 @@ pub struct ParseAdapter {
     execute_sqls: DashSet<String>,
     /// The quoting policy for the adapter
     quoting: ResolvedQuoting,
+    /// The global CLI cancellation token
+    cancellation_token: CancellationToken,
 }
 
 type RelationsToFetch = (
@@ -62,7 +65,11 @@ type RelationsToFetch = (
 
 impl ParseAdapter {
     /// Make a new adapter
-    pub fn new(adapter_type: impl Into<String>, package_quoting: DbtQuoting) -> Self {
+    pub fn new(
+        adapter_type: impl Into<String>,
+        package_quoting: DbtQuoting,
+        token: CancellationToken,
+    ) -> Self {
         let adapter_type = adapter_type.into();
         AdapterType::from_str(&adapter_type).expect("adapter_type is valid");
         Self {
@@ -75,6 +82,7 @@ impl ParseAdapter {
             quoting: package_quoting
                 .try_into()
                 .expect("Failed to convert quoting to resolved quoting"),
+            cancellation_token: token,
         }
     }
 
@@ -166,6 +174,10 @@ impl AdapterTyping for ParseAdapter {
 
     fn quoting(&self) -> ResolvedQuoting {
         self.quoting
+    }
+
+    fn cancellation_token(&self) -> CancellationToken {
+        self.cancellation_token.clone()
     }
 }
 
@@ -718,7 +730,12 @@ impl Object for ParseAdapter {
 pub fn create_parse_adapter(
     adapter_type: impl Into<String>,
     package_quoting: DbtQuoting,
+    token: CancellationToken,
 ) -> FsResult<Arc<dyn BaseAdapter>> {
     let adapter_type: String = adapter_type.into();
-    Ok(Arc::new(ParseAdapter::new(adapter_type, package_quoting)))
+    Ok(Arc::new(ParseAdapter::new(
+        adapter_type,
+        package_quoting,
+        token,
+    )))
 }
