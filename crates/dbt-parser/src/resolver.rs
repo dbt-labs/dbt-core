@@ -130,8 +130,13 @@ pub async fn resolve(
     let root_project_configs = Arc::new(root_project_configs);
 
     // Process packages in topological order
-    let mut refs_and_sources =
-        RefsAndSources::from_dbt_nodes(&nodes, &adapter_type, root_project_name.to_string(), None)?;
+    let mut refs_and_sources = RefsAndSources::from_dbt_nodes(
+        &nodes,
+        &adapter_type,
+        root_project_name.to_string(),
+        None,
+        arg.sample_config.clone(),
+    )?;
     let mut collector = RenderResults {
         rendering_results: BTreeMap::new(),
     };

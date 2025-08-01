@@ -1,8 +1,11 @@
 use dbt_common::{FsError, FsResult};
 use dbt_schemas::dbt_types::RelationType;
+use dbt_schemas::filter::RunFilter;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
-use dbt_schemas::schemas::relations::base::{BaseRelation, TableFormat};
+use dbt_schemas::schemas::relations::base::{
+    BaseRelation, TableFormat, render_with_run_filter_as_str,
+};
 use minijinja::arg_utils::ArgParser;
 use minijinja::value::{Enumerator, Object, ValueKind};
 use minijinja::{Error as MinijinjaError, State};
@@ -21,11 +24,31 @@ use std::{fmt, ops::Deref};
 /// A Wrapper type for BaseRelation
 /// for any concrete Relation type to be used as Object in Jinja
 #[derive(Clone)]
-pub struct RelationObject(Arc<dyn BaseRelation>);
+pub struct RelationObject {
+    relation: Arc<dyn BaseRelation>,
+    run_filter: Option<RunFilter>,
+    event_time: Option<String>,
+}
 
 impl RelationObject {
     pub fn new(relation: Arc<dyn BaseRelation>) -> Self {
-        Self(relation)
+        Self {
+            relation,
+            run_filter: None,
+            event_time: None,
+        }
+    }
+
+    pub fn new_with_filter(
+        relation: Arc<dyn BaseRelation>,
+        run_filter: RunFilter,
+        event_time: Option<String>,
+    ) -> Self {
+        Self {
+            relation,
+            run_filter: Some(run_filter),
+            event_time,
+        }
     }
 
     pub fn into_value(self) -> Value {
@@ -33,7 +56,7 @@ impl RelationObject {
     }
 
     pub fn inner(&self) -> Arc<dyn BaseRelation> {
-        self.0.clone()
+        self.relation.clone()
     }
 }
 
@@ -47,7 +70,7 @@ impl Deref for RelationObject {
     type Target = dyn BaseRelation;
 
     fn deref(&self) -> &Self::Target {
-        self.0.as_ref()
+        self.relation.as_ref()
     }
 }
 
@@ -128,8 +151,18 @@ impl Object for RelationObject {
     where
         Self: Sized + 'static,
     {
-        let text = self.render_self().expect("could not render self");
-        write!(f, "{text}")
+        if let Some(run_filter) = &self.run_filter {
+            if run_filter.enabled() {
+                let rendered = self.render_self_as_str();
+                return write!(
+                    f,
+                    "{}",
+                    render_with_run_filter_as_str(rendered, run_filter, &self.event_time)
+                );
+            }
+        }
+
+        write!(f, "{}", self.render_self().expect("could not render self"))
     }
 }
 
@@ -219,11 +252,13 @@ pub fn create_relation_internal(
 pub fn create_relation_from_node(
     adapter_type: String,
     node: &dyn InternalDbtNodeAttributes,
+    _sample_config: Option<RunFilter>,
 ) -> FsResult<Arc<dyn BaseRelation>> {
+    // dbg!(&_sample_config);
     create_relation_internal(
         adapter_type,
-        node.base().database.clone(),
-        node.base().schema.clone(),
+        node.database(),
+        node.schema(),
         Some(node.base().alias.clone()), // all identifiers are consolidated to alias in InternalDbtNode
         Some(RelationType::from(node.materialized())),
         node.quoting(),

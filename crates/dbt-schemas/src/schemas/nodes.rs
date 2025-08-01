@@ -135,6 +135,9 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     fn latest_version(&self) -> Option<StringOrInteger> {
         None
     }
+    fn event_time(&self) -> Option<String> {
+        None
+    }
     fn is_extended_model(&self) -> bool {
         false
     }
@@ -197,10 +200,39 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
 
 pub trait InternalDbtNodeAttributes: InternalDbtNode {
     // Required Fields
-    fn materialized(&self) -> DbtMaterialization;
-    fn quoting(&self) -> ResolvedQuoting;
-    fn tags(&self) -> Vec<String>;
-    fn meta(&self) -> BTreeMap<String, Value>;
+    fn database(&self) -> String {
+        self.base().database.clone()
+    }
+    fn schema(&self) -> String {
+        self.base().schema.clone()
+    }
+    fn unique_id(&self) -> String {
+        self.common().unique_id.clone()
+    }
+    fn name(&self) -> String {
+        self.common().name.clone()
+    }
+    fn alias(&self) -> String {
+        self.base().alias.clone()
+    }
+    fn path(&self) -> PathBuf {
+        self.common().path.clone()
+    }
+    fn package_name(&self) -> String {
+        self.common().package_name.clone()
+    }
+    fn materialized(&self) -> DbtMaterialization {
+        self.base().materialized.clone()
+    }
+    fn quoting(&self) -> ResolvedQuoting {
+        self.base().quoting
+    }
+    fn tags(&self) -> Vec<String> {
+        self.common().tags.clone()
+    }
+    fn meta(&self) -> BTreeMap<String, Value> {
+        self.common().meta.clone()
+    }
     fn static_analysis(&self) -> StaticAnalysisKind {
         StaticAnalysisKind::On
     }
@@ -256,6 +288,11 @@ impl InternalDbtNode for DbtModel {
     fn latest_version(&self) -> Option<StringOrInteger> {
         self.model_attr.latest_version.clone()
     }
+
+    fn event_time(&self) -> Option<String> {
+        self.model_attr.event_time.clone()
+    }
+
     fn is_versioned(&self) -> bool {
         self.model_attr.version.is_some()
     }
@@ -313,7 +350,7 @@ impl InternalDbtNode for DbtModel {
         if let Some(DbtIncrementalStrategy::Microbatch) = self.model_attr.incremental_strategy {
             return err!(
                 code => ErrorCode::UnsupportedFeature,
-                loc => self.common().path.clone(),
+                loc => self.path(),
                 "Microbatch incremental strategy is not supported. Use --exclude config.incremental_strategy:microbatch to exclude these models."
             );
         }
@@ -322,30 +359,22 @@ impl InternalDbtNode for DbtModel {
 }
 
 impl InternalDbtNodeAttributes for DbtModel {
-    fn materialized(&self) -> DbtMaterialization {
-        self.base_attr.materialized.clone()
-    }
-    fn quoting(&self) -> ResolvedQuoting {
-        self.base_attr.quoting
-    }
     fn static_analysis(&self) -> StaticAnalysisKind {
         self.base_attr.static_analysis
     }
+
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
         self.base_attr.quoting = quoting;
     }
+
     fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
         self.base_attr.static_analysis = static_analysis;
     }
-    fn tags(&self) -> Vec<String> {
-        self.common_attr.tags.clone()
-    }
-    fn meta(&self) -> BTreeMap<String, Value> {
-        self.common_attr.meta.clone()
-    }
+
     fn get_access(&self) -> Option<Access> {
         Some(self.model_attr.access.clone())
     }
+
     fn get_group(&self) -> Option<String> {
         self.model_attr.group.clone()
     }
@@ -418,23 +447,12 @@ impl InternalDbtNode for DbtSeed {
 }
 
 impl InternalDbtNodeAttributes for DbtSeed {
-    fn materialized(&self) -> DbtMaterialization {
-        self.base_attr.materialized.clone()
-    }
-    fn quoting(&self) -> ResolvedQuoting {
-        self.base_attr.quoting
-    }
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
         self.base_attr.quoting = quoting;
     }
+
     fn set_static_analysis(&mut self, _static_analysis: StaticAnalysisKind) {
         unimplemented!("static analysis metadata setting for schema nodes")
-    }
-    fn tags(&self) -> Vec<String> {
-        self.common_attr.tags.clone()
-    }
-    fn meta(&self) -> BTreeMap<String, Value> {
-        self.common_attr.meta.clone()
     }
 
     fn search_name(&self) -> String {
@@ -505,23 +523,12 @@ impl InternalDbtNode for DbtTest {
 }
 
 impl InternalDbtNodeAttributes for DbtTest {
-    fn materialized(&self) -> DbtMaterialization {
-        self.base_attr.materialized.clone()
-    }
-    fn quoting(&self) -> ResolvedQuoting {
-        self.base_attr.quoting
-    }
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
         self.base_attr.quoting = quoting;
     }
+
     fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
         self.base_attr.static_analysis = static_analysis;
-    }
-    fn tags(&self) -> Vec<String> {
-        self.common_attr.tags.clone()
-    }
-    fn meta(&self) -> BTreeMap<String, Value> {
-        self.common_attr.meta.clone()
     }
 
     fn search_name(&self) -> String {
@@ -595,23 +602,12 @@ impl InternalDbtNode for DbtUnitTest {
 }
 
 impl InternalDbtNodeAttributes for DbtUnitTest {
-    fn materialized(&self) -> DbtMaterialization {
-        self.base_attr.materialized.clone()
-    }
-    fn quoting(&self) -> ResolvedQuoting {
-        self.base_attr.quoting
-    }
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
         self.base_attr.quoting = quoting;
     }
+
     fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
         self.base_attr.static_analysis = static_analysis;
-    }
-    fn tags(&self) -> Vec<String> {
-        self.common_attr.tags.clone()
-    }
-    fn meta(&self) -> BTreeMap<String, Value> {
-        self.common_attr.meta.clone()
     }
 
     fn search_name(&self) -> String {
@@ -647,6 +643,10 @@ impl InternalDbtNode for DbtSource {
 
     fn resource_type(&self) -> &str {
         "source"
+    }
+
+    fn event_time(&self) -> Option<String> {
+        self.deprecated_config.event_time.clone()
     }
 
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
@@ -692,26 +692,12 @@ impl InternalDbtNode for DbtSource {
 }
 
 impl InternalDbtNodeAttributes for DbtSource {
-    fn materialized(&self) -> DbtMaterialization {
-        self.base_attr.materialized.clone()
-    }
-    fn static_analysis(&self) -> StaticAnalysisKind {
-        self.base_attr.static_analysis
-    }
-    fn quoting(&self) -> ResolvedQuoting {
-        self.base_attr.quoting
-    }
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
         self.base_attr.quoting = quoting;
     }
+
     fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
         self.base_attr.static_analysis = static_analysis;
-    }
-    fn tags(&self) -> Vec<String> {
-        self.common_attr.tags.clone()
-    }
-    fn meta(&self) -> BTreeMap<String, Value> {
-        self.common_attr.meta.clone()
     }
 
     fn search_name(&self) -> String {
@@ -734,24 +720,31 @@ impl InternalDbtNode for DbtSnapshot {
     fn common(&self) -> &CommonAttributes {
         &self.common_attr
     }
+
     fn base(&self) -> &NodeBaseAttributes {
         &self.base_attr
     }
+
     fn resource_type(&self) -> &str {
         "snapshot"
     }
+
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
         &mut self.base_attr
     }
+
     fn common_mut(&mut self) -> &mut CommonAttributes {
         &mut self.common_attr
     }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
+
     fn serialize_inner(&self) -> Value {
         serde_json::to_value(self).expect("Failed to serialize DbtSnapshot")
     }
+
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_snapshot) = other.as_any().downcast_ref::<DbtSnapshot>() {
             self.deprecated_config == other_snapshot.deprecated_config
@@ -759,6 +752,7 @@ impl InternalDbtNode for DbtSnapshot {
             false
         }
     }
+
     fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
         // TODO: support snapshot state comparison by generate the same hash.
         true
@@ -768,30 +762,29 @@ impl InternalDbtNode for DbtSnapshot {
         //     false
         // }
     }
+
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
         panic!("DbtSnapshot does not support setting detected_unsafe");
     }
 }
 
 impl InternalDbtNodeAttributes for DbtSnapshot {
-    fn materialized(&self) -> DbtMaterialization {
-        self.base_attr.materialized.clone()
-    }
     fn static_analysis(&self) -> StaticAnalysisKind {
         self.base_attr.static_analysis
     }
-    fn quoting(&self) -> ResolvedQuoting {
-        self.base_attr.quoting
-    }
+
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
         self.base_attr.quoting = quoting;
     }
+
     fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
         self.base_attr.static_analysis = static_analysis;
     }
+
     fn tags(&self) -> Vec<String> {
         self.common_attr.tags.clone()
     }
+
     fn meta(&self) -> BTreeMap<String, Value> {
         self.common_attr.meta.clone()
     }
@@ -813,24 +806,31 @@ impl InternalDbtNode for DbtSemanticModel {
     fn common(&self) -> &CommonAttributes {
         unimplemented!("semantic model common attributes access")
     }
+
     fn base(&self) -> &NodeBaseAttributes {
         unimplemented!("semantic model base attributes access")
     }
+
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
         unimplemented!("semantic model base attributes mutation")
     }
+
     fn common_mut(&mut self) -> &mut CommonAttributes {
         unimplemented!("semantic model common attributes mutation")
     }
+
     fn resource_type(&self) -> &str {
         "semantic_model"
     }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
+
     fn serialize_inner(&self) -> Value {
         serde_json::to_value(self).expect("Failed to serialize DbtSnapshot")
     }
+
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_semantic_model) = other.as_any().downcast_ref::<DbtSemanticModel>() {
             self.config == other_semantic_model.config
@@ -838,9 +838,11 @@ impl InternalDbtNode for DbtSemanticModel {
             false
         }
     }
+
     fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
         unimplemented!("semantic model content comparison")
     }
+
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
         panic!("DbtSemanticModel does not support setting detected_unsafe");
     }

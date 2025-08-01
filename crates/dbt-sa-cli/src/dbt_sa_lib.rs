@@ -207,7 +207,7 @@ async fn execute_all_phases(
     checkpoint_maybe_exit!(Phases::Deps, &arg, start);
 
     // Parses (dbt parses) all .sql files with execute == false
-    let resolve_args = ResolveArgs::from_eval_args(&arg);
+    let resolve_args = ResolveArgs::try_from_eval_args(&arg)?;
     let invocation_args = InvocationArgs::from_eval_args(&arg);
     let arc_dbt_state = Arc::new(dbt_state);
     let (resolved_state, _jinja_env) = resolve(

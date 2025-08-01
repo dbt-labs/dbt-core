@@ -264,6 +264,7 @@ pub struct EvalArgs {
     pub defer: Option<bool>,
     pub fail_fast: bool,
     pub empty: bool,
+    pub sample: Option<String>,
     pub full_refresh: bool,
     pub favor_state: bool,
     pub send_anonymous_usage_stats: bool,

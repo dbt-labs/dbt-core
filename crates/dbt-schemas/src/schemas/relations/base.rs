@@ -1,5 +1,6 @@
 //! Reference: dbt-adapters/src/dbt/adapters/contracts/relation.py
 use crate::dbt_types::RelationType;
+use crate::filter::RunFilter;
 use crate::schemas::common::ResolvedQuoting;
 
 use dbt_common::constants::DBT_CTE_PREFIX;
@@ -7,6 +8,7 @@ use dbt_common::{FsResult, current_function_name};
 use minijinja::arg_utils::{ArgParser, check_num_args};
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
 use minijinja::{invalid_argument, invalid_argument_inner, jinja_err};
+use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
 
@@ -379,6 +381,10 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
 
     /// Render this relation as a string
     fn render_self_as_str(&self) -> String {
+        if let Some(RelationType::Ephemeral) = self.relation_type() {
+            return format!("{}{}", DBT_CTE_PREFIX, self.identifier());
+        }
+
         let include_policy = self.include_policy();
         let quote_policy = self.quote_policy();
         let mut parts: Vec<String> = Vec::new();
@@ -414,15 +420,20 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
 
     /// Render this relation
     fn render_self(&self) -> Result<Value, MinijinjaError> {
-        if let Some(RelationType::Ephemeral) = self.relation_type() {
-            Ok(Value::from(format!(
-                "{}{}",
-                DBT_CTE_PREFIX,
-                self.identifier()
-            )))
-        } else {
-            Ok(Value::from(self.render_self_as_str()))
-        }
+        Ok(Value::from(self.render_self_as_str()))
+    }
+
+    /// Render this relation with a run filter
+    fn render_with_run_filter(
+        &self,
+        run_filter: &RunFilter,
+        event_time: &Option<String>,
+    ) -> Result<Value, MinijinjaError> {
+        Ok(Value::from(render_with_run_filter_as_str(
+            self.render_self_as_str(),
+            run_filter,
+            event_time,
+        )))
     }
 
     /// Relation without any identifier
@@ -651,8 +662,68 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     }
 }
 
+/// Render this relation with a run filter.
+///
+// FIXME: for Postgres, we need to support _render_subquery_alias for the returned result
+// reference: https://github.com/dbt-labs/dbt-adapters/blob/d2f725651c05be0de07f3152d5b4842feae8a18a/dbt-adapters/src/dbt/adapters/base/relation.py#L222
+pub fn render_with_run_filter_as_str(
+    rendered: String,
+    run_filter: &RunFilter,
+    event_time: &Option<String>,
+) -> String {
+    let rendered = if run_filter.empty {
+        format!("(select * from {rendered} limit 0)")
+    } else {
+        rendered
+    };
+
+    // TODO(harry): warn? error is not a good idea here since this is used by Object::render method
+    // the caller returns a fmt::Error that cannot carry extra error message, and suggested to be infallible
+    if let Some(ref sample) = run_filter.sample {
+        if (sample.start.is_some() || sample.end.is_some()) && event_time.is_none() {
+            return rendered;
+        }
+    }
+
+    let start = run_filter
+        .sample
+        .as_ref()
+        .and_then(|s| s.start.map(|s| PyDateTime::new_naive(s.naive_utc())));
+    let end = run_filter
+        .sample
+        .as_ref()
+        .and_then(|s| s.end.map(|s| PyDateTime::new_naive(s.naive_utc())));
+
+    let filter = match (end, start) {
+        (Some(end), Some(start)) => {
+            format!(
+                "{} >= '{}' and {} < '{}'",
+                event_time.as_ref().unwrap(),
+                start.isoformat(),
+                event_time.as_ref().unwrap(),
+                end.isoformat()
+            )
+        }
+        (Some(end), None) => {
+            format!("{} < '{}'", event_time.as_ref().unwrap(), end.isoformat())
+        }
+        (None, Some(start)) => {
+            format!(
+                "{} >= '{}'",
+                event_time.as_ref().unwrap(),
+                start.isoformat()
+            )
+        }
+        (None, None) => return rendered,
+    };
+
+    format!("(select * from {rendered} where {filter})")
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::filter::Sample;
+    use chrono::{DateTime, NaiveDate, Utc};
     use minijinja::value::Kwargs;
 
     use super::*;
@@ -899,5 +970,184 @@ mod tests {
         };
 
         assert_eq!(relation.semantic_fqn(), "\"MyDB\".\"myschema\".\"MyTable\"");
+    }
+
+    #[test]
+    fn test_render_with_run_filter_empty() {
+        let run_filter = RunFilter {
+            empty: true,
+            sample: None,
+        };
+        let rendered = "my_table".to_string();
+        let event_time = None;
+
+        let result = render_with_run_filter_as_str(rendered, &run_filter, &event_time);
+        assert_eq!(result, "(select * from my_table limit 0)");
+    }
+
+    #[test]
+    fn test_render_with_run_filter_no_sample() {
+        let run_filter = RunFilter {
+            empty: false,
+            sample: None,
+        };
+        let rendered = "my_table".to_string();
+        let event_time = Some("created_at".to_string());
+
+        let result = render_with_run_filter_as_str(rendered, &run_filter, &event_time);
+        assert_eq!(result, "my_table");
+    }
+
+    #[test]
+    fn test_render_with_run_filter_both_start_and_end() {
+        let start = NaiveDate::from_ymd_opt(2024, 7, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let end = NaiveDate::from_ymd_opt(2024, 7, 8)
+            .unwrap()
+            .and_hms_opt(18, 0, 0)
+            .unwrap();
+
+        let sample = Sample {
+            start: Some(DateTime::<Utc>::from_naive_utc_and_offset(start, Utc)),
+            end: Some(DateTime::<Utc>::from_naive_utc_and_offset(end, Utc)),
+        };
+
+        let run_filter = RunFilter {
+            empty: false,
+            sample: Some(sample),
+        };
+        let rendered = "my_table".to_string();
+        let event_time = Some("created_at".to_string());
+
+        let result = render_with_run_filter_as_str(rendered, &run_filter, &event_time);
+        assert_eq!(
+            result,
+            "(select * from my_table where created_at >= '2024-07-01T00:00:00' and created_at < '2024-07-08T18:00:00')"
+        );
+    }
+
+    #[test]
+    fn test_render_with_run_filter_start_only() {
+        let start = NaiveDate::from_ymd_opt(2024, 7, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+
+        let sample = Sample {
+            start: Some(DateTime::<Utc>::from_naive_utc_and_offset(start, Utc)),
+            end: None,
+        };
+
+        let run_filter = RunFilter {
+            empty: false,
+            sample: Some(sample),
+        };
+        let rendered = "my_table".to_string();
+        let event_time = Some("created_at".to_string());
+
+        let result = render_with_run_filter_as_str(rendered, &run_filter, &event_time);
+        assert_eq!(
+            result,
+            "(select * from my_table where created_at >= '2024-07-01T00:00:00')"
+        );
+    }
+
+    #[test]
+    fn test_render_with_run_filter_end_only() {
+        let end = NaiveDate::from_ymd_opt(2024, 7, 8)
+            .unwrap()
+            .and_hms_opt(18, 0, 0)
+            .unwrap();
+
+        let sample = Sample {
+            start: None,
+            end: Some(DateTime::<Utc>::from_naive_utc_and_offset(end, Utc)),
+        };
+
+        let run_filter = RunFilter {
+            empty: false,
+            sample: Some(sample),
+        };
+        let rendered = "my_table".to_string();
+        let event_time = Some("created_at".to_string());
+
+        let result = render_with_run_filter_as_str(rendered, &run_filter, &event_time);
+        assert_eq!(
+            result,
+            "(select * from my_table where created_at < '2024-07-08T18:00:00')"
+        );
+    }
+
+    #[test]
+    fn test_render_with_run_filter_sample_none_values() {
+        let sample = Sample {
+            start: None,
+            end: None,
+        };
+
+        let run_filter = RunFilter {
+            empty: false,
+            sample: Some(sample),
+        };
+        let rendered = "my_table".to_string();
+        let event_time = Some("created_at".to_string());
+
+        let result = render_with_run_filter_as_str(rendered, &run_filter, &event_time);
+        assert_eq!(result, "my_table");
+    }
+
+    #[test]
+    fn test_render_with_run_filter_no_event_time_error() {
+        let start = NaiveDate::from_ymd_opt(2024, 7, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+
+        let sample = Sample {
+            start: Some(DateTime::<Utc>::from_naive_utc_and_offset(start, Utc)),
+            end: None,
+        };
+
+        let run_filter = RunFilter {
+            empty: false,
+            sample: Some(sample),
+        };
+        let rendered = "my_table".to_string();
+        let event_time = None;
+
+        let result = render_with_run_filter_as_str(rendered, &run_filter, &event_time);
+        assert_eq!(result, "my_table");
+    }
+
+    #[test]
+    fn test_render_with_run_filter_empty_and_sample() {
+        let start = NaiveDate::from_ymd_opt(2024, 7, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let end = NaiveDate::from_ymd_opt(2024, 7, 8)
+            .unwrap()
+            .and_hms_opt(18, 0, 0)
+            .unwrap();
+
+        let sample = Sample {
+            start: Some(DateTime::<Utc>::from_naive_utc_and_offset(start, Utc)),
+            end: Some(DateTime::<Utc>::from_naive_utc_and_offset(end, Utc)),
+        };
+
+        let run_filter = RunFilter {
+            empty: true,
+            sample: Some(sample),
+        };
+        let rendered = "my_table".to_string();
+        let event_time = Some("created_at".to_string());
+
+        let result = render_with_run_filter_as_str(rendered, &run_filter, &event_time);
+        assert_eq!(
+            result,
+            "(select * from (select * from my_table limit 0) where created_at >= '2024-07-01T00:00:00' and created_at < '2024-07-08T18:00:00')"
+        );
     }
 }

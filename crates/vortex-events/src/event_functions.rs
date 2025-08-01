@@ -141,7 +141,7 @@ pub fn run_model_event(
     is_contract_enforced: bool,
     has_group: bool,
 ) {
-    let unique_id = node.common().unique_id.clone();
+    let unique_id = node.unique_id();
     if !run_stats.contains_key(&unique_id) {
         // This got called for a seed, which didn't have stats.
         // There might be a better way of doing this...

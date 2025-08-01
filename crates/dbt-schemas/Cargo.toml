@@ -21,9 +21,11 @@ dbt-common = { workspace = true }
 dbt-frontend-common = { workspace = true }
 dbt-serde_yaml = { workspace = true }
 hex = { workspace = true }
+humantime = { workspace = true }
 md5 = { workspace = true }
 merge = { workspace = true }
 minijinja = { workspace = true }
+minijinja-contrib = { workspace = true }
 regex = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }

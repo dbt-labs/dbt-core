@@ -205,11 +205,8 @@ pub fn generate_relation_components(
     let is_snapshot = node.resource_type() == "snapshot";
     // TODO handle jinja rendering errors on each component name rendering
     // Get default values from the node
-    let (default_database, default_schema, default_alias) = (
-        node.base().database.clone(),
-        node.base().schema.clone(),
-        node.base().alias.clone(),
-    );
+    let (default_database, default_schema, default_alias) =
+        (node.database(), node.schema(), node.base().alias.clone());
     // Generate database name
     let database = if is_snapshot && components.database.is_some() {
         components.database.clone().unwrap()

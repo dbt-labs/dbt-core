@@ -7,8 +7,9 @@ use std::{
 use dbt_common::{
     CodeLocation, ErrorCode, FsResult, err, io_args::IoArgs, show_error, unexpected_err,
 };
-use dbt_fusion_adapter::relation_object::create_relation_from_node;
+use dbt_fusion_adapter::relation_object::{RelationObject, create_relation_from_node};
 use dbt_schemas::{
+    filter::RunFilter,
     schemas::{
         DbtSource, InternalDbtNodeAttributes, Nodes,
         common::DbtQuoting,
@@ -30,6 +31,8 @@ pub struct RefsAndSources {
     pub root_package_name: String,
     /// Optional Quoting Config produced by mantle/core manifest needed for back compatibility for defer in fusion
     pub mantle_quoting: Option<DbtQuoting>,
+    /// Filters that will be applied to `run` or `build` (supports --empty or --sample)
+    pub run_filter: RunFilter,
 }
 
 impl RefsAndSources {
@@ -39,10 +42,12 @@ impl RefsAndSources {
         adapter_type: &str,
         root_package_name: String,
         mantle_quoting: Option<DbtQuoting>,
+        run_filter: RunFilter,
     ) -> FsResult<Self> {
         let mut refs_and_sources = RefsAndSources {
             root_package_name,
             mantle_quoting,
+            run_filter,
             ..Default::default()
         };
         for (_, node) in nodes.iter() {
@@ -104,15 +109,26 @@ impl RefsAndSourcesTracker for RefsAndSources {
         override_existing: bool,
     ) -> FsResult<()> {
         // If the latest version and current version are the same, the unversioned ref must point to the latest
-        let package_name = &node.common().package_name;
-        let model_name = node.common().name.clone();
-        let unique_id = node.common().unique_id.clone();
+        let package_name = &node.package_name();
+        let model_name = node.name();
+        let unique_id = node.unique_id();
         let (maybe_version, maybe_latest_version) = if node.resource_type() == "model" {
             (node.version(), node.latest_version())
         } else {
             (None, None)
         };
-        let relation = create_relation_from_node(adapter_type.to_string(), node)?.as_value();
+
+        let relation = RelationObject::new_with_filter(
+            create_relation_from_node(
+                adapter_type.to_string(),
+                node,
+                Some(self.run_filter.clone()),
+            )?,
+            self.run_filter.clone(),
+            node.event_time(),
+        )
+        .into_value();
+
         if maybe_version == maybe_latest_version {
             // Lookup by ref name
             let ref_entry = self.refs.entry(model_name.clone()).or_default();
@@ -198,7 +214,16 @@ impl RefsAndSourcesTracker for RefsAndSources {
         adapter_type: &str,
         status: ModelStatus,
     ) -> FsResult<()> {
-        let relation = create_relation_from_node(adapter_type.to_string(), source)?.as_value();
+        let relation = RelationObject::new_with_filter(
+            create_relation_from_node(
+                adapter_type.to_string(),
+                source,
+                Some(self.run_filter.clone()),
+            )?,
+            self.run_filter.clone(),
+            source.deprecated_config.event_time.clone(),
+        )
+        .into_value();
 
         self.sources
             .entry(format!(
@@ -394,8 +419,8 @@ pub fn resolve_dependencies(
     for node in nodes.iter_values_mut() {
         // Clone needed values first to avoid borrowing issues
         let node_path = node.common().path.clone();
-        let node_package_name = node.common().package_name.clone();
-        let node_unique_id = node.common().unique_id.clone();
+        let node_package_name = node.package_name();
+        let node_unique_id = node.unique_id();
         let is_test = node.is_test();
 
         let node_base = node.base_mut();

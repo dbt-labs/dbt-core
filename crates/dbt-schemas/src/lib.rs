@@ -1,6 +1,7 @@
 pub mod constants;
 pub mod dbt_types;
 pub mod dbt_utils;
+pub mod filter;
 pub mod man;
 pub mod state;
 

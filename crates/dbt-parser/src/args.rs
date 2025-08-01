@@ -1,10 +1,12 @@
 //! Module defines the input arguments required for resolution
 
+use dbt_common::FsResult;
 use dbt_common::io_args::IoArgs;
 use dbt_common::{
     io_args::EvalArgs,
     node_selector::{IndirectSelection, SelectExpression},
 };
+use dbt_schemas::filter::RunFilter;
 use std::collections::BTreeMap;
 
 /// Args to be passed into the resolution phase
@@ -28,12 +30,14 @@ pub struct ResolveArgs {
     pub exclude: Option<SelectExpression>,
     /// Number of tHreads to use
     pub num_threads: Option<usize>,
+    /// Sample config
+    pub sample_config: RunFilter,
 }
 
 impl ResolveArgs {
     /// Produce [ResolveArgs] from a set of [EvalArgs]
-    pub fn from_eval_args(arg: &EvalArgs) -> Self {
-        ResolveArgs {
+    pub fn try_from_eval_args(arg: &EvalArgs) -> FsResult<Self> {
+        Ok(ResolveArgs {
             command: arg.command.clone(),
             io: arg.io.clone(),
             vars: arg.vars.clone(),
@@ -43,6 +47,7 @@ impl ResolveArgs {
             exclude: arg.exclude.clone(),
             num_threads: arg.num_threads,
             indirect_selection: arg.indirect_selection,
-        }
+            sample_config: RunFilter::try_from(arg.empty, arg.sample.clone())?,
+        })
     }
 }
