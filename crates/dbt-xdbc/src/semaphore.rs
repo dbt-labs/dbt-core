@@ -103,19 +103,21 @@ impl Semaphore {
         self.max
     }
 
-    /// Release a permit, incrementing the count of available permits.
-    pub fn release(&self) {
-        self.base.release();
-    }
-
     /// Acquire a permit, blocking until one is available.
-    pub fn acquire(&self) {
+    #[must_use]
+    pub fn acquire(&self) -> PermitGuard<'_> {
         self.base.acquire();
+        PermitGuard { semaphore: self }
     }
 
     /// Try to acquire a permit without blocking.
-    pub fn try_acquire(&self) -> bool {
-        self.base.try_acquire()
+    #[must_use]
+    pub fn try_acquire(&self) -> Option<PermitGuard<'_>> {
+        if self.base.try_acquire() {
+            Some(PermitGuard { semaphore: self })
+        } else {
+            None
+        }
     }
 
     /// Wait for all permits to be available and acquire them all at once.
@@ -124,12 +126,35 @@ impl Semaphore {
     /// let semaphore = Semaphore::new(8);
     /// semaphore.acquire_all(); // will block until all 8 permits are available
     /// ```
-    pub fn acquire_all(&self) {
+    #[must_use]
+    pub fn acquire_all(&self) -> PermitGuardAll<'_> {
+        self.base.acquire_many(self.max);
+        PermitGuardAll { semaphore: self }
+    }
+
+    /// Like [Semaphore::acquire], but caller must ensure that
+    /// [Semaphore::unguarded_release] is called.
+    ///
+    /// Failing to do so may lead to deadlocks as acquired permits don't get released.
+    pub fn unguarded_acquire(&self) {
+        self.base.acquire();
+    }
+
+    /// Undo the effect of [Semaphore::unguarded_acquire].
+    pub fn unguarded_release(&self) {
+        self.base.release();
+    }
+
+    /// Like [Semaphore::acquire_all], but caller must ensure that
+    /// [Semaphore::unguarded_release_all] is called.
+    ///
+    /// Failing to do so may lead to deadlocks as acquired permits don't get released.
+    pub fn unguarded_acquire_all(&self) {
         self.base.acquire_many(self.max);
     }
 
-    /// Undo the effect of `acquire_all`.
-    pub fn release_all(&self) {
+    /// Undo the effect of [Semaphore::unguarded_acquire_all].
+    fn unguarded_release_all(&self) {
         self.base.release_impl(self.max);
     }
 }
@@ -140,6 +165,28 @@ impl fmt::Debug for Semaphore {
             .field("max", &self.max)
             .field("available", &self.base.a.load(Ordering::Relaxed))
             .finish()
+    }
+}
+
+/// A guard that releases the semaphore permit when dropped.
+pub struct PermitGuard<'a> {
+    semaphore: &'a Semaphore,
+}
+
+impl Drop for PermitGuard<'_> {
+    fn drop(&mut self) {
+        self.semaphore.unguarded_release()
+    }
+}
+
+/// A guard that releases all permits when dropped.
+pub struct PermitGuardAll<'a> {
+    semaphore: &'a Semaphore,
+}
+
+impl Drop for PermitGuardAll<'_> {
+    fn drop(&mut self) {
+        self.semaphore.unguarded_release_all()
     }
 }
 
@@ -156,26 +203,29 @@ mod tests {
         let semaphore = Semaphore::new(2);
         assert_eq!(semaphore.max(), 2);
 
-        semaphore.acquire();
-        semaphore.acquire();
+        let permit0 = semaphore.acquire();
+        let _permit1 = semaphore.acquire();
 
-        semaphore.release();
-        semaphore.acquire();
-        assert!(!semaphore.try_acquire());
+        drop(permit0);
+        let _permit2 = semaphore.acquire();
+        assert!(semaphore.try_acquire().is_none());
     }
 
     #[test]
     fn test_semaphore_release_more_than_initial() {
         let semaphore = Semaphore::new(1);
         // releasing without acquiring first
-        semaphore.release();
+        semaphore.unguarded_release();
 
-        assert!(semaphore.try_acquire());
+        let permit0 = semaphore.try_acquire();
+        assert!(permit0.is_some());
         // The semaphore handles the case where more permits are released than
         // initially available by expanding the count of available permits.
         // Any other strategy would be too complicated and error-prone.
-        assert!(semaphore.try_acquire());
-        assert!(!semaphore.try_acquire());
+        let permit1 = semaphore.try_acquire();
+        assert!(permit1.is_some());
+        let permit2 = semaphore.try_acquire();
+        assert!(permit2.is_none());
     }
 
     #[test]
@@ -186,9 +236,9 @@ mod tests {
         for i in 0..3 {
             let sem = semaphore.clone();
             handles.push(thread::spawn(move || {
-                sem.acquire();
+                let permit = sem.acquire();
                 thread::sleep(Duration::from_millis(100));
-                sem.release();
+                drop(permit);
                 i
             }));
         }
@@ -202,24 +252,24 @@ mod tests {
         let semaphore = Arc::new(Semaphore::new(4));
         let mut handles = vec![];
 
-        semaphore.acquire_all(); // acquire all permits at once
+        let permit = semaphore.acquire_all(); // acquire all permits at once
 
         let counter = Arc::new(AtomicU32::new(0)); // shared counter
         for _ in 0..4 {
             let counter = Arc::clone(&counter);
             let sem = semaphore.clone();
             handles.push(thread::spawn(move || {
-                sem.acquire();
+                let permit = sem.acquire();
                 let x = counter.load(Ordering::Acquire);
                 thread::sleep(SCHED_PERIOD);
-                sem.release();
+                drop(permit);
                 counter.fetch_add(1, Ordering::Release);
                 x
             }));
         }
         // all threads remain blocked until all permits are released
         thread::sleep(SCHED_PERIOD);
-        semaphore.release_all(); // release all permits at once and wake-up all threads
+        drop(permit); // release all permits at once and wake-up all threads
         let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
         // NOTE: if one of the threads is much slower than the others, a non-zero value
         // may appear here. SCHED_PERIOD must be increased or this test disabled.
@@ -237,17 +287,17 @@ mod tests {
 
         let tx_1 = tx.clone();
         let _ = thread::spawn(move || {
-            child_1.acquire();
+            child_1.unguarded_acquire();
             tx_1.send(()).unwrap();
         });
 
         let _ = thread::spawn(move || {
-            child_2.acquire();
+            child_2.unguarded_acquire();
             tx.send(()).unwrap();
         });
 
         // if main doesn't release one of the children will get stuck
-        main.release();
+        main.unguarded_release();
         let _ = rx.recv();
     }
 

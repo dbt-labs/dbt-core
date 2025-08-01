@@ -155,7 +155,7 @@ pub(crate) struct AdbcStatement(
 impl Drop for AdbcStatement {
     fn drop(&mut self) {
         if let Some(semaphore) = &self.2 {
-            semaphore.release();
+            semaphore.unguarded_release();
         }
     }
 }

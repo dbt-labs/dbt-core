@@ -386,7 +386,7 @@ impl Connection for AdbcConnection {
         let managed_adbc_stmt = self.1.new_statement()?;
         let semaphore = self.2.clone();
         if let Some(semaphore) = &semaphore {
-            semaphore.acquire();
+            semaphore.unguarded_acquire();
         }
         let adbc_stmt = AdbcStatement(self.0, managed_adbc_stmt, semaphore);
         Ok(Box::new(adbc_stmt))
