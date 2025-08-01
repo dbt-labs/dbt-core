@@ -18,7 +18,7 @@ use std::fs;
 use std::path::Path;
 use uuid::Uuid;
 
-use vortex_client::client::{ProducerError, log_proto, log_proto_and_shutdown};
+use vortex_client::client::{log_proto, log_proto_and_shutdown};
 
 pub fn invocation_start_event(
     invocation_id: &Uuid,
@@ -119,12 +119,16 @@ pub fn invocation_end_event(invocation_id: String, result_string: String, shutdo
     };
 
     if shutdown {
+        #[allow(unused_variables)]
         let _ = log_proto_and_shutdown(message).map_err(|e| {
             #[cfg(debug_assertions)]
-            match e {
-                ProducerError::DevModeError(e) => eprintln!("{e}"),
-                ProducerError::SendError(e) => eprintln!("{e}"),
-                ProducerError::ShutdownError(e) => panic!("{e:?}"),
+            {
+                use vortex_client::client::ProducerError;
+                match e {
+                    ProducerError::DevModeError(e) => eprintln!("{e}"),
+                    ProducerError::SendError(e) => eprintln!("{e}"),
+                    ProducerError::ShutdownError(e) => panic!("{e:?}"),
+                }
             }
         });
     } else {
