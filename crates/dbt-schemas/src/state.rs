@@ -347,6 +347,7 @@ pub struct ResolverState {
     pub runtime_config: Arc<DbtRuntimeConfig>,
     pub resolved_selectors: ResolvedSelector,
     pub root_project_quoting: ResolvedQuoting,
+    pub defer_nodes: Option<Nodes>,
 }
 
 impl ResolverState {

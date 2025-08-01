@@ -244,6 +244,7 @@ pub async fn resolve(
             runtime_config: root_runtime_config.clone(),
             resolved_selectors,
             root_project_quoting: root_project_quoting.try_into()?,
+            defer_nodes: None,
         },
         jinja_env,
     ))
