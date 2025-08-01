@@ -218,6 +218,11 @@ pub async fn render_unresolved_sql_files_sequentially<
         let execute_exists = Arc::new(AtomicBool::new(false));
 
         let mut resolve_model_context = base_ctx.clone();
+        let display_path = if dbt_asset.base_path == args.io.out_dir {
+            PathBuf::from("target").join(dbt_asset.to_display_path(&args.io.out_dir))
+        } else {
+            dbt_asset.to_display_path(&args.io.in_dir)
+        };
         resolve_model_context.extend(build_resolve_model_context(
             &properties_config,
             adapter_type,
@@ -235,12 +240,9 @@ pub async fn render_unresolved_sql_files_sequentially<
             runtime_config.clone(),
             sql_resources.clone(),
             execute_exists.clone(),
+            &display_path,
         ));
-        let display_path = if dbt_asset.base_path == args.io.out_dir {
-            PathBuf::from("target").join(dbt_asset.to_display_path(&args.io.out_dir))
-        } else {
-            dbt_asset.to_display_path(&args.io.in_dir)
-        };
+
         show_progress!(
             args.io,
             fsinfo!(PARSING.into(), display_path.display().to_string())
@@ -553,6 +555,11 @@ pub async fn render_unresolved_sql_files<
                 let execute_exists = Arc::new(AtomicBool::new(false));
 
                 let mut resolve_model_context = base_ctx.clone();
+                let display_path = if dbt_asset.base_path == args.io.out_dir {
+                    PathBuf::from("target").join(dbt_asset.to_display_path(&args.io.out_dir))
+                } else {
+                    dbt_asset.to_display_path(&args.io.in_dir)
+                };
                 resolve_model_context.extend(build_resolve_model_context(
                     &properties_config,
                     adapter_type,
@@ -570,16 +577,13 @@ pub async fn render_unresolved_sql_files<
                     runtime_config.clone(),
                     sql_resources.clone(),
                     execute_exists.clone(),
+                    &display_path,
                 ));
-                let display_path = if dbt_asset.base_path == args.io.out_dir {
-                    PathBuf::from("target").join(dbt_asset.to_display_path(&args.io.out_dir))
-                } else {
-                    dbt_asset.to_display_path(&args.io.in_dir)
-                };
                 show_progress!(
                     args.io,
                     fsinfo!(PARSING.into(), display_path.display().to_string())
                 );
+
                 let listener_factory = DefaultListenerFactory::default();
                 match render_sql(
                     &sql,

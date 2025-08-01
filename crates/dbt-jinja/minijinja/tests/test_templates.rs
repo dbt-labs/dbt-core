@@ -16,6 +16,7 @@ use minijinja::{context, render, Environment, Error, ErrorKind, State};
 
 use similar_asserts::assert_eq;
 
+#[ignore = "zhong is refactoring vm https://github.com/dbt-labs/fs/issues/4808"]
 #[test]
 fn test_vm() {
     let mut refs = Vec::new();

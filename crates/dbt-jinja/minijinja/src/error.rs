@@ -1,8 +1,10 @@
 use std::borrow::Cow;
-use std::fmt;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::{fmt, iter};
 
 use crate::compiler::tokens::Span;
+use crate::constants::{DBT_INTERNAL_PACKAGES_DIR_NAME, DBT_PACKAGES_DIR_NAME};
 
 /// Represents template errors.
 ///
@@ -241,6 +243,7 @@ impl fmt::Display for Error {
                 self.repr
                     .stack
                     .iter()
+                    .rev()
                     .map(|x| format!("\n(in {}:{})", x.filename, x.lineno))
                     .collect::<Vec<_>>()
                     .join("")
@@ -390,6 +393,28 @@ impl Error {
         }
     }
 
+    /// Return the significant name of the error.
+    pub fn significant_name(&self) -> Option<&str> {
+        if self.repr.stack.is_empty() {
+            None
+        } else {
+            self.repr.stack.iter().find_map(|err| {
+                // check if any component of the filename contains dbt_internal_packages
+                let filename = PathBuf::from(err.filename.as_str());
+                if !filename.components().any(|component| {
+                    let component = component.as_os_str().to_string_lossy();
+
+                    component.contains(DBT_INTERNAL_PACKAGES_DIR_NAME)
+                        || component.contains(DBT_PACKAGES_DIR_NAME)
+                }) {
+                    Some(err.filename.as_ref())
+                } else {
+                    None
+                }
+            })
+        }
+    }
+
     /// Returns the line number where the error occurred.
     pub fn line(&self) -> Option<usize> {
         if self.repr.stack.is_empty() {
@@ -417,6 +442,27 @@ impl Error {
     /// Returns the line number where the error occurred.
     pub fn span(&self) -> Option<Span> {
         self.repr.stack.last().and_then(|x| x.span)
+    }
+
+    /// Returns the significant span of the error.
+    pub fn significant_span(&self) -> Option<Span> {
+        if self.repr.stack.is_empty() {
+            None
+        } else {
+            self.repr.stack.iter().find_map(|err| {
+                let filename = PathBuf::from(err.filename.as_str());
+                if !filename.components().any(|component| {
+                    component
+                        .as_os_str()
+                        .to_string_lossy()
+                        .contains("dbt_internal_packages")
+                }) {
+                    err.span
+                } else {
+                    None
+                }
+            })
+        }
     }
 
     /// Returns the byte range of where the error occurred if available.
@@ -498,10 +544,23 @@ impl Error {
         self.repr.debug_info.as_deref()
     }
 
-    #[cfg(feature = "debug")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "debug")))]
-    pub(crate) fn attach_debug_info(&mut self, value: crate::debug::DebugInfo) {
-        self.repr.debug_info = Some(Arc::new(value));
+    pub(crate) fn with_span(&self, file_path: &Path, span: &Span) -> Error {
+        Error {
+            repr: Box::new(ErrorRepr {
+                stack: self
+                    .repr
+                    .stack
+                    .iter()
+                    .cloned()
+                    .chain(iter::once(ErrorStackItem {
+                        filename: file_path.to_string_lossy().to_string(),
+                        lineno: span.start_line as usize,
+                        span: Some(*span),
+                    }))
+                    .collect(),
+                ..*self.repr.clone()
+            }),
+        }
     }
 }
 

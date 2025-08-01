@@ -32,7 +32,7 @@ pub const MAX_LOCALS: usize = 50;
 #[derive(Clone)]
 pub enum Instruction<'source> {
     /// Emits raw source
-    EmitRaw(&'source str),
+    EmitRaw(&'source str, Span),
 
     /// Stores a variable (only possible in for loops)
     StoreLocal(&'source str, Span),
@@ -44,7 +44,7 @@ pub enum Instruction<'source> {
     GetAttr(&'source str, Span),
 
     /// Sets an attribute.
-    SetAttr(&'source str),
+    SetAttr(&'source str, Span),
 
     /// Looks up an item.
     GetItem(Span),
@@ -74,7 +74,7 @@ pub enum Instruction<'source> {
     UnpackList(usize, Span),
 
     /// Unpacks N lists onto the stack and pushes the number of items there were unpacked.
-    UnpackLists(usize),
+    UnpackLists(usize, Span),
 
     /// Add the top two values
     Add(Span),
@@ -135,10 +135,10 @@ pub enum Instruction<'source> {
     ApplyFilter(&'source str, Option<u16>, LocalId, Span),
 
     /// Perform a filter.
-    PerformTest(&'source str, Option<u16>, LocalId),
+    PerformTest(&'source str, Option<u16>, LocalId, Span),
 
     /// Emit the stack top as output
-    Emit,
+    Emit(Span),
 
     /// Starts a loop
     ///
@@ -146,13 +146,13 @@ pub enum Instruction<'source> {
     PushLoop(u8, Span),
 
     /// Starts a with block.
-    PushWith,
+    PushWith(Span),
 
     /// Does a single loop iteration
     ///
     /// The argument is the jump target for when the loop
     /// ends and must point to a `PopFrame` instruction.
-    Iterate(usize),
+    Iterate(usize, Span),
 
     /// Push a bool that indicates that the loop iterated.
     PushDidNotIterate,
@@ -164,7 +164,7 @@ pub enum Instruction<'source> {
     Jump(usize),
 
     /// Jump if the stack top evaluates to false
-    JumpIfFalse(usize),
+    JumpIfFalse(usize, Span),
 
     /// Jump if the stack top evaluates to false or pops the value
     JumpIfFalseOrPop(usize, Span),
@@ -200,10 +200,10 @@ pub enum Instruction<'source> {
     DiscardTop,
 
     /// A fast super instruction without intermediate capturing.
-    FastSuper,
+    FastSuper(Span),
 
     /// A fast loop recurse instruction without intermediate capturing.
-    FastRecurse,
+    FastRecurse(Span),
 
     /// Swaps the top two items in the stack.
     Swap,
@@ -218,7 +218,7 @@ pub enum Instruction<'source> {
 
     /// Includes another template.
     #[cfg(feature = "multi_template")]
-    Include(bool),
+    Include(bool, Span),
 
     /// Builds a module
     #[cfg(feature = "multi_template")]
@@ -450,7 +450,7 @@ impl<'source> Instructions<'source> {
                 | Instruction::StoreLocal(name, _)
                 | Instruction::CallFunction(name, _, _) => *name,
                 Instruction::PushLoop(flags, _) if flags & LOOP_FLAG_WITH_LOOP_VAR != 0 => "loop",
-                Instruction::PushLoop(_, _) | Instruction::PushWith => break,
+                Instruction::PushLoop(_, _) | Instruction::PushWith(_) => break,
                 _ => continue,
             };
             if !rv.contains(&name) {

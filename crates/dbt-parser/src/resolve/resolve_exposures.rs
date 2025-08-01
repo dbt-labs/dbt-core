@@ -21,6 +21,7 @@ use minijinja::value::Value as MinijinjaValue;
 use regex::Regex;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
@@ -221,6 +222,7 @@ pub fn resolve_yaml_depends_on(
             Arc::new(DbtRuntimeConfig::default()), // runtime_config
             sql_resources.clone(),
             Arc::new(AtomicBool::new(false)),
+            &PathBuf::from(relative_path),
         ));
 
         let sql_resource = render_extract_ref_or_source_expr(

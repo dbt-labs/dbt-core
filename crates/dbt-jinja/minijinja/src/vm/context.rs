@@ -181,7 +181,8 @@ pub(crate) struct Context<'env> {
     stack: StackWrapper<'env>,
     outer_stack_depth: usize,
     recursion_limit: usize,
-    pub file_stack: Vec<(PathBuf, Span, u32)>,
+    pub current_path: PathBuf,
+    pub current_span: Span,
 }
 
 impl fmt::Debug for Context<'_> {
@@ -236,7 +237,8 @@ impl<'env> Context<'env> {
             stack: StackWrapper(Vec::with_capacity(32)),
             outer_stack_depth: 0,
             recursion_limit,
-            file_stack: Vec::new(),
+            current_path: PathBuf::new(),
+            current_span: Span::new_file_default(),
         }
     }
 
@@ -244,11 +246,13 @@ impl<'env> Context<'env> {
     pub fn new_with_frame(
         frame: Frame<'env>,
         recursion_limit: usize,
-        file_stack: Vec<(PathBuf, Span, u32)>,
+        current_path: PathBuf,
+        current_span: Span,
     ) -> Context<'env> {
         let mut rv = Context::new(recursion_limit);
         rv.stack.push(frame);
-        rv.file_stack = file_stack;
+        rv.current_path = current_path;
+        rv.current_span = current_span;
         rv
     }
 
@@ -256,12 +260,14 @@ impl<'env> Context<'env> {
     pub fn new_with_frame_and_stack_depth(
         frame: Frame<'env>,
         recursion_limit: usize,
-        file_stack: Vec<(PathBuf, Span, u32)>,
+        current_path: PathBuf,
+        current_span: Span,
         outer_stack_depth: usize,
     ) -> Context<'env> {
         let mut rv = Context::new(recursion_limit);
         rv.stack.push(frame);
-        rv.file_stack = file_stack;
+        rv.current_path = current_path;
+        rv.current_span = current_span;
         rv.outer_stack_depth = outer_stack_depth;
         rv
     }

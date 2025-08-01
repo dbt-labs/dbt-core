@@ -60,6 +60,7 @@ mod tests {
             Arc::new(DbtRuntimeConfig::default()),
             sql_resources.clone(),
             Arc::new(AtomicBool::new(false)),
+            &PathBuf::from("test"),
         );
         context.insert(TARGET_PACKAGE_NAME.to_string(), Value::from("common"));
         context

@@ -12,7 +12,8 @@ use dbt_schemas::schemas::{CommonAttributes, NodeBaseAttributes, relations::base
 use dbt_schemas::state::{DbtRuntimeConfig, RefsAndSourcesTracker};
 use minijinja::{
     Value as MinijinjaValue,
-    constants::{TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID},
+    constants::{CURRENT_PATH, CURRENT_SPAN, TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID},
+    machinery::Span,
 };
 use serde_json::Value;
 
@@ -148,6 +149,15 @@ pub fn build_compile_node_context(
             current_project_name: None,
             packages,
         }),
+    );
+
+    ctx.insert(
+        CURRENT_PATH.to_string(),
+        MinijinjaValue::from(common_attr.original_file_path.clone().to_string_lossy()),
+    );
+    ctx.insert(
+        CURRENT_SPAN.to_string(),
+        MinijinjaValue::from_serialize(Span::new_file_default()),
     );
 
     (ctx, this_relation, config_map)

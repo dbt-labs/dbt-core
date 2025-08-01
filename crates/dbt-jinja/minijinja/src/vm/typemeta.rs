@@ -750,11 +750,11 @@ impl<'src> TypeChecker<'src> {
                     typestate.stack.push(b);
                     typestate.stack.push(a);
                 }
-                Instruction::EmitRaw(_) => {
+                Instruction::EmitRaw(_, _) => {
                     // TYPECHECK: NO
                     // no need to update the type stack
                 }
-                Instruction::Emit => {
+                Instruction::Emit(_) => {
                     // TYPECHECK: NO
                     let _item1 = match typestate.stack.pop() {
                         Some(val) => val,
@@ -828,7 +828,7 @@ impl<'src> TypeChecker<'src> {
                     }
                 }
 
-                Instruction::SetAttr(_name) => {
+                Instruction::SetAttr(_name, _span) => {
                     // TYPECHECK: NO
                     let _item1 = match typestate.stack.pop() {
                         Some(val) => val,
@@ -1098,7 +1098,7 @@ impl<'src> TypeChecker<'src> {
                         }
                     };
                 }
-                Instruction::UnpackLists(_count) => {
+                Instruction::UnpackLists(_count, _span) => {
                     // TODO
                     // We need to modify the structure of the UnpackLists instruction, adding an expected total items count
                 }
@@ -1314,7 +1314,7 @@ impl<'src> TypeChecker<'src> {
                     // TODO impl a.neg()
                     typestate.stack.push(a);
                 }
-                Instruction::PushWith => {
+                Instruction::PushWith(_) => {
                     // TYPECHECK: NO
                     typestate.push_frame();
                 }
@@ -1369,7 +1369,7 @@ impl<'src> TypeChecker<'src> {
 
                     typestate.push_frame();
                 }
-                Instruction::Iterate(_jump_target) => {
+                Instruction::Iterate(_jump_target, _span) => {
                     // TYPECHECK: NO
                     if let Some(element_type) = typestate.cur_loop_obj_type.clone() {
                         typestate.stack.push(element_type);
@@ -1388,7 +1388,7 @@ impl<'src> TypeChecker<'src> {
                     // TYPECHECK: NO
                     // have nothing to do with the stack
                 }
-                Instruction::JumpIfFalse(_else_label) => {
+                Instruction::JumpIfFalse(_else_label, _span) => {
                     let _item_type = match typestate.stack.pop() {
                         Some(val) => val,
                         None => {
@@ -1492,7 +1492,7 @@ impl<'src> TypeChecker<'src> {
                         typestate.stack.push(Type::Any { hard: false });
                     }
                 }
-                Instruction::PerformTest(_name, arg_count, _local_id) => {
+                Instruction::PerformTest(_name, arg_count, _local_id, _span) => {
                     // TYPECHECK: NO
                     typestate.drop_top(arg_count.unwrap_or(0) as usize);
                     typestate.stack.push(Type::Bool);
@@ -1780,11 +1780,11 @@ impl<'src> TypeChecker<'src> {
                     // TYPECHECK: NO
                     typestate.stack.pop();
                 }
-                Instruction::FastSuper => {
+                Instruction::FastSuper(_) => {
                     // TYPECHECK: NO
                     // Nothing to do with the stack
                 }
-                Instruction::FastRecurse => {
+                Instruction::FastRecurse(_) => {
                     // TYPECHECK: NO
                     // Nothing to do with the stack
                 }
@@ -1809,7 +1809,7 @@ impl<'src> TypeChecker<'src> {
                     // LoadBlocks does not change the stack, it just loads blocks
                 }
                 #[cfg(feature = "multi_template")]
-                Instruction::Include(_ignore_missing) => {
+                Instruction::Include(_ignore_missing, _span) => {
                     // TYPECHECK: NO
                     let _item_type = match typestate.stack.pop() {
                         Some(val) => val,

@@ -54,7 +54,7 @@ fn fuel_for_instruction(instruction: &Instruction) -> isize {
         Instruction::BeginCapture(_)
         | Instruction::PushLoop(_, _)
         | Instruction::PushDidNotIterate
-        | Instruction::PushWith
+        | Instruction::PushWith(_)
         | Instruction::PopFrame
         | Instruction::DupTop
         | Instruction::DiscardTop

@@ -3,7 +3,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
-    path::PathBuf,
+    path::{Path, PathBuf},
     rc::Rc,
     sync::{
         Arc, Mutex,
@@ -32,8 +32,9 @@ use dbt_schemas::{
 use minijinja::{
     Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State,
     arg_utils::ArgParser,
-    constants::TARGET_UNIQUE_ID,
+    constants::{CURRENT_PATH, CURRENT_SPAN, TARGET_UNIQUE_ID},
     listener::RenderingEventListener,
+    machinery::Span,
     value::{Object, ObjectRepr, Value as MinijinjaValue, ValueKind},
 };
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
@@ -69,6 +70,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
     runtime_config: Arc<DbtRuntimeConfig>,
     sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
     execute_exists: Arc<AtomicBool>,
+    display_path: &Path,
 ) -> BTreeMap<String, MinijinjaValue> {
     // Create a relation for 'this' using config values
     let mut context = BTreeMap::new();
@@ -285,6 +287,15 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
             current_project_name: None,
             packages,
         }),
+    );
+
+    context.insert(
+        CURRENT_PATH.to_string(),
+        MinijinjaValue::from(display_path.to_string_lossy()),
+    );
+    context.insert(
+        CURRENT_SPAN.to_string(),
+        MinijinjaValue::from_serialize(Span::new_file_default()),
     );
 
     context

@@ -117,11 +117,11 @@ fn is_block_terminator(inst: &Instruction) -> bool {
     matches!(
         inst,
         Instruction::Jump(_)
-            | Instruction::JumpIfFalse(_)
+            | Instruction::JumpIfFalse(_, _)
             | Instruction::JumpIfFalseOrPop(_, _)
             | Instruction::JumpIfTrueOrPop(_, _)
-            | Instruction::Iterate(_)
-            | Instruction::FastRecurse
+            | Instruction::Iterate(_, _)
+            | Instruction::FastRecurse(_)
             | Instruction::PopFrame
             | Instruction::Return
     )
@@ -131,9 +131,9 @@ fn branch_targets(cur_idx: usize, inst: &Instruction) -> Vec<(usize, EdgeKind)> 
     use EdgeKind::*;
     match inst {
         Instruction::Jump(t) => vec![(*t, Uncond)],
-        Instruction::FastRecurse => vec![(/*loop-head*/ 0, Uncond)],
-        Instruction::Iterate(t) => vec![(cur_idx + 1, Cond(true)), (*t, Cond(false))],
-        Instruction::JumpIfFalse(t) | Instruction::JumpIfFalseOrPop(t, _) => {
+        Instruction::FastRecurse(_) => vec![(/*loop-head*/ 0, Uncond)],
+        Instruction::Iterate(t, _) => vec![(cur_idx + 1, Cond(true)), (*t, Cond(false))],
+        Instruction::JumpIfFalse(t, _) | Instruction::JumpIfFalseOrPop(t, _) => {
             vec![(cur_idx + 1, Cond(true)), (*t, Cond(false))]
         }
         Instruction::JumpIfTrueOrPop(t, _) => vec![(*t, Cond(true)), (cur_idx + 1, Cond(false))],

@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use dbt_agate::AgateTable;
 use dbt_common::ErrorCode;
+use dbt_common::constants::DBT_COMPILED_DIR_NAME;
 use dbt_common::constants::DBT_RUN_DIR_NAME;
 use dbt_common::fs_err;
 use dbt_common::io_args::IoArgs;
@@ -21,7 +22,10 @@ use dbt_fusion_adapter::relation_object::create_relation;
 use dbt_schemas::schemas::CommonAttributes;
 use dbt_schemas::schemas::NodeBaseAttributes;
 use minijinja::State;
+use minijinja::constants::CURRENT_PATH;
+use minijinja::constants::CURRENT_SPAN;
 use minijinja::listener::RenderingEventListener;
+use minijinja::machinery::Span;
 use minijinja::{Error, ErrorKind, Value as MinijinjaValue, value::Object};
 use serde::Serialize;
 use serde_json::Value;
@@ -272,6 +276,16 @@ pub async fn build_run_node_context<S: Serialize>(
     context.insert(
         "builtins".to_owned(),
         MinijinjaValue::from_object(base_builtins),
+    );
+
+    let relative_path = PathBuf::from(DBT_COMPILED_DIR_NAME).join(&common_attr.path);
+    context.insert(
+        CURRENT_PATH.to_string(),
+        MinijinjaValue::from(relative_path.to_string_lossy()),
+    );
+    context.insert(
+        CURRENT_SPAN.to_string(),
+        MinijinjaValue::from_serialize(Span::new_file_default()),
     );
 
     context

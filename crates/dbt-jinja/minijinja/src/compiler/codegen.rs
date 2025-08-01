@@ -185,7 +185,7 @@ impl<'source> CodeGenerator<'source> {
             flags |= LOOP_FLAG_RECURSIVE;
         }
         self.add(Instruction::PushLoop(flags, span));
-        let instr = self.add(Instruction::Iterate(!0));
+        let instr = self.add(Instruction::Iterate(!0, span));
         self.pending_block.push(PendingBlock::Loop {
             iter_instr: instr,
             jump_instrs: Vec::new(),
@@ -207,7 +207,7 @@ impl<'source> CodeGenerator<'source> {
             self.add(Instruction::PopFrame);
             for instr in jump_instrs.into_iter().chain(Some(iter_instr)) {
                 match self.instructions.get_mut(instr) {
-                    Some(Instruction::Iterate(ref mut jump_target))
+                    Some(Instruction::Iterate(ref mut jump_target, _))
                     | Some(Instruction::Jump(ref mut jump_target)) => {
                         *jump_target = loop_end;
                     }
@@ -220,8 +220,8 @@ impl<'source> CodeGenerator<'source> {
     }
 
     /// Begins an if conditional
-    pub fn start_if(&mut self) {
-        let jump_instr = self.add(Instruction::JumpIfFalse(!0));
+    pub fn start_if(&mut self, span: Span) {
+        let jump_instr = self.add(Instruction::JumpIfFalse(!0, span));
         self.pending_block.push(PendingBlock::Branch { jump_instr });
     }
 
@@ -297,7 +297,7 @@ impl<'source> CodeGenerator<'source> {
         match self.pending_block.pop() {
             Some(PendingBlock::Branch { jump_instr }) => {
                 match self.instructions.get_mut(jump_instr) {
-                    Some(Instruction::JumpIfFalse(ref mut target))
+                    Some(Instruction::JumpIfFalse(ref mut target, _))
                     | Some(Instruction::Jump(ref mut target)) => {
                         *target = new_jump_instr;
                     }
@@ -326,7 +326,7 @@ impl<'source> CodeGenerator<'source> {
             }
             ast::Stmt::EmitRaw(raw) => {
                 self.set_line_from_span(raw.span());
-                self.add(Instruction::EmitRaw(raw.raw));
+                self.add(Instruction::EmitRaw(raw.raw, raw.span()));
                 self.raw_template_bytes += raw.raw.len();
             }
             ast::Stmt::ForLoop(for_loop) => {
@@ -337,7 +337,7 @@ impl<'source> CodeGenerator<'source> {
             }
             ast::Stmt::WithBlock(with_block) => {
                 self.set_line_from_span(with_block.span());
-                self.add(Instruction::PushWith);
+                self.add(Instruction::PushWith(with_block.span()));
                 for (target, expr) in &with_block.assignments {
                     self.compile_expr(expr, listeners);
                     self.compile_assignment(target, listeners);
@@ -397,7 +397,7 @@ impl<'source> CodeGenerator<'source> {
                 }
                 self.add(Instruction::EndCapture);
                 self.compile_expr(&filter_block.filter, listeners);
-                self.add(Instruction::Emit);
+                self.add(Instruction::Emit(filter_block.span()));
             }
             #[cfg(feature = "multi_template")]
             ast::Stmt::Block(block) => {
@@ -406,9 +406,9 @@ impl<'source> CodeGenerator<'source> {
             #[cfg(feature = "multi_template")]
             ast::Stmt::Import(import) => {
                 self.add(Instruction::BeginCapture(CaptureMode::Discard));
-                self.add(Instruction::PushWith);
+                self.add(Instruction::PushWith(import.span()));
                 self.compile_expr(&import.expr, listeners);
-                self.add_with_span(Instruction::Include(false), import.span());
+                self.add_with_span(Instruction::Include(false, import.span()), import.span());
                 self.add(Instruction::ExportLocals);
                 self.add(Instruction::PopFrame);
                 self.compile_assignment(&import.name, listeners);
@@ -417,9 +417,12 @@ impl<'source> CodeGenerator<'source> {
             #[cfg(feature = "multi_template")]
             ast::Stmt::FromImport(from_import) => {
                 self.add(Instruction::BeginCapture(CaptureMode::Discard));
-                self.add(Instruction::PushWith);
+                self.add(Instruction::PushWith(from_import.span()));
                 self.compile_expr(&from_import.expr, listeners);
-                self.add_with_span(Instruction::Include(false), from_import.span());
+                self.add_with_span(
+                    Instruction::Include(false, from_import.span()),
+                    from_import.span(),
+                );
                 for (name, _) in &from_import.names {
                     self.compile_expr(name, listeners);
                 }
@@ -439,7 +442,10 @@ impl<'source> CodeGenerator<'source> {
             ast::Stmt::Include(include) => {
                 self.set_line_from_span(include.span());
                 self.compile_expr(&include.name, listeners);
-                self.add_with_span(Instruction::Include(include.ignore_missing), include.span());
+                self.add_with_span(
+                    Instruction::Include(include.ignore_missing, include.span()),
+                    include.span(),
+                );
             }
             #[cfg(feature = "macros")]
             ast::Stmt::Macro(macro_decl) => {
@@ -554,7 +560,7 @@ impl<'source> CodeGenerator<'source> {
                     CodeGenerationProfile::Render => {
                         self.add(Instruction::DupTop);
                         self.add(Instruction::IsUndefined);
-                        self.start_if();
+                        self.start_if(macro_decl.span());
                         self.add(Instruction::DiscardTop);
                         self.compile_expr(default, listeners);
                         self.end_if();
@@ -666,7 +672,7 @@ impl<'source> CodeGenerator<'source> {
         listeners: &[Rc<dyn RenderingEventListener>],
     ) {
         self.compile_call(&call_block.call, Some(&call_block.macro_decl), listeners);
-        self.add(Instruction::Emit);
+        self.add(Instruction::Emit(call_block.span()));
     }
 
     fn compile_do(
@@ -695,7 +701,7 @@ impl<'source> CodeGenerator<'source> {
 
         self.compile_expr(&if_cond.expr, listeners);
         let type_constraints = self.get_type_constraints(&if_cond.expr);
-        self.start_if();
+        self.start_if(span);
         for type_constraint in &type_constraints {
             self.add(Instruction::TypeConstraint(type_constraint.clone(), true));
         }
@@ -748,7 +754,7 @@ impl<'source> CodeGenerator<'source> {
             match call.identify_call() {
                 ast::CallType::Function(name) => {
                     if name == "super" && call.args.is_empty() {
-                        self.add_with_span(Instruction::FastSuper, call.span());
+                        self.add_with_span(Instruction::FastSuper(call.span()), call.span());
                         return;
                     } else if name == "loop" && call.args.len() == 1 {
                         self.compile_call_args(
@@ -758,7 +764,7 @@ impl<'source> CodeGenerator<'source> {
                             call.span(),
                             listeners,
                         );
-                        self.add(Instruction::FastRecurse);
+                        self.add(Instruction::FastRecurse(call.span()));
                         return;
                     }
                 }
@@ -771,7 +777,7 @@ impl<'source> CodeGenerator<'source> {
             }
         }
         self.compile_expr(&expr.expr, listeners);
-        self.add(Instruction::Emit);
+        self.add(Instruction::Emit(expr.span()));
         self.add(Instruction::MacroStop(
             span.end_line,
             span.end_col,
@@ -806,7 +812,7 @@ impl<'source> CodeGenerator<'source> {
             self.add(Instruction::DupTop);
             self.compile_assignment(&for_loop.target, listeners);
             self.compile_expr(filter_expr, listeners);
-            self.start_if();
+            self.start_if(span);
             self.add(Instruction::Swap);
             self.add(Instruction::LoadConst(Value::from(1usize)));
             self.add(Instruction::Add(span));
@@ -826,7 +832,7 @@ impl<'source> CodeGenerator<'source> {
         }
         self.end_for_loop(!for_loop.else_body.is_empty());
         if !for_loop.else_body.is_empty() {
-            self.start_if();
+            self.start_if(span);
             for node in &for_loop.else_body {
                 self.compile_stmt(node, listeners);
             }
@@ -868,7 +874,7 @@ impl<'source> CodeGenerator<'source> {
             ast::Expr::GetAttr(attr) => {
                 self.push_span(attr.span());
                 self.compile_expr(&attr.expr, listeners);
-                self.add(Instruction::SetAttr(attr.name));
+                self.add(Instruction::SetAttr(attr.name, attr.span()));
             }
             _ => unreachable!(),
         }
@@ -940,7 +946,7 @@ impl<'source> CodeGenerator<'source> {
                 self.set_line_from_span(i.span());
                 self.compile_expr(&i.test_expr, listeners);
                 let type_constraints = self.get_type_constraints(&i.test_expr);
-                self.start_if();
+                self.start_if(i.span());
                 for type_constraint in &type_constraints {
                     self.add(Instruction::TypeConstraint(type_constraint.clone(), true));
                 }
@@ -981,7 +987,12 @@ impl<'source> CodeGenerator<'source> {
                 self.compile_expr(&f.expr, listeners);
                 let arg_count = self.compile_call_args(&f.args, 1, None, f.span(), listeners);
                 let local_id = get_local_id(&mut self.test_local_ids, f.name);
-                self.add(Instruction::PerformTest(f.name, arg_count, local_id));
+                self.add(Instruction::PerformTest(
+                    f.name,
+                    arg_count,
+                    local_id,
+                    f.span(),
+                ));
                 self.pop_span();
             }
             ast::Expr::GetAttr(g) => {
@@ -1191,7 +1202,7 @@ impl<'source> CodeGenerator<'source> {
                 self.add(Instruction::BuildList(Some(pending_args), span));
                 num_args_batches += 1;
             }
-            self.add(Instruction::UnpackLists(num_args_batches));
+            self.add(Instruction::UnpackLists(num_args_batches, span));
             None
         } else {
             assert!(pending_args as u16 as usize == pending_args);

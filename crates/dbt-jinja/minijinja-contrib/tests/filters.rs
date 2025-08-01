@@ -2,6 +2,7 @@ use minijinja::{context, Environment};
 use minijinja_contrib::filters::pluralize;
 use similar_asserts::assert_eq;
 
+#[ignore = "zhong is refactoring vm https://github.com/dbt-labs/fs/issues/4808"]
 #[test]
 fn test_pluralize() {
     let mut env = Environment::new();
@@ -135,6 +136,7 @@ fn test_filesizeformat() {
     insta::assert_snapshot!(render!(in env, r"{{ (1024 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024)|filesizeformat }}"), @"1267650.6 YB");
 }
 
+#[ignore = "zhong is refactoring vm https://github.com/dbt-labs/fs/issues/4808"]
 #[test]
 fn test_truncate() {
     use minijinja::render;

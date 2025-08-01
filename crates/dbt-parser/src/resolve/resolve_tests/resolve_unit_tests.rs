@@ -151,6 +151,7 @@ pub fn resolve_unit_tests(
                     let sql_resources: Arc<Mutex<Vec<SqlResource<UnitTestConfig>>>> =
                         Arc::new(Mutex::new(Vec::new()));
                     let mut resolve_model_context = base_ctx.clone();
+                    let relative_path = mpe.relative_path.clone();
                     resolve_model_context.extend(build_resolve_model_context(
                         &properties_config,
                         adapter_type,
@@ -164,6 +165,7 @@ pub fn resolve_unit_tests(
                         runtime_config.clone(),
                         sql_resources.clone(),
                         Arc::new(AtomicBool::new(false)),
+                        &relative_path,
                     ));
                     let sql_resource = render_extract_ref_or_source_expr(
                         jinja_env,

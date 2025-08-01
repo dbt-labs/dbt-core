@@ -143,6 +143,40 @@ pub struct Span {
     pub end_offset: u32,
 }
 
+impl Span {
+    pub fn new_file_default() -> Self {
+        Self {
+            start_line: 1,
+            start_col: 1,
+            start_offset: 0,
+            end_line: 1,
+            end_col: 1,
+            end_offset: 0,
+        }
+    }
+
+    pub fn with_offset(&self, offset: &Span) -> Self {
+        Self {
+            start_line: self.start_line + offset.start_line - 1,
+            start_col: self.start_col
+                + if offset.start_line == 1 {
+                    offset.start_col - 1
+                } else {
+                    0
+                },
+            start_offset: self.start_offset + offset.start_offset,
+            end_line: self.end_line + offset.start_line - 1,
+            end_col: self.end_col
+                + if self.end_line == 1 {
+                    offset.start_col - 1
+                } else {
+                    0
+                },
+            end_offset: self.end_offset + offset.end_offset,
+        }
+    }
+}
+
 impl fmt::Debug for Span {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -150,18 +184,5 @@ impl fmt::Debug for Span {
             " @ {}:{}-{}:{}",
             self.start_line, self.start_col, self.end_line, self.end_col
         )
-    }
-}
-
-impl Span {
-    pub fn with_delta(&self, delta_line: i32, delta_col: i32, delta_offset: i32) -> Self {
-        Self {
-            start_line: (self.start_line as i32 + delta_line) as u32,
-            start_col: (self.start_col as i32 + if delta_line == 0 { delta_col } else { 0 }) as u32,
-            start_offset: (self.start_offset as i32 + delta_offset) as u32,
-            end_line: (self.end_line as i32 + delta_line) as u32,
-            end_col: (self.end_col as i32 + if delta_line == 0 { delta_col } else { 0 }) as u32,
-            end_offset: (self.end_offset as i32 + delta_offset) as u32,
-        }
     }
 }

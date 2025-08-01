@@ -7,6 +7,7 @@ use std::sync::Arc;
 use crate::compiler::ast;
 use crate::compiler::cfg::build_cfg;
 use crate::compiler::instructions::Instructions;
+use crate::constants::{CURRENT_PATH, CURRENT_SPAN};
 use crate::types::funcsign_parser::parse;
 use crate::types::function::{
     Argument, DynFunctionType, UndefinedFunctionType, UserDefinedFunctionType,
@@ -15,7 +16,7 @@ use crate::vm::listeners::TypecheckingEventListener;
 use crate::vm::typemeta::TypeChecker;
 
 use crate::compiler::typecheck::FunctionRegistry;
-use crate::machinery::Span;
+use crate::machinery::{self, Span};
 use crate::types::utils::CodeLocation;
 use crate::utils::AutoEscape;
 use crate::value::{value_optimization, Value};
@@ -50,8 +51,12 @@ impl<'env> Vm<'env> {
                 }
             },
             self.env.recursion_limit(),
-            root.get_attr_fast("file_stack")
-                .map_or(vec![], |value| deserialize_file_stack(&value)),
+            root.get_attr_fast(CURRENT_PATH)
+                .map_or(PathBuf::new(), |value| deserialize_path(&value)),
+            root.get_attr_fast(CURRENT_SPAN)
+                .map_or(machinery::Span::new_file_default(), |value| {
+                    deserialize_span(&value)
+                }),
             0,
         );
 
@@ -99,28 +104,12 @@ impl<'env> Vm<'env> {
     }
 }
 
-fn deserialize_file_stack(value: &Value) -> Vec<(PathBuf, Span, u32)> {
-    let mut result = vec![];
-    for item in value.try_iter().unwrap() {
-        let mut iter = item.try_iter().unwrap();
-        let path = iter.next().unwrap();
-        let path = deserialize_path(&path);
-        let span = iter.next().unwrap();
-        let span = deserialize_span(&span);
-        let delta_line = iter.next().unwrap();
-        let delta_line = delta_line.as_usize().unwrap() as u32;
-
-        result.push((path, span, delta_line));
-    }
-    result
-}
-
 fn deserialize_path(value: &Value) -> PathBuf {
     PathBuf::from(value.as_str().unwrap())
 }
 
-fn deserialize_span(value: &Value) -> Span {
-    Span {
+fn deserialize_span(value: &Value) -> machinery::Span {
+    machinery::Span {
         start_line: value
             .get_attr_fast("start_line")
             .unwrap()

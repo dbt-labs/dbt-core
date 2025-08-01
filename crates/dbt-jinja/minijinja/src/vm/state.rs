@@ -1,4 +1,5 @@
 use crate::compiler::instructions::Instructions;
+use crate::constants::{CURRENT_PATH, CURRENT_SPAN};
 use crate::environment::Environment;
 use crate::error::{Error, ErrorKind};
 use crate::listener::RenderingEventListener;
@@ -174,9 +175,32 @@ impl<'template, 'env> State<'template, 'env> {
             if let Some(map) = obj.downcast_ref::<MutableMap>() {
                 let map = map.clone();
                 map.insert(
-                    Value::from("file_stack"),
-                    Value::from_serialize(&self.ctx.file_stack),
+                    Value::from(CURRENT_PATH),
+                    Value::from(self.ctx.current_path.clone().to_string_lossy()),
                 );
+                map.insert(
+                    Value::from(CURRENT_SPAN),
+                    Value::from_serialize(self.ctx.current_span),
+                );
+                Value::from_object(map)
+            } else {
+                Value::from_object(MutableMap::new())
+            }
+        } else {
+            Value::from_object(MutableMap::new())
+        }
+    }
+
+    /// Returns the base context of the state and add file_stack to it.
+    /// This should always be a mutable map wrapped in a Value:from_object
+    pub fn get_base_context_with_path_and_span(&self, path: &Value, span: &Value) -> Value {
+        let base = self.ctx.clone_base();
+        // Add file_stack to the base value
+        if let Some(obj) = base.as_object() {
+            if let Some(map) = obj.downcast_ref::<MutableMap>() {
+                let map = map.clone();
+                map.insert(Value::from(CURRENT_PATH), path.clone());
+                map.insert(Value::from(CURRENT_SPAN), span.clone());
                 Value::from_object(map)
             } else {
                 Value::from_object(MutableMap::new())
@@ -401,22 +425,6 @@ impl<'template, 'env> State<'template, 'env> {
         self.fuel_tracker
             .as_ref()
             .map(|x| (x.consumed(), x.remaining()))
-    }
-
-    #[cfg(feature = "debug")]
-    pub(crate) fn make_debug_info(
-        &self,
-        pc: usize,
-        instructions: &Instructions<'_>,
-    ) -> crate::debug::DebugInfo {
-        crate::debug::DebugInfo {
-            template_source: Some(instructions.source().to_string()),
-            referenced_locals: instructions
-                .get_referenced_names(pc)
-                .into_iter()
-                .filter_map(|n| Some((n.to_string(), some!(self.lookup(n)))))
-                .collect(),
-        }
     }
 }
 

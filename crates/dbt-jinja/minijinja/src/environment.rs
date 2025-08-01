@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -16,6 +17,7 @@ use crate::constants::{
 use crate::error::{attach_basic_debug_info, Error, ErrorKind};
 use crate::expression::Expression;
 use crate::listener::RenderingEventListener;
+use crate::machinery::Span;
 use crate::output::Output;
 use crate::template::{CompiledTemplate, CompiledTemplateRef, Template, TemplateConfig};
 use crate::utils::{AutoEscape, BTreeMapKeysDebug, UndefinedBehavior};
@@ -855,7 +857,12 @@ impl<'source> Environment<'source> {
         let frame = Frame::new(Value::from_object(ctx));
         State::new(
             self,
-            Context::new_with_frame(frame, self.recursion_limit(), vec![]),
+            Context::new_with_frame(
+                frame,
+                self.recursion_limit(),
+                PathBuf::new(),
+                Span::new_file_default(),
+            ),
             AutoEscape::None,
             &crate::compiler::instructions::EMPTY_INSTRUCTIONS,
             BTreeMap::new(),

@@ -148,9 +148,9 @@ pub struct MiniJinjaErrorWrapper(pub minijinja::Error);
 
 impl From<MiniJinjaErrorWrapper> for CodeLocation {
     fn from(err: MiniJinjaErrorWrapper) -> Self {
-        if let Some(span) = err.0.span() {
+        if let Some(span) = err.0.significant_span() {
             CodeLocation {
-                file: err.0.name().unwrap_or_default().into(),
+                file: err.0.significant_name().unwrap_or_default().into(),
                 line: span.start_line as usize,
                 col: span.start_col as usize,
                 index: span.start_offset as usize,
