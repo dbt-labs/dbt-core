@@ -5,6 +5,7 @@ members = [
   # Source Available
   "crates/dbt-test-primitives",
   "crates/dbt-agate",
+  "crates/dbt-cancel",
   "crates/dbt-common",
   "crates/dbt-frontend-common",
   "crates/dbt-jinja/minijinja",
@@ -129,6 +130,7 @@ opt-level = 3
 # fs source available dependencies
 dbt-adapter-proc-macros = { path = "crates/dbt-adapter-proc-macros" }
 dbt-agate = { path = "crates/dbt-agate" }
+dbt-cancel = { path = "crates/dbt-cancel" }
 dbt-common = { path = "crates/dbt-common" }
 dbt-dag = { path = "crates/dbt-dag" }
 dbt-deps = { path = "crates/dbt-deps" }

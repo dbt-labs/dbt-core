@@ -1,5 +1,6 @@
 use adbc_core::error::Status;
 use arrow_schema::ArrowError;
+use dbt_common::cancellation::Cancellable;
 use dbt_common::{ErrorCode, FsError};
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind};
 use std::future::Future;
@@ -12,7 +13,8 @@ use tokio::task::JoinError;
 pub type AdapterResult<T> = Result<T, AdapterError>;
 
 /// A pinned Future that produces an `AdapterResult<T>`.
-pub type AsyncAdapterResult<'a, T> = Pin<Box<dyn Future<Output = AdapterResult<T>> + Send + 'a>>;
+pub type AsyncAdapterResult<'a, T, E = AdapterError> =
+    Pin<Box<dyn Future<Output = Result<T, Cancellable<E>>> + Send + 'a>>;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum AdapterErrorKind {
@@ -242,6 +244,19 @@ impl From<AdapterError> for Box<FsError> {
     fn from(err: AdapterError) -> Self {
         // TODO: this error code is too generic
         Box::new(FsError::new(ErrorCode::Generic, format!("{err}")))
+    }
+}
+
+pub fn into_fs_error(err: Cancellable<AdapterError>) -> Box<FsError> {
+    match err {
+        Cancellable::Cancelled => {
+            let e = FsError::new(
+                ErrorCode::OperationCanceled,
+                "Adapter operation was cancelled",
+            );
+            Box::new(e)
+        }
+        Cancellable::Error(err) => err.into(),
     }
 }
 

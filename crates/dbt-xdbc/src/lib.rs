@@ -5,6 +5,7 @@
 )]
 #![doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/README.md"))]
 
+use dbt_cancel::Cancellable;
 use futures::stream::{FuturesUnordered, StreamExt};
 use tokio::sync::mpsc;
 use tokio::task::JoinError;
@@ -12,6 +13,7 @@ use tracy_client::span;
 
 use std::ffi::c_char;
 use std::future::Future;
+use std::panic;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -93,14 +95,14 @@ where
     Key: Sized + Send,
     Value: Sized + Send + 'static,
     Acc: Sized + Default + Send + 'static,
-    Error: From<JoinError> + Send,
+    Error: Send,
 {
     /// Function to create a new connection.
-    new_connection_f: NewConnectionF<Error>,
+    new_connection_f: NewConnectionF<Cancellable<Error>>,
     /// Function to map a key to a computed value using a [Connection].
     map_f: MapF<Key, Value>,
     /// Function to reduce a computed value into the accumulator.
-    reduce_f: ReduceF<Acc, Key, Value, Error>,
+    reduce_f: ReduceF<Acc, Key, Value, Cancellable<Error>>,
 
     /// The next key to be processed by any of the workers.
     key_counter: AtomicUsize,
@@ -117,10 +119,10 @@ where
     K: Sized + Send,
     V: Sized + Send + 'static,
     Acc: Sized + Default + Send + 'static,
-    E: From<JoinError> + Send + 'static,
+    E: Send + 'static,
 {
     #[inline(never)]
-    fn new_connection(&self) -> Result<Box<dyn Connection>, E> {
+    fn new_connection(&self) -> Result<Box<dyn Connection>, Cancellable<E>> {
         let _span = span!("MapReduceInner::new_connection");
         let start = std::time::Instant::now();
         let res = (self.new_connection_f)();
@@ -194,7 +196,7 @@ where
     Key: Sized + Clone + Send + Sync + 'static,
     Value: Sized + Send + 'static,
     Acc: Sized + Default + Send + 'static,
-    Error: From<JoinError> + Send + 'static,
+    Error: Send + 'static,
 {
     inner: Arc<MapReduceInner<Key, Value, Acc, Error>>,
     max_connections: usize,
@@ -205,12 +207,12 @@ where
     K: Sized + Clone + Send + Sync + 'static,
     V: Sized + Send + 'static,
     Acc: Sized + Default + Send + 'static,
-    E: From<JoinError> + Send + 'static,
+    E: Send + 'static,
 {
     pub fn new(
-        new_connection_f: NewConnectionF<E>,
+        new_connection_f: NewConnectionF<Cancellable<E>>,
         map_f: MapF<K, V>,
-        reduce_f: ReduceF<Acc, K, V, E>,
+        reduce_f: ReduceF<Acc, K, V, Cancellable<E>>,
         max_connections: usize,
     ) -> Self {
         let inner = MapReduceInner {
@@ -233,12 +235,12 @@ where
     #[allow(clippy::type_complexity)]
     pub fn new_connection(
         &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Box<dyn Connection>, E>> + Send>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Box<dyn Connection>, Cancellable<E>>> + Send>> {
         let inner = self.inner.clone(); // clone needed to move it into lambda
         let future = async move {
             match tokio::task::spawn_blocking(move || inner.new_connection()).await {
                 Ok(res) => res,
-                Err(join_err) => Err(E::from(join_err)),
+                Err(join_err) => Err(cancellable_from_join_error(join_err)),
             }
         };
         Box::pin(future)
@@ -281,12 +283,12 @@ where
     }
 
     /// Reduce a computed value into an accumulator.
-    fn reduce(&self, acc: &mut Acc, key: K, value: V) -> Result<(), E> {
+    fn reduce(&self, acc: &mut Acc, key: K, value: V) -> Result<(), Cancellable<E>> {
         (self.inner.reduce_f)(acc, key, value)
     }
 
     /// Run all tasks in parallel with at most `max_connections` connections.
-    async fn do_run(self, keys: Arc<Vec<K>>) -> Result<Acc, E> {
+    async fn do_run(self, keys: Arc<Vec<K>>) -> Result<Acc, Cancellable<E>> {
         let mut acc = Acc::default();
         if keys.is_empty() {
             return Ok(acc);
@@ -359,7 +361,12 @@ where
 
         // Wait for all the workers to finish...
         while let Some(res) = workers.next().await {
-            res.unwrap(); // panic in case of JoinError
+            match res {
+                Ok(()) => (),
+                Err(join_error) => {
+                    return Err(cancellable_from_join_error(join_error));
+                }
+            }
         }
         // ...and reduce their results.
         loop {
@@ -376,8 +383,21 @@ where
         Ok(acc)
     }
 
-    pub fn run(self, keys: Arc<Vec<K>>) -> Pin<Box<dyn Future<Output = Result<Acc, E>> + Send>> {
+    pub fn run(
+        self,
+        keys: Arc<Vec<K>>,
+    ) -> Pin<Box<dyn Future<Output = Result<Acc, Cancellable<E>>> + Send>> {
         let future = self.do_run(keys);
         Box::pin(future)
+    }
+}
+
+fn cancellable_from_join_error<T>(err: JoinError) -> Cancellable<T> {
+    if err.is_cancelled() {
+        Cancellable::Cancelled
+    } else if err.is_panic() {
+        panic::resume_unwind(err.into_panic());
+    } else {
+        unreachable!("JoinError's are either due to cancellation or panic");
     }
 }

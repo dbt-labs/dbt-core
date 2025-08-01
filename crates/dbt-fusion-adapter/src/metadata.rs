@@ -1,10 +1,11 @@
 use crate::AdapterType;
-use crate::errors::AdapterError;
-use crate::errors::{AdapterResult, AsyncAdapterResult};
+use crate::errors::AdapterResult;
+use crate::errors::{AdapterError, AsyncAdapterResult};
 use crate::typed_adapter::TypedBaseAdapter;
 
 use arrow::array::RecordBatch;
 use arrow_schema::Schema;
+use dbt_common::cancellation::Cancellable;
 use dbt_schemas::schemas::relations::DEFAULT_DATABRICKS_DATABASE;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, RelationPattern};
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
@@ -116,7 +117,7 @@ pub fn create_catalogs_schema_if_not_exists(
 ) -> AsyncAdapterResult<'static, Vec<(String, Option<String>, AdapterResult<()>)>> {
     type Acc = Vec<(String, Option<String>, AdapterResult<()>)>;
     let adapter_clone = adapter.clone();
-    let new_connection_f = move || adapter_clone.new_connection();
+    let new_connection_f = move || adapter_clone.new_connection().map_err(Cancellable::Error);
     let map_f = move |conn: &'_ mut dyn Connection,
                       (catalog, schema): &(String, Option<String>)|
           -> AdapterResult<AdapterResult<()>> {
@@ -156,7 +157,7 @@ pub fn create_catalogs_schema_if_not_exists(
     let reduce_f = move |acc: &mut Acc,
                          (catalog, schema): (String, Option<String>),
                          batch_res: AdapterResult<AdapterResult<()>>|
-          -> AdapterResult<()> {
+          -> Result<(), Cancellable<AdapterError>> {
         let batch = batch_res?;
         acc.push((catalog, schema, batch));
         Ok(())
