@@ -1,4 +1,0 @@
-kind: Features
-body: New Anchors field in properties file to support yaml anchors w/o unused key
-  warnings
-time: 2025-07-30T10:08:56.444898437-07:00

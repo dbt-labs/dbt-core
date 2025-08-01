@@ -1,3 +1,0 @@
-kind: Fixes
-body: Install jq if it's not installed already in the install script for unix
-time: 2025-07-30T12:40:12.281247-04:00
