@@ -267,20 +267,12 @@ detect_target() {
     local target=""
 
     if [ "$operating_system" = "linux" ]; then
-        if [ -n "$(ldd --version 2>/dev/null)" ]; then
-            if [ "$cpu_arch_target" = "arm64" ] || [ "$cpu_arch_target" = "aarch64" ]; then
-                target="aarch64-unknown-linux-gnu"
-            elif [ "$cpu_arch_target" = "x86_64" ]; then
-                target="x86_64-unknown-linux-gnu"
-            else
-                err "Unsupported CPU Architecture: $cpu_arch_target"
-            fi
+        if [ "$cpu_arch_target" = "arm64" ] || [ "$cpu_arch_target" = "aarch64" ]; then
+            target="aarch64-unknown-linux-gnu"
+        elif [ "$cpu_arch_target" = "x86_64" ]; then
+            target="x86_64-unknown-linux-gnu"
         else
-            if [ "$cpu_arch_target" = "x86_64" ]; then
-                target="x86_64-unknown-linux-gnu"
-            else
-                err "Unsupported CPU Architecture: $cpu_arch_target"
-            fi
+            err "Unsupported CPU Architecture: $cpu_arch_target"
         fi
     elif [ "$operating_system" = "darwin" ]; then
         if [ "$cpu_arch_target" = "arm64" ]; then
