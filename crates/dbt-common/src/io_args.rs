@@ -267,6 +267,7 @@ pub struct EvalArgs {
     pub sample: Option<String>,
     pub full_refresh: bool,
     pub favor_state: bool,
+    pub refresh_sources: bool,
     pub send_anonymous_usage_stats: bool,
     pub check_all: bool,
 }
