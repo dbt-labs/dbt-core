@@ -192,7 +192,7 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     }
 
     /// Execute a query and get results in an [AgateTable].
-    fn query(
+    fn exec_query(
         &self,
         state: &State,
         sql: &str,
