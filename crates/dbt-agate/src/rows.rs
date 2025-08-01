@@ -101,7 +101,7 @@ impl MappedSequence for Rows {
     fn keys(&self) -> Option<Tuple> {
         // TODO(felipecrv): implement row_names logic
         // See https://github.com/wireservice/agate/blob/7023e35b51e8abfe9784fe292a23dd4d7d983c63/agate/table/__init__.py#L144
-        todo!("keys for mapped sequence")
+        todo!("Rows::keys")
     }
 }
 

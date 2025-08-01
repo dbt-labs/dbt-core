@@ -160,32 +160,32 @@ impl TableRepr {
     /// Return a single-column table with the distinct values in this column.
     pub fn column_distinct(&self, col_idx: isize) -> Self {
         let _col = self.single_column_table(col_idx).unwrap();
-        todo!("column distinct values extraction")
+        todo!("column_distinct")
     }
 
     pub fn column_without_nulls(&self, col_idx: isize) -> Self {
         let _col = self.single_column_table(col_idx).unwrap();
-        todo!("column null value filtering")
+        todo!("column_without_nulls")
     }
 
     pub fn column_sorted(&self, col_idx: isize) -> Self {
         let _col = self.single_column_table(col_idx).unwrap();
-        todo!("column sorting")
+        todo!("column_sorted")
     }
 
     pub fn column_without_nulls_sorted(&self, col_idx: isize) -> Self {
         let _col = self.single_column_table(col_idx).unwrap();
-        todo!("column null filtering and sorting")
+        todo!("column_without_nulls_sorted")
     }
 
     pub fn count_occurrences_of_value_in_column(&self, _needle: &Value, col_idx: isize) -> usize {
         let _col = self.single_column_table(col_idx).unwrap();
-        todo!("column value occurrence counting")
+        todo!("count_occurrences_of_value_in_column")
     }
 
     pub fn index_of_value_in_column(&self, _needle: &Value, col_idx: isize) -> Option<usize> {
         let _col = self.single_column_table(col_idx).unwrap();
-        todo!("column value index lookup")
+        todo!("index_of_value_in_column")
     }
 
     fn with_renamed_columns(&self, renamed_columns: Vec<String>) -> Self {
@@ -232,21 +232,21 @@ impl TableRepr {
     }
 
     pub fn count_occurrences_of_row(&self, _needle: &Value) -> usize {
-        todo!("row occurrence counting")
+        todo!("count_occurrences_of_row")
     }
 
     pub fn index_of_row(&self, _needle: &Value) -> Option<usize> {
-        todo!("row index lookup")
+        todo!("index_of_row")
     }
 
     pub fn count_occurrences_of_value_in_row(&self, _needle: &Value, row_idx: isize) -> usize {
         let _row = self.row_by_index(row_idx).unwrap();
-        todo!("row value occurrence counting")
+        todo!("count_occurrences_of_value_in_row")
     }
 
     pub fn index_of_value_in_row(&self, _needle: &Value, row_idx: isize) -> Option<usize> {
         let _row = self.row_by_index(row_idx).unwrap();
-        todo!("row value index lookup")
+        todo!("index_of_value_in_row")
     }
 
     // Cells ------------------------------------------------------------------
@@ -534,7 +534,7 @@ impl Object for AgateTable {
                 )?;
                 Ok(Value::from_object(table))
             }
-            other => unimplemented!("{}", other),
+            other => unimplemented!("AgateTable::{}", other),
         }
     }
 }
