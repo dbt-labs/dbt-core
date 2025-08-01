@@ -12,12 +12,12 @@ struct AtomicSemaphoreBase {
     /// The atomic counter representing the number of available permits.
     ///
     /// `u32` was chosen because that is the atomic that Linux uses for futexes,
-    /// and as such, the type chosen byt the `atomic-wait` crate.
+    /// and as such, the type chosen by the `atomic-wait` crate.
     a: AtomicU32,
 }
 
 impl AtomicSemaphoreBase {
-    pub fn new(count: u32) -> Self {
+    pub const fn new(count: u32) -> Self {
         let a = AtomicU32::new(count);
         Self { a }
     }
@@ -40,11 +40,11 @@ impl AtomicSemaphoreBase {
 
     // Try to acquire a permit without blocking.
     #[inline]
-    fn try_acquire_impl(&self, old: u32) -> bool {
-        old > 0
+    fn try_acquire_impl(&self, old: u32, ask: u32) -> bool {
+        old >= ask
             && self
                 .a
-                .compare_exchange_weak(old, old - 1, Ordering::Acquire, Ordering::Relaxed)
+                .compare_exchange_weak(old, old - ask, Ordering::Acquire, Ordering::Relaxed)
                 .is_ok()
     }
 
@@ -53,7 +53,7 @@ impl AtomicSemaphoreBase {
             // wait until the value is not 0 anymore
             atomic_wait::wait(&self.a, 0);
             let old = self.a.load(Ordering::Relaxed);
-            if self.try_acquire_impl(old) {
+            if self.try_acquire_impl(old, 1) {
                 break;
             }
         }
@@ -61,7 +61,21 @@ impl AtomicSemaphoreBase {
 
     pub fn try_acquire(&self) -> bool {
         let old = self.a.load(Ordering::Acquire);
-        self.try_acquire_impl(old)
+        self.try_acquire_impl(old, 1)
+    }
+
+    pub fn acquire_many(&self, ask: u32) {
+        debug_assert!(ask > 0, "cannot acquire zero permits");
+        let mut insufficient = (ask - 1).min(self.a.load(Ordering::Relaxed));
+        loop {
+            // wait until the value is not `insufficient` anymore
+            atomic_wait::wait(&self.a, insufficient);
+            let old = self.a.load(Ordering::Relaxed);
+            if self.try_acquire_impl(old, ask) {
+                break;
+            }
+            insufficient = old;
+        }
     }
 }
 
@@ -76,7 +90,7 @@ pub struct Semaphore {
 }
 
 impl Semaphore {
-    pub fn new(count: u32) -> Self {
+    pub const fn new(count: u32) -> Self {
         debug_assert!(count > 0, "Semaphore must allow for at least one permit");
         Self {
             max: count,
@@ -102,6 +116,21 @@ impl Semaphore {
     /// Try to acquire a permit without blocking.
     pub fn try_acquire(&self) -> bool {
         self.base.try_acquire()
+    }
+
+    /// Wait for all permits to be available and acquire them all at once.
+    ///
+    /// ```rust
+    /// let semaphore = Semaphore::new(8);
+    /// semaphore.acquire_all(); // will block until all 8 permits are available
+    /// ```
+    pub fn acquire_all(&self) {
+        self.base.acquire_many(self.max);
+    }
+
+    /// Undo the effect of `acquire_all`.
+    pub fn release_all(&self) {
+        self.base.release_impl(self.max);
     }
 }
 
@@ -165,6 +194,36 @@ mod tests {
         }
         let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
         assert_eq!(results, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn test_semaphore_acquire_all() {
+        const SCHED_PERIOD: Duration = Duration::from_millis(100);
+        let semaphore = Arc::new(Semaphore::new(4));
+        let mut handles = vec![];
+
+        semaphore.acquire_all(); // acquire all permits at once
+
+        let counter = Arc::new(AtomicU32::new(0)); // shared counter
+        for _ in 0..4 {
+            let counter = Arc::clone(&counter);
+            let sem = semaphore.clone();
+            handles.push(thread::spawn(move || {
+                sem.acquire();
+                let x = counter.load(Ordering::Acquire);
+                thread::sleep(SCHED_PERIOD);
+                sem.release();
+                counter.fetch_add(1, Ordering::Release);
+                x
+            }));
+        }
+        // all threads remain blocked until all permits are released
+        thread::sleep(SCHED_PERIOD);
+        semaphore.release_all(); // release all permits at once and wake-up all threads
+        let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        // NOTE: if one of the threads is much slower than the others, a non-zero value
+        // may appear here. SCHED_PERIOD must be increased or this test disabled.
+        assert_eq!(results, vec![0, 0, 0, 0]);
     }
 
     #[test]
