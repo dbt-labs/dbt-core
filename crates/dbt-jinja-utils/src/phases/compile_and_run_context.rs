@@ -1,7 +1,7 @@
 //! This module contains the functions for initializing the Jinja environment for the compile phase.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use crate::functions::build_flat_graph;
 use crate::jinja_environment::JinjaEnv;
@@ -98,7 +98,7 @@ pub fn build_compile_and_run_base_context(
     // Register graph as a global
     ctx.insert(
         "graph".to_string(),
-        MinijinjaValue::from(build_flat_graph(nodes)),
+        MinijinjaValue::from_object(LazyFlatGraph::new(nodes)),
     );
     let result_store = ResultStore::default();
     ctx.insert(
@@ -390,5 +390,87 @@ impl Object for MacroLookupContext {
                 }
             }
         }
+    }
+}
+
+/// This is a lazy-loaded flat graph object that builds the flat graph from
+/// `nodes` on first access.
+#[derive(Debug)]
+struct LazyFlatGraph {
+    nodes: Nodes,
+    graph: OnceLock<MinijinjaValue>,
+}
+
+impl LazyFlatGraph {
+    pub fn new(nodes: &Nodes) -> Self {
+        // TODO: We don't want to clone the top level maps either -- make the
+        // caller pass in Arc<Nodes> instead
+        Self {
+            nodes: nodes.clone(),
+            graph: OnceLock::new(),
+        }
+    }
+
+    fn get_graph(&self) -> &MinijinjaValue {
+        self.graph
+            .get_or_init(|| MinijinjaValue::from(build_flat_graph(&self.nodes)))
+    }
+}
+
+impl Object for LazyFlatGraph {
+    fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
+        self.get_graph().as_object().unwrap().get_value(key)
+    }
+
+    fn repr(self: &Arc<Self>) -> minijinja::value::ObjectRepr {
+        self.get_graph().as_object().unwrap().repr()
+    }
+
+    fn enumerate(self: &Arc<Self>) -> minijinja::value::Enumerator {
+        self.get_graph().as_object().unwrap().enumerate()
+    }
+
+    fn enumerator_len(self: &Arc<Self>) -> Option<usize> {
+        self.get_graph().as_object().unwrap().enumerator_len()
+    }
+
+    fn is_true(self: &Arc<Self>) -> bool {
+        self.get_graph().as_object().unwrap().is_true()
+    }
+
+    fn is_mutable(self: &Arc<Self>) -> bool {
+        self.get_graph().as_object().unwrap().is_mutable()
+    }
+
+    fn call(
+        self: &Arc<Self>,
+        state: &State<'_, '_>,
+        args: &[MinijinjaValue],
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<MinijinjaValue, MinijinjaError> {
+        self.get_graph()
+            .as_object()
+            .unwrap()
+            .call(state, args, listeners)
+    }
+
+    fn call_method(
+        self: &Arc<Self>,
+        state: &State<'_, '_>,
+        method: &str,
+        args: &[MinijinjaValue],
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<MinijinjaValue, MinijinjaError> {
+        self.get_graph()
+            .as_object()
+            .unwrap()
+            .call_method(state, method, args, listeners)
+    }
+
+    fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+    where
+        Self: Sized + 'static,
+    {
+        self.get_graph().as_object().unwrap().render(f)
     }
 }
