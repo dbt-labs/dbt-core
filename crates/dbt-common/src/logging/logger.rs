@@ -11,6 +11,7 @@ use std::fmt::Display;
 use std::io::{IsTerminal as _, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use tracing_log::LogTracer;
 
 const QUERY_LOG_SQL: &str = "query_log.sql";
 
@@ -93,6 +94,7 @@ enum LogTarget {
     Stdout,
     Stderr,
     Writer(Arc<Mutex<Box<dyn Write + Send>>>),
+    TracingBridge(LogTracer),
 }
 
 // Individual logger that can be customized
@@ -130,6 +132,9 @@ macro_rules! locked_writeln {
                     writeln!(writer, $($arg)*).ok();
                 }
             }
+            LogTarget::TracingBridge(_) => {
+                // TracingBridge doesn't use writeln, handled separately in log() method
+            }
         }
     };
 }
@@ -145,6 +150,7 @@ impl Logger {
             LogTarget::Stdout => !std::io::stdout().is_terminal(),
             LogTarget::Stderr => !std::io::stderr().is_terminal(),
             LogTarget::Writer(_) => true, // Always remove ANSI codes for file writers
+            LogTarget::TracingBridge(_) => true, // Always remove ANSI codes for tracing bridge
         };
         Self {
             target: writer,
@@ -283,22 +289,42 @@ impl log::Log for Logger {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) && !super::term::is_term_control_only(record) {
-            match self.config.format {
-                LogFormat::Text | LogFormat::Fancy => {
-                    let mut text = record.args().to_string();
-                    if self.remove_ansi_codes {
-                        text = remove_ansi_codes(&text);
+            match &self.target {
+                LogTarget::TracingBridge(tracer) => {
+                    // Check if this record is already handled by new tracing logic
+                    if record
+                        .key_values()
+                        .get(log::kv::Key::from_str("_TRACING_HANDLED_"))
+                        .is_some()
+                    {
+                        // This record is already handled by the new tracing logic, skip it
+                        return;
                     }
-                    locked_writeln!(self, "{}", text);
+
+                    // For tracing bridge, we need to strip ANSI codes and pass through
+                    // the log level filtering logic, then delegate to the tracer
+                    let text = remove_ansi_codes(&record.args().to_string());
+
+                    // Pass a new record with stripped ANSI codes
+                    tracer.log(&record.to_builder().args(format_args!("{text}")).build());
                 }
-                LogFormat::Json => {
-                    let json = Self::format_json(
-                        record,
-                        &self.invocation_id.to_string(),
-                        self.remove_ansi_codes,
-                    );
-                    locked_writeln!(self, "{}", json);
-                }
+                _ => match self.config.format {
+                    LogFormat::Text | LogFormat::Fancy => {
+                        let mut text = record.args().to_string();
+                        if self.remove_ansi_codes {
+                            text = remove_ansi_codes(&text);
+                        }
+                        locked_writeln!(self, "{}", text);
+                    }
+                    LogFormat::Json => {
+                        let json = Self::format_json(
+                            record,
+                            &self.invocation_id.to_string(),
+                            self.remove_ansi_codes,
+                        );
+                        locked_writeln!(self, "{}", json);
+                    }
+                },
             }
         }
     }
@@ -315,6 +341,9 @@ impl log::Log for Logger {
                 if let Ok(mut writer) = path.lock() {
                     let _ = writer.flush();
                 }
+            }
+            LogTarget::TracingBridge(ref tracer) => {
+                tracer.flush();
             }
         }
     }
@@ -420,6 +449,27 @@ impl MultiLoggerBuilder {
         self
     }
 
+    fn add_tracing_bridge_logger(mut self, log_config: &FsLogConfig) -> Self {
+        let config = LoggerConfig {
+            level_filter: log_config.log_level,
+            format: LogFormat::Text, // Format doesn't matter for tracing bridge
+            min_level: None,
+            max_level: Some(LevelFilter::Debug),
+            includes: None,
+            excludes: None,
+        };
+
+        let logger = Logger::new(
+            "tracing_bridge",
+            LogTarget::TracingBridge(LogTracer::new()),
+            config,
+            self.invocation_id,
+        );
+
+        self.loggers.push(Box::new(logger));
+        self
+    }
+
     fn build(self) -> MultiLogger {
         MultiLogger {
             loggers: self.loggers,
@@ -436,19 +486,23 @@ pub struct FsLogConfig {
     pub invocation_id: uuid::Uuid,
 }
 
-impl From<IoArgs> for FsLogConfig {
-    fn from(args: IoArgs) -> Self {
+impl From<&IoArgs> for FsLogConfig {
+    fn from(args: &IoArgs) -> Self {
         Self {
             log_format: args.log_format, // TODO support different log format for different loggers
             log_level: args.log_level.unwrap_or(LevelFilter::Info), // default log level
-            file_log_path: args.log_path.map(|p| p.join("dbt.log")).unwrap_or_else(|| {
-                if args.out_dir.starts_with(&args.in_dir) {
-                    args.in_dir.join("logs/dbt.log")
-                } else {
-                    // This is because when we do test we do not want to modify in_dir
-                    args.out_dir.join("dbt.log")
-                }
-            }),
+            file_log_path: args
+                .log_path
+                .as_ref()
+                .map(|p| p.join("dbt.log"))
+                .unwrap_or_else(|| {
+                    if args.out_dir.starts_with(&args.in_dir) {
+                        args.in_dir.join("logs/dbt.log")
+                    } else {
+                        // This is because when we do test we do not want to modify in_dir
+                        args.out_dir.join("dbt.log")
+                    }
+                }),
             file_log_level: args.log_level.unwrap_or(LevelFilter::Info), // default file log level
             file_log_format: args.log_format,
             invocation_id: args.invocation_id,
@@ -549,6 +603,9 @@ pub fn init_logger(log_config: FsLogConfig) -> FsResult<()> {
             .unwrap_or_else(|_| panic!("Failed to open log file {query_log_path:?}")),
     ) as Box<dyn Write + Send>));
     builder = builder.add_logger("queries", file, query_file_config);
+
+    // Add tracing bridge logger
+    builder = builder.add_tracing_bridge_logger(&log_config);
 
     // Build the logger
     let logger = builder.build();

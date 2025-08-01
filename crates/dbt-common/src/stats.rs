@@ -1,4 +1,5 @@
 use chrono::{DateTime, Local};
+use dbt_telemetry::NodeExecutionStatus;
 use humantime::format_duration;
 use std::fmt;
 use std::time::{Duration, SystemTime};
@@ -35,6 +36,20 @@ impl fmt::Display for NodeStatus {
             NodeStatus::NoOp => "noop",
         };
         write!(f, "{status_str}")
+    }
+}
+
+impl From<&NodeStatus> for NodeExecutionStatus {
+    fn from(val: &NodeStatus) -> Self {
+        match val {
+            NodeStatus::Succeeded => NodeExecutionStatus::Success,
+            NodeStatus::Errored => NodeExecutionStatus::Error,
+            NodeStatus::SkippedUpstreamReused => NodeExecutionStatus::Skipped,
+            NodeStatus::SkippedUpstreamFailed => NodeExecutionStatus::Skipped,
+            NodeStatus::ReusedNoChanges => NodeExecutionStatus::Reused,
+            NodeStatus::ReusedStillFresh => NodeExecutionStatus::Reused,
+            NodeStatus::NoOp => NodeExecutionStatus::Skipped,
+        }
     }
 }
 

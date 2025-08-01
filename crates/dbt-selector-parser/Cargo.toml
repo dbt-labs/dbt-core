@@ -12,4 +12,5 @@ edition.workspace = true
 [dependencies]
 dbt-common = { workspace = true }
 dbt-schemas = { workspace = true }
+tracing = { workspace = true }
 

@@ -25,6 +25,7 @@ serde_json = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 log = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
 
 chrono = { workspace = true }
 console = { workspace = true }
@@ -36,6 +37,9 @@ uuid = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 
+[features]
+default = []
+otlp = ["dbt-common/otlp"]
 
 [[bin]]
 doctest = false

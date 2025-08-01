@@ -3,6 +3,7 @@ use std::str::FromStr;
 use std::{any::Any, collections::BTreeMap, fmt::Display, path::PathBuf, sync::Arc};
 
 use dbt_common::{ErrorCode, FsResult, err, io_args::StaticAnalysisKind};
+use dbt_telemetry::NodeIdentifier;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::skip_serializing_none;
@@ -250,7 +251,7 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
 
     /// Returns the search name for this node, following Python dbt patterns:
     /// - Models: name (or name.v{version} if versioned)
-    /// - Sources: source_name.name  
+    /// - Sources: source_name.name
     /// - Others: name
     fn search_name(&self) -> String;
 
@@ -1472,6 +1473,15 @@ pub struct CommonAttributes {
     // Tags and Meta
     pub tags: Vec<String>,
     pub meta: BTreeMap<String, Value>,
+}
+
+impl From<&CommonAttributes> for NodeIdentifier {
+    fn from(value: &CommonAttributes) -> Self {
+        NodeIdentifier {
+            unique_id: value.unique_id.clone(),
+            fqn: value.fqn.join("."),
+        }
+    }
 }
 
 #[skip_serializing_none]

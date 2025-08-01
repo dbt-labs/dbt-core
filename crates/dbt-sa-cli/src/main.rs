@@ -1,8 +1,8 @@
-use clap::Error;
 use clap::Parser;
 use clap::error::ErrorKind;
 
 use dbt_common::cancellation::CancellationTokenSource;
+use dbt_common::tracing::init_tracing;
 use dbt_common::{constants::PANIC, pretty_string::GREEN, pretty_string::RED};
 use dbt_sa_lib::dbt_sa_clap::Cli;
 use dbt_sa_lib::dbt_sa_clap::from_main;
@@ -33,7 +33,8 @@ fn main() -> ExitCode {
             if e.kind() == ErrorKind::UnknownArgument {
                 // todo make this for more than just unknown arguments
                 // Only show the actual error message
-                print_trimmed_error(e); // prints to stderr
+                let msg = e.to_string(); // includes both "error:" and possibly "tip:"
+                print_trimmed_error(msg); // prints to stderr
                 std::process::exit(1);
             } else {
                 // For other errors, show full help as usual
@@ -43,6 +44,16 @@ fn main() -> ExitCode {
     };
 
     let arg = from_main(&cli);
+
+    // Init tracing
+    let mut telemetry_handle = match init_tracing((&arg.io).into()) {
+        Ok(handle) => handle,
+        Err(e) => {
+            let msg = e.to_string();
+            print_trimmed_error(msg);
+            std::process::exit(1);
+        }
+    };
 
     // Setup tokio runtime and set stack-size to 8MB
     // DO NOT USE Rayon, it is not compatible with Tokio
@@ -91,9 +102,18 @@ fn main() -> ExitCode {
             std::process::exit(2);
         }));
     }
-    // Run
+
+    // Run within the process span
     let future = Box::pin(execute_fs(arg, cli, token));
-    let result = tokio_rt.block_on(async { tokio_rt.spawn(future).await.unwrap() });
+    let result = telemetry_handle
+        .process_span()
+        .in_scope(|| tokio_rt.block_on(async { tokio_rt.spawn(future).await.unwrap() }));
+
+    // Shut down telemetry
+    for err in telemetry_handle.shutdown() {
+        eprintln!("{}", err.pretty());
+    }
+
     // Remove the panic hook
     let _ = std::panic::take_hook();
 
@@ -113,10 +133,9 @@ fn main() -> ExitCode {
     }
 }
 
-fn print_trimmed_error(e: Error) {
+fn print_trimmed_error(msg: String) {
     let mut stderr = io::stderr();
 
-    let msg = e.to_string(); // includes both "error:" and possibly "tip:"
     let mut lines = msg.lines();
     let mut command = String::new();
 

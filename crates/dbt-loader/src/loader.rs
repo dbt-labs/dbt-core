@@ -8,6 +8,9 @@ use dbt_jinja_utils::phases::load::init::initialize_load_jinja_environment;
 use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
 use dbt_jinja_utils::serde::from_yaml_error;
 use dbt_schemas::schemas::serde::StringOrInteger;
+use dbt_schemas::schemas::telemetry::BuildPhaseInfo;
+use dbt_schemas::schemas::telemetry::SharedPhaseInfo;
+use dbt_schemas::schemas::telemetry::SpanAttributes;
 use fs_deps::get_or_install_packages;
 use pathdiff::diff_paths;
 use serde::Deserialize;
@@ -43,6 +46,18 @@ use dbt_jinja_utils::phases::load::secret_renderer::secret_context_env_var_fn;
 use dbt_jinja_utils::serde::{into_typed_with_jinja, value_from_file};
 use dbt_jinja_utils::var_fn;
 
+use dbt_common::tracing::ToTracingValue;
+
+#[tracing::instrument(
+    skip_all,
+    fields(
+        __event = SpanAttributes::Phase(BuildPhaseInfo::Loading {
+            shared: SharedPhaseInfo {
+                invocation_id: iarg.invocation_id.to_string(),
+            }
+        }).to_tracing_value(),
+    )
+)]
 pub async fn load(
     arg: &LoadArgs,
     iarg: &InvocationArgs,

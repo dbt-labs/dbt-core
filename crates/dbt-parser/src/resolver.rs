@@ -4,6 +4,7 @@ use dbt_common::FsError;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{DBT_GENERIC_TESTS_DIR_NAME, RESOLVING};
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
+use dbt_common::tracing::ToTracingValue;
 use dbt_common::{ErrorCode, FsResult, err, fs_err, show_error, with_progress};
 use dbt_common::{show_warning, stdfs};
 use dbt_jinja_utils::invocation_args::InvocationArgs;
@@ -20,15 +21,17 @@ use dbt_schemas::state::RenderResults;
 use dbt_schemas::state::{DbtPackage, Macros};
 use dbt_schemas::state::{DbtRuntimeConfig, Operations};
 
-use dbt_schemas::state::DbtState;
-use dbt_schemas::state::ResolverState;
-use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
-
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, build_root_project_configs};
 use crate::resolve::resolve_operations::resolve_operations;
 use crate::utils::{self};
+use dbt_schemas::schemas::telemetry::BuildPhaseInfo;
+use dbt_schemas::schemas::telemetry::SharedPhaseInfo;
+use dbt_schemas::schemas::telemetry::SpanAttributes;
+use dbt_schemas::state::DbtState;
+use dbt_schemas::state::ResolverState;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 
 use crate::resolve::resolve_analyses::resolve_analyses;
 use crate::resolve::resolve_exposures::resolve_exposures;
@@ -51,6 +54,16 @@ use crate::resolve::resolve_selectors::resolve_final_selectors;
 ///
 /// The final product is the parsed [DbtManifest], along with the collected
 /// macros to be used during compilation.
+#[tracing::instrument(
+    skip_all,
+    fields(
+        __event = SpanAttributes::Phase(BuildPhaseInfo::Parsing {
+            shared: SharedPhaseInfo {
+                invocation_id: invocation_args.invocation_id.to_string(),
+            }
+        }).to_tracing_value(),
+    )
+)]
 pub async fn resolve(
     arg: &ResolveArgs,
     invocation_args: &InvocationArgs,

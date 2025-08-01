@@ -4,7 +4,7 @@ use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_loader::clean::execute_clean_command;
 use dbt_schemas::man::execute_man_command;
 
-use dbt_common::io_args::{EvalArgs, IoArgs};
+use dbt_common::io_args::EvalArgs;
 use dbt_common::{
     ErrorCode, FsResult, checkpoint_maybe_exit,
     constants::{DBT_MANIFEST_JSON, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME, INSTALLING, VALIDATING},
@@ -14,15 +14,16 @@ use dbt_common::{
     logging::init_logger,
     pretty_string::GREEN,
     show_error, show_progress, show_progress_exit, show_result_with_default_title, stdfs,
-    tracing::init_tracing,
+    tracing::{ToTracingValue, constants::TRACING_ATTR_FIELD, span_info::record_span_status},
 };
 
-use dbt_schemas::schemas::Nodes;
+use dbt_schemas::schemas::{Nodes, telemetry::SpanAttributes};
 use dbt_schemas::state::Macros;
 #[allow(unused_imports)]
 use git_version::git_version;
 
 use dbt_schemas::schemas::manifest::build_manifest;
+use tracing::instrument;
 
 use std::{path::Path, sync::Arc, time::SystemTime};
 
@@ -33,19 +34,41 @@ use serde_json::to_string_pretty;
 
 // ------------------------------------------------------------------------------------------------
 
-fn init_logging_and_tracing(io: IoArgs) -> FsResult<()> {
-    init_logger(io.clone().into()).expect("Failed to initialize logger");
-    init_tracing(io.into())?;
-
-    Ok(())
-}
-
+#[instrument(skip_all, level = "trace")]
 pub async fn execute_fs(arg: SystemArgs, cli: Cli, token: CancellationToken) -> FsResult<i32> {
-    init_logging_and_tracing(arg.io.clone())?;
-    do_execute_fs(arg, cli, token).await
+    init_logger((&arg.io).into()).expect("Failed to initialize logger");
+
+    // Create the Invocation span as a new root
+    let invocation_span = tracing::info_span!(
+        parent: None,
+        "Invocation",
+        { TRACING_ATTR_FIELD } = SpanAttributes::Invocation {
+            invocation_id: arg.io.invocation_id.to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            host_os: std::env::consts::OS.to_string(),
+            host_arch: std::env::consts::ARCH.to_string(),
+            target: arg.target.clone(),
+            metrics: None,
+        }
+        .to_tracing_value(),
+    );
+
+    let result = invocation_span
+        .in_scope(|| async { do_execute_fs(arg, cli, token).await })
+        .await;
+
+    // Record span run result
+    match result {
+        Ok(0) => record_span_status(&invocation_span, None),
+        Ok(_) => record_span_status(&invocation_span, Some("Executed with errors")),
+        Err(ref e) => record_span_status(&invocation_span, Some(format!("Error: {e}").as_str())),
+    };
+
+    result
 }
 
 #[allow(clippy::cognitive_complexity)]
+#[instrument(skip_all, level = "trace")]
 async fn do_execute_fs(arg: SystemArgs, cli: Cli, token: CancellationToken) -> FsResult<i32> {
     let start = SystemTime::now();
 
@@ -111,6 +134,7 @@ async fn do_execute_fs(arg: SystemArgs, cli: Cli, token: CancellationToken) -> F
 }
 
 #[allow(clippy::cognitive_complexity)]
+#[instrument(skip_all, level = "trace")]
 async fn execute_setup_and_all_phases(
     system_arg: SystemArgs,
     cli: Cli,
@@ -185,6 +209,7 @@ async fn execute_setup_and_all_phases(
 }
 
 #[allow(clippy::cognitive_complexity)]
+#[instrument(skip_all, level = "trace")]
 async fn execute_all_phases(
     arg: &EvalArgs,
     _cli: &Cli,

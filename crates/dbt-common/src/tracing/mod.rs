@@ -1,70 +1,166 @@
-use crate::FsResult;
-use crate::io_args::IoArgs;
+mod config;
+pub mod constants;
+mod convert;
+mod file_writer;
+mod init;
+mod layers;
+pub mod log_info;
+pub mod metrics;
+mod shared;
+pub mod span_info;
 
-use std::fs::File;
-use std::path::PathBuf;
-use std::sync::Arc;
+pub use config::FsTraceConfig;
+pub use convert::log_level_to_severity;
+pub use init::{TelemetryShutdown, init_tracing};
+pub use shared::ToTracingValue;
 
-use tracing::subscriber::{NoSubscriber, set_global_default};
-use tracing_subscriber::{
-    EnvFilter,
-    fmt::{format::FmtSpan, writer::BoxMakeWriter},
-};
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-pub struct FsTraceConfig {
-    pub file_path: Option<PathBuf>,
-}
+    use dbt_telemetry::{
+        LogRecordInfo, SpanAttributes, SpanEndInfo, SpanStartInfo, TelemetryRecord,
+    };
+    use std::fs;
 
-impl From<IoArgs> for FsTraceConfig {
-    fn from(args: IoArgs) -> Self {
-        Self {
-            file_path: args
-                .trace_path
-                .map(|p| Some(p.join("dbt.trace")))
-                .unwrap_or_else(|| None),
-        }
-    }
-}
+    #[test]
+    fn test_split_layers_work_together() {
+        let invocation_id = uuid::Uuid::new_v4();
+        let trace_id = invocation_id.as_u128();
 
-#[allow(unused_variables)]
-pub fn init_tracing(config: FsTraceConfig) -> FsResult<()> {
-    if cfg!(debug_assertions)
-        && let Some(file_path) = config.file_path
-    {
-        // Set up file-based tracing in debug builds when path is provided
-        let file = Arc::new(File::create(file_path)?);
+        // Create a temporary file for the OTM output
+        let temp_dir = std::env::temp_dir();
+        let temp_file_path = temp_dir.join("test_otm.jsonl");
 
-        let make_writer = BoxMakeWriter::new({
-            move || {
-                let file_clone = file.try_clone().expect("Failed to clone file");
-                Box::new(file_clone) as Box<dyn std::io::Write + Send>
-            }
+        // Init telemetry
+        let mut telemetry_handle = init_tracing(FsTraceConfig {
+            max_log_level: tracing::level_filters::LevelFilter::TRACE,
+            invocation_id,
+            otm_file_path: Some(temp_file_path.clone()),
+            print_to_stdout: false,
+            #[cfg(all(debug_assertions, feature = "otlp"))]
+            export_to_otlp: false,
+        })
+        .expect("Failed to initialize tracing");
+
+        tracing::info_span!("test_root_span").in_scope(|| {
+            tracing::info!("Log message in root span");
+
+            let span = tracing::info_span!("test_child_span");
+            let _enter = span.enter();
+
+            tracing::info!("Log message in child span");
+            // Span will be created and closed automatically
         });
 
-        let env_filter =
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("trace"));
+        // Shutdown telemetry to ensure all data is flushed to the file
+        let shutdown_errs = telemetry_handle.shutdown();
+        assert_eq!(shutdown_errs.len(), 0);
 
-        let subscriber = tracing_subscriber::fmt()
-            // set filter for the events
-            .with_env_filter(env_filter)
-            // set the writer, i.e., place to write to
-            .with_writer(make_writer)
-            // include span events for #include
-            .with_span_events(FmtSpan::FULL)
-            // avoid issues with colors, etc.
-            .with_ansi(false)
-            // format as json
-            .json()
-            // finish it
-            .finish();
+        // Read the temporary file
+        let file_contents =
+            fs::read_to_string(&temp_file_path).expect("Failed to read temporary OTM file");
 
-        set_global_default(subscriber).expect("setting default subscriber failed");
-    } else {
-        // Always set up a no-op subscriber to prevent tracing from falling back to stdout
+        // Clean up the temporary file
+        fs::remove_file(&temp_file_path).expect("Failed to remove temporary file");
 
-        // Try to set a no-op subscriber, but don't panic if it fails
-        let _ = set_global_default(NoSubscriber::default());
+        let records: Vec<TelemetryRecord> = file_contents
+            .lines()
+            .map(|line| {
+                serde_json::from_str::<TelemetryRecord>(line)
+                    .expect("Failed to parse TelemetryRecord from line")
+            })
+            .collect();
+
+        assert_eq!(
+            records.len(),
+            8,
+            "Expected exactly 8 telemetry records (1 process span + 4 spans + 2 logs)"
+        );
+
+        // Test root span is present
+        assert!(records.iter().any(|r| matches!(
+            r,
+            TelemetryRecord::SpanStart(SpanStartInfo {
+                trace_id: deserialized_trace_id,
+                name: span_type,
+                parent_span_id: Some(1),
+                attributes: SpanAttributes::Unknown { name, .. },
+                ..
+            }) if span_type == "Unknown" && name == "test_root_span" && *deserialized_trace_id == trace_id
+        )));
+        assert!(records.iter().any(|r| matches!(
+            r,
+            TelemetryRecord::SpanEnd(SpanEndInfo {
+                trace_id: deserialized_trace_id,
+                name: span_type,
+                parent_span_id: Some(1),
+                attributes: SpanAttributes::Unknown { name, .. },
+                ..
+            }) if span_type == "Unknown" && name == "test_root_span" && *deserialized_trace_id == trace_id
+        )));
+
+        // Extract root span ID
+        let root_span_id = records
+            .iter()
+            .find_map(|r| {
+                if let TelemetryRecord::SpanStart(SpanStartInfo {
+                    span_id,
+                    attributes: SpanAttributes::Unknown { name, .. },
+                    ..
+                }) = r
+                    && name == "test_root_span"
+                {
+                    Some(*span_id)
+                } else {
+                    None
+                }
+            })
+            .unwrap();
+
+        // Test child span is present
+        assert!(records.iter().any(|r| matches!(
+            r,
+            TelemetryRecord::SpanStart(SpanStartInfo {
+                trace_id: deserialized_trace_id,
+                name: span_type,
+                parent_span_id: Some(parent_id),
+                attributes: SpanAttributes::Unknown { name, .. },
+                ..
+            }) if span_type == "Unknown" && name == "test_child_span" && *deserialized_trace_id == trace_id && *parent_id == root_span_id
+        )));
+        assert!(records.iter().any(|r| matches!(
+            r,
+            TelemetryRecord::SpanEnd(SpanEndInfo {
+                trace_id: deserialized_trace_id,
+                name: span_type,
+                parent_span_id: Some(parent_id),
+                attributes: SpanAttributes::Unknown { name, .. },
+                ..
+            }) if span_type == "Unknown" && name == "test_child_span" && *deserialized_trace_id == trace_id && *parent_id == root_span_id
+        )));
+
+        // Test log records are present
+        assert!(records.iter().any(|r| matches!(
+            r,
+            TelemetryRecord::LogRecord(LogRecordInfo {
+                trace_id: deserialized_trace_id,
+                span_name,
+                body,
+                span_id,
+                ..
+            }) if *deserialized_trace_id == trace_id && span_name == "Unknown" && body == "Log message in root span" && *span_id == root_span_id
+        )));
+
+        assert!(records.iter().any(|r| matches!(
+            r,
+            TelemetryRecord::LogRecord(LogRecordInfo {
+                trace_id: deserialized_trace_id,
+                span_name,
+                body,
+                span_id,
+                ..
+            }) if *deserialized_trace_id == trace_id && span_name == "Unknown" && body == "Log message in child span" && *span_id != root_span_id
+        )));
     }
-
-    Ok(())
 }

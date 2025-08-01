@@ -49,7 +49,7 @@ static AFTER_HELP: LazyLock<String> = LazyLock::new(|| {
 #[derive(Parser, Debug, Clone)]
 #[command(
     author,
-    name = "dbt-sa-cli",    
+    name = "dbt-sa-cli",
     version = env!("CARGO_PKG_VERSION"),
     about = &**ABOUT,
     after_help = &**AFTER_HELP
@@ -244,6 +244,11 @@ pub struct CommonArgs {
     #[arg(global = true, long, env = "DBT_LOG_PATH")]
     pub log_path: Option<PathBuf>,
 
+    /// Set 'otm_file_name' for the current run, overriding 'DBT_OTM_FILE_NAME'.
+    /// If set, OTEL telemetry will be written to `$log_path/otm_file_name`.
+    #[arg(global = true, long, env = "DBT_OTM_FILE_NAME", hide = true)]
+    pub otm_file_name: Option<String>,
+
     /// Set logging format; use --log-format-file to override.
     #[arg(global = true, long, env = "DBT_LOG_FORMAT", default_value_t = LogFormat::Text,)]
     pub log_format: LogFormat,
@@ -272,10 +277,6 @@ pub struct CommonArgs {
     /// Show produced artifacts [default: 'progress']
     #[clap(long, num_args(0..), help = "Show produced artifacts [default: 'progress']")]
     pub show: Vec<ShowOptions>,
-
-    #[arg(global = true, long, hide = true)]
-    /// The path to the trace file, if any, hidden, debugging only
-    pub trace_path: Option<PathBuf>,
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -408,7 +409,9 @@ impl InitArgs {
                 log_level: self.common_args.log_level,
                 log_level_file: self.common_args.log_level_file,
                 log_path: self.common_args.log_path.clone(),
-                trace_path: self.common_args.trace_path.clone(),
+                otm_file_name: self.common_args.otm_file_name.clone(),
+                #[cfg(all(debug_assertions, feature = "otlp"))]
+                export_to_otlp: false,
                 show_timings: arg.from_main,
                 build_cache_mode: arg.io.build_cache_mode,
                 build_cache_url: arg.io.build_cache_url,
@@ -492,7 +495,9 @@ impl CommonArgs {
                 log_level: self.log_level,
                 log_level_file: self.log_level_file,
                 log_path: self.log_path.clone(),
-                trace_path: self.trace_path.clone(),
+                otm_file_name: self.otm_file_name.clone(),
+                #[cfg(all(debug_assertions, feature = "otlp"))]
+                export_to_otlp: false,
                 show_timings: arg.from_main,
                 build_cache_mode: arg.io.build_cache_mode,
                 build_cache_url: arg.io.build_cache_url,
@@ -578,7 +583,9 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
                 (false, _) => cli.common_args().log_level_file,
             },
             log_path: cli.common_args().log_path,
-            trace_path: cli.common_args().trace_path,
+            otm_file_name: cli.common_args().otm_file_name,
+            #[cfg(all(debug_assertions, feature = "otlp"))]
+            export_to_otlp: false,
             show_timings: true, // always true for main
             build_cache_mode: None,
             build_cache_url: None,
@@ -605,7 +612,9 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             log_level: cli.common_args().log_level,
             log_level_file: cli.common_args().log_level_file,
             log_path: cli.common_args().log_path,
-            trace_path: cli.common_args().trace_path,
+            otm_file_name: cli.common_args().otm_file_name,
+            #[cfg(all(debug_assertions, feature = "otlp"))]
+            export_to_otlp: false,
             show_timings: false, // always false for lib
             build_cache_mode: None,
             build_cache_url: None,

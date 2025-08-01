@@ -14,6 +14,7 @@ members = [
   "crates/dbt-test-containers",
   "crates/dbt-parser",
   "crates/dbt-schemas",
+  "crates/dbt-telemetry",
   "crates/dbt-selector-parser",
   "crates/dbt-proc-macros",
   "crates/dbt-adapter-proc-macros",
@@ -141,6 +142,7 @@ dbt-parser = { path = "crates/dbt-parser" }
 dbt-proc-macros = { path = "crates/dbt-proc-macros" }
 dbt-schemas = { path = "crates/dbt-schemas" }
 dbt-selector-parser = { path = "crates/dbt-selector-parser" }
+dbt-telemetry = { path = "crates/dbt-telemetry" }
 dbt-test-containers = { path = "crates/dbt-test-containers" }
 dbt-test-primitives = { path = "crates/dbt-test-primitives" }
 dbt-test-utils = { path = "crates/dbt-test-utils" }
@@ -174,6 +176,7 @@ dbt-serde_yaml = { git = "https://github.com/sdf-labs/dbt-serde-yaml", rev = "40
 serde = { version = "1.0.147", default-features = false, features = ["derive"] }
 serde_derive = "1.0.215"
 serde_json = "1.0.133"
+serde_repr = "0.1.20"
 serde_with = "3.12.0"
 
 # cloud providers
@@ -256,8 +259,8 @@ lazy_static = "1.4"
 # type derived macros
 enum-map = "2.7.3"
 int-enum = "1.1"
-strum = "0.26.3"
-strum_macros = "0.26.4"
+strum = "0.27.2"
+strum_macros = "0.27.2"
 
 # macros
 paste = "1.0.15"
@@ -379,7 +382,14 @@ log = { version = "0.4.27", features = ["kv_serde"] }
 
 # tracing (observability)
 tracing = "0.1.41"
+tracing-log = "0.2.0" # temporary until we migrate to tracing exclusively
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "json"] }
+
+# OpenTelemetry (optional embedded OTLP exporter for traces, see dbt-common)
+opentelemetry = "0.30.0"
+opentelemetry-otlp = "0.30.0"
+opentelemetry-semantic-conventions = "0.30.0"
+opentelemetry_sdk = "0.30.0"
 
 # tracing (local profiling)
 # Compile with --features "tracy-client/enable" to enable integration with the

@@ -29,14 +29,16 @@ use crate::{
 
 // ----------------------------------------------------------------------------------------------
 // IO Args
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct IoArgs {
     pub invocation_id: uuid::Uuid,
     pub show: HashSet<ShowOptions>,
     pub in_dir: PathBuf,
     pub out_dir: PathBuf,
     pub log_path: Option<PathBuf>,
-    pub trace_path: Option<PathBuf>,
+    pub otm_file_name: Option<String>,
+    #[cfg(all(debug_assertions, feature = "otlp"))]
+    pub export_to_otlp: bool,
     pub log_format: LogFormat,
     pub log_level: Option<LevelFilter>,
     pub log_level_file: Option<LevelFilter>,
@@ -60,28 +62,6 @@ impl IoArgs {
     }
 }
 
-// define a clone for IoArgs
-impl Clone for IoArgs {
-    fn clone(&self) -> Self {
-        IoArgs {
-            invocation_id: self.invocation_id,
-            show: self.show.clone(),
-            in_dir: self.in_dir.clone(),
-            out_dir: self.out_dir.clone(),
-            log_path: self.log_path.clone(),
-            trace_path: self.trace_path.clone(),
-            log_format: self.log_format,
-            log_level_file: self.log_level_file,
-            log_level: self.log_level,
-            status_reporter: self.status_reporter.clone(),
-            send_anonymous_usage_stats: self.send_anonymous_usage_stats,
-            show_timings: self.show_timings,
-            build_cache_url: self.build_cache_url.clone(),
-            build_cache_cas_url: self.build_cache_cas_url.clone(),
-            build_cache_mode: self.build_cache_mode,
-        }
-    }
-}
 impl fmt::Debug for IoArgs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("IoArgs")
@@ -89,6 +69,8 @@ impl fmt::Debug for IoArgs {
             .field("show", &self.show)
             .field("in_dir", &self.in_dir)
             .field("out_dir", &self.out_dir)
+            .field("log_path", &self.log_path)
+            .field("otm_file_name", &self.otm_file_name)
             .field("status_reporter", &self.status_reporter.is_some())
             .finish()
     }
@@ -431,6 +413,7 @@ pub enum JsonSchemaTypes {
     Schema,
     Project,
     Profile,
+    Telemetry,
 }
 
 #[derive(

@@ -5,6 +5,7 @@ use super::{ProjectEnv, Task, TestEnv, TestResult};
 
 use dbt_common::error::FsResult;
 use dbt_common::string_utils::split_into_whitespace_and_brackets;
+use dbt_common::tracing::{FsTraceConfig, init_tracing};
 use std::future::Future;
 use std::iter;
 use std::path::{Path, PathBuf};
@@ -132,7 +133,14 @@ impl TaskSeq {
     ) -> TestResult<()> {
         let test_env = project_env.create_test_env()?;
         let _cwd_guard = CurrentWorkingDirGuard::new(&project_env.absolute_project_dir);
+
+        // Init tracing
+        let mut telemetry_guard = init_tracing(FsTraceConfig::default()).expect("Should init");
+
         run_test_tasks(&self.tasks, project_env, &test_env, set_env).await?;
+
+        // Shutdown tracing
+        telemetry_guard.shutdown();
 
         Ok(())
     }

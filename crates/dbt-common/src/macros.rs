@@ -320,12 +320,14 @@ macro_rules! show_progress {
             if let Some(data_json) = $info.data {
                 $crate::_log!(event.level(),
                     _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+                    _TRACING_HANDLED_ = true,
                     name = event.name(), data:serde = data_json;
                      "{}", output
                 );
             } else {
                 $crate::_log!(event.level(),
                     _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+                    _TRACING_HANDLED_ = true,
                     name = event.name();
                      "{}", output
                 );
@@ -622,6 +624,28 @@ macro_rules! show_warning {
         increment_warning_counter(&$io.invocation_id.to_string());
 
         let err = $err;
+
+        // New tracing based logic
+        use $crate::tracing::{ToTracingValue, log_level_to_severity};
+        use $crate::tracing::metrics::{increment_metric, MetricKey};
+        use $crate::tracing::constants::TRACING_ATTR_FIELD;
+        use dbt_schemas::schemas::telemetry::{LogAttributes, RecordCodeLocation};
+        increment_metric(MetricKey::TotalWarnings, 1);
+
+        let (original_severity_number, original_severity_text) = log_level_to_severity(&$crate::macros::log_adapter::log::Level::Warn);
+
+        tracing::warn!(
+            { TRACING_ATTR_FIELD } = LogAttributes::Log {
+                code: Some(err.code as u16 as u32),
+                dbt_core_code: None,
+                original_severity_number,
+                original_severity_text,
+                location: RecordCodeLocation::none(), // Will be auto injected
+            }.to_tracing_value(),
+            "{}",
+            err.pretty().as_str()
+        );
+
         if let Some(status_reporter) = &$io.status_reporter {
             status_reporter.collect_warning(&err);
         }
@@ -629,6 +653,7 @@ macro_rules! show_warning {
         $crate::_log!(
             $crate::macros::log_adapter::log::Level::Warn,
             _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+            _TRACING_HANDLED_ = true,
             code = err.code.to_string();
             "{} {}",
             YELLOW.apply_to(WARNING),

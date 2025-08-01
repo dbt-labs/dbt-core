@@ -235,7 +235,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     /// TODO (alex): THIS IS NOT AN ACTUAL IMPLEMENTATION
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip_all, level = "trace")]
     fn cache_added(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser: ArgParser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 1, 1)?;
@@ -248,17 +248,17 @@ impl BaseAdapter for BridgeAdapter {
         invalid_argument!("cache_added expects a relation")
     }
 
-    #[tracing::instrument(skip(self, _state, _args))]
+    #[tracing::instrument(skip_all, level = "trace")]
     fn cache_dropped(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
         unimplemented!("cache_dropped")
     }
 
-    #[tracing::instrument(skip(self, _state, _args))]
+    #[tracing::instrument(skip_all, level = "trace")]
     fn cache_renamed(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
         unimplemented!("cache_renamed")
     }
 
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip_all, level = "trace")]
     fn standardize_grants_dict(
         &self,
         _state: &State,
@@ -278,7 +278,7 @@ impl BaseAdapter for BridgeAdapter {
         }
     }
 
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip_all, level = "trace")]
     fn quote(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 1, 1)?;
@@ -292,7 +292,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(Value::from(quoted_identifier))
     }
 
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip_all, level = "trace")]
     fn quote_as_configured(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 2, 2)?;
@@ -323,7 +323,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(Value::from(result))
     }
 
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip_all, level = "trace")]
     fn quote_seed_column(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         // column: str, quote_config: Optional[bool]
         let mut parser = ArgParser::new(args, None);
@@ -336,7 +336,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(Value::from(result))
     }
 
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip_all, level = "trace")]
     fn convert_type(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 2, 2)?;
@@ -353,7 +353,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1839-L1840
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip_all, level = "trace")]
     fn render_raw_model_constraints(
         &self,
         _state: &State,
@@ -375,7 +375,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(Value::from(result))
     }
 
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip_all, level = "trace")]
     fn render_raw_columns_constraints(
         &self,
         _state: &State,
@@ -393,7 +393,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(Value::from(result))
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn execute(
         &self,
         state: &State,
@@ -411,7 +411,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok((response, table))
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state, bindings), level = "trace")]
     fn add_query(
         &self,
         state: &State,
@@ -443,7 +443,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn drop_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 1, 1)?;
@@ -453,7 +453,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(self.typed_adapter.drop_relation(state, relation)?)
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn truncate_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 1, 1)?;
@@ -463,7 +463,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(self.typed_adapter.truncate_relation(state, relation)?)
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn rename_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         execute_macro(state, args, "rename_relation")?;
         Ok(none_value())
@@ -471,7 +471,7 @@ impl BaseAdapter for BridgeAdapter {
 
     /// Expand the to_relation table's column types to match the schema of from_relation.
     /// https://docs.getdbt.com/reference/dbt-jinja-functions/adapter#expand_target_column_types
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn expand_target_column_types(
         &self,
         state: &State,
@@ -492,7 +492,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L212-L213
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn list_schemas(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 1, 1)?;
@@ -507,29 +507,29 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L161
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn create_schema(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         execute_macro(state, args, "create_schema")?;
         Ok(none_value())
     }
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L172-L173
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn drop_schema(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         execute_macro(state, args, "drop_schema")?;
         Ok(none_value())
     }
 
-    #[tracing::instrument(skip(self, _state, _args))]
+    #[tracing::instrument(skip(self, _state), level = "trace")]
     fn valid_snapshot_target(
         &self,
         _state: &State,
-        _args: &[Value],
+        args: &[Value],
     ) -> Result<Value, MinijinjaError> {
         unimplemented!("valid_snapshot_target")
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn get_incremental_strategy_macro(
         &self,
         state: &State,
@@ -570,7 +570,7 @@ impl BaseAdapter for BridgeAdapter {
         }))
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn assert_valid_snapshot_target_given_strategy(
         &self,
         state: &State,
@@ -603,7 +603,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(none_value())
     }
 
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip(self, _state), level = "trace")]
     fn get_hard_deletes_behavior(
         &self,
         _state: &State,
@@ -638,7 +638,7 @@ impl BaseAdapter for BridgeAdapter {
         ))
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn get_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 3, 4)?;
@@ -672,7 +672,7 @@ impl BaseAdapter for BridgeAdapter {
         }
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn get_missing_columns(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 2, 2)?;
@@ -689,7 +689,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(result)
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn get_columns_in_relation(
         &self,
         state: &State,
@@ -772,7 +772,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(result)
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip_all, level = "trace")]
     fn check_schema_exists(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 2, 2)?;
@@ -802,7 +802,7 @@ impl BaseAdapter for BridgeAdapter {
         }
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn get_relations_by_pattern(
         &self,
         state: &State,
@@ -831,7 +831,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(result)
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn get_column_schema_from_query(
         &self,
         state: &State,
@@ -855,7 +855,7 @@ impl BaseAdapter for BridgeAdapter {
     /// Shares the same input and output as get_column_schema_from_query, simply delegate to the other for now
     /// FIXME(harry): unlike get_column_schema_from_query which only works when returning a non-empty result
     /// get_columns_in_select_sql returns a schema using the BigQuery Job and GetTable APIs
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn get_columns_in_select_sql(
         &self,
         state: &State,
@@ -864,7 +864,7 @@ impl BaseAdapter for BridgeAdapter {
         self.get_column_schema_from_query(state, args)
     }
 
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip(self, _state), level = "trace")]
     fn verify_database(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 1, 1)?;
@@ -873,7 +873,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(result?)
     }
 
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip(self, _state), level = "trace")]
     fn nest_column_data_types(
         &self,
         _state: &State,
@@ -894,14 +894,14 @@ impl BaseAdapter for BridgeAdapter {
         Ok(Value::from_serialize(&result))
     }
 
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip(self, _state), level = "trace")]
     fn get_bq_table(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 1, 1)?;
         unimplemented!("get_bq_table")
     }
 
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip(self, _state), level = "trace")]
     fn is_replaceable(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 1, 3)?;
@@ -937,7 +937,7 @@ impl BaseAdapter for BridgeAdapter {
     ///
     /// # Panics
     /// This method will panic if called on a non-BigQuery adapter
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip_all, level = "trace")]
     fn parse_partition_by(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         parser.check_num_args(current_function_name!(), 1, 1)?;
@@ -949,7 +949,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(result)
     }
 
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip(self, _state), level = "trace")]
     fn get_table_options(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         parser.check_num_args(current_function_name!(), 2, 3)?;
@@ -981,7 +981,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(Value::from_serialize(options))
     }
 
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip(self, _state), level = "trace")]
     fn get_view_options(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         parser.check_num_args(current_function_name!(), 2, 3)?;
@@ -1008,7 +1008,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(Value::from_serialize(options))
     }
 
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip(self, _state), level = "trace")]
     fn add_time_ingestion_partition_column(
         &self,
         _state: &State,
@@ -1034,7 +1034,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(result)
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn grant_access_to(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 4, 4)?;
@@ -1082,7 +1082,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(result)
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn get_dataset_location(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 1, 1)?;
@@ -1095,7 +1095,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(Value::from(result))
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn update_table_description(
         &self,
         state: &State,
@@ -1121,7 +1121,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(result)
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn alter_table_add_columns(
         &self,
         state: &State,
@@ -1140,7 +1140,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(result)
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn update_columns(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 2, 2)?;
@@ -1161,7 +1161,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(result)
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip_all, level = "trace")]
     fn behavior(&self) -> Value {
         let mut behavior_flags = self.typed_adapter.behavior();
         for flag in DEFAULT_BASE_BEHAVIOR_FLAGS.iter() {
@@ -1172,7 +1172,7 @@ impl BaseAdapter for BridgeAdapter {
         Value::from_object(Behavior::new(&behavior_flags))
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn list_relations_without_caching(
         &self,
         state: &State,
@@ -1190,7 +1190,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(result)
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn compare_dbr_version(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 2, 2)?;
@@ -1205,7 +1205,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(result)
     }
 
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip_all, level = "trace")]
     fn compute_external_path(
         &self,
         _state: &State,
@@ -1239,7 +1239,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(Value::from(result))
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn update_tblproperties_for_iceberg(
         &self,
         state: &State,
@@ -1270,7 +1270,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(Value::from_serialize(&tblproperties))
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn copy_table(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 3, 3)?;
@@ -1290,7 +1290,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(none_value())
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), level = "trace")]
     fn describe_relation(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 1, 1)?;
@@ -1305,7 +1305,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(result.map_or(none_value(), Value::from_serialize))
     }
 
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip(self, _state), level = "trace")]
     fn generate_unique_temporary_table_suffix(
         &self,
         _state: &State,
@@ -1323,16 +1323,16 @@ impl BaseAdapter for BridgeAdapter {
         Ok(Value::from(suffix))
     }
 
-    #[tracing::instrument(skip(self, _state, _args))]
+    #[tracing::instrument(skip(self, _state), level = "trace")]
     fn valid_incremental_strategies(
         &self,
         _state: &State,
-        _args: &[Value],
+        args: &[Value],
     ) -> Result<Value, MinijinjaError> {
         Ok(self.typed_adapter.valid_incremental_strategies_as_values())
     }
 
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip(self, _state), level = "trace")]
     fn redact_credentials(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 1, 1)?;
@@ -1344,16 +1344,16 @@ impl BaseAdapter for BridgeAdapter {
         Ok(Value::from(sql_redacted))
     }
 
-    #[tracing::instrument(skip(self, _state, _args))]
+    #[tracing::instrument(skip(self, _state), level = "trace")]
     fn get_partitions_metadata(
         &self,
         _state: &State,
-        _args: &[Value],
+        args: &[Value],
     ) -> Result<Value, MinijinjaError> {
         unimplemented!("get_partitions_metadata")
     }
 
-    #[tracing::instrument(skip(self, _state, args))]
+    #[tracing::instrument(skip(self, _state), level = "trace")]
     fn get_persist_doc_columns(
         &self,
         _state: &State,
@@ -1375,7 +1375,7 @@ impl BaseAdapter for BridgeAdapter {
         ))
     }
 
-    #[tracing::instrument(skip(self, state, args))]
+    #[tracing::instrument(skip_all, level = "trace")]
     fn get_relation_config(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 1, 1)?;
@@ -1390,7 +1390,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(value)
     }
 
-    #[tracing::instrument(skip(self, _state, args))]
+    #[tracing::instrument(skip_all, level = "trace")]
     fn get_config_from_model(
         &self,
         _state: &State,
@@ -1413,7 +1413,7 @@ impl BaseAdapter for BridgeAdapter {
             .get_config_from_model(deserialized_node.as_internal_node())?)
     }
 
-    #[tracing::instrument(skip(self, _state, _args))]
+    #[tracing::instrument(skip_all, level = "trace")]
     fn get_relations_without_caching(
         &self,
         _state: &State,
@@ -1422,12 +1422,12 @@ impl BaseAdapter for BridgeAdapter {
         unimplemented!("get_relations_without_caching")
     }
 
-    #[tracing::instrument(skip(self, _state, _args))]
+    #[tracing::instrument(skip_all, level = "trace")]
     fn parse_index(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
         unimplemented!("parse_index")
     }
 
-    #[tracing::instrument(skip(self, args))]
+    #[tracing::instrument(skip_all, level = "trace")]
     fn clean_sql(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 1, 1)?;
@@ -1437,7 +1437,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(Value::from(self.typed_adapter.clean_sql(&sql)?))
     }
 
-    #[tracing::instrument(skip(self, warehouse, node_id))]
+    #[tracing::instrument(skip(self), level = "trace")]
     fn use_warehouse(&self, warehouse: Option<String>, node_id: &str) -> FsResult<bool> {
         if warehouse.is_none() {
             return Ok(false);
@@ -1451,7 +1451,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(true)
     }
 
-    #[tracing::instrument(skip(self, node_id))]
+    #[tracing::instrument(skip(self), level = "trace")]
     fn restore_warehouse(&self, node_id: &str) -> FsResult<()> {
         let mut conn = self
             .borrow_tlocal_connection()
@@ -1461,7 +1461,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self, state))]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn load_dataframe(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut conn = self.borrow_tlocal_connection()?;
         let query_ctx = query_ctx_from_state(state)?.with_desc("load_dataframe");

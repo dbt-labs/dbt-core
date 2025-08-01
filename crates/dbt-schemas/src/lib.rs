@@ -152,4 +152,7 @@ pub mod schemas {
         pub use source_properties::{SourceProperties, Tables};
         pub use unit_test_properties::{UnitTestOverrides, UnitTestProperties};
     }
+
+    // TODO: When dbt-schemas dependency on dbt-common is removed, we should move this to dbt_schemas
+    pub use dbt_telemetry as telemetry;
 }

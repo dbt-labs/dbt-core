@@ -2,12 +2,15 @@ use crate::schemas::profiles::DbtProfiles;
 use crate::schemas::project::DbtProject;
 use crate::schemas::properties::DbtPropertiesFile;
 use crate::schemas::selectors::SelectorFile;
+use crate::schemas::telemetry::TelemetryRecord;
 use dbt_common::ErrorCode;
 use dbt_common::FsResult;
 use dbt_common::err;
 use dbt_common::io_args::EvalArgs;
 use dbt_common::io_args::JsonSchemaTypes;
 use dbt_common::macros::log_adapter::log;
+
+use strum::IntoEnumIterator;
 
 use schemars::r#gen::SchemaSettings;
 use schemars::schema::*;
@@ -18,9 +21,13 @@ use serde_json::to_string_pretty;
 pub async fn execute_man_command(arg: &EvalArgs) -> FsResult<i32> {
     // create an error if arg.schema.is_empty
     if arg.schema.is_empty() {
+        let available_schemas: Vec<String> = JsonSchemaTypes::iter()
+            .map(|s| s.to_string().to_lowercase())
+            .collect();
         return err!(
             ErrorCode::InvalidArgument,
-            "Please provide a --schema <SCHEMA>, where <SCHEMA> is one of selector, schema, project, profile"
+            "Please provide a --schema <SCHEMA>, where <SCHEMA> is one of {}",
+            available_schemas.join(", ")
         );
     }
     for schema_type in &arg.schema {
@@ -51,6 +58,12 @@ pub async fn execute_man_command(arg: &EvalArgs) -> FsResult<i32> {
                 let generator = settings.into_generator();
                 let mut schema = generator.into_root_schema_for::<DbtPropertiesFile>();
                 deny_additional_properties_in_root(&mut schema);
+                log::info!("{}", to_string_pretty(&schema)?);
+            }
+            JsonSchemaTypes::Telemetry => {
+                let settings = SchemaSettings::draft07();
+                let generator = settings.into_generator();
+                let schema = generator.into_root_schema_for::<TelemetryRecord>();
                 log::info!("{}", to_string_pretty(&schema)?);
             }
         }
