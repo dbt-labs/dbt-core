@@ -1,4 +1,4 @@
-use crate::schemas::data_tests::DataTests;
+use crate::schemas::data_tests::ModelDataTests;
 use crate::schemas::dbt_column::ColumnProperties;
 use crate::schemas::project::SeedConfig;
 use dbt_serde_yaml::JsonSchema;
@@ -10,10 +10,10 @@ use serde_with::skip_serializing_none;
 pub struct SeedProperties {
     pub columns: Option<Vec<ColumnProperties>>,
     pub config: Option<SeedConfig>,
-    pub data_tests: Option<Vec<DataTests>>,
+    pub data_tests: Option<Vec<ModelDataTests>>,
     pub description: Option<String>,
     pub name: String,
-    pub tests: Option<Vec<DataTests>>,
+    pub tests: Option<Vec<ModelDataTests>>,
 }
 
 impl SeedProperties {

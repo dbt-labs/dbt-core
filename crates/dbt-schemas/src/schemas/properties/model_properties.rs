@@ -1,7 +1,7 @@
 use crate::schemas::common::ConstraintType;
 use crate::schemas::common::ModelFreshnessRules;
 use crate::schemas::common::Versions;
-use crate::schemas::data_tests::DataTests;
+use crate::schemas::data_tests::ModelDataTests;
 use crate::schemas::dbt_column::ColumnProperties;
 use crate::schemas::project::ModelConfig;
 use crate::schemas::properties::properties::GetConfig;
@@ -36,13 +36,13 @@ pub struct ModelProperties {
     pub columns: Option<Vec<ColumnProperties>>,
     pub config: Option<ModelConfig>,
     pub constraints: Option<Vec<ModelConstraint>>,
-    pub data_tests: Option<Vec<DataTests>>,
+    pub data_tests: Option<Vec<ModelDataTests>>,
     pub deprecation_date: Option<String>,
     pub description: Option<String>,
     pub identifier: Option<String>,
     pub latest_version: Option<FloatOrString>,
     pub name: String,
-    pub tests: Option<Vec<DataTests>>,
+    pub tests: Option<Vec<ModelDataTests>>,
     pub time_spine: Option<ModelsTimeSpine>,
     pub versions: Option<Vec<Versions>>,
 }

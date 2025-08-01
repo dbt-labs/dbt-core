@@ -14,8 +14,8 @@ use dbt_jinja_utils::serde::check_single_expression_without_whitepsace_control;
 use dbt_schemas::schemas::common::Versions;
 use dbt_schemas::schemas::common::normalize_quote;
 use dbt_schemas::schemas::data_tests::{
-    AcceptedValuesTestProperties, CustomTest, DataTests, NotNullTestProperties,
-    RelationshipsTestProperties, UniqueTestProperties,
+    AcceptedValuesTestProperties, ColumnDataTests, ColumnUniqueTestProperties, CustomTest,
+    ModelDataTests, ModelUniqueTestProperties, NotNullTestProperties, RelationshipsTestProperties,
 };
 
 use dbt_schemas::schemas::dbt_column::ColumnProperties;
@@ -61,7 +61,14 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
             // Handle model-level tests
             if let Some(tests) = &test_config.model_tests {
                 for test in tests {
-                    let dbt_asset = persist_inner(project_name, &test_config, None, test, io_args)?;
+                    let column_test: ColumnDataTests = test.clone().into();
+                    let dbt_asset = persist_inner(
+                        project_name,
+                        &test_config,
+                        test.column_name(),
+                        &column_test,
+                        io_args,
+                    )?;
                     collected_tests.push(dbt_asset);
                 }
             }
@@ -104,7 +111,7 @@ fn persist_inner(
     project_name: &str,
     test_config: &GenericTestConfig,
     column_name: Option<&str>,
-    test: &DataTests,
+    test: &ColumnDataTests,
     io_args: &IoArgs,
 ) -> FsResult<DbtAsset> {
     let details = get_test_details(test, test_config, column_name, io_args)?;
@@ -154,7 +161,7 @@ struct TestDetails {
 }
 
 fn get_test_details(
-    test: &DataTests,
+    test: &ColumnDataTests,
     test_config: &GenericTestConfig,
     column_name: Option<&str>,
     io_args: &IoArgs,
@@ -197,12 +204,12 @@ fn get_test_details(
     }
 
     let (test_macro_name, custom_test_name, namespace) = match test {
-        DataTests::String(test_name) => {
+        ColumnDataTests::String(test_name) => {
             let (test_macro_name, namespace) = parse_test_name_and_namespace(test_name);
             (test_macro_name, None, namespace)
         }
 
-        DataTests::NotNullTest(test) => {
+        ColumnDataTests::NotNullTest(test) => {
             config = merge_config_with_deprecated(
                 &test.not_null.config,
                 &test.not_null.deprecated_configs,
@@ -219,7 +226,7 @@ fn get_test_details(
             (macro_name, custom_name, None)
         }
 
-        DataTests::UniqueTest(test) => {
+        ColumnDataTests::ColumnUniqueTest(test) => {
             config = merge_config_with_deprecated(
                 &test.unique.config,
                 &test.unique.deprecated_configs,
@@ -231,7 +238,7 @@ fn get_test_details(
             (macro_name, custom_name, None)
         }
 
-        DataTests::AcceptedValuesTest(test) => {
+        ColumnDataTests::AcceptedValuesTest(test) => {
             // Use typed fields directly - no need for JSON roundtrip!
             config = merge_config_with_deprecated(
                 &test.accepted_values.config,
@@ -253,7 +260,7 @@ fn get_test_details(
             (macro_name, custom_name, None)
         }
 
-        DataTests::RelationshipsTest(test) => {
+        ColumnDataTests::RelationshipsTest(test) => {
             // Use typed fields directly - no need for JSON roundtrip!
             config = merge_config_with_deprecated(
                 &test.relationships.config,
@@ -276,7 +283,7 @@ fn get_test_details(
             (macro_name, custom_name, None)
         }
 
-        DataTests::CustomTest(custom_test) => match custom_test {
+        ColumnDataTests::CustomTest(custom_test) => match custom_test {
             CustomTest::MultiKey(mk) => {
                 let (test_name, namespace) = parse_test_name_and_namespace(&mk.test_name);
                 let extraction_result = extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
@@ -823,8 +830,8 @@ struct GenericTestConfig {
     resource_type: String,
     resource_name: String,
     version_num: Option<String>,
-    model_tests: Option<Vec<DataTests>>,
-    column_tests: Option<BTreeMap<String, (bool, Vec<DataTests>)>>,
+    model_tests: Option<Vec<ModelDataTests>>,
+    column_tests: Option<BTreeMap<String, (bool, Vec<ColumnDataTests>)>>,
     source_name: Option<String>,
 }
 
@@ -959,7 +966,8 @@ fn collect_versioned_model_tests(
             .get("tests")
             .or_else(|| version.__additional_properties__.get("data_tests"))
         {
-            if let Ok(version_tests) = serde_json::from_value::<Vec<DataTests>>(tests.clone()) {
+            if let Ok(version_tests) = serde_json::from_value::<Vec<ModelDataTests>>(tests.clone())
+            {
                 version_config.model_tests = Some(version_tests);
             }
         }
@@ -1059,11 +1067,11 @@ pub trait TestableNodeTrait {
     }
 
     /// Top-level tests (equivalent to "tests" or "data_tests").
-    fn base_tests(&self) -> FsResult<Option<Vec<DataTests>>>;
+    fn base_tests(&self) -> FsResult<Option<Vec<ModelDataTests>>>;
 
     /// Columns, each with optional tests.
     #[allow(clippy::type_complexity)]
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>>;
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<ColumnDataTests>)>>>;
 
     /// Versions for models, or None for everything else.
     fn versions(&self) -> Option<&[Versions]> {
@@ -1087,11 +1095,11 @@ impl TestableNodeTrait for ModelProperties {
         &self.name
     }
 
-    fn base_tests(&self) -> FsResult<Option<Vec<DataTests>>> {
+    fn base_tests(&self) -> FsResult<Option<Vec<ModelDataTests>>> {
         base_tests_inner(self.tests.as_deref(), self.data_tests.as_deref())
     }
 
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>> {
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<ColumnDataTests>)>>> {
         column_tests_inner(&self.columns)
     }
 
@@ -1109,11 +1117,11 @@ impl TestableNodeTrait for SeedProperties {
         &self.name
     }
 
-    fn base_tests(&self) -> FsResult<Option<Vec<DataTests>>> {
+    fn base_tests(&self) -> FsResult<Option<Vec<ModelDataTests>>> {
         base_tests_inner(self.tests.as_deref(), self.data_tests.as_deref())
     }
 
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>> {
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<ColumnDataTests>)>>> {
         column_tests_inner(&self.columns)
     }
 }
@@ -1127,11 +1135,11 @@ impl TestableNodeTrait for SnapshotProperties {
         &self.name
     }
 
-    fn base_tests(&self) -> FsResult<Option<Vec<DataTests>>> {
+    fn base_tests(&self) -> FsResult<Option<Vec<ModelDataTests>>> {
         base_tests_inner(self.tests.as_deref(), self.data_tests.as_deref())
     }
 
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>> {
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<ColumnDataTests>)>>> {
         column_tests_inner(&self.columns)
     }
 }
@@ -1155,14 +1163,14 @@ impl TestableNodeTrait for TestableTable<'_> {
         Some(self.source_name.clone())
     }
 
-    fn base_tests(&self) -> FsResult<Option<Vec<DataTests>>> {
+    fn base_tests(&self) -> FsResult<Option<Vec<ModelDataTests>>> {
         base_tests_inner(
             self.table.tests.as_deref(),
             self.table.data_tests.as_deref(),
         )
     }
 
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>> {
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<ColumnDataTests>)>>> {
         column_tests_inner(&self.table.columns)
     }
 }
@@ -1499,8 +1507,8 @@ mod tests {
             resource_name: "my_model_with_a_long_name_beyond_64_chars_and_some_other_chars_aa"
                 .to_string(),
             version_num: None,
-            model_tests: Some(vec![DataTests::CustomTest(CustomTest::MultiKey(Box::new(
-                CustomTestMultiKey {
+            model_tests: Some(vec![ModelDataTests::ModelCustomTest(CustomTest::MultiKey(
+                Box::new(CustomTestMultiKey {
                     arguments: Verbatim::from(Some(
                         to_value(json!({
                             "column_names": ["id"]
@@ -1512,8 +1520,8 @@ mod tests {
                     name: Some("noop?=p+:".to_string()),
                     test_name: "noop?=p+:".to_string(),
                     description: None,
-                },
-            )))]),
+                }),
+            ))]),
             column_tests: None,
             source_name: None,
         };

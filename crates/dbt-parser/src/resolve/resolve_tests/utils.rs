@@ -1,14 +1,17 @@
 use std::collections::BTreeMap;
 
 use dbt_common::{ErrorCode, FsResult, err};
-use dbt_schemas::schemas::{data_tests::DataTests, dbt_column::ColumnProperties};
+use dbt_schemas::schemas::{
+    data_tests::ColumnDataTests, data_tests::ModelDataTests, dbt_column::ColumnProperties,
+};
 
-type DataTestVec = Vec<DataTests>;
+type DataTestVec = Vec<ColumnDataTests>;
+type ModelDataTestVec = Vec<ModelDataTests>;
 
 pub fn base_tests_inner(
-    tests: Option<&[DataTests]>,
-    data_tests: Option<&[DataTests]>,
-) -> FsResult<Option<DataTestVec>> {
+    tests: Option<&[ModelDataTests]>,
+    data_tests: Option<&[ModelDataTests]>,
+) -> FsResult<Option<ModelDataTestVec>> {
     if tests.is_some() && data_tests.is_some() {
         return err!(
             ErrorCode::InvalidSchema,

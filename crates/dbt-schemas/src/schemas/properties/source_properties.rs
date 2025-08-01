@@ -1,6 +1,6 @@
 use crate::schemas::common::DbtQuoting;
 use crate::schemas::common::FreshnessDefinition;
-use crate::schemas::data_tests::DataTests;
+use crate::schemas::data_tests::ModelDataTests;
 use crate::schemas::dbt_column::ColumnProperties;
 use crate::schemas::project::SourceConfig;
 use crate::schemas::serde::StringOrArrayOfStrings;
@@ -31,14 +31,14 @@ pub struct SourceProperties {
 pub struct Tables {
     pub columns: Option<Vec<ColumnProperties>>,
     pub config: Option<TablesConfig>,
-    pub data_tests: Option<Vec<DataTests>>,
+    pub data_tests: Option<Vec<ModelDataTests>>,
     pub description: Option<String>,
     pub external: Option<serde_json::Value>,
     pub identifier: Option<String>,
     pub loader: Option<String>,
     pub name: String,
     pub quoting: Option<DbtQuoting>,
-    pub tests: Option<Vec<DataTests>>,
+    pub tests: Option<Vec<ModelDataTests>>,
 }
 
 #[skip_serializing_none]
