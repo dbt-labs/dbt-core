@@ -12,6 +12,8 @@ use minijinja::{Error as MinijinjaError, State, Value};
 use std::any::Any;
 use std::sync::Arc;
 
+const INFORMATION_SCHEMA_SCHEMA: &str = "information_schema";
+
 /// A struct representing the relation type for use with static methods
 #[derive(Clone, Debug)]
 pub struct BigqueryRelationType(pub ResolvedQuoting);
@@ -140,6 +142,11 @@ impl BigqueryRelation {
 }
 
 impl BaseRelation for BigqueryRelation {
+    fn is_system(&self) -> bool {
+        self.path.schema.as_ref().map(|s| s.to_lowercase())
+            == Some(INFORMATION_SCHEMA_SCHEMA.to_string())
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }

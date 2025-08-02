@@ -1,0 +1,3 @@
+kind: Under the Hood
+body: (adapter/bigquery) support downloading schemas for information schema views
+time: 2025-08-01T16:29:12.278929286-07:00
