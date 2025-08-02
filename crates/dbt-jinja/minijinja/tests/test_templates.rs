@@ -11,12 +11,13 @@ use std::sync::Arc;
 use std::{env, fs};
 
 use insta::assert_snapshot;
+use minijinja::constants::{CURRENT_PATH, CURRENT_SPAN};
+use minijinja::machinery::Span;
 use minijinja::value::{Enumerator, Object, ObjectRepr, Rest, Value};
 use minijinja::{context, render, Environment, Error, ErrorKind, State};
 
 use similar_asserts::assert_eq;
 
-#[ignore = "zhong is refactoring vm https://github.com/dbt-labs/fs/issues/4808"]
 #[test]
 fn test_vm() {
     let mut refs = Vec::new();
@@ -40,7 +41,17 @@ fn test_vm() {
         env.add_function("get_args", |args: Rest<Value>| -> Value {
             Value::from(args.0)
         });
-        let ctx: Value = serde_json::from_str(iter.next().unwrap()).unwrap();
+        let json_str = iter.next().unwrap();
+        let ctx: BTreeMap<String, serde_json::Value> = serde_json::from_str(json_str).unwrap();
+        let mut ctx: BTreeMap<String, Value> = ctx
+            .into_iter()
+            .map(|(k, v)| (k, minijinja::Value::from_serialize(&v)))
+            .collect();
+        ctx.insert(CURRENT_PATH.to_string(), Value::from(filename));
+        ctx.insert(
+            CURRENT_SPAN.to_string(),
+            Value::from_serialize(Span::default()),
+        );
 
         for (path, source) in &refs {
             let ref_filename = path.file_name().unwrap().to_str().unwrap();

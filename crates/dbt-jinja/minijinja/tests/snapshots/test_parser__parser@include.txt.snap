@@ -1,7 +1,7 @@
 ---
-source: crates/dbt-jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{% include \"foo.txt\" %}\n{% include \"foo.txt\" with context %}\n{% include \"foo.txt\" without context %}\n{% include \"foo.txt\" ignore missing with context %}\n{% include \"foo.txt\" ignore missing without context %}\n{% include \"foo.txt\" ignore missing %}"
-input_file: crates/dbt-jinja/minijinja/tests/parser-inputs/include.txt
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/include.txt
 ---
 Ok(
     Template {
@@ -58,5 +58,5 @@ Ok(
                 ignore_missing: true,
             } @ 6:1-6:39,
         ],
-    } @ 0:0-6:39,
+    } @ 1:1-6:39,
 )

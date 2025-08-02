@@ -295,7 +295,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
     );
     context.insert(
         CURRENT_SPAN.to_string(),
-        MinijinjaValue::from_serialize(Span::new_file_default()),
+        MinijinjaValue::from_serialize(Span::default()),
     );
 
     context

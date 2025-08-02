@@ -1,7 +1,7 @@
 ---
-source: crates/dbt-jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{% from \"foo.html\" import a, b %}\n{% from \"foo.html\" import a %}\n{% from \"foo.html\" import a as b %}\n{% from \"foo.html\" import a as b, b as c %}\n{% from \"foo.html\" import a, b, %}\n{% from \"foo.html\" import a, %}\n{% from \"foo.html\" import a as b, %}\n{% from \"foo.html\" import a as b, b as c, %}\n{% import \"foo.html\" as x %}"
-input_file: crates/dbt-jinja/minijinja/tests/parser-inputs/imports.txt
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/imports.txt
 ---
 Ok(
     Template {
@@ -191,5 +191,5 @@ Ok(
                 } @ 9:25-9:26,
             } @ 9:1-9:29,
         ],
-    } @ 0:0-9:29,
+    } @ 1:1-9:29,
 )

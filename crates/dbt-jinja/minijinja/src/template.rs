@@ -13,7 +13,7 @@ use crate::compiler::meta::find_undeclared;
 use crate::compiler::parser::parse;
 use crate::compiler::typecheck::FunctionRegistry;
 use crate::environment::Environment;
-use crate::error::{attach_basic_debug_info, Error};
+use crate::error::Error;
 use crate::listener::RenderingEventListener;
 use crate::output::{Output, WriteWrapper};
 use crate::output_tracker::{OutputTracker, OutputTrackerLocation};
@@ -437,10 +437,7 @@ impl<'source> CompiledTemplate<'source> {
         profile: CodeGenerationProfile,
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<CompiledTemplate<'source>, Error> {
-        attach_basic_debug_info(
-            Self::_new_impl(name, source, config, filename, profile, listeners),
-            source,
-        )
+        Self::_new_impl(name, source, config, filename, profile, listeners)
     }
 
     fn _new_impl(

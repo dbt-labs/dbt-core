@@ -242,7 +242,6 @@ pub async fn render_unresolved_sql_files_sequentially<
             execute_exists.clone(),
             &display_path,
         ));
-
         show_progress!(
             args.io,
             fsinfo!(PARSING.into(), display_path.display().to_string())
@@ -583,7 +582,6 @@ pub async fn render_unresolved_sql_files<
                     args.io,
                     fsinfo!(PARSING.into(), display_path.display().to_string())
                 );
-
                 let listener_factory = DefaultListenerFactory::default();
                 match render_sql(
                     &sql,

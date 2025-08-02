@@ -1,8 +1,7 @@
 ---
-source: crates/jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{{ foo and bar or baz == true }}"
-input_file: crates/jinja/minijinja/tests/parser-inputs/ops.txt
-snapshot_kind: text
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/ops.txt
 ---
 Ok(
     Template {
@@ -31,5 +30,5 @@ Ok(
                 } @ 1:1-1:33,
             } @ 1:1-1:33,
         ],
-    } @ 0:0-1:33,
+    } @ 1:1-1:33,
 )

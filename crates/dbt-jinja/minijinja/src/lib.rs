@@ -251,9 +251,6 @@ mod loader;
 #[cfg(feature = "loader")]
 pub use loader::path_loader;
 
-#[cfg(feature = "debug")]
-mod debug;
-
 pub use self::defaults::{default_auto_escape_callback, escape_formatter};
 pub use self::environment::Environment;
 pub use self::error::{Error, ErrorKind};

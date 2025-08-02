@@ -1,7 +1,7 @@
 ---
-source: crates/dbt-jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{{ [1, 2, 3] }}\n{{ (1, 2, 3) }}\n{{ (1,) }}\n{{ () }}\n{{ 1, 2 }}\n{{ 1, }}\n{{ (1, 2, 3,) }}                 {# trailing comma after last element #}\n{{ ( (1, 2), (3, 4) ) }}         {# tuple of two 2‑tuples #}\n{{ (\"a\", 42, true) }}            {# mixed types: str, int, bool #}\n{{ (1 + 2, 3 * 4) }}             {# tuple elements can be any expression #}\n{{ ((1,),) }}                    {# outer tuple containing a *singleton* tuple #}\n{{ [ (1, 2), () ] }}             {# list that contains two tuples #}\n{{ ('nested', ('tuple', 123), []) }}  {# deeply‑nested structures #}\n{{ (1,\n     2,\n     3) }}                       {# line‑breaks and extra whitespace #}\n{{ (1 ,\n   2 , 3 , ) }}                 {# whitespace variants + trailing comma #}\n{{ ((), ((),), (((),),),) }}     {# crazy nesting to stress the parser #}"
-input_file: crates/dbt-jinja/minijinja/tests/parser-inputs/tuples.txt
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/tuples.txt
 ---
 Ok(
     Template {
@@ -348,5 +348,5 @@ Ok(
             } @ 19:29-19:34,
             Comment @ 19:34-19:74,
         ],
-    } @ 0:0-19:74,
+    } @ 1:1-19:74,
 )

@@ -38,6 +38,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
 use std::hash::Hash;
 use std::ops::RangeBounds;
+use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -1523,15 +1524,14 @@ impl<'src> TypeChecker<'src> {
 
                     if *name == "return" {
                         if let Some(arg) = typestate.stack.pop_inner() {
-                            return Err(crate::Error::abrupt_return(
-                                Value::from_object(arg),
-                                *span,
-                            ));
+                            return Err(crate::Error::abrupt_return(Value::from_object(arg))
+                                .with_span(Path::new(""), span));
                         }
                         return Err(crate::Error::new(
                             crate::error::ErrorKind::InvalidOperation,
                             "Stack underflow on return",
-                        ));
+                        )
+                        .with_span(Path::new(""), span));
                     } else if *name == "caller" {
                         // judge whether current block is a macro
                         if let Some(block) = self.cfg.get_block(bb_id) {
@@ -1695,10 +1695,10 @@ impl<'src> TypeChecker<'src> {
                                     || *name == "column_type_missing"
                                     || *name == "warn"
                                 {
-                                    return Err(crate::Error::abrupt_return(
-                                        Value::from_object(Type::Exception),
-                                        *span,
-                                    ));
+                                    return Err(crate::Error::abrupt_return(Value::from_object(
+                                        Type::Exception,
+                                    ))
+                                    .with_span(Path::new(""), span));
                                 } else {
                                     rv
                                 }

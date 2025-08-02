@@ -1,8 +1,7 @@
 ---
-source: crates/jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "<title>{% block title %}{% endblock %}</title>\n{% block body %}\n    foo\n{% endblock body %}"
-input_file: crates/jinja/minijinja/tests/parser-inputs/block.txt
-snapshot_kind: text
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/block.txt
 ---
 Ok(
     Template {
@@ -26,5 +25,5 @@ Ok(
                 ],
             } @ 2:1-4:20,
         ],
-    } @ 0:0-4:20,
+    } @ 1:1-4:20,
 )

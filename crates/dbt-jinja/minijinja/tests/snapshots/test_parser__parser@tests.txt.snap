@@ -1,8 +1,7 @@
 ---
-source: crates/jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{% test foo() %}...{% endtest %}\n{% test foo(a, b) %}...{% endtest %}\n{% test foo(a, b=42) %}...{% endtest %}\n{% test foo(a, b,) %}...{% endtest %}\n{% test foo(a, b=42,) %}...{% endtest %}"
-input_file: crates/jinja/minijinja/tests/parser-inputs/tests.txt
-snapshot_kind: text
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/tests.txt
 ---
 Ok(
     Template {
@@ -126,5 +125,5 @@ Ok(
                 {},
             ),
         ],
-    } @ 0:0-5:41,
+    } @ 1:1-5:41,
 )

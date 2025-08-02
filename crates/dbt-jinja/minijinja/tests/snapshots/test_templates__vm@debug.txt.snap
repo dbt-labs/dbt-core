@@ -1,9 +1,17 @@
 ---
-source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_templates.rs
 description: "{% with f = range %}{% for x in f(upper) %}{{ debug() }}{% endfor %}{% endwith %}\n---\n{{ debug(none) }}\n---\n{{ debug(true, false, 42) }}\n---\n{{ debug([debug, 42]) }}"
 info:
+  __minijinja_current_path: debug.txt
+  __minijinja_current_span:
+    end_col: 1
+    end_line: 1
+    end_offset: 0
+    start_col: 1
+    start_line: 1
+    start_offset: 0
   upper: 1
-input_file: crates/dbt-jinja/minijinja/tests/inputs/debug.txt
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/inputs/debug.txt
 ---
 State {
     name: "debug.txt",
@@ -19,6 +27,15 @@ State {
             depth: 0,
         },
         "f": minijinja::functions::builtins::range,
+        "__minijinja_current_path": 'debug.txt',
+        "__minijinja_current_span": {
+            'end_col': 1,
+            'end_line': 1,
+            'end_offset': 0,
+            'start_col': 1,
+            'start_line': 1,
+            'start_offset': 0,
+        },
         "one_shot_iterator": <iterator>,
         "upper": 1,
     },

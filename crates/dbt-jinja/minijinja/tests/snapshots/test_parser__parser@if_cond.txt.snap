@@ -1,8 +1,7 @@
 ---
-source: crates/jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{% if expr1 %}\n    branch 1\n{% elif expr2 %}\n    branch 2\n{% elif expr3 %}\n    branch 3\n{% else %}\n    else\n{% endif %}"
-input_file: crates/jinja/minijinja/tests/parser-inputs/if_cond.txt
-snapshot_kind: text
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/if_cond.txt
 ---
 Ok(
     Template {
@@ -47,5 +46,5 @@ Ok(
                 ],
             } @ 1:1-9:12,
         ],
-    } @ 0:0-9:12,
+    } @ 1:1-9:12,
 )

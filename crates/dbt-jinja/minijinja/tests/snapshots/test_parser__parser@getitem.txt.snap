@@ -1,7 +1,7 @@
 ---
-source: crates/dbt-jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{{ foo[\"bar\"][42] }}\n{{ validate[a,] }}\n{{ validate[a, b, c] }}\n{{ validate.any[a, b, c] }}"
-input_file: crates/dbt-jinja/minijinja/tests/parser-inputs/getitem.txt
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/getitem.txt
 ---
 Ok(
     Template {
@@ -88,5 +88,5 @@ Ok(
                 } @ 4:1-4:28,
             } @ 4:1-4:28,
         ],
-    } @ 0:0-4:28,
+    } @ 1:1-4:28,
 )

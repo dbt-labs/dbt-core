@@ -157,7 +157,7 @@ pub fn build_compile_node_context(
     );
     ctx.insert(
         CURRENT_SPAN.to_string(),
-        MinijinjaValue::from_serialize(Span::new_file_default()),
+        MinijinjaValue::from_serialize(Span::default()),
     );
 
     (ctx, this_relation, config_map)

@@ -1,13 +1,12 @@
 ---
-source: minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{{ (((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((( 52 + 23 )))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))) }}"
-input_file: minijinja/tests/parser-inputs/max-recursion-expr.txt
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/max-recursion-expr.txt
 ---
 Err(
     Error {
         kind: SyntaxError,
         detail: "template exceeds maximum recursion limits",
         name: "max-recursion-expr.txt",
-        line: 1,
     },
 )

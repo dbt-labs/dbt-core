@@ -1,24 +1,24 @@
 ---
-source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_templates.rs
 description: "{% extends \"self-extends.txt\" %}"
-info: {}
-input_file: crates/dbt-jinja/minijinja/tests/inputs/err_self_extends.txt
+info:
+  __minijinja_current_path: err_self_extends.txt
+  __minijinja_current_span:
+    end_col: 1
+    end_line: 1
+    end_offset: 0
+    start_col: 1
+    start_line: 1
+    start_offset: 0
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/inputs/err_self_extends.txt
 ---
 !!!ERROR!!!
 
 Error {
     kind: InvalidOperation,
     detail: "cycle in template inheritance. \"self-extends.txt\" was referenced more than once",
-    name: "self-extends.txt",
-    line: 1,
+    name: "err_self_extends.txt",
 }
 
 invalid operation: cycle in template inheritance. "self-extends.txt" was referenced more than once
-(in self-extends.txt:1)
------------------------------- self-extends.txt -------------------------------
-   1 > {% extends "self-extends.txt" %}
-     i ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid operation
-   2 | {% block wat %}{% endblock %}
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-No referenced variables
--------------------------------------------------------------------------------
+(in err_self_extends.txt:1:1)

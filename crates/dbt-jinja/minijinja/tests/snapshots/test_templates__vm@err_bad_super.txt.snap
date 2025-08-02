@@ -1,8 +1,16 @@
 ---
-source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_templates.rs
 description: "{% extends \"bad_basic_block.txt\" %}\n{% block title %}My Title{% endblock %}\n{% block body %}\n  Changed stuff goes here. {{ super() }}\n{% endblock %}"
-info: {}
-input_file: crates/dbt-jinja/minijinja/tests/inputs/err_bad_super.txt
+info:
+  __minijinja_current_path: err_bad_super.txt
+  __minijinja_current_span:
+    end_col: 1
+    end_line: 1
+    end_offset: 0
+    start_col: 1
+    start_line: 1
+    start_offset: 0
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/inputs/err_bad_super.txt
 ---
 !!!ERROR!!!
 
@@ -10,36 +18,15 @@ Error {
     kind: EvalBlock,
     detail: "error in super block",
     name: "err_bad_super.txt",
-    line: 4,
     source: Error {
         kind: UnknownFunction,
         detail: "Jinja macro or function `missing_function` is unknown",
-        name: "bad_basic_block.txt",
-        line: 3,
+        name: "err_bad_super.txt",
     },
 }
 
 could not render block: error in super block
-(in err_bad_super.txt:4)
------------------------------- err_bad_super.txt ------------------------------
-   1 | {% extends "bad_basic_block.txt" %}
-   2 | {% block title %}My Title{% endblock %}
-   3 | {% block body %}
-   4 >   Changed stuff goes here. {{ super() }}
-     i                            ^^^^^^^^^^^^^ could not render block
-   5 | {% endblock %}
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-No referenced variables
--------------------------------------------------------------------------------
+(in err_bad_super.txt:4:28)
 
 caused by: unknown function: Jinja macro or function `missing_function` is unknown
-(in bad_basic_block.txt:3)
------------------------------ bad_basic_block.txt -----------------------------
-   1 | <title>{% block title %}default title{% endblock %}</title>
-   2 | {% block body %}
-   3 >   {{ missing_function() }}
-     i   ^^^^^^^^^^^^^^^^^^^^^^^^ unknown function
-   4 | {% endblock %}
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-No referenced variables
--------------------------------------------------------------------------------
+(in err_bad_super.txt:3:3)

@@ -1,8 +1,7 @@
 ---
-source: crates/jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{{ foo|bar(1, 2)|baz }}\n{{ foo|bar(1, 2,) }}\n{{ foo|bar(1, 2, a=1) }}\n{{ foo|bar(1, 2, a=1,) }}"
-input_file: crates/jinja/minijinja/tests/parser-inputs/filter.txt
-snapshot_kind: text
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/filter.txt
 ---
 Ok(
     Template {
@@ -123,5 +122,5 @@ Ok(
                 } @ 4:1-4:26,
             } @ 4:1-4:26,
         ],
-    } @ 0:0-4:26,
+    } @ 1:1-4:26,
 )

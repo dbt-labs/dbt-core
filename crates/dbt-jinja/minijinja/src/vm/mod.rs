@@ -144,7 +144,7 @@ impl<'env> Vm<'env> {
             root.get_attr_fast(CURRENT_PATH)
                 .map_or(PathBuf::new(), |value| deserialize_path(&value)),
             root.get_attr_fast(CURRENT_SPAN)
-                .map_or(Span::new_file_default(), |value| deserialize_span(&value)),
+                .map_or(Span::default(), |value| deserialize_span(&value)),
             outer_stack_depth,
         );
 
@@ -285,10 +285,10 @@ impl<'env> Vm<'env> {
         let mut parent_instructions = None;
 
         macro_rules! recurse_loop {
-            ($capture:expr, $file_path:expr, $span:expr) => {{
+            ($capture:expr, $span:expr) => {{
                 let jump_target = self
                     .prepare_loop_recursion(state)
-                    .map_err(|e| e.with_span($file_path, $span))?;
+                    .map_err(|e| state.with_span_error(e, &$span))?;
                 // the way this works is that we remember the next instruction
                 // as loop exit jump target.  Whenever a loop is pushed, it
                 // memorizes the value in `next_loop_iteration_jump` to jump
@@ -335,7 +335,7 @@ impl<'env> Vm<'env> {
             };
 
             macro_rules! func_binop {
-                ($method:ident, $obj_method:expr, $file_path:expr, $span:expr) => {{
+                ($method:ident, $obj_method:expr, $span:expr) => {{
                     let b = stack.pop();
                     let a = stack.pop();
                     stack.push(match ops::$method(&a, &b) {
@@ -344,12 +344,12 @@ impl<'env> Vm<'env> {
                             match a.call_method(state, $obj_method, &[b], listeners) {
                                 Ok(rv) => rv,
                                 Err(e2) if matches!(e2.kind(), ErrorKind::UnknownMethod(_, _)) => {
-                                    return Err(e.with_span(&$file_path, &$span));
+                                    return Err(state.with_span_error(e, &$span));
                                 }
-                                Err(e2) => return Err(e2.with_span(&$file_path, &$span)),
+                                Err(e2) => return Err(state.with_span_error(e2, &$span)),
                             }
                         }
-                        Err(e) => return Err(e.with_span(&$file_path, &$span)),
+                        Err(e) => return Err(state.with_span_error(e, &$span)),
                     });
                 }};
             }
@@ -381,19 +381,13 @@ impl<'env> Vm<'env> {
                     // location information.
                     out.write_str(val).map_err(|e| {
                         let e: Error = e.into();
-                        e.with_span(
-                            &state.ctx.current_path.clone(),
-                            &span.with_offset(&state.ctx.current_span),
-                        )
+                        state.with_span_error(e, span)
                     })?;
                 }
                 Instruction::Emit(span) => {
-                    self.env.format(&stack.pop(), state, out).map_err(|e| {
-                        e.with_span(
-                            &state.ctx.current_path.clone(),
-                            &span.with_offset(&state.ctx.current_span),
-                        )
-                    })?;
+                    self.env
+                        .format(&stack.pop(), state, out)
+                        .map_err(|e| state.with_span_error(e, span))?;
                 }
                 Instruction::StoreLocal(name, _) => {
                     state.ctx.store(name, stack.pop());
@@ -435,12 +429,9 @@ impl<'env> Vm<'env> {
                     // Only when we cannot look up something, we start to consider the undefined
                     // special case.
                     stack.push(match a.get_attr_fast(name) {
-                        Some(value) => value.validate().map_err(|e| {
-                            e.with_span(
-                                &state.ctx.current_path.clone(),
-                                &span.with_offset(&state.ctx.current_span),
-                            )
-                        })?,
+                        Some(value) => value
+                            .validate()
+                            .map_err(|e| state.with_span_error(e, span))?,
                         None => {
                             if let Some(namespace) = a.downcast_object_ref::<NamespaceName>() {
                                 let ns_name = Value::from(namespace.get_name());
@@ -459,7 +450,7 @@ impl<'env> Vm<'env> {
                                             ("path".to_string(), ns_name),
                                             (
                                                 "span".to_string(),
-                                                Value::from_serialize(Span::new_file_default()),
+                                                Value::from_serialize(Span::default()),
                                             ),
                                         ])));
                                     Value::from_object(DispatchObject {
@@ -475,22 +466,12 @@ impl<'env> Vm<'env> {
                                 } else {
                                     undefined_behavior
                                         .handle_undefined(Some(a.is_undefined()))
-                                        .map_err(|e| {
-                                            e.with_span(
-                                                &state.ctx.current_path.clone(),
-                                                &span.with_offset(&state.ctx.current_span),
-                                            )
-                                        })?
+                                        .map_err(|e| state.with_span_error(e, span))?
                                 }
                             } else {
                                 undefined_behavior
                                     .handle_undefined(Some(a.is_undefined()))
-                                    .map_err(|e| {
-                                        e.with_span(
-                                            &state.ctx.current_path.clone(),
-                                            &span.with_offset(&state.ctx.current_span),
-                                        )
-                                    })?
+                                    .map_err(|e| state.with_span_error(e, span))?
                             }
                         }
                     });
@@ -501,13 +482,12 @@ impl<'env> Vm<'env> {
                     if let Some(ns) = b.downcast_object_ref::<Namespace>() {
                         ns.set_value(name, a);
                     } else {
-                        return Err(Error::new(
-                            ErrorKind::InvalidOperation,
-                            format!("can only assign to namespaces, not {}", b.kind()),
-                        )
-                        .with_span(
-                            &state.ctx.current_path.clone(),
-                            &span.with_offset(&state.ctx.current_span),
+                        return Err(state.with_span_error(
+                            Error::new(
+                                ErrorKind::InvalidOperation,
+                                format!("can only assign to namespaces, not {}", b.kind()),
+                            ),
+                            span,
                         ));
                     }
                 }
@@ -515,20 +495,12 @@ impl<'env> Vm<'env> {
                     let a = stack.pop();
                     let b = stack.pop();
                     stack.push(match b.get_item_opt(&a) {
-                        Some(value) => value.validate().map_err(|e| {
-                            e.with_span(
-                                &state.ctx.current_path.clone(),
-                                &span.with_offset(&state.ctx.current_span),
-                            )
-                        })?,
+                        Some(value) => value
+                            .validate()
+                            .map_err(|e| state.with_span_error(e, span))?,
                         None => undefined_behavior
                             .handle_undefined(Some(b.is_undefined()))
-                            .map_err(|e| {
-                                e.with_span(
-                                    &state.ctx.current_path.clone(),
-                                    &span.with_offset(&state.ctx.current_span),
-                                )
-                            })?,
+                            .map_err(|e| state.with_span_error(e, span))?,
                     });
                 }
                 Instruction::Slice(span) => {
@@ -536,12 +508,9 @@ impl<'env> Vm<'env> {
                     let stop = stack.pop();
                     let b = stack.pop();
                     let a = stack.pop();
-                    stack.push(ops::slice(a, b, stop, step).map_err(|e| {
-                        e.with_span(
-                            &state.ctx.current_path.clone(),
-                            &span.with_offset(&state.ctx.current_span),
-                        )
-                    })?);
+                    stack.push(
+                        ops::slice(a, b, stop, step).map_err(|e| state.with_span_error(e, span))?,
+                    );
                 }
                 Instruction::LoadConst(value) => {
                     stack.push(value.clone());
@@ -616,12 +585,8 @@ impl<'env> Vm<'env> {
                     stack.push(Value::from_object(v))
                 }
                 Instruction::UnpackList(count, span) => {
-                    self.unpack_list(&mut stack, *count).map_err(|e| {
-                        e.with_span(
-                            &state.ctx.current_path.clone(),
-                            &span.with_offset(&state.ctx.current_span),
-                        )
-                    })?;
+                    self.unpack_list(&mut stack, *count)
+                        .map_err(|e| state.with_span_error(e, span))?;
                 }
                 Instruction::UnpackLists(count, span) => {
                     let mut lists = Vec::new();
@@ -630,60 +595,41 @@ impl<'env> Vm<'env> {
                     }
                     let mut len = 0;
                     for list in lists.into_iter().rev() {
-                        for item in list.try_iter().map_err(|e| {
-                            e.with_span(
-                                &state.ctx.current_path.clone(),
-                                &span.with_offset(&state.ctx.current_span),
-                            )
-                        })? {
+                        for item in list
+                            .try_iter()
+                            .map_err(|e| state.with_span_error(e, span))?
+                        {
                             stack.push(item);
                             len += 1;
                         }
                     }
                     stack.push(Value::from(len));
                 }
-                Instruction::Add(span) => func_binop!(
-                    add,
-                    "__add__",
-                    state.ctx.current_path.clone(),
-                    span.with_offset(&state.ctx.current_span)
-                ),
-                Instruction::Sub(span) => func_binop!(
-                    sub,
-                    "__sub__",
-                    state.ctx.current_path.clone(),
-                    span.with_offset(&state.ctx.current_span)
-                ),
-                Instruction::Mul(span) => func_binop!(
-                    mul,
-                    "__mul__",
-                    state.ctx.current_path.clone(),
-                    span.with_offset(&state.ctx.current_span)
-                ),
+                Instruction::Add(span) => {
+                    func_binop!(add, "__add__", span.with_offset(&state.ctx.current_span))
+                }
+                Instruction::Sub(span) => {
+                    func_binop!(sub, "__sub__", span.with_offset(&state.ctx.current_span))
+                }
+                Instruction::Mul(span) => {
+                    func_binop!(mul, "__mul__", span.with_offset(&state.ctx.current_span))
+                }
                 Instruction::Div(span) => func_binop!(
                     div,
                     "__truediv__",
-                    state.ctx.current_path.clone(),
                     span.with_offset(&state.ctx.current_span)
                 ),
                 Instruction::IntDiv(span) => func_binop!(
                     int_div,
                     "__floordiv__",
-                    state.ctx.current_path.clone(),
                     span.with_offset(&state.ctx.current_span)
                 ),
-                Instruction::Rem(span) => func_binop!(
-                    rem,
-                    "__mod__",
-                    state.ctx.current_path.clone(),
-                    span.with_offset(&state.ctx.current_span)
-                ),
-                Instruction::Pow(span) => func_binop!(
-                    pow,
-                    "__pow__",
-                    state.ctx.current_path.clone(),
-                    span.with_offset(&state.ctx.current_span)
-                ),
+                Instruction::Rem(span) => {
+                    func_binop!(rem, "__mod__", span.with_offset(&state.ctx.current_span))
+                }
+                Instruction::Pow(span) => {
+                    func_binop!(pow, "__pow__", span.with_offset(&state.ctx.current_span))
+                }
                 Instruction::Eq(_span) => {
                     op_binop!(==)
                 }
@@ -717,29 +663,17 @@ impl<'env> Vm<'env> {
                     // the in-operator can fail if the value is undefined and
                     // we are in strict mode.
                     state.undefined_behavior().assert_iterable(&a)?;
-                    stack.push(ops::contains(&a, &b).map_err(|e| {
-                        e.with_span(
-                            &state.ctx.current_path.clone(),
-                            &span.with_offset(&state.ctx.current_span),
-                        )
-                    })?);
+                    stack.push(ops::contains(&a, &b).map_err(|e| state.with_span_error(e, span))?);
                 }
                 Instruction::Neg(span) => {
                     let a = stack.pop();
-                    stack.push(ops::neg(&a).map_err(|e| {
-                        e.with_span(
-                            &state.ctx.current_path.clone(),
-                            &span.with_offset(&state.ctx.current_span),
-                        )
-                    })?);
+                    stack.push(ops::neg(&a).map_err(|e| state.with_span_error(e, span))?);
                 }
                 Instruction::PushWith(span) => {
-                    state.ctx.push_frame(Frame::default()).map_err(|e| {
-                        e.with_span(
-                            &state.ctx.current_path.clone(),
-                            &span.with_offset(&state.ctx.current_span),
-                        )
-                    })?;
+                    state
+                        .ctx
+                        .push_frame(Frame::default())
+                        .map_err(|e| state.with_span_error(e, span))?;
                 }
                 Instruction::PopFrame => {
                     if let Some(mut loop_ctx) = state.ctx.pop_frame().current_loop {
@@ -761,12 +695,7 @@ impl<'env> Vm<'env> {
                 Instruction::PushLoop(flags, span) => {
                     let a = stack.pop();
                     self.push_loop(state, a, *flags, pc, next_loop_recursion_jump.take())
-                        .map_err(|e| {
-                            e.with_span(
-                                &state.ctx.current_path.clone(),
-                                &span.with_offset(&state.ctx.current_span),
-                            )
-                        })?;
+                        .map_err(|e| state.with_span_error(e, span))?;
                 }
                 Instruction::Iterate(jump_target, span) => {
                     let l = state.ctx.current_loop().unwrap();
@@ -787,12 +716,10 @@ impl<'env> Vm<'env> {
                         }
                     };
                     match next {
-                        Some(item) => stack.push(item.validate().map_err(|e| {
-                            e.with_span(
-                                &state.ctx.current_path.clone(),
-                                &span.with_offset(&state.ctx.current_span),
-                            )
-                        })?),
+                        Some(item) => stack.push(
+                            item.validate()
+                                .map_err(|e| state.with_span_error(e, span))?,
+                        ),
                         None => {
                             pc = *jump_target;
                             continue;
@@ -809,23 +736,19 @@ impl<'env> Vm<'env> {
                 }
                 Instruction::JumpIfFalse(jump_target, span) => {
                     let a = stack.pop();
-                    if !undefined_behavior.is_true(&a).map_err(|e| {
-                        e.with_span(
-                            &state.ctx.current_path.clone(),
-                            &span.with_offset(&state.ctx.current_span),
-                        )
-                    })? {
+                    if !undefined_behavior
+                        .is_true(&a)
+                        .map_err(|e| state.with_span_error(e, span))?
+                    {
                         pc = *jump_target;
                         continue;
                     }
                 }
                 Instruction::JumpIfFalseOrPop(jump_target, span) => {
-                    if !undefined_behavior.is_true(stack.peek()).map_err(|e| {
-                        e.with_span(
-                            &state.ctx.current_path.clone(),
-                            &span.with_offset(&state.ctx.current_span),
-                        )
-                    })? {
+                    if !undefined_behavior
+                        .is_true(stack.peek())
+                        .map_err(|e| state.with_span_error(e, span))?
+                    {
                         pc = *jump_target;
                         continue;
                     } else {
@@ -833,12 +756,10 @@ impl<'env> Vm<'env> {
                     }
                 }
                 Instruction::JumpIfTrueOrPop(jump_target, span) => {
-                    if undefined_behavior.is_true(stack.peek()).map_err(|e| {
-                        e.with_span(
-                            &state.ctx.current_path.clone(),
-                            &span.with_offset(&state.ctx.current_span),
-                        )
-                    })? {
+                    if undefined_behavior
+                        .is_true(stack.peek())
+                        .map_err(|e| state.with_span_error(e, span))?
+                    {
                         pc = *jump_target;
                         continue;
                     } else {
@@ -854,14 +775,9 @@ impl<'env> Vm<'env> {
                 Instruction::PushAutoEscape(span) => {
                     let a = stack.pop();
                     auto_escape_stack.push(state.auto_escape);
-                    state.auto_escape =
-                        self.derive_auto_escape(a, initial_auto_escape)
-                            .map_err(|e| {
-                                e.with_span(
-                                    &state.ctx.current_path.clone(),
-                                    &span.with_offset(&state.ctx.current_span),
-                                )
-                            })?;
+                    state.auto_escape = self
+                        .derive_auto_escape(a, initial_auto_escape)
+                        .map_err(|e| state.with_span_error(e, span))?;
                 }
                 Instruction::PopAutoEscape => {
                     state.auto_escape = auto_escape_stack.pop().unwrap();
@@ -882,20 +798,12 @@ impl<'env> Vm<'env> {
                             format!("filter {name} is unknown"),
                         )
                     })
-                    .map_err(|e| {
-                        e.with_span(
-                            &state.ctx.current_path.clone(),
-                            &span.with_offset(&state.ctx.current_span),
-                        )
-                    })?;
+                    .map_err(|e| state.with_span_error(e, span))?;
                     let args = stack.get_call_args(*arg_count);
                     let arg_count = args.len();
-                    let a = filter.apply_to(state, args).map_err(|e| {
-                        e.with_span(
-                            &state.ctx.current_path.clone(),
-                            &span.with_offset(&state.ctx.current_span),
-                        )
-                    })?;
+                    let a = filter
+                        .apply_to(state, args)
+                        .map_err(|e| state.with_span_error(e, span))?;
                     stack.drop_top(arg_count);
                     stack.push(a);
                 }
@@ -906,12 +814,7 @@ impl<'env> Vm<'env> {
                     .ok_or_else(|| {
                         Error::new(ErrorKind::UnknownTest, format!("test {name} is unknown"))
                     })
-                    .map_err(|e| {
-                        e.with_span(
-                            &state.ctx.current_path.clone(),
-                            &span.with_offset(&state.ctx.current_span),
-                        )
-                    })?;
+                    .map_err(|e| state.with_span_error(e, span))?;
                     let args = stack.get_call_args(*arg_count);
                     let arg_count = args.len();
                     let rv = test.perform(state, args)?;
@@ -935,37 +838,30 @@ impl<'env> Vm<'env> {
                     // super is a special function reserved for super-ing into blocks.
                     let rv = if *name == "super" {
                         if !args.is_empty() {
-                            return Err(Error::new(
-                                ErrorKind::InvalidOperation,
-                                "super() takes no arguments",
-                            )
-                            .with_span(
-                                &state.ctx.current_path.clone(),
-                                &this_span.with_offset(&state.ctx.current_span),
+                            return Err(state.with_span_error(
+                                Error::new(
+                                    ErrorKind::InvalidOperation,
+                                    "super() takes no arguments",
+                                ),
+                                this_span,
                             ));
                         }
                         self.perform_super(state, out, current_location.clone(), true, listeners)
-                            .map_err(|e| {
-                                e.with_span(
-                                    &state.ctx.current_path.clone(),
-                                    &this_span.with_offset(&state.ctx.current_span),
-                                )
-                            })?
+                            .map_err(|e| state.with_span_error(e, this_span))?
                     // loop is a special name which when called recurses the current loop.
                     } else if *name == "loop" {
                         if args.len() != 1 {
-                            return Err(Error::new(
-                                ErrorKind::InvalidOperation,
-                                "loop() takes one argument",
-                            )
-                            .with_span(
-                                &state.ctx.current_path.clone(),
-                                &this_span.with_offset(&state.ctx.current_span),
+                            return Err(state.with_span_error(
+                                Error::new(
+                                    ErrorKind::InvalidOperation,
+                                    "loop() takes one argument",
+                                ),
+                                this_span,
                             ));
                         }
                         // leave the one argument on the stack for the recursion.  The
                         // recurse_loop! macro itself will perform a jump and not return here.
-                        recurse_loop!(true, &state.ctx.current_path, &this_span);
+                        recurse_loop!(true, &this_span);
                     } else if (*name == "ref" || *name == "source") && {
                         // we only consider the ref source override in root package
                         let template_result =
@@ -995,10 +891,7 @@ impl<'env> Vm<'env> {
                                     "path".to_string(),
                                     Value::from(format!("{root_package_name}.{name}")),
                                 ),
-                                (
-                                    "span".to_string(),
-                                    Value::from_serialize(Span::new_file_default()),
-                                ),
+                                ("span".to_string(), Value::from_serialize(Span::default())),
                             ])));
 
                         let inner_state: State<'_, '_> = template
@@ -1019,10 +912,7 @@ impl<'env> Vm<'env> {
                             Err(err) => match err.try_abrupt_return() {
                                 Some(rv) => rv.clone(),
                                 None => {
-                                    return Err(err.with_span(
-                                        &state.ctx.current_path.clone(),
-                                        &this_span.with_offset(&state.ctx.current_span),
-                                    ));
+                                    return Err(state.with_span_error(err, this_span));
                                 }
                             },
                         };
@@ -1064,7 +954,7 @@ impl<'env> Vm<'env> {
                             Ok(rv) => {
                                 // return implements  https://docs.getdbt.com/reference/dbt-jinja-functions/return
                                 if *name == "return" {
-                                    return Err(Error::abrupt_return(rv, *this_span));
+                                    return Err(Error::abrupt_return(rv));
                                 } else {
                                     rv
                                 }
@@ -1072,10 +962,7 @@ impl<'env> Vm<'env> {
                             Err(err) => match err.try_abrupt_return() {
                                 Some(rv) => rv.clone(),
                                 None => {
-                                    return Err(err.with_span(
-                                        &state.ctx.current_path.clone(),
-                                        &this_span.with_offset(&state.ctx.current_span),
-                                    ));
+                                    return Err(state.with_span_error(err, this_span));
                                 }
                             },
                         };
@@ -1099,10 +986,7 @@ impl<'env> Vm<'env> {
                                     "path".to_string(),
                                     Value::from(format!("{root_package_name}.{name}")),
                                 ),
-                                (
-                                    "span".to_string(),
-                                    Value::from_serialize(Span::new_file_default()),
-                                ),
+                                ("span".to_string(), Value::from_serialize(Span::default())),
                             ])));
                         let mut new_state = template.eval_to_state_with_outer_stack_depth(
                             state.get_base_context_with_path_and_span(
@@ -1154,7 +1038,7 @@ impl<'env> Vm<'env> {
                             Ok(rv) => {
                                 // return implements  https://docs.getdbt.com/reference/dbt-jinja-functions/return
                                 if *name == "return" {
-                                    return Err(Error::abrupt_return(rv, *this_span));
+                                    return Err(Error::abrupt_return(rv));
                                 } else {
                                     rv
                                 }
@@ -1162,10 +1046,7 @@ impl<'env> Vm<'env> {
                             Err(err) => match err.try_abrupt_return() {
                                 Some(rv) => rv.clone(),
                                 None => {
-                                    return Err(err.with_span(
-                                        &state.ctx.current_path.clone(),
-                                        &this_span.with_offset(&state.ctx.current_span),
-                                    ));
+                                    return Err(state.with_span_error(err, this_span));
                                 }
                             },
                         };
@@ -1179,13 +1060,12 @@ impl<'env> Vm<'env> {
                         let rendered_sql = template.render(state.get_base_context(), listeners)?;
                         Value::from(rendered_sql)
                     } else {
-                        return Err(Error::new(
-                            ErrorKind::UnknownFunction,
-                            format!("Jinja macro or function `{name}` is unknown"),
-                        )
-                        .with_span(
-                            &state.ctx.current_path.clone(),
-                            &this_span.with_offset(&state.ctx.current_span),
+                        return Err(state.with_span_error(
+                            Error::new(
+                                ErrorKind::UnknownFunction,
+                                format!("Jinja macro or function `{name}` is unknown"),
+                            ),
+                            this_span,
                         ));
                     };
                     // Render the result of var function if it it has macro calls
@@ -1221,13 +1101,12 @@ impl<'env> Vm<'env> {
                         // if not found, attempt to lookup the template and function using name stripped of test_
                         // see generate_test_macro in resolve_generic_tests.rs -> a subset of generated macro names are prefixed with test_
                         let Ok(template) = self.env.get_template(&qualified_name, listeners) else {
-                            return Err(Error::new(
-                                ErrorKind::UnknownFunction,
-                                format!("Jinja macro or function `{name}` is unknown"),
-                            )
-                            .with_span(
-                                &state.ctx.current_path.clone(),
-                                &this_span.with_offset(&state.ctx.current_span),
+                            return Err(state.with_span_error(
+                                Error::new(
+                                    ErrorKind::UnknownFunction,
+                                    format!("Jinja macro or function `{name}` is unknown"),
+                                ),
+                                this_span,
                             ));
                         };
 
@@ -1236,10 +1115,7 @@ impl<'env> Vm<'env> {
                             .cloned()
                             .unwrap_or(Value::from(BTreeMap::from([
                                 ("path".to_string(), Value::from(qualified_name)),
-                                (
-                                    "span".to_string(),
-                                    Value::from_serialize(Span::new_file_default()),
-                                ),
+                                ("span".to_string(), Value::from_serialize(Span::default())),
                             ])));
 
                         let ctx = state.get_base_context_with_path_and_span(
@@ -1260,7 +1136,7 @@ impl<'env> Vm<'env> {
                                 // return implements  https://docs.getdbt.com/reference/dbt-jinja-functions/return
 
                                 if *name == "return" {
-                                    return Err(Error::abrupt_return(rv, *this_span));
+                                    return Err(Error::abrupt_return(rv));
                                 } else {
                                     rv
                                 }
@@ -1268,10 +1144,7 @@ impl<'env> Vm<'env> {
                             Err(err) => match err.try_abrupt_return() {
                                 Some(rv) => rv.clone(),
                                 None => {
-                                    return Err(err.with_span(
-                                        &state.ctx.current_path.clone(),
-                                        &this_span.with_offset(&state.ctx.current_span),
-                                    ));
+                                    return Err(state.with_span_error(err, this_span));
                                 }
                             },
                         };
@@ -1309,21 +1182,13 @@ impl<'env> Vm<'env> {
                                 // If we return DispatchObject from a
                                 // method call, we immediately forward
                                 // the call to the dispatch object.
-                                Some(obj) if obj.auto_execute => {
-                                    obj.call(state, &args[1..], listeners).map_err(|e| {
-                                        e.with_span(
-                                            &state.ctx.current_path.clone(),
-                                            &this_span.with_offset(&state.ctx.current_span),
-                                        )
-                                    })?
-                                }
+                                Some(obj) if obj.auto_execute => obj
+                                    .call(state, &args[1..], listeners)
+                                    .map_err(|e| state.with_span_error(e, this_span))?,
                                 _ => rv,
                             },
                             Err(err) => {
-                                return Err(err.with_span(
-                                    &state.ctx.current_path.clone(),
-                                    &this_span.with_offset(&state.ctx.current_span),
-                                ));
+                                return Err(state.with_span_error(err, this_span));
                             }
                         }
                     };
@@ -1333,12 +1198,9 @@ impl<'env> Vm<'env> {
                 Instruction::CallObject(arg_count, span) => {
                     let args = stack.get_call_args(*arg_count);
                     let arg_count = args.len();
-                    let a = args[0].call(state, &args[1..], listeners).map_err(|e| {
-                        e.with_span(
-                            &state.ctx.current_path.clone(),
-                            &span.with_offset(&state.ctx.current_span),
-                        )
-                    })?;
+                    let a = args[0]
+                        .call(state, &args[1..], listeners)
+                        .map_err(|e| state.with_span_error(e, span))?;
                     stack.drop_top(arg_count);
                     stack.push(a);
                 }
@@ -1350,15 +1212,10 @@ impl<'env> Vm<'env> {
                 }
                 Instruction::FastSuper(span) => {
                     self.perform_super(state, out, current_location.clone(), false, listeners)
-                        .map_err(|e| {
-                            e.with_span(
-                                &state.ctx.current_path.clone(),
-                                &span.with_offset(&state.ctx.current_span),
-                            )
-                        })?;
+                        .map_err(|e| state.with_span_error(e, span))?;
                 }
                 Instruction::FastRecurse(span) => {
-                    recurse_loop!(false, &state.ctx.current_path, &span);
+                    recurse_loop!(false, &span);
                 }
                 // Explanation on the behavior of `LoadBlocks` and rendering of
                 // inherited templates:
@@ -1387,22 +1244,18 @@ impl<'env> Vm<'env> {
                 Instruction::LoadBlocks(span) => {
                     let a = stack.pop();
                     if parent_instructions.is_some() {
-                        return Err(Error::new(
-                            ErrorKind::InvalidOperation,
-                            "tried to extend a second time in a template",
-                        )
-                        .with_span(
-                            &state.ctx.current_path.clone(),
-                            &span.with_offset(&state.ctx.current_span),
+                        return Err(state.with_span_error(
+                            Error::new(
+                                ErrorKind::InvalidOperation,
+                                "tried to extend a second time in a template",
+                            ),
+                            span,
                         ));
                     }
-                    parent_instructions =
-                        Some(self.load_blocks(a, state, listeners).map_err(|e| {
-                            e.with_span(
-                                &state.ctx.current_path.clone(),
-                                &span.with_offset(&state.ctx.current_span),
-                            )
-                        })?);
+                    parent_instructions = Some(
+                        self.load_blocks(a, state, listeners)
+                            .map_err(|e| state.with_span_error(e, span))?,
+                    );
                     out.begin_capture(CaptureMode::Discard);
                 }
                 #[cfg(feature = "multi_template")]
@@ -1416,12 +1269,7 @@ impl<'env> Vm<'env> {
                         *ignore_missing,
                         listeners,
                     )
-                    .map_err(|e| {
-                        e.with_span(
-                            &state.ctx.current_path.clone(),
-                            &span.with_offset(&state.ctx.current_span),
-                        )
-                    })?;
+                    .map_err(|e| state.with_span_error(e, span))?;
                 }
                 #[cfg(feature = "multi_template")]
                 Instruction::ExportLocals => {
@@ -1743,7 +1591,6 @@ impl<'env> Vm<'env> {
             ))
         }
     }
-
     fn derive_auto_escape(
         &self,
         value: Value,

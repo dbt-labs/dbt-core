@@ -1,8 +1,7 @@
 ---
-source: crates/jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{{ [1, 2, foo] }}\n{{ [1, 2, 3,] }}"
-input_file: crates/jinja/minijinja/tests/parser-inputs/list.txt
-snapshot_kind: text
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/list.txt
 ---
 Ok(
     Template {
@@ -41,5 +40,5 @@ Ok(
                 } @ 2:1-2:17,
             } @ 2:1-2:17,
         ],
-    } @ 0:0-2:17,
+    } @ 1:1-2:17,
 )

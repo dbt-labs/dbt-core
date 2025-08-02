@@ -1,8 +1,7 @@
 ---
-source: crates/jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{% filter foo|bar(1, 2)|baz %}...{% endfilter %}"
-input_file: crates/jinja/minijinja/tests/parser-inputs/filter_block.txt
-snapshot_kind: text
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/filter_block.txt
 ---
 Ok(
     Template {
@@ -43,5 +42,5 @@ Ok(
                 ],
             } @ 1:1-1:49,
         ],
-    } @ 0:0-1:49,
+    } @ 1:1-1:49,
 )

@@ -1,8 +1,7 @@
 ---
-source: crates/jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{{ a if b else c }}\n{{ a if b }}"
-input_file: crates/jinja/minijinja/tests/parser-inputs/ifexpr.txt
-snapshot_kind: text
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/ifexpr.txt
 ---
 Ok(
     Template {
@@ -37,5 +36,5 @@ Ok(
                 } @ 2:1-2:13,
             } @ 2:1-2:13,
         ],
-    } @ 0:0-2:13,
+    } @ 1:1-2:13,
 )

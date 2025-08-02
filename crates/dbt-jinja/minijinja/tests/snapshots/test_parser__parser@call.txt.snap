@@ -1,8 +1,7 @@
 ---
-source: crates/jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{{ super() }}\n{{ loop.cycle(1, 2) }}\n{{ self.foo() }}\n{{ foo(1, 2, a=3, b=4) }}\n{{ trailing(1, 2,) }}\n{{ trailing_kwarg(1, 2, a=3,) }}"
-input_file: crates/jinja/minijinja/tests/parser-inputs/call.txt
-snapshot_kind: text
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/call.txt
 ---
 Ok(
     Template {
@@ -139,5 +138,5 @@ Ok(
                 } @ 6:1-6:33,
             } @ 6:1-6:33,
         ],
-    } @ 0:0-6:33,
+    } @ 1:1-6:33,
 )

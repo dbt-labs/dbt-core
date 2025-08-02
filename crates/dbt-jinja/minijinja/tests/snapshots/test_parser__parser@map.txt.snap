@@ -1,7 +1,7 @@
 ---
-source: crates/dbt-jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{{ {\"foo\": \"bar\"} }}\n\n{{ config(\n        tags=['elementary-tests'],\n        meta={\"elementary\": {\"include\": false}}\n    ) }}"
-input_file: crates/dbt-jinja/minijinja/tests/parser-inputs/map.txt
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/map.txt
 ---
 Ok(
     Template {
@@ -67,5 +67,5 @@ Ok(
                 } @ 3:1-6:9,
             } @ 3:1-6:9,
         ],
-    } @ 0:0-6:9,
+    } @ 1:1-6:9,
 )

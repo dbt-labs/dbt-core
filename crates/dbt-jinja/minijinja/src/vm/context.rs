@@ -238,7 +238,7 @@ impl<'env> Context<'env> {
             outer_stack_depth: 0,
             recursion_limit,
             current_path: PathBuf::new(),
-            current_span: Span::new_file_default(),
+            current_span: Span::default(),
         }
     }
 

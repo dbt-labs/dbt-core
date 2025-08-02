@@ -1,8 +1,7 @@
 ---
-source: crates/jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{% autoescape false %}foo{% endautoescape %}"
-input_file: crates/jinja/minijinja/tests/parser-inputs/autoescape.txt
-snapshot_kind: text
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/autoescape.txt
 ---
 Ok(
     Template {
@@ -18,5 +17,5 @@ Ok(
                 ],
             } @ 1:1-1:45,
         ],
-    } @ 0:0-1:45,
+    } @ 1:1-1:45,
 )

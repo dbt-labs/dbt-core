@@ -48,8 +48,7 @@ pub struct Error {
 #[derive(Debug, Clone)]
 pub struct ErrorStackItem {
     pub filename: String,
-    pub lineno: usize,
-    pub span: Option<Span>,
+    pub span: Span,
 }
 
 /// The internal error data
@@ -57,14 +56,9 @@ pub struct ErrorStackItem {
 struct ErrorRepr {
     kind: ErrorKind,
     detail: Option<Cow<'static, str>>,
-    lineno: u32,
     stack: Vec<ErrorStackItem>,
     source: Option<Arc<dyn std::error::Error + Send + Sync>>,
-    #[cfg(feature = "debug")]
-    debug_info: Option<Arc<crate::debug::DebugInfo>>,
     return_value: Option<crate::value::Value>,
-    suspend_vm: Option<(String, crate::cache_key::CacheKey)>,
-    span: Option<Span>,
 }
 
 impl fmt::Debug for Error {
@@ -77,24 +71,10 @@ impl fmt::Debug for Error {
         if let Some(ref name) = self.name() {
             err.field("name", name);
         }
-        if let Some(line) = self.line() {
-            err.field("line", &line);
-        }
         if let Some(ref source) = std::error::Error::source(self) {
             err.field("source", source);
         }
         ok!(err.finish());
-
-        // so this is a bit questionable, but because of how commonly errors are just
-        // unwrapped i think it's sensible to spit out the debug info following the
-        // error struct dump.
-        #[cfg(feature = "debug")]
-        {
-            if !f.alternate() && self.debug_info().is_some() {
-                ok!(writeln!(f));
-                ok!(writeln!(f, "{}", self.display_debug_info()));
-            }
-        }
 
         Ok(())
     }
@@ -244,16 +224,13 @@ impl fmt::Display for Error {
                     .stack
                     .iter()
                     .rev()
-                    .map(|x| format!("\n(in {}:{})", x.filename, x.lineno))
+                    .map(|x| format!(
+                        "\n(in {}:{}:{})",
+                        x.filename, x.span.start_line, x.span.start_col
+                    ))
                     .collect::<Vec<_>>()
                     .join("")
             ));
-        }
-        #[cfg(feature = "debug")]
-        {
-            if f.alternate() && self.debug_info().is_some() {
-                ok!(write!(f, "{}", self.display_debug_info()));
-            }
         }
         Ok(())
     }
@@ -266,50 +243,22 @@ impl Error {
             repr: Box::new(ErrorRepr {
                 kind,
                 detail: Some(detail.into()),
-                lineno: 0,
                 stack: Vec::new(),
                 source: None,
-                #[cfg(feature = "debug")]
-                debug_info: None,
                 return_value: None,
-                suspend_vm: None,
-                span: None,
             }),
         }
     }
 
     /// Creates a new error for an abrupt return with the given value.
-    pub fn abrupt_return(value: crate::value::Value, span: Span) -> Error {
+    pub fn abrupt_return(value: crate::value::Value) -> Error {
         Error {
             repr: Box::new(ErrorRepr {
                 kind: ErrorKind::InvalidOperation,
                 detail: Some("abrupt return".into()),
-                lineno: 0,
                 stack: Vec::new(),
                 source: None,
-                #[cfg(feature = "debug")]
-                debug_info: None,
                 return_value: Some(value),
-                suspend_vm: None,
-                span: Some(span),
-            }),
-        }
-    }
-
-    /// Create a new error for suspend vm
-    pub fn suspend_vm(name: String, cache_key: crate::cache_key::CacheKey) -> Error {
-        Error {
-            repr: Box::new(ErrorRepr {
-                kind: ErrorKind::SuspendVm,
-                detail: None,
-                lineno: 0,
-                stack: Vec::new(),
-                source: None,
-                #[cfg(feature = "debug")]
-                debug_info: None,
-                return_value: None,
-                suspend_vm: Some((name, cache_key)),
-                span: None,
             }),
         }
     }
@@ -321,12 +270,7 @@ impl Error {
 
     /// Returns the span of the abrupt return if available.
     pub fn get_abrupt_return_span(&self) -> Span {
-        self.repr.span.unwrap()
-    }
-
-    /// Returns the value if the error was caused by a suspend vm
-    pub fn try_suspend_vm(&self) -> Option<(String, crate::cache_key::CacheKey)> {
-        self.repr.suspend_vm.clone()
+        self.span().unwrap_or_default()
     }
 
     pub(crate) fn internal_clone(&self) -> Error {
@@ -335,20 +279,10 @@ impl Error {
         }
     }
 
-    pub(crate) fn insert_filename_and_line(&mut self, filename: &str, lineno: usize) {
-        let item = ErrorStackItem {
-            filename: filename.into(),
-            lineno,
-            span: None,
-        };
-        self.repr.stack.push(item);
-    }
-
     pub(crate) fn insert_filename_and_span(&mut self, filename: &str, span: Span) {
         let item = ErrorStackItem {
             filename: filename.into(),
-            lineno: span.start_line as usize,
-            span: Some(span),
+            span,
         };
         self.repr.stack.push(item);
     }
@@ -415,33 +349,14 @@ impl Error {
         }
     }
 
-    /// Returns the line number where the error occurred.
-    pub fn line(&self) -> Option<usize> {
-        if self.repr.stack.is_empty() {
-            None
-        } else {
-            Some(self.repr.stack.last().unwrap().lineno)
-        }
-    }
-
     /// Returns if the stack is empty.
     pub fn is_stack_empty(&self) -> bool {
         self.repr.stack.is_empty()
     }
 
-    /// sets the line number of the error(most original caller).
-    pub fn set_caller_line(&mut self, lineno: u32) {
-        self.repr.lineno = lineno;
-    }
-
-    /// Returns the line number of the error(most original caller).
-    pub fn get_caller_line(&self) -> u32 {
-        self.repr.lineno
-    }
-
     /// Returns the line number where the error occurred.
     pub fn span(&self) -> Option<Span> {
-        self.repr.stack.last().and_then(|x| x.span)
+        self.repr.stack.last().map(|x| x.span)
     }
 
     /// Returns the significant span of the error.
@@ -457,7 +372,7 @@ impl Error {
                         .to_string_lossy()
                         .contains("dbt_internal_packages")
                 }) {
-                    err.span
+                    Some(err.span)
                 } else {
                     None
                 }
@@ -489,59 +404,8 @@ impl Error {
     #[cfg(feature = "debug")]
     #[cfg_attr(docsrs, doc(cfg(feature = "debug")))]
     pub fn range(&self) -> Option<std::ops::Range<usize>> {
-        self.repr
-            .stack
-            .last()
-            .and_then(|x| x.span)
+        self.span()
             .map(|x| x.start_offset as usize..x.end_offset as usize)
-    }
-
-    /// Helper function that renders all known debug info on format.
-    ///
-    /// This method returns an object that when formatted prints out the debug information
-    /// that is contained on that error.  Normally this is automatically rendered when the
-    /// error is displayed but in some cases you might want to decide for yourself when and
-    /// how to display that information.
-    #[cfg(feature = "debug")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "debug")))]
-    pub fn display_debug_info(&self) -> impl fmt::Display + '_ {
-        struct Proxy<'a>(&'a Error);
-
-        impl fmt::Display for Proxy<'_> {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                if let Some(info) = self.0.debug_info() {
-                    crate::debug::render_debug_info(
-                        f,
-                        self.0.name(),
-                        self.0.kind(),
-                        self.0.line(),
-                        self.0.span(),
-                        info,
-                    )
-                } else {
-                    Ok(())
-                }
-            }
-        }
-
-        Proxy(self)
-    }
-
-    /// Returns the template source if available.
-    #[cfg(feature = "debug")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "debug")))]
-    pub fn template_source(&self) -> Option<&str> {
-        self.debug_info().and_then(|x| x.source())
-    }
-
-    /// Returns the template debug information is available.
-    ///
-    /// The debug info snapshot is only embedded into the error if the debug
-    /// mode is enabled on the environment
-    /// ([`Environment::set_debug`](crate::Environment::set_debug)).
-    #[cfg(feature = "debug")]
-    pub(crate) fn debug_info(&self) -> Option<&crate::debug::DebugInfo> {
-        self.repr.debug_info.as_deref()
     }
 
     pub(crate) fn with_span(&self, file_path: &Path, span: &Span) -> Error {
@@ -554,8 +418,7 @@ impl Error {
                     .cloned()
                     .chain(iter::once(ErrorStackItem {
                         filename: file_path.to_string_lossy().to_string(),
-                        lineno: span.start_line as usize,
-                        span: Some(*span),
+                        span: *span,
                     }))
                     .collect(),
                 ..*self.repr.clone()
@@ -576,14 +439,9 @@ impl From<ErrorKind> for Error {
             repr: Box::new(ErrorRepr {
                 kind,
                 detail: None,
-                lineno: 0,
                 stack: Vec::new(),
                 source: None,
-                #[cfg(feature = "debug")]
-                debug_info: None,
                 return_value: None,
-                suspend_vm: None,
-                span: None,
             }),
         }
     }
@@ -592,26 +450,5 @@ impl From<ErrorKind> for Error {
 impl From<fmt::Error> for Error {
     fn from(_: fmt::Error) -> Self {
         Error::new(ErrorKind::WriteFailure, "formatting failed")
-    }
-}
-
-pub fn attach_basic_debug_info<T>(rv: Result<T, Error>, source: &str) -> Result<T, Error> {
-    #[cfg(feature = "debug")]
-    {
-        match rv {
-            Ok(rv) => Ok(rv),
-            Err(mut err) => {
-                err.repr.debug_info = Some(Arc::new(crate::debug::DebugInfo {
-                    template_source: Some(source.to_string()),
-                    ..Default::default()
-                }));
-                Err(err)
-            }
-        }
-    }
-    #[cfg(not(feature = "debug"))]
-    {
-        let _source = source;
-        rv
     }
 }

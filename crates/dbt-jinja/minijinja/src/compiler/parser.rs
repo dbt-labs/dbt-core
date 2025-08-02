@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt;
+use std::path::PathBuf;
 use std::sync::LazyLock;
 
 use crate::compiler::ast::{self, Comment, MacroKind, Spanned};
@@ -195,6 +196,7 @@ pub struct Parser<'a> {
     depth: usize,
     string_interner: HashMap<String, &'a str>,
     ignore_unknown_stmts: bool,
+    filename: PathBuf,
 }
 
 macro_rules! binop {
@@ -275,6 +277,7 @@ impl<'a> Parser<'a> {
             depth: 0,
             string_interner: HashMap::new(),
             ignore_unknown_stmts: false,
+            filename: PathBuf::from(filename),
         }
     }
 
@@ -288,7 +291,7 @@ impl<'a> Parser<'a> {
                     self.stream.expand_span(span),
                 ))
             })
-            .map_err(|err| self.attach_location_to_error(err))
+            .map_err(|err| err.with_span(&self.filename, &span))
     }
 
     /// Parses an expression and asserts that there is no more input after it.
@@ -301,7 +304,7 @@ impl<'a> Parser<'a> {
                     Ok(result)
                 }
             })
-            .map_err(|err| self.attach_location_to_error(err))
+            .map_err(|err| err.with_span(&self.filename, &Span::default()))
     }
 
     /// Returns the current filename.
@@ -1679,14 +1682,6 @@ impl<'a> Parser<'a> {
         Ok(rv)
     }
 
-    #[inline]
-    fn attach_location_to_error(&mut self, mut err: Error) -> Error {
-        if err.line().is_none() {
-            err.insert_filename_and_span(self.filename(), self.stream.last_span())
-        }
-        err
-    }
-
     fn intern_string(&mut self, s: &str) -> &'a str {
         if let Some(interned) = self.string_interner.get(s) {
             return interned;
@@ -1718,7 +1713,7 @@ impl<'a> Parser<'a> {
                     self.stream.expand_span(span),
                 ))
             })
-            .map_err(|err| self.attach_location_to_error(err))
+            .map_err(|err| err.with_span(&self.filename, &span))
     }
 
     fn subparse_top_level(

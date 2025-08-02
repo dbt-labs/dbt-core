@@ -1,8 +1,7 @@
 ---
-source: crates/jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{% for (a, b), c in seq %}...{% endfor %}"
-input_file: crates/jinja/minijinja/tests/parser-inputs/for_loop_unpack.txt
-snapshot_kind: text
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/for_loop_unpack.txt
 ---
 Ok(
     Template {
@@ -38,5 +37,5 @@ Ok(
                 else_body: [],
             } @ 1:1-1:42,
         ],
-    } @ 0:0-1:42,
+    } @ 1:1-1:42,
 )

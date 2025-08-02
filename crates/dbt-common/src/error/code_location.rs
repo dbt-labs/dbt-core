@@ -159,7 +159,6 @@ impl From<MiniJinjaErrorWrapper> for CodeLocation {
         } else {
             CodeLocation {
                 file: err.0.name().unwrap_or_default().into(),
-                line: err.0.line().unwrap_or_default(),
                 ..Default::default()
             }
         }

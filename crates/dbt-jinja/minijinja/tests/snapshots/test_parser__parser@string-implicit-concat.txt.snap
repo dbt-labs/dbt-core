@@ -1,7 +1,7 @@
 ---
-source: crates/dbt-jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{{ \"foo\" }}\n{{ \"foo\" \"bar\" }}\n{{ \"foo\" \"bar\" \"baz\" }}"
-input_file: crates/dbt-jinja/minijinja/tests/parser-inputs/string-implicit-concat.txt
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/string-implicit-concat.txt
 ---
 Ok(
     Template {
@@ -28,5 +28,5 @@ Ok(
                 } @ 3:1-3:24,
             } @ 3:1-3:24,
         ],
-    } @ 0:0-3:24,
+    } @ 1:1-3:24,
 )

@@ -3,6 +3,7 @@ use crate::constants::{CURRENT_PATH, CURRENT_SPAN};
 use crate::environment::Environment;
 use crate::error::{Error, ErrorKind};
 use crate::listener::RenderingEventListener;
+use crate::machinery::Span;
 use crate::output::Output;
 use crate::template::Template;
 use crate::utils::{AutoEscape, UndefinedBehavior};
@@ -100,6 +101,17 @@ impl<'template, 'env> State<'template, 'env> {
             #[cfg(feature = "fuel")]
             fuel_tracker: env.fuel().map(FuelTracker::new),
         }
+    }
+
+    /// Helper method to attach span information to an error.
+    /// This reduces code duplication by centralizing the common pattern of
+    /// `error.with_span(&state.ctx.current_path.clone(), &span.with_offset(&state.ctx.current_span))`.
+    #[inline]
+    pub(crate) fn with_span_error(&self, error: Error, span: &Span) -> Error {
+        error.with_span(
+            &self.ctx.current_path.clone(),
+            &span.with_offset(&self.ctx.current_span),
+        )
     }
 
     /// Creates an empty state for an environment.

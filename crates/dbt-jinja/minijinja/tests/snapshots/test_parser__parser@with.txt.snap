@@ -1,8 +1,7 @@
 ---
-source: crates/jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{% with a=foo, b=bar %}\n  {{ a }}|{{ b }}\n{% endwith %}\n\n{% with a=foo %}\n  {{ a }}\n{% endwith %}"
-input_file: crates/jinja/minijinja/tests/parser-inputs/with.txt
-snapshot_kind: text
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/with.txt
 ---
 Ok(
     Template {
@@ -77,5 +76,5 @@ Ok(
                 ],
             } @ 5:1-7:14,
         ],
-    } @ 0:0-7:14,
+    } @ 1:1-7:14,
 )

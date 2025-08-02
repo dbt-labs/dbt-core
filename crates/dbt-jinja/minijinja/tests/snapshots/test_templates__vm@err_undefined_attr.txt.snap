@@ -1,22 +1,23 @@
 ---
-source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_templates.rs
 description: "{{ undefined_value.attr }}"
-info: {}
-input_file: crates/dbt-jinja/minijinja/tests/inputs/err_undefined_attr.txt
+info:
+  __minijinja_current_path: err_undefined_attr.txt
+  __minijinja_current_span:
+    end_col: 1
+    end_line: 1
+    end_offset: 0
+    start_col: 1
+    start_line: 1
+    start_offset: 0
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/inputs/err_undefined_attr.txt
 ---
 !!!ERROR!!!
 
 Error {
     kind: UndefinedError,
     name: "err_undefined_attr.txt",
-    line: 1,
 }
 
 undefined value
-(in err_undefined_attr.txt:1)
---------------------------- err_undefined_attr.txt ----------------------------
-   1 > {{ undefined_value.attr }}
-     i ^^^^^^^^^^^^^^^^^^^^^^^^^^ undefined value
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-No referenced variables
--------------------------------------------------------------------------------
+(in err_undefined_attr.txt:1:1)

@@ -285,7 +285,7 @@ pub async fn build_run_node_context<S: Serialize>(
     );
     context.insert(
         CURRENT_SPAN.to_string(),
-        MinijinjaValue::from_serialize(Span::new_file_default()),
+        MinijinjaValue::from_serialize(Span::default()),
     );
 
     context

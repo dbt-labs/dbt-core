@@ -14,7 +14,7 @@ use crate::constants::{
     DBT_AND_ADAPTERS_NAMESPACE, MACRO_NAMESPACE_REGISTRY, MACRO_TEMPLATE_REGISTRY,
     NON_INTERNAL_PACKAGES, ROOT_PACKAGE_NAME,
 };
-use crate::error::{attach_basic_debug_info, Error, ErrorKind};
+use crate::error::{Error, ErrorKind};
 use crate::expression::Expression;
 use crate::listener::RenderingEventListener;
 use crate::machinery::Span;
@@ -756,14 +756,11 @@ impl<'source> Environment<'source> {
         expr: &'expr str,
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Instructions<'expr>, Error> {
-        attach_basic_debug_info(
-            parse_expr(expr).map(|ast| {
-                let mut gen = CodeGenerator::new("<expression>", expr, self.profile.clone());
-                gen.compile_expr(&ast, listeners);
-                gen.finish().0
-            }),
-            expr,
-        )
+        parse_expr(expr).map(|ast| {
+            let mut gen = CodeGenerator::new("<expression>", expr, self.profile.clone());
+            gen.compile_expr(&ast, listeners);
+            gen.finish().0
+        })
     }
 
     /// Adds a new filter function.
@@ -861,7 +858,7 @@ impl<'source> Environment<'source> {
                 frame,
                 self.recursion_limit(),
                 PathBuf::new(),
-                Span::new_file_default(),
+                Span::default(),
             ),
             AutoEscape::None,
             &crate::compiler::instructions::EMPTY_INSTRUCTIONS,
@@ -972,21 +969,31 @@ mod basic_store {
     }
 
     impl<'source> BasicStore<'source> {
-        pub fn new(template_config: TemplateConfig) -> BasicStore<'source> {
+        pub fn new(
+            template_config: TemplateConfig,
+            _profile: CodeGenerationProfile,
+        ) -> BasicStore<'source> {
             BasicStore {
                 template_config,
                 map: BTreeMap::default(),
             }
         }
 
-        pub fn insert(&mut self, name: &'source str, source: &'source str) -> Result<(), Error> {
+        pub fn insert(
+            &mut self,
+            name: &'source str,
+            source: &'source str,
+            listeners: &[Rc<dyn RenderingEventListener>],
+        ) -> Result<(), Error> {
             self.map.insert(
                 name,
                 Arc::new(ok!(CompiledTemplate::new(
                     name,
                     source,
                     &self.template_config,
-                    None
+                    None,
+                    CodeGenerationProfile::Render,
+                    listeners
                 ))),
             );
             Ok(())
@@ -1000,7 +1007,11 @@ mod basic_store {
             self.map.clear();
         }
 
-        pub fn get(&self, name: &str) -> Result<&CompiledTemplate<'source>, Error> {
+        pub fn get(
+            &self,
+            name: &str,
+            _listeners: &[Rc<dyn RenderingEventListener>],
+        ) -> Result<&CompiledTemplate<'source>, Error> {
             self.map
                 .get(name)
                 .map(|x| &**x)

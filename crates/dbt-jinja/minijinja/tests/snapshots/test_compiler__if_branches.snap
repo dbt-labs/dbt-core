@@ -4,15 +4,15 @@ expression: "&c.finish()"
 ---
 (
     [
-        00000 | Lookup("false",  @ 0:0-0:0)  [line 0],
-        00001 | JumpIfFalse(4),
-        00002 | EmitRaw("nope1"),
+        00000 | Lookup("false",  @ 1:1-1:1)  [line 0],
+        00001 | JumpIfFalse(4,  @ 1:1-1:1),
+        00002 | EmitRaw("nope1",  @ 1:1-1:1),
         00003 | Jump(9),
-        00004 | Lookup("nil",  @ 0:0-0:0),
-        00005 | JumpIfFalse(8),
-        00006 | EmitRaw("nope1"),
+        00004 | Lookup("nil",  @ 1:1-1:1),
+        00005 | JumpIfFalse(8,  @ 1:1-1:1),
+        00006 | EmitRaw("nope1",  @ 1:1-1:1),
         00007 | Jump(9),
-        00008 | EmitRaw("yes"),
+        00008 | EmitRaw("yes",  @ 1:1-1:1),
     ],
     {},
 )

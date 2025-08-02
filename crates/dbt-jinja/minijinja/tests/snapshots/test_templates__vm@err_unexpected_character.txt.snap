@@ -1,8 +1,16 @@
 ---
-source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_templates.rs
 description: "{{ foo @ }}"
-info: {}
-input_file: crates/dbt-jinja/minijinja/tests/inputs/err_unexpected_character.txt
+info:
+  __minijinja_current_path: err_unexpected_character.txt
+  __minijinja_current_span:
+    end_col: 1
+    end_line: 1
+    end_offset: 0
+    start_col: 1
+    start_line: 1
+    start_offset: 0
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/inputs/err_unexpected_character.txt
 ---
 !!!SYNTAX ERROR!!!
 
@@ -10,14 +18,8 @@ Error {
     kind: SyntaxError,
     detail: "unexpected character",
     name: "err_unexpected_character.txt",
-    line: 1,
 }
 
 syntax error: unexpected character
-(in err_unexpected_character.txt:1)
------------------------- err_unexpected_character.txt -------------------------
-   1 > {{ foo @ }}
-     i        ^ syntax error
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-No referenced variables
--------------------------------------------------------------------------------
+(in err_unexpected_character.txt:1:1)
+(in err_unexpected_character.txt:1:8)

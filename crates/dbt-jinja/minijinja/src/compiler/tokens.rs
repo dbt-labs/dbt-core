@@ -132,7 +132,7 @@ impl fmt::Display for Token<'_> {
 }
 
 /// Token span information
-#[derive(Copy, Clone, Default, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Deserialize)]
 #[cfg_attr(feature = "unstable_machinery_serde", derive(serde::Serialize))]
 pub struct Span {
     pub start_line: u32,
@@ -143,18 +143,20 @@ pub struct Span {
     pub end_offset: u32,
 }
 
-impl Span {
-    pub fn new_file_default() -> Self {
+impl Default for Span {
+    fn default() -> Self {
         Self {
             start_line: 1,
             start_col: 1,
             start_offset: 0,
             end_line: 1,
             end_col: 1,
-            end_offset: 0,
+            end_offset: Default::default(),
         }
     }
+}
 
+impl Span {
     pub fn with_offset(&self, offset: &Span) -> Self {
         Self {
             start_line: self.start_line + offset.start_line - 1,

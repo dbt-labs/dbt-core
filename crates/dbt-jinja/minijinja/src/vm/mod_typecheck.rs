@@ -54,9 +54,7 @@ impl<'env> Vm<'env> {
             root.get_attr_fast(CURRENT_PATH)
                 .map_or(PathBuf::new(), |value| deserialize_path(&value)),
             root.get_attr_fast(CURRENT_SPAN)
-                .map_or(machinery::Span::new_file_default(), |value| {
-                    deserialize_span(&value)
-                }),
+                .map_or(machinery::Span::default(), |value| deserialize_span(&value)),
             0,
         );
 
@@ -80,8 +78,6 @@ impl<'env> Vm<'env> {
         funcsigns: Arc<FunctionRegistry>,
         warning_printer: Rc<dyn TypecheckingEventListener>,
     ) -> Result<(), crate::Error> {
-        // warning_printer.warn(&Span::default(), &format!("start a file"));
-        // dbg!(state.instructions);
         // get instructions
         let instructions = &state.instructions.instructions;
 

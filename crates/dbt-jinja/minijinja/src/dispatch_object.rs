@@ -176,7 +176,7 @@ impl Object for DispatchObject {
             .join(", ");
 
         // Create error with the original file information preserved
-        let mut err = Error::new(
+        let err = Error::new(
             ErrorKind::UnknownFunction,
             format!(
                 "In dispatch: No macro named '{}' found within namespace: '{}'\n    Searched for: {}",
@@ -185,9 +185,6 @@ impl Object for DispatchObject {
                 searched
             ),
         );
-
-        // Set the error to use the current instruction's file name
-        err.insert_filename_and_line(state.instructions.name(), 1);
 
         Err(err)
     }

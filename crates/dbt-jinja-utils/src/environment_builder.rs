@@ -670,7 +670,7 @@ all okay!");
                         info: MacroInfo {
                             name: "macro_b".to_string(),
                             path: PathBuf::from("test"),
-                            span: Span::new_file_default(),
+                            span: Span::default(),
                         },
                         sql: "{% macro macro_b() %}{%- set small_macro_name = some_macro -%} {{ small_macro_name() }}{% endmacro %}".to_string(),
                     },

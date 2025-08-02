@@ -1,7 +1,7 @@
 ---
-source: crates/jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{% macro foo() %}...{% endmacro %}\n{% macro foo(a, b) %}...{% endmacro %}\n{% macro foo(a, b=42) %}...{% endmacro %}\n{% macro foo(a, b,) %}...{% endmacro %}\n{% macro foo(a, b=42,) %}...{% endmacro %}"
-input_file: crates/jinja/minijinja/tests/parser-inputs/macros.txt
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/macros.txt
 ---
 Ok(
     Template {
@@ -125,5 +125,5 @@ Ok(
                 {},
             ),
         ],
-    } @ 0:0-5:43,
+    } @ 1:1-5:43,
 )

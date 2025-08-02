@@ -1,7 +1,7 @@
 ---
-source: crates/dbt-jinja/minijinja/tests/test_parser.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
 description: "{% set variable = value %}\n{% set (a, b) = (1, 2) %}\n{% set variable2 %}\n    this is the {{ body }}\n{% endset %}\n{% set variable3 | upper %}\n    this is the {{ body }} with filter\n{% endset %}"
-input_file: crates/dbt-jinja/minijinja/tests/parser-inputs/set.txt
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/set.txt
 ---
 Ok(
     Template {
@@ -90,5 +90,5 @@ Ok(
                 ],
             } @ 6:1-8:13,
         ],
-    } @ 0:0-8:13,
+    } @ 1:1-8:13,
 )

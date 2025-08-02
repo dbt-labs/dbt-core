@@ -1,8 +1,16 @@
 ---
-source: crates/dbt-jinja/minijinja/tests/test_templates.rs
+source: fs/sa/crates/dbt-jinja/minijinja/tests/test_templates.rs
 description: "{% call 42 %}...{% endcall %}"
-info: {}
-input_file: crates/dbt-jinja/minijinja/tests/inputs/err_bad_call_block_call.txt
+info:
+  __minijinja_current_path: err_bad_call_block_call.txt
+  __minijinja_current_span:
+    end_col: 1
+    end_line: 1
+    end_offset: 0
+    start_col: 1
+    start_line: 1
+    start_offset: 0
+input_file: fs/sa/crates/dbt-jinja/minijinja/tests/inputs/err_bad_call_block_call.txt
 ---
 !!!SYNTAX ERROR!!!
 
@@ -10,14 +18,7 @@ Error {
     kind: SyntaxError,
     detail: "expected call expression in call block, got constant",
     name: "err_bad_call_block_call.txt",
-    line: 1,
 }
 
 syntax error: expected call expression in call block, got constant
-(in err_bad_call_block_call.txt:1)
-------------------------- err_bad_call_block_call.txt -------------------------
-   1 > {% call 42 %}...{% endcall %}
-     i         ^^ syntax error
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-No referenced variables
--------------------------------------------------------------------------------
+(in err_bad_call_block_call.txt:1:1)
