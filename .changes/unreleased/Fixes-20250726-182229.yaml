@@ -1,0 +1,3 @@
+kind: Fixes
+body: Detect safe introspection when accessing adapter methods through the 'dbt' namespace
+time: 2025-07-26T18:22:29.707810837-07:00

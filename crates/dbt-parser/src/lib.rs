@@ -10,6 +10,8 @@
 #![deny(missing_docs)]
 
 pub mod args;
+/// DbtNamespace for intercepting dbt macro calls during parse phase
+pub mod dbt_namespace;
 pub mod dbt_project_config;
 pub mod renderer;
 /// All of the individual resolve functions broken out into their own files

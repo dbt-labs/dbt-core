@@ -1,4 +1,6 @@
 //! Utility functions for the resolver
+use crate::args::ResolveArgs;
+use crate::dbt_namespace::DbtNamespace;
 use crate::dbt_project_config::DbtProjectConfig;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::sql_file_info::SqlFileInfo;
@@ -8,7 +10,8 @@ use dbt_common::constants::PARSING;
 use dbt_common::io_args::IoArgs;
 use dbt_common::tokiofs::read_to_string;
 use dbt_common::{
-    ErrorCode, FsError, FsResult, fs_err, show_error, show_progress, show_warning_soon_to_be_error,
+    ErrorCode, FsError, FsResult, fs_err, fsinfo, show_error, show_progress, show_warning,
+    show_warning_soon_to_be_error,
 };
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::{DefaultListenerFactory, ListenerFactory};
@@ -32,11 +35,9 @@ use minijinja::constants::{TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID};
 use minijinja::{MacroSpans, Value as MinijinjaValue};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{self, AtomicBool};
-use std::sync::{Arc, Mutex};
-
-use crate::args::ResolveArgs;
-use dbt_common::{fsinfo, show_warning};
 
 /// Represents the result of rendering a single SQL file
 #[derive(Debug)]
@@ -856,7 +857,7 @@ async fn process_model_chunk_for_unsafe_detection(
             MinijinjaValue::from(model.common().unique_id.clone()),
         );
 
-        let (render_resolved_context, _, _) = build_compile_node_context(
+        let (mut render_resolved_context, _, _) = build_compile_node_context(
             &MinijinjaValue::from_serialize(model.serialize()),
             model.common(),
             model.base(),
@@ -869,6 +870,14 @@ async fn process_model_chunk_for_unsafe_detection(
             runtime_config.clone(),
             true,
         );
+
+        // Inject the DbtNamespace to intercept dbt macro calls
+        let dbt_namespace = DbtNamespace::new(parse_adapter.clone());
+        render_resolved_context.insert(
+            "dbt".to_string(),
+            MinijinjaValue::from_object(dbt_namespace),
+        );
+
         let display_path = if arg
             .io
             .out_dir

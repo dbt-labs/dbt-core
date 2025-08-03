@@ -86,6 +86,72 @@ impl ParseAdapter {
         }
     }
 
+    /// Record a get_relation call for tracking
+    pub fn record_get_relation_call(
+        &self,
+        state: &State,
+        args: &[Value],
+    ) -> Result<(), MinijinjaError> {
+        let mut parser = ArgParser::new(args, None);
+        check_num_args(current_function_name!(), &parser, 3, 3)?;
+
+        let database = parser.get::<String>("database")?;
+        let schema = parser.get::<String>("schema")?;
+        let identifier = parser.get::<String>("identifier")?;
+
+        let relation = create_relation(
+            self.adapter_type.clone(),
+            database,
+            schema,
+            Some(identifier),
+            None,
+            self.quoting,
+        )?
+        .as_value();
+
+        if state.is_execute() {
+            if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID) {
+                self.call_get_relation
+                    .entry(unique_id.to_string())
+                    .or_default()
+                    .push(relation);
+            } else {
+                println!("'TARGET_UNIQUE_ID' while get_relation is unset");
+            }
+        }
+        Ok(())
+    }
+
+    /// Record a get_columns_in_relation call for tracking  
+    pub fn record_get_columns_in_relation_call(
+        &self,
+        state: &State,
+        args: &[Value],
+    ) -> Result<(), MinijinjaError> {
+        let parser = ArgParser::new(args, None);
+        check_num_args(current_function_name!(), &parser, 1, 1)?;
+
+        let relation = args
+            .first()
+            .expect("get_columns_in_relation requires one argument");
+
+        let base_relation = downcast_value_to_dyn_base_relation(relation.clone())?;
+        if !base_relation.is_database_relation() {
+            return Ok(());
+        }
+        if state.is_execute() {
+            if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID) {
+                self.call_get_columns_in_relation
+                    .entry(unique_id.to_string())
+                    .or_default()
+                    .push(relation.to_owned());
+            } else {
+                println!("'TARGET_UNIQUE_ID' while get_columns_in_relation is unset");
+            }
+        }
+        Ok(())
+    }
+
     /// Returns a tuple of (dangling_sources, patterned_dangling_sources)
     /// dangling_sources is a vector of dangling source relations
     /// patterned_dangling_sources is a vector of patterned dangling source relations
@@ -224,33 +290,7 @@ impl BaseAdapter for ParseAdapter {
     }
 
     fn get_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 3, 3)?;
-
-        let database = parser.get::<String>("database")?;
-        let schema = parser.get::<String>("schema")?;
-        let identifier = parser.get::<String>("identifier")?;
-
-        let relation = create_relation(
-            self.adapter_type.clone(),
-            database,
-            schema,
-            Some(identifier),
-            None,
-            self.quoting,
-        )?
-        .as_value();
-
-        if state.is_execute() {
-            if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID) {
-                self.call_get_relation
-                    .entry(unique_id.to_string())
-                    .or_default()
-                    .push(relation);
-            } else {
-                println!("'TARGET_UNIQUE_ID' while get_relation is unset");
-            }
-        }
+        self.record_get_relation_call(state, args)?;
         Ok(RelationObject::new(Arc::new(EmptyRelation {})).into_value())
     }
 
@@ -259,29 +299,7 @@ impl BaseAdapter for ParseAdapter {
         state: &State,
         args: &[Value],
     ) -> Result<Value, MinijinjaError> {
-        let parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-
-        let relation = args
-            .first()
-            .expect("get_columns_in_relation requires one argument");
-
-        // validate the relation
-        let base_relation = downcast_value_to_dyn_base_relation(relation.clone())?;
-        if !base_relation.is_database_relation() {
-            return Ok(empty_vec_value());
-        }
-
-        if state.is_execute() {
-            if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID) {
-                self.call_get_columns_in_relation
-                    .entry(unique_id.to_string())
-                    .or_default()
-                    .push(relation.to_owned());
-            } else {
-                println!("'TARGET_UNIQUE_ID' while get_columns_in_relation is unset");
-            }
-        }
+        self.record_get_columns_in_relation_call(state, args)?;
         Ok(empty_vec_value())
     }
 
