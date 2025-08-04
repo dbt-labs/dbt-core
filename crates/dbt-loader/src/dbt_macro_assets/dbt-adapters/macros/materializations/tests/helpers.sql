@@ -1,7 +1,9 @@
+-- funcsign: (string, string, string, string, optional[integer]) -> string
 {% macro get_test_sql(main_sql, fail_calc, warn_if, error_if, limit) -%}
   {{ adapter.dispatch('get_test_sql', 'dbt')(main_sql, fail_calc, warn_if, error_if, limit) }}
 {%- endmacro %}
 
+-- funcsign: (string, string, string, string, optional[integer]) -> string
 {% macro default__get_test_sql(main_sql, fail_calc, warn_if, error_if, limit) -%}
     select
       {{ fail_calc }} as failures,
@@ -13,13 +15,12 @@
     ) dbt_internal_test
 {%- endmacro %}
 
-
-
-
+-- funcsign: (string, string, list[string]) -> string
 {% macro get_unit_test_sql(main_sql, expected_fixture_sql, expected_column_names) -%}
   {{ adapter.dispatch('get_unit_test_sql', 'dbt')(main_sql, expected_fixture_sql, expected_column_names) }}
 {%- endmacro %}
 
+-- funcsign: (string, string, list[string]) -> string
 {% macro default__get_unit_test_sql(main_sql, expected_fixture_sql, expected_column_names) -%}
 -- Build actual result given inputs
 with dbt_internal_unit_test_actual as (

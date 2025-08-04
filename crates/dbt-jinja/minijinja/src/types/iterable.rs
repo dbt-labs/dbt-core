@@ -1,4 +1,9 @@
-use crate::types::{builtin::Type, class::ClassType};
+use std::rc::Rc;
+
+use crate::{
+    types::{Object, Type},
+    TypecheckingEventListener,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct IterableType {
@@ -13,15 +18,19 @@ impl IterableType {
     }
 }
 
-impl ClassType for IterableType {
-    fn subscript(&self, index: &Type) -> Result<Type, crate::Error> {
+impl Object for IterableType {
+    fn subscript(
+        &self,
+        index: &Type,
+        listener: Rc<dyn TypecheckingEventListener>,
+    ) -> Result<Type, crate::Error> {
         match index {
             Type::Integer(_) => Ok(*self.element.clone()),
             Type::Any { hard: true } => Ok(Type::Any { hard: true }),
-            _ => Err(crate::Error::new(
-                crate::error::ErrorKind::InvalidOperation,
-                format!("Failed to subscript {self:?} with {index:?}"),
-            )),
+            _ => {
+                listener.warn(&format!("Failed to subscript {self:?} with {index:?}"));
+                Ok(Type::Any { hard: false })
+            }
         }
     }
 }

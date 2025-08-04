@@ -1,3 +1,4 @@
+-- funcsign: (optional[string], relation, string, string) -> string
 {% macro snowflake__create_table_as(temporary, relation, compiled_code, language='sql') -%}
 
   {%- if relation.is_iceberg_format and not adapter.behavior.enable_iceberg_materializations.no_warn %}

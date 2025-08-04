@@ -1,8 +1,8 @@
 use crate::compiler::instructions::Instruction;
-use crate::types::builtin::Type;
 use crate::types::iterable::IterableType;
 use crate::types::list::ListType;
 use crate::types::struct_::StructType;
+use crate::types::Type;
 use crate::value::argtypes::KwargsValues;
 use crate::value::{Value, ValueKind};
 use std::collections::BTreeMap;

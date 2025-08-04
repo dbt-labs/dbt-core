@@ -47,10 +47,10 @@ pub mod listeners;
 mod loop_object;
 #[cfg(feature = "macros")]
 mod macro_object;
-mod mod_typecheck;
 mod state;
 pub mod typemeta;
-pub use mod_typecheck::find_macro_signatures;
+mod utils;
+pub use utils::find_macro_signatures;
 
 // the cost of a single include against the stack limit.
 #[cfg(feature = "multi_template")]
@@ -515,7 +515,7 @@ impl<'env> Vm<'env> {
                 Instruction::LoadConst(value) => {
                     stack.push(value.clone());
                 }
-                Instruction::BuildMap(pair_count) => {
+                Instruction::BuildMap(pair_count, _) => {
                     let mut map = value_map_with_capacity(*pair_count);
                     stack.reverse_top(*pair_count * 2);
                     for _ in 0..*pair_count {
@@ -730,13 +730,23 @@ impl<'env> Vm<'env> {
                     let l = state.ctx.current_loop().unwrap();
                     stack.push(Value::from(l.object.idx.load(Ordering::Relaxed) == 0));
                 }
-                Instruction::Jump(jump_target) => {
+                Instruction::Jump(jump_target, _) => {
                     pc = *jump_target;
                     continue;
                 }
                 Instruction::JumpIfFalse(jump_target, span) => {
                     let a = stack.pop();
                     if !undefined_behavior
+                        .is_true(&a)
+                        .map_err(|e| state.with_span_error(e, span))?
+                    {
+                        pc = *jump_target;
+                        continue;
+                    }
+                }
+                Instruction::JumpIfTrue(jump_target, span) => {
+                    let a = stack.pop();
+                    if undefined_behavior
                         .is_true(&a)
                         .map_err(|e| state.with_span_error(e, span))?
                     {
@@ -1362,7 +1372,7 @@ impl<'env> Vm<'env> {
                 Instruction::MacroName(_, _) => {
                     // no-op, we don't need to do anything here
                 }
-                Instruction::TypeConstraint(_type_constraint, _is_true) => {
+                Instruction::TypeConstraint(_type_constraint, _is_true, _span) => {
                     // no-op, we don't need to do anything here
                 }
                 Instruction::LoadType(_type) => {

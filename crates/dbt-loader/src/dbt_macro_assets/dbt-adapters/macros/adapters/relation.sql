@@ -1,4 +1,4 @@
--- funcsign: (relation, string) -> relation
+-- funcsign: (relation, optional[string]) -> relation
 {% macro make_intermediate_relation(base_relation, suffix='__dbt_tmp') %}
   {{ return(adapter.dispatch('make_intermediate_relation', 'dbt')(base_relation, suffix)) }}
 {% endmacro %}
@@ -8,10 +8,11 @@
     {{ return(default__make_temp_relation(base_relation, suffix)) }}
 {% endmacro %}
 
--- funcsign: (relation, string) -> relation
+-- funcsign: (relation, optional[string]) -> relation
 {% macro make_temp_relation(base_relation, suffix='__dbt_tmp') %}
   {#-- This ensures microbatch batches get unique temp relations to avoid clobbering --#}
   {% if suffix == '__dbt_tmp' and model.batch %}
+    {#-- TYPE CHECK: model.batch is optional --#}
     {% set suffix = suffix ~ '_' ~ model.batch.id %}
   {% endif %}
 
@@ -27,7 +28,7 @@
     {{ return(temp_relation) }}
 {% endmacro %}
 
--- funcsign: (relation, string, string) -> relation
+-- funcsign: (relation, string, optional[string]) -> relation
 {% macro make_backup_relation(base_relation, backup_relation_type, suffix='__dbt_backup') %}
     {{ return(adapter.dispatch('make_backup_relation', 'dbt')(base_relation, backup_relation_type, suffix)) }}
 {% endmacro %}

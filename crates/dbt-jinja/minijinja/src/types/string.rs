@@ -1,34 +1,27 @@
-use crate::types::{
-    builtin::Type,
-    function::{ArgSpec, FunctionType},
-    list::ListType,
+use crate::{
+    types::{
+        function::{ArgSpec, FunctionType},
+        list::ListType,
+        Type,
+    },
+    TypecheckingEventListener,
 };
+use std::rc::Rc;
 
 #[derive(Debug, Default, Eq, PartialEq, Clone)]
 pub struct StringStripFunction {}
 
 impl FunctionType for StringStripFunction {
-    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
-        if args.iter().len() != 1 {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::TypeError,
-                format!(
-                    "args type mismatch: expected 1 argument, got {}",
-                    args.len()
-                ),
-            ));
-        }
-        if !args[0].is_subtype_of(&Type::String(None)) {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::TypeError,
-                "Expected a string argument for strip function",
-            ));
-        }
+    fn _resolve_arguments(
+        &self,
+        _args: &[Type],
+        _listener: Rc<dyn TypecheckingEventListener>,
+    ) -> Result<Type, crate::Error> {
         Ok(Type::String(None))
     }
 
     fn arg_specs(&self) -> Vec<ArgSpec> {
-        vec![ArgSpec::new("value", true)]
+        vec![]
     }
 }
 
@@ -36,16 +29,11 @@ impl FunctionType for StringStripFunction {
 pub struct StringLowerFunction {}
 
 impl FunctionType for StringLowerFunction {
-    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
-        if !args.is_empty() {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::TypeError,
-                format!(
-                    "args type mismatch: expected 0 argument, got {}",
-                    args.len()
-                ),
-            ));
-        }
+    fn _resolve_arguments(
+        &self,
+        _args: &[Type],
+        _listener: Rc<dyn TypecheckingEventListener>,
+    ) -> Result<Type, crate::Error> {
         Ok(Type::String(None))
     }
 
@@ -58,16 +46,11 @@ impl FunctionType for StringLowerFunction {
 pub struct StringUpperFunction {}
 
 impl FunctionType for StringUpperFunction {
-    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
-        if !args.is_empty() {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::TypeError,
-                format!(
-                    "args type mismatch: expected 0 argument, got {}",
-                    args.len()
-                ),
-            ));
-        }
+    fn _resolve_arguments(
+        &self,
+        _args: &[Type],
+        _listener: Rc<dyn TypecheckingEventListener>,
+    ) -> Result<Type, crate::Error> {
         Ok(Type::String(None))
     }
 
@@ -80,40 +63,28 @@ impl FunctionType for StringUpperFunction {
 pub struct StringReplaceFunction {}
 
 impl FunctionType for StringReplaceFunction {
-    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
-        if args.len() != 3 {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::TypeError,
-                format!(
-                    "args type mismatch: expected 3 arguments, got {}",
-                    args.len()
-                ),
+    fn _resolve_arguments(
+        &self,
+        args: &[Type],
+        listener: Rc<dyn TypecheckingEventListener>,
+    ) -> Result<Type, crate::Error> {
+        let old = args[0].clone();
+        let new = args[1].clone();
+        if matches!(old, Type::String(_)) {
+            listener.warn(&format!(
+                "Expected a string argument for replace function, got {old:?}",
             ));
         }
-        let str = args[0].clone();
-        let old = args[1].clone();
-        let new = args[2].clone();
-        if matches!(str, Type::String(_))
-            || matches!(old, Type::String(_))
-            || matches!(new, Type::String(_))
-        {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::TypeError,
-                format!(
-                    "args type mismatch: expected 3 arguments, got {}",
-                    args.len()
-                ),
+        if matches!(new, Type::String(_)) {
+            listener.warn(&format!(
+                "Expected a string argument for replace function, got {new:?}",
             ));
         }
         Ok(Type::String(None))
     }
 
     fn arg_specs(&self) -> Vec<ArgSpec> {
-        vec![
-            ArgSpec::new("value", false),
-            ArgSpec::new("old", false),
-            ArgSpec::new("new", false),
-        ]
+        vec![ArgSpec::new("old", false), ArgSpec::new("new", false)]
     }
 }
 
@@ -127,21 +98,13 @@ impl std::fmt::Debug for StringSplitFunction {
 }
 
 impl FunctionType for StringSplitFunction {
-    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
-        if args.len() != 1 {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::TypeError,
-                format!(
-                    "args type mismatch: expected 1 argument, got {}",
-                    args.len()
-                ),
-            ));
-        }
+    fn _resolve_arguments(
+        &self,
+        args: &[Type],
+        listener: Rc<dyn TypecheckingEventListener>,
+    ) -> Result<Type, crate::Error> {
         if !args[0].is_subtype_of(&Type::String(None)) {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::TypeError,
-                "Expected a string argument for split function",
-            ));
+            listener.warn("Expected a string argument for split function");
         }
         Ok(Type::List(ListType::new(Type::String(None))))
     }
@@ -161,21 +124,13 @@ impl std::fmt::Debug for StringFormatFunction {
 }
 
 impl FunctionType for StringFormatFunction {
-    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
-        if args.len() != 1 {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::TypeError,
-                format!(
-                    "args type mismatch: expected 1 argument, got {}",
-                    args.len()
-                ),
-            ));
-        }
+    fn _resolve_arguments(
+        &self,
+        args: &[Type],
+        listener: Rc<dyn TypecheckingEventListener>,
+    ) -> Result<Type, crate::Error> {
         if !args[0].is_subtype_of(&Type::String(None)) {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::TypeError,
-                "Expected a string argument for format function",
-            ));
+            listener.warn("Expected a string argument for format function");
         }
         Ok(Type::String(None))
     }

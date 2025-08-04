@@ -1,9 +1,11 @@
 {# string  -------------------------------------------------     #}
 
+-- funcsign: () -> string
 {%- macro type_string() -%}
   {{ return(adapter.dispatch('type_string', 'dbt')()) }}
 {%- endmacro -%}
 
+-- funcsign: () -> string
 {% macro default__type_string() %}
     {{ return(api.Column.translate_type("string")) }}
 {% endmacro %}
@@ -15,10 +17,12 @@
 
 {# timestamp  -------------------------------------------------     #}
 
+-- funcsign: () -> string
 {%- macro type_timestamp() -%}
   {{ return(adapter.dispatch('type_timestamp', 'dbt')()) }}
 {%- endmacro -%}
 
+-- funcsign: () -> string
 {% macro default__type_timestamp() %}
     {{ return(api.Column.translate_type("timestamp")) }}
 {% endmacro %}
@@ -84,7 +88,7 @@ the precision and scale explicitly.)
 */
 
 {% macro default__type_numeric() %}
-    {{ return(api.Column.numeric_type("numeric", 28, 6)) }}
+    {{ return(api.Column.numeric_type("numeric", 28, 6)) }} -- noqa: this warning is in the comment
 {% endmacro %}
 
 

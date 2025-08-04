@@ -10,7 +10,7 @@
 {% endmacro %}
 
 {# helper for adapter-specific implementations of get_columns_in_relation #}
--- funcsign: (agate_table) -> list[api_column]
+-- funcsign: (agate_table) -> list[api.column]
 {% macro sql_convert_columns_in_relation(table) -%}
   {% set columns = [] %}
   {% for row in table %}
@@ -40,12 +40,12 @@
     limit 0
 {% endmacro %}
 
--- funcsign: (dict[string, api_column]) -> string
+-- funcsign: (dict[string, api.column]) -> string
 {% macro get_empty_schema_sql(columns) -%}
   {{ return(adapter.dispatch('get_empty_schema_sql', 'dbt')(columns)) }}
 {% endmacro %}
 
--- funcsign: (dict[string, api_column]) -> string
+-- funcsign: (dict[string, api.column]) -> string
 {% macro default__get_empty_schema_sql(columns) %}
     {%- set col_err = [] -%}
     {%- set col_naked_numeric = [] -%}
@@ -55,6 +55,7 @@
       {%- if col['data_type'] is not defined -%}
         {%- do col_err.append(col['name']) -%}
       {#-- If this column's type is just 'numeric' then it is missing precision/scale, raise a warning --#}
+      {#-- TYPE CHECK: col['data_type'] is optional[string] but user have this constraint --#}
       {%- elif col['data_type'].strip().lower() in ('numeric', 'decimal', 'number') -%}
         {%- do col_naked_numeric.append(col['name']) -%}
       {%- endif -%}
@@ -68,7 +69,7 @@
     {%- endif -%}
 {% endmacro %}
 
--- funcsign: (string, optional[string]) -> string
+-- funcsign: (string, optional[string]) -> list[base_column]
 {% macro get_column_schema_from_query(select_sql, select_sql_header=none) -%}
     {% set columns = [] %}
     {# -- Using an 'empty subquery' here to get the same schema as the given select_sql statement, without necessitating a data scan.#}
@@ -116,12 +117,12 @@
 {% endmacro %}
 
 
--- funcsign: (relation, optional[list[api_column]], optional[list[api_column]]) -> string
+-- funcsign: (relation, optional[list[base_column]], optional[list[base_column]]) -> string
 {% macro alter_relation_add_remove_columns(relation, add_columns = none, remove_columns = none) -%}
   {{ return(adapter.dispatch('alter_relation_add_remove_columns', 'dbt')(relation, add_columns, remove_columns)) }}
 {% endmacro %}
 
--- funcsign: (relation, optional[list[api_column]], optional[list[api_column]]) -> string
+-- funcsign: (relation, optional[list[base_column]], optional[list[base_column]]) -> string
 {% macro default__alter_relation_add_remove_columns(relation, add_columns, remove_columns) %}
 
   {% if add_columns is none %}

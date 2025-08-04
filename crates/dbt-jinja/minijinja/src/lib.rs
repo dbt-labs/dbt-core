@@ -266,7 +266,9 @@ pub use self::value::Value;
 pub use self::macros::__context;
 pub use self::vm::State;
 pub use crate::types::adapter::AdapterDispatchFunction;
+pub use crate::types::builtins::load_builtins;
 pub use crate::types::utils::CodeLocation;
+pub use crate::types::Type;
 // forwards compatibility
 #[cfg(not(feature = "serde"))]
 const _: () = {

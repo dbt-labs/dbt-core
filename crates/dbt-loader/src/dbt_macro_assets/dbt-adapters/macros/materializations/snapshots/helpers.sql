@@ -1,10 +1,12 @@
 {#
     Add new columns to the table if applicable
 #}
+-- funcsign: (relation, list[base_column]) -> string
 {% macro create_columns(relation, columns) %}
   {{ adapter.dispatch('create_columns', 'dbt')(relation, columns) }}
 {% endmacro %}
 
+-- funcsign: (relation, list[base_column]) -> string
 {% macro default__create_columns(relation, columns) %}
   {% for column in columns %}
     {% call statement() %}
@@ -13,31 +15,37 @@
   {% endfor %}
 {% endmacro %}
 
-
+-- funcsign: (relation) -> string
 {% macro post_snapshot(staging_relation) %}
   {{ adapter.dispatch('post_snapshot', 'dbt')(staging_relation) }}
 {% endmacro %}
 
+-- funcsign: (relation) -> string
 {% macro default__post_snapshot(staging_relation) %}
     {# no-op #}
 {% endmacro %}
 
+-- funcsign: () -> string
 {% macro get_true_sql() %}
   {{ adapter.dispatch('get_true_sql', 'dbt')() }}
 {% endmacro %}
 
+-- funcsign: () -> string
 {% macro default__get_true_sql() %}
     {{ return('TRUE') }}
 {% endmacro %}
 
+-- funcsign: (strategy, string, relation) -> string
 {% macro snapshot_staging_table(strategy, source_sql, target_relation) -%}
   {{ adapter.dispatch('snapshot_staging_table', 'dbt')(strategy, source_sql, target_relation) }}
 {% endmacro %}
 
+-- funcsign: () -> struct{dbt_valid_to: string, dbt_valid_from: string, dbt_scd_id: string, dbt_updated_at: string, dbt_is_deleted: string}
 {% macro get_snapshot_table_column_names() %}
     {{ return({'dbt_valid_to': 'dbt_valid_to', 'dbt_valid_from': 'dbt_valid_from', 'dbt_scd_id': 'dbt_scd_id', 'dbt_updated_at': 'dbt_updated_at', 'dbt_is_deleted': 'dbt_is_deleted'}) }}
 {% endmacro %}
 
+-- funcsign: (strategy, string, relation) -> string
 {% macro default__snapshot_staging_table(strategy, source_sql, target_relation) -%}
     {% set columns = config.get('snapshot_table_column_names') or get_snapshot_table_column_names() %}
     {% if strategy.hard_deletes == 'new_record' %}
@@ -56,7 +64,7 @@
         where
             {% if config.get('dbt_valid_to_current') %}
 		{% set source_unique_key = columns.dbt_valid_to | trim %}
-		{% set target_unique_key = config.get('dbt_valid_to_current') | trim %}
+		{% set target_unique_key = config.get('dbt_valid_to_current') | trim %} -- noqa: optional[string] does not support trim
 
 		{# The exact equals semantics between NULL values depends on the current behavior flag set. Also, update records if the source field is null #}
                 ( {{ equals(source_unique_key, target_unique_key) }} or {{ source_unique_key }} is null )
@@ -199,11 +207,12 @@
 
 {%- endmacro %}
 
-
+-- funcsign: (strategy, string) -> string
 {% macro build_snapshot_table(strategy, sql) -%}
   {{ adapter.dispatch('build_snapshot_table', 'dbt')(strategy, sql) }}
 {% endmacro %}
 
+-- funcsign: (strategy, string) -> string
 {% macro default__build_snapshot_table(strategy, sql) %}
     {% set columns = config.get('snapshot_table_column_names') or get_snapshot_table_column_names() %}
 
@@ -221,7 +230,7 @@
 
 {% endmacro %}
 
-
+-- funcsign: (strategy, string, relation) -> relation
 {% macro build_snapshot_staging_table(strategy, sql, target_relation) %}
     {% set temp_relation = make_temp_relation(target_relation) %}
 
@@ -234,7 +243,7 @@
     {% do return(temp_relation) %}
 {% endmacro %}
 
-
+-- funcsign: (string) -> string
 {% macro get_updated_at_column_data_type(snapshot_sql) %}
     {% set snapshot_sql_column_schema = get_column_schema_from_query(snapshot_sql) %}
     {% set dbt_updated_at_data_type = null %}
@@ -248,7 +257,7 @@
     {{ return(ns.dbt_updated_at_data_type or none)  }}
 {% endmacro %}
 
-
+-- funcsign: (string) -> string
 {% macro check_time_data_types(sql) %}
   {% set dbt_updated_at_data_type = get_updated_at_column_data_type(sql) %}
   {% set snapshot_get_time_data_type = get_snapshot_get_time_data_type() %}
@@ -259,14 +268,14 @@
   {% endif %}
 {% endmacro %}
 
-
+-- funcsign: (strategy, list[base_column]) -> string
 {% macro get_dbt_valid_to_current(strategy, columns) %}
   {% set dbt_valid_to_current = config.get('dbt_valid_to_current') or "null" %}
   coalesce(nullif({{ strategy.updated_at }}, {{ strategy.updated_at }}), {{dbt_valid_to_current}})
   as {{ columns.dbt_valid_to }}
 {% endmacro %}
 
-
+-- funcsign: (string|list[string]|none) -> string
 {% macro unique_key_fields(unique_key) %}
     {% if unique_key | is_list %}
         {% for key in unique_key %}
@@ -278,7 +287,7 @@
     {% endif %}
 {% endmacro %}
 
-
+-- funcsign: (string|list[string]|none, string, string) -> string
 {% macro unique_key_join_on(unique_key, identifier, from_identifier) %}
     {% if unique_key | is_list %}
         {% for key in unique_key %}
@@ -292,7 +301,7 @@
     {% endif %}
 {% endmacro %}
 
-
+-- funcsign: (string|list[string]|none, string) -> string
 {% macro unique_key_is_null(unique_key, identifier) %}
     {% if unique_key | is_list %}
         {{ identifier }}.dbt_unique_key_1 is null
@@ -301,7 +310,7 @@
     {% endif %}
 {% endmacro %}
 
-
+-- funcsign: (string|list[string]|none, string) -> string
 {% macro unique_key_is_not_null(unique_key, identifier) %}
     {% if unique_key | is_list %}
         {{ identifier }}.dbt_unique_key_1 is not null

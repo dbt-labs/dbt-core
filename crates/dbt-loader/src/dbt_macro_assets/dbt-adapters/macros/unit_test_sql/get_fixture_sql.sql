@@ -1,3 +1,4 @@
+-- funcsign: (list[ANY], optional[dict[string, string]]) -> string
 {% macro get_fixture_sql(rows, column_name_to_data_types) %}
 -- Fixture for {{ model.name }}
 {% set default_row = {} %}
@@ -44,7 +45,7 @@ union all
 {%- endif -%}
 {% endmacro %}
 
-
+-- funcsign: (list[ANY], dict[string, string]) -> string
 {% macro get_expected_sql(rows, column_name_to_data_types) %}
 
 {%- if (rows | length) == 0 -%}
@@ -64,6 +65,7 @@ union all
 
 {% endmacro %}
 
+-- funcsign: (dict[string, string], dict[string, string]) -> dict[string, string]
 {%- macro format_row(row, column_name_to_data_types) -%}
     {#-- generate case-insensitive formatted row --#}
     {% set formatted_row = {} %}
@@ -95,10 +97,12 @@ union all
     {{ return(formatted_row) }}
 {%- endmacro -%}
 
+-- funcsign: (optional[list[ANY]], integer) -> string
 {%- macro validate_fixture_rows(rows, row_number) -%}
   {{ return(adapter.dispatch('validate_fixture_rows', 'dbt')(rows, row_number)) }}
 {%- endmacro -%}
 
+-- funcsign: (optional[list[ANY]], integer) -> string
 {%- macro default__validate_fixture_rows(rows, row_number) -%}
   {# This is an abstract method for adapter overrides as needed #}
 {%- endmacro -%}

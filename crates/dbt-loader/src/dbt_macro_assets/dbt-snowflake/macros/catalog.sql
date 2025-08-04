@@ -1,3 +1,4 @@
+-- funcsign: (information_schema, list[relation]) -> agate_table
 {% macro snowflake__get_catalog(information_schema, schemas) -%}
 
     {% set query %}
@@ -16,7 +17,7 @@
 
 {%- endmacro %}
 
-
+-- funcsign: (information_schema, list[relation]) -> agate_table
 {% macro snowflake__get_catalog_relations(information_schema, relations) -%}
 
     {% set query %}
@@ -35,7 +36,7 @@
 
 {%- endmacro %}
 
-
+-- funcsign: (information_schema) -> string
 {% macro snowflake__get_catalog_tables_sql(information_schema) -%}
     select
         table_catalog as "table_database",
@@ -72,7 +73,7 @@
     from {{ information_schema }}.tables
 {%- endmacro %}
 
-
+-- funcsign: (information_schema) -> string
 {% macro snowflake__get_catalog_columns_sql(information_schema) -%}
     select
         table_catalog as "table_database",
@@ -86,7 +87,7 @@
     from {{ information_schema }}.columns
 {%- endmacro %}
 
-
+-- funcsign: () -> string
 {% macro snowflake__get_catalog_results_sql() -%}
     select *
     from tables
@@ -94,19 +95,19 @@
     order by "column_index"
 {%- endmacro %}
 
-
+-- funcsign: (string, string) -> string
 {% macro snowflake__catalog_equals(field, value) %}
     "{{ field }}" ilike '{{ value }}' and upper("{{ field }}") = upper('{{ value }}')
 {% endmacro %}
 
-
+-- funcsign: (list[relation]) -> string
 {% macro snowflake__get_catalog_schemas_where_clause_sql(schemas) -%}
     where ({%- for schema in schemas -%}
         ({{ snowflake__catalog_equals('table_schema', schema) }}){%- if not loop.last %} or {% endif -%}
     {%- endfor -%})
 {%- endmacro %}
 
-
+-- funcsign: (list[relation]) -> string
 {% macro snowflake__get_catalog_relations_where_clause_sql(relations) -%}
     where (
         {%- for relation in relations -%}

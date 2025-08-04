@@ -160,5 +160,3 @@ macro_rules! type_erase {
         };
     };
 }
-
-pub(crate) use type_erase;

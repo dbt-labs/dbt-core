@@ -1,39 +1,18 @@
+use dashmap::DashMap;
+
 use crate::compiler::cfg::CFG;
 use crate::compiler::codegen::{TypeConstraintOperation, Variable};
 use crate::compiler::instructions::Instruction;
 use crate::compiler::typecheck::FunctionRegistry;
-use crate::types::adapter::AdapterType;
-use crate::types::agate_table::AgateTableType;
-use crate::types::api::{ApiColumnType, ApiType};
-use crate::types::builtin::Type;
-use crate::types::class::DynClassType;
-use crate::types::config::ConfigType;
-use crate::types::dbt::DbtType;
-use crate::types::dict::DictType;
-use crate::types::exceptions::ExceptionsType;
-use crate::types::flags::FlagsType;
-use crate::types::function::{
-    CastFunctionType, DiffOfTwoDictsFunctionType, DynFunctionType, EnvVarFunctionType,
-    FirstFunctionType, FunctionType, GetColumnSchemaFromQueryFunction, JoinFunctionType,
-    LengthFunctionType, ListFunctionType, LoadResultFunctionType, LogFunctionType,
-    LowerFunctionType, MapFunctionType, PrintFunctionType, RangeFunctionType, RefFunctionType,
-    RenderFunctionType, ReplaceFunctionType, SelectAttrFunctionType, SourceFunctionType,
-    StoreRawResultFunctionType, StoreResultFunctionType, StringFunctionType,
-    SubmitPythonJobFunctionType, ToJsonFunctionType, TrimFunctionType,
-    TryOrCompilerErrorFunctionType, UpperFunctionType, UserDefinedFunctionType, WriteFunctionType,
-};
-use crate::types::hook::HookType;
-use crate::types::internal_func::InternalCaller;
+use crate::types::function::UserDefinedFunctionType;
 use crate::types::list::ListType;
-use crate::types::loop_::LoopType;
-use crate::types::model::ModelType;
-use crate::types::modules::ModulesType;
-use crate::types::relation::RelationType;
 use crate::types::struct_::StructType;
 use crate::types::tuple::TupleType;
 use crate::types::utils::{infer_type_from_const_value, instr_name, CodeLocation};
-use crate::vm::listeners::TypecheckingEventListener;
+use crate::types::Type;
+use crate::vm::listeners::{DefaultTypecheckingEventListener, TypecheckingEventListener};
 use crate::{ErrorKind, Value};
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
 use std::hash::Hash;
@@ -46,7 +25,13 @@ use std::sync::Arc;
 #[derive(Clone, Debug)]
 pub struct TypeWithConstraint {
     pub inner: Type,
-    pub constraint: BTreeMap<String, TypeWithConstraint>,
+    pub constraint: BTreeMap<Part, TypeWithConstraint>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum Part {
+    String(String),
+    Subscript(String),
 }
 
 impl std::fmt::Display for TypeWithConstraint {
@@ -65,21 +50,38 @@ impl From<Type> for TypeWithConstraint {
 }
 
 impl TypeWithConstraint {
-    pub fn get_attribute(&self, name: &str) -> Result<TypeWithConstraint, crate::Error> {
-        if let Some(constraint) = self.constraint.get(name) {
+    pub fn get_attribute(
+        &self,
+        name: &str,
+        listener: Rc<dyn TypecheckingEventListener>,
+    ) -> Result<TypeWithConstraint, crate::Error> {
+        if let Some(constraint) = self.constraint.get(&Part::String(name.to_string())) {
             Ok(constraint.clone())
         } else {
-            self.inner.get_attribute(name).map(TypeWithConstraint::from)
+            self.inner
+                .get_attribute(name, listener)
+                .map(TypeWithConstraint::from)
         }
     }
 
     pub fn subscript(
         &self,
         index: &TypeWithConstraint,
+        listener: Rc<dyn TypecheckingEventListener>,
     ) -> Result<TypeWithConstraint, crate::Error> {
-        self.inner
-            .subscript(&index.inner)
-            .map(TypeWithConstraint::from)
+        if let Type::String(Some(idx)) = &index.inner {
+            if let Some(constraint) = self.constraint.get(&Part::Subscript(idx.clone())) {
+                Ok(constraint.clone())
+            } else {
+                self.inner
+                    .subscript(&index.inner, listener)
+                    .map(TypeWithConstraint::from)
+            }
+        } else {
+            self.inner
+                .subscript(&index.inner, listener)
+                .map(TypeWithConstraint::from)
+        }
     }
 
     pub fn is_subtype_of(&self, other: &TypeWithConstraint) -> bool {
@@ -98,9 +100,10 @@ impl TypeWithConstraint {
         &self,
         other: &TypeWithConstraint,
         op: &'static str,
+        registry: Arc<DashMap<String, Type>>,
     ) -> Option<TypeWithConstraint> {
         self.inner
-            .can_binary_op_with(&other.inner, op)
+            .can_binary_op_with(&other.inner, op, registry)
             .map(TypeWithConstraint::from)
     }
 
@@ -120,12 +123,17 @@ impl TypeWithConstraint {
         &self,
         positional_args: &[Type],
         kwargs: &BTreeMap<String, Type>,
+        listener: Rc<dyn TypecheckingEventListener>,
     ) -> Result<Type, crate::Error> {
-        self.inner.call(positional_args, kwargs)
+        self.inner.call(positional_args, kwargs, listener)
     }
 
     pub fn is_optional(&self) -> bool {
         self.inner.is_optional()
+    }
+
+    pub fn is_none(&self) -> bool {
+        self.inner.is_none()
     }
 
     pub fn get_non_optional_type(&self) -> Type {
@@ -142,47 +150,107 @@ impl TypeWithConstraint {
     }
 
     #[allow(unconditional_recursion)]
-    pub fn insert(&mut self, path: &[String], type_: Type) {
+    pub fn insert(
+        &mut self,
+        path: &[Part],
+        type_: Type,
+        listener: Rc<dyn TypecheckingEventListener>,
+    ) -> Result<(), crate::Error> {
         if let Some((item, rest)) = path.split_first() {
             if let Some(attribute_type) = self.constraint.get_mut(item) {
-                attribute_type.insert(rest, type_);
-            } else if let Ok(mut attribute_type) = self.get_attribute(item) {
-                attribute_type.insert(rest, type_);
-                self.constraint.insert(item.to_string(), attribute_type);
+                attribute_type.insert(rest, type_, listener)?;
             } else {
-                let mut attribute_type: TypeWithConstraint = Type::Any { hard: false }.into();
-                attribute_type.insert(rest, type_);
-                self.constraint.insert(item.to_string(), attribute_type);
+                let mut attribute_type = match item {
+                    Part::String(s) => self.get_attribute(s, listener.clone())?,
+                    Part::Subscript(s) => {
+                        let idx_type = TypeWithConstraint::from(Type::String(Some(s.clone())));
+                        self.subscript(&idx_type, listener.clone())?
+                    }
+                };
+                attribute_type.insert(rest, type_, listener)?;
+                self.constraint.insert(item.clone(), attribute_type);
             }
         } else {
             self.inner = type_;
         }
+        Ok(())
     }
 }
 
 /// symbol table mapping local variable names to their types
-#[derive(Clone, Debug)]
-pub struct SymbolTable(BTreeMap<String, TypeWithConstraint>);
+#[derive(Clone, Debug, Default)]
+pub struct SymbolTable {
+    pub builtins: Arc<DashMap<String, Type>>,
+    pub locals: BTreeMap<String, TypeWithConstraint>,
+}
 
 impl SymbolTable {
-    pub fn get(&self, variable: impl Into<Variable>) -> Result<TypeWithConstraint, crate::Error> {
+    pub fn new(builtins: Arc<DashMap<String, Type>>) -> Self {
+        Self {
+            builtins,
+            locals: BTreeMap::new(),
+        }
+    }
+
+    pub fn get(
+        &self,
+        variable: impl Into<Variable>,
+        listener: Rc<dyn TypecheckingEventListener>,
+    ) -> Result<TypeWithConstraint, crate::Error> {
         let variable = variable.into();
         match variable {
-            Variable::String(name) => self.0.get(&name).cloned().ok_or_else(|| {
-                crate::Error::new(
-                    ErrorKind::InvalidOperation,
-                    format!("Variable not found: {name}"),
-                )
-            }),
-            Variable::GetAttr(path) => {
-                let mut type_ = self.0.get(&path[0]).cloned().ok_or_else(|| {
+            Variable::String(name) => self
+                .locals
+                .get(&name)
+                .cloned()
+                .or_else(|| {
+                    self.builtins
+                        .get(&name)
+                        .map(|type_| type_.value().clone().into())
+                })
+                .ok_or_else(|| {
                     crate::Error::new(
                         ErrorKind::InvalidOperation,
-                        format!("Variable not found: {}", path[0]),
+                        format!("Variable not found: {name}"),
                     )
-                })?;
-                for name in path.iter().skip(1) {
-                    type_ = type_.get_attribute(name)?;
+                }),
+            Variable::GetAttr(path) => {
+                // The first element must be Part::String
+                let base_name = match &path[0] {
+                    Part::String(s) => s,
+                    _ => {
+                        return Err(crate::Error::new(
+                            ErrorKind::InvalidOperation,
+                            format!("Base variable must be a string: {:?}", path[0]),
+                        ));
+                    }
+                };
+                let mut type_ = self
+                    .locals
+                    .get(base_name)
+                    .cloned()
+                    .or_else(|| {
+                        self.builtins
+                            .get(base_name)
+                            .map(|type_| type_.value().clone().into())
+                    })
+                    .ok_or_else(|| {
+                        crate::Error::new(
+                            ErrorKind::InvalidOperation,
+                            format!("Variable not found: {base_name}"),
+                        )
+                    })?;
+                for part in path.iter().skip(1) {
+                    match part {
+                        Part::String(attr) => {
+                            type_ = type_.get_attribute(attr, listener.clone())?;
+                        }
+                        Part::Subscript(idx) => {
+                            let idx_type =
+                                TypeWithConstraint::from(Type::String(Some(idx.clone())));
+                            type_ = type_.subscript(&idx_type, listener.clone())?;
+                        }
+                    }
                 }
                 Ok(type_)
             }
@@ -193,50 +261,61 @@ impl SymbolTable {
         &mut self,
         variable: impl Into<Variable>,
         value: Type,
+        listener: Rc<dyn TypecheckingEventListener>,
     ) -> Result<(), crate::Error> {
         let variable = variable.into();
         match variable {
             Variable::String(name) => {
-                self.0.insert(name, value.into());
+                self.locals.insert(name, value.into());
                 Ok(())
             }
             Variable::GetAttr(path) => {
-                let type_ = self.0.get_mut(&path[0]).ok_or_else(|| {
-                    crate::Error::new(
-                        ErrorKind::InvalidOperation,
-                        format!("Variable not found: {}", path[0]),
-                    )
-                })?;
-                type_.insert(&path[1..], value);
+                let type_ = match self.locals.get_mut(match &path[0] {
+                    Part::String(s) => s,
+                    _ => unreachable!(),
+                }) {
+                    Some(type_) => type_,
+                    None => if let Some(type_) = self.builtins.get(match &path[0] {
+                        Part::String(s) => s,
+                        _ => unreachable!(),
+                    }) {
+                        self.locals.insert(
+                            match &path[0] {
+                                Part::String(s) => s.clone(),
+                                _ => unreachable!(),
+                            },
+                            type_.value().clone().into(),
+                        );
+                        self.locals.get_mut(&match &path[0] {
+                            Part::String(s) => s.clone(),
+                            _ => unreachable!(),
+                        })
+                    } else {
+                        None
+                    }
+                    .ok_or_else(|| {
+                        crate::Error::new(
+                            ErrorKind::InvalidOperation,
+                            format!("Variable not found: {:?}", path[0]),
+                        )
+                    })?,
+                };
+                type_.insert(&path[1..], value, listener)?;
                 Ok(())
             }
         }
     }
 
     pub fn keys(&self) -> impl Iterator<Item = &String> {
-        self.0.keys()
+        self.locals.keys()
     }
 
     pub fn get_mut(&mut self, name: &str) -> Option<&mut TypeWithConstraint> {
-        self.0.get_mut(name)
+        self.locals.get_mut(name)
     }
 
     pub fn get_ref(&self, name: &str) -> Option<&TypeWithConstraint> {
-        self.0.get(name)
-    }
-}
-
-impl<const N: usize> From<[(String, Type); N]> for SymbolTable {
-    fn from(array: [(String, Type); N]) -> Self {
-        SymbolTable(BTreeMap::from_iter(array.iter().map(|(name, type_)| {
-            (
-                name.clone(),
-                TypeWithConstraint {
-                    inner: type_.clone(),
-                    constraint: BTreeMap::new(),
-                },
-            )
-        })))
+        self.locals.get(name)
     }
 }
 
@@ -295,226 +374,10 @@ pub struct TypecheckState {
 }
 
 impl TypecheckState {
-    pub fn new() -> Self {
+    pub fn new(builtins: Arc<DashMap<String, Type>>) -> Self {
         TypecheckState {
             stack: TypecheckStack::default(),
-            locals: SymbolTable::from([
-                (
-                    "this".to_string(),
-                    Type::Class(DynClassType::new(Arc::new(RelationType::default()))),
-                ),
-                ("database".to_string(), Type::String(None)),
-                ("schema".to_string(), Type::String(None)),
-                ("identifier".to_string(), Type::String(None)),
-                (
-                    "config".to_string(),
-                    Type::Class(DynClassType::new(Arc::new(ConfigType::default()))),
-                ),
-                (
-                    "model".to_string(),
-                    Type::Class(DynClassType::new(Arc::new(ModelType::default()))),
-                ),
-                (
-                    "store_result".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(
-                        StoreResultFunctionType::default(),
-                    ))),
-                ),
-                (
-                    "load_result".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(
-                        LoadResultFunctionType::default(),
-                    ))),
-                ),
-                (
-                    "store_raw_result".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(
-                        StoreRawResultFunctionType::default(),
-                    ))),
-                ),
-                ("TARGET_PACKAGE_NAME".to_string(), Type::String(None)),
-                ("TARGET_UNIQUE_ID".to_string(), Type::String(None)),
-                (
-                    "api".to_string(),
-                    Type::Class(DynClassType::new(Arc::new(ApiType::default()))),
-                ),
-                (
-                    "adapter".to_string(),
-                    Type::Class(DynClassType::new(Arc::new(AdapterType::default()))),
-                ),
-                (
-                    "ref".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(RefFunctionType::default()))),
-                ),
-                (
-                    "source".to_string(),
-                    Type::Function(DynFunctionType::new(
-                        Arc::new(SourceFunctionType::default()),
-                    )),
-                ),
-                (
-                    "diff_of_two_dicts".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(
-                        DiffOfTwoDictsFunctionType::default(),
-                    ))),
-                ),
-                (
-                    "log".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(LogFunctionType::default()))),
-                ),
-                (
-                    "exceptions".to_string(),
-                    Type::Class(DynClassType::new(Arc::new(ExceptionsType::default()))),
-                ),
-                (
-                    "length".to_string(),
-                    Type::Function(DynFunctionType::new(
-                        Arc::new(LengthFunctionType::default()),
-                    )),
-                ),
-                (
-                    "join".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(JoinFunctionType::default()))),
-                ),
-                (
-                    "map".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(MapFunctionType::default()))),
-                ),
-                (
-                    "list".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(ListFunctionType::default()))),
-                ),
-                (
-                    "string".to_string(),
-                    Type::Function(DynFunctionType::new(
-                        Arc::new(StringFunctionType::default()),
-                    )),
-                ),
-                (
-                    "replace".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(
-                        ReplaceFunctionType::default(),
-                    ))),
-                ),
-                (
-                    "cast".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(CastFunctionType::default()))),
-                ),
-                (
-                    "trim".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(TrimFunctionType::default()))),
-                ),
-                (
-                    "upper".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(UpperFunctionType::default()))),
-                ),
-                (
-                    "lower".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(LowerFunctionType::default()))),
-                ),
-                (
-                    "loop".to_string(),
-                    Type::Class(DynClassType::new(Arc::new(LoopType::default()))),
-                ),
-                (
-                    "env_var".to_string(),
-                    Type::Function(DynFunctionType::new(
-                        Arc::new(EnvVarFunctionType::default()),
-                    )),
-                ),
-                (
-                    "pre_hooks".to_string(),
-                    Type::List(ListType::new(Type::Class(DynClassType::new(Arc::new(
-                        HookType::default(),
-                    ))))),
-                ),
-                (
-                    "post_hooks".to_string(),
-                    Type::List(ListType::new(Type::Class(DynClassType::new(Arc::new(
-                        HookType::default(),
-                    ))))),
-                ),
-                ("sql".to_string(), Type::String(None)),
-                (
-                    "target".to_string(),
-                    Type::Class(DynClassType::new(Arc::new(RelationType::default()))),
-                ),
-                ("compiled_code".to_string(), Type::String(None)),
-                (
-                    "modules".to_string(),
-                    Type::Class(DynClassType::new(Arc::new(ModulesType::default()))),
-                ),
-                (
-                    "range".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(RangeFunctionType::default()))),
-                ),
-                ("execute".to_string(), Type::Bool),
-                (
-                    "context".to_string(),
-                    Type::Dict(DictType::new(Type::String(None), Type::Any { hard: true })),
-                ),
-                (
-                    "defer_relation".to_string(),
-                    Type::Class(DynClassType::new(Arc::new(RelationType::default()))),
-                ),
-                (
-                    "dbt".to_string(),
-                    Type::Class(DynClassType::new(Arc::new(DbtType::default()))),
-                ),
-                ("null".to_string(), Type::None),
-                (
-                    "get_column_schema_from_query".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(
-                        GetColumnSchemaFromQueryFunction::default(),
-                    ))),
-                ),
-                (
-                    "try_or_compiler_error".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(
-                        TryOrCompilerErrorFunctionType::default(),
-                    ))),
-                ),
-                (
-                    "write".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(WriteFunctionType::default()))),
-                ),
-                (
-                    "submit_python_job".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(
-                        SubmitPythonJobFunctionType::default(),
-                    ))),
-                ),
-                (
-                    "flags".to_string(),
-                    Type::Class(DynClassType::new(Arc::new(FlagsType::default()))),
-                ),
-                (
-                    "selectattr".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(
-                        SelectAttrFunctionType::default(),
-                    ))),
-                ),
-                (
-                    "tojson".to_string(),
-                    Type::Function(DynFunctionType::new(
-                        Arc::new(ToJsonFunctionType::default()),
-                    )),
-                ),
-                (
-                    "render".to_string(),
-                    Type::Function(DynFunctionType::new(
-                        Arc::new(RenderFunctionType::default()),
-                    )),
-                ),
-                (
-                    "print".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(PrintFunctionType::default()))),
-                ),
-                (
-                    "first".to_string(),
-                    Type::Function(DynFunctionType::new(Arc::new(FirstFunctionType::default()))),
-                ),
-            ]),
+            locals: SymbolTable::new(builtins),
             frame_base: 0,
             cur_loop_obj_type: None,
             single_branch_definition_vars: BTreeSet::new(),
@@ -562,12 +425,6 @@ impl TypecheckState {
     }
 }
 
-impl Default for TypecheckState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// Represents a type error
 /// We current only use the 'message', 'line_num' and 'col_num' are saved for future uses
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -594,6 +451,7 @@ pub struct TypeChecker<'src> {
     pub cfg: CFG,
     pub in_states: Vec<TypecheckState>,
     pub function_registry: Arc<FunctionRegistry>,
+    pub builtins: Arc<DashMap<String, Type>>,
 }
 
 /// Typecheck logic implementation
@@ -602,20 +460,23 @@ impl<'src> TypeChecker<'src> {
         instr: &'src [Instruction<'src>],
         cfg: CFG,
         funcsigns: Arc<FunctionRegistry>,
+        builtins: Arc<DashMap<String, Type>>,
     ) -> Self {
-        let in_states = vec![TypecheckState::default(); cfg.blocks.len()];
+        let in_states = vec![TypecheckState::new(builtins.clone()); cfg.blocks.len()];
         Self {
             instr,
             cfg,
             in_states,
             function_registry: funcsigns,
+            builtins,
         }
     }
 
     pub fn check(
         &mut self,
-        warning_printer: Rc<dyn TypecheckingEventListener>,
+        listener: Rc<dyn TypecheckingEventListener>,
     ) -> Result<(), crate::Error> {
+        // println!("{}", self.cfg.dump_blocks(self.instr));
         let mut worklist = VecDeque::new();
         let mut visited = vec![false; self.cfg.blocks.len()];
         let mut first_merge = vec![true; self.cfg.blocks.len()];
@@ -623,7 +484,7 @@ impl<'src> TypeChecker<'src> {
         // Find all roots (blocks with no predecessors)
         for (i, block) in self.cfg.blocks.iter().enumerate() {
             if block.predecessor.is_empty() {
-                self.in_states[i] = TypecheckState::default();
+                self.in_states[i] = TypecheckState::new(self.builtins.clone());
                 worklist.push_back(i);
                 visited[i] = true;
                 first_merge[i] = false;
@@ -631,7 +492,8 @@ impl<'src> TypeChecker<'src> {
         }
 
         while let Some(bb_id) = worklist.pop_front() {
-            let out_state = self.transfer_block(bb_id, warning_printer.clone());
+            listener.clone().new_block(bb_id);
+            let out_state = self.transfer_block(bb_id, listener.clone());
 
             match out_state {
                 Ok(out_state) => {
@@ -641,7 +503,12 @@ impl<'src> TypeChecker<'src> {
                             first_merge[*succ] = false;
                             true
                         } else {
-                            Self::merge_into(&mut self.in_states[*succ], &out_state, visited[*succ])
+                            Self::merge_into(
+                                &mut self.in_states[*succ],
+                                &out_state,
+                                visited[*succ],
+                                listener.clone(),
+                            )
                         };
                         if !visited[*succ] || changed {
                             worklist.push_back(*succ);
@@ -658,8 +525,9 @@ impl<'src> TypeChecker<'src> {
                                     {
                                         let expected_ret_type = user_defined_func.ret_type.clone();
                                         if !expected_ret_type.is_subtype_of(&Type::String(None)) {
-                                            warning_printer.warn(
-                                                &macro_block.span.unwrap_or_default(),
+                                            listener
+                                                .set_span(&macro_block.span.unwrap_or_default());
+                                            listener.warn(
                                                 &format!("Type mismatch: expected return type {expected_ret_type}, got String"),
                                             );
                                         }
@@ -692,8 +560,8 @@ impl<'src> TypeChecker<'src> {
                                             .unwrap_or(Type::Any { hard: false });
                                         let span = e.get_abrupt_return_span();
                                         if !rv_type.is_subtype_of(&expected_ret_type) {
-                                            warning_printer.warn(
-                                                &span,
+                                            listener.set_span(&span);
+                                            listener.warn(
                                                 &format!(
                                                     "Type mismatch: expected return type {expected_ret_type}, got {rv_type}"
                                                 ),
@@ -719,8 +587,9 @@ impl<'src> TypeChecker<'src> {
     fn transfer_block(
         &mut self,
         bb_id: usize,
-        warning_printer: Rc<dyn TypecheckingEventListener>,
+        listener: Rc<dyn TypecheckingEventListener>,
     ) -> Result<TypecheckState, crate::Error> {
+        let suppressed_listener = Rc::new(DefaultTypecheckingEventListener::default());
         let mut typestate = self.in_states[bb_id].clone();
         let slice = self.cfg.instructions(bb_id, self.instr);
 
@@ -769,6 +638,7 @@ impl<'src> TypeChecker<'src> {
                 }
                 Instruction::StoreLocal(name, span) => {
                     // TYPECHECK: NO
+                    listener.set_span(span);
                     let value_type = match typestate.stack.pop_inner() {
                         Some(val) => val,
                         None => {
@@ -778,33 +648,38 @@ impl<'src> TypeChecker<'src> {
                             ));
                         }
                     };
-                    typestate
-                        .locals
-                        .insert(name.to_string(), value_type.clone())?;
+                    typestate.locals.insert(
+                        name.to_string(),
+                        value_type.clone(),
+                        listener.clone(),
+                    )?;
                 }
                 Instruction::Lookup(name, span) => {
                     // TYPECHECK: NO
+                    listener.set_span(span);
                     let name_str: &str = name;
                     // first try to search in self.cfg.get_block(bb_id).type_narrow
-                    if let Ok(ty) = typestate.locals.get(name_str) {
+                    if let Ok(ty) = typestate.locals.get(name_str, listener.clone()) {
                         if typestate.single_branch_definition_vars.contains(name_str) {
-                            warning_printer.warn(span, &format!("Variable '{name_str}' is not defined in one of its predecessor blocks."));
+                            listener.warn(
+                                &format!("Variable '{name_str}' is not defined in one of its predecessor blocks."),
+                            );
                             typestate.stack.push(Type::Any { hard: false });
                         } else {
                             typestate.stack.push(ty.clone());
                         }
                     } else if let Some(function) = self.function_registry.get(name_str) {
-                        typestate.stack.push(Type::Function(function.clone()));
+                        typestate.stack.push(Type::Object(function.clone()));
                     } else {
-                        warning_printer.warn(
-                            span,
-                            &format!("Potential TypeError: Unknown local variable '{name_str}'"),
-                        );
+                        listener.warn(&format!(
+                            "Potential TypeError: Unknown local variable '{name_str}'"
+                        ));
                         typestate.stack.push(Type::Any { hard: false });
                     }
                 }
                 Instruction::GetAttr(name, span) => {
                     // TYPECHECK: YES
+                    listener.set_span(span);
                     // pop a type from the stack
                     let value_type = match typestate.stack.pop() {
                         Some(val) => val,
@@ -815,18 +690,9 @@ impl<'src> TypeChecker<'src> {
                             ))
                         }
                     };
-                    match value_type.get_attribute(name) {
-                        Ok(rv) => {
-                            typestate.stack.push(rv);
-                        }
-                        Err(e) => {
-                            warning_printer.warn(
-                                span,
-                                &format!("Unknown attribute '{value_type}.{name}': {e}"),
-                            );
-                            typestate.stack.push(Type::Any { hard: false });
-                        }
-                    }
+                    typestate
+                        .stack
+                        .push(value_type.get_attribute(name, listener.clone())?);
                 }
 
                 Instruction::SetAttr(_name, _span) => {
@@ -852,6 +718,7 @@ impl<'src> TypeChecker<'src> {
                 }
                 Instruction::GetItem(span) => {
                     // TYPECHECK: YES
+                    listener.set_span(span);
                     let index = match typestate.stack.pop() {
                         Some(val) => val,
                         None => {
@@ -870,18 +737,13 @@ impl<'src> TypeChecker<'src> {
                             ))
                         }
                     };
-                    let rv = base.subscript(&index);
-                    match rv {
-                        Ok(rv) => typestate.stack.push(rv),
-                        Err(e) => {
-                            warning_printer
-                                .warn(span, &format!("Failed to subscript {base}[{index}]: {e}"));
-                            typestate.stack.push(Type::Any { hard: false });
-                        }
-                    }
+                    typestate
+                        .stack
+                        .push(base.subscript(&index, listener.clone())?);
                 }
                 Instruction::Slice(span) => {
                     // TYPECHECK: YES
+                    listener.set_span(span);
                     // b, step, stop must be Integer, None, or Value (or a union containing any of these)
                     let step = match typestate.stack.pop() {
                         Some(val) => val,
@@ -922,10 +784,9 @@ impl<'src> TypeChecker<'src> {
 
                     for (name, slice_type) in [("b", &b), ("stop", &stop), ("step", &step)] {
                         if !slice_type.is_subtype_of(&Type::Integer(None).into()) {
-                            warning_printer.warn(
-                                span,
-                                &format!("Type mismatch for slice {name}: type = {slice_type}"),
-                            );
+                            listener.warn(&format!(
+                                "Type mismatch for slice {name}: type = {slice_type}"
+                            ));
                         }
                     }
 
@@ -935,9 +796,10 @@ impl<'src> TypeChecker<'src> {
                     // TYPECHECK: NO
                     typestate.stack.push(infer_type_from_const_value(val));
                 }
-                Instruction::BuildMap(pair_count) => {
+                Instruction::BuildMap(pair_count, span) => {
                     // TYPECHECK: NO
-                    let mut args_map = BTreeMap::new();
+                    listener.set_span(span);
+                    let mut args_map_types = vec![];
                     for _ in 0..*pair_count {
                         let v = match typestate.stack.pop_inner() {
                             Some(val) => val,
@@ -957,12 +819,29 @@ impl<'src> TypeChecker<'src> {
                                 ))
                             }
                         };
-
-                        args_map.insert(k.to_string(), v);
+                        args_map_types.push((k, v));
                     }
-                    typestate
-                        .stack
-                        .push(Type::Struct(StructType::new(args_map)));
+                    let mut args_map = BTreeMap::new();
+                    let mut success = true;
+                    for (k, v) in args_map_types {
+                        if let TypeWithConstraint {
+                            inner: Type::String(Some(k)),
+                            ..
+                        } = k
+                        {
+                            args_map.insert(k, v);
+                        } else {
+                            success = false;
+                            break;
+                        }
+                    }
+                    if success {
+                        typestate
+                            .stack
+                            .push(Type::Struct(StructType::new(args_map)));
+                    } else {
+                        typestate.stack.push(Type::Any { hard: true });
+                    }
                 }
                 Instruction::BuildKwargs(pair_count) => {
                     // TYPECHECK: NO
@@ -1004,12 +883,8 @@ impl<'src> TypeChecker<'src> {
                     }
                     typestate.stack.push(Type::Kwargs(args_map));
                 }
-                Instruction::BuildList(n, _span) => {
-                    // TODO
-                    // We need to modify BuildList to make the arg mandatory
-                    // Consider add the loopstart instruction at the start of a loop with a filter
-                    // When calling the loopstart instruction we backup stack
-                    // When calling the BuildList instruction we restore the stack
+                Instruction::BuildList(n, span) => {
+                    listener.set_span(span);
 
                     let count = n.unwrap_or(0);
                     if count == 0 {
@@ -1043,6 +918,7 @@ impl<'src> TypeChecker<'src> {
                     }
                 }
                 Instruction::BuildTuple(n, span) => {
+                    listener.set_span(span);
                     if let Some(n) = n {
                         let mut item_types = Vec::new();
                         for _ in 0..*n {
@@ -1062,14 +938,14 @@ impl<'src> TypeChecker<'src> {
                             .stack
                             .push(Type::Tuple(TupleType::new(item_types)));
                     } else {
-                        warning_printer.warn(
-                            span,
+                        listener.warn(
                             "Type mismatch for build tuple: expected tuple with a fixed number of elements, got None",
                         );
                         typestate.stack.push(Type::Any { hard: false });
                     }
                 }
                 Instruction::UnpackList(count, span) => {
+                    listener.set_span(span);
                     let tuple_type = match typestate.stack.pop_inner() {
                         Some(val) => val,
                         None => {
@@ -1086,16 +962,20 @@ impl<'src> TypeChecker<'src> {
                                 typestate.stack.push(field_type.clone());
                             }
                         }
+                        Type::List(list_type) => {
+                            // get list_type.element
+                            let element_type = list_type.element.clone();
+                            for _ in 0..*count {
+                                typestate.stack.push(*element_type.clone());
+                            }
+                        }
                         _ => {
                             for _ in 0..*count {
                                 typestate.stack.push(Type::Any { hard: false });
                             }
-                            warning_printer.warn(
-                                span,
-                                &format!(
-                                    "Type mismatch for unpack list: expected Tuple with {count} elements, got {tuple_type}"
-                                ),
-                            );
+                            listener.warn(&format!(
+                                "Type mismatch for unpack list: expected Tuple with {count} elements, got {tuple_type}"
+                            ));
                         }
                     };
                 }
@@ -1110,6 +990,7 @@ impl<'src> TypeChecker<'src> {
                 | Instruction::IntDiv(span)
                 | Instruction::Pow(span) => {
                     // TYPECHECK: YES
+                    listener.set_span(span);
                     // lhs and rhs must have the same type
                     let op = instr_name(&self.instr[global_idx]);
                     let rhs_type = match typestate.stack.pop() {
@@ -1131,20 +1012,21 @@ impl<'src> TypeChecker<'src> {
                         }
                     };
 
-                    let result_type = lhs_type.can_binary_op_with(&rhs_type, op);
+                    let result_type =
+                        lhs_type.can_binary_op_with(&rhs_type, op, self.builtins.clone());
                     if let Some(result_type) = result_type {
                         typestate.stack.push(result_type);
                     } else {
-                        warning_printer.warn(
-                            span,
-                            &format!("Type mismatch for {op}: lhs = {lhs_type}, rhs = {rhs_type}"),
-                        );
+                        listener.warn(&format!(
+                            "Type mismatch for {op}: lhs = {lhs_type}, rhs = {rhs_type}"
+                        ));
                         typestate.stack.push(Type::Any { hard: false });
                     }
                 }
 
                 Instruction::Rem(span) => {
                     // TYPECHECK: YES
+                    listener.set_span(span);
                     // lhs and rhs must have the same type
                     // or, according to the runtime logic, Rem can be used with lhs = String, rhs = Seq
                     let op = instr_name(&self.instr[global_idx]);
@@ -1181,14 +1063,14 @@ impl<'src> TypeChecker<'src> {
                         continue;
                     }
 
-                    let result_type = lhs_type.can_binary_op_with(&rhs_type, op);
+                    let result_type =
+                        lhs_type.can_binary_op_with(&rhs_type, op, self.builtins.clone());
                     if let Some(result_type) = result_type {
                         typestate.stack.push(result_type);
                     } else {
-                        warning_printer.warn(
-                            span,
-                            &format!("Type mismatch for {op}: lhs = {lhs_type}, rhs = {rhs_type}"),
-                        );
+                        listener.warn(&format!(
+                            "Type mismatch for {op}: lhs = {lhs_type}, rhs = {rhs_type}"
+                        ));
                         typestate.stack.push(Type::Any { hard: false });
                     }
                 }
@@ -1200,6 +1082,7 @@ impl<'src> TypeChecker<'src> {
                 | Instruction::Gt(span)
                 | Instruction::Gte(span) => {
                     // TYPECHECK: YES
+                    listener.set_span(span);
                     // lhs and rhs must have the same type
                     let op = instr_name(&self.instr[global_idx]);
                     let rhs_type = match typestate.stack.pop() {
@@ -1223,17 +1106,17 @@ impl<'src> TypeChecker<'src> {
 
                     let result_type = lhs_type.can_compare_with(&rhs_type, op);
                     if !result_type {
-                        warning_printer.warn(
-                            span,
-                            &format!("Type mismatch for {op}: lhs = {lhs_type}, rhs = {rhs_type}"),
-                        );
+                        listener.warn(&format!(
+                            "Type mismatch for {op}: lhs = {lhs_type}, rhs = {rhs_type}"
+                        ));
                     }
                     typestate.stack.push(Type::Bool);
                 }
 
-                Instruction::Not(_) => {
+                Instruction::Not(span) => {
                     // TYPECHECK: NO
-                    let _item_type = match typestate.stack.pop() {
+                    listener.set_span(span);
+                    let item_type = match typestate.stack.pop() {
                         Some(val) => val,
                         None => {
                             return Err(crate::Error::new(
@@ -1242,10 +1125,15 @@ impl<'src> TypeChecker<'src> {
                             ))
                         }
                     };
-                    typestate.stack.push(Type::Bool);
+                    if item_type.is_optional() {
+                        typestate.stack.push(item_type.exclude(&Type::None));
+                    } else {
+                        typestate.stack.push(Type::Bool);
+                    }
                 }
-                Instruction::StringConcat(_) => {
+                Instruction::StringConcat(span) => {
                     // TYPECHECK: NO
+                    listener.set_span(span);
                     // Stringconcat can actually concat any two types
                     let rhs_type = match typestate.stack.pop_inner() {
                         Some(val) => val,
@@ -1276,8 +1164,9 @@ impl<'src> TypeChecker<'src> {
                         },
                     ));
                 }
-                Instruction::In(_) => {
+                Instruction::In(span) => {
                     // TYPECHECK: NO
+                    listener.set_span(span);
                     let _rhs_type = match typestate.stack.pop() {
                         Some(val) => val,
                         None => {
@@ -1299,8 +1188,9 @@ impl<'src> TypeChecker<'src> {
 
                     typestate.stack.push(Type::Bool);
                 }
-                Instruction::Neg(_) => {
+                Instruction::Neg(span) => {
                     // TYPECHECK: YES
+                    listener.set_span(span);
                     // The operand must be a number
                     let a = match typestate.stack.pop() {
                         Some(val) => val,
@@ -1341,23 +1231,17 @@ impl<'src> TypeChecker<'src> {
                 }
                 Instruction::PushLoop(_flags, span) => {
                     // TYPECHECK: NO
+                    listener.set_span(span);
                     if let Some(iterable) = typestate.stack.pop_inner() {
                         let element_type = match iterable {
                             Type::List(list) => *list.element.clone(),
                             Type::Iterable(iterable) => *iterable.element.clone(),
                             Type::Dict(dict) => *dict.key.clone(),
                             Type::Any { hard: true } => Type::Any { hard: true },
-                            Type::Class(class) if class.is::<AgateTableType>() => {
-                                Type::Class(DynClassType::new(Arc::new(ApiColumnType::default())))
-                            }
+
                             _ => {
-                                warning_printer.warn(
-                                    span,
-                                    &format!(
-                                        "Type mismatch for push loop: expected a iterable type, found {iterable:?}"
-                                    ),
-                                );
-                                Type::Any { hard: false }
+                                let func = iterable.get_attribute("__iter__", listener.clone())?;
+                                func.call(&[], &BTreeMap::new(), listener.clone())?
                             }
                         };
                         typestate.cur_loop_obj_type = Some(element_type);
@@ -1385,7 +1269,7 @@ impl<'src> TypeChecker<'src> {
                     // TYPECHECK: NO
                     typestate.stack.push(Type::Any { hard: false });
                 }
-                Instruction::Jump(_jump_target) => {
+                Instruction::Jump(_jump_target, _) => {
                     // TYPECHECK: NO
                     // have nothing to do with the stack
                 }
@@ -1400,28 +1284,35 @@ impl<'src> TypeChecker<'src> {
                         }
                     };
                 }
+                Instruction::JumpIfTrue(_else_label, _) => {
+                    let _item_type = match typestate.stack.pop() {
+                        Some(val) => val,
+                        None => {
+                            return Err(crate::Error::new(
+                                crate::error::ErrorKind::InvalidOperation,
+                                "Stack underflow on jump if false",
+                            ))
+                        }
+                    };
+                }
                 Instruction::JumpIfFalseOrPop(_jump_target, span) => {
                     // TYPECHECK: YES
+                    listener.set_span(span);
                     // the operand must be a boolean
                     let a = typestate.peek().clone();
 
                     if !a.is_condition() {
-                        warning_printer.warn(
-                            span,
-                            &format!("Type mismatch for jump condition: type = {a}"),
-                        );
+                        listener.warn(&format!("Type mismatch for jump condition: type = {a}"));
                     }
                 }
                 Instruction::JumpIfTrueOrPop(_jump_target, span) => {
                     // TYPECHECK: YES
+                    listener.set_span(span);
                     // the operand must be a boolean
                     let a = typestate.peek().clone();
 
                     if !a.is_condition() {
-                        warning_printer.warn(
-                            span,
-                            &format!("Type mismatch for jump condition: type = {a}"),
-                        );
+                        listener.warn(&format!("Type mismatch for jump condition: type = {a}"));
                     }
                 }
                 #[cfg(feature = "multi_template")]
@@ -1433,6 +1324,7 @@ impl<'src> TypeChecker<'src> {
                 }
                 Instruction::PushAutoEscape(span) => {
                     // TYPECHECK: YES
+                    listener.set_span(span);
                     // the operand must be a string
                     let a = match typestate.stack.pop() {
                         Some(val) => val,
@@ -1445,8 +1337,7 @@ impl<'src> TypeChecker<'src> {
                     };
 
                     if !a.is_subtype_of(&Type::String(None).into()) {
-                        warning_printer
-                            .warn(span, &format!("Type mismatch for auto escape: type = {a}"));
+                        listener.warn(&format!("Type mismatch for auto escape: type = {a}"));
                     }
                 }
                 Instruction::PopAutoEscape => {
@@ -1463,33 +1354,27 @@ impl<'src> TypeChecker<'src> {
                 }
                 Instruction::ApplyFilter(name, arg_count, _local_id, span) => {
                     // TYPECHECK: NO
-
-                    if let Ok(Type::Function(funcsign)) =
-                        typestate.locals.get(name).map(|t| t.inner)
+                    listener.set_span(span);
+                    if let Ok(Type::Object(funcsign)) = typestate
+                        .locals
+                        .get(name, listener.clone())
+                        .map(|t| t.inner)
                     {
                         if let Some(arg_cnt) = arg_count {
                             let funcsign = funcsign.clone();
                             let (args, kwargs) = typestate.get_call_args(*arg_cnt);
 
-                            match funcsign.resolve_arguments(&args, &kwargs) {
-                                Ok(ret_type) => {
-                                    typestate.stack.push(ret_type.clone());
-                                }
-                                Err(msg) => {
-                                    warning_printer.warn(
-                                        span,
-                                        &format!("Type mismatch for function '{name}': {msg}"),
-                                    );
-                                    typestate.stack.push(Type::Any { hard: false });
-                                }
-                            }
+                            typestate.stack.push(funcsign.call(
+                                &args,
+                                &kwargs,
+                                listener.clone(),
+                            )?);
                         }
                     } else {
                         // TODO: handle the case when arg_count is None
-                        warning_printer.warn(
-                            span,
-                            &format!("Potential TypeError: Filter '{name}' is not defined."),
-                        );
+                        listener.warn(&format!(
+                            "Potential TypeError: Filter '{name}' is not defined."
+                        ));
                         typestate.stack.push(Type::Any { hard: false });
                     }
                 }
@@ -1500,6 +1385,7 @@ impl<'src> TypeChecker<'src> {
                 }
                 Instruction::CallFunction(name, arg_count, span) => {
                     // TYPECHECK: YES
+                    listener.set_span(span);
                     // check the parameter types
                     // For internal rust functions
                     // if let Some(func) = state.lookup(name).filter(|func| !func.is_undefined()) {
@@ -1535,26 +1421,17 @@ impl<'src> TypeChecker<'src> {
                     } else if *name == "caller" {
                         // judge whether current block is a macro
                         if let Some(block) = self.cfg.get_block(bb_id) {
-                            if let Some(macro_name) = &block.current_macro {
+                            if let Some(_macro_name) = &block.current_macro {
                                 if let Some(arg_cnt) = arg_count {
                                     let (args, kwargs) = typestate.get_call_args(*arg_cnt);
 
-                                    match InternalCaller::default()
-                                        .resolve_arguments(&args, &kwargs)
-                                    {
-                                        Ok(ret_type) => {
-                                            typestate.stack.push(ret_type);
-                                        }
-                                        Err(msg) => {
-                                            warning_printer.warn(
-                                                span,
-                                                &format!(
-                                                    "Type error for function 'caller' in macro {macro_name}: {msg}"
-                                                ),
-                                            );
-                                            typestate.stack.push(Type::Any { hard: false });
-                                        }
-                                    }
+                                    typestate.stack.push(
+                                        self.builtins.get("caller").unwrap().call(
+                                            &args,
+                                            &kwargs,
+                                            listener.clone(),
+                                        )?,
+                                    );
                                 } else {
                                     return Err(crate::Error::new(
                                         crate::error::ErrorKind::InvalidOperation,
@@ -1572,84 +1449,64 @@ impl<'src> TypeChecker<'src> {
                         if let Some(arg_cnt) = arg_count {
                             let (args, kwargs) = typestate.get_call_args(*arg_cnt);
                             let function_type = match *name {
-                                "source" => {
-                                    DynFunctionType::new(Arc::new(SourceFunctionType::default()))
-                                }
-                                "ref" => DynFunctionType::new(Arc::new(RefFunctionType::default())),
+                                "source" => self.builtins.get("source").unwrap(),
+                                "ref" => self.builtins.get("ref").unwrap(),
                                 _ => unreachable!(),
                             };
-                            match function_type.resolve_arguments(&args, &kwargs) {
-                                Ok(ret_type) => {
-                                    typestate.stack.push(ret_type.clone());
-                                }
-                                Err(msg) => {
-                                    warning_printer.warn(
-                                        span,
-                                        &format!("Type mismatch for function '{name}': {msg}"),
-                                    );
-                                    typestate.stack.push(Type::Any { hard: false });
-                                }
-                            }
+                            typestate.stack.push(function_type.call(
+                                &args,
+                                &kwargs,
+                                listener.clone(),
+                            )?);
                         }
-                    } else if let Ok(Type::Function(funcsign)) =
-                        typestate.locals.get(name).map(|t| t.inner)
+                    } else if let Ok(Type::Object(funcsign)) = typestate
+                        .locals
+                        .get(name, listener.clone())
+                        .map(|t| t.inner)
                     {
                         if let Some(arg_cnt) = arg_count {
                             let funcsign = funcsign.clone();
                             let (args, kwargs) = typestate.get_call_args(*arg_cnt);
 
-                            match funcsign.resolve_arguments(&args, &kwargs) {
-                                Ok(ret_type) => {
-                                    typestate.stack.push(ret_type.clone());
-                                }
-                                Err(msg) => {
-                                    warning_printer.warn(
-                                        span,
-                                        &format!("Type mismatch for function '{name}': {msg}"),
-                                    );
-                                    typestate.stack.push(Type::Any { hard: false });
-                                }
-                            }
+                            typestate.stack.push(funcsign.call(
+                                &args,
+                                &kwargs,
+                                listener.clone(),
+                            )?);
                         }
-                    } else if let Ok(Type::Any { hard: true }) =
-                        typestate.locals.get(name).map(|t| t.inner)
+                    } else if let Ok(Type::Any { hard: true }) = typestate
+                        .locals
+                        .get(name, listener.clone())
+                        .map(|t| t.inner)
                     {
                         typestate.stack.push(Type::Any { hard: true });
                     } else if let Some(funcsign) = self.function_registry.get(name.to_owned()) {
                         if let Some(arg_cnt) = arg_count {
                             let (args, kwargs) = typestate.get_call_args(*arg_cnt);
 
-                            match funcsign.resolve_arguments(&args, &kwargs) {
-                                Ok(ret_type) => {
-                                    typestate.stack.push(ret_type.clone());
-                                }
-                                Err(msg) => {
-                                    warning_printer.warn(
-                                        span,
-                                        &format!("Type mismatch for function '{name}': {msg}"),
-                                    );
-                                    typestate.stack.push(Type::Any { hard: false });
-                                }
-                            }
+                            typestate.stack.push(funcsign.call(
+                                &args,
+                                &kwargs,
+                                listener.clone(),
+                            )?);
                         }
                     } else if let Some(arg_cnt) = arg_count {
                         let _ = typestate.get_call_args(*arg_cnt);
-                        warning_printer.warn(
-                            span,
-                            &format!("Potential TypeError: Function '{name}' is not defined."),
-                        );
+                        listener.warn(&format!(
+                            "Potential TypeError: Function '{name}' is not defined."
+                        ));
                         typestate.stack.push(Type::Any { hard: false });
                     } else {
                         // TODO: handle the case when arg_count is None
-                        warning_printer.warn(
-                            span,
-                            &format!("Potential TypeError: Function '{name}' is not defined."),
-                        );
+                        listener.warn(&format!(
+                            "Potential TypeError: Function '{name}' is not defined."
+                        ));
                         typestate.stack.push(Type::Any { hard: false });
                     }
                 }
                 Instruction::CallMethod(name, arg_count, span) => {
                     // TYPECHECK: NO? (Maybe add method check later)
+                    listener.set_span(span);
 
                     let count = arg_count.unwrap_or(0);
                     if count > 0 {
@@ -1671,29 +1528,19 @@ impl<'src> TypeChecker<'src> {
                             continue;
                         }
 
-                        let function = match self_type.get_attribute(name) {
-                            Ok(rv) => rv,
-                            Err(e) => {
-                                warning_printer.warn(
-                                    span,
-                                    &format!("Unknown method '{self_type:?}.{name}': {e}"),
-                                );
-                                typestate.stack.push(Type::Any { hard: false });
-                                continue;
-                            }
-                        };
+                        let function = self_type.get_attribute(name, listener.clone())?;
 
                         if function.is_any() {
                             typestate.stack.push(function);
                             continue;
                         }
 
-                        let result = match function.call(&method_args, &kwargs) {
+                        let result = match function.call(&method_args, &kwargs, listener.clone()) {
                             Ok(rv) => {
                                 if *name == "raise_not_implemented"
                                     || *name == "raise_compiler_error"
                                     || *name == "column_type_missing"
-                                    || *name == "warn"
+                                    || *name == "raise_fail_fast_error"
                                 {
                                     return Err(crate::Error::abrupt_return(Value::from_object(
                                         Type::Exception,
@@ -1704,10 +1551,8 @@ impl<'src> TypeChecker<'src> {
                                 }
                             }
                             Err(e) => {
-                                warning_printer.warn(
-                                    span,
-                                    &format!("Method call failed '{self_type}.{name}': {e}"),
-                                );
+                                listener
+                                    .warn(&format!("Method call failed '{self_type}.{name}': {e}"));
                                 Type::Any { hard: false }
                             }
                         };
@@ -1725,6 +1570,7 @@ impl<'src> TypeChecker<'src> {
                 }
                 Instruction::CallObject(arg_count, span) => {
                     // TYPECHECK: YES
+                    listener.set_span(span);
                     let count = arg_count.unwrap_or(0);
                     if count > 0 {
                         // Pop (arg_count - 1) arguments
@@ -1745,16 +1591,7 @@ impl<'src> TypeChecker<'src> {
                             continue;
                         }
 
-                        let result = match self_type.call(&args, &kwargs) {
-                            Ok(rv) => rv,
-                            Err(e) => {
-                                warning_printer.warn(
-                                    span,
-                                    &format!("Object call failed '{self_type:?}()': {e}"),
-                                );
-                                Type::Any { hard: false }
-                            }
-                        };
+                        let result = self_type.call(&args, &kwargs, listener.clone())?;
 
                         typestate.stack.push(result);
                     } else {
@@ -1791,6 +1628,7 @@ impl<'src> TypeChecker<'src> {
                 #[cfg(feature = "multi_template")]
                 Instruction::LoadBlocks(span) => {
                     // TYPECHECK: YES
+                    listener.set_span(span);
                     // the operand must be a string
                     let a = match typestate.stack.pop() {
                         Some(val) => val,
@@ -1803,8 +1641,7 @@ impl<'src> TypeChecker<'src> {
                     };
 
                     if !a.is_subtype_of(&Type::String(None).into()) {
-                        warning_printer
-                            .warn(span, &format!("Type mismatch for block name: type = {a}"));
+                        listener.warn(&format!("Type mismatch for block name: type = {a}"));
                     }
                     // LoadBlocks does not change the stack, it just loads blocks
                 }
@@ -1829,6 +1666,7 @@ impl<'src> TypeChecker<'src> {
                 #[cfg(feature = "macros")]
                 Instruction::BuildMacro(name, _offset, _flags, span) => {
                     // TYPECHECK: NO?
+                    listener.set_span(span);
                     // BuildMacro consume the parameter names in the stack
                     if typestate.stack.pop().is_none() {
                         return Err(crate::Error::new(
@@ -1845,20 +1683,15 @@ impl<'src> TypeChecker<'src> {
                     }
                     // look up the function in the function registry
                     if let Some(function) = self.function_registry.get(*name) {
-                        typestate.stack.push(Type::Function(function.clone()));
+                        typestate.stack.push(Type::Object(function.clone()));
                     } else if *name == "caller" {
-                        use crate::types::function::CallerFunctionType;
-
                         typestate
                             .stack
-                            .push(Type::Function(DynFunctionType::new(Arc::new(
-                                CallerFunctionType::default(),
-                            ))));
+                            .push(self.builtins.get("caller").unwrap().clone());
                     } else {
-                        warning_printer.warn(
-                            span,
-                            &format!("Function '{name}' is not defined in the function registry."),
-                        );
+                        listener.warn(&format!(
+                            "Function '{name}' is not defined in the function registry."
+                        ));
                         typestate.stack.push(Type::Any { hard: false });
                     }
                 }
@@ -1885,38 +1718,60 @@ impl<'src> TypeChecker<'src> {
                     // TYPECHECK: NO
                     // Nothing to do with the stack
                 }
-                Instruction::MacroName(_name, _span) => {
+                Instruction::MacroName(_name, span) => {
                     // TYPECHECK: NO
+                    listener.set_span(span);
                 }
-                Instruction::TypeConstraint(type_constraint, true_branch) => {
+                Instruction::TypeConstraint(type_constraint, _true_branch, span) => {
+                    listener.set_span(span);
                     let name = &type_constraint.name;
                     match &type_constraint.operation {
                         TypeConstraintOperation::NotNull(is_true) => {
-                            if is_true ^ true_branch {
-                                if let Ok(type_) = typestate.locals.get(name) {
+                            if *is_true {
+                                if let Ok(type_) =
+                                    typestate.locals.get(name, suppressed_listener.clone())
+                                {
                                     if type_.is_optional() {
-                                        typestate.locals.insert(name, Type::None)?;
+                                        let non_optional_type = type_.get_non_optional_type();
+                                        typestate.locals.insert(
+                                            name,
+                                            non_optional_type,
+                                            listener.clone(),
+                                        )?;
+                                    } else if type_.is_none() {
+                                        typestate.locals.insert(
+                                            name,
+                                            Type::Any { hard: true },
+                                            listener.clone(),
+                                        )?;
                                     }
                                 }
-                            } else if let Ok(type_) = typestate.locals.get(name) {
+                            } else if let Ok(type_) =
+                                typestate.locals.get(name, suppressed_listener.clone())
+                            {
                                 if type_.is_optional() {
-                                    let non_optional_type = type_.get_non_optional_type();
-                                    typestate.locals.insert(name, non_optional_type)?;
+                                    typestate
+                                        .locals
+                                        .insert(name, Type::None, listener.clone())?;
                                 }
                             }
                         }
                         TypeConstraintOperation::Is(test_name, is_true) => {
                             let test_type = Type::from_str(test_name)?;
-                            if is_true ^ true_branch {
-                                if let Ok(type_) = typestate.locals.get(name) {
-                                    if type_.is_optional() {
-                                        typestate.locals.insert(name, type_.exclude(&test_type))?;
-                                    }
+                            if !is_true {
+                                if let Ok(type_) =
+                                    typestate.locals.get(name, suppressed_listener.clone())
+                                {
+                                    typestate.locals.insert(
+                                        name,
+                                        type_.exclude(&test_type),
+                                        listener.clone(),
+                                    )?;
                                 }
-                            } else if let Ok(type_) = typestate.locals.get(name) {
-                                if type_.is_optional() {
-                                    typestate.locals.insert(name, test_type)?;
-                                }
+                            } else if let Ok(_type_) =
+                                typestate.locals.get(name, suppressed_listener.clone())
+                            {
+                                typestate.locals.insert(name, test_type, listener.clone())?;
                             }
                         }
                     }
@@ -1962,12 +1817,24 @@ impl<'src> TypeChecker<'src> {
                     typestate.stack.push(union_type);
                 }
             }
+            // println!(
+            //     "After instruction {:?}, locals_temp_relation: {:?}",
+            //     inst,
+            //     typestate
+            //         .locals
+            //         .get("temp_relation", suppressed_listener.clone())
+            // );
         }
         Ok(typestate)
     }
 
     /// Merges the source typecheck state into the destination state at the merge point.
-    fn merge_into(dst: &mut TypecheckState, src: &TypecheckState, visited: bool) -> bool {
+    fn merge_into(
+        dst: &mut TypecheckState,
+        src: &TypecheckState,
+        visited: bool,
+        listener: Rc<dyn TypecheckingEventListener>,
+    ) -> bool {
         let mut changed = false;
 
         let min_len = dst.stack.len().min(src.stack.len());
@@ -1975,13 +1842,20 @@ impl<'src> TypeChecker<'src> {
 
         if dst.cur_loop_obj_type != src.cur_loop_obj_type {
             dst.cur_loop_obj_type = match (&dst.cur_loop_obj_type, &src.cur_loop_obj_type) {
-                (Some(a), Some(b)) if a == b => Some(a.clone()),
+                (Some(a), Some(b)) => {
+                    if a.is_subtype_of(b) {
+                        Some(b.clone())
+                    } else if b.is_subtype_of(a) {
+                        Some(a.clone())
+                    } else {
+                        Some(Type::Any { hard: false })
+                    }
+                }
                 (None, Some(t)) => Some(t.clone()),
                 (Some(t), None) => Some(t.clone()),
                 (None, None) => None,
-                _ => Some(Type::Any { hard: false }),
             };
-            changed = true;
+            changed = false;
         }
 
         for i in 0..min_len {
@@ -2016,7 +1890,7 @@ impl<'src> TypeChecker<'src> {
                         dst.single_branch_definition_vars.insert(name.clone());
                     }
                     dst.locals
-                        .insert(name.clone(), Type::Any { hard: true })
+                        .insert(name.clone(), Type::Any { hard: true }, listener.clone())
                         .unwrap();
                     changed = true;
                 }

@@ -1,3 +1,4 @@
+-- funcsign: (relation, string) -> string
 {%- macro snowflake__get_rename_table_sql(relation, new_name) -%}
     /*
     Rename or move a table to the new name.

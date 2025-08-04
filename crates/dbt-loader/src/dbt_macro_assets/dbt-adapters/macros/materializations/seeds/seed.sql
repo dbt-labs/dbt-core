@@ -22,9 +22,9 @@
   -- build model
   {% set create_table_sql = "" %}
   {% if exists_as_view %}
-    {{ exceptions.raise_compiler_error("Cannot seed to '{}', it is a view".format(old_relation.render())) }}
+    {{ exceptions.raise_compiler_error("Cannot seed to '{}', it is a view".format(old_relation.render())) }} -- noqa: optional[relation] does not support render()
   {% elif exists_as_table %}
-    {% set create_table_sql = reset_csv_table(model, full_refresh_mode, old_relation, agate_table) %}
+    {% set create_table_sql = reset_csv_table(model, full_refresh_mode, old_relation, agate_table) %} -- noqa: optional[relation] as arguments
   {% else %}
     {% set create_table_sql = create_csv_table(model, agate_table) %}
   {% endif %}
@@ -33,7 +33,7 @@
   {% set rows_affected = (agate_table.rows | length) %}
   {% set sql = load_csv_rows(model, agate_table) %}
 
-  {% call noop_statement('main', code ~ ' ' ~ rows_affected, code, rows_affected) %}
+  {% call noop_statement('main', code ~ ' ' ~ rows_affected, code, rows_affected) %} -- noqa: Should accept a string instead of a integer
     {{ get_csv_sql(create_table_sql, sql) }};
   {% endcall %}
 

@@ -10,10 +10,11 @@ use crate::compiler::tokens::Span;
 use crate::compiler::typecheck::FunctionRegistry;
 use crate::listener::RenderingEventListener;
 use crate::output::CaptureMode;
-use crate::types::builtin::Type;
 use crate::types::function::UserDefinedFunctionType;
+use crate::types::Type;
 use crate::value::ops::neg;
 use crate::value::{Kwargs, Value, ValueMap};
+use crate::vm::typemeta::Part;
 
 use serde::{Deserialize, Serialize};
 #[cfg(test)]
@@ -193,13 +194,13 @@ impl<'source> CodeGenerator<'source> {
     }
 
     /// Ends the open for loop
-    pub fn end_for_loop(&mut self, push_did_not_iterate: bool) {
+    pub fn end_for_loop(&mut self, push_did_not_iterate: bool, span: Span) {
         if let Some(PendingBlock::Loop {
             iter_instr,
             jump_instrs,
         }) = self.pending_block.pop()
         {
-            self.add(Instruction::Jump(iter_instr));
+            self.add(Instruction::Jump(iter_instr, span));
             let loop_end = self.next_instruction();
             if push_did_not_iterate {
                 self.add(Instruction::PushDidNotIterate);
@@ -208,7 +209,7 @@ impl<'source> CodeGenerator<'source> {
             for instr in jump_instrs.into_iter().chain(Some(iter_instr)) {
                 match self.instructions.get_mut(instr) {
                     Some(Instruction::Iterate(ref mut jump_target, _))
-                    | Some(Instruction::Jump(ref mut jump_target)) => {
+                    | Some(Instruction::Jump(ref mut jump_target, _)) => {
                         *jump_target = loop_end;
                     }
                     _ => unreachable!(),
@@ -226,8 +227,8 @@ impl<'source> CodeGenerator<'source> {
     }
 
     /// Begins an else conditional
-    pub fn start_else(&mut self) {
-        let jump_instr = self.add(Instruction::Jump(!0));
+    pub fn start_else(&mut self, span: Span) {
+        let jump_instr = self.add(Instruction::Jump(!0, span));
         self.end_condition(jump_instr + 1);
         self.pending_block.push(PendingBlock::Branch { jump_instr });
     }
@@ -246,34 +247,114 @@ impl<'source> CodeGenerator<'source> {
 
     /// Emits a short-circuited bool operator.
     pub fn sc_bool(&mut self, and: bool, span: Span, type_constraints: Vec<TypeConstraint>) {
-        if let Some(PendingBlock::ScBool {
-            ref mut jump_instrs,
-        }) = self.pending_block.last_mut()
-        {
-            if and {
-                jump_instrs.push(
-                    self.instructions
-                        .add(Instruction::JumpIfFalseOrPop(!0, span)),
-                );
-                for type_constraint in type_constraints {
-                    self.add(Instruction::TypeConstraint(type_constraint, true));
-                }
-            } else {
-                jump_instrs.push(
-                    self.instructions
-                        .add(Instruction::JumpIfTrueOrPop(!0, span)),
-                );
-                if type_constraints.len() == 1 {
-                    // if there is only one type constraint, we can just add it to the else block
-                    // if there is more than one, we don't have constraints
-                    self.add(Instruction::TypeConstraint(
-                        type_constraints[0].clone(),
-                        false,
-                    ));
+        match self.profile {
+            CodeGenerationProfile::Render => {
+                if let Some(PendingBlock::ScBool {
+                    ref mut jump_instrs,
+                }) = self.pending_block.last_mut()
+                {
+                    if and {
+                        jump_instrs.push(
+                            self.instructions
+                                .add(Instruction::JumpIfFalseOrPop(!0, span)),
+                        );
+                        for type_constraint in type_constraints {
+                            self.add(Instruction::TypeConstraint(type_constraint, true, span));
+                        }
+                    } else {
+                        jump_instrs.push(
+                            self.instructions
+                                .add(Instruction::JumpIfTrueOrPop(!0, span)),
+                        );
+                        if type_constraints.len() == 1 {
+                            // if there is only one type constraint, we can just add it to the else block
+                            // if there is more than one, we don't have constraints
+                            self.add(Instruction::TypeConstraint(
+                                type_constraints[0].clone(),
+                                false,
+                                span,
+                            ));
+                        }
+                    }
+                } else {
+                    unreachable!();
                 }
             }
-        } else {
-            unreachable!();
+            CodeGenerationProfile::TypeCheck(_) => {
+                if and {
+                    self.instructions.add(Instruction::StoreLocal("tmp", span));
+                    self.instructions.add(Instruction::Lookup("tmp", span));
+
+                    self.start_sc_bool();
+
+                    if let Some(PendingBlock::ScBool {
+                        ref mut jump_instrs,
+                    }) = self.pending_block.last_mut()
+                    {
+                        jump_instrs.push(self.instructions.add(Instruction::JumpIfTrue(!0, span)));
+                    } else {
+                        unreachable!();
+                    }
+                    if type_constraints.len() == 1 {
+                        self.add(Instruction::TypeConstraint(
+                            type_constraints[0].clone(),
+                            false,
+                            span,
+                        ));
+                    }
+
+                    self.instructions.add(Instruction::Lookup("tmp", span));
+                    if let Some(PendingBlock::ScBool {
+                        ref mut jump_instrs,
+                    }) = self.pending_block.first_mut()
+                    {
+                        jump_instrs.push(self.instructions.add(Instruction::Jump(!0, span)));
+                    }
+
+                    self.end_sc_bool();
+                    if type_constraints.len() == 1 {
+                        let mut inverted = type_constraints[0].clone();
+                        inverted.operation = inverted.operation.not();
+                        self.add(Instruction::TypeConstraint(inverted, true, span));
+                    }
+                } else {
+                    self.instructions.add(Instruction::StoreLocal("tmp", span));
+                    self.instructions.add(Instruction::Lookup("tmp", span));
+
+                    self.start_sc_bool();
+
+                    if let Some(PendingBlock::ScBool {
+                        ref mut jump_instrs,
+                    }) = self.pending_block.last_mut()
+                    {
+                        jump_instrs.push(self.instructions.add(Instruction::JumpIfFalse(!0, span)));
+                    } else {
+                        unreachable!();
+                    }
+                    if type_constraints.len() == 1 {
+                        self.add(Instruction::TypeConstraint(
+                            type_constraints[0].clone(),
+                            true,
+                            span,
+                        ));
+                    }
+
+                    self.instructions.add(Instruction::Lookup("tmp", span));
+                    if let Some(PendingBlock::ScBool {
+                        ref mut jump_instrs,
+                    }) = self.pending_block.first_mut()
+                    {
+                        jump_instrs.push(self.instructions.add(Instruction::Jump(!0, span)));
+                    }
+
+                    self.end_sc_bool();
+                    if type_constraints.len() == 1 {
+                        let mut inverted = type_constraints[0].clone();
+                        inverted.operation = inverted.operation.not();
+                        self.add(Instruction::TypeConstraint(inverted, false, span));
+                    }
+                }
+            }
         }
     }
 
@@ -284,7 +365,10 @@ impl<'source> CodeGenerator<'source> {
             for instr in jump_instrs {
                 match self.instructions.get_mut(instr) {
                     Some(Instruction::JumpIfFalseOrPop(ref mut target, _))
-                    | Some(Instruction::JumpIfTrueOrPop(ref mut target, _)) => {
+                    | Some(Instruction::JumpIfTrueOrPop(ref mut target, _))
+                    | Some(Instruction::Jump(ref mut target, _))
+                    | Some(Instruction::JumpIfFalse(ref mut target, _))
+                    | Some(Instruction::JumpIfTrue(ref mut target, _)) => {
                         *target = end;
                     }
                     _ => unreachable!(),
@@ -298,7 +382,7 @@ impl<'source> CodeGenerator<'source> {
             Some(PendingBlock::Branch { jump_instr }) => {
                 match self.instructions.get_mut(jump_instr) {
                     Some(Instruction::JumpIfFalse(ref mut target, _))
-                    | Some(Instruction::Jump(ref mut target)) => {
+                    | Some(Instruction::Jump(ref mut target, _)) => {
                         *target = new_jump_instr;
                     }
                     _ => {}
@@ -460,7 +544,7 @@ impl<'source> CodeGenerator<'source> {
                 self.set_line_from_span(cont.span());
                 for pending_block in self.pending_block.iter().rev() {
                     if let PendingBlock::Loop { iter_instr, .. } = pending_block {
-                        self.add(Instruction::Jump(*iter_instr));
+                        self.add(Instruction::Jump(*iter_instr, cont.span));
                         break;
                     }
                 }
@@ -470,7 +554,7 @@ impl<'source> CodeGenerator<'source> {
                 match &self.profile {
                     CodeGenerationProfile::Render => {
                         self.set_line_from_span(brk.span());
-                        let instr = self.add(Instruction::Jump(0));
+                        let instr = self.add(Instruction::Jump(0, brk.span));
                         for pending_block in self.pending_block.iter_mut().rev() {
                             if let PendingBlock::Loop {
                                 ref mut jump_instrs,
@@ -547,7 +631,7 @@ impl<'source> CodeGenerator<'source> {
     ) {
         use crate::compiler::instructions::MACRO_CALLER;
         self.set_line_from_span(macro_decl.span());
-        let instr = self.add(Instruction::Jump(!0));
+        let instr = self.add(Instruction::Jump(!0, macro_decl.span()));
         self.add(Instruction::MacroName(macro_decl.name, macro_decl.span()));
         // dbt function parameters support lateral variables, e.g.
         // {% macro foo(a, b=a+1, c=b+1) %}
@@ -648,7 +732,7 @@ impl<'source> CodeGenerator<'source> {
             span.end_offset,
         ));
 
-        if let Some(Instruction::Jump(ref mut target)) = self.instructions.get_mut(instr) {
+        if let Some(Instruction::Jump(ref mut target, _)) = self.instructions.get_mut(instr) {
             *target = macro_instr;
         } else {
             unreachable!();
@@ -703,7 +787,11 @@ impl<'source> CodeGenerator<'source> {
         let type_constraints = self.get_type_constraints(&if_cond.expr);
         self.start_if(span);
         for type_constraint in &type_constraints {
-            self.add(Instruction::TypeConstraint(type_constraint.clone(), true));
+            self.add(Instruction::TypeConstraint(
+                type_constraint.clone(),
+                true,
+                span,
+            ));
         }
         for node in &if_cond.true_body {
             self.compile_stmt(node, listeners);
@@ -711,14 +799,13 @@ impl<'source> CodeGenerator<'source> {
         if !if_cond.false_body.is_empty()
             || matches!(self.profile, CodeGenerationProfile::TypeCheck(_))
         {
-            self.start_else();
+            self.start_else(span);
             if type_constraints.len() == 1 {
                 // if there is only one type constraint, we can just add it to the else block
                 // if there is more than one, we don't have constraints
-                self.add(Instruction::TypeConstraint(
-                    type_constraints[0].clone(),
-                    false,
-                ));
+                let mut inverted = type_constraints[0].clone();
+                inverted.operation = inverted.operation.not();
+                self.add(Instruction::TypeConstraint(inverted, false, span));
             }
             if !if_cond.false_body.is_empty() {
                 for node in &if_cond.false_body {
@@ -816,10 +903,10 @@ impl<'source> CodeGenerator<'source> {
             self.add(Instruction::Swap);
             self.add(Instruction::LoadConst(Value::from(1usize)));
             self.add(Instruction::Add(span));
-            self.start_else();
+            self.start_else(span);
             self.add(Instruction::DiscardTop);
             self.end_if();
-            self.end_for_loop(false);
+            self.end_for_loop(false, span);
             self.add(Instruction::BuildList(None, span));
         } else {
             self.compile_expr(&for_loop.iter, listeners);
@@ -830,7 +917,7 @@ impl<'source> CodeGenerator<'source> {
         for node in &for_loop.body {
             self.compile_stmt(node, listeners);
         }
-        self.end_for_loop(!for_loop.else_body.is_empty());
+        self.end_for_loop(!for_loop.else_body.is_empty(), span);
         if !for_loop.else_body.is_empty() {
             self.start_if(span);
             for node in &for_loop.else_body {
@@ -948,17 +1035,20 @@ impl<'source> CodeGenerator<'source> {
                 let type_constraints = self.get_type_constraints(&i.test_expr);
                 self.start_if(i.span());
                 for type_constraint in &type_constraints {
-                    self.add(Instruction::TypeConstraint(type_constraint.clone(), true));
+                    self.add(Instruction::TypeConstraint(
+                        type_constraint.clone(),
+                        true,
+                        i.span(),
+                    ));
                 }
                 self.compile_expr(&i.true_expr, listeners);
-                self.start_else();
+                self.start_else(i.span);
                 if type_constraints.len() == 1 {
                     // if there is only one type constraint, we can just add it to the else block
                     // if there is more than one, we don't have constraints
-                    self.add(Instruction::TypeConstraint(
-                        type_constraints[0].clone(),
-                        false,
-                    ));
+                    let mut inverted = type_constraints[0].clone();
+                    inverted.operation = inverted.operation.not();
+                    self.add(Instruction::TypeConstraint(inverted, false, i.span()));
                 }
                 if let Some(ref false_expr) = i.false_expr {
                     self.compile_expr(false_expr, listeners);
@@ -1025,7 +1115,7 @@ impl<'source> CodeGenerator<'source> {
                     self.compile_expr(key, listeners);
                     self.compile_expr(value, listeners);
                 }
-                self.add(Instruction::BuildMap(m.keys.len()));
+                self.add(Instruction::BuildMap(m.keys.len(), m.span()));
             }
             ast::Expr::Tuple(t) => {
                 self.set_line_from_span(t.span());
@@ -1227,11 +1317,13 @@ impl<'source> CodeGenerator<'source> {
             ast::BinOpKind::ScAnd | ast::BinOpKind::ScOr => {
                 self.start_sc_bool();
                 self.compile_expr(&c.left, listeners);
-                let type_constraints = if matches!(c.op, ast::BinOpKind::ScAnd) {
-                    self.get_type_constraints(&c.left)
-                } else {
-                    vec![]
-                };
+                let mut type_constraints = self.get_type_constraints(&c.left);
+                if matches!(c.op, ast::BinOpKind::ScAnd) {
+                    // invert
+                    type_constraints.iter_mut().for_each(|tc| {
+                        tc.operation = tc.operation.not();
+                    });
+                }
                 self.sc_bool(
                     matches!(c.op, ast::BinOpKind::ScAnd),
                     span,
@@ -1282,7 +1374,7 @@ impl<'source> CodeGenerator<'source> {
 
     pub fn get_type_constraints(&self, expr: &ast::Expr<'source>) -> Vec<TypeConstraint> {
         if matches!(self.profile, CodeGenerationProfile::TypeCheck(_)) {
-            expr.try_into().unwrap_or_default()
+            get_type_constraints(expr).unwrap_or_default()
         } else {
             vec![]
         }
@@ -1310,76 +1402,102 @@ impl TypeConstraintOperation {
     }
 }
 
-impl<'source> TryFrom<&'source ast::Expr<'source>> for Vec<TypeConstraint> {
-    type Error = ();
-
-    fn try_from(expr: &'source ast::Expr<'source>) -> Result<Self, Self::Error> {
-        match expr {
-            ast::Expr::Var(_) => Ok(vec![TypeConstraint {
-                name: expr.try_into()?,
-                operation: TypeConstraintOperation::NotNull(true),
-            }]),
-            ast::Expr::GetAttr(_) => Ok(vec![TypeConstraint {
-                name: expr.try_into()?,
-                operation: TypeConstraintOperation::NotNull(true),
-            }]),
-            ast::Expr::Test(spanned) => {
-                let test_name = spanned.name.to_string();
-                (&spanned.expr).try_into().map(|variable| {
-                    vec![TypeConstraint {
-                        name: variable,
-                        operation: TypeConstraintOperation::Is(test_name, true),
-                    }]
-                })
-            }
-            ast::Expr::BinOp(bin_op) => {
-                match bin_op.op {
-                    ast::BinOpKind::ScAnd => (&bin_op.left).try_into().and_then(
-                        |mut constraints: Vec<TypeConstraint>| {
-                            let right_constraints: Vec<TypeConstraint> =
-                                (&bin_op.right).try_into()?;
-                            constraints.extend(right_constraints);
-                            Ok(constraints)
-                        },
-                    ),
-                    _ => Ok(vec![]),
-                }
-            }
-            ast::Expr::UnaryOp(unary_op) if matches!(unary_op.op, ast::UnaryOpKind::Not) => {
-                (&unary_op.expr)
-                    .try_into()
-                    .map(|constraints: Vec<TypeConstraint>| {
-                        constraints
-                            .iter()
-                            .map(|constraint| TypeConstraint {
-                                name: constraint.name.clone(),
-                                operation: constraint.operation.not(),
-                            })
-                            .collect()
-                    })
+fn get_type_constraints<'source>(expr: &ast::Expr<'source>) -> Result<Vec<TypeConstraint>, ()> {
+    match expr {
+        ast::Expr::Var(_) => Ok(vec![TypeConstraint {
+            name: expr.try_into()?,
+            operation: TypeConstraintOperation::NotNull(true),
+        }]),
+        ast::Expr::GetAttr(_) => Ok(vec![TypeConstraint {
+            name: expr.try_into()?,
+            operation: TypeConstraintOperation::NotNull(true),
+        }]),
+        ast::Expr::GetItem(_) => Ok(vec![TypeConstraint {
+            name: expr.try_into()?,
+            operation: TypeConstraintOperation::NotNull(true),
+        }]),
+        ast::Expr::Test(spanned) => {
+            let test_name = spanned.name.to_string();
+            (&spanned.expr).try_into().map(|variable| {
+                vec![TypeConstraint {
+                    name: variable,
+                    operation: TypeConstraintOperation::Is(test_name, true),
+                }]
+            })
+        }
+        ast::Expr::BinOp(bin_op) => match bin_op.op {
+            ast::BinOpKind::ScAnd | ast::BinOpKind::ScOr => {
+                let mut left_constraints = get_type_constraints(&bin_op.left)?;
+                let right_constraints = get_type_constraints(&bin_op.right)?;
+                left_constraints.extend(right_constraints);
+                Ok(left_constraints)
             }
             _ => Ok(vec![]),
+        },
+        ast::Expr::UnaryOp(unary_op) if matches!(unary_op.op, ast::UnaryOpKind::Not) => {
+            Ok(get_type_constraints(&unary_op.expr)?
+                .into_iter()
+                .map(|constraint| TypeConstraint {
+                    name: constraint.name.clone(),
+                    operation: constraint.operation.not(),
+                })
+                .collect())
         }
+        ast::Expr::Call(_) => Ok(vec![TypeConstraint {
+            name: "tmp".into(),
+            operation: TypeConstraintOperation::NotNull(true),
+        }]),
+        ast::Expr::Filter(filter) => {
+            if filter.name == "is_list" {
+                if let Some(ref expr) = filter.expr {
+                    if let Ok(variable) = expr.try_into() {
+                        return Ok(vec![TypeConstraint {
+                            name: variable,
+                            operation: TypeConstraintOperation::Is("sequence".into(), true),
+                        }]);
+                    }
+                }
+            }
+            Ok(vec![TypeConstraint {
+                name: "tmp".into(),
+                operation: TypeConstraintOperation::NotNull(true),
+            }])
+        }
+        _ => Ok(vec![]),
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Deserialize, Serialize, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Variable {
     String(String),
-    GetAttr(Vec<String>),
+    GetAttr(Vec<Part>),
 }
 
 impl Variable {
     pub fn get_attribute(&self, name: &str) -> Variable {
         match self {
-            Variable::String(base) => Variable::GetAttr(vec![base.clone(), name.to_string()]),
-            Variable::GetAttr(items) => Variable::GetAttr(
-                items
-                    .iter()
-                    .cloned()
-                    .chain(std::iter::once(name.to_string()))
-                    .collect(),
-            ),
+            Variable::String(base) => Variable::GetAttr(vec![
+                Part::String(base.clone()),
+                Part::String(name.to_string()),
+            ]),
+            Variable::GetAttr(items) => {
+                let mut new_items = items.clone();
+                new_items.push(Part::String(name.to_string()));
+                Variable::GetAttr(new_items)
+            }
+        }
+    }
+    pub fn get_subscript(&self, index: &str) -> Variable {
+        match self {
+            Variable::String(base) => Variable::GetAttr(vec![
+                Part::String(base.clone()),
+                Part::Subscript(index.to_string()),
+            ]),
+            Variable::GetAttr(items) => {
+                let mut new_items = items.clone();
+                new_items.push(Part::Subscript(index.to_string()));
+                Variable::GetAttr(new_items)
+            }
         }
     }
 }
@@ -1393,6 +1511,14 @@ impl<'source> TryFrom<&ast::Expr<'source>> for Variable {
             ast::Expr::GetAttr(spanned) => {
                 let variable: Variable = (&spanned.expr).try_into()?;
                 Ok(variable.get_attribute(spanned.name))
+            }
+            ast::Expr::GetItem(spanned) => {
+                let variable: Variable = (&spanned.expr).try_into()?;
+                let subscript = match &spanned.subscript_expr {
+                    ast::Expr::Const(c) => c.value.to_string(),
+                    _ => return Err(()),
+                };
+                Ok(variable.get_subscript(&subscript))
             }
             _ => Err(()),
         }

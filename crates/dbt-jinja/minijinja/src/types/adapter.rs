@@ -1,92 +1,9 @@
 use crate::compiler::typecheck::FunctionRegistry;
-use crate::types::agate_table::AgateTableType;
-use crate::types::builtin::Type;
-use crate::types::class::{ClassType, DynClassType};
-use crate::types::function::{ArgSpec, DynFunctionType, FunctionType};
-use crate::types::relation::RelationType;
-use crate::types::struct_::StructType;
-use crate::types::tuple::TupleType;
-use crate::types::union::UnionType;
-use std::collections::BTreeMap;
-use std::hash::Hash;
+use crate::types::function::{ArgSpec, FunctionType};
+use crate::types::Type;
+use crate::TypecheckingEventListener;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex, OnceLock};
-
-/// Metadata for relation objects, including valid attributes and their return types.
-#[derive(Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct AdapterType {}
-
-impl std::fmt::Debug for AdapterType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("adapter")
-    }
-}
-
-impl ClassType for AdapterType {
-    fn get_attribute(&self, key: &str) -> Result<Type, crate::Error> {
-        match key {
-            "get_relation" => Ok(Type::Function(DynFunctionType::new(Arc::new(
-                AdapterGetRelationFunction::default(),
-            )))),
-            "dispatch" => Ok(Type::Function(DynFunctionType::new(Arc::new(
-                AdapterDispatchFunction::instance(),
-            )))),
-            "standardize_grants_dict" => Ok(Type::Function(DynFunctionType::new(Arc::new(
-                AdapterStandardizeGrantsDictFunction::default(),
-            )))),
-            "type" => Ok(Type::Function(DynFunctionType::new(Arc::new(
-                AdapterTypeFunction::default(),
-            )))),
-            "get_column_schema_from_query" => Ok(Type::Function(DynFunctionType::new(Arc::new(
-                AdapterGetColumnSchemaFromQueryFunction::default(),
-            )))),
-            "quote" => Ok(Type::Function(DynFunctionType::new(Arc::new(
-                AdapterQuoteFunction::default(),
-            )))),
-            "commit" => Ok(Type::Function(DynFunctionType::new(Arc::new(
-                AdapterCommitFunction::default(),
-            )))),
-            "get_columns_in_relation" => Ok(Type::Function(DynFunctionType::new(Arc::new(
-                AdapterGetColumnsInRelationFunction::default(),
-            )))),
-            "rename_relation" => Ok(Type::Function(DynFunctionType::new(Arc::new(
-                AdapterRenameRelationFunction::default(),
-            )))),
-            "execute" => Ok(Type::Function(DynFunctionType::new(Arc::new(
-                AdapterExecuteFunction::default(),
-            )))),
-            _ => Err(crate::Error::new(
-                crate::error::ErrorKind::InvalidOperation,
-                format!("{self:?}.{key} is not supported"),
-            )),
-        }
-    }
-}
-
-#[derive(Default, Clone, Eq, PartialEq)]
-pub struct AdapterGetRelationFunction {}
-
-impl std::fmt::Debug for AdapterGetRelationFunction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("adapter.get_relation")
-    }
-}
-
-impl FunctionType for AdapterGetRelationFunction {
-    fn _resolve_arguments(&self, _args: &[Type]) -> Result<Type, crate::Error> {
-        Ok(Type::Union(UnionType::new(vec![
-            Type::Class(DynClassType::new(Arc::new(RelationType::default()))),
-            Type::None,
-        ])))
-    }
-
-    fn arg_specs(&self) -> Vec<ArgSpec> {
-        vec![
-            ArgSpec::new("database", false),
-            ArgSpec::new("schema", false),
-            ArgSpec::new("identifier", false),
-        ]
-    }
-}
 
 #[derive(Clone)]
 /// AdapterDispatchFunction is a singleton that type check adapter.dispatch
@@ -128,25 +45,31 @@ impl std::fmt::Debug for AdapterDispatchFunction {
 }
 
 impl FunctionType for AdapterDispatchFunction {
-    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
-        if args.len() > 2 {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::TypeError,
-                "Expected at most 2 arguments for adapter.dispatch",
-            ));
-        }
+    fn _resolve_arguments(
+        &self,
+        args: &[Type],
+        listener: Rc<dyn TypecheckingEventListener>,
+    ) -> Result<Type, crate::Error> {
         if let Some(Type::String(Some(name))) = args.get(0) {
-            let name = format!("default__{name}");
+            let prefixes = [
+                "default__",
+                "snowflake__",
+                "redshift__",
+                "bigquery__",
+                "postgres__",
+            ];
             if let Ok(registry_opt) = self.function_registry.lock() {
                 if let Some(ref registry) = *registry_opt {
-                    if let Some(func) = registry.get(&name) {
-                        Ok(Type::Function(func.clone()))
-                    } else {
-                        Err(crate::Error::new(
-                            crate::error::ErrorKind::InvalidOperation,
-                            format!("Function {name} not found"),
-                        ))
+                    for prefix in prefixes.iter() {
+                        let key = format!("{prefix}{name}");
+                        if let Some(func) = registry.get(&key) {
+                            return Ok(Type::Object(func.clone()));
+                        }
                     }
+                    listener.warn(&format!(
+                        "Function {name} not found in any supported adapter"
+                    ));
+                    Ok(Type::Any { hard: false })
                 } else {
                     Err(crate::Error::new(
                         crate::error::ErrorKind::InvalidOperation,
@@ -160,312 +83,12 @@ impl FunctionType for AdapterDispatchFunction {
                 ))
             }
         } else {
-            Err(crate::Error::new(
-                crate::error::ErrorKind::TypeError,
-                "Expected literal string for first argument of adapter.dispatch",
-            ))
+            listener.warn("Expected literal string for first argument of adapter.dispatch");
+            Ok(Type::Any { hard: false })
         }
     }
 
     fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![ArgSpec::new("name", false)]
-    }
-}
-
-#[derive(Default, Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
-pub struct AdapterStandardizeGrantsDictFunction {}
-
-impl std::fmt::Debug for AdapterStandardizeGrantsDictFunction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("adapter.standardize_grants_dict")
-    }
-}
-
-impl FunctionType for AdapterStandardizeGrantsDictFunction {
-    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
-        // The first arg must be a agate_table
-        if let Some(Type::Class(class)) = args.get(0) {
-            if !class.is::<AgateTableType>() {
-                return Err(crate::Error::new(
-                    crate::error::ErrorKind::TypeError,
-                    format!(
-                        "Expected agate_table type for first argument of adapter.standardize_grants_dict, got {class:?}"
-                    ),
-                ));
-            }
-        } else {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::TypeError,
-                format!(
-                    "Expected agate_table type for first argument of adapter.standardize_grants_dict, got {:?}",
-                    args.get(0)
-                ),
-            ));
-        }
-        if args.len() > 1 {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::TypeError,
-                "Expected at most 1 argument for adapter.standardize_grants_dict",
-            ));
-        }
-        Ok(Type::Struct(StructType::new(BTreeMap::from([(
-            "return_val".to_string(),
-            Type::Any { hard: true }, // TODO
-        )]))))
-    }
-
-    fn arg_specs(&self) -> Vec<ArgSpec> {
-        vec![ArgSpec::new("grants_dict", false)]
-    }
-}
-
-#[derive(Default, Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
-pub struct AdapterTypeFunction {}
-
-impl std::fmt::Debug for AdapterTypeFunction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("adapter.type")
-    }
-}
-
-impl FunctionType for AdapterTypeFunction {
-    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
-        if !args.is_empty() {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::InvalidOperation,
-                "Expected 0 arguments for adapter.type",
-            ));
-        }
-        Ok(Type::String(None))
-    }
-
-    fn arg_specs(&self) -> Vec<ArgSpec> {
-        vec![]
-    }
-}
-
-#[derive(Default, Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
-pub struct AdapterGetColumnSchemaFromQueryFunction {}
-
-impl std::fmt::Debug for AdapterGetColumnSchemaFromQueryFunction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("adapter.get_column_schema_from_query")
-    }
-}
-
-impl FunctionType for AdapterGetColumnSchemaFromQueryFunction {
-    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
-        if args.len() != 2 {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::InvalidOperation,
-                format!(
-                    "Expected 2 arguments for adapter.get_column_schema_from_query, got {}",
-                    args.len()
-                ),
-            ));
-        }
-        if !args[0].is_subtype_of(&Type::String(None)) {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::InvalidOperation,
-                format!(
-                    "Expected string for first argument of adapter.get_column_schema_from_query, got {:?}",
-                    args[0]
-                ),
-            ));
-        }
-        if !args[1].is_subtype_of(&Type::String(None)) {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::InvalidOperation,
-                format!("Expected string for second argument of adapter.get_column_schema_from_query, got {:?}", args[1]),
-            ));
-        }
-        Ok(Type::String(None))
-    }
-
-    fn arg_specs(&self) -> Vec<ArgSpec> {
-        vec![
-            ArgSpec::new("select_sql", false),
-            ArgSpec::new("select_sql_header", true),
-        ]
-    }
-}
-
-#[derive(Default, Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
-pub struct AdapterQuoteFunction {}
-
-impl std::fmt::Debug for AdapterQuoteFunction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("adapter.quote")
-    }
-}
-
-impl FunctionType for AdapterQuoteFunction {
-    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
-        if args.len() != 1 {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::InvalidOperation,
-                "Expected 1 argument for adapter.quote",
-            ));
-        }
-        if !matches!(args[0], Type::String(_)) {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::InvalidOperation,
-                format!(
-                    "Expected string for first argument of adapter.quote, got {:?}",
-                    args[0]
-                ),
-            ));
-        }
-        Ok(Type::String(Some(args[0].to_string())))
-    }
-
-    fn arg_specs(&self) -> Vec<ArgSpec> {
-        vec![ArgSpec::new("value", false)]
-    }
-}
-
-#[derive(Default, Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
-pub struct AdapterCommitFunction {}
-
-impl std::fmt::Debug for AdapterCommitFunction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("adapter.commit")
-    }
-}
-
-impl FunctionType for AdapterCommitFunction {
-    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
-        if !args.is_empty() {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::InvalidOperation,
-                "Expected 0 argument for adapter.commit",
-            ));
-        }
-        Ok(Type::None)
-    }
-
-    fn arg_specs(&self) -> Vec<ArgSpec> {
-        vec![]
-    }
-}
-
-#[derive(Default, Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
-pub struct AdapterGetColumnsInRelationFunction {}
-
-impl std::fmt::Debug for AdapterGetColumnsInRelationFunction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("adapter.get_columns_in_relation")
-    }
-}
-
-impl FunctionType for AdapterGetColumnsInRelationFunction {
-    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
-        if args.len() != 1 {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::InvalidOperation,
-                "Expected 1 argument for adapter.get_columns_in_relation",
-            ));
-        } // check if the first argument is a relation type
-        if !matches!(&args[0], Type::Class(class) if class.is::<RelationType>()) {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::InvalidOperation,
-                "Expected relation type for first argument of adapter.get_columns_in_relation",
-            ));
-        }
-        Ok(Type::StdColumn)
-    }
-
-    fn arg_specs(&self) -> Vec<ArgSpec> {
-        vec![]
-    }
-}
-
-#[derive(Default, Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
-pub struct AdapterRenameRelationFunction {}
-
-impl std::fmt::Debug for AdapterRenameRelationFunction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("adapter.rename_relation")
-    }
-}
-
-impl FunctionType for AdapterRenameRelationFunction {
-    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
-        if args.len() != 2 {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::InvalidOperation,
-                "Expected 2 arguments for adapter.rename_relation",
-            ));
-        }
-        if !matches!(&args[0], Type::Class(class) if class.is::<RelationType>()) {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::InvalidOperation,
-                "Expected relation type for first argument of adapter.rename_relation",
-            ));
-        } else if !matches!(&args[1], Type::Class(class) if class.is::<RelationType>()) {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::InvalidOperation,
-                "Expected relation type for second argument of adapter.rename_relation",
-            ));
-        }
-        Ok(Type::None)
-    }
-
-    fn arg_specs(&self) -> Vec<ArgSpec> {
-        vec![
-            ArgSpec::new("relation", false),
-            ArgSpec::new("new_name", false),
-        ]
-    }
-}
-
-#[derive(Default, Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
-pub struct AdapterExecuteFunction {}
-
-impl std::fmt::Debug for AdapterExecuteFunction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("adapter.execute")
-    }
-}
-
-impl FunctionType for AdapterExecuteFunction {
-    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
-        if args.len() != 3 {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::InvalidOperation,
-                "Expected 3 arguments for adapter.execute",
-            ));
-        }
-        if !args[0].is_subtype_of(&Type::String(None)) {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::InvalidOperation,
-                "Expected string for first argument of adapter.execute",
-            ));
-        }
-        if !args[1].is_subtype_of(&Type::Bool) {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::InvalidOperation,
-                "Expected bool for second argument of adapter.execute",
-            ));
-        }
-        if !args[2].is_subtype_of(&Type::Bool) {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::InvalidOperation,
-                "Expected bool for third argument of adapter.execute",
-            ));
-        }
-        Ok(Type::Tuple(TupleType::new(vec![
-            // TODO: the response type
-            Type::Any { hard: false },
-            Type::Class(DynClassType::new(Arc::new(AgateTableType::default()))),
-        ])))
-    }
-
-    fn arg_specs(&self) -> Vec<ArgSpec> {
-        vec![
-            ArgSpec::new("compiled_code", false),
-            ArgSpec::new("auto_begin", true),
-            ArgSpec::new("fetch", true),
-        ]
     }
 }

@@ -1,11 +1,14 @@
+-- funcsign: () -> string
 {%- macro get_table_columns_and_constraints() -%}
   {{ adapter.dispatch('get_table_columns_and_constraints', 'dbt')() }}
 {%- endmacro -%}
 
+-- funcsign: () -> string
 {% macro default__get_table_columns_and_constraints() -%}
   {{ return(table_columns_and_constraints()) }}
 {%- endmacro %}
 
+-- funcsign: () -> string
 {% macro table_columns_and_constraints() %}
   {# loop through user_provided_columns to create DDL with data types and constraints #}
     {%- set raw_column_constraints = adapter.render_raw_columns_constraints(raw_columns=model['columns']) -%}
@@ -20,10 +23,12 @@
     )
 {% endmacro %}
 
+-- funcsign: (string) -> string
 {%- macro get_assert_columns_equivalent(sql) -%}
   {{ adapter.dispatch('get_assert_columns_equivalent', 'dbt')(sql) }}
 {%- endmacro -%}
 
+-- funcsign: (string) -> string
 {% macro default__get_assert_columns_equivalent(sql) -%}
   {{ return(assert_columns_equivalent(sql)) }}
 {%- endmacro %}
@@ -32,6 +37,7 @@
   Compares the column schema provided by a model's sql file to the column schema provided by a model's schema file.
   If any differences in name, data_type or number of columns exist between the two schemas, raises a compiler error
 #}
+-- funcsign: (string) -> string
 {% macro assert_columns_equivalent(sql) %}
 
   {#-- First ensure the user has defined 'columns' in yaml specification --#}
@@ -73,6 +79,7 @@
 
 {% endmacro %}
 
+-- funcsign: (list[ANY]) -> list[ANY]
 {% macro format_columns(columns) %}
   {% set formatted_columns = [] %}
   {% for column in columns %}
@@ -82,6 +89,7 @@
   {{ return(formatted_columns) }}
 {% endmacro %}
 
+-- funcsign: (base_column) -> struct {name: string, data_type: string, formatted: string}
 {% macro default__format_column(column) -%}
   {% set data_type = column.dtype %}
   {% set formatted = column.column.lower() ~ " " ~ data_type %}

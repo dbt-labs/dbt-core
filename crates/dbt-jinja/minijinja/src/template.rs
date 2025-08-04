@@ -4,8 +4,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::{fmt, io};
 
+use dashmap::DashMap;
 use serde::Serialize;
 
+use crate::compiler::cfg::build_cfg;
 use crate::compiler::codegen::{CodeGenerationProfile, CodeGenerator};
 use crate::compiler::instructions::Instructions;
 use crate::compiler::lexer::WhitespaceConfig;
@@ -21,7 +23,9 @@ use crate::syntax::SyntaxConfig;
 use crate::utils::AutoEscape;
 use crate::value::{self, Value};
 use crate::vm::listeners::TypecheckingEventListener;
+use crate::vm::typemeta::TypeChecker;
 use crate::vm::{prepare_blocks, Context, State, Vm};
+use crate::Type;
 
 /// Callback for auto escape determination
 pub type AutoEscapeFunc = dyn Fn(&str) -> AutoEscape + Sync + Send;
@@ -131,22 +135,24 @@ impl<'env, 'source> Template<'env, 'source> {
 
     /// typechecks the template with the given context.
     #[allow(clippy::too_many_arguments)]
-    pub fn typecheck<S: Serialize>(
+    pub fn typecheck(
         &self,
-        ctx: S,
         funcsigns: Arc<FunctionRegistry>,
+        builtins: Arc<DashMap<String, Type>>,
         warning_printer: Rc<dyn TypecheckingEventListener>,
     ) -> Result<(), crate::Error> {
-        let vm = Vm::new(self.env);
+        let instructions = &self.compiled.instructions.instructions;
+        // build CFG
+        let cfg = build_cfg(instructions);
+        // create a typechecker
+        let mut typechecker = TypeChecker::new(instructions, cfg, funcsigns, builtins);
 
-        vm.typecheck(
-            &self.compiled.instructions,
-            Value::from_serialize(&ctx),
-            &self.compiled.blocks,
-            self.compiled.initial_auto_escape,
-            funcsigns,
-            warning_printer,
-        )
+        typechecker.check(warning_printer).map_err(|err| {
+            crate::Error::new(
+                crate::error::ErrorKind::InvalidOperation,
+                format!("Type checking failed: {err}"),
+            )
+        })
     }
 
     /// Like [`render`](Self::render) but also return the evaluated [`State`].

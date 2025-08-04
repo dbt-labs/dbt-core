@@ -1,9 +1,11 @@
 -- This is ported from the override version of get_relations_by_pattern in tests/data/internal-analytics
 -- with var('single-tenant-exclusions') usage being extracted to a parameter - excluded_schemas
+-- funcsign: (string, string, string, string, boolean, list[ANY]) -> list[ANY]
 {% macro get_relations_by_pattern_internal(schema_pattern, table_pattern, exclude='', database=target.database, quote_table=False, excluded_schemas=[]) %}
     {{ return(adapter.dispatch('get_relations_by_pattern_internal')(schema_pattern, table_pattern, exclude, database, quote_table, excluded_schemas)) }}
 {% endmacro %}
 
+-- funcsign: (string, string, string, string, boolean, list[ANY]) -> list[ANY]
 {% macro default__get_relations_by_pattern_internal(schema_pattern, table_pattern, exclude='', database=target.database, quote_table=False, excluded_schemas=[]) %}
 
     {%- call statement('get_tables', fetch_result=True) %}

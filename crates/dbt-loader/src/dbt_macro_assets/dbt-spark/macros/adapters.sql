@@ -1,7 +1,9 @@
+-- funcsign: () -> string
 {% macro tblproperties_clause() %}
   {{ return(adapter.dispatch('tblproperties_clause', 'dbt')()) }}
 {%- endmacro -%}
 
+-- funcsign: () -> string
 {% macro spark__tblproperties_clause() -%}
   {%- set tblproperties = config.get('tblproperties') -%}
   {%- if tblproperties is not none %}
@@ -13,10 +15,12 @@
   {%- endif %}
 {%- endmacro -%}
 
+-- funcsign: () -> string
 {% macro file_format_clause() %}
   {{ return(adapter.dispatch('file_format_clause', 'dbt')()) }}
 {%- endmacro -%}
 
+-- funcsign: () -> string
 {% macro spark__file_format_clause() %}
   {%- set file_format = config.get('file_format', validator=validation.any[basestring]) -%}
   {%- if file_format is not none %}
@@ -24,11 +28,12 @@
   {%- endif %}
 {%- endmacro -%}
 
-
+-- funcsign: () -> string
 {% macro location_clause() %}
   {{ return(adapter.dispatch('location_clause', 'dbt')()) }}
 {%- endmacro -%}
 
+-- funcsign: () -> string
 {% macro spark__location_clause() %}
   {%- set location_root = config.get('location_root', validator=validation.any[basestring]) -%}
   {%- set identifier = model['alias'] -%}
@@ -37,11 +42,12 @@
   {%- endif %}
 {%- endmacro -%}
 
-
+-- funcsign: () -> string
 {% macro options_clause() -%}
   {{ return(adapter.dispatch('options_clause', 'dbt')()) }}
 {%- endmacro -%}
 
+-- funcsign: () -> string
 {% macro spark__options_clause() -%}
   {%- set options = config.get('options') -%}
   {%- if config.get('file_format') == 'hudi' -%}
@@ -64,11 +70,12 @@
   {%- endif %}
 {%- endmacro -%}
 
-
+-- funcsign: () -> string
 {% macro comment_clause() %}
   {{ return(adapter.dispatch('comment_clause', 'dbt')()) }}
 {%- endmacro -%}
 
+-- funcsign: () -> string
 {% macro spark__comment_clause() %}
   {%- set raw_persist_docs = config.get('persist_docs', {}) -%}
 
@@ -82,11 +89,12 @@
   {% endif %}
 {%- endmacro -%}
 
-
+-- funcsign: (string, bool) -> string
 {% macro partition_cols(label, required=false) %}
   {{ return(adapter.dispatch('partition_cols', 'dbt')(label, required)) }}
 {%- endmacro -%}
 
+-- funcsign: (string, bool) -> string
 {% macro spark__partition_cols(label, required=false) %}
   {%- set cols = config.get('partition_by', validator=validation.any[list, basestring]) -%}
   {%- if cols is not none %}
@@ -102,11 +110,12 @@
   {%- endif %}
 {%- endmacro -%}
 
-
+-- funcsign: (string, bool) -> string
 {% macro clustered_cols(label, required=false) %}
   {{ return(adapter.dispatch('clustered_cols', 'dbt')(label, required)) }}
 {%- endmacro -%}
 
+-- funcsign: (string, bool) -> string
 {% macro spark__clustered_cols(label, required=false) %}
   {%- set cols = config.get('clustered_by', validator=validation.any[list, basestring]) -%}
   {%- set buckets = config.get('buckets', validator=validation.any[int]) -%}
@@ -123,7 +132,6 @@
   {%- endif %}
 {%- endmacro -%}
 
-
 {% macro fetch_tbl_properties(relation) -%}
   {% call statement('list_properties', fetch_result=True) -%}
     SHOW TBLPROPERTIES {{ relation }}
@@ -131,12 +139,13 @@
   {% do return(load_result('list_properties').table) %}
 {%- endmacro %}
 
-
+-- funcsign: (relation, string) -> string
 {% macro create_temporary_view(relation, compiled_code) -%}
   {{ return(adapter.dispatch('create_temporary_view', 'dbt')(relation, compiled_code)) }}
 {%- endmacro -%}
 
 {#-- We can't use temporary tables with `create ... as ()` syntax --#}
+-- funcsign: (relation, string) -> string
 {% macro spark__create_temporary_view(relation, compiled_code) -%}
     create or replace temporary view {{ relation }} as
       {{ compiled_code }}
@@ -181,11 +190,12 @@
   {%- endif -%}
 {%- endmacro -%}
 
-
+-- funcsign: (relation, string) -> string
 {% macro persist_constraints(relation, model) %}
   {{ return(adapter.dispatch('persist_constraints', 'dbt')(relation, model)) }}
 {% endmacro %}
 
+-- funcsign: (relation, model) -> string
 {% macro spark__persist_constraints(relation, model) %}
   {%- set contract_config = config.get('contract') -%}
   {% if contract_config.enforced and config.get('file_format', 'delta') == 'delta' %}

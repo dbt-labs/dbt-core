@@ -1,3 +1,4 @@
+-- funcsign: (string, optional[string]) -> string
 {% macro incremental_validate_on_schema_change(on_schema_change, default='ignore') %}
 
    {% if on_schema_change not in ['sync_all_columns', 'append_new_columns', 'fail', 'ignore'] %}
@@ -15,7 +16,7 @@
 
 {% endmacro %}
 
-
+-- funcsign: (relation, relation) -> struct{schema_changed: bool, source_not_in_target: list[base_column], target_not_in_source: list[base_column], source_columns: list[base_column], target_columns: list[base_column], new_target_types: list[dict[string, string]]}
 {% macro check_for_schema_changes(source_relation, target_relation) %}
 
   {% set schema_changed = False %}
@@ -58,7 +59,7 @@
 
 {% endmacro %}
 
-
+-- funcsign: (string, relation, struct{schema_changed: bool, source_not_in_target: list[base_column], target_not_in_source: list[base_column], source_columns: list[base_column], target_columns: list[base_column], new_target_types: list[dict[string, string]]}) -> string
 {% macro sync_column_schemas(on_schema_change, target_relation, schema_changes_dict) %}
 
   {%- set add_to_target_arr = schema_changes_dict['source_not_in_target'] -%}
@@ -98,12 +99,12 @@
 
 {% endmacro %}
 
-
+-- funcsign: (string, relation, relation) -> list[base_column]
 {% macro process_schema_changes(on_schema_change, source_relation, target_relation) %}
 
     {% if on_schema_change == 'ignore' %}
 
-     {{ return({}) }}
+     {{ return({}) }} -- noqa: return value should be list[base_column]
 
     {% else %}
 

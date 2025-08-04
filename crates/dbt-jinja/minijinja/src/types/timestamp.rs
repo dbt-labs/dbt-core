@@ -1,6 +1,11 @@
-use crate::types::{
-    builtin::Type,
-    function::{ArgSpec, FunctionType},
+use std::rc::Rc;
+
+use crate::{
+    types::{
+        function::{ArgSpec, FunctionType},
+        Type,
+    },
+    TypecheckingEventListener,
 };
 
 #[derive(Default, Clone, Eq, PartialEq)]
@@ -13,18 +18,13 @@ impl std::fmt::Debug for PyDateTimeStrftimeFunction {
 }
 
 impl FunctionType for PyDateTimeStrftimeFunction {
-    fn _resolve_arguments(&self, args: &[Type]) -> Result<Type, crate::Error> {
-        if args.len() != 1 {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::TypeError,
-                format!("Expected 1 argument, got {}", args.len()),
-            ));
-        }
+    fn _resolve_arguments(
+        &self,
+        args: &[Type],
+        listener: Rc<dyn TypecheckingEventListener>,
+    ) -> Result<Type, crate::Error> {
         if !args[0].is_subtype_of(&Type::String(None)) {
-            return Err(crate::Error::new(
-                crate::error::ErrorKind::TypeError,
-                format!("Expected string, got {}", args[0]),
-            ));
+            listener.warn(&format!("Expected string, got {}", args[0]));
         }
         Ok(Type::String(None))
     }

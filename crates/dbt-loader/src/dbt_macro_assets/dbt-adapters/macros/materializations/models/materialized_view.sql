@@ -21,7 +21,7 @@
 
 {% endmaterialization %}
 
-
+-- funcsign: (relation, relation, list[hook]) -> string
 {% macro materialized_view_setup(backup_relation, intermediate_relation, pre_hooks) %}
 
     -- backup_relation and intermediate_relation should not already exist in the database
@@ -37,7 +37,7 @@
 
 {% endmacro %}
 
-
+-- funcsign: (optional[relation], optional[relation], list[hook]) -> string
 {% macro materialized_view_teardown(backup_relation, intermediate_relation, post_hooks) %}
 
     -- drop the temp relations if they exist to leave the database clean for the next run
@@ -49,6 +49,7 @@
 {% endmacro %}
 
 
+-- funcsign: (optional[relation], relation, relation, relation) -> string
 {% macro materialized_view_get_build_sql(existing_relation, target_relation, backup_relation, intermediate_relation) %}
 
     {% set full_refresh_mode = should_full_refresh() %}
@@ -88,6 +89,7 @@
 {% endmacro %}
 
 
+-- funcsign: (relation) -> string
 {% macro materialized_view_execute_no_op(target_relation) %}
     {% do store_raw_result(
         name="main",
@@ -97,7 +99,7 @@
     ) %}
 {% endmacro %}
 
-
+-- funcsign: (string, optional[relation], relation, list[hook]) -> string
 {% macro materialized_view_execute_build_sql(build_sql, existing_relation, target_relation, post_hooks) %}
 
     -- `BEGIN` happens here:

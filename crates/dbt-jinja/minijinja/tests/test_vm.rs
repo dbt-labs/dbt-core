@@ -41,7 +41,7 @@ fn test_loop() {
     c.add(Instruction::Lookup("items", Span::default()));
     c.start_for_loop(false, false, Span::default());
     c.add(Instruction::Emit(Span::default()));
-    c.end_for_loop(false);
+    c.end_for_loop(false, Span::default());
     c.add(Instruction::EmitRaw("!", Span::default()));
 
     let output = simple_eval(&c.finish().0, ctx).unwrap();
@@ -59,7 +59,7 @@ fn test_if() {
         c.add(Instruction::Lookup("cond", Span::default()));
         c.start_if(Span::default());
         c.add(Instruction::EmitRaw("true", Span::default()));
-        c.start_else();
+        c.start_else(Span::default());
         c.add(Instruction::EmitRaw("false", Span::default()));
         c.end_if();
 
@@ -79,11 +79,11 @@ fn test_if_branches() {
     c.add(Instruction::Lookup("false", Span::default()));
     c.start_if(Span::default());
     c.add(Instruction::EmitRaw("nope1", Span::default()));
-    c.start_else();
+    c.start_else(Span::default());
     c.add(Instruction::Lookup("nil", Span::default()));
     c.start_if(Span::default());
     c.add(Instruction::EmitRaw("nope1", Span::default()));
-    c.start_else();
+    c.start_else(Span::default());
     c.add(Instruction::EmitRaw("yes", Span::default()));
     c.end_if();
     c.end_if();

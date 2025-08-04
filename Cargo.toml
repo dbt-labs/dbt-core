@@ -9,6 +9,7 @@ members = [
   "crates/dbt-common",
   "crates/dbt-frontend-common",
   "crates/dbt-jinja/minijinja",
+  "crates/minijinja-typecheck-builtins",
   "crates/dbt-jinja/minijinja-contrib",
   "crates/dbt-dag",
   "crates/dbt-loader",
@@ -91,7 +92,7 @@ opt-level = 1
 
 [profile.dev.build-override]
 # Some libraries (e.g. syn, proc-macro2 and all their dependencies) are compiled
-# *for* the build, and also depended-on by tests (because we have proc-macro crates).
+# *for* the build, and also dependend by tests (because we have proc-macro crates).
 # Tests compile with debug symbols enabled, otherwise debug symbols are disabled by default.
 # Force debug symbols to be always enabled to increase cache reuse between `cargo xtask`
 # and `cargo build/run --bin` invocations.
@@ -154,6 +155,8 @@ vortex-events = { path = "crates/vortex-events" }
 
 
 # jinja dependencies
+minijinja-typecheck-builtins = { path = "crates/minijinja-typecheck-builtins" }
+
 minijinja = { path = "crates/dbt-jinja/minijinja", features = [
   "loader",
   "custom_syntax",

@@ -1,3 +1,4 @@
+-- funcsign: (string, string) -> string
 {% macro snowflake__safe_cast(field, type) %}
     {% if type|upper == "GEOMETRY" -%}
         try_to_geometry({{field}})

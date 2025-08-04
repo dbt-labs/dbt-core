@@ -1,9 +1,11 @@
+-- funcsign: (string, string, string|list[string]|none, list[base_column], optional[list[string]]) -> string
 {% macro get_merge_sql(target, source, unique_key, dest_columns, incremental_predicates=none) -%}
    -- back compat for old kwarg name
   {% set incremental_predicates = kwargs.get('predicates', incremental_predicates) %}
   {{ adapter.dispatch('get_merge_sql', 'dbt')(target, source, unique_key, dest_columns, incremental_predicates) }}
 {%- endmacro %}
 
+-- funcsign: (string, string, string|list[string]|none, list[base_column], optional[list[string]]) -> string
 {% macro default__get_merge_sql(target, source, unique_key, dest_columns, incremental_predicates=none) -%}
     {%- set predicates = [] if incremental_predicates is none else [] + incremental_predicates -%}
     {%- set dest_cols_csv = get_quoted_csv(dest_columns | map(attribute="name")) -%}
@@ -51,11 +53,12 @@
 
 {% endmacro %}
 
-
+-- funcsign: (string, string, string|list[string]|none, list[base_column], optional[list[string]]) -> string
 {% macro get_delete_insert_merge_sql(target, source, unique_key, dest_columns, incremental_predicates) -%}
   {{ adapter.dispatch('get_delete_insert_merge_sql', 'dbt')(target, source, unique_key, dest_columns, incremental_predicates) }}
 {%- endmacro %}
 
+-- funcsign: (string, string, string|list[string]|none, list[base_column], optional[list[string]]) -> string
 {% macro default__get_delete_insert_merge_sql(target, source, unique_key, dest_columns, incremental_predicates) -%}
 
     {%- set dest_cols_csv = get_quoted_csv(dest_columns | map(attribute="name")) -%}
@@ -88,11 +91,12 @@
 
 {%- endmacro %}
 
-
+-- funcsign: (string, string, list[base_column], optional[list[string]], optional[bool]) -> string
 {% macro get_insert_overwrite_merge_sql(target, source, dest_columns, predicates, include_sql_header=false) -%}
   {{ adapter.dispatch('get_insert_overwrite_merge_sql', 'dbt')(target, source, dest_columns, predicates, include_sql_header) }}
 {%- endmacro %}
 
+-- funcsign: (string, string, list[base_column], optional[list[string]], optional[bool]) -> string
 {% macro default__get_insert_overwrite_merge_sql(target, source, dest_columns, predicates, include_sql_header) -%}
     {#-- The only time include_sql_header is True: --#}
     {#-- BigQuery + insert_overwrite strategy + "static" partitions config --#}

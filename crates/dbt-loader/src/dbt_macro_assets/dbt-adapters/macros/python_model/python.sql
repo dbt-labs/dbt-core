@@ -1,11 +1,14 @@
+-- funcsign: (string) -> string
 {% macro resolve_model_name(input_model_name) %}
     {{ return(adapter.dispatch('resolve_model_name', 'dbt')(input_model_name)) }}
 {% endmacro %}
 
+-- funcsign: (string) -> string
 {%- macro default__resolve_model_name(input_model_name) -%}
     {{  input_model_name | string | replace('"', '\"') }}
 {%- endmacro -%}
 
+-- funcsign: (model) -> string
 {% macro build_ref_function(model) %}
 
     {%- set ref_dict = {} -%}

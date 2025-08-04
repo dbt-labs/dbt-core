@@ -42,7 +42,7 @@
       {% endcall %}
 
       {% set should_revoke = should_revoke(existing_relation, full_refresh_mode=True) %}
-      {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
+      {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %} -- noqa: Unknown local variable 'grant_config'
       {% do persist_docs(target_relation, model) %}
 
       {{ return({'relations': [target_relation]}) }}

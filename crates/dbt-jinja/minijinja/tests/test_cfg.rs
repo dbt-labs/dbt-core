@@ -10,7 +10,7 @@ fn simple_cfg() {
         Instruction::LoadConst(1.into()),
         Instruction::JumpIfFalse(4, Span::default()),
         Instruction::LoadConst(2.into()),
-        Instruction::Jump(5),
+        Instruction::Jump(5, Span::default()),
         Instruction::LoadConst(3.into()),
         Instruction::Return,
     ];

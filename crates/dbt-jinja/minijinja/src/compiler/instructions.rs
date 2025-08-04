@@ -56,7 +56,7 @@ pub enum Instruction<'source> {
     LoadConst(Value),
 
     /// Builds a map of the last n pairs on the stack.
-    BuildMap(usize),
+    BuildMap(usize, Span),
 
     /// Builds a kwargs map of the last n pairs on the stack.
     BuildKwargs(usize),
@@ -161,10 +161,13 @@ pub enum Instruction<'source> {
     PopFrame,
 
     /// Jump to a specific instruction
-    Jump(usize),
+    Jump(usize, Span),
 
     /// Jump if the stack top evaluates to false
     JumpIfFalse(usize, Span),
+
+    /// Jump if the stack top evaluates to true
+    JumpIfTrue(usize, Span),
 
     /// Jump if the stack top evaluates to false or pops the value
     JumpIfFalseOrPop(usize, Span),
@@ -253,7 +256,7 @@ pub enum Instruction<'source> {
     MacroName(&'source str, Span),
 
     /// Type constraint is used to tell type checker to mutate the type of the variable
-    TypeConstraint(TypeConstraint, bool),
+    TypeConstraint(TypeConstraint, bool, Span),
 
     /// Load a type to the stack
     LoadType(Value),
@@ -505,5 +508,5 @@ impl fmt::Debug for Instructions<'_> {
 #[test]
 #[cfg(target_pointer_width = "64")]
 fn test_sizes() {
-    assert_eq!(std::mem::size_of::<Instruction>(), 72);
+    assert_eq!(std::mem::size_of::<Instruction>(), 96);
 }

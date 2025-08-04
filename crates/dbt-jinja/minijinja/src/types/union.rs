@@ -1,10 +1,24 @@
 use std::collections::BTreeSet;
 
-use crate::types::builtin::Type;
+use crate::types::Type;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct UnionType {
     pub types: BTreeSet<Type>,
+}
+
+impl std::fmt::Debug for UnionType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{}]",
+            self.types
+                .iter()
+                .map(|t| format!("{t:?}"))
+                .collect::<Vec<_>>()
+                .join("| ")
+        )
+    }
 }
 
 impl UnionType {
@@ -88,7 +102,7 @@ impl UnionType {
     }
 
     pub fn is_optional(&self) -> bool {
-        self.types.iter().any(|t| *t == Type::None)
+        self.types.iter().any(|t| matches!(t, Type::None))
     }
 
     pub fn exclude(&self, other: &Type) -> Type {

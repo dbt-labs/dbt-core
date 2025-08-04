@@ -4,7 +4,7 @@
 
   {% set expected_rows = config.get('expected_rows') %}
   {% set expected_sql = config.get('expected_sql') %}
-  {% set tested_expected_column_names = expected_rows[0].keys() if (expected_rows | length ) > 0 else get_columns_in_query(sql) %} %}
+  {% set tested_expected_column_names = expected_rows[0].keys() if (expected_rows | length ) > 0 else get_columns_in_query(sql) %} %} -- noqa: operations may fail as expected_rows may be none
 
   {%- set target_relation = this.incorporate(type='table') -%}
   {%- set temp_relation = make_temp_relation(target_relation)-%}

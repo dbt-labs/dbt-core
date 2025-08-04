@@ -8,7 +8,7 @@ expression: "&c.finish()"
         00001 | PushLoop(1,  @ 1:1-1:1),
         00002 | Iterate(5,  @ 1:1-1:1),
         00003 | Emit( @ 1:1-1:1),
-        00004 | Jump(2),
+        00004 | Jump(2,  @ 1:1-1:1),
         00005 | PopFrame,
         00006 | EmitRaw("!",  @ 1:1-1:1),
     ],

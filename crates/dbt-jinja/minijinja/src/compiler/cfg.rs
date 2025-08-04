@@ -116,7 +116,7 @@ impl CFG {
 fn is_block_terminator(inst: &Instruction) -> bool {
     matches!(
         inst,
-        Instruction::Jump(_)
+        Instruction::Jump(_, _)
             | Instruction::JumpIfFalse(_, _)
             | Instruction::JumpIfFalseOrPop(_, _)
             | Instruction::JumpIfTrueOrPop(_, _)
@@ -130,13 +130,15 @@ fn is_block_terminator(inst: &Instruction) -> bool {
 fn branch_targets(cur_idx: usize, inst: &Instruction) -> Vec<(usize, EdgeKind)> {
     use EdgeKind::*;
     match inst {
-        Instruction::Jump(t) => vec![(*t, Uncond)],
+        Instruction::Jump(t, _) => vec![(*t, Uncond)],
         Instruction::FastRecurse(_) => vec![(/*loop-head*/ 0, Uncond)],
         Instruction::Iterate(t, _) => vec![(cur_idx + 1, Cond(true)), (*t, Cond(false))],
         Instruction::JumpIfFalse(t, _) | Instruction::JumpIfFalseOrPop(t, _) => {
             vec![(cur_idx + 1, Cond(true)), (*t, Cond(false))]
         }
-        Instruction::JumpIfTrueOrPop(t, _) => vec![(*t, Cond(true)), (cur_idx + 1, Cond(false))],
+        Instruction::JumpIfTrueOrPop(t, _) | Instruction::JumpIfTrue(t, _) => {
+            vec![(cur_idx + 1, Cond(false)), (*t, Cond(true))]
+        }
         Instruction::PopFrame => vec![(cur_idx + 1, EdgeKind::FallThrough)],
         Instruction::Return => vec![],
         _ => vec![(cur_idx + 1, FallThrough)],

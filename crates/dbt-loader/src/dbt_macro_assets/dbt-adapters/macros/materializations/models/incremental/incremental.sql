@@ -11,8 +11,8 @@
 
   -- configs
   {%- set unique_key = config.get('unique_key') -%}
-  {%- set full_refresh_mode = (should_full_refresh()  or existing_relation.is_view) -%}
-  {%- set on_schema_change = incremental_validate_on_schema_change(config.get('on_schema_change'), default='ignore') -%}
+  {%- set full_refresh_mode = (should_full_refresh()  or existing_relation.is_view) -%} -- noqa: existing_relation could be None
+  {%- set on_schema_change = incremental_validate_on_schema_change(config.get('on_schema_change'), default='ignore') -%} -- noqa: incremental_validate_on_schema_change 1st parameter is not nullable
 
   -- the temp_ and backup_ relations should not already exist in the database; get_relation
   -- will return None in that case. Otherwise, we get a relation that we can drop

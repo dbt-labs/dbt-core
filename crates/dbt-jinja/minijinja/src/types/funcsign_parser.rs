@@ -1,24 +1,10 @@
 use std::{collections::BTreeMap, sync::Arc};
 
+use dashmap::DashMap;
+
 use crate::types::{
-    adapter::AdapterType,
-    agate_table::AgateTableType,
-    api::{ApiColumnType, ApiType},
-    builtin::Type,
-    class::DynClassType,
-    column_schema::ColumnSchemaType,
-    config::ConfigType,
-    dict::DictType,
-    function::{DynFunctionType, LambdaType},
-    hook::HookType,
-    information_schema::InformationSchemaType,
-    list::ListType,
-    model::ModelType,
-    node::NodeType,
-    relation::RelationType,
-    struct_::StructType,
-    tuple::TupleType,
-    union::UnionType,
+    builtins::Reference, dict::DictType, function::LambdaType, list::ListType, struct_::StructType,
+    tuple::TupleType, union::UnionType, DynObject, Type,
 };
 
 #[derive(Debug, Clone)]
@@ -81,6 +67,7 @@ enum Token {
     Comma(CodeLocation),
     Arrow(CodeLocation),
     Colon(CodeLocation),
+    Pipe(CodeLocation),
     Identifier(String, CodeLocation),
 }
 
@@ -96,6 +83,7 @@ impl Token {
             Token::Comma(loc) => Some(loc.clone()),
             Token::Arrow(loc) => Some(loc.clone()),
             Token::Colon(loc) => Some(loc.clone()),
+            Token::Pipe(loc) => Some(loc.clone()),
             Token::Identifier(_, loc) => Some(loc.clone()),
         }
     }
@@ -219,6 +207,16 @@ fn tokenize(s: &str) -> Vec<Token> {
             }
             tokens.push(Token::Colon(CodeLocation { line, col, index }));
             col += 1;
+        } else if c == '|' {
+            if !current_token.is_empty() {
+                tokens.push(Token::Identifier(
+                    current_token.clone(),
+                    CodeLocation { line, col, index },
+                ));
+                current_token = String::new();
+            }
+            tokens.push(Token::Pipe(CodeLocation { line, col, index }));
+            col += 1;
         } else {
             current_token.push(c);
             col += 1;
@@ -237,26 +235,28 @@ fn tokenize(s: &str) -> Vec<Token> {
     tokens
 }
 
-fn parse_type(tokens: &[Token], index: usize) -> Result<(Type, usize), ParseError> {
+fn _parse_type(
+    tokens: &[Token],
+    index: usize,
+    registry: Arc<DashMap<String, Type>>,
+) -> Result<(Type, usize), ParseError> {
     let next_token = tokens.get(index);
-    match next_token {
+    let (type_, consumed) = match next_token {
         Some(Token::OpenParen(_)) => {
-            let (args, ret_type, consumed) = parse_lambda(tokens, index)?;
+            let (args, ret_type, consumed) = parse_lambda(tokens, index, registry.clone())?;
             Ok((
-                Type::Function(DynFunctionType::new(Arc::new(LambdaType::new(
-                    args, ret_type,
-                )))),
+                Type::Object(DynObject::new(Arc::new(LambdaType::new(args, ret_type)))),
                 consumed,
             ))
         }
-        Some(Token::Identifier(id, location)) => match id.as_str() {
+        Some(Token::Identifier(id, _location)) => match id.as_str() {
             "string" => Ok((Type::String(None), 1)),
             "integer" => Ok((Type::Integer(None), 1)),
             "float" => Ok((Type::Float, 1)),
             "bool" => Ok((Type::Bool, 1)),
             "bytes" => Ok((Type::Bytes, 1)),
             "seq" | "list" => {
-                let (parameters, consumed) = parse_list(tokens, index + 1)?;
+                let (parameters, consumed) = parse_list(tokens, index + 1, registry.clone())?;
                 if parameters.len() != 1 {
                     let location = get_token_location(tokens, index);
                     Err(ParseError::new(
@@ -271,7 +271,7 @@ fn parse_type(tokens: &[Token], index: usize) -> Result<(Type, usize), ParseErro
                 }
             }
             "dict" => {
-                let (parameters, consumed) = parse_list(tokens, index + 1)?;
+                let (parameters, consumed) = parse_list(tokens, index + 1, registry.clone())?;
                 if parameters.len() != 2 {
                     let location = get_token_location(tokens, index);
                     Err(ParseError::new(
@@ -286,15 +286,15 @@ fn parse_type(tokens: &[Token], index: usize) -> Result<(Type, usize), ParseErro
                 }
             }
             "tuple" => {
-                let (elements, consumed) = parse_list(tokens, index + 1)?;
+                let (elements, consumed) = parse_list(tokens, index + 1, registry.clone())?;
                 Ok((Type::Tuple(TupleType::new(elements)), 1 + consumed))
             }
             "struct" => {
-                let (fields, consumed) = parse_fields(tokens, index + 1)?;
+                let (fields, consumed) = parse_fields(tokens, index + 1, registry.clone())?;
                 Ok((Type::Struct(StructType::new(fields)), 1 + consumed))
             }
             "optional" => {
-                let (parameters, consumed) = parse_list(tokens, index + 1)?;
+                let (parameters, consumed) = parse_list(tokens, index + 1, registry.clone())?;
                 if parameters.len() != 1 {
                     let location = get_token_location(tokens, index);
                     Err(ParseError::new(
@@ -308,60 +308,16 @@ fn parse_type(tokens: &[Token], index: usize) -> Result<(Type, usize), ParseErro
                     ))
                 }
             }
-            "relation" => Ok((
-                Type::Class(DynClassType::new(Arc::new(RelationType::default()))),
-                1,
-            )),
-            "adapter" => Ok((
-                Type::Class(DynClassType::new(Arc::new(AdapterType::default()))),
-                1,
-            )),
-            "api" => Ok((
-                Type::Class(DynClassType::new(Arc::new(ApiType::default()))),
-                1,
-            )),
-            "api_column" => Ok((
-                Type::Class(DynClassType::new(Arc::new(ApiColumnType::default()))),
-                1,
-            )),
-            "column_schema" => Ok((
-                Type::Class(DynClassType::new(Arc::new(ColumnSchemaType::default()))),
-                1,
-            )),
-            "agate_table" => Ok((
-                Type::Class(DynClassType::new(Arc::new(AgateTableType::default()))),
-                1,
-            )),
-            "model" => Ok((
-                Type::Class(DynClassType::new(Arc::new(ModelType::default()))),
-                1,
-            )),
             "none" => Ok((Type::None, 1)),
             "any" => Ok((Type::Any { hard: false }, 1)),
-            "information_schema" => Ok((
-                Type::Class(DynClassType::new(
-                    Arc::new(InformationSchemaType::default()),
-                )),
-                1,
-            )),
+            "ANY" => Ok((Type::Any { hard: true }, 1)),
             "timestamp" => Ok((Type::TimeStamp, 1)),
-            "config" => Ok((
-                Type::Class(DynClassType::new(Arc::new(ConfigType::default()))),
-                1,
-            )),
-            "hook" => Ok((
-                Type::Class(DynClassType::new(Arc::new(HookType::default()))),
-                1,
-            )),
-            "node" => Ok((
-                Type::Class(DynClassType::new(Arc::new(NodeType::default()))),
-                1,
-            )),
 
-            _ => Err(ParseError::new(
-                format!("Unknown type: {id}"),
-                location.clone(),
-            )),
+            _ => {
+                let builtin = Reference::new(id.clone(), registry.clone());
+                let type_ = Type::Object(DynObject::new(Arc::new(builtin)));
+                Ok((type_, 1))
+            }
         },
         None => Err(ParseError::new(
             "Unexpected end of input".to_string(),
@@ -371,12 +327,19 @@ fn parse_type(tokens: &[Token], index: usize) -> Result<(Type, usize), ParseErro
             "Unexpected token".to_string(),
             get_token_location(tokens, index),
         )),
+    }?;
+    if let Some(Token::Pipe(_)) = tokens.get(index + consumed) {
+        let (or_type, or_consumed) = _parse_type(tokens, index + consumed + 1, registry)?;
+        Ok((type_.union(&or_type), consumed + or_consumed + 1))
+    } else {
+        Ok((type_, consumed))
     }
 }
 
 fn parse_lambda(
     tokens: &[Token],
     mut index: usize,
+    registry: Arc<DashMap<String, Type>>,
 ) -> Result<(Vec<Type>, Type, usize), ParseError> {
     let start_index = index;
     let mut args = Vec::new();
@@ -400,7 +363,7 @@ fn parse_lambda(
         index += 1; // Skip closing paren
     } else {
         // Parse first argument
-        let (arg_type, consumed) = parse_type(tokens, index)?;
+        let (arg_type, consumed) = _parse_type(tokens, index, registry.clone())?;
         args.push(arg_type);
         index += consumed;
 
@@ -413,7 +376,7 @@ fn parse_lambda(
                 }
                 Token::Comma(_) => {
                     index += 1; // Skip comma
-                    let (arg_type, consumed) = parse_type(tokens, index)?;
+                    let (arg_type, consumed) = _parse_type(tokens, index, registry.clone())?;
                     args.push(arg_type);
                     index += consumed;
                 }
@@ -431,7 +394,7 @@ fn parse_lambda(
     let ret_type = match tokens.get(index) {
         Some(Token::Arrow(_)) => {
             index += 1; // Skip arrow
-            let (ret_type, consumed) = parse_type(tokens, index)?;
+            let (ret_type, consumed) = _parse_type(tokens, index, registry)?;
             index += consumed;
             ret_type
         }
@@ -448,7 +411,11 @@ fn parse_lambda(
     Ok((args, ret_type, index - start_index))
 }
 
-fn parse_list(tokens: &[Token], mut index: usize) -> Result<(Vec<Type>, usize), ParseError> {
+fn parse_list(
+    tokens: &[Token],
+    mut index: usize,
+    registry: Arc<DashMap<String, Type>>,
+) -> Result<(Vec<Type>, usize), ParseError> {
     let start_index = index;
     match tokens.get(index) {
         Some(Token::OpenBracket(_)) => {
@@ -462,7 +429,7 @@ fn parse_list(tokens: &[Token], mut index: usize) -> Result<(Vec<Type>, usize), 
             }
 
             // Parse first parameter
-            let (parameter, consumed) = parse_type(tokens, index)?;
+            let (parameter, consumed) = _parse_type(tokens, index, registry.clone())?;
             parameters.push(parameter);
             index += consumed;
 
@@ -475,7 +442,7 @@ fn parse_list(tokens: &[Token], mut index: usize) -> Result<(Vec<Type>, usize), 
                     }
                     Some(Token::Comma(_)) => {
                         index += 1; // Skip comma
-                        let (parameter, consumed) = parse_type(tokens, index)?;
+                        let (parameter, consumed) = _parse_type(tokens, index, registry.clone())?;
                         parameters.push(parameter);
                         index += consumed;
                     }
@@ -508,6 +475,7 @@ fn parse_list(tokens: &[Token], mut index: usize) -> Result<(Vec<Type>, usize), 
 fn parse_fields(
     tokens: &[Token],
     mut index: usize,
+    registry: Arc<DashMap<String, Type>>,
 ) -> Result<(BTreeMap<String, Type>, usize), ParseError> {
     let start_index = index;
     let mut fields = BTreeMap::new();
@@ -549,7 +517,7 @@ fn parse_fields(
                 }
             }
 
-            let (field_type, consumed) = parse_type(tokens, index)?;
+            let (field_type, consumed) = _parse_type(tokens, index, registry.clone())?;
             fields.insert(field_name, field_type);
             index += consumed;
 
@@ -589,7 +557,7 @@ fn parse_fields(
                             }
                         }
 
-                        let (field_type, consumed) = parse_type(tokens, index)?;
+                        let (field_type, consumed) = _parse_type(tokens, index, registry.clone())?;
                         fields.insert(field_name, field_type);
                         index += consumed;
                     }
@@ -619,10 +587,19 @@ fn parse_fields(
     }
 }
 
-pub fn parse(s: &str) -> Result<(Vec<Type>, Type), ParseError> {
+pub fn parse(
+    s: &str,
+    registry: Arc<DashMap<String, Type>>,
+) -> Result<(Vec<Type>, Type), ParseError> {
     let tokens = tokenize(s);
-    let (args, ret_type, _) = parse_lambda(&tokens, 0)?;
+    let (args, ret_type, _) = parse_lambda(&tokens, 0, registry)?;
     Ok((args, ret_type))
+}
+
+pub fn parse_type(s: &str, registry: Arc<DashMap<String, Type>>) -> Result<Type, ParseError> {
+    let tokens = tokenize(s);
+    let (type_, _) = _parse_type(&tokens, 0, registry)?;
+    Ok(type_)
 }
 
 #[cfg(test)]
@@ -631,14 +608,16 @@ mod tests {
 
     #[test]
     fn test_parse_simple_function() {
-        let (args, ret_type) = parse("() -> string").unwrap();
+        let registry = Arc::new(DashMap::new());
+        let (args, ret_type) = parse("() -> string", registry).unwrap();
         assert_eq!(args.len(), 0);
         matches!(ret_type, Type::String(None));
     }
 
     #[test]
     fn test_parse_function_with_single_arg() {
-        let (args, ret_type) = parse("(string) -> integer").unwrap();
+        let registry = Arc::new(DashMap::new());
+        let (args, ret_type) = parse("(string) -> integer", registry).unwrap();
         assert_eq!(args.len(), 1);
         matches!(args[0], Type::String(None));
         matches!(ret_type, Type::Integer(None));
@@ -646,7 +625,8 @@ mod tests {
 
     #[test]
     fn test_parse_function_with_multiple_args() {
-        let (args, ret_type) = parse("(string, integer, bool) -> float").unwrap();
+        let registry = Arc::new(DashMap::new());
+        let (args, ret_type) = parse("(string, integer, bool) -> float", registry).unwrap();
         assert_eq!(args.len(), 3);
         matches!(args[0], Type::String(None));
         matches!(args[1], Type::Integer(None));
@@ -656,7 +636,8 @@ mod tests {
 
     #[test]
     fn test_parse_function_returning_list() {
-        let (args, ret_type) = parse("(string) -> seq[integer]").unwrap();
+        let registry = Arc::new(DashMap::new());
+        let (args, ret_type) = parse("(string) -> seq[integer]", registry).unwrap();
         assert_eq!(args.len(), 1);
         matches!(args[0], Type::String(None));
         matches!(ret_type, Type::List { .. });
@@ -664,7 +645,8 @@ mod tests {
 
     #[test]
     fn test_parse_function_returning_dict() {
-        let (args, ret_type) = parse("(string) -> dict[string, integer]").unwrap();
+        let registry = Arc::new(DashMap::new());
+        let (args, ret_type) = parse("(string) -> dict[string, integer]", registry).unwrap();
         assert_eq!(args.len(), 1);
         matches!(args[0], Type::String(None));
         matches!(ret_type, Type::Dict { .. });
@@ -672,7 +654,8 @@ mod tests {
 
     #[test]
     fn test_parse_function_with_list_args() {
-        let (args, ret_type) = parse("(seq[string], list[integer]) -> bool").unwrap();
+        let registry = Arc::new(DashMap::new());
+        let (args, ret_type) = parse("(seq[string], list[integer]) -> bool", registry).unwrap();
         assert_eq!(args.len(), 2);
         matches!(args[0], Type::List { .. });
         matches!(args[1], Type::List { .. });
@@ -681,8 +664,12 @@ mod tests {
 
     #[test]
     fn test_parse_function_with_dict_args() {
-        let (args, ret_type) =
-            parse("(dict[string, integer], dict[integer, bool]) -> string").unwrap();
+        let registry = Arc::new(DashMap::new());
+        let (args, ret_type) = parse(
+            "(dict[string, integer], dict[integer, bool]) -> string",
+            registry,
+        )
+        .unwrap();
         assert_eq!(args.len(), 2);
         matches!(args[0], Type::Dict { .. });
         matches!(args[1], Type::Dict { .. });
@@ -691,7 +678,9 @@ mod tests {
 
     #[test]
     fn test_parse_function_with_struct_args() {
-        let (args, ret_type) = parse("(struct{name: string, age: integer}) -> bool").unwrap();
+        let registry = Arc::new(DashMap::new());
+        let (args, ret_type) =
+            parse("(struct{name: string, age: integer}) -> bool", registry).unwrap();
         assert_eq!(args.len(), 1);
         matches!(args[0], Type::Struct(_));
         matches!(ret_type, Type::Bool);
@@ -699,8 +688,12 @@ mod tests {
 
     #[test]
     fn test_parse_function_returning_struct() {
-        let (args, ret_type) =
-            parse("(string, integer) -> struct{id: integer, name: string, active: bool}").unwrap();
+        let registry = Arc::new(DashMap::new());
+        let (args, ret_type) = parse(
+            "(string, integer) -> struct{id: integer, name: string, active: bool}",
+            registry,
+        )
+        .unwrap();
         assert_eq!(args.len(), 2);
         matches!(args[0], Type::String(None));
         matches!(args[1], Type::Integer(None));
@@ -709,27 +702,32 @@ mod tests {
 
     #[test]
     fn test_parse_function_with_class_types() {
-        let (args, ret_type) = parse("(relation, adapter) -> api").unwrap();
+        let registry = Arc::new(DashMap::new());
+        let (args, ret_type) = parse("(relation, adapter) -> api", registry).unwrap();
         assert_eq!(args.len(), 2);
-        matches!(args[0], Type::Class(_));
-        matches!(args[1], Type::Class(_));
-        matches!(ret_type, Type::Class(_));
+        matches!(args[0], Type::Object(_));
+        matches!(args[1], Type::Object(_));
+        matches!(ret_type, Type::Object(_));
     }
 
     #[test]
     fn test_parse_function_with_nested_function_type() {
-        let (args, ret_type) = parse("((string) -> integer, string) -> bool").unwrap();
+        let registry = Arc::new(DashMap::new());
+        let (args, ret_type) = parse("((string) -> integer, string) -> bool", registry).unwrap();
         assert_eq!(args.len(), 2);
-        matches!(args[0], Type::Function(_));
+        matches!(args[0], Type::Object(_));
         matches!(args[1], Type::String(None));
         matches!(ret_type, Type::Bool);
     }
 
     #[test]
     fn test_parse_function_with_complex_nested_types() {
-        let (args, ret_type) =
-            parse("(seq[dict[string, integer]], struct{users: seq[string]}) -> dict[string, bool]")
-                .unwrap();
+        let registry = Arc::new(DashMap::new());
+        let (args, ret_type) = parse(
+            "(seq[dict[string, integer]], struct{users: seq[string]}) -> dict[string, bool]",
+            registry,
+        )
+        .unwrap();
         assert_eq!(args.len(), 2);
         matches!(args[0], Type::List { .. });
         matches!(args[1], Type::Struct(_));
@@ -738,7 +736,9 @@ mod tests {
 
     #[test]
     fn test_parse_function_with_all_primitive_types() {
-        let (args, ret_type) = parse("(string, integer, float, bool, bytes) -> string").unwrap();
+        let registry = Arc::new(DashMap::new());
+        let (args, ret_type) =
+            parse("(string, integer, float, bool, bytes) -> string", registry).unwrap();
         assert_eq!(args.len(), 5);
         matches!(args[0], Type::String(None));
         matches!(args[1], Type::Integer(None));
@@ -750,7 +750,8 @@ mod tests {
 
     #[test]
     fn test_parse_function_with_whitespace() {
-        let (args, ret_type) = parse("  ( string , integer )  ->  bool  ").unwrap();
+        let registry = Arc::new(DashMap::new());
+        let (args, ret_type) = parse("  ( string , integer )  ->  bool  ", registry).unwrap();
         assert_eq!(args.len(), 2);
         matches!(args[0], Type::String(None));
         matches!(args[1], Type::Integer(None));
@@ -759,21 +760,23 @@ mod tests {
 
     #[test]
     fn test_parse_function_returning_apicolumn() {
-        let (args, ret_type) = parse("(string) -> api_column").unwrap();
+        let registry = Arc::new(DashMap::new());
+        let (args, ret_type) = parse("(string) -> api_column", registry).unwrap();
         assert_eq!(args.len(), 1);
         matches!(args[0], Type::String(None));
-        matches!(ret_type, Type::Class(_));
+        matches!(ret_type, Type::Object(_));
     }
 
     #[test]
     fn test_parse_complex_function_signature() {
-        let (args, ret_type) = parse("(relation, dict[string, list[string]], (relation, string, list[string]) -> string) -> list[string]").unwrap();
+        let registry = Arc::new(DashMap::new());
+        let (args, ret_type) = parse("(relation, dict[string, list[string]], (relation, string, list[string]) -> string) -> list[string]", registry).unwrap();
 
         // Should have 3 arguments
         assert_eq!(args.len(), 3);
 
         // First arg should be relation (class type)
-        matches!(args[0], Type::Class(_));
+        matches!(args[0], Type::Object(_));
 
         // Second arg should be dict[string, list[string]]
         matches!(args[1], Type::Dict { .. });
@@ -789,13 +792,13 @@ mod tests {
         }
 
         // Third arg should be a function type: (relation, string, list[string]) -> string
-        matches!(args[2], Type::Function(_));
-        if let Type::Function(func) = &args[2] {
+        matches!(args[2], Type::Object(_));
+        if let Type::Object(func) = &args[2] {
             let func = func.downcast_ref::<LambdaType>().unwrap();
 
             // Function should have 3 args: relation, string, list[string]
             assert_eq!(func.args.len(), 3);
-            matches!(func.args[0], Type::Class(_)); // relation
+            matches!(func.args[0], Type::Object(_)); // relation
             matches!(func.args[1], Type::String(None)); // string
             matches!(func.args[2], Type::List { .. }); // list[string]
 
@@ -817,7 +820,8 @@ mod tests {
     // Tests for error conditions
     #[test]
     fn test_parse_invalid_syntax() {
-        let result = parse("invalid -> -> string");
+        let registry = Arc::new(DashMap::new());
+        let result = parse("invalid -> -> string", registry);
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert!(error.message.contains("Unexpected token") || error.message.contains("Expected"));
@@ -825,7 +829,8 @@ mod tests {
 
     #[test]
     fn test_parse_missing_return_type() {
-        let result = parse("(string) ->");
+        let registry = Arc::new(DashMap::new());
+        let result = parse("(string) ->", registry);
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert!(
@@ -835,7 +840,8 @@ mod tests {
 
     #[test]
     fn test_parse_missing_arrow() {
-        let result = parse("(string) string");
+        let registry = Arc::new(DashMap::new());
+        let result = parse("(string) string", registry);
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert!(error.message.contains("Unexpected token") || error.message.contains("Expected"));
@@ -843,7 +849,8 @@ mod tests {
 
     #[test]
     fn test_parse_unclosed_parenthesis() {
-        let result = parse("(string -> bool");
+        let registry = Arc::new(DashMap::new());
+        let result = parse("(string -> bool", registry);
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert!(
@@ -853,7 +860,8 @@ mod tests {
 
     #[test]
     fn test_parse_unclosed_bracket() {
-        let result = parse("(seq[string) -> bool");
+        let registry = Arc::new(DashMap::new());
+        let result = parse("(seq[string) -> bool", registry);
         assert!(result.is_err());
         let error = result.unwrap_err();
         println!("Actual error message: '{}'", error.message);
@@ -864,7 +872,8 @@ mod tests {
 
     #[test]
     fn test_parse_unclosed_brace() {
-        let result = parse("(struct{name: string) -> bool");
+        let registry = Arc::new(DashMap::new());
+        let result = parse("(struct{name: string) -> bool", registry);
         assert!(result.is_err());
         let error = result.unwrap_err();
         println!("Actual error message: '{}'", error.message);
@@ -874,7 +883,8 @@ mod tests {
     // New error handling tests
     #[test]
     fn test_parse_error_with_location() {
-        let result = parse("(unknown_bracket_type[) -> bool");
+        let registry = Arc::new(DashMap::new());
+        let result = parse("(unknown_bracket_type[) -> bool", registry);
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert!(error.location.line > 0);
@@ -883,7 +893,8 @@ mod tests {
 
     #[test]
     fn test_parse_error_message_display() {
-        let result = parse("(invalid -> bool");
+        let registry = Arc::new(DashMap::new());
+        let result = parse("(invalid -> bool", registry);
         assert!(result.is_err());
         let error = result.unwrap_err();
         let error_str = format!("{error}");
@@ -892,7 +903,8 @@ mod tests {
 
     #[test]
     fn test_parse_empty_input() {
-        let result = parse("");
+        let registry = Arc::new(DashMap::new());
+        let result = parse("", registry);
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert!(error.message.contains("Expected opening parenthesis"));
@@ -900,7 +912,8 @@ mod tests {
 
     #[test]
     fn test_parse_malformed_list_type() {
-        let result = parse("(seq[string, integer, bool) -> bool");
+        let registry = Arc::new(DashMap::new());
+        let result = parse("(seq[string, integer, bool) -> bool", registry);
         assert!(result.is_err());
         let error = result.unwrap_err();
         println!("Actual error message: '{}'", error.message);
@@ -911,12 +924,98 @@ mod tests {
 
     #[test]
     fn test_parse_malformed_dict_type() {
-        let result = parse("(dict[string) -> bool");
+        let registry = Arc::new(DashMap::new());
+        let result = parse("(dict[string) -> bool", registry);
         assert!(result.is_err());
         let error = result.unwrap_err();
         println!("Actual error message: '{}'", error.message);
         assert!(error
             .message
             .contains("Expected ',' or ']' in parameter list"));
+    }
+
+    // Tests for union type parsing
+    #[test]
+    fn test_parse_simple_union_type() {
+        let registry = Arc::new(DashMap::new());
+        let result = parse_type("string | integer", registry).unwrap();
+        matches!(result, Type::Union(_));
+    }
+
+    #[test]
+    fn test_parse_multiple_union_types() {
+        let registry = Arc::new(DashMap::new());
+        let result = parse_type("string | integer | bool", registry).unwrap();
+        matches!(result, Type::Union(_));
+    }
+
+    #[test]
+    fn test_parse_function_with_union_parameter() {
+        let registry = Arc::new(DashMap::new());
+        let (args, ret_type) = parse("(string | integer) -> bool", registry).unwrap();
+        assert_eq!(args.len(), 1);
+        matches!(args[0], Type::Union(_));
+        matches!(ret_type, Type::Bool);
+    }
+
+    #[test]
+    fn test_parse_function_with_union_return_type() {
+        let registry = Arc::new(DashMap::new());
+        let (args, ret_type) = parse("(string) -> integer | bool", registry).unwrap();
+        assert_eq!(args.len(), 1);
+        matches!(args[0], Type::String(None));
+        matches!(ret_type, Type::Union(_));
+    }
+
+    #[test]
+    fn test_parse_complex_union_with_lists() {
+        let registry = Arc::new(DashMap::new());
+        let result = parse_type("seq[string] | seq[integer]", registry).unwrap();
+        matches!(result, Type::Union(_));
+    }
+
+    #[test]
+    fn test_parse_complex_union_with_dicts() {
+        let registry = Arc::new(DashMap::new());
+        let result = parse_type("dict[string, integer] | dict[string, bool]", registry).unwrap();
+        matches!(result, Type::Union(_));
+    }
+
+    #[test]
+    fn test_parse_union_with_struct() {
+        let registry = Arc::new(DashMap::new());
+        let result = parse_type("struct{name: string} | struct{id: integer}", registry).unwrap();
+        matches!(result, Type::Union(_));
+    }
+
+    #[test]
+    fn test_parse_union_with_custom_types() {
+        let registry = Arc::new(DashMap::new());
+        let result = parse_type("relation | adapter", registry).unwrap();
+        matches!(result, Type::Union(_));
+    }
+
+    #[test]
+    fn test_parse_function_with_multiple_union_parameters() {
+        let registry = Arc::new(DashMap::new());
+        let (args, ret_type) = parse("(string | integer, bool | float) -> any", registry).unwrap();
+        assert_eq!(args.len(), 2);
+        matches!(args[0], Type::Union(_));
+        matches!(args[1], Type::Union(_));
+        matches!(ret_type, Type::Any { .. });
+    }
+
+    #[test]
+    fn test_parse_union_with_optional() {
+        let registry = Arc::new(DashMap::new());
+        let result = parse_type("string | optional[integer]", registry).unwrap();
+        matches!(result, Type::Union(_));
+    }
+
+    #[test]
+    fn test_parse_union_with_whitespace() {
+        let registry = Arc::new(DashMap::new());
+        let result = parse_type("string  |  integer  |  bool", registry).unwrap();
+        matches!(result, Type::Union(_));
     }
 }
