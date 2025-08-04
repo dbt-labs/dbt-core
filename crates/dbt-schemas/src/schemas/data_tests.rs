@@ -1,4 +1,4 @@
-use dbt_serde_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize, Verbatim};
+use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize, Verbatim};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
@@ -40,7 +40,7 @@ pub struct ColumnUniqueTestProperties {
     pub description: Option<String>,
     pub config: Option<DataTestConfig>,
     #[serde(flatten)]
-    pub deprecated_configs: Spanned<Option<BTreeMap<String, dbt_serde_yaml::Value>>>,
+    pub deprecated_configs: Option<BTreeMap<String, dbt_serde_yaml::Value>>,
 }
 
 #[skip_serializing_none]
@@ -85,7 +85,7 @@ pub struct NotNullTestProperties {
     pub config: Option<DataTestConfig>,
     pub column: Option<String>,
     #[serde(flatten)]
-    pub deprecated_configs: Spanned<Option<BTreeMap<String, dbt_serde_yaml::Value>>>,
+    pub deprecated_configs: Option<BTreeMap<String, dbt_serde_yaml::Value>>,
 }
 
 #[skip_serializing_none]
@@ -117,7 +117,7 @@ pub struct RelationshipsTestProperties {
     pub field: String,
     pub to: Verbatim<String>,
     #[serde(flatten)]
-    pub deprecated_configs: Spanned<Option<BTreeMap<String, dbt_serde_yaml::Value>>>,
+    pub deprecated_configs: Option<BTreeMap<String, dbt_serde_yaml::Value>>,
 }
 
 #[skip_serializing_none]
@@ -149,7 +149,7 @@ pub struct AcceptedValuesTestProperties {
     pub values: Vec<serde_json::Value>,
     pub quote: Option<bool>,
     #[serde(flatten)]
-    pub deprecated_configs: Spanned<Option<BTreeMap<String, dbt_serde_yaml::Value>>>,
+    pub deprecated_configs: Option<BTreeMap<String, dbt_serde_yaml::Value>>,
 }
 
 #[derive(Debug, Clone, UntaggedEnumDeserialize, Serialize, JsonSchema)]
@@ -167,8 +167,7 @@ pub struct CustomTestInner {
     pub config: Option<DataTestConfig>,
     pub arguments: Verbatim<Option<dbt_serde_yaml::Value>>,
     #[serde(flatten)]
-    pub deprecated_args_and_configs:
-        Verbatim<Option<Spanned<BTreeMap<String, dbt_serde_yaml::Value>>>>,
+    pub deprecated_args_and_configs: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
 }
 
 #[skip_serializing_none]
@@ -180,8 +179,7 @@ pub struct CustomTestMultiKey {
     pub config: Option<DataTestConfig>,
     pub arguments: Verbatim<Option<dbt_serde_yaml::Value>>,
     #[serde(flatten)]
-    pub deprecated_args_and_configs:
-        Verbatim<Option<Spanned<BTreeMap<String, dbt_serde_yaml::Value>>>>,
+    pub deprecated_args_and_configs: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
 }
 
 // Into implementation to convert ModelDataTests to ColumnDataTests

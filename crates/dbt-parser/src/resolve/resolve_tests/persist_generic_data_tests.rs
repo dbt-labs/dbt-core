@@ -342,9 +342,7 @@ struct KwargsExtractionResult {
 /// Simplified extraction of kwargs and Jinja variables for strongly typed custom tests
 fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
     arguments: &Verbatim<Option<dbt_serde_yaml::Value>>,
-    deprecated_args_and_configs: &Verbatim<
-        Option<Spanned<BTreeMap<String, dbt_serde_yaml::Value>>>,
-    >,
+    deprecated_args_and_configs: &Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
     existing_config: &Option<DataTestConfig>,
     io_args: &IoArgs,
 ) -> FsResult<KwargsExtractionResult> {
@@ -362,52 +360,49 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
     }
 
     // Process deprecated_args_and_configs
-    if let Some(deprecated) = &deprecated_args_and_configs.0 {
-        if !deprecated.is_empty() {
-            let deprecated_map = deprecated.clone().into_inner();
-            let config_keys = extract_config_keys_from_map(&deprecated_map);
-            let arg_keys: Vec<String> = deprecated_map
-                .keys()
-                .filter(|key| !CONFIG_ARGS.contains(&key.as_str()))
-                .cloned()
-                .collect();
+    let deprecated = &deprecated_args_and_configs.0;
+    if !deprecated.is_empty() {
+        let config_keys = extract_config_keys_from_map(deprecated);
+        let arg_keys: Vec<String> = deprecated
+            .keys()
+            .filter(|key| !CONFIG_ARGS.contains(&key.as_str()))
+            .cloned()
+            .collect();
 
-            let message = if !config_keys.is_empty() && !arg_keys.is_empty() {
-                format!(
-                    "Deprecated test configs: {config_keys:?} and arguments: {arg_keys:?} at top-level detected. Please migrate to the new format: https://docs.getdbt.com/reference/deprecations#missingargumentspropertyingenerictestdeprecation."
-                )
-            } else if !config_keys.is_empty() {
-                format!(
-                    "Deprecated test configs: {config_keys:?} at top-level detected. Please migrate under the 'config' field."
-                )
-            } else {
-                format!(
-                    "Deprecated test arguments: {arg_keys:?} at top-level detected. Please migrate to the new format: https://docs.getdbt.com/reference/deprecations#missingargumentspropertyingenerictestdeprecation."
-                )
-            };
+        let message = if !config_keys.is_empty() && !arg_keys.is_empty() {
+            format!(
+                "Deprecated test configs: {config_keys:?} and arguments: {arg_keys:?} at top-level detected. Please migrate to the new format: https://docs.getdbt.com/reference/deprecations#missingargumentspropertyingenerictestdeprecation."
+            )
+        } else if !config_keys.is_empty() {
+            format!(
+                "Deprecated test configs: {config_keys:?} at top-level detected. Please migrate under the 'config' field."
+            )
+        } else {
+            format!(
+                "Deprecated test arguments: {arg_keys:?} at top-level detected. Please migrate to the new format: https://docs.getdbt.com/reference/deprecations#missingargumentspropertyingenerictestdeprecation."
+            )
+        };
 
-            let schema_error = fs_err!(
-                code => ErrorCode::SchemaError,
-                loc => deprecated.span().clone(),
-                "{}",
-                message
-            );
-            // Show warning or error if deprecated fields are present
-            if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
-                show_error!(io_args, schema_error);
-            } else {
-                show_warning_soon_to_be_error!(io_args, schema_error);
-            }
+        let schema_error = fs_err!(
+            code => ErrorCode::SchemaError,
+            loc => deprecated.iter().next().map(|(_, v)| v.span()).unwrap_or_default(),
+            "{}",
+            message
+        );
+        if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+            show_error!(io_args, schema_error);
+        } else {
+            show_warning_soon_to_be_error!(io_args, schema_error);
         }
-        for (key, value) in deprecated.clone().into_inner() {
-            let json_value = serde_json::to_value(value.clone()).unwrap_or(Value::Null);
+    }
+    for (key, value) in deprecated.clone() {
+        let json_value = serde_json::to_value(value.clone()).unwrap_or(Value::Null);
 
-            if CONFIG_ARGS.contains(&key.as_str()) {
-                config_from_deprecated.insert(key.clone(), json_value);
-            } else {
-                // It's an argument, add to combined args
-                combined_args.insert(key.clone(), json_value);
-            }
+        if CONFIG_ARGS.contains(&key.as_str()) {
+            config_from_deprecated.insert(key.clone(), json_value);
+        } else {
+            // It's an argument, add to combined args
+            combined_args.insert(key.clone(), json_value);
         }
     }
 
@@ -507,10 +502,10 @@ fn extract_config_keys_from_map(
 /// Merges regular config with deprecated top-level config, handling conflicts and warnings
 fn merge_config_with_deprecated(
     config: &Option<DataTestConfig>,
-    deprecated_configs: &Spanned<Option<BTreeMap<String, dbt_serde_yaml::Value>>>,
+    deprecated_configs: &Option<BTreeMap<String, dbt_serde_yaml::Value>>,
     io_args: &IoArgs,
 ) -> FsResult<Option<DataTestConfig>> {
-    match (config, deprecated_configs.clone().into_inner()) {
+    match (config, deprecated_configs.clone()) {
         (None, None) => Ok(None),
         (Some(config), None) => Ok(Some(config.clone())),
         (None, Some(deprecated)) => {
@@ -526,7 +521,7 @@ fn merge_config_with_deprecated(
             if !present_config_keys.is_empty() {
                 let warning = fs_err!(
                     code => ErrorCode::SchemaError,
-                    loc => deprecated_configs.span().clone(),
+                    loc => deprecated.iter().next().map(|(_, v)| v.span()).unwrap_or_default(),
                     "Detected top-level config keys: {present_config_keys:?}. Please move under the 'config' field."
                 );
                 if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
@@ -540,7 +535,7 @@ fn merge_config_with_deprecated(
             if !unused_keys.is_empty() {
                 let unused_warning = fs_err!(
                     code => ErrorCode::SchemaError,
-                    loc => deprecated_configs.span().clone(),
+                    loc => deprecated.iter().next().map(|(_, v)| v.span()).unwrap_or_default(), //get the span of the first key
                     "Unused keys detected in test definition: {unused_keys:?}."
                 );
                 if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
@@ -558,7 +553,7 @@ fn merge_config_with_deprecated(
         (Some(config), Some(deprecated)) => {
             // Both exist - need to merge with conflict detection
             let config_json = serde_json::to_value(config)?;
-            let deprecated_json = serde_json::to_value(deprecated)?;
+            let deprecated_json = serde_json::to_value(deprecated.clone())?;
 
             // Check for conflicts at JSON level
             if let (Value::Object(config_map), Value::Object(deprecated_map)) =
@@ -568,7 +563,7 @@ fn merge_config_with_deprecated(
                     if config_map.contains_key(key) {
                         return err!(
                             code => ErrorCode::SchemaError,
-                            loc => deprecated_configs.span().clone(),
+                            loc => deprecated.iter().next().map(|(_, v)| v.span()).unwrap_or_default(),
                             "Test cannot have the same config key '{}' in both 'config' and at the top-level",
                             key
                         );
@@ -584,7 +579,7 @@ fn merge_config_with_deprecated(
             if !top_level_keys.is_empty() {
                 let warning = fs_err!(
                     code => ErrorCode::SchemaError,
-                    loc => deprecated_configs.span().clone(),
+                    loc => deprecated.iter().next().map(|(_, v)| v.span()).unwrap_or_default(), //get the span of the first key
                     "Detected top-level config keys: {top_level_keys:?}. Please move under the 'config' field."
                 );
                 if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
@@ -1342,7 +1337,7 @@ mod tests {
         // Convert to dbt_serde_yaml::Value using the to_value function
         let yaml_value = to_value(&test_args_btree).unwrap();
         let verbatim_wrapper = Verbatim::from(Some(yaml_value));
-        let empty_deprecated = Verbatim::from(None);
+        let empty_deprecated = Verbatim::from(BTreeMap::new());
         let existing_config = None;
         let io_args = IoArgs::default();
 
@@ -1516,7 +1511,7 @@ mod tests {
                         .unwrap(),
                     )),
                     config: None,
-                    deprecated_args_and_configs: None.into(),
+                    deprecated_args_and_configs: Verbatim::from(BTreeMap::new()),
                     name: Some("noop?=p+:".to_string()),
                     test_name: "noop?=p+:".to_string(),
                     description: None,
