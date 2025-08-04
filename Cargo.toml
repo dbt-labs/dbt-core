@@ -50,9 +50,9 @@ version = "2.0.0-beta.60"
 # numbers as crates.io / the upstream repository.
 # See https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html#the-patch-section
 [patch.crates-io]
-datafusion = { git = "https://github.com/sdf-labs/arrow-datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
+datafusion = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
 # OR, when working locally
-# datafusion = { path = "../arrow-datafusion/datafusion/core" }
+#datafusion = { path = "../datafusion/datafusion/core" }
 
 # All arrow dependencies (run `cargo tree --prefix none | grep ^arrow | cut -d ' ' -f1 | sort -u` to get this list)
 arrow = { git = "https://github.com/sdf-labs/arrow-rs", rev = "ad6ab6fcf06156ae084de4d49625ca52c66b310f" } # @ sdf/54.2.1
