@@ -601,7 +601,7 @@ pub async fn render_unresolved_sql_files<
                             sql_resources_cloned
                                 .lock()
                                 .unwrap()
-                                .insert(0, SqlResource::Config(Box::new(root_config.clone())));
+                                .push(SqlResource::Config(Box::new(root_config.clone())));
                         }
 
                         // Get config from current resources to use for hook rendering
