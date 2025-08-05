@@ -22,20 +22,25 @@ impl AtomicSemaphoreBase {
         Self { a }
     }
 
+    /// Releases `update` semaphore permits.
+    ///
+    /// If acquiring all the permits is allowed by the wrapping Semaphore,
+    /// `force_wake` must be true because it's possible that the thread trying
+    /// to acquire all permits is waiting for the number of permits to go from
+    /// `max - 1` to `max`. But when the semaphore only allows acquiring one
+    /// permit at a time, wake-ups are only needed when the previous number of
+    /// permits was `0`. Because that's the only value that would block a
+    /// thread from acquiring a single permit.
     #[inline]
-    pub fn release_impl(&self, update: u32) {
+    pub fn release(&self, update: u32, force_wake: bool) {
         let old = self.a.fetch_add(update, Ordering::Release);
         debug_assert!(
             update <= u32::MAX - old,
             "update is greater than the expected value"
         );
-        if old == 0u32 {
+        if force_wake || old == 0u32 {
             atomic_wait::wake_all(&self.a);
         }
-    }
-
-    pub fn release(&self) {
-        self.release_impl(1);
     }
 
     // Try to acquire a permit without blocking.
@@ -105,31 +110,19 @@ impl Semaphore {
 
     /// Acquire a permit, blocking until one is available.
     #[must_use]
-    pub fn acquire(&self) -> PermitGuard<'_> {
+    pub fn acquire(&self) -> PermitGuard<'_, false> {
         self.base.acquire();
-        PermitGuard { semaphore: self }
+        PermitGuard { base: &self.base }
     }
 
     /// Try to acquire a permit without blocking.
     #[must_use]
-    pub fn try_acquire(&self) -> Option<PermitGuard<'_>> {
+    pub fn try_acquire(&self) -> Option<PermitGuard<'_, false>> {
         if self.base.try_acquire() {
-            Some(PermitGuard { semaphore: self })
+            Some(PermitGuard { base: &self.base })
         } else {
             None
         }
-    }
-
-    /// Wait for all permits to be available and acquire them all at once.
-    ///
-    /// ```rust
-    /// let semaphore = Semaphore::new(8);
-    /// semaphore.acquire_all(); // will block until all 8 permits are available
-    /// ```
-    #[must_use]
-    pub fn acquire_all(&self) -> PermitGuardAll<'_> {
-        self.base.acquire_many(self.max);
-        PermitGuardAll { semaphore: self }
     }
 
     /// Like [Semaphore::acquire], but caller must ensure that
@@ -142,20 +135,7 @@ impl Semaphore {
 
     /// Undo the effect of [Semaphore::unguarded_acquire].
     pub fn unguarded_release(&self) {
-        self.base.release();
-    }
-
-    /// Like [Semaphore::acquire_all], but caller must ensure that
-    /// [Semaphore::unguarded_release_all] is called.
-    ///
-    /// Failing to do so may lead to deadlocks as acquired permits don't get released.
-    pub fn unguarded_acquire_all(&self) {
-        self.base.acquire_many(self.max);
-    }
-
-    /// Undo the effect of [Semaphore::unguarded_acquire_all].
-    fn unguarded_release_all(&self) {
-        self.base.release_impl(self.max);
+        self.base.release(1, false);
     }
 }
 
@@ -168,20 +148,99 @@ impl fmt::Debug for Semaphore {
     }
 }
 
-/// A guard that releases the semaphore permit when dropped.
-pub struct PermitGuard<'a> {
-    semaphore: &'a Semaphore,
+/// A counting semaphore that allows a thread to try to acquire all permits at once.
+///
+/// This has a bit more overhead than [Semaphore], because it has to notify all waiting
+/// on every release.
+pub struct AcquireAllSemaphore {
+    inner: Semaphore,
 }
 
-impl Drop for PermitGuard<'_> {
+impl AcquireAllSemaphore {
+    pub const fn new(count: u32) -> Self {
+        Self {
+            inner: Semaphore::new(count),
+        }
+    }
+
+    /// Get the number of available permits the semaphore started with.
+    pub fn max(&self) -> u32 {
+        self.inner.max()
+    }
+
+    /// Acquire a permit, blocking until one is available.
+    #[must_use]
+    pub fn acquire(&self) -> PermitGuard<'_, true> {
+        self.inner.base.acquire();
+        PermitGuard {
+            base: &self.inner.base,
+        }
+    }
+
+    /// Try to acquire a permit without blocking.
+    #[must_use]
+    pub fn try_acquire(&self) -> Option<PermitGuard<'_, true>> {
+        if self.inner.base.try_acquire() {
+            Some(PermitGuard {
+                base: &self.inner.base,
+            })
+        } else {
+            None
+        }
+    }
+
+    /// Like [Semaphore::acquire], but caller must ensure that
+    /// [Semaphore::unguarded_release] is called.
+    ///
+    /// Failing to do so may lead to deadlocks as acquired permits don't get released.
+    pub fn unguarded_acquire(&self) {
+        self.inner.base.acquire();
+    }
+
+    /// Undo the effect of [Semaphore::unguarded_acquire].
+    pub fn unguarded_release(&self) {
+        self.inner.base.release(1, true);
+    }
+    /// Wait for all permits to be available and acquire them all at once.
+    ///
+    /// ```rust
+    /// let semaphore = Semaphore::new(8);
+    /// semaphore.acquire_all(); // will block until all 8 permits are available
+    /// ```
+    #[must_use]
+    pub fn acquire_all(&self) -> PermitGuardAll<'_> {
+        self.inner.base.acquire_many(self.inner.max);
+        PermitGuardAll { semaphore: self }
+    }
+
+    /// Like [Semaphore::acquire_all], but caller must ensure that
+    /// [Semaphore::unguarded_release_all] is called.
+    ///
+    /// Failing to do so may lead to deadlocks as acquired permits don't get released.
+    pub fn unguarded_acquire_all(&self) {
+        self.inner.base.acquire_many(self.inner.max);
+    }
+
+    /// Undo the effect of [Semaphore::unguarded_acquire_all].
+    pub fn unguarded_release_all(&self) {
+        self.inner.base.release(self.inner.max, true);
+    }
+}
+
+/// A guard that releases the semaphore permit when dropped.
+pub struct PermitGuard<'a, const FORCE_WAKE: bool> {
+    base: &'a AtomicSemaphoreBase,
+}
+
+impl<const FORCE_WAKE: bool> Drop for PermitGuard<'_, FORCE_WAKE> {
     fn drop(&mut self) {
-        self.semaphore.unguarded_release()
+        self.base.release(1, FORCE_WAKE)
     }
 }
 
 /// A guard that releases all permits when dropped.
 pub struct PermitGuardAll<'a> {
-    semaphore: &'a Semaphore,
+    semaphore: &'a AcquireAllSemaphore,
 }
 
 impl Drop for PermitGuardAll<'_> {
@@ -249,13 +308,30 @@ mod tests {
     #[test]
     fn test_semaphore_acquire_all() {
         const SCHED_PERIOD: Duration = Duration::from_millis(100);
-        let semaphore = Arc::new(Semaphore::new(4));
+        let semaphore = Arc::new(AcquireAllSemaphore::new(4));
         let mut handles = vec![];
 
         let permit = semaphore.acquire_all(); // acquire all permits at once
 
         let counter = Arc::new(AtomicU32::new(0)); // shared counter
-        for _ in 0..4 {
+        {
+            let counter = Arc::clone(&counter);
+            let sem = semaphore.clone();
+            // Add one thread that has to wait for all the permits.
+            handles.push(thread::spawn(move || {
+                // Let the 2 other threads run first and then block on acquiring all permits.
+                thread::sleep(SCHED_PERIOD);
+                let permits = sem.acquire_all();
+                let x = counter.load(Ordering::Acquire);
+                drop(permits);
+                counter.fetch_add(1, Ordering::Release);
+                x
+            }));
+        }
+        // Get only half of the permits, so release makes permits go from 4 to 3, then 3 to 2.
+        // Without `force_wake` on release(), the thread waiting for all permits would never
+        // be notified.
+        for _ in 0..2 {
             let counter = Arc::clone(&counter);
             let sem = semaphore.clone();
             handles.push(thread::spawn(move || {
@@ -271,9 +347,9 @@ mod tests {
         thread::sleep(SCHED_PERIOD);
         drop(permit); // release all permits at once and wake-up all threads
         let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
-        // NOTE: if one of the threads is much slower than the others, a non-zero value
-        // may appear here. SCHED_PERIOD must be increased or this test disabled.
-        assert_eq!(results, vec![0, 0, 0, 0]);
+        // the 3 threads can observe any value from 0 to 2, so the maximum must be 2
+        let max_result = results.iter().max().cloned().unwrap_or(0);
+        assert!(max_result <= 2);
     }
 
     #[test]
