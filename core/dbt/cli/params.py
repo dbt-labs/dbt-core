@@ -59,7 +59,7 @@ args = _create_option_and_track_env_var(
 browser = _create_option_and_track_env_var(
     "--browser/--no-browser",
     envvar=None,
-    help="Wether or not to open a local web browser after starting the server",
+    help="Whether or not to open a local web browser after starting the server",
     default=True,
 )
 

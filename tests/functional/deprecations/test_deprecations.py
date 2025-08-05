@@ -25,6 +25,7 @@ from dbt.events.types import (
     ModelParamUsageDeprecation,
     ModulesItertoolsUsageDeprecation,
     PackageRedirectDeprecation,
+    PropertyMovedToConfigDeprecation,
     WEOIncludeExcludeDeprecation,
 )
 from dbt.tests.util import read_file, run_dbt, run_dbt_and_capture, write_file
@@ -39,6 +40,7 @@ from tests.functional.deprecations.fixtures import (
     invalid_deprecation_date_yaml,
     models_trivial__model_sql,
     multiple_custom_keys_in_config_yaml,
+    property_moved_to_config_yaml,
     test_missing_arguments_property_yaml,
     test_with_arguments_yaml,
 )
@@ -838,3 +840,22 @@ class TestMissingArgumentsPropertyInGenericTestDeprecation:
             callbacks=[event_catcher.catch],
         )
         assert len(event_catcher.caught_events) == 4
+
+
+class TestPropertyMovedToConfigDeprecation:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models_trivial.sql": models_trivial__model_sql,
+            "models.yml": property_moved_to_config_yaml,
+        }
+
+    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
+    @mock.patch("dbt.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
+    def test_property_moved_to_config_deprecation(self, project):
+        event_catcher = EventCatcher(PropertyMovedToConfigDeprecation)
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 5
