@@ -78,7 +78,7 @@ Releases of various Fusion components will be iterative as each component reache
 ## FAQ
 
 <details>
-  <summary><i>Can I con contribute to the dbt Fusion engine?</i></summary>
+  <summary><i>Can I contribute to the dbt Fusion engine?</i></summary>
 
   Yes absolutely!. Please see [`CONTRIBUTING.md`](CONTRIBUTING.md) for contribution guidelines
 </details>
