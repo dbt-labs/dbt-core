@@ -2113,7 +2113,7 @@ def parse_manifest(
     write_perf_info: bool,
     write: bool,
     write_json: bool,
-    active_integrations: List[CatalogWriteIntegrationConfig],
+    active_integrations: List[Optional[CatalogWriteIntegrationConfig]],
 ) -> Manifest:
     register_adapter(runtime_config, get_mp_context())
     adapter = get_adapter(runtime_config)
