@@ -8,6 +8,10 @@ license.workspace = true
 keywords.workspace = true
 edition.workspace = true
 
+[features]
+default = []
+scheduling-tests = []
+
 [dependencies]
 proto-rust = { path = "../proto-rust" }
 

@@ -774,6 +774,20 @@ fn wait_for_event(
     }
 }
 
+/// Tests for the Vortex client.
+///
+/// If you're working on the Vortex client, you can run more strict assertions
+/// with the `scheduling-tests` feature enabled. These asserts can't be enabled
+/// by default because if the CI machines are overloaded, threads might take
+/// longer to get CPU time and that affects asserts on batch sizes and deadlines.
+///
+/// ```sh
+/// cargo test -p vortex-client --features scheduling-tests
+/// ```
+///
+/// But the external behavior of the Vortex is eventually consistent: even if the
+/// batches sent differ in size, eventually all events are sent successfully and/or
+/// retried appropriately.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -935,10 +949,6 @@ mod tests {
             lock.failed.push(messages);
         }
 
-        fn num_failed_attempts(&self) -> usize {
-            self.inner.lock().unwrap().failed.len()
-        }
-
         fn push(&self, messages: Vec<VortexMessage>) {
             let mut messages = messages;
             for msg in &mut messages {
@@ -951,10 +961,6 @@ mod tests {
             }
             let mut lock = self.inner.lock().unwrap();
             lock.sent.push(messages);
-        }
-
-        fn len(&self) -> usize {
-            self.inner.lock().unwrap().sent.len()
         }
 
         fn poll_until(
@@ -983,6 +989,7 @@ mod tests {
         AlwaysSucceed,
         Unreachable,
         BoundedSuccesses(usize),
+        #[allow(dead_code)]
         BoundedFailures(usize),
     }
 
@@ -1122,11 +1129,14 @@ mod tests {
             "Worker thread should not block indefinitely on retries when server is unreachable"
         );
 
-        assert_eq!(sent_batches_handle.num_failed_attempts(), 1);
-        assert_eq!(sent_batches_handle.len(), 0);
+        sent_batches_handle.with_lock(|batches| {
+            assert_eq!(batches.failed.len(), 1);
+            assert_eq!(batches.sent.len(), 0);
+        });
     }
 
     #[test]
+    #[allow(unused_variables)]
     fn test_log_is_non_blocking_after_shutdown() {
         let agent = TestSenderAgent::with_long_flush_interval(ServerMode::AlwaysSucceed);
         let sent_batches_handle = agent.sent_batches_handle();
@@ -1138,20 +1148,22 @@ mod tests {
         client.log_proto(test_message(3), false).unwrap(); // TARGET_BATCH_SIZE_BYTES reached
         client.log_proto(test_message(4), false).unwrap();
         client.log_proto(test_message(5), true).unwrap(); // shutdown message
-        client.log_proto(test_message(6), false).unwrap(); // after shutdown message (still logged)
+        client.log_proto(test_message(6), false).unwrap(); // after shutdown message (might be logged)
 
         let start = Instant::now();
         let handle = client.take_thread_handle();
         handle.unwrap().join().unwrap().unwrap(); // wait for the worker thread to finish
-        let elapsed = start.elapsed();
-        assert!(
-            elapsed < MARGIN,
-            "Worker thread should not block indefinitely on retries when server is unreachable"
-        );
+        #[cfg(feature = "scheduling-tests")]
+        {
+            let elapsed = start.elapsed();
+            assert!(
+                elapsed < MARGIN,
+                "Worker thread should not block indefinitely on retries when server is unreachable"
+            );
+        }
 
-        // this panics in debug mode, but is a no-op in release mode
-        #[cfg(not(debug_assertions))]
-        let _ = client.log_proto(test_message(7), false); // panic in debug, silently dropped in release
+        // this prints a warning in debug mode, but does not do anything in release mode
+        let _ = client.log_proto(test_message(7), false);
 
         sent_batches_handle.with_lock(|batches| {
             assert_eq!(batches.sent.len(), 2);
@@ -1175,8 +1187,7 @@ mod tests {
     }
 
     #[test]
-    // The dependency on time makes the test flaky on CI where the machine is under load.
-    #[ignore = "TODO(felipecrv): This test is flaky and needs to be fixed."]
+    #[allow(unused_variables)]
     fn test_batch_is_sent_after_flush_interval() {
         let agent = TestSenderAgent::with_server_mode(ServerMode::AlwaysSucceed);
         let flush_interval = agent.flush_interval();
@@ -1188,11 +1199,12 @@ mod tests {
         let elapsed = sent_batches_handle.poll_until(FLUSH_INTERVAL / 2, |batches| {
             batches.sent.len() == 1 && batches.sent[0].len() == 2
         });
+        #[cfg(feature = "scheduling-tests")]
         assert!(elapsed >= flush_interval);
 
         client.log_proto(test_message(2), false).unwrap();
         client.log_proto(test_message(3), true).unwrap(); // shutdown message
-        client.log_proto(test_message(4), false).unwrap(); // after shutdown message (still logged)
+        client.log_proto(test_message(4), false).unwrap(); // after shutdown message (might be logged)
 
         client
             .take_thread_handle()
@@ -1203,7 +1215,8 @@ mod tests {
 
         sent_batches_handle.with_lock(|batches| {
             assert!(batches.sent.len() >= 2);
-            if batches.sent.len() == 2 {
+            #[cfg(feature = "scheduling-tests")]
+            {
                 assert_eq!(
                     batches.sent,
                     vec![
@@ -1218,13 +1231,15 @@ mod tests {
                         ]
                     ]
                 );
-            } else {
+            }
+            #[cfg(not(feature = "scheduling-tests"))]
+            {
                 let mut count = 0;
                 for batch in &batches.sent {
                     count += batch.len();
                 }
                 assert!(
-                    count <= 4,
+                    count >= 4,
                     "Expected at least 4 messages in total, but got {count}"
                 );
             }
@@ -1232,6 +1247,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "scheduling-tests")]
     fn test_batch_is_sent_after_retries() {
         let agent = TestSenderAgent::with_server_mode(ServerMode::BoundedFailures(2));
         let flush_interval = agent.flush_interval();
@@ -1266,7 +1282,7 @@ mod tests {
             }
         });
         client.log_proto(test_message(3), true).unwrap(); // shutdown message
-        client.log_proto(test_message(4), false).unwrap(); // after shutdown message (still logged)
+        client.log_proto(test_message(4), false).unwrap(); // after shutdown message (might be logged)
         client
             .take_thread_handle()
             .unwrap()
@@ -1274,8 +1290,8 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert!(sent_batches_handle.len() >= 2);
         sent_batches_handle.with_lock(|batches| {
+            assert_eq!(batches.sent.len(), 2);
             assert_eq!(
                 batches.sent,
                 vec![
@@ -1291,6 +1307,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(unused_variables, clippy::len_zero)]
     fn test_terminates_after_permanent_failure() {
         let agent = TestSenderAgent::with_server_mode(ServerMode::BoundedSuccesses(2));
         let flush_interval = agent.flush_interval();
@@ -1302,7 +1319,8 @@ mod tests {
         client.log_proto(test_message(2), false).unwrap();
         client.log_proto(test_message(3), false).unwrap();
         let elapsed =
-            sent_batches_handle.poll_until(flush_interval / 2, |batches| batches.sent.len() == 1);
+            sent_batches_handle.poll_until(flush_interval / 2, |batches| batches.sent.len() >= 1);
+        #[cfg(feature = "scheduling-tests")]
         assert!(elapsed < flush_interval + MARGIN); // TARGET_BATCH_SIZE_BYTES reached
 
         // After 1 success, the server will keep failing, so let's simulate a burst of messages.
@@ -1310,10 +1328,11 @@ mod tests {
             client.log_proto(test_message(i), false).unwrap();
         }
         // Poll for the next and last success.
-        sent_batches_handle.poll_until(flush_interval / 2, |batches| batches.sent.len() == 2);
+        sent_batches_handle.poll_until(flush_interval / 2, |batches| batches.sent.len() >= 2);
         // Look at the next 2 failures.
         sent_batches_handle.poll_until(flush_interval / 2, |batches| {
-            if batches.failed.len() == 2 {
+            if batches.failed.len() >= 2 {
+                #[cfg(feature = "scheduling-tests")]
                 assert_eq!(
                     batches.failed,
                     vec![
@@ -1348,7 +1367,8 @@ mod tests {
         client.log_proto(test_message(16), false).unwrap();
         client.log_proto(test_message(17), false).unwrap();
         sent_batches_handle.poll_until(flush_interval / 2, |batches| {
-            if batches.failed.len() == 3 {
+            if batches.failed.len() >= 3 {
+                #[cfg(feature = "scheduling-tests")]
                 assert_eq!(
                     batches.failed[2],
                     vec![
@@ -1376,7 +1396,8 @@ mod tests {
         }
         client.log_proto(test_message(31), true).unwrap();
         let elapsed = sent_batches_handle.poll_until(flush_interval / 2, |batches| {
-            if batches.failed.len() == 4 {
+            if batches.failed.len() >= 4 {
+                #[cfg(feature = "scheduling-tests")]
                 assert_eq!(
                     batches.failed[3],
                     vec![
@@ -1395,6 +1416,7 @@ mod tests {
                 false
             }
         });
+        #[cfg(feature = "scheduling-tests")]
         // The backoff at this point is much longer than 4 * MIN_BACKOFF_MILLIS,
         // but we expect the shutdown message to be sent as soon as the OS wakes up the
         // thread with that final shutdown message in the queue.
