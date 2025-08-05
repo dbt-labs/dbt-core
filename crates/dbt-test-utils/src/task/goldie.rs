@@ -234,7 +234,11 @@ fn sort_lines(content: String) -> String {
 }
 
 fn filter_lines_internal(content: String, in_emacs: bool) -> String {
-    const KNOWN_NOISE: &[&str] = &[" has been running for over", "last updated"];
+    const KNOWN_NOISE: &[&str] = &[
+        " has been running for over",
+        "last updated",
+        "Detected unsafe introspection which may lead to non-deterministic static analysis.",
+    ];
 
     let mut res = content
         .lines()
