@@ -199,6 +199,10 @@ sources:
   - name: seed_source
     schema: "{{ var('schema_override', target.schema) }}"
     tags: ["test"]  # deprecated - should be in config
+    freshness: # deprecated - should be in config
+      warn_after:
+        count: 1
+        period: day
     tables:
       - name: "seed"
         tags: ["test"]  # deprecated - should be in config
