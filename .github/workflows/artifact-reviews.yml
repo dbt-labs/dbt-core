@@ -165,15 +165,20 @@ jobs:
 
       - name: "Post Event"
         run: |
+          # Convert our status to GitHub status state
+          if [[ "${{ steps.status_check.outputs.current_status }}" == "success" ]]; then
+            state="success"
+          else
+            state="pending"
+          fi
+
           gh api \
             --method POST \
             -H "Accept: application/vnd.github+json" \
-            /repos/${{ github.repository }}/check-runs \
-            -f name='Artifact Review Check' \
-            -f head_sha=${{ github.event.pull_request_target.head.sha || github.event.pull_request.head.sha }} \
-            -f status='completed' \
-            -f conclusion='${{ steps.status_check.outputs.current_status }}' \
-            -f force=true \
-            -f details_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            /repos/${{ github.repository }}/statuses/${{ github.event.pull_request_target.head.sha || github.event.pull_request.head.sha }} \
+            -f state="$state" \
+            -f description="Artifact Review Check" \
+            -f context="Artifact Review Check" \
+            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.IT_TEAM_MEMBERSHIP }}
