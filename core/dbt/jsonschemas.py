@@ -3,7 +3,7 @@ import os
 import re
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Union
 
 import jsonschema
 from jsonschema import ValidationError
@@ -107,6 +107,39 @@ def _validate_with_schema(
     return validator.iter_errors(json)
 
 
+def _get_allowed_config_fields_from_error_path(
+    yml_schema: Dict[str, Any], error_path: List[Union[str, int]]
+) -> Optional[List[str]]:
+    property_field_name = None
+    node_schema = yml_schema["properties"]
+    for part in error_path:
+        if isinstance(part, str):
+            if part in node_schema:
+                if "items" not in node_schema[part]:
+                    break
+
+                # Update property field name
+                property_field_name = node_schema[part]["items"]["$ref"].split("/")[-1]
+
+                # Jump to the next level of the schema
+                item_definition = node_schema[part]["items"]["$ref"].split("/")[-1]
+                node_schema = yml_schema["definitions"][item_definition]["properties"]
+
+    if not property_field_name:
+        return None
+
+    if "config" not in yml_schema["definitions"][property_field_name]["properties"]:
+        return None
+
+    config_field_name = yml_schema["definitions"][property_field_name]["properties"]["config"][
+        "anyOf"
+    ][0]["$ref"].split("/")[-1]
+
+    allowed_config_fields = list(set(yml_schema["definitions"][config_field_name]["properties"]))
+
+    return allowed_config_fields
+
+
 def _can_run_validations() -> bool:
     if not os.environ.get("DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS"):
         return False
@@ -143,12 +176,23 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                             file=file_path,
                         )
                     else:
-                        deprecations.warn(
-                            "custom-key-in-object-deprecation",
-                            key=key,
-                            file=file_path,
-                            key_path=key_path,
+                        allowed_config_fields = _get_allowed_config_fields_from_error_path(
+                            schema, error_path
                         )
+                        if allowed_config_fields and key in allowed_config_fields:
+                            deprecations.warn(
+                                "property-moved-to-config-deprecation",
+                                key=key,
+                                file=file_path,
+                                key_path=key_path,
+                            )
+                        else:
+                            deprecations.warn(
+                                "custom-key-in-object-deprecation",
+                                key=key,
+                                file=file_path,
+                                key_path=key_path,
+                            )
         elif error.validator == "anyOf" and len(error_path) > 0:
             sub_errors = error.context or []
             # schema yaml resource configs
