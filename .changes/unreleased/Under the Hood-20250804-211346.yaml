@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: call adapter.add_catalog_integration during parse_manifest
+time: 2025-08-04T21:13:46.077488-07:00
+custom:
+  Author: colin-rogers-dbt
+  Issue: "11889"
