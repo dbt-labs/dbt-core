@@ -164,21 +164,23 @@ jobs:
           fi
 
       - name: "Post Event"
+        # This step posts the status of the check because the workflow is triggered by multiple events
+        # and we need to ensure the check is always updated.  Otherwise we would end up with duplicate
+        # checks in the GitHub UI.
         run: |
-          # Convert our status to GitHub status state
           if [[ "${{ steps.status_check.outputs.current_status }}" == "success" ]]; then
             state="success"
           else
-            state="pending"
+            state="failure"
           fi
 
           gh api \
             --method POST \
             -H "Accept: application/vnd.github+json" \
-            /repos/${{ github.repository }}/statuses/${{ github.event.pull_request_target.head.sha || github.event.pull_request.head.sha }} \
+            /repos/${{ github.repository }}/statuses/${{ github.event.pull_request.base.sha }} \
             -f state="$state" \
             -f description="Artifact Review Check" \
             -f context="Artifact Review Check" \
             -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         env:
-          GH_TOKEN: ${{ secrets.IT_TEAM_MEMBERSHIP }}
+          GH_TOKEN: ${{ secrets.FISHTOWN_BOT_PAT }}
