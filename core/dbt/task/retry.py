@@ -117,7 +117,7 @@ class RetryTask(ConfiguredTask):
         retry_config = RuntimeConfig.from_args(args=retry_flags)
 
         # Parse manifest using resolved config/flags
-        manifest = parse_manifest(retry_config, False, True, retry_flags.write_json)  # type: ignore
+        manifest = parse_manifest(retry_config, False, True, retry_flags.write_json, [])  # type: ignore
         super().__init__(args, retry_config, manifest)
         self.task_class = TASK_DICT.get(self.previous_command_name)  # type: ignore
 
