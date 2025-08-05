@@ -206,9 +206,14 @@ sources:
     tables:
       - name: "seed"
         tags: ["test"]  # deprecated - should be in config
+        freshness: # deprecated - should be in config
+          warn_after:
+            count: 1
+            period: day
         columns:
           - name: id
             tags: ["test"]  # deprecated - should be in config
+      - name: "another_table"
 """
 
 test_with_arguments_yaml = """
