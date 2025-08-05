@@ -219,6 +219,8 @@ pub struct EvalArgs {
     pub quiet: bool,
     /// Write JSON artifacts to disk
     pub write_json: bool,
+    /// Write a catalog.json file to the target directory
+    pub write_catalog: bool,
     /// Show schema on the command line
     pub schema: Vec<JsonSchemaTypes>,
 

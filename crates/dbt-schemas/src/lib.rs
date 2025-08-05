@@ -40,6 +40,11 @@ pub mod schemas {
     };
 
     pub use sources::{FreshnessResultsArtifact, FreshnessResultsMetadata, FreshnessResultsNode};
+    pub mod legacy_catalog {
+        mod catalog;
+        pub use catalog::DbtCatalog;
+        pub use catalog::build_catalog;
+    }
     pub mod manifest {
         mod bigquery_partition;
         mod group;
