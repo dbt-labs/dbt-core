@@ -51,6 +51,8 @@ impl TestEnvGuard {
         "SSH_AUTH_SOCK",
         "TMPDIR",
         "USER",
+        // This is to allow locally testing if a driver change breaks any test
+        "DISABLE_CDN_DRIVER_CACHE",
     ];
 
     /// Windows-specific environment variables required for system operations and DNS resolution
