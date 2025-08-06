@@ -1,6 +1,7 @@
 // from https://github.com/apache/arrow-adbc/blob/9a10e6791db6d54b813fde4df3925c354822192e/go/adbc/driver/bigquery/driver.go#L31
 
 pub const AUTH_TYPE: &str = "adbc.bigquery.sql.auth_type";
+pub const LOCATION: &str = "adbc.bigquery.sql.location";
 pub const PROJECT_ID: &str = "adbc.bigquery.sql.project_id";
 pub const DATASET_ID: &str = "adbc.bigquery.sql.dataset_id";
 pub const TABLE_ID: &str = "adbc.bigquery.sql.table_id";
