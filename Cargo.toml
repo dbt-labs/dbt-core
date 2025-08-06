@@ -371,11 +371,13 @@ sqllogictest = "0.26.0"
 
 # protobuf
 bytes = "1.10.1"
-pbjson = "0.7.0"
-pbjson-types = "0.7.0"
-prost = "0.13"
-prost-types = "0.13"
-tonic-build = "0.11.0"
+pbjson = "0.8.0"
+pbjson-build = "0.8.0"
+pbjson-types = "0.8.0"
+prost = "0.14"
+prost-build = "0.14"
+prost-types = "0.14"
+tonic-build = "0.14"
 
 # jsonschema
 jsonschema-valid = "0.5.2"

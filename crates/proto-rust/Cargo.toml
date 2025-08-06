@@ -30,6 +30,7 @@ bytes = { workspace = true }
 pbjson = { workspace = true }
 pbjson-types = { workspace = true }
 prost = { workspace = true }
+prost-types = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
