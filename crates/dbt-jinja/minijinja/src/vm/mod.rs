@@ -963,7 +963,23 @@ impl<'env> Vm<'env> {
                                 }
                             }
                             Err(err) => match err.try_abrupt_return() {
-                                Some(rv) => rv.clone(),
+                                Some(rv) => {
+                                    if *name == "caller" {
+                                        if rv.as_str().is_some() {
+                                            return Err(err);
+                                        } else {
+                                            return Err(state.with_span_error(
+                                                Error::new(
+                                                    ErrorKind::InvalidOperation,
+                                                    "caller() must return a string",
+                                                ),
+                                                this_span,
+                                            ));
+                                        }
+                                    } else {
+                                        rv.clone()
+                                    }
+                                }
                                 None => {
                                     return Err(state.with_span_error(err, this_span));
                                 }
