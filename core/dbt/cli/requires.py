@@ -414,7 +414,11 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
     # if a manifest has already been set on the context, don't overwrite it
     if ctx.obj.get("manifest") is None:
         ctx.obj["manifest"] = parse_manifest(
-            runtime_config, write_perf_info, write, ctx.obj["flags"].write_json
+            runtime_config,
+            write_perf_info,
+            write,
+            ctx.obj["flags"].write_json,
+            active_integrations,
         )
         adapter = get_adapter(runtime_config)
     else:
@@ -424,6 +428,3 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
         adapter.set_macro_resolver(ctx.obj["manifest"])
         query_header_context = generate_query_header_context(adapter.config, ctx.obj["manifest"])  # type: ignore[attr-defined]
         adapter.connections.set_query_header(query_header_context)
-
-    for integration in active_integrations:
-        adapter.add_catalog_integration(integration)
