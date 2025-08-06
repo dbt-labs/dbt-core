@@ -96,8 +96,10 @@ impl ResultStore {
                     Ok(value.clone())
                 } else if *value == none_value() {
                     Err(MinijinjaError::new(
-                        MinijinjaErrorKind::MacroResultAlreadyLoadedError(name),
-                        "name",
+                        MinijinjaErrorKind::MacroResultAlreadyLoadedError,
+                        format!(
+                            "The 'statement' result named '{name}' has already been loaded into a variable"
+                        ),
                     ))
                 } else {
                     let result = value.clone();

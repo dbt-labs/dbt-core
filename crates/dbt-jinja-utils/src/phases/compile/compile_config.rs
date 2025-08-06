@@ -135,7 +135,7 @@ impl Object for CompileConfig {
                     .unwrap_or(Value::from(false)))
             }
             _ => Err(MinijinjaError::new(
-                MinijinjaErrorKind::UnknownMethod("CompileConfig".to_string(), name.to_string()),
+                MinijinjaErrorKind::UnknownMethod,
                 format!("Unknown method on compile config: {name}"),
             )),
         }

@@ -63,10 +63,7 @@ pub fn unknown_method_callback(
         ValueKind::Map => map_methods(value, method, args),
         ValueKind::Seq => seq_methods(value, method, args),
         ValueKind::Number => number_methods(value, method, args),
-        _ => Err(Error::from(ErrorKind::UnknownMethod(
-            format!("{}", value.kind()),
-            method.to_string(),
-        ))),
+        _ => Err(Error::from(ErrorKind::UnknownMethod)),
     }
 }
 
@@ -74,12 +71,7 @@ pub fn unknown_method_callback(
 fn string_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, Error> {
     let s = match value.as_str() {
         Some(s) => s,
-        None => {
-            return Err(Error::from(ErrorKind::UnknownMethod(
-                "None".to_string(),
-                method.to_string(),
-            )))
-        }
+        None => return Err(Error::from(ErrorKind::UnknownMethod)),
     };
 
     match method {
@@ -345,22 +337,14 @@ fn string_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, 
             let (suffix,): (&str,) = from_args(args)?;
             Ok(Value::from(s.trim_end_matches(suffix)))
         }
-        _ => Err(Error::from(ErrorKind::UnknownMethod(
-            "String".to_string(),
-            method.to_string(),
-        ))),
+        _ => Err(Error::from(ErrorKind::UnknownMethod)),
     }
 }
 
 fn map_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, Error> {
     let obj = match value.as_object() {
         Some(obj) => obj,
-        None => {
-            return Err(Error::from(ErrorKind::UnknownMethod(
-                "None".to_string(),
-                method.to_string(),
-            )))
-        }
+        None => return Err(Error::from(ErrorKind::UnknownMethod)),
     };
 
     match method {
@@ -398,22 +382,14 @@ fn map_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, Err
                 _ => default.cloned().unwrap_or_else(|| Value::from(())),
             })
         }
-        _ => Err(Error::from(ErrorKind::UnknownMethod(
-            "Map".to_string(),
-            method.to_string(),
-        ))),
+        _ => Err(Error::from(ErrorKind::UnknownMethod)),
     }
 }
 
 fn seq_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, Error> {
     let obj = match value.as_object() {
         Some(obj) => obj,
-        None => {
-            return Err(Error::from(ErrorKind::UnknownMethod(
-                "None".to_string(),
-                method.to_string(),
-            )))
-        }
+        None => return Err(Error::from(ErrorKind::UnknownMethod)),
     };
 
     match method {
@@ -517,10 +493,7 @@ fn seq_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, Err
                 ))
             }
         }
-        _ => Err(Error::from(ErrorKind::UnknownMethod(
-            "Sequence".to_string(),
-            method.to_string(),
-        ))),
+        _ => Err(Error::from(ErrorKind::UnknownMethod)),
     }
 }
 
@@ -540,9 +513,6 @@ fn number_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, 
                 ))
             }
         }
-        _ => Err(Error::from(ErrorKind::UnknownMethod(
-            "Number".to_string(),
-            method.to_string(),
-        ))),
+        _ => Err(Error::from(ErrorKind::UnknownMethod)),
     }
 }

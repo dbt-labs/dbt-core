@@ -261,12 +261,7 @@ mod builtins {
         match obj.call_method(state, &name, &[], &[]) {
             // if get_attr succeeds and returns something other than `Undefined`, it's “there”
             Ok(_) => panic!("should not happen"),
-            Err(err)
-                if err.kind()
-                    == ErrorKind::UnknownMethod("Value".to_string(), name.to_string()) =>
-            {
-                false
-            }
+            Err(err) if err.kind() == ErrorKind::UnknownMethod => false,
             Err(_) => true,
         }
     }

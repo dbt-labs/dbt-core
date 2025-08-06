@@ -211,12 +211,12 @@ use std::sync::{Arc, Mutex};
 use serde::ser::{Serialize, Serializer};
 
 use crate::error::{Error, ErrorKind};
-use crate::functions;
 use crate::listener::RenderingEventListener;
 use crate::utils::OnDrop;
 use crate::value::ops::as_f64;
 use crate::value::serialize::transform;
 use crate::vm::State;
+use crate::{functions, UndefinedBehavior};
 
 pub use crate::value::argtypes::{from_args, ArgType, FunctionArgs, FunctionResult, Kwargs, Rest};
 pub use crate::value::object::{
@@ -1586,15 +1586,18 @@ impl Value {
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         if let ValueRepr::Object(ref dy) = self.0 {
-            dy.call(state, args, listeners)
-        } else if self.is_undefined() {
-            state.undefined_behavior().handle_undefined(None)
-        } else {
-            Err(Error::new(
-                ErrorKind::InvalidOperation,
-                format!("value of type {} is not callable", self.kind()),
-            ))
+            return dy.call(state, args, listeners);
         }
+        if (self.is_undefined() || self.is_none())
+            && state.env().undefined_behavior() == UndefinedBehavior::AllowAll
+        {
+            return Ok(Value::UNDEFINED);
+        }
+
+        Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("value of type {} is not callable", self.kind()),
+        ))
     }
 
     /// Calls a method on the value.
@@ -1611,33 +1614,25 @@ impl Value {
         match self._call_method(state, name, args, listeners) {
             Ok(rv) => Ok(rv),
             Err(mut err) => {
-                if let ErrorKind::UnknownMethod(_caller, _method_name) = err.kind() {
+                if err.kind() == ErrorKind::UnknownMethod {
                     if let Some(ref callback) = state.env().unknown_method_callback {
                         match callback(state, self, name, args) {
-                            Ok(rv) => return Ok(rv),
-                            Err(err) => {
-                                if let ErrorKind::UnknownMethod(_caller, _method_name) = err.kind()
-                                {
-                                    if self.is_undefined() {
-                                        return state.undefined_behavior().handle_undefined(None);
-                                    } else if self.is_none() {
-                                        return state
-                                            .undefined_behavior()
-                                            .handle_undefined_none(name);
-                                    }
+                            Ok(result) => return Ok(result),
+                            Err(callback_err) => {
+                                // if the callback fails with the same error, we
+                                // want to also attach the default detail if
+                                // it's missing
+                                if callback_err.kind() == ErrorKind::UnknownMethod {
+                                    err = callback_err;
+                                } else {
+                                    return Err(callback_err);
                                 }
-                                return Err(err);
                             }
-                        };
-                    } else if err.detail().is_none() {
-                        err.set_detail(
-                            format!("No method named '{}' for '{}'", name, self.kind(),),
-                        );
+                        }
                     }
-                } else if self.is_undefined() {
-                    return state.undefined_behavior().handle_undefined(None);
-                } else if self.is_none() {
-                    return state.undefined_behavior().handle_undefined_none(name);
+                    if err.detail().is_none() {
+                        err.set_detail(format!("{} has no method named {}", self.kind(), name));
+                    }
                 }
                 Err(err)
             }
@@ -1652,13 +1647,15 @@ impl Value {
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         if let Some(object) = self.as_object() {
-            object.call_method(state, name, args, listeners)
-        } else {
-            Err(Error::from(ErrorKind::UnknownMethod(
-                "Value".to_string(),
-                name.to_string(),
-            )))
+            return object.call_method(state, name, args, listeners);
         }
+        if (self.is_undefined() || self.is_none())
+            && state.env().undefined_behavior() == UndefinedBehavior::AllowAll
+        {
+            return Ok(Value::UNDEFINED);
+        }
+
+        Err(Error::from(ErrorKind::UnknownMethod))
     }
 
     #[cfg(feature = "builtins")]

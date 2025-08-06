@@ -764,7 +764,7 @@ mod builtins {
                         let mut result = vec![];
                         for item in iter {
                             if item.is_undefined() {
-                                ok!(state.undefined_behavior().handle_undefined(Some(false)));
+                                ok!(state.undefined_behavior().handle_undefined(false));
                                 continue;
                             }
                             if let Some(iter) = item.as_object().and_then(|x| x.try_iter()) {
@@ -800,7 +800,7 @@ mod builtins {
         }? as usize;
         for value in iter.skip(start) {
             if value.is_undefined() {
-                ok!(state.undefined_behavior().handle_undefined(Some(false)));
+                ok!(state.undefined_behavior().handle_undefined(false));
                 continue;
             } else if !value.is_number() {
                 return Err(Error::new(

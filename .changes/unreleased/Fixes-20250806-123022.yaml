@@ -1,0 +1,3 @@
+kind: Fixes
+body: Correctly report unknown method errors on undefined values
+time: 2025-08-06T12:30:22.356275484-07:00

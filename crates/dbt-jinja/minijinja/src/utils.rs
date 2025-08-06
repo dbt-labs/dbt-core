@@ -111,11 +111,19 @@ pub enum AutoEscape {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub enum UndefinedBehavior {
+    /// Allows all operations on undefined values. Used for dbt parse.
+    ///
+    /// * **printing:** allowed (returns empty string)
+    /// * **iteration:** allowed (returns empty array)
+    /// * **attribute access of undefined values:** allowed (returns [`undefined`](Value::UNDEFINED))
+    /// * **method calls on undefined values:** allowed (returns [`undefined`](Value::UNDEFINED))
+    AllowAll,
     /// The default, somewhat lenient undefined behavior.
     ///
     /// * **printing:** allowed (returns empty string)
     /// * **iteration:** allowed (returns empty array)
     /// * **attribute access of undefined values:** fails
+    /// * **method calls on undefined values:** fails
     #[default]
     Lenient,
     /// Like `Lenient`, but also allows chaining of undefined lookups.
@@ -123,20 +131,14 @@ pub enum UndefinedBehavior {
     /// * **printing:** allowed (returns empty string)
     /// * **iteration:** allowed (returns empty array)
     /// * **attribute access of undefined values:** allowed (returns [`undefined`](Value::UNDEFINED))
+    /// * **method calls on undefined values:** fails
     Chainable,
-    /// Like `Chainable`, but also allows calling methods on undefined values
-    ///
-    /// * **printing:** allowed (returns empty string)
-    /// * **iteration:** allowed (returns empty array)
-    /// * **attribute access of undefined values:** allowed (returns [`undefined`](Value::UNDEFINED))
-    /// * **method calls on undefined values:** allowed (returns [`undefined`](Value::UNDEFINED))
-    /// * **method calls on None values:** allowed (returns [`undefined`](Value::UNDEFINED))
-    Dbt,
     /// Complains very quickly about undefined values.
     ///
     /// * **printing:** fails
     /// * **iteration:** fails
     /// * **attribute access of undefined values:** fails
+    /// * **method calls on undefined values:** fails
     Strict,
 }
 
@@ -148,27 +150,15 @@ impl UndefinedBehavior {
     /// `parent_was_undefined` is set to `true`, the undefined was created by looking up
     /// a missing attribute on an undefined value.  If `false` the undefined was created by
     /// looking up a missing attribute on a defined value.
-    pub fn handle_undefined(self, parent_was_undefined: Option<bool>) -> Result<Value, Error> {
+    pub fn handle_undefined(self, parent_was_undefined: bool) -> Result<Value, Error> {
         match (self, parent_was_undefined) {
-            (UndefinedBehavior::Dbt, _) => Ok(Value::UNDEFINED),
-            (UndefinedBehavior::Lenient, Some(false))
-            | (UndefinedBehavior::Lenient, None)
-            | (UndefinedBehavior::Strict, Some(false))
+            (UndefinedBehavior::AllowAll, _) => Ok(Value::UNDEFINED),
+            (UndefinedBehavior::Lenient, false)
+            | (UndefinedBehavior::Strict, false)
             | (UndefinedBehavior::Chainable, _) => Ok(Value::UNDEFINED),
-            (UndefinedBehavior::Lenient, Some(true)) | (UndefinedBehavior::Strict, _) => {
+            (UndefinedBehavior::Lenient, true) | (UndefinedBehavior::Strict, true) => {
                 Err(Error::from(ErrorKind::UndefinedError))
             }
-        }
-    }
-
-    /// Utility method to optionally return undefined values when the caller is None.
-    pub fn handle_undefined_none(self, method: &str) -> Result<Value, Error> {
-        match self {
-            UndefinedBehavior::Dbt => Ok(Value::UNDEFINED),
-            _ => Err(Error::from(ErrorKind::UnknownMethod(
-                "None".to_string(),
-                method.to_string(),
-            ))),
         }
     }
 

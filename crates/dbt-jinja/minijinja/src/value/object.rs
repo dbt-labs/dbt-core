@@ -262,10 +262,7 @@ pub trait Object: fmt::Debug + Send + Sync {
             return value.call(state, args, listeners);
         }
 
-        Err(Error::from(ErrorKind::UnknownMethod(
-            format!("{:#?}", self.repr()),
-            method.to_string(),
-        )))
+        Err(Error::from(ErrorKind::UnknownMethod))
     }
 
     /// Formats the object for stringification.
@@ -1136,10 +1133,10 @@ pub mod mutable_vec {
                 }
                 "sort" => sort_impl(self, args),
                 "copy" => copy_impl(self, args),
-                _ => Err(Error::from(ErrorKind::UnknownMethod(
-                    "MutableVec".to_string(),
-                    method.to_string(),
-                ))),
+                _ => Err(Error::new(
+                    ErrorKind::UnknownMethod,
+                    format!("MutableVec has no method named {method}"),
+                )),
             }
         }
     }
@@ -1485,10 +1482,10 @@ pub mod mutable_map {
                     if let Some(value) = self.get(&Value::from(method)) {
                         return value.call(state, args, listeners);
                     }
-                    Err(Error::from(ErrorKind::UnknownMethod(
-                        "MutableMap".to_string(),
-                        method.to_string(),
-                    )))
+                    Err(Error::new(
+                        ErrorKind::UnknownMethod,
+                        format!("MutableMap has no method named {method}"),
+                    ))
                 }
             }
         }

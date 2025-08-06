@@ -105,7 +105,7 @@ impl minijinja::value::Object for PytzTimezone {
         match method {
             "localize" => Ok(Value::from("TODO: implement localize()")),
             _ => Err(Error::new(
-                ErrorKind::UnknownMethod("PytzTimeZone".to_string(), method.to_string()),
+                ErrorKind::UnknownMethod,
                 format!("Timezone object has no method named '{method}'"),
             )),
         }

@@ -17,7 +17,7 @@ use dbt_schemas::{
     state::DbtVars,
 };
 use minijinja::{
-    UndefinedBehavior, dispatch_object::THREAD_LOCAL_DEPENDENCIES, macro_unit::MacroUnit,
+    dispatch_object::THREAD_LOCAL_DEPENDENCIES, macro_unit::MacroUnit,
     value::Value as MinijinjaValue,
 };
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
@@ -110,13 +110,13 @@ pub fn initialize_parse_jinja_environment(
         ),
     ]);
 
-    let mut env = JinjaEnvBuilder::new()
+    let env = JinjaEnvBuilder::new()
+        .with_undefined_behavior(minijinja::UndefinedBehavior::AllowAll)
         .with_adapter(create_parse_adapter(adapter_type, package_quoting, token)?)
         .with_root_package(project_name.to_string())
         .with_globals(globals)
         .with_io_args(io_args)
         .try_with_macros(MacroUnitsWrapper::new(macro_units), listener_factory)?
         .build();
-    env.set_undefined_behavior(UndefinedBehavior::Dbt);
     Ok(env)
 }

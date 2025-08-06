@@ -149,7 +149,7 @@ impl Object for PyDateClass {
             "fromordinal" => Self::date_from_ordinal(args).map(Value::from_object),
             "fromisoformat" => Self::fromisoformat(args).map(Value::from_object),
             _ => Err(Error::new(
-                ErrorKind::UnknownMethod("PyDateClass".to_string(), method.to_string()),
+                ErrorKind::UnknownMethod,
                 format!("date has no method named '{method}'"),
             )),
         }
@@ -325,7 +325,7 @@ impl Object for PyDate {
             "__sub__" => self.add_op(args, false),
 
             _ => Err(Error::new(
-                ErrorKind::UnknownMethod("PyDate".to_string(), method.to_string()),
+                ErrorKind::UnknownMethod,
                 format!("date has no method named '{method}'"),
             )),
         }

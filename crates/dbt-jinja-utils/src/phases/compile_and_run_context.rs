@@ -290,10 +290,10 @@ impl Object for RefFunction {
                     )),
                 }
             }
-            _ => Err(MinijinjaError::from(MinijinjaErrorKind::UnknownMethod(
-                "ref".to_string(),
-                method.to_string(),
-            ))),
+            _ => Err(MinijinjaError::new(
+                MinijinjaErrorKind::UnknownMethod,
+                format!("No method named '{method}' on ref objects"),
+            )),
         }
     }
 

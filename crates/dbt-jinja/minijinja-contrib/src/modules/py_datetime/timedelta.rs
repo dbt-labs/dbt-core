@@ -217,8 +217,8 @@ impl Object for PyTimeDelta {
             "__add__" => self.add(args),
             "__sub__" => self.sub(args),
             _ => Err(Error::new(
-                ErrorKind::UnknownMethod("PyTimeDelta".to_string(), method.to_string()),
-                format!("timedelta has no method named '{method}'"),
+                ErrorKind::UnknownMethod,
+                format!("timedelta object has no method named '{method}'"),
             )),
         }
     }

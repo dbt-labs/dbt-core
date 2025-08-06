@@ -85,10 +85,10 @@ impl Object for Pattern {
         } else if method == "sub" {
             re_sub(&args)
         } else {
-            Err(Error::from(ErrorKind::UnknownMethod(
-                "Pattern".to_string(),
-                method.to_string(),
-            )))
+            Err(Error::new(
+                ErrorKind::UnknownMethod,
+                format!("Pattern object has no method named '{method}'"),
+            ))
         }
     }
 }

@@ -184,10 +184,7 @@ fn test_unknown_method_callback() {
             from_args::<()>(args)?;
             minijinja::filters::items(value)
         } else {
-            Err(Error::from(ErrorKind::UnknownMethod(
-                "dummy".to_string(),
-                method.to_string(),
-            )))
+            Err(Error::from(ErrorKind::UnknownMethod))
         }
     });
 

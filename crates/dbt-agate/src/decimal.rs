@@ -1,7 +1,7 @@
 use arrow::array::ArrowNativeTypeOp as _;
 use arrow::datatypes::DecimalType;
 use minijinja::value::{Object, ObjectRepr};
-use minijinja::{Error as MinijinjaError, Value};
+use minijinja::{Error, Value};
 use std::fmt;
 use std::sync::Arc;
 
@@ -147,16 +147,16 @@ impl<T: DecimalType> Object for DecimalValue<T> {
         method: &str,
         args: &[Value],
         listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, Error> {
         if let Some(value) = self.get_value(&Value::from(method)) {
             return value.call(state, args, listeners);
         }
 
         // TODO: implement decimal methods
 
-        Err(minijinja::Error::from(minijinja::ErrorKind::UnknownMethod(
-            format!("{:#?}", self.repr()),
-            method.to_string(),
-        )))
+        Err(Error::new(
+            minijinja::ErrorKind::UnknownMethod,
+            format!("DecimalValue has no method named {method}"),
+        ))
     }
 }

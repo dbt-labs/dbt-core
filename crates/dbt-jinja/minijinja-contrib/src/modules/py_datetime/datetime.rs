@@ -445,7 +445,7 @@ impl Object for PyDateTimeClass {
                 ))
             }
             _ => Err(Error::new(
-                ErrorKind::UnknownMethod("PyDateTimeClass".to_string(), method.to_string()),
+                ErrorKind::UnknownMethod,
                 format!("datetime has no method named '{method}'"),
             )),
         }
@@ -886,7 +886,7 @@ impl Object for PyDateTime {
             "__sub__" => self.add_op(args, false),
 
             _ => Err(Error::new(
-                ErrorKind::UnknownMethod("PyDateTime".to_string(), method.to_string()),
+                ErrorKind::UnknownMethod,
                 format!("datetime has no method named '{method}'"),
             )),
         }

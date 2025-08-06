@@ -41,6 +41,7 @@ pub struct JinjaEnvBuilder {
     adapter: Option<Arc<dyn BaseAdapter>>,
     globals: BTreeMap<String, Value>,
     root_package: Option<String>,
+    undefined_behavior: minijinja::UndefinedBehavior,
     io_args: IoArgs,
 }
 
@@ -52,8 +53,17 @@ impl JinjaEnvBuilder {
             adapter: None,
             globals: BTreeMap::new(),
             root_package: None,
+            undefined_behavior: Default::default(),
             io_args: IoArgs::default(),
         }
+    }
+
+    pub fn with_undefined_behavior(
+        mut self,
+        undefined_behavior: minijinja::UndefinedBehavior,
+    ) -> Self {
+        self.undefined_behavior = undefined_behavior;
+        self
     }
 
     pub fn with_root_package(mut self, root_package: String) -> Self {
@@ -242,6 +252,8 @@ impl JinjaEnvBuilder {
 
         // Any extra steps (unknown method callback, etc.)
         minijinja_contrib::add_to_environment(&mut self.env);
+
+        self.env.set_undefined_behavior(self.undefined_behavior);
 
         // Pull in the pycompat methods
         self.env

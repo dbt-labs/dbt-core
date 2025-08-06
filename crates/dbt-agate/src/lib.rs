@@ -449,10 +449,10 @@ pub trait MappedSequence {
                 if let Some(value) = self.get_value(&Value::from(name)) {
                     return value.call(state, args, listeners);
                 }
-                Err(MinijinjaError::from(ErrorKind::UnknownMethod(
-                    "MappedSequence".to_string(),
-                    name.to_string(),
-                )))
+                Err(MinijinjaError::new(
+                    ErrorKind::UnknownMethod,
+                    format!("{} has no method named {}", self.type_name(), name),
+                ))
             }
         }
     }

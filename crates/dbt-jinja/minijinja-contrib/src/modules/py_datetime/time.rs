@@ -124,8 +124,8 @@ impl Object for PyTimeClass {
             "now" => Self::now(args).map(Value::from_object),
             "fromisoformat" => Self::fromisoformat(args).map(Value::from_object),
             _ => Err(Error::new(
-                ErrorKind::UnknownMethod("PyTimeClass".to_string(), method.to_string()),
-                format!("time has no method named '{method}'"),
+                ErrorKind::UnknownMethod,
+                format!("time object has no method named '{method}'"),
             )),
         }
     }
@@ -296,7 +296,7 @@ impl Object for PyTime {
             "__add__" => self.add_op(args, true),
             "__sub__" => self.add_op(args, false),
             _ => Err(Error::new(
-                ErrorKind::UnknownMethod("PyTime".to_string(), method.to_string()),
+                ErrorKind::UnknownMethod,
                 format!("time object has no method '{method}'"),
             )),
         }

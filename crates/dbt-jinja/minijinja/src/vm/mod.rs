@@ -343,7 +343,7 @@ impl<'env> Vm<'env> {
                         Err(e) if e.kind() == ErrorKind::InvalidOperation => {
                             match a.call_method(state, $obj_method, &[b], listeners) {
                                 Ok(rv) => rv,
-                                Err(e2) if matches!(e2.kind(), ErrorKind::UnknownMethod(_, _)) => {
+                                Err(e2) if e2.kind() == ErrorKind::UnknownMethod => {
                                     return Err(state.with_span_error(e, &$span));
                                 }
                                 Err(e2) => return Err(state.with_span_error(e2, &$span)),
@@ -462,12 +462,12 @@ impl<'env> Vm<'env> {
                                     })
                                 } else {
                                     undefined_behavior
-                                        .handle_undefined(Some(a.is_undefined()))
+                                        .handle_undefined(a.is_undefined())
                                         .map_err(|e| state.with_span_error(e, span))?
                                 }
                             } else {
                                 undefined_behavior
-                                    .handle_undefined(Some(a.is_undefined()))
+                                    .handle_undefined(a.is_undefined())
                                     .map_err(|e| state.with_span_error(e, span))?
                             }
                         }
@@ -496,7 +496,7 @@ impl<'env> Vm<'env> {
                             .validate()
                             .map_err(|e| state.with_span_error(e, span))?,
                         None => undefined_behavior
-                            .handle_undefined(Some(b.is_undefined()))
+                            .handle_undefined(b.is_undefined())
                             .map_err(|e| state.with_span_error(e, span))?,
                     });
                 }

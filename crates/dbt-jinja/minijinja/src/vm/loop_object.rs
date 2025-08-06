@@ -64,10 +64,7 @@ impl Object for Loop {
                 None => Ok(Value::UNDEFINED),
             }
         } else {
-            Err(Error::from(ErrorKind::UnknownMethod(
-                "Loop".to_string(),
-                name.to_string(),
-            )))
+            Err(Error::from(ErrorKind::UnknownMethod))
         }
     }
 

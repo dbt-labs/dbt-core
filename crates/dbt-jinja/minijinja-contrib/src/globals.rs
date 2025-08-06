@@ -62,10 +62,10 @@ pub fn cycler(items: Vec<Value>) -> Result<Value, Error> {
                         .store((idx + 1) % self.items.len(), Ordering::Relaxed);
                     Ok(self.items[idx].clone())
                 }
-                _ => Err(Error::from(ErrorKind::UnknownMethod(
-                    "Cycler".to_string(),
-                    method.to_string(),
-                ))),
+                _ => Err(Error::new(
+                    ErrorKind::UnknownMethod,
+                    format!("Cycler object has no method named {method}"),
+                )),
             }
         }
     }

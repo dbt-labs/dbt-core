@@ -234,11 +234,8 @@ impl Object for RelationChangeSetChangesObject {
                 }
             }
             _ => Err(MiniJinjaError::new(
-                ErrorKind::UnknownMethod(
-                    "RelationChangeSetChangesObject".to_string(),
-                    name.to_string(),
-                ),
-                "method not supported",
+                ErrorKind::UnknownMethod,
+                format!("RelationChangeSetChangesObject has no method named '{name}'"),
             )),
         }
     }

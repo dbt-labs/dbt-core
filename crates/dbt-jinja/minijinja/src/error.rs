@@ -81,7 +81,7 @@ impl fmt::Debug for Error {
 }
 
 /// An enum describing the error kind.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum ErrorKind {
     /// A non primitive value was encountered where one was expected.
@@ -107,7 +107,7 @@ pub enum ErrorKind {
     /// A function is unknown
     UnknownFunction,
     /// Un unknown method was called
-    UnknownMethod(String, String),
+    UnknownMethod,
     /// A bad escape sequence in a string was encountered.
     BadEscape,
     /// An operation on an undefined value was attempted.
@@ -143,7 +143,7 @@ pub enum ErrorKind {
     /// SecretEnvVarLocationError
     SecretEnvVarLocationError,
     /// MacroResultAlreadyLoadedError
-    MacroResultAlreadyLoadedError(String),
+    MacroResultAlreadyLoadedError,
     /// DeserializeError
     SerdeDeserializeError,
     /// RegexError
@@ -155,50 +155,52 @@ pub enum ErrorKind {
 }
 
 impl ErrorKind {
-    fn description(&self) -> String {
+    /// Returns a plain text description of the error kind.
+    ///
+    /// **NOTE**: Do *not* make this function return a `String`!
+    /// Context-specific error messages should be provided in the `details`
+    /// field of [Error] objects (by using [Error::new], or
+    /// [Error::set_detail]), not here.
+    fn description(&self) -> &'static str {
         match self {
-            ErrorKind::NonPrimitive => "not a primitive".to_string(),
-            ErrorKind::NonKey => "not a key type".to_string(),
-            ErrorKind::InvalidOperation => "invalid operation".to_string(),
-            ErrorKind::SyntaxError => "syntax error".to_string(),
-            ErrorKind::TemplateNotFound => "template not found".to_string(),
-            ErrorKind::TooManyArguments => "too many arguments".to_string(),
-            ErrorKind::MissingArgument => "missing argument".to_string(),
-            ErrorKind::UnknownFilter => "unknown filter".to_string(),
-            ErrorKind::UnknownFunction => "unknown function".to_string(),
-            ErrorKind::UnknownTest => "unknown test".to_string(),
-            ErrorKind::UnknownMethod(caller, name) => {
-                format!("No method named '{name}' for '{caller}'")
-            }
-            ErrorKind::BadEscape => "bad string escape".to_string(),
-            ErrorKind::UndefinedError => "undefined value".to_string(),
-            ErrorKind::BadSerialization => "could not serialize to value".to_string(),
-            ErrorKind::BadInclude => "could not render include".to_string(),
-            ErrorKind::EvalBlock => "could not render block".to_string(),
-            ErrorKind::CannotUnpack => "cannot unpack".to_string(),
-            ErrorKind::WriteFailure => "failed to write output".to_string(),
+            ErrorKind::NonPrimitive => "not a primitive",
+            ErrorKind::NonKey => "not a key type",
+            ErrorKind::InvalidOperation => "invalid operation",
+            ErrorKind::SyntaxError => "syntax error",
+            ErrorKind::TemplateNotFound => "template not found",
+            ErrorKind::TooManyArguments => "too many arguments",
+            ErrorKind::MissingArgument => "missing argument",
+            ErrorKind::UnknownFilter => "unknown filter",
+            ErrorKind::UnknownFunction => "unknown function",
+            ErrorKind::UnknownTest => "unknown test",
+            ErrorKind::UnknownMethod => "unknown method",
+            ErrorKind::BadEscape => "bad string escape",
+            ErrorKind::UndefinedError => "undefined value",
+            ErrorKind::BadSerialization => "could not serialize to value",
+            ErrorKind::BadInclude => "could not render include",
+            ErrorKind::EvalBlock => "could not render block",
+            ErrorKind::CannotUnpack => "cannot unpack",
+            ErrorKind::WriteFailure => "failed to write output",
             #[cfg(feature = "deserialization")]
-            ErrorKind::CannotDeserialize => "cannot deserialize".to_string(),
+            ErrorKind::CannotDeserialize => "cannot deserialize",
             #[cfg(feature = "fuel")]
-            ErrorKind::OutOfFuel => "engine ran out of fuel".to_string(),
+            ErrorKind::OutOfFuel => "engine ran out of fuel",
             #[cfg(feature = "custom_syntax")]
-            ErrorKind::InvalidDelimiter => "invalid custom delimiters".to_string(),
+            ErrorKind::InvalidDelimiter => "invalid custom delimiters",
             #[cfg(feature = "multi_template")]
-            ErrorKind::UnknownBlock => "unknown block".to_string(),
-            ErrorKind::ReturnValue => "return value".to_string(),
-            ErrorKind::SuspendVm => "suspend vm".to_string(),
-            ErrorKind::EnvVarMissingError => "env var required but not provided".to_string(),
+            ErrorKind::UnknownBlock => "unknown block",
+            ErrorKind::ReturnValue => "return value",
+            ErrorKind::SuspendVm => "suspend vm",
+            ErrorKind::EnvVarMissingError => "env var required but not provided",
             ErrorKind::SecretEnvVarLocationError => {
-                "secret env vars are allowed only in profiles.yml or packages.yml.".to_string()
+                "secret env vars are allowed only in profiles.yml or packages.yml."
             }
-            ErrorKind::InvalidArgument => "invalid argument".to_string(),
-            ErrorKind::MacroResultAlreadyLoadedError(name) => format!(
-                "The 'statement' result named '{name}' has already been loaded into a variable"
-            ),
-            ErrorKind::SerdeDeserializeError => "could not deserialize".to_string(),
-            ErrorKind::RegexError => "regex error".to_string(),
-            ErrorKind::DisabledModel => "model is disabled".to_string(),
-            ErrorKind::TypeError => "type error".to_string(),
+            ErrorKind::InvalidArgument => "invalid argument",
+            ErrorKind::MacroResultAlreadyLoadedError => "macro result already loaded",
+            ErrorKind::SerdeDeserializeError => "could not deserialize",
+            ErrorKind::RegexError => "regex error",
+            ErrorKind::DisabledModel => "model is disabled",
+            ErrorKind::TypeError => "type error",
         }
     }
 }
@@ -302,7 +304,7 @@ impl Error {
 
     /// Returns the error kind
     pub fn kind(&self) -> ErrorKind {
-        self.repr.kind.clone()
+        self.repr.kind
     }
 
     /// Returns the error detail
@@ -433,6 +435,11 @@ impl std::error::Error for Error {
 }
 
 impl From<ErrorKind> for Error {
+    /// Constructs a default Error instance from an `ErrorKind`.
+    ///
+    /// Note: This does not take a detail message, so the error will not have
+    /// any context-specific information. If you need to provide a detail
+    /// message, use `Error::new` instead.
     fn from(kind: ErrorKind) -> Self {
         Error {
             repr: Box::new(ErrorRepr {

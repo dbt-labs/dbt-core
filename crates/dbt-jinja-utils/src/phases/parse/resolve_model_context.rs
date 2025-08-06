@@ -630,7 +630,7 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
                 Ok(MinijinjaValue::from(""))
             }
             _ => Err(MinijinjaError::new(
-                MinijinjaErrorKind::UnknownMethod("ParseConfig".to_string(), name.to_string()),
+                MinijinjaErrorKind::UnknownMethod,
                 format!("Unknown method on parse: {name}"),
             )),
         }

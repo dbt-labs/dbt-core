@@ -41,7 +41,7 @@ impl Object for Flags {
         match name {
             "get" => get_method(args, &self.flags),
             _ => Err(MinijinjaError::new(
-                MinijinjaErrorKind::UnknownMethod("Flags".to_string(), name.to_string()),
+                MinijinjaErrorKind::UnknownMethod,
                 format!("Unknown method on flags: {name}"),
             )),
         }

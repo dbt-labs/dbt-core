@@ -1168,7 +1168,7 @@ impl Object for Exceptions {
                 Ok(Value::UNDEFINED)
             }
             _ => Err(Error::new(
-                ErrorKind::UnknownMethod("Exceptions".to_string(), method.to_string()),
+                ErrorKind::UnknownMethod,
                 format!("Unknown method on Exceptions: {method}"),
             )),
         }
