@@ -830,6 +830,17 @@ impl<'source> Environment<'source> {
         self.add_global(name.into(), Value::from_function(f))
     }
 
+    /// Add a new global function that parses its arguments as [`Values`](crate::Value).
+    ///
+    /// See [Value::from_func_func] for more details.
+    pub fn add_func_func(
+        &mut self,
+        name: &'static str,
+        f: impl Fn(&State, &[Value]) -> Result<Value, Error> + Sync + Send + 'static,
+    ) {
+        self.add_global(name, Value::from_func_func(name, f))
+    }
+
     /// Adds a global variable.
     pub fn add_global<N, V>(&mut self, name: N, value: V)
     where

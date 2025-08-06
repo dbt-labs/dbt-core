@@ -216,13 +216,24 @@ impl BoxedFunction {
         Rv: FunctionResult,
         Args: for<'a> FunctionArgs<'a>,
     {
-        BoxedFunction(
+        Self::from_func_func(
             Arc::new(move |state, args| -> Result<Value, Error> {
                 f.invoke(ok!(Args::from_values(Some(state), args)), SealedMarker)
                     .into_result()
             }),
             #[cfg(feature = "debug")]
             std::any::type_name::<F>(),
+        )
+    }
+
+    pub(crate) fn from_func_func(
+        f: Arc<FuncFunc>,
+        #[cfg(feature = "debug")] debug: &'static str,
+    ) -> BoxedFunction {
+        BoxedFunction(
+            f,
+            #[cfg(feature = "debug")]
+            debug,
         )
     }
 

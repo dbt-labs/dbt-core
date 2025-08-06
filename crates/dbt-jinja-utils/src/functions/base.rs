@@ -9,7 +9,10 @@ use std::{
 use dbt_agate::{AgateTable, print_table};
 use dbt_common::{ErrorCode, fs_err, io_args::IoArgs, show_warning};
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
-use minijinja::value::{ValueMap, mutable_map::MutableMap};
+use minijinja::{
+    arg_utils::ArgsIter,
+    value::{ValueMap, mutable_map::MutableMap},
+};
 
 use minijinja::{
     Environment, Error, ErrorKind, State, Value,
@@ -26,6 +29,7 @@ use crate::functions::contract_error::get_contract_mismatches;
 
 /// The default placeholder for environment variables when the default value is used
 pub const DEFAULT_ENV_PLACEHOLDER: &str = "__dbt_placeholder__";
+pub const SECRET_PLACEHOLDER: &str = "$$$DBT_SECRET_START$$${}$$$DBT_SECRET_END$$$";
 
 /// Registers all the functions shared across all contexts
 pub fn register_base_functions(env: &mut Environment, io_args: IoArgs) {
@@ -36,10 +40,10 @@ pub fn register_base_functions(env: &mut Environment, io_args: IoArgs) {
     );
 
     env.add_function("return", return_macro);
-    env.add_function("fromjson", fromjson_fn());
-    env.add_function("tojson", tojson_fn());
-    env.add_function("fromyaml", fromyaml_fn());
-    env.add_function("toyaml", toyaml_fn());
+    env.add_func_func("fromjson", fromjson);
+    env.add_func_func("tojson", tojson);
+    env.add_func_func("fromyaml", fromyaml);
+    env.add_func_func("toyaml", toyaml);
     env.add_function("set", set_fn());
     env.add_function("render", render_fn());
     env.add_function("set_strict", set_strict_fn());
@@ -54,7 +58,7 @@ pub fn register_base_functions(env: &mut Environment, io_args: IoArgs) {
     env.add_function("log", log_fn());
     env.add_function("diff_of_two_dicts", diff_of_two_dicts_fn());
     env.add_function("local_md5", local_md5_fn());
-    env.add_function("env_var", env_var_fn());
+    env.add_func_func("env_var", |state, args| env_var(false, None, state, args));
     env.add_function("try_or_compiler_error", try_or_compiler_error_fn());
     // var and env_Var are slightly different depending on the context
 }
@@ -204,61 +208,82 @@ pub fn var_fn(
     }
 }
 
+type LookupFn = dyn Fn(&str) -> Option<Value>;
+
 /// A function that returns an environment variable from the environment
-pub fn env_var_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
-    move |args: &[Value], kwargs: Kwargs| -> Result<Value, Error> {
-        let mut env_vars_guard = ENV_VARS.lock().unwrap();
+///
+/// `placeholder_on_secret_access` is used to control whether to return a placeholder
+/// or produce a hard error when an attempt is made to access a secret environment variable.
+///
+/// `overrides_fn` is an optional function that can be checked before accessing the real
+/// environment variable. Effectively, this allows for mocking or overriding environment
+/// variables.
+///
+/// ```python
+/// def env_var(self, var: str, default: Optional[str] = None) -> str
+/// ```
+/// https://github.com/dbt-labs/dbt-core/blob/303c63ccc836a357505f241dbe90c3abb7b73d57/core/dbt/context/base.py#L305
+pub fn env_var(
+    placeholder_on_secret_access: bool,
+    overrides_fn: Option<&LookupFn>,
+    _state: &State,
+    args: &[Value],
+) -> Result<Value, Error> {
+    let iter = ArgsIter::new("env_var", &["var"], args);
+    let var = iter.next_arg::<&str>()?;
+    let default = iter.next_kwarg::<Option<&Value>>("default")?;
 
-        let mut arg_parser = ArgParser::new(args, Some(kwargs));
-        let var_name = arg_parser
-            .get::<String>("value")
-            .or_else(|_| arg_parser.get::<String>("var"))
-            .map_err(|_| {
-                Error::new(
-                    ErrorKind::InvalidOperation,
-                    "env_var requires a 'value' or 'var' argument",
-                )
-            })?;
-        let default_value = arg_parser.get_optional::<Value>("default");
+    if let Some(value) = overrides_fn.and_then(|f| f(var)) {
+        return Ok(value);
+    }
 
-        if var_name.starts_with(SECRET_ENV_VAR_PREFIX) {
-            return Err(Error::new(
-                ErrorKind::InvalidOperation,
-                format!(
-                    "Secret environment variables (starting with {SECRET_ENV_VAR_PREFIX}) cannot be accessed here"
-                ),
-            ));
-        } else if var_name.starts_with(DBT_INTERNAL_ENV_VAR_PREFIX) {
-            return Err(Error::new(
-                ErrorKind::InvalidOperation,
-                format!(
-                    "Environment variables (starting with {DBT_INTERNAL_ENV_VAR_PREFIX}) cannot be accessed here"
-                ),
-            ));
-        }
+    let is_secret = var.starts_with(SECRET_ENV_VAR_PREFIX);
+    if is_secret && !placeholder_on_secret_access {
+        let err = Error::new(
+            ErrorKind::InvalidOperation,
+            format!(
+                "Secret environment variables (starting with {SECRET_ENV_VAR_PREFIX}) \
+                cannot be accessed here"
+            ),
+        );
+        return Err(err);
+    }
+    let is_internal = var.starts_with(DBT_INTERNAL_ENV_VAR_PREFIX);
+    if is_internal {
+        let err = Error::new(
+            ErrorKind::InvalidOperation,
+            format!(
+                "Environment variables (starting with {DBT_INTERNAL_ENV_VAR_PREFIX}) \
+                cannot be accessed here"
+            ),
+        );
+        return Err(err);
+    }
 
-        let return_value = match (std::env::var(&var_name), default_value) {
-            (Ok(value), _) => Some(value),
-            (_, Some(default)) => Some(default.to_string()),
-            _ => None,
-        };
-
-        match return_value {
-            Some(value) => {
-                env_vars_guard.insert(
-                    var_name.clone(),
-                    if std::env::var(&var_name).is_ok() {
-                        value.clone()
-                    } else {
-                        DEFAULT_ENV_PLACEHOLDER.to_string()
-                    },
-                );
-                Ok(value.into())
+    let mut env_vars_guard = ENV_VARS.lock().unwrap();
+    match (std::env::var(var), default) {
+        (Ok(value), _) => {
+            if is_secret {
+                debug_assert!(placeholder_on_secret_access);
+                let value = Value::from(SECRET_PLACEHOLDER.replace("{}", var));
+                Ok(value)
+            } else {
+                env_vars_guard.insert(var.to_string(), value.clone());
+                Ok(Value::from(value))
             }
-            None => Err(Error::new(
+        }
+        (Err(_), Some(default)) => {
+            env_vars_guard.insert(var.to_string(), DEFAULT_ENV_PLACEHOLDER.to_string());
+            // coerce the default value to a string
+            let default_as_str = default.to_string();
+            Ok(Value::from(default_as_str))
+        }
+        _ => {
+            let err = Error::new(
                 ErrorKind::InvalidOperation,
-                format!("'env_var': environment variable '{var_name}' not found"),
-            )),
+                format!("'env_var': environment variable '{var}' not found"),
+            );
+            Err(err)
         }
     }
 }
@@ -278,212 +303,219 @@ pub fn return_macro(arg: Value) -> Result<Value, Error> {
 
 /// Deserialize a JSON string into a Python object primitive (e.g., a dict or list).
 ///
-/// Args:
-///     string: A string containing JSON data
-///     default: (optional) Value to return if the JSON is invalid
+/// ```python
+/// def fromjson(string: str, default: Any = None) -> Any:
+///     """The `fromjson` context method can be used to deserialize a json
+///     string into a Python object primitive, eg. a `dict` or `list`.
 ///
-/// Example:
-/// ```jinja
-/// {% set my_json_str = '{"abc": 123}' %}
-/// {% set my_dict = fromjson(my_json_str) %}
+///     :param value: The json string to deserialize
+///     :param default: A default value to return if the `string` argument
+///         cannot be deserialized (optional)
+///
+///     Usage:
+///
+///         {% set my_json_str = '{"abc": 123}' %}
+///         {% set my_dict = fromjson(my_json_str) %}
+///         {% do log(my_dict['abc']) %}
+///     """
 /// ```
-pub fn fromjson_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
-    move |args: &[Value], kwargs: Kwargs| -> Result<Value, Error> {
-        if args.is_empty() || args.len() > 2 {
-            return Err(Error::new(
+pub fn fromjson(_state: &State, args: &[Value]) -> Result<Value, Error> {
+    let iter = ArgsIter::new("fromjson", &["string"], args);
+    let string = iter.next_arg::<&str>()?;
+    let default = iter.next_kwarg::<Option<Value>>("default")?;
+    iter.finish()?;
+
+    match serde_json::from_str::<serde_json::Value>(string) {
+        Ok(value) => Ok(Value::from_serialize(value)),
+        Err(err) => match default {
+            Some(default_value) => Ok(default_value),
+            None => Err(Error::new(
                 ErrorKind::InvalidOperation,
-                "fromjson takes 1 or 2 arguments: string and optional default",
-            ));
-        }
-
-        let mut arg_parser = ArgParser::new(args, Some(kwargs));
-        let string = arg_parser.get::<String>("value")?;
-        let default = arg_parser.get_optional::<Value>("default");
-
-        match serde_json::from_str::<serde_json::Value>(&string) {
-            Ok(value) => Ok(Value::from_serialize(&value)),
-            Err(err) => match default {
-                Some(default_value) => Ok(default_value),
-                None => Err(Error::new(
-                    ErrorKind::InvalidOperation,
-                    format!("Failed to parse JSON: {err}"),
-                )),
-            },
-        }
+                format!("Failed to parse JSON: {err}"),
+            )),
+        },
     }
 }
 
 /// Serialize a Python object primitive (e.g., a dict or list) to a JSON string.
 ///
-/// Args:
-///     value: Object to serialize to JSON
-///     default: (optional) Value to return if serialization fails.
-///     sort_keys: (optional, default: false) Whether to sort dictionary keys.
-///     (Not all dbt kwargs like separators/indent are fully implemented here.)
+/// NOTE: Not all dbt kwargs like separators/indent are fully implemented here.
 ///
-/// Example:
-/// ```jinja
-/// {% set my_dict = {"abc": 123} %}
-/// {% set my_json_str = tojson(my_dict) %}
+/// ```python
+/// def tojson(value: Any, default: Any = None, sort_keys: bool = False) -> Any:
+///     """The `tojson` context method can be used to serialize a Python
+///     object primitive, eg. a `dict` or `list` to a json string.
+///
+///     :param value: The value serialize to json
+///     :param default: A default value to return if the `value` argument
+///         cannot be serialized
+///     :param sort_keys: If True, sort the keys.
+///
+///
+///     Usage:
+///
+///         {% set my_dict = {"abc": 123} %}
+///         {% set my_json_string = tojson(my_dict) %}
+///         {% do log(my_json_string) %}
+///     """
 /// ```
-pub fn tojson_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
-    move |args: &[Value], kwargs: Kwargs| -> Result<Value, Error> {
-        if args.is_empty() || args.len() > 3 {
-            return Err(Error::new(
-                ErrorKind::InvalidOperation,
-                "tojson requires at least 1 argument (the value to serialize)",
-            ));
-        }
+pub fn tojson(_state: &State, args: &[Value]) -> Result<Value, Error> {
+    let iter = ArgsIter::new("tojson", &["value"], args);
+    let value = iter.next_arg::<&Value>()?;
+    let default = iter.next_kwarg::<Option<&Value>>("default")?;
+    let sort_keys = iter
+        .next_kwarg::<Option<bool>>("sort_keys")?
+        .unwrap_or(false);
+    iter.finish()?;
 
-        let mut arg_parser = ArgParser::new(args, Some(kwargs));
-        let value = arg_parser.get::<Value>("value")?;
-        let default = arg_parser.get_optional::<Value>("default");
-        let sort_keys = arg_parser
-            .get_optional::<bool>("sort_keys")
-            .unwrap_or(false);
+    // Return default if value is undefined
+    if value.is_undefined() {
+        return match default {
+            Some(default_value) => Ok(default_value.clone()),
+            None => Ok(Value::from(())),
+        };
+    }
 
-        // Return default if value is undefined
-        if value.is_undefined() {
-            return match default {
-                Some(default_value) => Ok(default_value),
-                None => Ok(Value::from(())),
-            };
-        }
-
-        match serde_json::to_string(&value) {
-            Ok(mut json_str) => {
-                if sort_keys {
-                    // Parse the JSON string back to a Value to sort keys
-                    if let Ok(mut json_value) = serde_json::from_str::<serde_json::Value>(&json_str)
-                    {
-                        if let Some(obj) = json_value.as_object_mut() {
-                            let sorted: serde_json::Map<String, serde_json::Value> = obj
-                                .iter()
-                                .collect::<BTreeMap<_, _>>()
-                                .into_iter()
-                                .map(|(k, v)| (k.clone(), v.clone()))
-                                .collect();
-                            json_value = serde_json::Value::Object(sorted);
-                            json_str = serde_json::to_string(&json_value)
-                                .unwrap_or_else(|_| "{}".to_string());
-                        }
+    match serde_json::to_string(&value) {
+        Ok(mut json_str) => {
+            if sort_keys {
+                // Parse the JSON string back to a Value to sort keys
+                if let Ok(mut json_value) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                    if let Some(obj) = json_value.as_object_mut() {
+                        let sorted: serde_json::Map<String, serde_json::Value> = obj
+                            .iter()
+                            .collect::<BTreeMap<_, _>>()
+                            .into_iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect();
+                        json_value = serde_json::Value::Object(sorted);
+                        json_str =
+                            serde_json::to_string(&json_value).unwrap_or_else(|_| "{}".to_string());
                     }
                 }
-                Ok(Value::from_safe_string(json_str))
             }
-            Err(err) => match default {
-                Some(default_value) => Ok(default_value),
-                None => Err(Error::new(
-                    ErrorKind::InvalidOperation,
-                    format!("Failed to convert value to JSON: {err}"),
-                )),
-            },
+            Ok(Value::from_safe_string(json_str))
         }
+        Err(err) => match default {
+            Some(default_value) => Ok(default_value.clone()),
+            None => Err(Error::new(
+                ErrorKind::InvalidOperation,
+                format!("Failed to convert value to JSON: {err}"),
+            )),
+        },
     }
 }
 
 /// Deserialize a YAML string into a Python object primitive.
 ///
-/// Args:
-///     string: A string containing YAML data
-///     default: (optional) Value to return if the YAML is invalid
+/// ```python
+/// def fromyaml(value: str, default: Any = None) -> Any:
+///     """The fromyaml context method can be used to deserialize a yaml string
+///     into a Python object primitive, eg. a `dict` or `list`.
 ///
-/// Example:
-/// ```jinja
-/// {% set my_yaml_str = 'abc: 123' %}
-/// {% set my_dict = fromyaml(my_yaml_str) %}
+///     :param value: The yaml string to deserialize
+///     :param default: A default value to return if the `string` argument
+///         cannot be deserialized (optional)
+///
+///     Usage:
+///
+///         {% set my_yml_str -%}
+///         dogs:
+///          - good
+///          - bad
+///         {%- endset %}
+///         {% set my_dict = fromyaml(my_yml_str) %}
+///         {% do log(my_dict['dogs'], info=true) %}
+///         -- ["good", "bad"]
+///         {% do my_dict['dogs'].pop() }
+///         {% do log(my_dict['dogs'], info=true) %}
+///         -- ["good"]
+///     """
 /// ```
-pub fn fromyaml_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
-    move |args: &[Value], kwargs: Kwargs| -> Result<Value, Error> {
-        if args.is_empty() || args.len() > 2 {
-            return Err(Error::new(
+pub fn fromyaml(_state: &State, args: &[Value]) -> Result<Value, Error> {
+    let iter = ArgsIter::new("fromyaml", &["value"], args);
+    let value = iter.next_arg::<&str>()?;
+    let default = iter.next_kwarg::<Option<Value>>("default")?;
+    iter.finish()?;
+
+    match dbt_serde_yaml::from_str::<dbt_serde_yaml::Value>(value) {
+        Ok(serde_value) => Ok(Value::from_serialize(serde_value)),
+        Err(err) => match default {
+            Some(default_value) => Ok(default_value),
+            None => Err(Error::new(
                 ErrorKind::InvalidOperation,
-                "fromyaml takes 1 or 2 arguments: string and optional default",
-            ));
-        }
-
-        let mut arg_parser = ArgParser::new(args, Some(kwargs));
-        let string = arg_parser.get::<String>("value")?;
-        let default = arg_parser.get_optional::<Value>("default");
-
-        match dbt_serde_yaml::from_str::<dbt_serde_yaml::Value>(&string) {
-            Ok(value) => Ok(Value::from_serialize(&value)),
-            Err(err) => match default {
-                Some(default_value) => Ok(default_value),
-                None => Err(Error::new(
-                    ErrorKind::InvalidOperation,
-                    format!("Failed to parse YAML: {err}"),
-                )),
-            },
-        }
+                format!("Failed to parse YAML: {err}"),
+            )),
+        },
     }
 }
 
 /// Serialize a Python object primitive to a YAML string.
 ///
-/// Args:
-///     value: Object to serialize to YAML
-///     default: (optional) Value to return if serialization fails
-///     sort_keys: (optional, default: false) Whether to sort dictionary keys
+/// ```python
+/// def toyaml(
+///     value: Any, default: Optional[str] = None, sort_keys: bool = False
+/// ) -> Optional[str]:
+///     """The `tojson` context method can be used to serialize a Python
+///     object primitive, eg. a `dict` or `list` to a yaml string.
 ///
-/// Example:
-/// ```jinja
-/// {% set my_dict = {"abc": 123} %}
-/// {% set my_yaml_str = toyaml(my_dict) %}
+///     :param value: The value serialize to yaml
+///     :param default: A default value to return if the `value` argument
+///         cannot be serialized
+///     :param sort_keys: If True, sort the keys.
+///
+///
+///     Usage:
+///
+///         {% set my_dict = {"abc": 123} %}
+///         {% set my_yaml_string = toyaml(my_dict) %}
+///         {% do log(my_yaml_string) %}
+///     """
 /// ```
-pub fn toyaml_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
-    move |args: &[Value], kwargs: Kwargs| -> Result<Value, Error> {
-        if args.is_empty() || args.len() > 3 {
+pub fn toyaml(_state: &State, args: &[Value]) -> Result<Value, Error> {
+    let iter = ArgsIter::new("toyaml", &["value"], args);
+    let value = iter.next_arg::<&Value>()?;
+    let default = iter.next_kwarg::<Option<&Value>>("default")?;
+    let sort_keys = iter
+        .next_kwarg::<Option<bool>>("sort_keys")?
+        .unwrap_or(false);
+
+    // If the value is undefined or none and there's a default, return it
+    if value.is_undefined() || value.is_none() {
+        return match default {
+            Some(def) => Ok(def.clone()),
+            // Return none for undefined/none values when no default is provided
+            None => Ok(Value::from(())),
+        };
+    }
+
+    // Convert the Minijinja Value to a serde_json::Value
+    // Should this say YAML or JSON cause this is toyaml function, not sure
+    let mut json_value = match serde_json::to_value(value) {
+        Ok(val) => val,
+        Err(err) => {
             return Err(Error::new(
                 ErrorKind::InvalidOperation,
-                "toyaml requires at least 1 argument (the value to serialize)",
+                format!("Failed to convert value to YAML: {err}"),
             ));
         }
+    };
 
-        let mut arg_parser = ArgParser::new(args, Some(kwargs));
-        let value = arg_parser.get::<Value>("value")?;
-        let default = arg_parser.get_optional::<Value>("default");
-        let sort_keys = arg_parser
-            .get_optional::<bool>("sort_keys")
-            .unwrap_or(false);
-
-        // If the value is undefined or none and there's a default, return it
-        if value.is_undefined() || value.is_none() {
-            return match default {
-                Some(def) => Ok(def),
-                // Return none for undefined/none values when no default is provided
-                None => Ok(Value::from(())),
-            };
+    // Sort keys if requested
+    if sort_keys {
+        if let Some(obj) = json_value.as_object_mut() {
+            let sorted_map: BTreeMap<_, _> =
+                obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            *obj = sorted_map.into_iter().collect();
         }
+    }
 
-        // Convert the Minijinja Value to a serde_json::Value
-        // Should this say YAML or JSON cause this is toyaml function, not sure
-        let mut json_value = match serde_json::to_value(&value) {
-            Ok(val) => val,
-            Err(err) => {
-                return Err(Error::new(
-                    ErrorKind::InvalidOperation,
-                    format!("Failed to convert value to YAML: {err}"),
-                ));
-            }
-        };
-
-        // Sort keys if requested
-        if sort_keys {
-            if let Some(obj) = json_value.as_object_mut() {
-                let sorted_map: BTreeMap<_, _> =
-                    obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-                *obj = sorted_map.into_iter().collect();
-            }
-        }
-
-        match dbt_serde_yaml::to_string(&json_value) {
-            Ok(yaml_str) => Ok(Value::from_safe_string(yaml_str)),
-            Err(err) => Err(Error::new(
-                ErrorKind::InvalidOperation,
-                format!("Failed to convert value to YAML: {err}"),
-            )),
-        }
+    match dbt_serde_yaml::to_string(&json_value) {
+        Ok(yaml_str) => Ok(Value::from(yaml_str)),
+        Err(err) => Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("Failed to convert value to YAML: {err}"),
+        )),
     }
 }
 
@@ -1291,7 +1323,7 @@ mod tests {
     #[test]
     fn test_tojson_simple_dict() {
         let mut env = Environment::new();
-        env.add_function("tojson", tojson_fn());
+        env.add_function("tojson", tojson);
 
         let template_source = r#"{{ tojson({'a': 1, 'b': 'hello'}) }}"#;
         let tmpl = env.template_from_str(template_source, &[]).unwrap();
@@ -1302,7 +1334,7 @@ mod tests {
     #[test]
     fn test_tojson_nested_dict() {
         let mut env = Environment::new();
-        env.add_function("tojson", tojson_fn());
+        env.add_function("tojson", tojson);
 
         let template_source = r#"{{ tojson({'a': 1, 'b': {'c': 3}}) }}"#;
         let tmpl = env.template_from_str(template_source, &[]).unwrap();
@@ -1313,7 +1345,7 @@ mod tests {
     #[test]
     fn test_tojson_with_sort_keys() {
         let mut env = Environment::new();
-        env.add_function("tojson", tojson_fn());
+        env.add_function("tojson", tojson);
 
         let template_source = r#"{{ tojson({'b': 2, 'a': 1}, sort_keys=True) }}"#;
         let tmpl = env.template_from_str(template_source, &[]).unwrap();
@@ -1324,7 +1356,7 @@ mod tests {
     #[test]
     fn test_toyaml_simple_dict() {
         let mut env = Environment::new();
-        env.add_function("toyaml", toyaml_fn());
+        env.add_function("toyaml", toyaml);
 
         let template_source = r#"{{ toyaml({'a': 1, 'b': 'hello'}) }}"#;
         let tmpl = env.template_from_str(template_source, &[]).unwrap();
@@ -1335,7 +1367,7 @@ mod tests {
     #[test]
     fn test_toyaml_nested_dict() {
         let mut env = Environment::new();
-        env.add_function("toyaml", toyaml_fn());
+        env.add_function("toyaml", toyaml);
 
         let template_source = r#"{{ toyaml({'a': 1, 'b': {'c': 3}}) }}"#;
         let tmpl = env.template_from_str(template_source, &[]).unwrap();
@@ -1346,7 +1378,7 @@ mod tests {
     #[test]
     fn test_toyaml_with_sort_keys() {
         let mut env = Environment::new();
-        env.add_function("toyaml", toyaml_fn());
+        env.add_function("toyaml", toyaml);
 
         let template_source = r#"{{ toyaml({'b': 2, 'a': 1}, sort_keys=True) }}"#;
         let tmpl = env.template_from_str(template_source, &[]).unwrap();

@@ -12,7 +12,7 @@ pub mod utils;
 
 /// Module for functions implementations for the dbt jinja context
 mod functions;
-
+pub use functions::env_var;
 pub use functions::silence_base_context;
 pub use functions::var_fn;
 

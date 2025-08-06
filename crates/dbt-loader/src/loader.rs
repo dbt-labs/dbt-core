@@ -42,7 +42,7 @@ use crate::{
 };
 
 use dbt_common::fsinfo;
-use dbt_jinja_utils::phases::load::secret_renderer::secret_context_env_var_fn;
+use dbt_jinja_utils::phases::load::secret_renderer::secret_context_env_var;
 use dbt_jinja_utils::serde::{into_typed_with_jinja, value_from_file};
 use dbt_jinja_utils::var_fn;
 
@@ -73,7 +73,7 @@ pub async fn load(
     let ctx: BTreeMap<String, minijinja::Value> = BTreeMap::from([
         (
             "env_var".to_owned(),
-            minijinja::Value::from_function(secret_context_env_var_fn()),
+            minijinja::Value::from_func_func("env_var", secret_context_env_var),
         ),
         (
             "var".to_owned(),
