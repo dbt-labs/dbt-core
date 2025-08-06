@@ -4,11 +4,8 @@
 #[macro_use]
 mod macros;
 
-// In this section of the file nothing should be `pub`.
-pub mod auth;
 pub mod base_adapter;
 pub mod bridge_adapter;
-pub mod config;
 pub mod convert_type;
 pub mod errors;
 pub mod factory;
@@ -22,6 +19,14 @@ pub mod response;
 pub mod snapshots;
 pub mod sql_engine;
 pub mod typed_adapter;
+
+// Re-export types and modules that were moved to dbt_auth
+pub mod auth {
+    pub use dbt_auth::Auth;
+}
+pub mod config {
+    pub use dbt_auth::AdapterConfig;
+}
 
 // Adapters for warehouses / dbs
 /// Bigquery adapter
@@ -60,5 +65,5 @@ pub use response::AdapterResponse;
 pub use typed_adapter::TypedBaseAdapter;
 
 // Exposing structs for testing
-pub use config::AdapterConfig as AdapterConfigForTesting;
+pub use dbt_auth::AdapterConfig as AdapterConfigForTesting;
 pub use sql_engine::SqlEngine as SqlEngineForTesting;

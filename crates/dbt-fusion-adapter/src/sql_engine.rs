@@ -267,7 +267,10 @@ impl SqlEngine {
     /// always is Ok(None) for non Warehouse/Record variance
     pub fn config(&self, key: &str) -> AdapterResult<Option<String>> {
         match self {
-            Self::Warehouse(actual_engine) => actual_engine.config.maybe_get_str(key),
+            Self::Warehouse(actual_engine) => {
+                let opt = actual_engine.config.maybe_get_str(key)?;
+                Ok(opt)
+            }
             Self::Record(record_engine) => record_engine.config(key),
             Self::Replay(replay_engine) => replay_engine.config(key),
         }

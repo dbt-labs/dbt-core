@@ -322,7 +322,8 @@ impl ReplayEngine {
     }
 
     pub fn config(&self, key: &str) -> AdapterResult<Option<String>> {
-        self.0.config.maybe_get_str(key)
+        let opt = self.0.config.maybe_get_str(key)?;
+        Ok(opt)
     }
 
     pub fn cancellation_token(&self) -> CancellationToken {

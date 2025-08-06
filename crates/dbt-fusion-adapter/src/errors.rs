@@ -1,18 +1,17 @@
 use adbc_core::error::Status;
 use arrow_schema::ArrowError;
+use dbt_auth::AuthError;
 use dbt_common::cancellation::Cancellable;
 use dbt_common::{ErrorCode, FsError};
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind};
-use std::future::Future;
 use std::io;
 use std::pin::Pin;
 use std::{fmt, panic};
 use tokio::task::JoinError;
 
-/// Adapter result.
 pub type AdapterResult<T> = Result<T, AdapterError>;
 
-/// A pinned Future that produces an `AdapterResult<T>`.
+/// A pinned Future that produces a `Result<T, Cancellable<AdapterError>>`.
 pub type AsyncAdapterResult<'a, T, E = AdapterError> =
     Pin<Box<dyn Future<Output = Result<T, Cancellable<E>>> + Send + 'a>>;
 
@@ -236,6 +235,17 @@ impl From<JoinError> for AdapterError {
         } else {
             // as of today, this is unreachable, but we keep it for future-proofing
             AdapterError::new(AdapterErrorKind::Internal, err.to_string())
+        }
+    }
+}
+
+impl From<AuthError> for AdapterError {
+    fn from(err: AuthError) -> Self {
+        match err {
+            AuthError::Adbc(adbc_err) => adbc_err.into(),
+            AuthError::Config(msg) => AdapterError::new(AdapterErrorKind::Configuration, msg),
+            AuthError::JSON(json_err) => json_err.into(),
+            AuthError::Io(io_err) => io_err.into(),
         }
     }
 }

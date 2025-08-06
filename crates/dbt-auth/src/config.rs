@@ -1,4 +1,4 @@
-use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
+use crate::AuthError;
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -20,7 +20,7 @@ impl AdapterConfig {
     }
 
     /// Get a value from a map or return an error.
-    pub fn maybe_get_str(&self, key: &str) -> AdapterResult<Option<String>> {
+    pub fn maybe_get_str(&self, key: &str) -> Result<Option<String>, AuthError> {
         if let Some(value) = self.db_config.get(key) {
             let s = value.as_str();
             if let Some(s) = s {
@@ -36,10 +36,10 @@ impl AdapterConfig {
             } else if value.is_null() {
                 Ok(None)
             } else {
-                Err(AdapterError::new(
-                    AdapterErrorKind::Configuration,
-                    format!("{key} value: {value} is not a string, integer, float, or boolean"),
-                ))
+                let err = AuthError::Config(format!(
+                    "{key} value: {value} is not a string, integer, float, or boolean"
+                ));
+                Err(err)
             }
         } else {
             Ok(None)
@@ -48,14 +48,11 @@ impl AdapterConfig {
 
     /// Get a value from a map or return an error.
     /// TODO: return &str instead String
-    pub fn get_str(&self, key: &str) -> AdapterResult<String> {
+    pub fn get_str(&self, key: &str) -> Result<String, AuthError> {
         if let Some(s) = self.maybe_get_str(key)? {
             Ok(s)
         } else {
-            Err(AdapterError::new(
-                AdapterErrorKind::Configuration,
-                format!("{key} missing"),
-            ))
+            Err(AuthError::config(format!("{key} missing")))
         }
     }
 
