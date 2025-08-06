@@ -367,10 +367,9 @@ impl Error {
             self.repr.stack.iter().find_map(|err| {
                 let filename = PathBuf::from(err.filename.as_str());
                 if !filename.components().any(|component| {
-                    component
-                        .as_os_str()
-                        .to_string_lossy()
-                        .contains("dbt_internal_packages")
+                    let component = component.as_os_str().to_string_lossy();
+                    component.contains(DBT_INTERNAL_PACKAGES_DIR_NAME)
+                        || component.contains(DBT_PACKAGES_DIR_NAME)
                 }) {
                     Some(err.span)
                 } else {

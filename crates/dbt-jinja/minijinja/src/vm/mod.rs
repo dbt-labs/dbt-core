@@ -443,25 +443,22 @@ impl<'env> Vm<'env> {
                                     .unwrap_or_default()
                                     .contains(&Value::from(name as &str))
                                 {
-                                    let template_registry_item = template_registry
-                                        .get(&ns_name)
-                                        .cloned()
-                                        .unwrap_or(Value::from(BTreeMap::from([
-                                            ("path".to_string(), ns_name),
-                                            (
-                                                "span".to_string(),
-                                                Value::from_serialize(Span::default()),
-                                            ),
-                                        ])));
+                                    let template_registry_entry = template_registry.get(&ns_name);
+                                    let path = template_registry_entry
+                                        .and_then(|entry| entry.get_attr_fast("path"))
+                                        .unwrap_or(ns_name);
+                                    let span = template_registry_entry
+                                        .and_then(|entry| entry.get_attr_fast("span"))
+                                        .unwrap_or_else(|| Value::from_serialize(Span::default()));
+
+                                    let context =
+                                        state.get_base_context_with_path_and_span(&path, &span);
                                     Value::from_object(DispatchObject {
                                         macro_name: name.to_string(),
                                         package_name: Some(namespace.get_name().to_string()),
                                         strict: true,
                                         auto_execute: false,
-                                        context: Some(state.get_base_context_with_path_and_span(
-                                            &template_registry_item.get_attr_fast("path").unwrap(),
-                                            &template_registry_item.get_attr_fast("span").unwrap(),
-                                        )),
+                                        context: Some(context),
                                     })
                                 } else {
                                     undefined_behavior
@@ -893,23 +890,19 @@ impl<'env> Vm<'env> {
                                 )
                             })
                             .unwrap();
-                        let template_registry_item = template_registry
-                            .get(&Value::from(*name))
-                            .cloned()
-                            .unwrap_or(Value::from(BTreeMap::from([
-                                (
-                                    "path".to_string(),
-                                    Value::from(format!("{root_package_name}.{name}")),
-                                ),
-                                ("span".to_string(), Value::from_serialize(Span::default())),
-                            ])));
+                        let template_registry_entry = template_registry.get(&Value::from(*name));
+                        let path = template_registry_entry
+                            .and_then(|entry| entry.get_attr_fast("path"))
+                            .unwrap_or_else(|| Value::from(*name));
+                        let span = template_registry_entry
+                            .and_then(|entry| entry.get_attr_fast("span"))
+                            .unwrap_or_else(|| Value::from_serialize(Span::default()));
+
+                        let context = state.get_base_context_with_path_and_span(&path, &span);
 
                         let inner_state: State<'_, '_> = template
                             .eval_to_state_with_outer_stack_depth(
-                                state.get_base_context_with_path_and_span(
-                                    &template_registry_item.get_attr_fast("path").unwrap(),
-                                    &template_registry_item.get_attr_fast("span").unwrap(),
-                                ),
+                                context,
                                 listeners,
                                 state.ctx.depth() + INCLUDE_RECURSION_COST,
                             )?;
@@ -988,21 +981,19 @@ impl<'env> Vm<'env> {
                     {
                         // The template was found, now get and execute it
                         let template = self.env.get_template(&template_name, listeners)?;
-                        let template_registry_item = template_registry
-                            .get(&Value::from(template_name))
-                            .cloned()
-                            .unwrap_or(Value::from(BTreeMap::from([
-                                (
-                                    "path".to_string(),
-                                    Value::from(format!("{root_package_name}.{name}")),
-                                ),
-                                ("span".to_string(), Value::from_serialize(Span::default())),
-                            ])));
+                        let template_registry_entry =
+                            template_registry.get(&Value::from(template_name.clone()));
+                        let path = template_registry_entry
+                            .and_then(|entry| entry.get_attr_fast("path"))
+                            .unwrap_or_else(|| Value::from(template_name.clone()));
+                        let span = template_registry_entry
+                            .and_then(|entry| entry.get_attr_fast("span"))
+                            .unwrap_or_else(|| Value::from_serialize(Span::default()));
+
+                        let context = state.get_base_context_with_path_and_span(&path, &span);
+
                         let mut new_state = template.eval_to_state_with_outer_stack_depth(
-                            state.get_base_context_with_path_and_span(
-                                &template_registry_item.get_attr_fast("path").unwrap(),
-                                &template_registry_item.get_attr_fast("span").unwrap(),
-                            ),
+                            context,
                             listeners,
                             state.ctx.depth() + MACRO_RECURSION_COST,
                         )?;
@@ -1120,18 +1111,16 @@ impl<'env> Vm<'env> {
                             ));
                         };
 
-                        let template_registry_item = template_registry
-                            .get(&Value::from(&qualified_name))
-                            .cloned()
-                            .unwrap_or(Value::from(BTreeMap::from([
-                                ("path".to_string(), Value::from(qualified_name)),
-                                ("span".to_string(), Value::from_serialize(Span::default())),
-                            ])));
+                        let template_registry_entry =
+                            template_registry.get(&Value::from(qualified_name.clone()));
+                        let path = template_registry_entry
+                            .and_then(|entry| entry.get_attr_fast("path"))
+                            .unwrap_or_else(|| Value::from(qualified_name));
+                        let span = template_registry_entry
+                            .and_then(|entry| entry.get_attr_fast("span"))
+                            .unwrap_or_else(|| Value::from_serialize(Span::default()));
 
-                        let ctx = state.get_base_context_with_path_and_span(
-                            &template_registry_item.get_attr_fast("path").unwrap(),
-                            &template_registry_item.get_attr_fast("span").unwrap(),
-                        );
+                        let ctx = state.get_base_context_with_path_and_span(&path, &span);
                         let macro_state = template.eval_to_state_with_outer_stack_depth(
                             ctx,
                             listeners,

@@ -1,6 +1,7 @@
 use crate::constants::MACRO_DISPATCH_ORDER;
 use crate::constants::TARGET_PACKAGE_NAME;
 use crate::listener::RenderingEventListener;
+use crate::machinery::Span;
 use crate::value::Enumerator;
 use crate::value::Object;
 use crate::value::Value;
@@ -263,11 +264,18 @@ impl DispatchObject {
                 ));
             }
         };
+        let template_registry = state.env.get_macro_template_registry();
+        let template_registry_entry = template_registry.get(&Value::from(template_name));
+        let path = template_registry_entry
+            .and_then(|entry| entry.get_attr_fast("path"))
+            .unwrap_or_else(|| Value::from(template_name));
+        let span = template_registry_entry
+            .and_then(|entry| entry.get_attr_fast("span"))
+            .unwrap_or_else(|| Value::from_serialize(Span::default()));
 
+        let context = state.get_base_context_with_path_and_span(&path, &span);
         let template_state = template.eval_to_state_with_outer_stack_depth(
-            self.context
-                .clone()
-                .unwrap_or_else(|| state.get_base_context()),
+            context,
             listeners,
             state.ctx.depth() + INCLUDE_RECURSION_COST,
         )?;
