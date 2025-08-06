@@ -186,6 +186,27 @@ models:
     my_custom_property: "It's over, I have the high ground"
 """
 
+property_moved_to_config_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    access: public  # deprecated - should be in config
+    columns:
+      - name: id
+        tags: ["test"]  # deprecated - should be in config
+
+sources:
+  - name: seed_source
+    schema: "{{ var('schema_override', target.schema) }}"
+    tags: ["test"]  # deprecated - should be in config
+    tables:
+      - name: "seed"
+        tags: ["test"]  # deprecated - should be in config
+        columns:
+          - name: id
+            tags: ["test"]  # deprecated - should be in config
+"""
+
 test_with_arguments_yaml = """
 models:
   - name: models_trivial
