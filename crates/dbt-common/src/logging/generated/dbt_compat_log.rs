@@ -2,7 +2,6 @@
 /// Main log entry structure
 /// the order here is because completion
 #[derive(serde::Serialize, serde::Deserialize)]
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct LogEntry {
     #[prost(message, optional, tag = "10")]
@@ -13,8 +12,6 @@ pub struct LogEntry {
 /// Nested message and enum types in `LogEntry`.
 pub mod log_entry {
     #[derive(serde::Serialize, serde::Deserialize)]
-    #[serde(untagged)]
-    #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Data {
         #[prost(message, tag = "1")]
@@ -29,7 +26,6 @@ pub mod log_entry {
 }
 /// Completion log data (for command completion)
 #[derive(serde::Serialize, serde::Deserialize)]
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CompletionLogData {
     #[prost(uint32, tag = "1")]
@@ -45,8 +41,7 @@ pub struct CompletionLogData {
 }
 /// Compiled node log data (for dbt compile events)
 #[derive(serde::Serialize, serde::Deserialize)]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct CompiledNodeLogData {
     #[prost(uint32, tag = "1")]
     pub log_version: u32,
@@ -59,8 +54,7 @@ pub struct CompiledNodeLogData {
 }
 /// Node executing log data (for general dbt events, including node start and completion)
 #[derive(serde::Serialize, serde::Deserialize)]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ExecutingLogData {
     #[prost(uint32, tag = "1")]
     pub log_version: u32,
@@ -70,8 +64,7 @@ pub struct ExecutingLogData {
     pub node_info: ::core::option::Option<NodeInfo>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ShowLogData {
     #[prost(uint32, tag = "1")]
     pub log_version: u32,
@@ -84,7 +77,6 @@ pub struct ShowLogData {
 }
 /// Log info structure
 #[derive(serde::Serialize, serde::Deserialize)]
-#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct LogInfo {
     #[prost(string, tag = "1")]
@@ -116,8 +108,7 @@ pub struct LogInfo {
 }
 /// Node info structure
 #[derive(serde::Serialize, serde::Deserialize)]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct NodeInfo {
     #[prost(string, tag = "1")]
     pub unique_id: ::prost::alloc::string::String,
