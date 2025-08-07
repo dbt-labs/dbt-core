@@ -858,4 +858,4 @@ class TestPropertyMovedToConfigDeprecation:
             ["parse", "--no-partial-parse", "--show-all-deprecations"],
             callbacks=[event_catcher.catch],
         )
-        assert len(event_catcher.caught_events) == 5
+        assert len(event_catcher.caught_events) == 7

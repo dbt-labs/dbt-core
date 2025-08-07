@@ -3,7 +3,6 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
-from dbt import deprecations
 from dbt.adapters.capability import Capability
 from dbt.adapters.factory import get_adapter
 from dbt.artifacts.resources import FreshnessThreshold, SourceConfig, Time
@@ -377,14 +376,6 @@ class SourcePatcher:
         source: UnparsedSourceDefinition = target.source
 
         source_freshness = source.freshness
-        if source_freshness and (target.path, source.name) not in self._deprecations:
-            deprecations.warn(
-                "property-moved-to-config-deprecation",
-                key="freshness",
-                file=target.path,
-                key_path=source.name,
-            )
-            self._deprecations.add((target.path, source.name))
 
         source_config_freshness_raw: Optional[Dict] = source.config.get(
             "freshness", {}
@@ -397,14 +388,6 @@ class SourcePatcher:
 
         table: UnparsedSourceTableDefinition = target.table
         table_freshness = table.freshness
-        if table_freshness and (target.path, table.name) not in self._deprecations:
-            deprecations.warn(
-                "property-moved-to-config-deprecation",
-                key="freshness",
-                file=target.path,
-                key_path=table.name,
-            )
-            self._deprecations.add((target.path, table.name))
 
         table_config_freshness_raw: Optional[Dict] = table.config.get(
             "freshness", {}
