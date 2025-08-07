@@ -1,0 +1,3 @@
+kind: Fixes
+body: (fix adapters/snowflake) seed binary data
+time: 2025-08-06T13:51:14.10169939-07:00

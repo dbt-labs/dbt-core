@@ -1,3 +1,5 @@
+use minijinja::Value;
+use minijinja::value::ValueKind;
 use minijinja_contrib::modules::py_datetime::date::PyDate;
 use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
 
@@ -14,6 +16,14 @@ pub trait SqlLiteralFormatter {
     fn format_str(&self, l: &str) -> String {
         let escaped_str = l.replace("'", "''");
         format!("'{escaped_str}'")
+    }
+
+    /// ## Panics
+    /// If the value is not a bytes array
+    fn format_bytes(&self, bytes_value: &Value) -> String {
+        assert!(bytes_value.kind() == ValueKind::Bytes);
+        // uses what is defined by impl fmt::Display for Value
+        format!("'{bytes_value}'")
     }
 
     fn format_date(&self, l: PyDate) -> String {

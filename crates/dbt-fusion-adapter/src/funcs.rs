@@ -296,6 +296,7 @@ pub fn format_sql_with_bindings(
                     ValueKind::String => {
                         result.push_str(&formatter.format_str(value.as_str().unwrap()))
                     }
+                    ValueKind::Bytes => result.push_str(&formatter.format_bytes(&value)),
                     ValueKind::None => result.push_str(&formatter.none_value()),
                     _ => {
                         // TODO: handle the SQL escaping of more data types
