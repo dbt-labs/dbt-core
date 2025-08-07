@@ -1,5 +1,5 @@
-use crate::{cancellation::CancelledError, error::code_location::AbstractLocation, is_sdf_debug};
 use datafusion::{arrow, error::DataFusionError, logical_expr::Expr, parquet};
+use dbt_cancel::CancelledError;
 use dbt_frontend_common::error::{FrontendError, FrontendResult, NameCandidate, format_candidates};
 use itertools::Itertools as _;
 use regex::Regex;
@@ -12,9 +12,9 @@ use std::{
 };
 use tokio::task::JoinError;
 
-use crate::io_utils::find_enclosed_substring;
-
-use super::{ErrorCode, code_location::MiniJinjaErrorWrapper, preprocessor_location::MacroSpan};
+use super::{ErrorCode, preprocessor_location::MacroSpan};
+use crate::code_location::{AbstractLocation, MiniJinjaErrorWrapper};
+use crate::utils::{find_enclosed_substring, is_sdf_debug};
 
 pub type FsResult<T, E = Box<FsError>> = Result<T, E>;
 
@@ -348,10 +348,7 @@ impl FsError {
 
             if token.is_some() && in_dir.join(file).exists() {
                 // patch up trying to find the line/column of the token
-                match crate::io_utils::find_locations(
-                    &token.unwrap(),
-                    Path::new(&in_dir.join(file)),
-                ) {
+                match crate::utils::find_locations(&token.unwrap(), Path::new(&in_dir.join(file))) {
                     Ok(Some((line, col, index))) => {
                         super::CodeLocation::new(line, col, index, file)
                     }

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use dbt_serde_yaml::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::stdfs;
+use crate::utils;
 
 use super::preprocessor_location;
 
@@ -170,7 +170,7 @@ impl std::fmt::Display for CodeLocation {
         let relative_path = if self.file.is_relative() {
             self.file.to_owned()
         } else if let Ok(cwd) = std::env::current_dir() {
-            let cwd = stdfs::canonicalize(cwd.as_path()).unwrap_or(cwd);
+            let cwd = utils::canonicalize(cwd.as_path()).unwrap_or(cwd);
             pathdiff::diff_paths(&self.file, &cwd).unwrap_or_else(|| self.file.to_owned())
         } else {
             self.file.to_owned()

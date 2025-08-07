@@ -1,12 +1,11 @@
 use crate::stdfs::File;
 use crate::{ErrorCode, FsError, FsResult, err, fs_err, stdfs::canonicalize};
 use pathdiff::diff_paths;
-use regex::Regex;
 use std::{
     any::Any,
     env,
     ffi::OsStr,
-    io::{BufRead, BufReader, Read},
+    io::Read,
     path::{Path, PathBuf},
 };
 
@@ -18,62 +17,6 @@ pub trait StatusReporter: Any + Send + Sync {
     fn collect_warning(&self, warning: &FsError);
     /// Called to show progress in the UI
     fn show_progress(&self, action: &str, target: &str, description: Option<&str>);
-}
-
-fn find_token_positions_in_file(file: &Path, token: &str) -> FsResult<Vec<(usize, usize, usize)>> {
-    let file = File::open(file)?;
-    let reader = BufReader::new(file);
-
-    let mut positions = Vec::new();
-    let mut pos = 0;
-    for (line_number, line) in reader.lines().enumerate() {
-        let line = line?;
-        let column_number = 0;
-        let remaining_line = &line[..];
-
-        if let Some(index) = remaining_line.find(token) {
-            let start_column = column_number + index;
-            // let end_column = start_column + token.len();
-            positions.push((line_number + 1, start_column + 1, pos + index));
-            // remaining_line = &remaining_line[(index + token.len())..];
-            // column_number += index + token.len();
-        }
-        pos += line.len() + 1; // TODO: 1 means the newline character, maybe \r\n
-    }
-
-    Ok(positions)
-}
-
-pub fn find_locations(token: &str, file: &Path) -> FsResult<Option<(usize, usize, usize)>> {
-    let output = None;
-    // the token might be a dotted name, first try to find the full name, then the last part
-    let tokens = token.split('.').collect::<Vec<&str>>();
-    let full_and_last = if tokens.len() > 1 {
-        vec![
-            token.to_owned(),
-            tokens.last().unwrap().to_owned().to_string(),
-        ]
-    } else {
-        vec![token.to_owned()]
-    };
-    for token in full_and_last {
-        let positions = find_token_positions_in_file(file, &token)?;
-        if !positions.is_empty() {
-            if let Some((line, column, index)) = positions.into_iter().next() {
-                return Ok(Some((line, column, index)));
-            }
-        }
-    }
-    Ok(output)
-}
-
-pub fn find_enclosed_substring(msg: &str, re: &Regex) -> Option<String> {
-    if let Some(captures) = re.captures(msg) {
-        if let Some(substring) = captures.get(1) {
-            return Some(substring.as_str().to_string());
-        }
-    }
-    None
 }
 
 /// Reads the contents of a file as a string.

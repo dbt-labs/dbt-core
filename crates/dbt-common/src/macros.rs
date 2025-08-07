@@ -1,28 +1,8 @@
 pub use humantime as _vendored_human_time;
 
-/// fs_err!(code,msg) construct a user-facing [FsError], to be used for further
-/// processing, e.g. typically used in `.map_err(|_| fs_err!(..))`, etc
-#[macro_export]
-macro_rules! fs_err {
-    ($code:expr, $($arg:tt)*) => {
-        Box::new($crate::FsError::new(
-            $code,
-            format!($($arg)*),
-        ))
-    };
-    (code => $code:expr, loc => $location:expr, $($arg:tt)*) => {
-        Box::new($crate::FsError::new(
-            $code,
-            format!($($arg)*),
-        ).with_location($location))
-    };
-    (code => $code:expr, hacky_yml_loc => $location:expr, $($arg:tt)*) => {
-        Box::new($crate::FsError::new(
-            $code,
-            format!($($arg)*),
-        ).with_hacky_yml_location($location))
-    }
-}
+// Re-export dbt_error here such that downstream crates could use
+// macros using dbt_error without having to add it as a dependency explicitly.
+pub use dbt_error as _dbt_error;
 
 /// fsinfo! constructs an FsInfo struct with optional data and desc fields
 #[macro_export]
@@ -61,108 +41,6 @@ macro_rules! fsinfo {
             target: $target,
             data: Some($data),
             desc: Some($desc),
-        }
-    };
-}
-
-/// err! constructs a user-facing [FsError] and immediately wrap it in an `Err`
-/// variant of a `Result`, typically used in `return err!(...)`, etc
-#[macro_export]
-macro_rules! err {
-    ($code:expr, $($arg:tt)*) => {
-        Err($crate::fs_err!($code, $($arg)*))
-    };
-    (code => $code:expr, loc => $location:expr, $($arg:tt)*) => {
-        Err($crate::fs_err!(code => $code, loc => $location, $($arg)*))
-    };
-    (code => $code:expr, hacky_yml_loc => $location:expr, $($arg:tt)*) => {
-        Err($crate::fs_err!(code => $code, hacky_yml_loc => $location, $($arg)*))
-    }
-}
-
-#[macro_export]
-macro_rules! unexpected_err {
-    ($($arg:tt)*) => {
-        Err($crate::unexpected_fs_err!($($arg)*))
-    }
-}
-
-#[macro_export]
-macro_rules! unexpected_fs_err {
-    ($($arg:tt)*) => {
-        Box::new($crate::FsError::new_with_forced_backtrace(
-            $crate::ErrorCode::Unexpected,
-            format!($($arg)*),
-        ))
-    }
-}
-
-#[macro_export]
-macro_rules! not_implemented_err {
-    ($($arg:tt)*) => {
-        Err($crate::not_implemented_fs_err!($($arg)*))
-    }
-}
-
-#[macro_export]
-macro_rules! not_implemented_fs_err {
-    ($($arg:tt)*) => {
-        Box::new($crate::FsError::new(
-            $crate::ErrorCode::NotImplemented,
-            format!($($arg)*),
-        ))
-    }
-}
-
-#[macro_export]
-macro_rules! ectx {
-    (code => $code:expr, loc => $location:expr $(,)? ) => {
-        || $crate::ErrContext {
-            code: Some($code),
-            location: Some($location),
-            context: None,
-        }
-    };
-    (code => $code:expr, loc => $location:expr, $($arg:tt)*) => {
-        || $crate::ErrContext {
-            code: Some($code),
-            location: Some($location),
-            context: Some(format!($($arg)*)),
-        }
-    };
-    (code => $code:expr, $($arg:tt)*) => {
-        || $crate::ErrContext {
-            code: Some($code),
-            location: None,
-            context: Some(format!($($arg)*)),
-        }
-    };
-    (loc => $location:expr) => {
-        || $crate::ErrContext {
-            code: None,
-            location: Some($location),
-            context: None,
-        }
-    };
-    (loc => $location:expr, $($arg:tt)*) => {
-        || $crate::ErrContext {
-            code: None,
-            location: Some($location),
-            context: Some(format!($($arg)*)),
-        }
-    };
-    (code => $code:expr) => {
-        || $crate::ErrContext {
-            code: Some($code),
-            location: None,
-            context: None,
-        }
-    };
-    ($($arg:tt)*) => {
-        || $crate::ErrContext {
-            code: None,
-            location: None,
-            context: Some(format!($($arg)*)),
         }
     };
 }
@@ -739,7 +617,7 @@ macro_rules! show_error {
         use $crate::error_counter::increment_error_counter;
         use $crate::pretty_string::color_quotes;
         use $crate::pretty_string::RED;
-        use $crate::FsError;
+        use $crate::macros::_dbt_error::FsError;
         increment_error_counter(&$io.invocation_id.to_string());
         // clean up the path before showing the error
         let mut err = $err;
@@ -798,7 +676,7 @@ macro_rules! show_fail {
         $crate::_log!(
             $crate::macros::log_adapter::log::Level::Error,
             _INVOCATION_ID_ = $io.invocation_id.as_u128(),
-            code = $crate::ErrorCode::Generic.to_string();
+            code = $crate::macros::_dbt_error::ErrorCode::Generic.to_string();
             "{}",
             $fmt
         );
@@ -810,12 +688,12 @@ macro_rules! show_autofix_suggestion {
     ($io:expr) => {{
         use dbt_common::show_warning;
         use $crate::pretty_string::BLUE;
-        use $crate::FsError;
+        use $crate::macros::_dbt_error::FsError;
 
         show_warning!(
             $io,
-            $crate::FsError::new(
-                $crate::ErrorCode::Generic,
+            $crate::macros::_dbt_error::FsError::new(
+                $crate::macros::_dbt_error::ErrorCode::Generic,
                 "Warnings marked (will error post beta) will turn into errors before leaving beta. Please fix them."
             )
         );
@@ -892,7 +770,7 @@ macro_rules! show_progress_exit {
         use $crate::macros::_vendored_human_time::{format_duration, FormattedDuration};
         use $crate::pretty_string::color_quotes;
         use $crate::pretty_string::{GREEN, RED, YELLOW};
-        use $crate::FsError;
+        use $crate::macros::_dbt_error::FsError;
         use serde_json::json;
         let e_ct = get_error_counter(&$arg.io.invocation_id.to_string());
         let w_ct = get_warning_counter(&$arg.io.invocation_id.to_string());

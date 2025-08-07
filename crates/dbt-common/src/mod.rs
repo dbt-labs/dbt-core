@@ -5,7 +5,6 @@ pub mod adapter;
 pub mod atomic;
 pub mod cancellation;
 pub mod constants;
-pub mod error;
 pub mod error_counter;
 pub mod init;
 pub mod io_utils;
@@ -17,7 +16,12 @@ pub mod stats;
 pub mod stdfs;
 pub mod string_utils;
 pub mod tokiofs;
-pub use error::{CodeLocation, ErrContext, ErrorCode, FsError, FsResult, Span};
+#[macro_use]
+pub extern crate dbt_error as error;
+pub use dbt_error::{
+    CodeLocation, ErrContext, ErrorCode, FsError, FsResult, LiftableResult, MacroSpan, Span, ectx,
+    err, fs_err, not_implemented_err, unexpected_err, unexpected_fs_err,
+};
 pub mod behavior_flags;
 pub mod embedded_install_scripts;
 pub mod io_args;
@@ -27,19 +31,3 @@ pub mod row_limit;
 pub mod serde_utils;
 pub mod time;
 pub mod tracing;
-
-// ------------------------------------------------------------------------------------------------
-// todo: get rid of this SDF remains
-
-pub fn sdf_debug_level() -> i32 {
-    std::env::var("SDF_DEBUG")
-        .as_ref()
-        .map(String::as_str)
-        .map(str::parse::<i32>)
-        .map(Result::unwrap_or_default)
-        .unwrap_or_default()
-}
-
-pub fn is_sdf_debug() -> bool {
-    sdf_debug_level() > 0
-}
