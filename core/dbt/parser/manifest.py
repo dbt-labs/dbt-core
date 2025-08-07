@@ -25,7 +25,12 @@ from dbt.adapters.factory import (
     get_relation_class_by_name,
     register_adapter,
 )
-from dbt.artifacts.resources import FileHash, NodeRelation, NodeVersion
+from dbt.artifacts.resources import (
+    CatalogWriteIntegrationConfig,
+    FileHash,
+    NodeRelation,
+    NodeVersion,
+)
 from dbt.artifacts.resources.types import BatchSize
 from dbt.artifacts.schemas.base import Writable
 from dbt.clients.jinja import MacroStack, get_rendered
@@ -2108,10 +2113,13 @@ def parse_manifest(
     write_perf_info: bool,
     write: bool,
     write_json: bool,
+    active_integrations: List[Optional[CatalogWriteIntegrationConfig]],
 ) -> Manifest:
     register_adapter(runtime_config, get_mp_context())
     adapter = get_adapter(runtime_config)
     adapter.set_macro_context_generator(generate_runtime_macro_context)
+    for integration in active_integrations:
+        adapter.add_catalog_integration(integration)
     manifest = ManifestLoader.get_full_manifest(
         runtime_config,
         write_perf_info=write_perf_info,
