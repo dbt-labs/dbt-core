@@ -1,6 +1,0 @@
-kind: Fixes
-body: Raise PropertyMovedToConfigDeprecation instead of CustomTopLevelKeyDeprecation when additional attribute is a valid node config
-time: 2025-07-31T16:21:42.938703-04:00
-custom:
-    Author: michelleark
-    Issue: "11879"
