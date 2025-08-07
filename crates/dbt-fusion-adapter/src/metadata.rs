@@ -6,7 +6,6 @@ use crate::typed_adapter::TypedBaseAdapter;
 use arrow::array::RecordBatch;
 use arrow_schema::Schema;
 use dbt_common::cancellation::{Cancellable, CancellationToken};
-use dbt_schemas::schemas::relations::DEFAULT_DATABRICKS_DATABASE;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, RelationPattern};
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 
@@ -80,19 +79,12 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
         patterns: &[RelationPattern],
     ) -> AsyncAdapterResult<Vec<(String, AdapterResult<RelationSchemaPair>)>>;
 
-    /// Create catalogs if they don't exist
-    #[allow(clippy::type_complexity)]
-    fn create_catalogs_if_not_exists(
-        &self,
-        catalogs: &[String],
-    ) -> AsyncAdapterResult<Vec<(String, Option<String>, AdapterResult<()>)>>;
-
     /// Create schemas if they don't exist
     #[allow(clippy::type_complexity)]
     fn create_schemas_if_not_exists(
         &self,
         catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
-    ) -> AsyncAdapterResult<Vec<(String, Option<String>, AdapterResult<()>)>>;
+    ) -> AsyncAdapterResult<Vec<(String, String, AdapterResult<()>)>>;
 
     /// Get freshness of relations
     fn freshness(
@@ -101,41 +93,25 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
     ) -> AsyncAdapterResult<BTreeMap<String, MetadataFreshness>>;
 }
 
-/// Create catalogs or schemas if they don't exist
+/// Create schemas if they don't exist
 ///
-/// catalog here refers to database entity - that'll be project for BigQuery, catalog for Databricks, database for Snowflake etc
-///
-/// When schema is None, this creates catalogs
-/// Otherwise, this create schemas
 /// Caveat: you'll want to first use this helper to create catalogs for the schemas you're going to create
 /// before using it to create schemas
 #[allow(clippy::type_complexity)]
-pub fn create_catalogs_schema_if_not_exists(
+pub fn create_schemas_if_not_exists(
     adapter: Arc<dyn MetadataAdapter>,
-    catalog_schemas: Vec<(String, Option<String>)>,
+    catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
     adapter_type: AdapterType,
     token: CancellationToken,
-) -> AsyncAdapterResult<'static, Vec<(String, Option<String>, AdapterResult<()>)>> {
-    type Acc = Vec<(String, Option<String>, AdapterResult<()>)>;
+) -> AsyncAdapterResult<'static, Vec<(String, String, AdapterResult<()>)>> {
+    type Acc = Vec<(String, String, AdapterResult<()>)>;
+    let catalog_schemas = flatten_catalog_schemas(catalog_schemas);
     let adapter_clone = adapter.clone();
     let new_connection_f = move || adapter_clone.new_connection().map_err(Cancellable::Error);
     let map_f = move |conn: &'_ mut dyn Connection,
-                      (catalog, schema): &(String, Option<String>)|
+                      (catalog, schema): &(String, String)|
           -> AdapterResult<AdapterResult<()>> {
-        let (sql, _) = match schema {
-            Some(schema) => (create_schema_sql(&adapter, catalog, schema), false),
-            None => {
-                match adapter_type {
-                    // skip creating a database if this is to target default catalog in databricks
-                    // otherwise execute below errors 42832: caused by an error of message [MODIFY_BUILTIN_CATALOG] Modifying built-in catalog hive_metastore is not supported
-                    AdapterType::Databricks if catalog == DEFAULT_DATABRICKS_DATABASE => {
-                        return Ok(Ok(()));
-                    }
-                    _ => {}
-                }
-                (create_catalog_sql(&adapter, catalog), true)
-            }
-        };
+        let sql = create_schema_sql(&adapter, catalog, schema);
         let query_ctx = QueryCtx::new(adapter.adapter_type().to_string())
             .with_sql(sql)
             .with_desc("Ensure catalogs and schemas exist");
@@ -156,7 +132,7 @@ pub fn create_catalogs_schema_if_not_exists(
     };
 
     let reduce_f = move |acc: &mut Acc,
-                         (catalog, schema): (String, Option<String>),
+                         (catalog, schema): (String, String),
                          batch_res: AdapterResult<AdapterResult<()>>|
           -> Result<(), Cancellable<AdapterError>> {
         let batch = batch_res?;
@@ -172,48 +148,18 @@ pub fn create_catalogs_schema_if_not_exists(
     map_reduce.run(Arc::new(catalog_schemas), token)
 }
 
-/// A helper that transforms the input of [`MetadataAdapter::create_catalogs_if_not_exists`] to what is required by [`create_catalogs_schema_if_not_exists`]
-///
-/// catalog here refers to database entity - that'll be project for BigQuery, catalog for Databricks, database for Snowflake etc
-pub fn transform_catalogs(catalogs: &[String]) -> Vec<(String, Option<String>)> {
-    catalogs
-        .iter()
-        .map(|catalog| {
-            // Build the query for all relations in this database
-            (catalog.clone(), None)
-        })
-        .collect::<Vec<_>>()
-}
-
-/// A helper that transforms the input of [`MetadataAdapter::create_schemas_if_not_exists`] to what is required by [`create_catalogs_schema_if_not_exists`]`
-///
-/// catalog here refers to database entity - that'll be project for BigQuery, catalog for Databricks, database for Snowflake etc
-pub fn transform_catalog_schemas(
+pub fn flatten_catalog_schemas(
     catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
-) -> Vec<(String, Option<String>)> {
+) -> Vec<(String, String)> {
     catalog_schemas
         .iter()
         .flat_map(|(catalog, schemas)| {
             schemas
                 .iter()
-                .map(|schema| (catalog.clone(), Some(schema.clone())))
+                .map(|schema| (catalog.clone(), schema.clone()))
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>()
-}
-
-/// Returns a SQL that creates a catalog
-///
-/// catalog here refers to database entity - that'll be project for BigQuery, catalog for Databricks, database for Snowflake etc
-/// TODO: revisit this to reuse an existing macro
-fn create_catalog_sql(adapter: &Arc<dyn MetadataAdapter>, catalog: &str) -> String {
-    let catalog = adapter.quote_component(catalog, ComponentName::Database);
-    let adapter_type = adapter.adapter_type();
-    match adapter_type {
-        AdapterType::Snowflake => format!("CREATE DATABASE IF NOT EXISTS {catalog}"),
-        AdapterType::Databricks => format!("CREATE CATALOG IF NOT EXISTS {catalog}"),
-        _ => unimplemented!("create_catalog_sql for adapter type: {}", adapter_type),
-    }
 }
 
 /// Returns a SQL that creates a schema

@@ -294,7 +294,7 @@ impl SnowflakeAuth {
                     "user" => Ok(builder.with_username(value)),
                     "password" => Ok(builder.with_password(value)),
                     "account" => builder.with_named_option(snowflake::ACCOUNT, value),
-                    // "database" => builder.with_named_option(snowflake::DATABASE, value),
+                    "database" => builder.with_named_option(snowflake::DATABASE, value),
                     // TODO: see if setting SCHEMA is necessary, connection cannot be established if schema doesn't exist
                     // this is a common case if we need to execute statements like `CREATE SCHEMA`
                     // "schema" => builder.with_named_option(snowflake::SCHEMA, value),
@@ -352,9 +352,8 @@ impl SnowflakeAuth {
                     "password" => Ok(builder.with_password(value)),
                     "account" => builder.with_named_option(snowflake::ACCOUNT, value),
                     // TODO: see if setting SCHEMA is necessary, connection cannot be established if schema doesn't exist
-                    // this is the same for DATABASE
                     // this is a common case if we need to execute statements like `CREATE SCHEMA` or `CREATE DATABASE`
-                    // "database" => builder.with_named_option(snowflake::DATABASE, value),
+                    "database" => builder.with_named_option(snowflake::DATABASE, value),
                     // "schema" => builder.with_named_option(snowflake::SCHEMA, value),
                     "role" => builder.with_named_option(snowflake::ROLE, value),
                     "warehouse" => builder.with_named_option(snowflake::WAREHOUSE, value),
