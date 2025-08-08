@@ -338,9 +338,7 @@ struct ResolveRefFunction<T: DefaultTo<T> + 'static> {
 impl<T: DefaultTo<T>> Object for ResolveRefFunction<T> {
     fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
         match key.as_str()? {
-            "config" => Some(MinijinjaValue::from_object(
-                self.runtime_config.to_minijinja_map(),
-            )),
+            "config" => Some(MinijinjaValue::from_dyn_object(self.runtime_config.clone())),
             "function_name" => Some(MinijinjaValue::from("ref")),
             _ => None,
         }

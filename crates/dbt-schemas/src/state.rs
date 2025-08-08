@@ -503,6 +503,7 @@ pub struct RenderResults {
 pub struct DbtRuntimeConfig {
     pub runtime_config: BTreeMap<String, minijinja::Value>,
     pub dependencies: BTreeMap<String, Arc<DbtRuntimeConfig>>,
+    pub vars: minijinja::Value,
     pub inner: DbtRuntimeConfigInner,
 }
 
@@ -688,6 +689,9 @@ impl DbtRuntimeConfig {
                 serde_json::to_value(&runtime_config_inner).unwrap(),
             ),
             dependencies: BTreeMap::new(),
+            vars: minijinja::Value::from_object(VarProvider::new(convert_json_to_map(
+                serde_json::to_value(&runtime_config_inner.vars).unwrap(),
+            ))),
             inner: runtime_config_inner,
         };
 
@@ -742,12 +746,47 @@ impl Object for DbtRuntimeConfig {
                 }
                 Some(minijinja::Value::from_object(deps))
             }
+            "vars" => Some(self.vars.clone()),
             // Otherwise, we just return the value from the runtime config
             other => self.runtime_config.get(other).cloned(),
         }
     }
 }
 
+/// Analogue of python VarProvider
+#[derive(Debug, Default, Clone)]
+pub struct VarProvider(BTreeMap<String, minijinja::Value>);
+
+impl VarProvider {
+    pub fn new(map: BTreeMap<String, minijinja::Value>) -> VarProvider {
+        VarProvider(map)
+    }
+}
+impl Object for VarProvider {
+    fn call_method(
+        self: &Arc<Self>,
+        _state: &minijinja::State<'_, '_>,
+        method: &str,
+        args: &[minijinja::Value],
+        _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
+    ) -> Result<minijinja::Value, minijinja::Error> {
+        match method {
+            "to_dict" => {
+                if !args.is_empty() {
+                    return Err(minijinja::Error::new(
+                        minijinja::ErrorKind::TooManyArguments,
+                        "to_dict() takes no arguments",
+                    ));
+                }
+                Ok(minijinja::Value::from(self.0.clone()))
+            }
+            _ => Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                format!("Unknown method on VarProvider: '{method}'"),
+            )),
+        }
+    }
+}
 /// Represents the status of a model
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub enum ModelStatus {
