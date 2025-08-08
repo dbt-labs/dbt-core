@@ -870,7 +870,10 @@ class PartialParsing:
                     if node.is_versioned or elem.get("versions"):
                         self.schedule_referencing_nodes_for_parsing(node.unique_id)
             # remove from patches
-            schema_file.node_patches.remove(elem_unique_id)
+            # For versioned models, the schedule_referencing_nodes_for_parsing call above
+            # could have caused a recursive visit to this file.
+            if elem_unique_id in schema_file.node_patches:
+                schema_file.node_patches.remove(elem_unique_id)
 
         # for models, seeds, snapshots (not analyses)
         if dict_key in ["models", "seeds", "snapshots"]:

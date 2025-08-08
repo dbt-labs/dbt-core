@@ -1,0 +1,6 @@
+kind: Fixes
+body: Avoid redundant node patch removal during partial parsing
+time: 2025-08-04T07:40:06.993913-06:00
+custom:
+    Author: wircho
+    Issue: "11886"
