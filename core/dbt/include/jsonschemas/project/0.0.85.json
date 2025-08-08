@@ -124,6 +124,23 @@
         },
         {
           "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "sql": {
+                "type": "string"
+              },
+              "priority": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "sql"
+            ]
+          }
         }
       ]
     },
@@ -134,6 +151,23 @@
         },
         {
           "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "sql": {
+                "type": "string"
+              },
+              "priority": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "sql"
+            ]
+          }
         }
       ]
     },
