@@ -1,4 +1,6 @@
+use crate::AdapterType;
 use crate::base_adapter::BaseAdapter;
+use crate::databricks::relation::DEFAULT_DATABRICKS_DATABASE;
 use crate::errors::AdapterResult;
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::formatter::SqlLiteralFormatter;
@@ -73,7 +75,26 @@ pub fn dispatch_adapter_calls(
             )?;
             Ok(Value::from(()))
         }
-        "get_relation" => adapter.get_relation(state, args),
+        "get_relation" => {
+            // database: str
+            // schema: str
+            // identifier: str
+            let iter = ArgsIter::new(name, &["database", "schema", "identifier"], args);
+
+            let database = iter.next_arg::<&str>().or_else(|e| {
+                if adapter.adapter_type() == AdapterType::Databricks {
+                    Ok(DEFAULT_DATABRICKS_DATABASE)
+                } else {
+                    Err(e)
+                }
+            })?;
+
+            let schema = iter.next_arg::<&str>()?;
+            let identifier = iter.next_arg::<&str>()?;
+            iter.finish()?;
+
+            adapter.get_relation(state, database, schema, identifier)
+        }
         "get_columns_in_relation" => adapter.get_columns_in_relation(state, args),
         "type" => Ok(Value::from(adapter.adapter_type().to_string())),
         "get_hard_deletes_behavior" => adapter.get_hard_deletes_behavior(state, args),

@@ -90,20 +90,15 @@ impl ParseAdapter {
     pub fn record_get_relation_call(
         &self,
         state: &State,
-        args: &[Value],
+        database: &str,
+        schema: &str,
+        identifier: &str,
     ) -> Result<(), MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 3, 3)?;
-
-        let database = parser.get::<String>("database")?;
-        let schema = parser.get::<String>("schema")?;
-        let identifier = parser.get::<String>("identifier")?;
-
         let relation = create_relation(
             self.adapter_type.clone(),
-            database,
-            schema,
-            Some(identifier),
+            database.to_string(),
+            schema.to_string(),
+            Some(identifier.to_string()),
             None,
             self.quoting,
         )?
@@ -122,7 +117,7 @@ impl ParseAdapter {
         Ok(())
     }
 
-    /// Record a get_columns_in_relation call for tracking  
+    /// Record a get_columns_in_relation call for tracking
     pub fn record_get_columns_in_relation_call(
         &self,
         state: &State,
@@ -289,8 +284,14 @@ impl BaseAdapter for ParseAdapter {
         Ok(())
     }
 
-    fn get_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        self.record_get_relation_call(state, args)?;
+    fn get_relation(
+        &self,
+        state: &State,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+    ) -> Result<Value, MinijinjaError> {
+        self.record_get_relation_call(state, database, schema, identifier)?;
         Ok(RelationObject::new(Arc::new(EmptyRelation {})).into_value())
     }
 

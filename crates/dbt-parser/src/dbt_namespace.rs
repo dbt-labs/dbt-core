@@ -3,6 +3,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use dbt_fusion_adapter::ParseAdapter;
+use minijinja::arg_utils::ArgsIter;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::Object;
 use minijinja::{
@@ -67,7 +68,13 @@ impl Object for DbtNamespace {
             }
             "get_relation" => {
                 // Track the call in the parse adapter if in execute mode
-                self.parse_adapter.record_get_relation_call(state, args)?;
+                let iter = ArgsIter::new(name, &["database", "schema", "identifier"], args);
+                let database = iter.next_arg::<&str>()?;
+                let schema = iter.next_arg::<&str>()?;
+                let identifier = iter.next_arg::<&str>()?;
+                iter.finish()?;
+                self.parse_adapter
+                    .record_get_relation_call(state, database, schema, identifier)?;
 
                 // Delegate to the original dbt.get_relation template
                 let template_name = "dbt.get_relation";

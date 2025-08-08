@@ -10,8 +10,7 @@
           database=model.database,
           schema=model.schema,
           identifier=target_table,
-          type='table',
-          needs_information=True) -%}
+          type='table') -%}
 
   {%- if file_format not in ['delta', 'hudi'] -%}
     {% set invalid_format_msg -%}

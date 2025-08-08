@@ -281,7 +281,25 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     ) -> Result<Value, MinijinjaError>;
 
     /// Get relation.
-    fn get_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/5fba80c621c3f0f732dba71aa6cf9055792b6495/dbt-adapters/src/dbt/adapters/base/impl.py#L1014
+    ///
+    /// ```python
+    /// def get_relation(
+    ///     self,
+    ///     database: str,
+    ///     schema: str,
+    ///     identifier: str
+    /// )  -> Optional[BaseRelation]
+    /// ```
+    ///
+    fn get_relation(
+        &self,
+        state: &State,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+    ) -> Result<Value, MinijinjaError>;
 
     /// Returns a list of columns.
     fn get_missing_columns(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;

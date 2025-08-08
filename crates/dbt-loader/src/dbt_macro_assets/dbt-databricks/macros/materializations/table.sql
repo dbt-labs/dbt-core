@@ -6,7 +6,7 @@
   {%- set tblproperties = config.get('tblproperties') -%}
   {%- set tags = config.get('databricks_tags') -%}
 
-  {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier, needs_information=True) -%}
+  {%- set old_relation = adapter.get_relation(database=database, schema=schema, identifier=identifier) -%}
   {%- set target_relation = api.Relation.create(identifier=identifier,
                                                 schema=schema,
                                                 database=database,

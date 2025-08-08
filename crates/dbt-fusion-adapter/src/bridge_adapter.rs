@@ -1,6 +1,5 @@
 use crate::base_adapter::{AdapterType, AdapterTyping};
 use crate::cast_util::{downcast_value_to_dyn_base_relation, dyn_base_columns_to_value};
-use crate::databricks::relation::DEFAULT_DATABRICKS_DATABASE;
 use crate::formatter::create_sql_literal_formatter;
 use crate::funcs::{
     dispatch_adapter_calls, dispatch_adapter_get_value, execute_macro, execute_macro_wrapper,
@@ -644,32 +643,21 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn get_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 3, 4)?;
-
-        let database = parser.get_optional::<String>("database");
-        let database = if let Some(database) = database {
-            database
-        } else if self.typed_adapter.adapter_type() == AdapterType::Databricks {
-            DEFAULT_DATABRICKS_DATABASE.to_string()
-        } else {
-            return jinja_err!(MinijinjaErrorKind::InvalidOperation, "database is required");
-        };
-
-        let schema = parser.get::<String>("schema")?;
-        let identifier = parser.get::<String>("identifier")?;
-        let needs_information = parser.get_optional::<bool>("needs_information");
-
+    fn get_relation(
+        &self,
+        state: &State,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+    ) -> Result<Value, MinijinjaError> {
         let mut conn = self.borrow_tlocal_connection()?;
         let query_ctx = query_ctx_from_state(state)?.with_desc("get_relation adapter call");
         let relation = self.typed_adapter.get_relation(
             &query_ctx,
             conn.as_mut(),
-            &database,
-            &schema,
-            &identifier,
-            needs_information,
+            database,
+            schema,
+            identifier,
         )?;
         match relation {
             Some(relation) => Ok(relation.as_value()),

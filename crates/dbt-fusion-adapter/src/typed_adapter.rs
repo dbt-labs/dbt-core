@@ -220,7 +220,6 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         database: &str,
         schema: &str,
         identifier: &str,
-        needs_information: Option<bool>,
     ) -> AdapterResult<Option<Arc<dyn BaseRelation>>>;
 
     /// Drop relation
