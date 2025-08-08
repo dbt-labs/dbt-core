@@ -337,4 +337,7 @@ message RunModel {
   // A globally unique ID that is emitted at each instance of an individual
   // model being run.
   string run_model_id = 19;
+
+  // The resource type of the node (model, test, etc.)
+  string resource_type = 20;
 }
