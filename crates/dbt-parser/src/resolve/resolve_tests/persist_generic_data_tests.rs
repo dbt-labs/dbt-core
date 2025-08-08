@@ -13,10 +13,7 @@ use dbt_frontend_common::Dialect;
 use dbt_jinja_utils::serde::check_single_expression_without_whitepsace_control;
 use dbt_schemas::schemas::common::Versions;
 use dbt_schemas::schemas::common::normalize_quote;
-use dbt_schemas::schemas::data_tests::{
-    AcceptedValuesTestProperties, ColumnDataTests, ColumnUniqueTestProperties, CustomTest,
-    ModelDataTests, ModelUniqueTestProperties, NotNullTestProperties, RelationshipsTestProperties,
-};
+use dbt_schemas::schemas::data_tests::{CustomTest, DataTests};
 
 use dbt_schemas::schemas::dbt_column::ColumnProperties;
 use dbt_schemas::schemas::project::DataTestConfig;
@@ -61,7 +58,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
             // Handle model-level tests
             if let Some(tests) = &test_config.model_tests {
                 for test in tests {
-                    let column_test: ColumnDataTests = test.clone().into();
+                    let column_test: DataTests = test.clone();
                     let dbt_asset = persist_inner(
                         project_name,
                         &test_config,
@@ -111,7 +108,7 @@ fn persist_inner(
     project_name: &str,
     test_config: &GenericTestConfig,
     column_name: Option<&str>,
-    test: &ColumnDataTests,
+    test: &DataTests,
     io_args: &IoArgs,
 ) -> FsResult<DbtAsset> {
     let details = get_test_details(test, test_config, column_name, io_args)?;
@@ -161,7 +158,7 @@ struct TestDetails {
 }
 
 fn get_test_details(
-    test: &ColumnDataTests,
+    test: &DataTests,
     test_config: &GenericTestConfig,
     column_name: Option<&str>,
     io_args: &IoArgs,
@@ -204,86 +201,11 @@ fn get_test_details(
     }
 
     let (test_macro_name, custom_test_name, namespace) = match test {
-        ColumnDataTests::String(test_name) => {
+        DataTests::String(test_name) => {
             let (test_macro_name, namespace) = parse_test_name_and_namespace(test_name);
             (test_macro_name, None, namespace)
         }
-
-        ColumnDataTests::NotNullTest(test) => {
-            config = merge_config_with_deprecated(
-                &test.not_null.config,
-                &test.not_null.deprecated_configs,
-                io_args,
-            )?;
-
-            // Add test-specific kwargs
-            if let Some(column) = &test.not_null.column {
-                kwargs.insert("column".to_string(), Value::String(column.clone()));
-            }
-
-            let macro_name = "not_null".to_string();
-            let custom_name = test.not_null.name.clone();
-            (macro_name, custom_name, None)
-        }
-
-        ColumnDataTests::ColumnUniqueTest(test) => {
-            config = merge_config_with_deprecated(
-                &test.unique.config,
-                &test.unique.deprecated_configs,
-                io_args,
-            )?;
-
-            let macro_name = "unique".to_string();
-            let custom_name = test.unique.name.clone();
-            (macro_name, custom_name, None)
-        }
-
-        ColumnDataTests::AcceptedValuesTest(test) => {
-            // Use typed fields directly - no need for JSON roundtrip!
-            config = merge_config_with_deprecated(
-                &test.accepted_values.config,
-                &test.accepted_values.deprecated_configs,
-                io_args,
-            )?;
-
-            // Add test-specific kwargs
-            kwargs.insert(
-                "values".to_string(),
-                Value::Array(test.accepted_values.values.clone()),
-            );
-            if let Some(quote) = test.accepted_values.quote {
-                kwargs.insert("quote".to_string(), Value::Bool(quote));
-            }
-
-            let macro_name = "accepted_values".to_string();
-            let custom_name = test.accepted_values.name.clone();
-            (macro_name, custom_name, None)
-        }
-
-        ColumnDataTests::RelationshipsTest(test) => {
-            // Use typed fields directly - no need for JSON roundtrip!
-            config = merge_config_with_deprecated(
-                &test.relationships.config,
-                &test.relationships.deprecated_configs,
-                io_args,
-            )?;
-
-            // Add test-specific kwargs
-            kwargs.insert(
-                "field".to_string(),
-                Value::String(test.relationships.field.clone()),
-            );
-            kwargs.insert(
-                "to".to_string(),
-                Value::String(test.relationships.to.0.clone()),
-            );
-
-            let macro_name = "relationships".to_string();
-            let custom_name = test.relationships.name.clone();
-            (macro_name, custom_name, None)
-        }
-
-        ColumnDataTests::CustomTest(custom_test) => match custom_test {
+        DataTests::CustomTest(custom_test) => match custom_test {
             CustomTest::MultiKey(mk) => {
                 let (test_name, namespace) = parse_test_name_and_namespace(&mk.test_name);
                 let extraction_result = extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
@@ -379,7 +301,7 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
             )
         } else {
             format!(
-                "Deprecated test arguments: {arg_keys:?} at top-level detected. Please migrate to the new format: https://docs.getdbt.com/reference/deprecations#missingargumentspropertyingenerictestdeprecation."
+                "Deprecated test arguments: {arg_keys:?} at top-level detected. Please migrate to the new format under the 'arguments' field: https://docs.getdbt.com/reference/deprecations#missingargumentspropertyingenerictestdeprecation."
             )
         };
 
@@ -497,112 +419,6 @@ fn extract_config_keys_from_map(
         .filter(|key| CONFIG_ARGS.contains(&key.as_str()))
         .cloned()
         .collect()
-}
-
-/// Merges regular config with deprecated top-level config, handling conflicts and warnings
-fn merge_config_with_deprecated(
-    config: &Option<DataTestConfig>,
-    deprecated_configs: &Option<BTreeMap<String, dbt_serde_yaml::Value>>,
-    io_args: &IoArgs,
-) -> FsResult<Option<DataTestConfig>> {
-    match (config, deprecated_configs.clone()) {
-        (None, None) => Ok(None),
-        (Some(config), None) => Ok(Some(config.clone())),
-        (None, Some(deprecated)) => {
-            // Extract config keys and non-config keys separately
-            let present_config_keys = extract_config_keys_from_map(&deprecated);
-            let unused_keys: Vec<String> = deprecated
-                .keys()
-                .filter(|key| !CONFIG_ARGS.contains(&key.as_str()))
-                .cloned()
-                .collect();
-
-            // Show warning for deprecated config usage
-            if !present_config_keys.is_empty() {
-                let warning = fs_err!(
-                    code => ErrorCode::SchemaError,
-                    loc => deprecated.iter().next().map(|(_, v)| v.span()).unwrap_or_default(),
-                    "Detected top-level config keys: {present_config_keys:?}. Please move under the 'config' field."
-                );
-                if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
-                    show_error!(io_args, warning);
-                } else {
-                    show_warning_soon_to_be_error!(io_args, warning);
-                }
-            }
-
-            // Show warning for unused/invalid keys
-            if !unused_keys.is_empty() {
-                let unused_warning = fs_err!(
-                    code => ErrorCode::SchemaError,
-                    loc => deprecated.iter().next().map(|(_, v)| v.span()).unwrap_or_default(), //get the span of the first key
-                    "Unused keys detected in test definition: {unused_keys:?}."
-                );
-                if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
-                    show_error!(io_args, unused_warning);
-                } else {
-                    show_warning_soon_to_be_error!(io_args, unused_warning);
-                }
-            }
-
-            // Convert BTreeMap to DataTestConfig
-            let deprecated_json = serde_json::to_value(deprecated)?;
-            let deprecated_config = serde_json::from_value::<DataTestConfig>(deprecated_json)?;
-            Ok(Some(deprecated_config))
-        }
-        (Some(config), Some(deprecated)) => {
-            // Both exist - need to merge with conflict detection
-            let config_json = serde_json::to_value(config)?;
-            let deprecated_json = serde_json::to_value(deprecated.clone())?;
-
-            // Check for conflicts at JSON level
-            if let (Value::Object(config_map), Value::Object(deprecated_map)) =
-                (&config_json, &deprecated_json)
-            {
-                for key in deprecated_map.keys() {
-                    if config_map.contains_key(key) {
-                        return err!(
-                            code => ErrorCode::SchemaError,
-                            loc => deprecated.iter().next().map(|(_, v)| v.span()).unwrap_or_default(),
-                            "Test cannot have the same config key '{}' in both 'config' and at the top-level",
-                            key
-                        );
-                    }
-                }
-            }
-
-            // Show warning for deprecated config usage, listing the keys in deprecated_json that should be moved
-            let top_level_keys: Vec<String> = match &deprecated_json {
-                Value::Object(map) => map.keys().cloned().collect(),
-                _ => vec![],
-            };
-            if !top_level_keys.is_empty() {
-                let warning = fs_err!(
-                    code => ErrorCode::SchemaError,
-                    loc => deprecated.iter().next().map(|(_, v)| v.span()).unwrap_or_default(), //get the span of the first key
-                    "Detected top-level config keys: {top_level_keys:?}. Please move under the 'config' field."
-                );
-                if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
-                    show_error!(io_args, warning);
-                } else {
-                    show_warning_soon_to_be_error!(io_args, warning);
-                }
-            }
-            // Merge the JSON objects - regular config takes precedence
-            let mut merged_json = config_json;
-            if let (Value::Object(merged_map), Value::Object(deprecated_map)) =
-                (&mut merged_json, deprecated_json)
-            {
-                for (key, value) in deprecated_map {
-                    merged_map.entry(key).or_insert(value);
-                }
-            }
-
-            // Deserialize back to struct
-            let merged_config = serde_json::from_value::<DataTestConfig>(merged_json)?;
-            Ok(Some(merged_config))
-        }
-    }
 }
 
 /// Helper function to process a kwarg value and detect if it needs a Jinja set block
@@ -825,8 +641,8 @@ struct GenericTestConfig {
     resource_type: String,
     resource_name: String,
     version_num: Option<String>,
-    model_tests: Option<Vec<ModelDataTests>>,
-    column_tests: Option<BTreeMap<String, (bool, Vec<ColumnDataTests>)>>,
+    model_tests: Option<Vec<DataTests>>,
+    column_tests: Option<BTreeMap<String, (bool, Vec<DataTests>)>>,
     source_name: Option<String>,
 }
 
@@ -961,8 +777,7 @@ fn collect_versioned_model_tests(
             .get("tests")
             .or_else(|| version.__additional_properties__.get("data_tests"))
         {
-            if let Ok(version_tests) = serde_json::from_value::<Vec<ModelDataTests>>(tests.clone())
-            {
+            if let Ok(version_tests) = serde_json::from_value::<Vec<DataTests>>(tests.clone()) {
                 version_config.model_tests = Some(version_tests);
             }
         }
@@ -1062,11 +877,11 @@ pub trait TestableNodeTrait {
     }
 
     /// Top-level tests (equivalent to "tests" or "data_tests").
-    fn base_tests(&self) -> FsResult<Option<Vec<ModelDataTests>>>;
+    fn base_tests(&self) -> FsResult<Option<Vec<DataTests>>>;
 
     /// Columns, each with optional tests.
     #[allow(clippy::type_complexity)]
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<ColumnDataTests>)>>>;
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>>;
 
     /// Versions for models, or None for everything else.
     fn versions(&self) -> Option<&[Versions]> {
@@ -1090,11 +905,11 @@ impl TestableNodeTrait for ModelProperties {
         &self.name
     }
 
-    fn base_tests(&self) -> FsResult<Option<Vec<ModelDataTests>>> {
+    fn base_tests(&self) -> FsResult<Option<Vec<DataTests>>> {
         base_tests_inner(self.tests.as_deref(), self.data_tests.as_deref())
     }
 
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<ColumnDataTests>)>>> {
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>> {
         column_tests_inner(&self.columns)
     }
 
@@ -1112,11 +927,11 @@ impl TestableNodeTrait for SeedProperties {
         &self.name
     }
 
-    fn base_tests(&self) -> FsResult<Option<Vec<ModelDataTests>>> {
+    fn base_tests(&self) -> FsResult<Option<Vec<DataTests>>> {
         base_tests_inner(self.tests.as_deref(), self.data_tests.as_deref())
     }
 
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<ColumnDataTests>)>>> {
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>> {
         column_tests_inner(&self.columns)
     }
 }
@@ -1130,11 +945,11 @@ impl TestableNodeTrait for SnapshotProperties {
         &self.name
     }
 
-    fn base_tests(&self) -> FsResult<Option<Vec<ModelDataTests>>> {
+    fn base_tests(&self) -> FsResult<Option<Vec<DataTests>>> {
         base_tests_inner(self.tests.as_deref(), self.data_tests.as_deref())
     }
 
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<ColumnDataTests>)>>> {
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>> {
         column_tests_inner(&self.columns)
     }
 }
@@ -1158,14 +973,14 @@ impl TestableNodeTrait for TestableTable<'_> {
         Some(self.source_name.clone())
     }
 
-    fn base_tests(&self) -> FsResult<Option<Vec<ModelDataTests>>> {
+    fn base_tests(&self) -> FsResult<Option<Vec<DataTests>>> {
         base_tests_inner(
             self.table.tests.as_deref(),
             self.table.data_tests.as_deref(),
         )
     }
 
-    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<ColumnDataTests>)>>> {
+    fn column_tests(&self) -> FsResult<Option<BTreeMap<String, (bool, Vec<DataTests>)>>> {
         column_tests_inner(&self.table.columns)
     }
 }
@@ -1502,21 +1317,22 @@ mod tests {
             resource_name: "my_model_with_a_long_name_beyond_64_chars_and_some_other_chars_aa"
                 .to_string(),
             version_num: None,
-            model_tests: Some(vec![ModelDataTests::ModelCustomTest(CustomTest::MultiKey(
-                Box::new(CustomTestMultiKey {
+            model_tests: Some(vec![DataTests::CustomTest(CustomTest::MultiKey(Box::new(
+                CustomTestMultiKey {
                     arguments: Verbatim::from(Some(
                         to_value(json!({
                             "column_names": ["id"]
                         }))
                         .unwrap(),
                     )),
+                    column_name: None,
                     config: None,
                     deprecated_args_and_configs: Verbatim::from(BTreeMap::new()),
                     name: Some("noop?=p+:".to_string()),
                     test_name: "noop?=p+:".to_string(),
                     description: None,
-                }),
-            ))]),
+                },
+            )))]),
             column_tests: None,
             source_name: None,
         };

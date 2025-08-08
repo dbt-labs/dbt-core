@@ -8,7 +8,7 @@ use serde_with::skip_serializing_none;
 
 use crate::schemas::serde::StringOrArrayOfStrings;
 
-use super::{common::Constraint, data_tests::ColumnDataTests};
+use super::{common::Constraint, data_tests::DataTests};
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -33,8 +33,8 @@ pub struct ColumnProperties {
     pub data_type: Option<String>,
     pub description: Option<String>,
     pub constraints: Option<Vec<Constraint>>,
-    pub tests: Option<Vec<ColumnDataTests>>,
-    pub data_tests: Option<Vec<ColumnDataTests>>,
+    pub tests: Option<Vec<DataTests>>,
+    pub data_tests: Option<Vec<DataTests>>,
     pub granularity: Option<ColumnPropertiesGranularity>,
     pub policy_tags: Option<Vec<String>>,
     pub quote: Option<bool>,
