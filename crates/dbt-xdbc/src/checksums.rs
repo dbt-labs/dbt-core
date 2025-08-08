@@ -11,10 +11,14 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         &str, // version
     ),
     &str, // checksum
-); 54] = [
+); 64] = [
     (
         ("bigquery", "apple-darwin", "aarch64", "0.18.0+dbt0.0.10"),
         "2fd7deeb5e71f322a6d71e0b28070493c0efb6766436b49d65669d59e96c42cb",
+    ),
+    (
+        ("bigquery", "apple-darwin", "aarch64", "0.18.0+dbt0.0.11"),
+        "131b59fb8e2593e849418bdd072da06ea9700cefb7a71402a129ad376b0752be",
     ),
     (
         ("bigquery", "apple-darwin", "aarch64", "0.18.0+dbt0.0.8"),
@@ -29,6 +33,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "0d982115f3a225e08d88d4033e7d706235f60198cb423e4080b48e114200a4ce",
     ),
     (
+        ("bigquery", "apple-darwin", "x86_64", "0.18.0+dbt0.0.11"),
+        "6b2893bfc247a734392dfc719f8a5bb2d670f83c51a88f79a7edd09d8e901d6a",
+    ),
+    (
         ("bigquery", "apple-darwin", "x86_64", "0.18.0+dbt0.0.8"),
         "b19979c0a2d92735591e2fdf03f4281c8f5a39bca75fa5e239e45d7e0945b3d2",
     ),
@@ -39,6 +47,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("bigquery", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.10"),
         "dd602bb2d14adbf932b0f0c4ff0cd62f7cacdbcbab6575aa1e278308877e3c65",
+    ),
+    (
+        ("bigquery", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.11"),
+        "99818daaadd030d4ffe35b8fdf414ea536ecf2bfd4fc462b22366b6a0468567b",
     ),
     (
         ("bigquery", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.8"),
@@ -53,6 +65,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "df7087bd9e57024738587e314e408bb6d2e524ff4231f6d4eabbc41a08028a4b",
     ),
     (
+        ("bigquery", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.11"),
+        "8177e2d67530748ea9b269740e97cc39c516326e036a7aa499dc9f26a6e16b12",
+    ),
+    (
         ("bigquery", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.8"),
         "cd3d7f8ab15b0d02c739a2b479c07be5e84893fdf3b14af5162804aed29c3f78",
     ),
@@ -63,6 +79,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("bigquery", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.10"),
         "a7dba3d86e81f7adefdb526f490744967370e347f4672b1fb7ee3b38c4323ddb",
+    ),
+    (
+        ("bigquery", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.11"),
+        "505f4eb0a5506c4df7b64f79b711434bba9f3008bce77f0a334fed99d59e531b",
     ),
     (
         ("bigquery", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.8"),
@@ -141,6 +161,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "fb3a52e89163a61e09f5d85d03cd8d7afaaae697617e2b981128f375faa53aeb",
     ),
     (
+        ("postgresql", "apple-darwin", "aarch64", "0.18.0+dbt0.0.3"),
+        "759eaacee1ea8139f884fa258ec8a7496ae9458f66cb8029817a2978b6f651ed",
+    ),
+    (
         ("postgresql", "apple-darwin", "x86_64", "0.17.0+dbt0.0.1"),
         "40f6627b9ecabc659c9750c06a8d836b86e807044bea150e74ac4550ac641cbf",
     ),
@@ -149,8 +173,16 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "da4087189a70deba7040d7f00faea221b492d00855d9d8eff56787eb5fbf02c1",
     ),
     (
+        ("postgresql", "apple-darwin", "x86_64", "0.18.0+dbt0.0.3"),
+        "aa0b1da8145aa3b374dd0bd2b52cd02a8814ce3b03490aa8b5fc99178682803c",
+    ),
+    (
         ("postgresql", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.2"),
         "0f3989966d5308b172d5b4cdb8d4cde6752c10ae175a1200f738a0f73c45edde",
+    ),
+    (
+        ("postgresql", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.3"),
+        "0650e5069c7ba4c545fc2850143109292842b117719991a7554bd35434a08bd0",
     ),
     (
         ("postgresql", "manylinux_2_17-linux-gnu", "x86_64", "0.17.0+dbt0.0.1"),
@@ -161,12 +193,20 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "a14e9532dc54371698c9730d7904f03431137c2c216b22ac623e84552b7cc93e",
     ),
     (
+        ("postgresql", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.3"),
+        "ff3cd85d65c0425eb31471f536812c333dec6ef0eb5e51d537ce607c9d2853dc",
+    ),
+    (
         ("postgresql", "pc-windows-msvc", "x86_64", "0.17.0+dbt0.0.1"),
         "cff84d5f3db4fe0efbfc64591d4005d81020261faee24c4b9b7b7211c4895fbd",
     ),
     (
         ("postgresql", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.2"),
         "b5ee9393977dff39f62d4196938a90313bea3681b1183ddb1e2f8afb92af23c8",
+    ),
+    (
+        ("postgresql", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.3"),
+        "6f38377190af7320b0020c11f726e018cae0932272adba88359bf395c0f8ad94",
     ),
     (
         ("snowflake", "apple-darwin", "aarch64", "0.18.0+dbt0.0.10"),

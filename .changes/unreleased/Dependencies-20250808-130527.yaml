@@ -1,0 +1,4 @@
+kind: Dependencies
+body: Driver bump for Postgres and Bigquery. Fixes empty record issue in Bigquery
+  and static linking issues for Redshift/Postgres.
+time: 2025-08-08T13:05:27.244181937-07:00
