@@ -1,3 +1,0 @@
-kind: Fixes
-body: (fix adapters/snowflake) bring back `database` to connection creations
-time: 2025-08-06T12:20:38.005932884-07:00

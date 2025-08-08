@@ -1,3 +1,0 @@
-kind: Fixes
-body: Respect `location` configuration in BigQuery
-time: 2025-08-05T13:22:13.992273+02:00
