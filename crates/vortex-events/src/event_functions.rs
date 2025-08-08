@@ -190,6 +190,8 @@ pub fn run_model_event(
         }
     }
 
+    let resource_type = node.resource_type().to_string();
+
     let message = RunModel {
         // REQUIRED invocation_id - globally unique identifier
         invocation_id,
@@ -230,6 +232,8 @@ pub fn run_model_event(
         run_model_id: uuid::Uuid::new_v4().to_string(),
         //  enrichment - toggle enrichment of message by vortex
         enrichment: None,
+        // The resource type of the node (model, test, etc.)
+        resource_type,
     };
 
     let _ = log_proto(message);
