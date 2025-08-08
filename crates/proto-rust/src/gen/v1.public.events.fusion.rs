@@ -390,6 +390,9 @@ pub struct RunModel {
     /// model being run.
     #[prost(string, tag = "19")]
     pub run_model_id: ::prost::alloc::string::String,
+    /// The resource type of the node (model, test, etc.)
+    #[prost(string, tag = "20")]
+    pub resource_type: ::prost::alloc::string::String,
 }
 impl ::prost::Name for RunModel {
     const NAME: &'static str = "RunModel";

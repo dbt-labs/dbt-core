@@ -1395,6 +1395,9 @@ impl serde::Serialize for RunModel {
         if !self.run_model_id.is_empty() {
             len += 1;
         }
+        if !self.resource_type.is_empty() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("v1.public.events.fusion.RunModel", len)?;
         if let Some(v) = self.enrichment.as_ref() {
             struct_ser.serialize_field("enrichment", v)?;
@@ -1453,6 +1456,9 @@ impl serde::Serialize for RunModel {
         if !self.run_model_id.is_empty() {
             struct_ser.serialize_field("runModelId", &self.run_model_id)?;
         }
+        if !self.resource_type.is_empty() {
+            struct_ser.serialize_field("resourceType", &self.resource_type)?;
+        }
         struct_ser.end()
     }
 }
@@ -1495,6 +1501,8 @@ impl<'de> serde::Deserialize<'de> for RunModel {
             "runSkippedReason",
             "run_model_id",
             "runModelId",
+            "resource_type",
+            "resourceType",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -1518,6 +1526,7 @@ impl<'de> serde::Deserialize<'de> for RunModel {
             Versioned,
             RunSkippedReason,
             RunModelId,
+            ResourceType,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -1558,6 +1567,7 @@ impl<'de> serde::Deserialize<'de> for RunModel {
                             "versioned" => Ok(GeneratedField::Versioned),
                             "runSkippedReason" | "run_skipped_reason" => Ok(GeneratedField::RunSkippedReason),
                             "runModelId" | "run_model_id" => Ok(GeneratedField::RunModelId),
+                            "resourceType" | "resource_type" => Ok(GeneratedField::ResourceType),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -1596,6 +1606,7 @@ impl<'de> serde::Deserialize<'de> for RunModel {
                 let mut versioned__ = None;
                 let mut run_skipped_reason__ = None;
                 let mut run_model_id__ = None;
+                let mut resource_type__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Enrichment => {
@@ -1718,6 +1729,12 @@ impl<'de> serde::Deserialize<'de> for RunModel {
                             }
                             run_model_id__ = Some(map_.next_value()?);
                         }
+                        GeneratedField::ResourceType => {
+                            if resource_type__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("resourceType"));
+                            }
+                            resource_type__ = Some(map_.next_value()?);
+                        }
                     }
                 }
                 Ok(RunModel {
@@ -1740,6 +1757,7 @@ impl<'de> serde::Deserialize<'de> for RunModel {
                     versioned: versioned__.unwrap_or_default(),
                     run_skipped_reason: run_skipped_reason__.unwrap_or_default(),
                     run_model_id: run_model_id__.unwrap_or_default(),
+                    resource_type: resource_type__.unwrap_or_default(),
                 })
             }
         }
