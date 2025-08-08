@@ -9,17 +9,15 @@ use serde_json::{Map, Value};
 
 #[derive(Debug, Clone, Default)]
 pub struct Schedule<T> {
-    // This is the dependency DAG
+    // This is the dependency DAG including selected nodes and frontier nodes
     // - note: all values are also defined as keys
     // - note: T is always a String, namely the unique id of a node
     pub deps: BTreeMap<T, BTreeSet<T>>,
-    // this is a topological sort of the selected dag (selected & frontier -> upstreams)
+    // Topological sort of selected nodes, followed by frontier nodes (for introspection detection)
     pub sorted_nodes: Vec<T>,
-    // this is a topological sort of the self-contained dag (i.e. selected + frontier)
-    pub self_contained_nodes: Vec<T>,
-    // these are the selected nodes, they are a superset of deps/sorted
+    // The nodes explicitly selected by the user's selection criteria
     pub selected_nodes: BTreeSet<T>,
-    // these are the nodes in the frontier, a subset of deps (where deps are not closed)
+    // Frontier nodes: dependencies of selected nodes that weren't selected (for schema hydration only)
     pub frontier_nodes: BTreeSet<T>,
     // Unused source nodes (these are excluded from sorted_nodes)
     pub unused_nodes: BTreeSet<T>,
@@ -227,9 +225,6 @@ mod tests {
             "test.project.standalone_test".to_string(),
         ];
 
-        // All nodes are self-contained
-        let self_contained_nodes = sorted_nodes.clone();
-
         // All nodes are selected
         let selected_nodes: BTreeSet<String> = sorted_nodes.iter().cloned().collect();
 
@@ -240,7 +235,6 @@ mod tests {
         let schedule = Schedule {
             deps,
             sorted_nodes,
-            self_contained_nodes,
             selected_nodes,
             frontier_nodes,
             select: None,
@@ -303,15 +297,12 @@ mod tests {
         let selected_nodes: BTreeSet<String> = sorted_nodes.iter().cloned().collect();
 
         // All nodes are self-contained
-        let self_contained_nodes = sorted_nodes.clone();
-
         // No frontier nodes
         let frontier_nodes = BTreeSet::new();
 
         let schedule = Schedule {
             deps,
             sorted_nodes,
-            self_contained_nodes,
             selected_nodes,
             frontier_nodes,
             select: None,
