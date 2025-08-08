@@ -37,7 +37,7 @@ pub struct ProjectSeedConfig {
     pub column_types: Option<BTreeMap<String, String>>,
     #[serde(rename = "+copy_grants")]
     pub copy_grants: Option<bool>,
-    #[serde(rename = "+database")]
+    #[serde(rename = "+database", alias = "+project")]
     pub database: Option<String>,
     #[serde(rename = "+alias")]
     pub alias: Option<String>,
@@ -67,7 +67,7 @@ pub struct ProjectSeedConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub quote_columns: Option<bool>,
-    #[serde(rename = "+schema")]
+    #[serde(rename = "+schema", alias = "+dataset")]
     pub schema: Option<String>,
     #[serde(rename = "+snowflake_warehouse")]
     pub snowflake_warehouse: Option<String>,

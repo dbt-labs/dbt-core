@@ -23,7 +23,7 @@ use crate::schemas::serde::{StringOrArrayOfStrings, bool_or_string_bool, u64_or_
 pub struct ProjectDataTestConfig {
     #[serde(rename = "+alias")]
     pub alias: Option<String>,
-    #[serde(rename = "+database")]
+    #[serde(rename = "+database", alias = "+project")]
     pub database: Option<String>,
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
@@ -37,7 +37,7 @@ pub struct ProjectDataTestConfig {
     pub limit: Option<i32>,
     #[serde(rename = "+meta")]
     pub meta: Option<BTreeMap<String, Value>>,
-    #[serde(rename = "+schema")]
+    #[serde(rename = "+schema", alias = "+dataset")]
     pub schema: Option<String>,
     #[serde(rename = "+severity")]
     pub severity: Option<Severity>,

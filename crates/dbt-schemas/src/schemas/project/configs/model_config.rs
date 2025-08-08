@@ -103,7 +103,7 @@ pub struct ProjectModelConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub copy_grants: Option<bool>,
-    #[serde(rename = "+database")]
+    #[serde(rename = "+database", alias = "+project")]
     pub database: Omissible<Option<String>>,
     #[serde(rename = "+databricks_compute")]
     pub databricks_compute: Option<String>,
@@ -249,7 +249,7 @@ pub struct ProjectModelConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub require_partition_filter: Option<bool>,
-    #[serde(rename = "+schema")]
+    #[serde(rename = "+schema", alias = "+dataset")]
     pub schema: Omissible<Option<String>>,
     #[serde(
         default,
