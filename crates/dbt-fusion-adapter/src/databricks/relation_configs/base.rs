@@ -244,6 +244,22 @@ impl Object for RelationChangeSetChangesObject {
             )),
         }
     }
+
+    fn get_value(self: &Arc<Self>, key: &MiniJinjaValue) -> Option<MiniJinjaValue> {
+        let key = key.as_str()?;
+        let value = self.0.get(key)?;
+        Some(value.as_value())
+    }
+
+    fn enumerate(self: &Arc<Self>) -> Enumerator {
+        Enumerator::Iter(Box::new(
+            self.0
+                .keys()
+                .map(MiniJinjaValue::from)
+                .collect::<Vec<_>>()
+                .into_iter(),
+        ))
+    }
 }
 
 pub trait DatabricksComponentProcessorProperties {

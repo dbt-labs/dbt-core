@@ -6,7 +6,7 @@ use crate::databricks::relation_configs::base::{
     DatabricksComponentProcessorProperties, DatabricksRelationResults, DatabricksRelationMetadataKey,
 };
 
-use dbt_schemas::schemas::InternalDbtNodeAttributes;
+use dbt_schemas::schemas::{InternalDbtNodeAttributes, nodes::DbtModel};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -82,6 +82,11 @@ impl DatabricksComponentProcessor for ColumnCommentsProcessor {
                         break;
                     }
                     
+                    // Skip empty column names (metadata rows)
+                    if col_name_str.trim().is_empty() {
+                        continue;
+                    }
+                    
                     // Get the comment for this column (default to empty string if None)
                     let comment = if let Ok(comment_value) = row.get_attr("comment") {
                         comment_value.as_str().unwrap_or("").to_string()
@@ -106,11 +111,10 @@ impl DatabricksComponentProcessor for ColumnCommentsProcessor {
         let columns = &relation_config.base().columns;
         
         // Check if persist_docs.relation is enabled
-        let persist = if let Some(persist_docs) = relation_config.meta().get("persist_docs") {
-            persist_docs
-                .as_object()
-                .and_then(|obj| obj.get("relation"))
-                .and_then(|v| v.as_bool())
+        let persist = if let Some(model) = relation_config.as_any().downcast_ref::<DbtModel>() {
+            model.deprecated_config.persist_docs
+                .as_ref()
+                .map(|pd| pd.relation.unwrap_or(false))
                 .unwrap_or(false)
         } else {
             false
@@ -423,6 +427,45 @@ mod tests {
             // Should default to empty string when comment column is missing
             assert_eq!(config.comments.get("id"), Some(&"".to_string()));
             assert_eq!(config.comments.get("name"), Some(&"".to_string()));
+        } else {
+            panic!("Expected ColumnComments config");
+        }
+    }
+
+    #[test]
+    fn test_from_relation_results_skips_empty_column_names() {
+        let processor = ColumnCommentsProcessor;
+        
+        let column_names = vec![
+            "col_name".to_string(),
+            "data_type".to_string(),
+            "comment".to_string(),
+        ];
+        
+        let rows = vec![
+            Value::from(vec!["id".to_string(), "int".to_string(), "Primary key".to_string()]),
+            Value::from(vec!["".to_string(), "".to_string(), "".to_string()]), // Empty metadata row
+            Value::from(vec!["name".to_string(), "string".to_string(), "User name".to_string()]),
+            Value::from(vec!["  ".to_string(), "".to_string(), "".to_string()]), // Whitespace-only row
+            Value::from(vec!["# Detailed Table Information".to_string(), "".to_string(), "".to_string()]),
+        ];
+
+        let table = AgateTable::from_rows(column_names, rows);
+        
+        let results = DatabricksRelationResultsBuilder::new()
+            .with_describe_extended(table)
+            .build();
+
+        let component = processor.from_relation_results(&results);
+        assert!(component.is_some());
+
+        if let Some(DatabricksComponentConfig::ColumnComments(config)) = component {
+            // Should only have 2 valid columns, skipping empty and whitespace-only names
+            assert_eq!(config.comments.len(), 2);
+            assert_eq!(config.comments.get("id"), Some(&"Primary key".to_string()));
+            assert_eq!(config.comments.get("name"), Some(&"User name".to_string()));
+            // Should not contain empty column name
+            assert!(!config.comments.contains_key(""));
         } else {
             panic!("Expected ColumnComments config");
         }

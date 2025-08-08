@@ -1,0 +1,3 @@
+kind: Features
+body: '[adapters] [databricks] [incremental] #4856 column comments changesets and tests'
+time: 2025-08-08T16:55:43.912872+03:00
