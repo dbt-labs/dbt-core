@@ -241,7 +241,7 @@ class ConfiguredParser(
             "path": path,
             "original_file_path": block.path.original_file_path,
             "package_name": self.project.project_name,
-            "raw_code": block.contents,
+            "raw_code": block.contents or "",
             "language": language,
             "unique_id": self.generate_unique_id(name),
             "config": self.config_dict(config),
