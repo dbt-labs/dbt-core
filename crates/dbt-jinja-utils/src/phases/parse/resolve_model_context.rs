@@ -159,13 +159,6 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
         .unwrap()
         .push(SqlResource::Config(Box::new(config.clone())));
 
-    let is_incremental = config.is_incremental();
-    context.insert(
-        "is_incremental".to_owned(),
-        MinijinjaValue::from_function(move |_args: &[MinijinjaValue]| {
-            Ok(MinijinjaValue::from(is_incremental))
-        }),
-    );
     let is_enabled = config.get_enabled().unwrap_or(true);
     context.insert(
         "config".to_owned(),

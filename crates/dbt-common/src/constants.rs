@@ -82,6 +82,7 @@ pub const CLEANING: &str = "  Cleaning";
 pub const FORMATTING: &str = " Formatting";
 pub const LINTING: &str = "   Linting";
 pub const DOWNLOADING: &str = " Downloading";
+pub const DOWNLOADED: &str = " Downloaded";
 pub const COMPILING: &str = " Compiling";
 pub const RENDERING: &str = " Rendering";
 pub const SEEDING: &str = "   Seeding";

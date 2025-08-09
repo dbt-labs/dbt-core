@@ -1,4 +1,5 @@
 use crate::base_adapter::{AdapterType, AdapterTyping};
+use crate::cache::RelationCache;
 use crate::cast_util::{downcast_value_to_dyn_base_relation, dyn_base_columns_to_value};
 use crate::formatter::create_sql_literal_formatter;
 use crate::funcs::{
@@ -7,13 +8,14 @@ use crate::funcs::{
 };
 use crate::funcs::{execute_macro_wrapper_with_package, format_sql_with_bindings};
 use crate::information_schema::InformationSchema;
-use crate::metadata::MetadataAdapter;
+use crate::metadata::{CatalogAndSchema, MetadataAdapter, RelationVec};
 use crate::query_ctx::{query_ctx_from_state, query_ctx_from_state_with_sql};
 use crate::record_batch_utils::extract_first_value_as_i64;
+use crate::relation_object::RelationObject;
 use crate::render_constraint::render_model_constraint;
 use crate::snapshots::SnapshotStrategy;
 use crate::typed_adapter::TypedBaseAdapter;
-use crate::{AdapterResponse, AdapterResult, BaseAdapter, SqlEngine};
+use crate::{AdapterResponse, AdapterResult, BaseAdapter, SqlEngine, relation_object};
 
 use dbt_agate::AgateTable;
 use dbt_common::adapter::SchemaRegistry;
@@ -32,7 +34,7 @@ use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_xdbc::Connection;
-use minijinja::arg_utils::{ArgParser, check_num_args};
+use minijinja::arg_utils::{ArgParser, ArgsIter, check_num_args};
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Kwargs, Object};
@@ -157,6 +159,7 @@ pub struct BridgeAdapter {
     pub(crate) typed_adapter: Arc<dyn TypedBaseAdapter>,
     #[allow(dead_code)]
     db: Option<Arc<dyn SchemaRegistry>>,
+    relation_cache: Arc<RelationCache>,
 }
 
 impl fmt::Debug for BridgeAdapter {
@@ -170,8 +173,13 @@ impl BridgeAdapter {
     pub fn new(
         typed_adapter: Arc<dyn TypedBaseAdapter>,
         db: Option<Arc<dyn SchemaRegistry>>,
+        relation_cache: Arc<RelationCache>,
     ) -> Self {
-        Self { typed_adapter, db }
+        Self {
+            typed_adapter,
+            db,
+            relation_cache,
+        }
     }
 
     /// Borrow the current thread-local connection or create one if it's not set yet.
@@ -238,28 +246,47 @@ impl BaseAdapter for BridgeAdapter {
         Ok(conn)
     }
 
-    /// TODO (alex): THIS IS NOT AN ACTUAL IMPLEMENTATION
+    fn update_relation_cache(
+        &self,
+        schema_to_relations_map: BTreeMap<CatalogAndSchema, RelationVec>,
+    ) -> FsResult<()> {
+        schema_to_relations_map
+            .into_iter()
+            .for_each(|(schema, relations)| self.relation_cache.insert_schema(schema, relations));
+        Ok(())
+    }
+
     #[tracing::instrument(skip_all, level = "trace")]
     fn cache_added(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser: ArgParser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-        let relation = parser.get::<Value>("relation")?;
-        if relation.as_object().is_some() {
-            let _relation = downcast_value_to_dyn_base_relation(relation)?;
-            // TODO (alex): Determine where the cache should live
-            return Ok(Value::from(""));
-        }
-        invalid_argument!("cache_added expects a relation")
+        let iter = ArgsIter::new(current_function_name!(), &["relation"], args);
+        let relation = iter.next_arg::<&RelationObject>()?;
+        iter.finish()?;
+        self.relation_cache.insert_relation(relation.inner(), None);
+        Ok(none_value())
     }
 
-    #[tracing::instrument(skip_all, level = "trace")]
-    fn cache_dropped(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
-        unimplemented!("cache_dropped")
+    #[tracing::instrument(skip(self, _state, args))]
+    fn cache_dropped(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
+        let iter = ArgsIter::new(current_function_name!(), &["relation"], args);
+        let relation = iter.next_arg::<&RelationObject>()?;
+        iter.finish()?;
+        self.relation_cache.evict_relation(&relation.inner());
+        Ok(none_value())
     }
 
-    #[tracing::instrument(skip_all, level = "trace")]
-    fn cache_renamed(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
-        unimplemented!("cache_renamed")
+    #[tracing::instrument(skip(self, _state, args))]
+    fn cache_renamed(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
+        let iter = ArgsIter::new(
+            current_function_name!(),
+            &["old_relation", "new_relation"],
+            args,
+        );
+        let old_relation = iter.next_arg::<&RelationObject>()?;
+        let new_relation = iter.next_arg::<&RelationObject>()?;
+        iter.finish()?;
+        self.relation_cache
+            .rename_relation(&old_relation.inner(), new_relation.inner());
+        Ok(none_value())
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
@@ -453,7 +480,8 @@ impl BaseAdapter for BridgeAdapter {
         check_num_args(current_function_name!(), &parser, 1, 1)?;
 
         let relation = parser.get::<Value>("relation")?;
-        let relation = downcast_value_to_dyn_base_relation(relation)?;
+        let relation = downcast_value_to_dyn_base_relation(&relation)?;
+        self.relation_cache.evict_relation(&relation);
         Ok(self.typed_adapter.drop_relation(state, relation)?)
     }
 
@@ -463,12 +491,13 @@ impl BaseAdapter for BridgeAdapter {
         check_num_args(current_function_name!(), &parser, 1, 1)?;
 
         let relation = parser.get::<Value>("relation")?;
-        let relation = downcast_value_to_dyn_base_relation(relation)?;
+        let relation = downcast_value_to_dyn_base_relation(&relation)?;
         Ok(self.typed_adapter.truncate_relation(state, relation)?)
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
     fn rename_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
+        self.cache_renamed(state, args)?;
         execute_macro(state, args, "rename_relation")?;
         Ok(none_value())
     }
@@ -487,8 +516,8 @@ impl BaseAdapter for BridgeAdapter {
         let from_relation = parser.get::<Value>("from_relation")?;
         let to_relation = parser.get::<Value>("to_relation")?;
 
-        let from_relation = downcast_value_to_dyn_base_relation(from_relation)?;
-        let to_relation = downcast_value_to_dyn_base_relation(to_relation)?;
+        let from_relation = downcast_value_to_dyn_base_relation(&from_relation)?;
+        let to_relation = downcast_value_to_dyn_base_relation(&to_relation)?;
         let result =
             self.typed_adapter
                 .expand_target_column_types(state, from_relation, to_relation)?;
@@ -520,6 +549,11 @@ impl BaseAdapter for BridgeAdapter {
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L172-L173
     #[tracing::instrument(skip(self, state), level = "trace")]
     fn drop_schema(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
+        let iter = ArgsIter::new(current_function_name!(), &["relation"], args);
+        let relation = iter.next_arg::<&RelationObject>()?;
+        iter.finish()?;
+        self.relation_cache
+            .evict_schema_for_relation(&relation.inner());
         execute_macro(state, args, "drop_schema")?;
         Ok(none_value())
     }
@@ -584,7 +618,7 @@ impl BaseAdapter for BridgeAdapter {
         check_num_args(current_function_name!(), &parser, 3, 3)?;
 
         let relation = parser.get::<Value>("relation")?;
-        let relation = downcast_value_to_dyn_base_relation(relation)?;
+        let relation = downcast_value_to_dyn_base_relation(&relation)?;
 
         let column_names = parser.get::<Value>("column_names")?;
         let column_names = if column_names.is_none() {
@@ -650,6 +684,30 @@ impl BaseAdapter for BridgeAdapter {
         schema: &str,
         identifier: &str,
     ) -> Result<Value, MinijinjaError> {
+        let temp_relation = relation_object::create_relation(
+            self.typed_adapter.adapter_type().to_string(),
+            database.to_string(),
+            schema.to_string(),
+            Some(identifier.to_string()),
+            None,
+            self.typed_adapter().get_resolved_quoting(),
+        )?;
+
+        if let Some(cached_entry) = self.relation_cache.get_relation(&temp_relation) {
+            return Ok(cached_entry.relation().as_value());
+        }
+        // If we have captured the entire schema previously, we can check for non-existence
+        // In these cases, return early with a None value
+        else if self
+            .relation_cache
+            .contains_full_schema_for_relation(&temp_relation)
+        {
+            return Ok(none_value());
+        }
+
+        // Move on to query against the remote when we have:
+        // 1. A cache miss
+        // 2. The schema was not previously cached
         let mut conn = self.borrow_tlocal_connection()?;
         let query_ctx = query_ctx_from_state(state)?.with_desc("get_relation adapter call");
         let relation = self.typed_adapter.get_relation(
@@ -660,7 +718,11 @@ impl BaseAdapter for BridgeAdapter {
             identifier,
         )?;
         match relation {
-            Some(relation) => Ok(relation.as_value()),
+            Some(relation) => {
+                // cache found relation
+                self.relation_cache.insert_relation(relation.clone(), None);
+                Ok(relation.as_value())
+            }
             None => Ok(none_value()),
         }
     }
@@ -673,8 +735,8 @@ impl BaseAdapter for BridgeAdapter {
         let from_relation = parser.get::<Value>("from_relation")?;
         let to_relation = parser.get::<Value>("to_relation")?;
 
-        let from_relation = downcast_value_to_dyn_base_relation(from_relation)?;
-        let to_relation = downcast_value_to_dyn_base_relation(to_relation)?;
+        let from_relation = downcast_value_to_dyn_base_relation(&from_relation)?;
+        let to_relation = downcast_value_to_dyn_base_relation(&to_relation)?;
         let result = self
             .typed_adapter
             .get_missing_columns(state, from_relation, to_relation)?;
@@ -692,7 +754,7 @@ impl BaseAdapter for BridgeAdapter {
         check_num_args(current_function_name!(), &parser, 1, 1)?;
 
         let relation = parser.get::<Value>("relation")?;
-        let relation = downcast_value_to_dyn_base_relation(relation)?;
+        let relation = downcast_value_to_dyn_base_relation(&relation)?;
 
         if let Some(db) = &self.db {
             // skip local compilation results if it's invoked upon a snapshot
@@ -903,7 +965,7 @@ impl BaseAdapter for BridgeAdapter {
         let relation = if relation_as_val.is_none() {
             return Ok(Value::from(true));
         } else {
-            downcast_value_to_dyn_base_relation(relation_as_val)?
+            downcast_value_to_dyn_base_relation(&relation_as_val)?
         };
         let partition_by = parser.get::<Value>("partition_by")?;
         let partition_by = if partition_by.is_none() {
@@ -1062,7 +1124,7 @@ impl BaseAdapter for BridgeAdapter {
             )
         };
         let mut conn = self.borrow_tlocal_connection()?;
-        let relation = downcast_value_to_dyn_base_relation(entity)?;
+        let relation = downcast_value_to_dyn_base_relation(&entity)?;
         let result = self.typed_adapter.grant_access_to(
             state,
             conn.as_mut(),
@@ -1273,8 +1335,10 @@ impl BaseAdapter for BridgeAdapter {
         let dest = parser.get::<Value>("target_relation_partitioned")?;
         let materialization = parser.get::<String>("materialization")?;
 
-        let source = downcast_value_to_dyn_base_relation(source)?;
-        let dest = downcast_value_to_dyn_base_relation(dest)?;
+        let source = downcast_value_to_dyn_base_relation(&source)?;
+        let dest = downcast_value_to_dyn_base_relation(&dest)?;
+
+        self.relation_cache.insert_relation(dest.clone(), None);
 
         let mut conn = self.borrow_tlocal_connection()?;
         self.typed_adapter
@@ -1289,7 +1353,7 @@ impl BaseAdapter for BridgeAdapter {
         check_num_args(current_function_name!(), &parser, 1, 1)?;
 
         let relation = parser.get::<Value>("relation")?;
-        let relation = downcast_value_to_dyn_base_relation(relation)?;
+        let relation = downcast_value_to_dyn_base_relation(&relation)?;
 
         let mut conn = self.borrow_tlocal_connection()?;
         let result = self
@@ -1374,7 +1438,7 @@ impl BaseAdapter for BridgeAdapter {
         check_num_args(current_function_name!(), &parser, 1, 1)?;
 
         let relation = parser.get::<Value>("relation")?;
-        let relation = downcast_value_to_dyn_base_relation(relation)?;
+        let relation = downcast_value_to_dyn_base_relation(&relation)?;
 
         let config = self
             .typed_adapter

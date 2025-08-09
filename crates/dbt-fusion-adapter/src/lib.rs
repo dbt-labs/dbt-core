@@ -6,6 +6,7 @@ mod macros;
 
 pub mod base_adapter;
 pub mod bridge_adapter;
+pub mod cache;
 pub mod convert_type;
 pub mod errors;
 pub mod factory;

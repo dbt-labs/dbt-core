@@ -6,10 +6,12 @@ use crate::typed_adapter::TypedBaseAdapter;
 use arrow::array::RecordBatch;
 use arrow_schema::Schema;
 use dbt_common::cancellation::{Cancellable, CancellationToken};
+use dbt_common::io_args::IoArgs;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, RelationPattern};
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fmt;
 use std::sync::Arc;
 
 /// Maximum number of connections
@@ -18,9 +20,65 @@ pub const MAX_CONNECTIONS: usize = 128;
 /// The two ways of representing a relation in a pair.
 pub type RelationSchemaPair = (Arc<dyn BaseRelation>, Arc<Schema>);
 
+/// A collection of relations
+pub type RelationVec = Vec<Arc<dyn BaseRelation>>;
+/// A struct representing a catalog and a schema
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub struct CatalogAndSchema {
+    pub rendered_catalog: String,
+    pub rendered_schema: String,
+}
+
+impl fmt::Display for CatalogAndSchema {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}", self.rendered_catalog, self.rendered_schema)
+    }
+}
+
+impl From<&Arc<dyn BaseRelation>> for CatalogAndSchema {
+    fn from(relation: &Arc<dyn BaseRelation>) -> Self {
+        let rendered_catalog = relation.quoted(
+            &relation
+                .database_as_resolved_str()
+                .expect("Database is required for relation"),
+        );
+        let rendered_schema = relation.quoted(
+            &relation
+                .schema_as_resolved_str()
+                .expect("schema is required for relation"),
+        );
+
+        Self {
+            rendered_catalog,
+            rendered_schema,
+        }
+    }
+}
+
 pub struct MetadataFreshness {
     pub last_altered: i128,
     pub is_view: bool,
+}
+
+/// Used to represent status of remote download from warehouse
+pub enum MetadataDownloadStatus {
+    /// To represent no data being found - e.g. empty schema
+    NoDataFound,
+    /// Successful operation
+    Success,
+    /// Operation had an error
+    Failed,
+}
+
+impl fmt::Display for MetadataDownloadStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let status_str = match self {
+            MetadataDownloadStatus::NoDataFound => "empty",
+            MetadataDownloadStatus::Success => "success",
+            MetadataDownloadStatus::Failed => "failed",
+        };
+        write!(f, "{status_str}")
+    }
 }
 
 /// Allows serializing record batches into maps and Arrow schemas
@@ -91,6 +149,18 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
         &self,
         relations: &[Arc<dyn BaseRelation>],
     ) -> AsyncAdapterResult<BTreeMap<String, MetadataFreshness>>;
+
+    /// List relations in the specified database schemas
+    ///
+    /// # Arguments
+    /// * `io` - I/O Arguments to report progress to
+    /// * `db_schemas` - List of (catalog, schema) pairs to discover relations in
+    ///
+    fn list_relations(
+        &self,
+        _io: &IoArgs,
+        _db_schemas: &[CatalogAndSchema],
+    ) -> AsyncAdapterResult<BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>>;
 }
 
 /// Create schemas if they don't exist

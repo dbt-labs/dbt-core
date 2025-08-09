@@ -1,4 +1,4 @@
-use crate::metadata::MetadataAdapter;
+use crate::metadata::{CatalogAndSchema, MetadataAdapter};
 use crate::sql_engine::SqlEngine;
 use crate::typed_adapter::TypedBaseAdapter;
 use crate::{AdapterResponse, AdapterResult};
@@ -7,12 +7,13 @@ use dbt_agate::AgateTable;
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::schemas::common::ResolvedQuoting;
-use dbt_schemas::schemas::relations::base::ComponentName;
+use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_xdbc::Connection;
 use minijinja::arg_utils::ArgParser;
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 
@@ -538,6 +539,16 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     /// To restore to the warehouse configured in profiles.yml
     /// For other BaseAdapter types, this is noop
     fn restore_warehouse(&self, _node_id: &str) -> FsResult<()> {
+        Ok(())
+    }
+
+    /// Used internally to hydrate the relation cache with the given schema -> relation map
+    ///
+    /// This operation should be additive and not reset the cache.
+    fn update_relation_cache(
+        &self,
+        _schema_to_relations_map: BTreeMap<CatalogAndSchema, Vec<Arc<dyn BaseRelation>>>,
+    ) -> FsResult<()> {
         Ok(())
     }
 }

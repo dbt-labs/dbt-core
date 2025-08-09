@@ -1,0 +1,3 @@
+kind: Features
+body: Adds a relation cache to reduce repeat get_relation calls
+time: 2025-08-04T16:07:21.640825021-07:00

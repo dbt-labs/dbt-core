@@ -130,7 +130,7 @@ impl ParseAdapter {
             .first()
             .expect("get_columns_in_relation requires one argument");
 
-        let base_relation = downcast_value_to_dyn_base_relation(relation.clone())?;
+        let base_relation = downcast_value_to_dyn_base_relation(relation)?;
         if !base_relation.is_database_relation() {
             return Ok(());
         }
@@ -160,7 +160,6 @@ impl ParseAdapter {
                     v.key().to_owned(),
                     v.value()
                         .iter()
-                        .cloned()
                         .map(|v| downcast_value_to_dyn_base_relation(v))
                         .collect::<Result<Vec<Arc<dyn BaseRelation>>, MinijinjaError>>()?,
                 ))
@@ -176,7 +175,6 @@ impl ParseAdapter {
                     v.key().to_owned(),
                     v.value()
                         .iter()
-                        .cloned()
                         .map(|v| downcast_value_to_dyn_base_relation(v))
                         .collect::<Result<Vec<Arc<dyn BaseRelation>>, MinijinjaError>>()?,
                 ))
@@ -724,6 +722,20 @@ impl BaseAdapter for ParseAdapter {
 
     fn clean_sql(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
         unimplemented!("clean_sql")
+    }
+
+    // TODO(jason): We should probably capture any manual user engagement with the cache
+    // and use this knowledge for our cache hydration
+    fn cache_added(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+        Ok(none_value())
+    }
+
+    fn cache_dropped(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+        Ok(none_value())
+    }
+
+    fn cache_renamed(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+        Ok(none_value())
     }
 }
 
