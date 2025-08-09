@@ -51,11 +51,8 @@ fn new_operation(
     let project_name = &dbt_project.name;
     // Calculate the original file path for dbt_project.yml
     let dbt_project_yml_path = PathBuf::from("dbt_project.yml");
-    let original_file_path = get_original_file_path(
-        &package_base_path.join(&dbt_project_yml_path),
-        &project_root.to_path_buf(),
-        &dbt_project_yml_path,
-    );
+    let original_file_path =
+        get_original_file_path(package_base_path, project_root, &dbt_project_yml_path);
 
     // Map with index
     operations

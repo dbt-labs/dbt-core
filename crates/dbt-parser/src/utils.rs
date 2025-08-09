@@ -96,11 +96,7 @@ pub fn split_versions(models: Vec<&ModelProperties>) -> Vec<ModelProperties> {
 /// If `base_path` differs from `in_dir`, attempts to compute a relative path
 /// from `base_path.join(sub_path)` to `in_dir`. If that fails, returns `sub_path`.
 /// Otherwise, if `base_path` equals `in_dir`, returns `sub_path` directly.
-pub fn get_original_file_path(
-    base_path: &PathBuf,
-    in_dir: &PathBuf,
-    sub_path: &PathBuf,
-) -> PathBuf {
+pub fn get_original_file_path(base_path: &Path, in_dir: &Path, sub_path: &Path) -> PathBuf {
     if base_path != in_dir {
         pathdiff::diff_paths(base_path.join(sub_path), in_dir)
             .unwrap_or_else(|| sub_path.to_owned())
