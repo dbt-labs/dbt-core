@@ -144,6 +144,7 @@ impl fmt::Display for DbtProfile {
 #[derive(Debug)]
 pub struct DbtPackage {
     pub dbt_project: DbtProject,
+    pub package_root_path: PathBuf,
     pub dbt_properties: Vec<DbtAsset>,
     pub analysis_files: Vec<DbtAsset>,
     pub model_sql_files: Vec<DbtAsset>,

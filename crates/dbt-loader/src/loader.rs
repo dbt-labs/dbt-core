@@ -468,6 +468,7 @@ pub async fn load_inner(
     );
     Ok(DbtPackage {
         dbt_project,
+        package_root_path: package_path.to_path_buf(),
         dbt_properties,
         analysis_files,
         model_sql_files,
