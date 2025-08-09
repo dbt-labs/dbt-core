@@ -361,7 +361,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     require_nested_cumulative_type_params: bool = False
     validate_macro_args: bool = False
     require_all_warnings_handled_by_warn_error: bool = False
-    require_generic_test_arguments_property: bool = False
+    require_generic_test_arguments_property: bool = True
 
     @property
     def project_only_flags(self) -> Dict[str, Any]:
