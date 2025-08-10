@@ -234,9 +234,7 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
     fn meta(&self) -> BTreeMap<String, Value> {
         self.common().meta.clone()
     }
-    fn static_analysis(&self) -> StaticAnalysisKind {
-        StaticAnalysisKind::On
-    }
+    fn static_analysis(&self) -> StaticAnalysisKind;
     // Setters
     fn set_quoting(&mut self, quoting: ResolvedQuoting);
     fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind);
@@ -448,6 +446,10 @@ impl InternalDbtNode for DbtSeed {
 }
 
 impl InternalDbtNodeAttributes for DbtSeed {
+    fn static_analysis(&self) -> StaticAnalysisKind {
+        self.base_attr.static_analysis
+    }
+
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
         self.base_attr.quoting = quoting;
     }
@@ -524,6 +526,10 @@ impl InternalDbtNode for DbtTest {
 }
 
 impl InternalDbtNodeAttributes for DbtTest {
+    fn static_analysis(&self) -> StaticAnalysisKind {
+        self.base_attr.static_analysis
+    }
+
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
         self.base_attr.quoting = quoting;
     }
@@ -603,6 +609,10 @@ impl InternalDbtNode for DbtUnitTest {
 }
 
 impl InternalDbtNodeAttributes for DbtUnitTest {
+    fn static_analysis(&self) -> StaticAnalysisKind {
+        self.base_attr.static_analysis
+    }
+
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
         self.base_attr.quoting = quoting;
     }
@@ -693,6 +703,10 @@ impl InternalDbtNode for DbtSource {
 }
 
 impl InternalDbtNodeAttributes for DbtSource {
+    fn static_analysis(&self) -> StaticAnalysisKind {
+        self.base_attr.static_analysis
+    }
+
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
         self.base_attr.quoting = quoting;
     }
@@ -893,6 +907,10 @@ impl InternalDbtNode for DbtExposure {
 }
 
 impl InternalDbtNodeAttributes for DbtExposure {
+    fn static_analysis(&self) -> StaticAnalysisKind {
+        self.base_attr.static_analysis
+    }
+
     fn materialized(&self) -> DbtMaterialization {
         self.base_attr.materialized.clone()
     }
