@@ -1,9 +1,9 @@
+use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
 use crate::utils::{
     RelationComponents, get_node_fqn, register_duplicate_resource, trigger_duplicate_errors,
     update_node_relation_components,
 };
-use dbt_common::io_args::IoArgs;
 use dbt_common::{ErrorCode, FsResult, fs_err, show_error, stdfs};
 use dbt_frontend_common::Dialect;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -28,7 +28,7 @@ use super::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
 
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn resolve_seeds(
-    io_args: &IoArgs,
+    arg: &ResolveArgs,
     mut seed_properties: BTreeMap<String, MinimalPropertiesEntry>,
     package: &DbtPackage,
     package_quoting: DbtQuoting,
@@ -45,6 +45,8 @@ pub fn resolve_seeds(
 ) -> FsResult<(HashMap<String, Arc<DbtSeed>>, HashMap<String, Arc<DbtSeed>>)> {
     let mut seeds: HashMap<String, Arc<DbtSeed>> = HashMap::new();
     let mut disabled_seeds: HashMap<String, Arc<DbtSeed>> = HashMap::new();
+    let is_replay_mode = arg.replay.is_some();
+    let io_args = &arg.io;
     let local_project_config = init_project_config(
         io_args,
         &package.dbt_project.seeds,
@@ -259,8 +261,13 @@ pub fn resolve_seeds(
         match status {
             ModelStatus::Enabled => {
                 seeds.insert(unique_id, Arc::new(dbt_seed));
-                seed.as_testable()
-                    .persist(package_name, collected_tests, adapter_type, io_args)?;
+                seed.as_testable().persist(
+                    package_name,
+                    collected_tests,
+                    adapter_type,
+                    is_replay_mode,
+                    io_args,
+                )?;
             }
             ModelStatus::Disabled => {
                 disabled_seeds.insert(unique_id, Arc::new(dbt_seed));

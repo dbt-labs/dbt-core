@@ -115,7 +115,7 @@ impl<'template, 'env> State<'template, 'env> {
     }
 
     /// Creates an empty state for an environment.
-    pub(crate) fn new_for_env(env: &'env Environment) -> State<'env, 'env> {
+    pub fn new_for_env(env: &'env Environment) -> State<'env, 'env> {
         State::new(
             env,
             Context::new(env.recursion_limit()),

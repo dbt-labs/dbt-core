@@ -355,7 +355,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn quote_seed_column(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn quote_seed_column(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         // column: str, quote_config: Optional[bool]
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 1, 2)?;
@@ -363,7 +363,9 @@ impl BaseAdapter for BridgeAdapter {
         let column = parser.get::<String>("column")?;
         let quote_config = parser.get_optional::<bool>("quote_config");
 
-        let result = self.typed_adapter.quote_seed_column(&column, quote_config);
+        let result = self
+            .typed_adapter
+            .quote_seed_column(state, &column, quote_config);
         Ok(Value::from(result))
     }
 
@@ -1531,7 +1533,7 @@ impl BaseAdapter for BridgeAdapter {
 
 impl fmt::Display for BridgeAdapter {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Adapter({})", self.adapter_type())
+        write!(f, "BridgeAdapter({})", self.adapter_type())
     }
 }
 

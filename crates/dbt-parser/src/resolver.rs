@@ -399,7 +399,7 @@ pub async fn resolve_inner(
 
     // Resolve sources based on the dbt_state, database, schema, and project name
     let (sources, disabled_sources) = resolve_sources(
-        &arg.io,
+        arg,
         package,
         package_quoting,
         root_project_configs,
@@ -416,7 +416,7 @@ pub async fn resolve_inner(
 
     // Resolve seeds based on the dbt_state, database, schema, and project name
     let (seeds, disabled_seeds) = resolve_seeds(
-        &arg.io,
+        arg,
         min_properties.seeds,
         package,
         package_quoting,

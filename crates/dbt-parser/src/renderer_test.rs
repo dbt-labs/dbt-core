@@ -76,6 +76,7 @@ mod tests {
             select: None,
             indirect_selection: None,
             exclude: None,
+            replay: None,
             sample_config: RunFilter::default(),
         };
 

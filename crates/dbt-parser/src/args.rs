@@ -30,6 +30,8 @@ pub struct ResolveArgs {
     pub exclude: Option<SelectExpression>,
     /// Number of tHreads to use
     pub num_threads: Option<usize>,
+    /// replay mode
+    pub replay: Option<dbt_common::io_args::ReplayMode>,
     /// Sample config
     pub sample_config: RunFilter,
 }
@@ -47,6 +49,7 @@ impl ResolveArgs {
             exclude: arg.exclude.clone(),
             num_threads: arg.num_threads,
             indirect_selection: arg.indirect_selection,
+            replay: arg.replay.clone(),
             sample_config: RunFilter::try_from(arg.empty, arg.sample.clone())?,
         })
     }

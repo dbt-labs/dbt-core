@@ -42,6 +42,13 @@ pub fn get_contract_mismatches(
         "mismatch_reason".to_string(),
     ];
 
+    let column_types = vec![
+        "Text".to_string(),
+        "Text".to_string(),
+        "Text".to_string(),
+        "Text".to_string(),
+    ];
+
     let mut mismatches: Vec<HashMap<String, String>> = Vec::new();
     let mut sql_col_set = std::collections::HashSet::new();
 
@@ -118,7 +125,7 @@ pub fn get_contract_mismatches(
         })
         .collect();
 
-    let table = Arc::new(AgateTable::from_rows(column_names, rows));
+    let table = Arc::new(AgateTable::from_rows(column_names, column_types, rows));
     Ok(Box::leak(Box::new(table)))
 }
 

@@ -741,7 +741,7 @@ impl BaseAdapter for ParseAdapter {
 
 impl fmt::Display for ParseAdapter {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Adapter({})", self.adapter_type)
+        write!(f, "ParseAdapter({})", self.adapter_type)
     }
 }
 

@@ -1,8 +1,9 @@
 //! Module containing the entrypoint for the resolve phase.
+use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
 use crate::utils::get_node_fqn;
 
-use dbt_common::io_args::{IoArgs, StaticAnalysisKind};
+use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::{ErrorCode, FsResult, err, show_error};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
@@ -28,7 +29,7 @@ use super::resolve_tests::persist_generic_data_tests::{TestableNodeTrait, Testab
 
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn resolve_sources(
-    io_args: &IoArgs,
+    arg: &ResolveArgs,
     package: &DbtPackage,
     package_quoting: DbtQuoting,
     root_project_configs: &RootProjectConfigs,
@@ -43,6 +44,8 @@ pub fn resolve_sources(
     HashMap<String, Arc<DbtSource>>,
     HashMap<String, Arc<DbtSource>>,
 )> {
+    let is_replay_mode = arg.replay.is_some();
+    let io_args = &arg.io;
     let mut sources: HashMap<String, Arc<DbtSource>> = HashMap::new();
     let mut disabled_sources: HashMap<String, Arc<DbtSource>> = HashMap::new();
     let package_name = package.dbt_project.name.as_ref();
@@ -286,7 +289,13 @@ pub fn resolve_sources(
                     table: &table.clone(),
                 }
                 .as_testable()
-                .persist(package_name, collected_tests, adapter_type, io_args)?;
+                .persist(
+                    package_name,
+                    collected_tests,
+                    adapter_type,
+                    is_replay_mode,
+                    io_args,
+                )?;
             }
             ModelStatus::Disabled => {
                 disabled_sources.insert(unique_id, Arc::new(dbt_source));

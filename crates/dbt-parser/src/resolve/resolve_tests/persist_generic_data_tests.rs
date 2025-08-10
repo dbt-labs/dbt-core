@@ -48,6 +48,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
         project_name: &str,
         collected_tests: &mut Vec<DbtAsset>,
         adapter_type: &str,
+        is_replay_mode: bool,
         io_args: &IoArgs,
     ) -> FsResult<()> {
         let test_configs: Vec<GenericTestConfig> = self.try_into()?;
@@ -64,6 +65,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                         &test_config,
                         test.column_name(),
                         &column_test,
+                        false,
                         io_args,
                     )?;
                     collected_tests.push(dbt_asset);
@@ -92,6 +94,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                             &test_config,
                             Some(&quoted_column_name),
                             test,
+                            is_replay_mode,
                             io_args,
                         )?;
                         collected_tests.push(dbt_asset);
@@ -109,6 +112,7 @@ fn persist_inner(
     test_config: &GenericTestConfig,
     column_name: Option<&str>,
     test: &DataTests,
+    is_replay_mode: bool,
     io_args: &IoArgs,
 ) -> FsResult<DbtAsset> {
     let details = get_test_details(test, test_config, column_name, io_args)?;
@@ -129,6 +133,7 @@ fn persist_inner(
         &kwargs,
         namespace.as_ref(),
         &jinja_set_vars,
+        is_replay_mode,
     );
     let path = PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join(format!("{full_name}.sql"));
     let test_file = io_args.out_dir.join(&path);
@@ -472,6 +477,7 @@ static CLEAN_REGEX: LazyLock<Regex> =
 ///
 /// * `test_name` - Name of the test (e.g. "unique", "not_null", etc)
 /// * `is_custom_test_name` - Whether a custom name was provided for this test
+#[allow(clippy::too_many_arguments)]
 fn generate_test_name(
     test_macro_name: &str,
     custom_test_name: Option<String>,
@@ -480,6 +486,7 @@ fn generate_test_name(
     kwargs: &BTreeMap<String, Value>,
     package_name: Option<&String>,
     jinja_set_vars: &BTreeMap<String, String>,
+    replay_mode: bool,
 ) -> String {
     // Flatten args (excluding 'model' and config args)
     let mut flat_args = Vec::new();
@@ -565,7 +572,7 @@ fn generate_test_name(
     // 30 identifying chars plus a 32-character hash of the full contents
     // See the function `synthesize_generic_test_name` in `dbt-core`:
     // https://github.com/dbt-labs/dbt-core/blob/9010537499980743503ed3b462eb1952be4d2b38/core/dbt/parser/generic_test_builders.py
-    if result.len() >= 64 {
+    if result.len() >= 64 && !replay_mode {
         let test_trunc_identifier: String = test_identifier.chars().take(30).collect();
         let hash = md5::compute(result.as_str());
         let res: String = format!("{test_trunc_identifier}_{hash:x}");
@@ -1244,6 +1251,7 @@ mod tests {
             &kwargs,
             None,
             &jinja_set_vars,
+            false,
         );
 
         // Verify that the test name does not contain the variable name
@@ -1267,6 +1275,7 @@ mod tests {
             &kwargs,
             None,
             &empty_set_vars,
+            false,
         );
 
         // set vars part of the name is truncated from the final test name due to length
@@ -1297,6 +1306,7 @@ mod tests {
             &BTreeMap::new(),
             None,
             &BTreeMap::new(),
+            false,
         );
 
         assert!(
@@ -1359,6 +1369,7 @@ mod tests {
             &kwargs,
             None,
             &BTreeMap::new(),
+            false,
         );
 
         // The generated test name will initially be over 64 characters and have the

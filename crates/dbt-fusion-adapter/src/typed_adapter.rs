@@ -334,7 +334,12 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
 
     /// Quote seed column, default to true if not provided
     /// reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1072
-    fn quote_seed_column(&self, column: &str, quote_config: Option<bool>) -> String {
+    fn quote_seed_column(
+        &self,
+        _state: &State,
+        column: &str,
+        quote_config: Option<bool>,
+    ) -> String {
         if quote_config.unwrap_or(true) {
             self.quote(column)
         } else {

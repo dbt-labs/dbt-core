@@ -10,6 +10,7 @@ use crate::rows::Rows;
 use crate::vec_of_rows::VecOfRows;
 
 use arrow::record_batch::RecordBatch;
+use arrow_schema::DataType;
 use arrow_schema::{ArrowError, Schema};
 use minijinja::Value;
 use minijinja::arg_utils::ArgsIter;
@@ -309,9 +310,35 @@ impl AgateTable {
     /// Create an AgateTable from column names and rows.
     ///
     /// Each row is a single minijiinja::Value that contains the row data.
-    pub fn from_rows(column_names: Vec<String>, rows: Vec<Value>) -> Self {
-        let vec_of_rows = VecOfRows::new(column_names, rows);
+    pub fn from_rows(
+        column_names: Vec<String>,
+        column_types: Vec<String>,
+        rows: Vec<Value>,
+    ) -> Self {
+        let vec_of_rows = VecOfRows::new(column_names, column_types, rows);
         let repr = TableRepr::RowTable(Arc::new(vec_of_rows));
+        Self::new(repr)
+    }
+
+    /// Create an AgateTable from column names and rows using a type parser function.
+    ///
+    /// Each row is a single minijiinja::Value that contains the row data.
+    pub fn from_rows_with_type_parser(
+        column_names: Vec<String>,
+        column_types: Vec<String>,
+        rows: Vec<Value>,
+        type_parser: impl Fn(&str) -> DataType,
+    ) -> Self {
+        let vec_of_rows = VecOfRows::new(column_names, column_types, rows);
+        let repr = if vec_of_rows.rows().is_empty() {
+            // can't use Arrow if there are no rows
+            TableRepr::RowTable(Arc::new(vec_of_rows))
+        } else {
+            // Convert to Arrow representation to ensure proper column types
+            let record_batch = vec_of_rows.to_record_batch_with_type_parser(type_parser);
+            let flat = FlatRecordBatch::new(record_batch);
+            TableRepr::Arrow(flat)
+        };
         Self::new(repr)
     }
 
@@ -604,6 +631,7 @@ mod tests {
     fn test_agate_table_from_value() {
         let table = AgateTable::from_rows(
             vec!["grantee".to_string(), "privilege_type".to_string()],
+            vec!["Text".to_string(), "Text".to_string()],
             vec![
                 Value::from(vec!["dbt_test_user_1".to_string(), "SELECT".to_string()]),
                 Value::from(vec!["dbt_test_user_2".to_string(), "SELECT".to_string()]),
