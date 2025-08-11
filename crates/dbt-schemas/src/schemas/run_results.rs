@@ -1,9 +1,11 @@
 use chrono::{DateTime, Utc};
 use dbt_common::{ErrorCode, FsResult, fs_err, stdfs};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use serde_with::skip_serializing_none;
 use std::{collections::BTreeMap, path::Path};
+
+// Type aliases for clarity
+type JsonValue = serde_json::Value;
 
 /// Metadata about the dbt run invocation.
 #[skip_serializing_none]
@@ -53,7 +55,7 @@ pub struct RunResult {
     /// Total execution time for the node in seconds.
     pub execution_time: f64,
     /// Adapter-specific response information.
-    pub adapter_response: BTreeMap<String, Value>,
+    pub adapter_response: BTreeMap<String, JsonValue>,
     /// Execution message (e.g., error message).
     pub message: Option<String>,
     /// Information about failures (often used for tests).
@@ -82,7 +84,7 @@ pub struct RunResultsArgs {
     pub which: String,
     /// Capture any other arguments passed via CLI using flatten
     #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub other: BTreeMap<String, JsonValue>,
 }
 
 /// Represents the structure of the run_results.json artifact.

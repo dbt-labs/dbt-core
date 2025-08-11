@@ -7,6 +7,9 @@ use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
+// Type aliases for clarity
+type YmlValue = dbt_serde_yaml::Value;
+
 use crate::default_to;
 use crate::schemas::common::DbtMaterialization;
 use crate::schemas::common::DbtQuoting;
@@ -76,7 +79,7 @@ pub struct ProjectSnapshotConfig {
     #[serde(rename = "+static_analysis")]
     pub static_analysis: Option<StaticAnalysisKind>,
     #[serde(rename = "+meta")]
-    pub meta: Option<BTreeMap<String, serde_json::Value>>,
+    pub meta: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+group")]
     pub group: Option<String>,
     #[serde(
@@ -207,7 +210,7 @@ pub struct ProjectSnapshotConfig {
     #[serde(rename = "+databricks_compute")]
     pub databricks_compute: Option<String>,
     #[serde(rename = "+databricks_tags")]
-    pub databricks_tags: Option<BTreeMap<String, serde_json::Value>>,
+    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+file_format")]
     pub file_format: Option<String>,
     #[serde(
@@ -251,7 +254,7 @@ pub struct ProjectSnapshotConfig {
     #[serde(rename = "+target_alias")]
     pub target_alias: Option<String>,
     #[serde(rename = "+tblproperties")]
-    pub tblproperties: Option<BTreeMap<String, serde_json::Value>>,
+    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
     // Adapter-specific fields (Redshift)
     #[serde(default, rename = "+bind", deserialize_with = "bool_or_string_bool")]
     pub bind: Option<bool>,
@@ -297,7 +300,7 @@ pub struct SnapshotConfig {
     pub event_time: Option<String>,
     pub quoting: Option<DbtQuoting>,
     pub static_analysis: Option<StaticAnalysisKind>,
-    pub meta: Option<BTreeMap<String, serde_json::Value>>,
+    pub meta: Option<BTreeMap<String, YmlValue>>,
     pub group: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub quote_columns: Option<bool>,

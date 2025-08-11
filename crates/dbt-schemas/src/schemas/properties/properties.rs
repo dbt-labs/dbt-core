@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 
+// Type aliases for clarity
+type YmlValue = dbt_serde_yaml::Value;
+
 use super::DataTestProperties;
 use super::ExposureProperties;
 use super::MetricsProperties;
@@ -104,7 +107,7 @@ pub struct AnalysesConfig {
     pub tags: Option<Vec<String>>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    pub meta: Option<BTreeMap<String, serde_json::Value>>,
+    pub meta: Option<BTreeMap<String, YmlValue>>,
     pub docs: Option<DocsConfig>,
     pub group: Option<String>,
 }
@@ -128,7 +131,7 @@ pub struct GroupsOwner {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct GroupsConfig {
-    pub meta: Option<serde_json::Value>,
+    pub meta: Option<YmlValue>,
 }
 
 #[skip_serializing_none]

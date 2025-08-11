@@ -8,6 +8,7 @@ use crate::{
     errors::{AdapterError, AdapterErrorKind},
 };
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
+use dbt_schemas::schemas::serde::yml_value_to_string;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -72,7 +73,7 @@ impl DatabricksComponentProcessor for TagsProcessor {
 
         let tags = tags
             .unwrap()
-            .as_object()
+            .as_mapping()
             .ok_or_else(|| {
                 AdapterError::new(
                     AdapterErrorKind::Configuration,
@@ -80,8 +81,22 @@ impl DatabricksComponentProcessor for TagsProcessor {
                 )
             })?
             .iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect::<BTreeMap<String, String>>();
+            .map(|(k, v)| {
+                let key = yml_value_to_string(k).ok_or_else(|| {
+                    AdapterError::new(
+                        AdapterErrorKind::Configuration,
+                        format!("databricks_tags keys must be strings, got {k:?}"),
+                    )
+                })?;
+                let value = yml_value_to_string(v).ok_or_else(|| {
+                    AdapterError::new(
+                        AdapterErrorKind::Configuration,
+                        format!("databricks_tags values must be strings, numbers, or booleans, got {v:?}"),
+                    )
+                })?;
+                Ok((key, value))
+            })
+            .collect::<AdapterResult<BTreeMap<String, String>>>()?;
 
         let tags_config = TagsConfig::new(tags, Vec::new());
         Ok(Some(DatabricksComponentConfig::Tags(tags_config)))

@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 
+// Type aliases for clarity
+type YmlValue = dbt_serde_yaml::Value;
+
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct SemanticModelsProperties {
@@ -41,7 +44,7 @@ pub struct Entity {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct EntityConfig {
-    pub meta: Option<BTreeMap<String, serde_json::Value>>,
+    pub meta: Option<BTreeMap<String, YmlValue>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
@@ -72,7 +75,7 @@ pub struct Measure {
     pub agg: MeasureAgg,
     pub agg_params: Option<AggregationTypeParams>,
     pub agg_time_dimension: Option<String>,
-    pub config: Option<serde_json::Value>,
+    pub config: Option<YmlValue>,
     pub create_metric: Option<bool>,
     pub create_metric_display_name: Option<String>,
     pub description: Option<String>,

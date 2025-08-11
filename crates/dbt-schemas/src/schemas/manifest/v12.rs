@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
+
+// Type aliases for clarity
+type JsonValue = serde_json::Value;
 
 use crate::schemas::{
     InternalDbtNode,
@@ -29,7 +31,7 @@ pub struct DbtManifestV12 {
     pub child_map: BTreeMap<String, Vec<String>>,
     pub parent_map: BTreeMap<String, Vec<String>>,
     pub group_map: BTreeMap<String, Vec<String>>,
-    pub disabled: BTreeMap<String, Vec<Value>>,
+    pub disabled: BTreeMap<String, Vec<JsonValue>>,
     pub selectors: BTreeMap<String, DbtSelector>,
     pub groups: BTreeMap<String, DbtGroup>,
 }
@@ -66,7 +68,7 @@ impl Serialize for DbtManifestV12 {
         );
 
         // Serialize sources using InternalDbtNode trait
-        let sources_serialized: BTreeMap<String, Value> = self
+        let sources_serialized: BTreeMap<String, JsonValue> = self
             .sources
             .iter()
             .map(|(k, v)| {
@@ -85,7 +87,7 @@ impl Serialize for DbtManifestV12 {
         );
 
         // Serialize macros using InternalDbtNode trait
-        let macros_serialized: BTreeMap<String, Value> = self
+        let macros_serialized: BTreeMap<String, JsonValue> = self
             .macros
             .iter()
             .map(|(k, v)| (k.clone(), InternalDbtNode::serialize(v)))
@@ -96,7 +98,7 @@ impl Serialize for DbtManifestV12 {
         );
 
         // Serialize unit_tests using InternalDbtNode trait
-        let unit_tests_serialized: BTreeMap<String, Value> = self
+        let unit_tests_serialized: BTreeMap<String, JsonValue> = self
             .unit_tests
             .iter()
             .map(|(k, v)| {
@@ -120,7 +122,7 @@ impl Serialize for DbtManifestV12 {
         );
 
         // Serialize semantic_models using InternalDbtNode trait
-        let semantic_models_serialized: BTreeMap<String, Value> = self
+        let semantic_models_serialized: BTreeMap<String, JsonValue> = self
             .semantic_models
             .iter()
             .map(|(k, v)| (k.clone(), InternalDbtNode::serialize(v)))
@@ -131,7 +133,7 @@ impl Serialize for DbtManifestV12 {
         );
 
         // Serialize saved_queries using InternalDbtNode trait
-        let saved_queries_serialized: BTreeMap<String, Value> = self
+        let saved_queries_serialized: BTreeMap<String, JsonValue> = self
             .saved_queries
             .iter()
             .map(|(k, v)| (k.clone(), InternalDbtNode::serialize(v)))
@@ -142,7 +144,7 @@ impl Serialize for DbtManifestV12 {
         );
 
         // Serialize exposures
-        let exposures_serialized: BTreeMap<String, Value> = self
+        let exposures_serialized: BTreeMap<String, JsonValue> = self
             .exposures
             .iter()
             .map(|(k, v)| {
@@ -161,7 +163,7 @@ impl Serialize for DbtManifestV12 {
         );
 
         // Serialize metrics using InternalDbtNode trait
-        let metrics_serialized: BTreeMap<String, Value> = self
+        let metrics_serialized: BTreeMap<String, JsonValue> = self
             .metrics
             .iter()
             .map(|(k, v)| (k.clone(), InternalDbtNode::serialize(v)))

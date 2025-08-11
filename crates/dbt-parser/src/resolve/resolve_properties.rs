@@ -17,7 +17,6 @@ use dbt_schemas::state::DbtPackage;
 use dbt_serde_yaml::Verbatim;
 use itertools::Itertools;
 use minijinja::Value as MinijinjaValue;
-use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -418,12 +417,12 @@ pub fn collect_model_version_info(
             .iter()
             .map(|v| {
                 let version = match &v.v {
-                    Value::String(s) => Some(s.to_string()),
-                    Value::Number(n) => Some(n.to_string()),
+                    dbt_serde_yaml::Value::String(s, _) => Some(s.to_string()),
+                    dbt_serde_yaml::Value::Number(n, _) => Some(n.to_string()),
                     _ => None,
                 }
                 .unwrap_or_else(|| {
-                    panic!("Version '{}' does not meet the required format", v.v);
+                    panic!("Version '{:?}' does not meet the required format", v.v);
                 });
 
                 let versioned_name = format!("{}_v{}", model.name, version);

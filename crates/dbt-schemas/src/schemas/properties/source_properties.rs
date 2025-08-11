@@ -11,6 +11,9 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::{BTreeMap, HashMap};
 
+// Type aliases for clarity
+type YmlValue = dbt_serde_yaml::Value;
+
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct SourceProperties {
@@ -33,7 +36,7 @@ pub struct Tables {
     pub config: Option<TablesConfig>,
     pub data_tests: Option<Vec<DataTests>>,
     pub description: Option<String>,
-    pub external: Option<serde_json::Value>,
+    pub external: Option<YmlValue>,
     pub identifier: Option<String>,
     pub loader: Option<String>,
     pub name: String,
@@ -45,11 +48,11 @@ pub struct Tables {
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Default)]
 pub struct TablesConfig {
     #[serde(flatten)]
-    pub additional_properties: HashMap<String, serde_json::Value>,
+    pub additional_properties: HashMap<String, YmlValue>,
     pub event_time: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    pub meta: Option<BTreeMap<String, serde_json::Value>>,
+    pub meta: Option<BTreeMap<String, YmlValue>>,
     pub freshness: Omissible<Option<FreshnessDefinition>>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub loaded_at_field: Option<String>,

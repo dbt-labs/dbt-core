@@ -3,6 +3,9 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::{BTreeMap, btree_map::Iter};
 
+// Type aliases for clarity
+type YmlValue = dbt_serde_yaml::Value;
+
 use crate::{
     default_to,
     schemas::{
@@ -17,7 +20,7 @@ pub struct ProjectMetricConfigs {
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     #[serde(rename = "+meta")]
-    pub meta: Option<BTreeMap<String, serde_json::Value>>,
+    pub meta: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+group")]
@@ -37,7 +40,7 @@ impl IterChildren<ProjectMetricConfigs> for ProjectMetricConfigs {
 pub struct MetricConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    pub meta: Option<BTreeMap<String, serde_json::Value>>,
+    pub meta: Option<BTreeMap<String, YmlValue>>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub group: Option<String>,
 }

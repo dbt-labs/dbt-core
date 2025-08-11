@@ -21,6 +21,7 @@ use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Object};
 use minijinja::{Error as MiniJinjaError, ErrorKind, State, Value as MiniJinjaValue};
 use serde::{Deserialize, Serialize};
+type YmlValue = dbt_serde_yaml::Value;
 
 use std::collections::BTreeMap;
 use std::fmt::Debug;
@@ -403,10 +404,7 @@ pub trait DatabricksRelationConfigBase: BaseRelationConfig + Send + Sync + Debug
 
 /// Get a value from the config.extra dictionary, or None if it is not present.
 /// reference: https://github.com/databricks/dbt-databricks/blob/6cd74dd5a9f46a9f29e49d1b077b63b73646507a/dbt/adapters/databricks/relation_configs/base.py#L143
-pub fn get_config_value(
-    config: &dyn InternalDbtNodeAttributes,
-    key: &str,
-) -> Option<serde_json::Value> {
+pub fn get_config_value(config: &dyn InternalDbtNodeAttributes, key: &str) -> Option<YmlValue> {
     config.meta().get(key).cloned()
 }
 

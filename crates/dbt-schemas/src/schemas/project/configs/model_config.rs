@@ -3,7 +3,8 @@ use dbt_common::serde_utils::Omissible;
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+// Type aliases for clarity
+type YmlValue = dbt_serde_yaml::Value;
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
@@ -108,7 +109,7 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+databricks_compute")]
     pub databricks_compute: Option<String>,
     #[serde(rename = "+databricks_tags")]
-    pub databricks_tags: Option<BTreeMap<String, Value>>,
+    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+description")]
     pub description: Option<String>,
     #[serde(rename = "+dist")]
@@ -196,7 +197,7 @@ pub struct ProjectModelConfig {
     )]
     pub merge_with_schema_evolution: Option<bool>,
     #[serde(rename = "+meta")]
-    pub meta: Option<BTreeMap<String, Value>>,
+    pub meta: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+not_matched_by_source_action")]
     pub not_matched_by_source_action: Option<String>,
     #[serde(rename = "+not_matched_by_source_condition")]
@@ -282,7 +283,7 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+target_lag")]
     pub target_lag: Option<String>,
     #[serde(rename = "+tblproperties")]
-    pub tblproperties: Option<BTreeMap<String, Value>>,
+    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+tmp_relation_type")]
     pub tmp_relation_type: Option<String>,
     #[serde(
@@ -314,7 +315,7 @@ pub struct ModelConfig {
     pub catalog_name: Option<String>,
     // need default to ensure None if field is not set
     #[serde(default, deserialize_with = "default_type")]
-    pub meta: Option<BTreeMap<String, Value>>,
+    pub meta: Option<BTreeMap<String, YmlValue>>,
     pub group: Option<String>,
     pub materialized: Option<DbtMaterialization>,
     pub incremental_strategy: Option<DbtIncrementalStrategy>,

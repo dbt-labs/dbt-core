@@ -3,8 +3,10 @@ use std::collections::{BTreeMap, HashMap};
 use dbt_common::FsResult;
 use dbt_serde_yaml::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use serde_with::skip_serializing_none;
+
+// Type aliases for clarity
+type YmlValue = dbt_serde_yaml::Value;
 
 use crate::schemas::serde::StringOrArrayOfStrings;
 
@@ -18,7 +20,7 @@ pub struct DbtColumn {
     pub data_type: Option<String>,
     pub description: Option<String>,
     pub constraints: Vec<Constraint>,
-    pub meta: BTreeMap<String, Value>,
+    pub meta: BTreeMap<String, YmlValue>,
     pub tags: Vec<String>,
     pub policy_tags: Option<Vec<String>>,
     pub quote: Option<bool>,
@@ -62,17 +64,17 @@ pub enum ColumnPropertiesGranularity {
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Default, PartialEq, Eq)]
 pub struct ColumnConfig {
     #[serde(flatten)]
-    pub additional_properties: HashMap<String, Value>,
+    pub additional_properties: HashMap<String, YmlValue>,
     #[serde(default)]
     pub tags: Option<StringOrArrayOfStrings>,
-    pub meta: Option<BTreeMap<String, Value>>,
+    pub meta: Option<BTreeMap<String, YmlValue>>,
 }
 
 /// Process columns by merging parent config with each column's config.
 /// Returns a BTreeMap of column name to DbtColumn.
 pub fn process_columns(
     columns: Option<&Vec<ColumnProperties>>,
-    meta: Option<BTreeMap<String, Value>>,
+    meta: Option<BTreeMap<String, YmlValue>>,
     tags: Option<Vec<String>>,
 ) -> FsResult<BTreeMap<String, DbtColumn>> {
     Ok(columns

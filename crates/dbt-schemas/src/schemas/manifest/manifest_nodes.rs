@@ -1,8 +1,10 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use serde_with::skip_serializing_none;
+
+// Type aliases for clarity
+type JsonValue = serde_json::Value;
 
 use crate::schemas::{
     DbtExposure, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest,
@@ -71,12 +73,12 @@ pub struct ManifestNodeBaseAttributes {
     pub compiled: Option<bool>,
     pub compiled_code: Option<String>,
     #[serde(default)]
-    pub unrendered_config: BTreeMap<String, Value>,
+    pub unrendered_config: BTreeMap<String, JsonValue>,
 
     // Metadata
-    pub doc_blocks: Option<Vec<Value>>,
+    pub doc_blocks: Option<Vec<JsonValue>>,
     pub extra_ctes_injected: Option<bool>,
-    pub extra_ctes: Option<Vec<Value>>,
+    pub extra_ctes: Option<Vec<JsonValue>>,
     #[serde(default)]
     pub metrics: Vec<Vec<String>>,
     pub checksum: DbtChecksum,
@@ -101,7 +103,7 @@ pub struct ManifestSeed {
     pub root_path: Option<PathBuf>,
 
     #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub other: BTreeMap<String, JsonValue>,
 }
 
 impl From<DbtSeed> for ManifestSeed {
@@ -232,7 +234,7 @@ pub struct ManifestDataTest {
     pub file_key_name: Option<String>,
 
     #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub other: BTreeMap<String, JsonValue>,
 }
 
 impl From<DbtTest> for ManifestDataTest {
@@ -295,7 +297,7 @@ pub struct ManifestSnapshot {
     pub config: SnapshotConfig,
 
     #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub other: BTreeMap<String, JsonValue>,
 }
 
 impl From<DbtSnapshot> for ManifestSnapshot {
@@ -356,7 +358,7 @@ pub struct ManifestSource {
     pub config: SourceConfig,
     pub quoting: Option<DbtQuoting>,
     pub source_description: String,
-    pub unrendered_config: BTreeMap<String, Value>,
+    pub unrendered_config: BTreeMap<String, JsonValue>,
     pub unrendered_database: Option<String>,
     pub unrendered_schema: Option<String>,
     #[serde(default)]
@@ -366,7 +368,7 @@ pub struct ManifestSource {
     pub freshness: Option<FreshnessDefinition>,
 
     #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub other: BTreeMap<String, JsonValue>,
 }
 
 impl From<DbtSource> for ManifestSource {
@@ -425,10 +427,10 @@ pub struct ManifestModel {
     pub constraints: Option<Vec<ModelConstraint>>,
     pub deprecation_date: Option<String>,
     pub primary_key: Option<Vec<String>>,
-    pub time_spine: Option<Value>,
+    pub time_spine: Option<JsonValue>,
 
     #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub other: BTreeMap<String, JsonValue>,
 }
 
 impl From<DbtModel> for ManifestModel {
@@ -491,7 +493,7 @@ pub struct ManifestOperation {
     pub base_attr: ManifestNodeBaseAttributes,
 
     #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub other: BTreeMap<String, JsonValue>,
 }
 
 impl From<DbtOperation> for ManifestOperation {
@@ -547,7 +549,7 @@ pub struct ManifestExposureNodeBaseAttributes {
     pub sources: Vec<DbtSourceWrapper>,
 
     #[serde(default)]
-    pub unrendered_config: BTreeMap<String, Value>,
+    pub unrendered_config: BTreeMap<String, JsonValue>,
 
     // Metadata
     #[serde(default)]
@@ -576,7 +578,7 @@ pub struct ManifestExposure {
     pub config: ExposureConfig,
 
     #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub other: BTreeMap<String, JsonValue>,
 }
 
 impl From<DbtExposure> for ManifestExposure {

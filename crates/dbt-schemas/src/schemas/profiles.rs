@@ -7,9 +7,12 @@ use dbt_serde_yaml::JsonSchema;
 use merge::Merge;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
-use serde_json::Value;
 
 use std::collections::HashMap;
+
+// Type aliases for clarity
+type JsonValue = serde_json::Value;
+type YmlValue = dbt_serde_yaml::Value;
 use std::convert::TryFrom;
 use std::fmt::{self, Debug, Display};
 use std::path::PathBuf;
@@ -21,8 +24,7 @@ pub type DefaultTargetName = String;
 #[derive(Debug, Deserialize)]
 pub struct DbtProfilesIntermediate {
     pub config: Option<dbt_serde_yaml::Value>,
-    #[serde(flatten)]
-    pub profiles: HashMap<ProfileName, dbt_serde_yaml::Value>,
+    pub __profiles__: HashMap<ProfileName, dbt_serde_yaml::Value>,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, JsonSchema)]
@@ -102,7 +104,7 @@ impl DbConfig {
         }
     }
 
-    pub fn get_credential_value(&self) -> serde_json::Value {
+    pub fn get_credential_value(&self) -> JsonValue {
         match self {
             DbConfig::Snowflake(config) => serde_json::to_value(config).unwrap(),
             DbConfig::Postgres(config) => serde_json::to_value(config).unwrap(),
@@ -271,7 +273,7 @@ impl DbConfig {
         }
     }
 
-    pub fn to_connection_dict(&self) -> HashMap<String, serde_json::Value> {
+    pub fn to_connection_dict(&self) -> HashMap<String, JsonValue> {
         let all_dict = self.to_dict();
         let connection_keys = self.get_connection_keys();
         all_dict
@@ -280,7 +282,7 @@ impl DbConfig {
             .collect()
     }
 
-    pub fn to_dict(&self) -> HashMap<String, serde_json::Value> {
+    pub fn to_dict(&self) -> HashMap<String, JsonValue> {
         match self {
             DbConfig::Snowflake(config) => {
                 // Serialize into json, then deserialize into a dictionary
@@ -312,7 +314,7 @@ impl DbConfig {
         vec![]
     }
 
-    pub fn ignored_properties(&self) -> HashMap<String, serde_json::Value> {
+    pub fn ignored_properties(&self) -> HashMap<String, YmlValue> {
         match self {
             DbConfig::Snowflake(config) => config.ignored_properties.clone(),
             DbConfig::Postgres(config) => config.ignored_properties.clone(),
@@ -386,7 +388,7 @@ impl Execute {
 pub struct DbTargets {
     #[serde(rename = "target", default = "default_target")]
     pub default_target: DefaultTargetName,
-    pub outputs: HashMap<TargetName, serde_json::Value>,
+    pub outputs: HashMap<TargetName, JsonValue>,
 }
 
 fn default_target() -> String {
@@ -435,7 +437,7 @@ pub struct RedshiftDbConfig {
     pub threads: Option<StringOrInteger>,
     #[serde(flatten)]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub ignored_properties: HashMap<String, serde_json::Value>,
+    pub ignored_properties: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, Merge)]
@@ -501,7 +503,7 @@ pub struct SnowflakeDbConfig {
     pub s3_stage_vpce_dns_name: Option<String>,
     #[serde(flatten)]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub ignored_properties: HashMap<String, serde_json::Value>,
+    pub ignored_properties: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, Merge)]
@@ -545,7 +547,7 @@ pub struct PostgresDbConfig {
     pub password: Option<String>,
     #[serde(flatten)]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub ignored_properties: HashMap<String, serde_json::Value>,
+    pub ignored_properties: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Merge)]
@@ -578,7 +580,7 @@ pub struct BigqueryDbConfig {
     pub execution_project: Option<String>,
     pub compute_region: Option<String>,
     // TODO: support this https://docs.getdbt.com/docs/core/connect-data-platform/bigquery-setup
-    pub dataproc_batch: Option<Value>,
+    pub dataproc_batch: Option<YmlValue>,
     pub dataproc_cluster_name: Option<String>,
     pub dataproc_region: Option<String>,
     pub gcs_bucket: Option<String>,
@@ -590,7 +592,7 @@ pub struct BigqueryDbConfig {
 
     #[serde(flatten)]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub ignored_properties: HashMap<String, serde_json::Value>,
+    pub ignored_properties: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Merge)]
@@ -608,7 +610,7 @@ pub struct TrinoDbConfig {
     pub role: Option<String>,
     #[serde(flatten)]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub ignored_properties: HashMap<String, serde_json::Value>,
+    pub ignored_properties: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Merge)]
@@ -621,7 +623,7 @@ pub struct DatafusionDbConfig {
     pub execute: Execute,
     #[serde(flatten)]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub ignored_properties: HashMap<String, serde_json::Value>,
+    pub ignored_properties: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, Merge)]
@@ -639,12 +641,12 @@ pub struct DatabricksDbConfig {
     pub oauth_redirect_url: Option<String>,
     pub oauth_scopes: Option<Vec<String>>,
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub session_properties: Option<HashMap<String, serde_json::Value>>,
+    pub session_properties: Option<HashMap<String, YmlValue>>,
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub connection_parameters: Option<HashMap<String, serde_json::Value>>,
+    pub connection_parameters: Option<HashMap<String, YmlValue>>,
     pub auth_type: Option<String>,
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub compute: Option<HashMap<String, serde_json::Value>>,
+    pub compute: Option<HashMap<String, YmlValue>>,
     pub connect_retries: Option<i32>,
     pub connect_timeout: Option<i32>,
     pub retry_all: Option<bool>,
@@ -652,7 +654,7 @@ pub struct DatabricksDbConfig {
     pub threads: Option<StringOrInteger>,
     #[serde(flatten)]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub ignored_properties: HashMap<String, serde_json::Value>,
+    pub ignored_properties: HashMap<String, YmlValue>,
 }
 
 fn default_databricks_database() -> Option<String> {
@@ -717,7 +719,7 @@ pub struct BigqueryTargetEnv {
     pub dataset: String,
     pub client_id: Option<String>,
     pub compute_region: Option<String>,
-    pub dataproc_batch: Option<Value>,
+    pub dataproc_batch: Option<YmlValue>,
     pub dataproc_cluster_name: Option<String>,
     pub dataproc_region: Option<String>,
     pub execution_project: Option<String>,

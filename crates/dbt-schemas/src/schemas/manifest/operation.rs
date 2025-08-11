@@ -1,8 +1,10 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use serde_with::skip_serializing_none;
+
+// Type aliases for clarity
+type JsonValue = serde_json::Value;
 
 use crate::schemas::CommonAttributes;
 
@@ -14,5 +16,5 @@ pub struct DbtOperation {
     pub common_attr: CommonAttributes,
 
     #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub other: BTreeMap<String, JsonValue>,
 }

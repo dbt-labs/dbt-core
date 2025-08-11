@@ -128,7 +128,7 @@ pub fn read_profiles_and_extract_db_config<S: Serialize>(
 
     // get the profile value
     let profile_val: &dbt_serde_yaml::Value =
-        dbt_profiles.profiles.get(profile_str).ok_or(fs_err!(
+        dbt_profiles.__profiles__.get(profile_str).ok_or(fs_err!(
             ErrorCode::IoError,
             "Profile '{}' not found in profiles.yml",
             profile_str

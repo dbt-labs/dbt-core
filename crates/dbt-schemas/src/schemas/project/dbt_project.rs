@@ -5,6 +5,9 @@ use std::collections::btree_map::Iter;
 use std::fmt::Debug;
 
 use dbt_serde_yaml::JsonSchema;
+
+// Type aliases for clarity
+type YmlValue = dbt_serde_yaml::Value;
 use dbt_serde_yaml::ShouldBe;
 use dbt_serde_yaml::Spanned;
 use dbt_serde_yaml::UntaggedEnumDeserialize;
@@ -141,7 +144,7 @@ pub struct DbtProject {
     #[serde(rename = "dbt-cloud")]
     pub dbt_cloud: Option<ProjectDbtCloudConfig>,
     pub dispatch: Option<Vec<_Dispatch>>,
-    pub flags: Option<serde_json::Value>,
+    pub flags: Option<YmlValue>,
     #[serde(rename = "on-run-end")]
     pub on_run_end: Verbatim<Option<SpannedStringOrArrayOfStrings>>,
     #[serde(rename = "on-run-start")]
@@ -176,7 +179,7 @@ pub struct _Dispatch {
 #[serde(untagged)]
 pub enum QueryComment {
     String(String),
-    Object(serde_json::Value),
+    Object(YmlValue),
 }
 
 /// This trait is used to default fields in a config to the values of a parent config.

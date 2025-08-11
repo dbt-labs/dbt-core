@@ -3,7 +3,8 @@ use dbt_serde_yaml::ShouldBe;
 use dbt_serde_yaml::Spanned;
 use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+// Type aliases for clarity
+type YmlValue = dbt_serde_yaml::Value;
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
@@ -54,7 +55,7 @@ pub struct ProjectSeedConfig {
     #[serde(rename = "+group")]
     pub group: Option<String>,
     #[serde(rename = "+meta")]
-    pub meta: Option<BTreeMap<String, Value>>,
+    pub meta: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+persist_docs")]
     pub persist_docs: Option<PersistDocsConfig>,
     #[serde(rename = "+post-hook")]
@@ -160,7 +161,7 @@ pub struct ProjectSeedConfig {
     #[serde(rename = "+location_root")]
     pub location_root: Option<String>,
     #[serde(rename = "+tblproperties")]
-    pub tblproperties: Option<BTreeMap<String, Value>>,
+    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
     #[serde(
         default,
         rename = "+include_full_name_in_path",
@@ -182,7 +183,7 @@ pub struct ProjectSeedConfig {
     #[serde(rename = "+catalog")]
     pub catalog: Option<String>,
     #[serde(rename = "+databricks_tags")]
-    pub databricks_tags: Option<BTreeMap<String, Value>>,
+    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+compression")]
     pub compression: Option<String>,
     #[serde(rename = "+databricks_compute")]
@@ -259,7 +260,7 @@ pub struct SeedConfig {
     pub event_time: Option<String>,
     pub full_refresh: Option<bool>,
     pub group: Option<String>,
-    pub meta: Option<BTreeMap<String, Value>>,
+    pub meta: Option<BTreeMap<String, YmlValue>>,
     pub persist_docs: Option<PersistDocsConfig>,
     pub post_hook: Verbatim<Option<Hooks>>,
     pub pre_hook: Verbatim<Option<Hooks>>,

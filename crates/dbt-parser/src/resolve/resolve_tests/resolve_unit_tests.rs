@@ -304,12 +304,16 @@ pub fn resolve_unit_tests(
             // Parse version configuration to get the include and exclude lists
             // this include and exclude accepted values are different than for generic tests
             // no 'all' or '*' accepted
-            let version_config = unit_test.versions.as_ref().map(|v| {
-                let v = v.as_object().expect("Version config is not an object");
-                (
-                    v.get("include").and_then(parse_version_numbers),
-                    v.get("exclude").and_then(parse_version_numbers),
-                )
+            let version_config = unit_test.versions.as_ref().and_then(|v| match v {
+                dbt_serde_yaml::Value::Mapping(map, _) => {
+                    let include_key = dbt_serde_yaml::Value::string("include".to_string());
+                    let exclude_key = dbt_serde_yaml::Value::string("exclude".to_string());
+                    Some((
+                        map.get(&include_key).and_then(parse_version_numbers_yml),
+                        map.get(&exclude_key).and_then(parse_version_numbers_yml),
+                    ))
+                }
+                _ => None,
             });
 
             // In the main code:
@@ -362,18 +366,20 @@ pub fn resolve_unit_tests(
     Ok((unit_tests, disabled_unit_tests))
 }
 
-fn parse_version_numbers(value: &Value) -> Option<Vec<String>> {
+fn parse_version_numbers_yml(value: &dbt_serde_yaml::Value) -> Option<Vec<String>> {
     match value {
-        Value::Array(arr) => Some(
+        dbt_serde_yaml::Value::Sequence(arr, _) => Some(
             arr.iter()
                 .filter_map(|v| match v {
-                    Value::Number(n) => n.as_i64().map(|n| n.to_string()),
-                    Value::String(s) => s.parse::<i64>().ok().map(|n| n.to_string()),
+                    dbt_serde_yaml::Value::Number(n, _) => Some(n.to_string()),
+                    dbt_serde_yaml::Value::String(s, _) => {
+                        s.parse::<i64>().ok().map(|n| n.to_string())
+                    }
                     _ => None,
                 })
                 .collect(),
         ),
-        Value::String(s) => s.parse::<i64>().ok().map(|n| vec![n.to_string()]),
+        dbt_serde_yaml::Value::String(s, _) => s.parse::<i64>().ok().map(|n| vec![n.to_string()]),
         _ => None,
     }
 }

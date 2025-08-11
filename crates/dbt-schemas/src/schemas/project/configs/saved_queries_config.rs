@@ -4,6 +4,9 @@ use dbt_serde_yaml::{JsonSchema, ShouldBe};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
+// Type aliases for clarity
+type YmlValue = dbt_serde_yaml::Value;
+
 use crate::{
     default_to,
     schemas::{
@@ -26,7 +29,7 @@ pub struct ProjectSavedQueriesConfig {
     #[serde(rename = "+group")]
     pub group: Option<String>,
     #[serde(rename = "+meta")]
-    pub meta: Option<BTreeMap<String, serde_json::Value>>,
+    pub meta: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
     // Flattened fields
@@ -48,7 +51,7 @@ pub struct SavedQueriesConfig {
     pub export_as: Option<ExportConfigExportAs>,
     pub schema: Option<String>,
     pub group: Option<String>,
-    pub meta: Option<BTreeMap<String, serde_json::Value>>,
+    pub meta: Option<BTreeMap<String, YmlValue>>,
     pub tags: Option<StringOrArrayOfStrings>,
 }
 

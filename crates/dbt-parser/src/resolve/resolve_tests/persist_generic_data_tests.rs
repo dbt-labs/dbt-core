@@ -590,33 +590,44 @@ struct GenericTestColumnInheritanceRules {
 }
 impl GenericTestColumnInheritanceRules {
     // Given a column block in a versioned model, return the includes and excludes for that model
-    fn from_version_columns(columns: &Value) -> Option<Self> {
-        if let Value::Array(cols) = columns {
+    fn from_version_columns(columns: &dbt_serde_yaml::Value) -> Option<Self> {
+        if let dbt_serde_yaml::Value::Sequence(cols, _) = columns {
             for col in cols {
-                if let Value::Object(map) = col {
+                if let dbt_serde_yaml::Value::Mapping(map, _) = col {
                     // Only create inheritance rules if there's an include or exclude
-                    if map.contains_key("include") || map.contains_key("exclude") {
+                    let include_key = dbt_serde_yaml::Value::string("include".to_string());
+                    let exclude_key = dbt_serde_yaml::Value::string("exclude".to_string());
+
+                    if map.contains_key(&include_key) || map.contains_key(&exclude_key) {
                         let includes = map
-                            .get("include")
+                            .get(&include_key)
                             .map(|v| match v {
-                                Value::String(s) if s == "*" || s == "all" => Vec::new(), // Empty vec means include all
-                                Value::Array(arr) => arr
+                                dbt_serde_yaml::Value::String(s, _) if s == "*" || s == "all" => {
+                                    Vec::new()
+                                } // Empty vec means include all
+                                dbt_serde_yaml::Value::Sequence(arr, _) => arr
                                     .iter()
-                                    .filter_map(|v| v.as_str().map(String::from))
+                                    .filter_map(|v| match v {
+                                        dbt_serde_yaml::Value::String(s, _) => Some(s.clone()),
+                                        _ => None,
+                                    })
                                     .collect(),
-                                Value::String(s) => vec![s.clone()],
+                                dbt_serde_yaml::Value::String(s, _) => vec![s.clone()],
                                 _ => Vec::new(),
                             })
                             .unwrap_or_default(); // Default to empty vec (include all)
 
                         let excludes = map
-                            .get("exclude")
+                            .get(&exclude_key)
                             .map(|v| match v {
-                                Value::Array(arr) => arr
+                                dbt_serde_yaml::Value::Sequence(arr, _) => arr
                                     .iter()
-                                    .filter_map(|v| v.as_str().map(String::from))
+                                    .filter_map(|v| match v {
+                                        dbt_serde_yaml::Value::String(s, _) => Some(s.clone()),
+                                        _ => None,
+                                    })
                                     .collect(),
-                                Value::String(s) => vec![s.clone()],
+                                dbt_serde_yaml::Value::String(s, _) => vec![s.clone()],
                                 _ => Vec::new(),
                             })
                             .unwrap_or_default();
@@ -765,12 +776,15 @@ fn collect_versioned_model_tests(
     // For each version, merge base tests with version-specific tests
     for version in versions {
         let version_suffix = match &version.v {
-            Value::String(s) => Some(s.to_string()),
-            Value::Number(n) => Some(n.to_string()),
+            dbt_serde_yaml::Value::String(s, _) => Some(s.to_string()),
+            dbt_serde_yaml::Value::Number(n, _) => Some(n.to_string()),
             _ => None,
         }
         .unwrap_or_else(|| {
-            panic!("Version '{}' does not meet the required format", version.v);
+            panic!(
+                "Version '{:?}' does not meet the required format",
+                version.v
+            );
         });
 
         // Start with base tests but set the version number
@@ -784,7 +798,7 @@ fn collect_versioned_model_tests(
             .get("tests")
             .or_else(|| version.__additional_properties__.get("data_tests"))
         {
-            if let Ok(version_tests) = serde_json::from_value::<Vec<DataTests>>(tests.clone()) {
+            if let Ok(version_tests) = dbt_serde_yaml::from_value::<Vec<DataTests>>(tests.clone()) {
                 version_config.model_tests = Some(version_tests);
             }
         }
@@ -817,7 +831,8 @@ fn collect_versioned_model_tests(
             };
 
             // Then handle any explicit column test definitions
-            if let Ok(column_map) = serde_json::from_value::<Vec<ColumnProperties>>(columns.clone())
+            if let Ok(column_map) =
+                dbt_serde_yaml::from_value::<Vec<ColumnProperties>>(columns.clone())
             {
                 for col in column_map {
                     if let Some(tests) = col.tests.as_ref() {

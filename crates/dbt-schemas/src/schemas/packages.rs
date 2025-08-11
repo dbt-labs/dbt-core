@@ -6,6 +6,9 @@ use std::{
 use dbt_serde_yaml::{UntaggedEnumDeserialize, Verbatim};
 use serde::{Deserialize, Serialize};
 
+// Type aliases for clarity
+type YmlValue = dbt_serde_yaml::Value;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UpstreamProject {
     pub name: String,
@@ -80,7 +83,7 @@ pub struct GitPackage {
     #[serde(rename = "subdirectory", skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
     #[serde(flatten)]
-    pub unrendered: HashMap<String, serde_json::Value>,
+    pub unrendered: HashMap<String, YmlValue>,
 }
 
 impl From<GitPackageLock> for GitPackage {
@@ -107,7 +110,7 @@ pub struct PrivatePackage {
     #[serde(rename = "subdirectory", skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
     #[serde(flatten)]
-    pub unrendered: HashMap<String, serde_json::Value>,
+    pub unrendered: HashMap<String, YmlValue>,
 }
 
 impl From<PrivatePackageLock> for PrivatePackage {
@@ -244,7 +247,7 @@ pub struct GitPackageLock {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
     #[serde(flatten)]
-    pub unrendered: HashMap<String, serde_json::Value>,
+    pub unrendered: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -265,7 +268,7 @@ pub struct PrivatePackageLock {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
     #[serde(flatten)]
-    pub unrendered: HashMap<String, serde_json::Value>,
+    pub unrendered: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -273,14 +276,14 @@ pub struct TarballPackageLock {
     pub tarball: Verbatim<String>,
     pub name: String,
     #[serde(flatten)]
-    pub unrendered: HashMap<String, serde_json::Value>,
+    pub unrendered: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TarballPackage {
     pub tarball: Verbatim<String>,
     #[serde(flatten)]
-    pub unrendered: HashMap<String, serde_json::Value>,
+    pub unrendered: HashMap<String, YmlValue>,
 }
 
 impl From<TarballPackageLock> for TarballPackage {
@@ -316,7 +319,7 @@ pub enum DeprecatedDbtPackageLock {
         #[serde(skip_serializing_if = "Option::is_none")]
         subdirectory: Option<String>,
         #[serde(flatten)]
-        unrendered: HashMap<String, serde_json::Value>,
+        unrendered: HashMap<String, YmlValue>,
     },
     Local {
         local: PathBuf,

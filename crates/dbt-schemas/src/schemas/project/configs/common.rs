@@ -1,7 +1,8 @@
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+// Type aliases for clarity
+type YmlValue = dbt_serde_yaml::Value;
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 
@@ -49,8 +50,8 @@ pub fn default_quoting(
 /// Helper function to handle default_to logic for meta and tags
 /// Uses the existing merge functions for proper merging behavior
 pub fn default_meta_and_tags(
-    child_meta: &mut Option<BTreeMap<String, Value>>,
-    parent_meta: &Option<BTreeMap<String, Value>>,
+    child_meta: &mut Option<BTreeMap<String, YmlValue>>,
+    parent_meta: &Option<BTreeMap<String, YmlValue>>,
     child_tags: &mut Option<StringOrArrayOfStrings>,
     parent_tags: &Option<StringOrArrayOfStrings>,
 ) {
@@ -296,7 +297,7 @@ impl DefaultTo<RedshiftNodeConfig> for RedshiftNodeConfig {
 pub struct DatabricksNodeConfig {
     pub file_format: Option<String>,
     pub location_root: Option<String>,
-    pub tblproperties: Option<BTreeMap<String, Value>>,
+    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
     // this config is introduced here https://github.com/databricks/dbt-databricks/pull/823
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub include_full_name_in_path: Option<bool>,
@@ -306,7 +307,7 @@ pub struct DatabricksNodeConfig {
     pub clustered_by: Option<String>,
     pub buckets: Option<i64>,
     pub catalog: Option<String>,
-    pub databricks_tags: Option<BTreeMap<String, Value>>,
+    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
     pub compression: Option<String>,
     pub databricks_compute: Option<String>,
     pub target_alias: Option<String>,

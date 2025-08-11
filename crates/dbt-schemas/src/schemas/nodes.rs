@@ -7,6 +7,7 @@ use dbt_telemetry::NodeIdentifier;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use serde_with::skip_serializing_none;
+type YmlValue = dbt_serde_yaml::Value;
 
 use crate::schemas::{
     common::{
@@ -231,7 +232,7 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
     fn tags(&self) -> Vec<String> {
         self.common().tags.clone()
     }
-    fn meta(&self) -> BTreeMap<String, Value> {
+    fn meta(&self) -> BTreeMap<String, YmlValue> {
         self.common().meta.clone()
     }
     fn static_analysis(&self) -> StaticAnalysisKind;
@@ -800,7 +801,7 @@ impl InternalDbtNodeAttributes for DbtSnapshot {
         self.common_attr.tags.clone()
     }
 
-    fn meta(&self) -> BTreeMap<String, Value> {
+    fn meta(&self) -> BTreeMap<String, YmlValue> {
         self.common_attr.meta.clone()
     }
 
@@ -926,7 +927,7 @@ impl InternalDbtNodeAttributes for DbtExposure {
     fn tags(&self) -> Vec<String> {
         self.common_attr.tags.clone()
     }
-    fn meta(&self) -> BTreeMap<String, Value> {
+    fn meta(&self) -> BTreeMap<String, YmlValue> {
         self.common_attr.meta.clone()
     }
     fn serialized_config(&self) -> Value {
@@ -1490,7 +1491,7 @@ pub struct CommonAttributes {
 
     // Tags and Meta
     pub tags: Vec<String>,
-    pub meta: BTreeMap<String, Value>,
+    pub meta: BTreeMap<String, YmlValue>,
 }
 
 impl From<&CommonAttributes> for NodeIdentifier {

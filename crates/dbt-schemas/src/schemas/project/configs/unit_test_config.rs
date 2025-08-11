@@ -1,7 +1,8 @@
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_serde_yaml::{JsonSchema, ShouldBe};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+// Type aliases for clarity
+type YmlValue = dbt_serde_yaml::Value;
 use serde_with::skip_serializing_none;
 use std::collections::{BTreeMap, btree_map::Iter};
 
@@ -25,7 +26,7 @@ pub struct ProjectUnitTestConfig {
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     #[serde(rename = "+meta")]
-    pub meta: Option<BTreeMap<String, Value>>,
+    pub meta: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+static_analysis")]
@@ -131,7 +132,7 @@ pub struct ProjectUnitTestConfig {
     #[serde(rename = "+location_root")]
     pub location_root: Option<String>,
     #[serde(rename = "+tblproperties")]
-    pub tblproperties: Option<BTreeMap<String, Value>>,
+    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
     #[serde(
         default,
         rename = "+include_full_name_in_path",
@@ -153,7 +154,7 @@ pub struct ProjectUnitTestConfig {
     #[serde(rename = "+catalog")]
     pub catalog: Option<String>,
     #[serde(rename = "+databricks_tags")]
-    pub databricks_tags: Option<BTreeMap<String, Value>>,
+    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+compression")]
     pub compression: Option<String>,
     #[serde(rename = "+databricks_compute")]
@@ -223,7 +224,7 @@ pub struct UnitTestConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub static_analysis: Option<StaticAnalysisKind>,
-    pub meta: Option<BTreeMap<String, Value>>,
+    pub meta: Option<BTreeMap<String, YmlValue>>,
     pub tags: Option<StringOrArrayOfStrings>,
     // Adapter specific configs
     #[serde(flatten)]

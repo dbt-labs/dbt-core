@@ -5,6 +5,9 @@ use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
+// Type aliases for clarity
+type YmlValue = dbt_serde_yaml::Value;
+
 use crate::{
     default_to,
     schemas::{
@@ -17,7 +20,7 @@ use crate::{
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq)]
 pub struct ProjectExposureConfig {
     #[serde(rename = "+meta")]
-    pub meta: Option<BTreeMap<String, serde_json::Value>>,
+    pub meta: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
@@ -37,7 +40,7 @@ impl IterChildren<ProjectExposureConfig> for ProjectExposureConfig {
 pub struct ExposureConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    pub meta: Option<BTreeMap<String, serde_json::Value>>,
+    pub meta: Option<BTreeMap<String, YmlValue>>,
     pub tags: Option<StringOrArrayOfStrings>,
 }
 

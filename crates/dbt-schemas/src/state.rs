@@ -190,7 +190,8 @@ impl DbtState {
     pub fn root_project_flags(&self) -> BTreeMap<String, minijinja::Value> {
         let flags = self.root_project().flags.clone();
         if let Some(flags) = flags {
-            convert_json_to_map(flags)
+            // Convert YmlValue directly to minijinja map
+            crate::schemas::serde::yml_value_to_minijinja_map(flags)
         } else {
             BTreeMap::new()
         }

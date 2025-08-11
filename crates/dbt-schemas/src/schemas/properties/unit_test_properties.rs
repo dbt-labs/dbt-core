@@ -1,5 +1,8 @@
 use std::collections::BTreeMap;
 
+// Type aliases for clarity
+type YmlValue = dbt_serde_yaml::Value;
+
 use crate::schemas::{
     common::{Expect, Given},
     project::UnitTestConfig,
@@ -18,13 +21,13 @@ pub struct UnitTestProperties {
     pub model: String,
     pub name: String,
     pub overrides: Option<UnitTestOverrides>,
-    pub versions: Option<serde_json::Value>,
+    pub versions: Option<YmlValue>,
 }
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct UnitTestOverrides {
-    pub env_vars: Option<BTreeMap<String, serde_json::Value>>,
-    pub macros: Option<BTreeMap<String, serde_json::Value>>,
-    pub vars: Option<BTreeMap<String, serde_json::Value>>,
+    pub env_vars: Option<BTreeMap<String, YmlValue>>,
+    pub macros: Option<BTreeMap<String, YmlValue>>,
+    pub vars: Option<BTreeMap<String, YmlValue>>,
 }

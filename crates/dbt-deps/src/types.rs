@@ -5,7 +5,7 @@ use dbt_common::{ErrorCode, FsError, FsResult, err, fs_err};
 use dbt_schemas::schemas::packages::{
     GitPackage, HubPackage, PackageVersion, PrivatePackage, TarballPackage,
 };
-use serde_json::Value;
+use dbt_serde_yaml::Value as YmlValue;
 
 use super::semver::{
     Matchers, Version, VersionSpecifier, filter_installable, reduce_versions,
@@ -132,7 +132,7 @@ pub struct GitPinnedPackage {
     pub revision: String,
     pub warn_unpinned: Option<bool>,
     pub subdirectory: Option<String>,
-    pub unrendered: HashMap<String, Value>,
+    pub unrendered: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Clone)]
@@ -142,7 +142,7 @@ pub struct GitUnpinnedPackage {
     pub warn_unpinned: Option<bool>,
     pub revisions: Vec<String>,
     pub subdirectory: Option<String>,
-    pub unrendered: HashMap<String, Value>,
+    pub unrendered: HashMap<String, YmlValue>,
     pub original_entry: GitPackage,
 }
 
@@ -235,7 +235,7 @@ pub struct PrivatePinnedPackage {
     pub revision: String,
     pub warn_unpinned: Option<bool>,
     pub subdirectory: Option<String>,
-    pub unrendered: HashMap<String, Value>,
+    pub unrendered: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Clone)]
@@ -246,7 +246,7 @@ pub struct PrivateUnpinnedPackage {
     pub warn_unpinned: Option<bool>,
     pub revisions: Vec<String>,
     pub subdirectory: Option<String>,
-    pub unrendered: HashMap<String, Value>,
+    pub unrendered: HashMap<String, YmlValue>,
     pub original_entry: PrivatePackage,
 }
 
@@ -309,7 +309,7 @@ impl TryFrom<PrivatePackage> for PrivateUnpinnedPackage {
 pub struct TarballPinnedPackage {
     pub tarball: String,
     pub name: String,
-    pub unrendered: HashMap<String, Value>,
+    pub unrendered: HashMap<String, YmlValue>,
 }
 
 impl TarballPinnedPackage {
@@ -347,7 +347,7 @@ impl TryFrom<TarballUnpinnedPackage> for TarballPinnedPackage {
 pub struct TarballUnpinnedPackage {
     pub tarball: String,
     pub name: Option<String>,
-    pub unrendered: HashMap<String, Value>,
+    pub unrendered: HashMap<String, YmlValue>,
     pub original_entry: TarballPackage,
 }
 

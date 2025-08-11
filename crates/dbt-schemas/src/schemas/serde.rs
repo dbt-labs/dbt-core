@@ -6,16 +6,25 @@ use serde::{
     self, Deserialize, Deserializer, Serialize,
     de::{self, DeserializeOwned},
 };
-use serde_json::Value;
+// Type aliases for clarity
+type YmlValue = dbt_serde_yaml::Value;
 
-pub fn default_type<'de, D>(deserializer: D) -> Result<Option<BTreeMap<String, Value>>, D::Error>
+pub fn default_type<'de, D>(deserializer: D) -> Result<Option<BTreeMap<String, YmlValue>>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let value = Value::deserialize(deserializer)?;
+    let value = serde_json::Value::deserialize(deserializer)?;
     match value {
-        Value::Object(map) => Ok(Some(map.into_iter().collect())),
-        Value::Null => Ok(None),
+        serde_json::Value::Object(map) => Ok(Some(
+            map.into_iter()
+                .map(|(k, v)| {
+                    // Convert serde_json::Value to dbt_serde_yaml::Value
+                    let yml_val = serde_json::from_value::<YmlValue>(v).unwrap_or(YmlValue::null());
+                    (k, yml_val)
+                })
+                .collect(),
+        )),
+        serde_json::Value::Null => Ok(None),
         _ => Err(de::Error::custom("expected an object or null")),
     }
 }
@@ -25,15 +34,15 @@ pub fn string_or_array<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D
 where
     D: Deserializer<'de>,
 {
-    let value = Value::deserialize(deserializer)?;
+    let value = serde_json::Value::deserialize(deserializer)?;
     match value {
-        Value::Array(arr) => Ok(Some(
+        serde_json::Value::Array(arr) => Ok(Some(
             arr.iter()
                 .map(|v| v.as_str().unwrap().to_string())
                 .collect(),
         )),
-        Value::String(s) => Ok(Some(vec![s])),
-        Value::Null => Ok(None),
+        serde_json::Value::String(s) => Ok(Some(vec![s])),
+        serde_json::Value::Null => Ok(None),
         _ => Err(de::Error::custom(
             "expected a string, an array of strings, or null",
         )),
@@ -44,7 +53,7 @@ pub fn bool_or_string_bool<'de, D>(deserializer: D) -> Result<Option<bool>, D::E
 where
     D: Deserializer<'de>,
 {
-    let value = Value::deserialize(deserializer)?;
+    let value = serde_json::Value::deserialize(deserializer)?;
     Ok(value
         .as_bool()
         .or_else(|| value.as_str().map(|s| s.to_lowercase() == "true")))
@@ -54,7 +63,7 @@ pub fn bool_or_string_bool_default<'de, D>(deserializer: D) -> Result<bool, D::E
 where
     D: Deserializer<'de>,
 {
-    let value = Value::deserialize(deserializer)?;
+    let value = serde_json::Value::deserialize(deserializer)?;
     Ok(value
         .as_bool()
         .or_else(|| value.as_str().map(|s| s.to_lowercase() == "true"))
@@ -65,7 +74,7 @@ pub fn u64_or_string_u64<'de, D>(deserializer: D) -> Result<Option<u64>, D::Erro
 where
     D: Deserializer<'de>,
 {
-    let value = Value::deserialize(deserializer)?;
+    let value = serde_json::Value::deserialize(deserializer)?;
     Ok(value
         .as_u64()
         .or_else(|| value.as_str().and_then(|s| s.parse::<u64>().ok())))
@@ -76,7 +85,7 @@ pub fn default_true() -> Option<bool> {
 }
 
 pub fn try_from_value<T: DeserializeOwned>(
-    value: Option<Value>,
+    value: Option<serde_json::Value>,
 ) -> Result<Option<T>, Box<dyn std::error::Error>> {
     if let Some(value) = value {
         Ok(Some(
@@ -84,6 +93,74 @@ pub fn try_from_value<T: DeserializeOwned>(
         ))
     } else {
         Ok(None)
+    }
+}
+
+/// Convert YmlValue to a BTreeMap for minijinja
+pub fn yml_value_to_minijinja_map(value: YmlValue) -> BTreeMap<String, minijinja::Value> {
+    match value {
+        YmlValue::Mapping(map, _) => {
+            let mut result = BTreeMap::new();
+            for (k, v) in map {
+                if let YmlValue::String(key, _) = k {
+                    result.insert(key, yml_value_to_minijinja(v));
+                }
+            }
+            result
+        }
+        _ => BTreeMap::new(),
+    }
+}
+
+/// Convert YmlValue to serde_json::Value
+pub fn yml_to_json_value(value: &YmlValue) -> serde_json::Value {
+    serde_json::to_value(value).unwrap_or(serde_json::Value::Null)
+}
+
+/// Convert YmlValue to String
+pub fn yml_value_to_string(value: &YmlValue) -> Option<String> {
+    match value {
+        YmlValue::String(s, _) => Some(s.clone()),
+        YmlValue::Number(n, _) => Some(n.to_string()),
+        YmlValue::Bool(b, _) => Some(b.to_string()),
+        YmlValue::Null(_) => Some("null".to_string()),
+        _ => None,
+    }
+}
+
+/// Convert YmlValue to minijinja::Value
+pub fn yml_value_to_minijinja(value: YmlValue) -> minijinja::Value {
+    match value {
+        YmlValue::Null(_) => minijinja::Value::from(()),
+        YmlValue::Bool(b, _) => minijinja::Value::from(b),
+        YmlValue::String(s, _) => minijinja::Value::from(s),
+        YmlValue::Number(n, _) => {
+            if let Some(i) = n.as_i64() {
+                minijinja::Value::from(i)
+            } else if let Some(f) = n.as_f64() {
+                minijinja::Value::from(f)
+            } else {
+                minijinja::Value::from(n.to_string())
+            }
+        }
+        YmlValue::Sequence(seq, _) => {
+            let items: Vec<minijinja::Value> =
+                seq.into_iter().map(yml_value_to_minijinja).collect();
+            minijinja::Value::from(items)
+        }
+        YmlValue::Mapping(map, _) => {
+            let mut result = BTreeMap::new();
+            for (k, v) in map {
+                if let YmlValue::String(key, _) = k {
+                    result.insert(key, yml_value_to_minijinja(v));
+                }
+            }
+            minijinja::Value::from_object(result)
+        }
+        YmlValue::Tagged(tagged, _) => {
+            // For tagged values, convert the inner value
+            yml_value_to_minijinja(tagged.value)
+        }
     }
 }
 
@@ -161,7 +238,7 @@ impl StringOrInteger {
 #[serde(untagged)]
 pub enum StringOrMap {
     StringValue(String),
-    MapValue(HashMap<String, Value>),
+    MapValue(HashMap<String, YmlValue>),
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]

@@ -1,8 +1,10 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use serde_with::skip_serializing_none;
+
+// Type aliases for clarity
+type JsonValue = serde_json::Value;
 
 use crate::schemas::ref_and_source::DbtRef;
 
@@ -20,9 +22,9 @@ pub struct DbtMetric {
     pub label: Option<String>,
     pub type_params: MetricTypeParams,
     pub filter: Option<MetricFilter>,
-    pub metadata: Option<Value>,
+    pub metadata: Option<JsonValue>,
     pub time_granularity: Option<String>,
-    pub unrendered_config: BTreeMap<String, Value>,
+    pub unrendered_config: BTreeMap<String, JsonValue>,
     pub sources: Vec<Vec<String>>,
     pub depends_on: MetricDependsOn,
     pub refs: Vec<DbtRef>,
@@ -41,25 +43,25 @@ pub struct MetricDependsOn {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetricTypeParams {
     pub measure: Option<MetricMeasure>,
-    pub input_measures: Option<Vec<Value>>,
-    pub numerator: Option<Value>,
-    pub denominator: Option<Value>,
+    pub input_measures: Option<Vec<JsonValue>>,
+    pub numerator: Option<JsonValue>,
+    pub denominator: Option<JsonValue>,
     pub expr: Option<String>,
-    pub window: Option<Value>,
-    pub grain_to_date: Option<Value>,
-    pub metrics: Option<Vec<Value>>,
-    pub conversion_type_params: Option<Value>,
-    pub cumulative_type_params: Option<Value>,
+    pub window: Option<JsonValue>,
+    pub grain_to_date: Option<JsonValue>,
+    pub metrics: Option<Vec<JsonValue>>,
+    pub conversion_type_params: Option<JsonValue>,
+    pub cumulative_type_params: Option<JsonValue>,
 }
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetricMeasure {
     pub name: String,
-    pub filter: Option<Value>,
+    pub filter: Option<JsonValue>,
     pub alias: Option<String>,
     pub join_to_timespine: Option<bool>,
-    pub fill_nulls_with: Option<Value>,
+    pub fill_nulls_with: Option<JsonValue>,
 }
 
 #[skip_serializing_none]

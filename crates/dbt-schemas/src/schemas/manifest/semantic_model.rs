@@ -4,9 +4,11 @@ use crate::schemas::{
     ref_and_source::DbtRef,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use serde_with::skip_serializing_none;
 use std::{collections::BTreeMap, path::PathBuf};
+
+// Type aliases for clarity
+type JsonValue = serde_json::Value;
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,12 +28,12 @@ pub struct DbtSemanticModel {
     pub entities: Vec<SemanticModelEntity>,
     pub measures: Vec<SemanticModelMeasure>,
     pub dimensions: Vec<Dimension>,
-    pub metadata: Option<Value>,
+    pub metadata: Option<JsonValue>,
     pub depends_on: SemanticModelDependsOn,
     pub refs: Vec<DbtRef>,
     pub created_at: Option<f64>,
     pub config: SemanticModelConfig,
-    pub unrendered_config: BTreeMap<String, Value>,
+    pub unrendered_config: BTreeMap<String, JsonValue>,
     pub primary_entity: Option<String>,
 }
 
@@ -62,7 +64,7 @@ pub struct SemanticModelEntity {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EntityConfig {
-    pub meta: BTreeMap<String, Value>,
+    pub meta: BTreeMap<String, JsonValue>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,7 +75,7 @@ pub struct SemanticModelMeasure {
     pub label: Option<String>,
     pub create_metric: bool,
     pub expr: Option<String>,
-    pub agg_params: Option<Value>,
+    pub agg_params: Option<JsonValue>,
     pub non_additive_dimension: Option<NonAdditiveDimension>,
     pub agg_time_dimension: Option<String>,
     pub config: Option<MeasureConfig>,
@@ -87,5 +89,5 @@ pub struct NonAdditiveDimension {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MeasureConfig {
-    pub meta: BTreeMap<String, Value>,
+    pub meta: BTreeMap<String, JsonValue>,
 }

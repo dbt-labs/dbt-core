@@ -1,8 +1,10 @@
 use chrono::{DateTime, Utc};
 use dbt_common::io_args::StaticAnalysisKind;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::{collections::BTreeMap, sync::Arc};
+
+// Type aliases for clarity
+type JsonValue = serde_json::Value;
 
 use crate::{
     dbt_utils::get_dbt_schema_version,
@@ -80,11 +82,11 @@ pub use super::v12::DbtManifestV12;
 // Type aliases for backwards compatibility
 pub type DbtManifest = DbtManifestV12;
 
-pub fn serialize_with_resource_type(mut value: Value, resource_type: &str) -> Value {
-    if let Value::Object(ref mut map) = value {
+pub fn serialize_with_resource_type(mut value: JsonValue, resource_type: &str) -> JsonValue {
+    if let JsonValue::Object(ref mut map) = value {
         map.insert(
             "resource_type".to_string(),
-            Value::String(resource_type.to_string()),
+            JsonValue::String(resource_type.to_string()),
         );
     }
     value

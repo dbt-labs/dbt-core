@@ -8,7 +8,9 @@ use dbt_frontend_common::Dialect;
 use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize, Verbatim};
 use hex;
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::Value;
+// Type alias for clarity
+type YmlValue = dbt_serde_yaml::Value;
+type JsonValue = serde_json::Value;
 use serde_with::skip_serializing_none;
 use sha2::{Digest, Sha256};
 use strum::{Display, EnumIter, EnumString};
@@ -421,20 +423,20 @@ impl<'de> Deserialize<'de> for DbtCheckColsSpec {
     where
         D: Deserializer<'de>,
     {
-        let value = Value::deserialize(deserializer)?;
+        let value = YmlValue::deserialize(deserializer)?;
         match value {
-            Value::String(all) => {
+            YmlValue::String(all, _) => {
                 // Validate that all is 'all'
                 if all != "all" {
                     return Err(serde::de::Error::custom("Expected 'all'"));
                 }
                 Ok(DbtCheckColsSpec::All)
             }
-            Value::Array(col_list) => {
+            YmlValue::Sequence(col_list, _) => {
                 let cols: Result<Vec<_>, D::Error> = col_list
                     .into_iter()
                     .map(|v| match v {
-                        Value::String(s) => Ok(s),
+                        YmlValue::String(s, _) => Ok(s),
                         _ => Err(serde::de::Error::custom("Expected array of strings")),
                     })
                     .collect();
@@ -467,7 +469,7 @@ pub struct DbtContract {
     #[serde(default)]
     pub enforced: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub checksum: Option<Value>,
+    pub checksum: Option<YmlValue>,
 }
 
 fn default_alias_types() -> bool {
@@ -685,20 +687,7 @@ pub struct Given {
 #[serde(untagged)]
 pub enum Rows {
     String(String),
-    List(Vec<BTreeMap<String, Value>>),
-}
-
-impl From<Rows> for Value {
-    fn from(rows: Rows) -> Self {
-        match rows {
-            Rows::String(s) => Value::String(s),
-            Rows::List(list) => Value::Array(
-                list.into_iter()
-                    .map(|map| Value::Object(map.into_iter().collect()))
-                    .collect(),
-            ),
-        }
-    }
+    List(Vec<BTreeMap<String, JsonValue>>),
 }
 
 #[skip_serializing_none]
@@ -794,7 +783,7 @@ pub struct Dimension {
     pub is_partition: bool,
     pub type_params: Option<DimensionTypeParams>,
     pub expr: Option<String>,
-    pub metadata: Option<Value>,
+    pub metadata: Option<YmlValue>,
     pub config: Option<DimensionConfig>,
 }
 fn default_false() -> bool {
@@ -816,7 +805,7 @@ pub struct DimensionTypeParams {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 pub struct DimensionConfig {
-    pub meta: BTreeMap<String, Value>,
+    pub meta: BTreeMap<String, YmlValue>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
@@ -871,9 +860,9 @@ pub enum Severity {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct Versions {
-    pub v: Value,
+    pub v: YmlValue,
     pub config: Verbatim<Option<dbt_serde_yaml::Value>>,
-    pub __additional_properties__: Verbatim<HashMap<String, Value>>,
+    pub __additional_properties__: Verbatim<HashMap<String, YmlValue>>,
 }
 
 /// Get the semantic names for database, schema, and identifier
@@ -923,9 +912,9 @@ pub fn _normalize_quote(quoting: bool, dialect: &Dialect, name: &str) -> (String
 
 /// Merge two meta maps, with the second map's values taking precedence on key conflicts.
 pub fn merge_meta(
-    base_meta: Option<BTreeMap<String, Value>>,
-    update_meta: Option<BTreeMap<String, Value>>,
-) -> Option<BTreeMap<String, Value>> {
+    base_meta: Option<BTreeMap<String, YmlValue>>,
+    update_meta: Option<BTreeMap<String, YmlValue>>,
+) -> Option<BTreeMap<String, YmlValue>> {
     match (base_meta, update_meta) {
         (Some(base_map), Some(update_map)) => {
             let mut merged = base_map;
