@@ -163,6 +163,12 @@ mod tests {
             "comment".to_string(),
         ];
 
+        let column_types = vec![
+            "string".to_string(),
+            "string".to_string(),
+            "string".to_string(),
+        ];
+
         let rows = vec![
             Value::from(vec![
                 "id".to_string(),
@@ -186,7 +192,7 @@ mod tests {
             ]),
         ];
 
-        AgateTable::from_rows(column_names, rows)
+        AgateTable::from_rows(column_names, column_types, rows)
     }
 
     fn create_mock_dbt_model(
@@ -284,8 +290,15 @@ mod tests {
             "data_type".to_string(),
             "comment".to_string(),
         ];
+
+        let column_types = vec![
+            "string".to_string(),
+            "string".to_string(),
+            "string".to_string(),
+        ];
+
         let rows = vec![]; // Empty rows
-        let table = AgateTable::from_rows(column_names, rows);
+        let table = AgateTable::from_rows(column_names, column_types, rows);
 
         let results = DatabricksRelationResultsBuilder::new()
             .with_describe_extended(table)
@@ -312,6 +325,12 @@ mod tests {
             "comment".to_string(),
         ];
 
+        let column_types = vec![
+            "string".to_string(),
+            "string".to_string(),
+            "string".to_string(),
+        ];
+
         let rows = vec![
             Value::from(vec![
                 "ID".to_string(),
@@ -335,7 +354,7 @@ mod tests {
             ]),
         ];
 
-        let table = AgateTable::from_rows(column_names, rows);
+        let table = AgateTable::from_rows(column_names, column_types, rows);
 
         let results = DatabricksRelationResultsBuilder::new()
             .with_describe_extended(table)
@@ -368,6 +387,12 @@ mod tests {
             "comment".to_string(),
         ];
 
+        let column_types = vec![
+            "string".to_string(),
+            "string".to_string(),
+            "string".to_string(),
+        ];
+
         let rows = vec![
             Value::from(vec![
                 "id".to_string(),
@@ -386,7 +411,7 @@ mod tests {
             ]),
         ];
 
-        let table = AgateTable::from_rows(column_names, rows);
+        let table = AgateTable::from_rows(column_names, column_types, rows);
 
         let results = DatabricksRelationResultsBuilder::new()
             .with_describe_extended(table)
@@ -415,12 +440,14 @@ mod tests {
             // Missing comment column
         ];
 
+        let column_types = vec!["string".to_string(), "string".to_string()];
+
         let rows = vec![
             Value::from(vec!["id".to_string(), "int".to_string()]),
             Value::from(vec!["name".to_string(), "string".to_string()]),
         ];
 
-        let table = AgateTable::from_rows(column_names, rows);
+        let table = AgateTable::from_rows(column_names, column_types, rows);
 
         let results = DatabricksRelationResultsBuilder::new()
             .with_describe_extended(table)
@@ -449,6 +476,12 @@ mod tests {
             "comment".to_string(),
         ];
 
+        let column_types = vec![
+            "string".to_string(),
+            "string".to_string(),
+            "string".to_string(),
+        ];
+
         let rows = vec![
             Value::from(vec![
                 "id".to_string(),
@@ -469,7 +502,7 @@ mod tests {
             ]),
         ];
 
-        let table = AgateTable::from_rows(column_names, rows);
+        let table = AgateTable::from_rows(column_names, column_types, rows);
 
         let results = DatabricksRelationResultsBuilder::new()
             .with_describe_extended(table)
