@@ -119,7 +119,8 @@ pub fn init_tracing(config: FsTraceConfig) -> FsResult<TelemetryHandle> {
         .add_directive("hyper=off".parse().expect("Must be ok"))
         .add_directive("tonic=off".parse().expect("Must be ok"))
         .add_directive("h2=off".parse().expect("Must be ok"))
-        .add_directive("reqwest=off".parse().expect("Must be ok"));
+        .add_directive("reqwest=off".parse().expect("Must be ok"))
+        .add_directive("ureq=off".parse().expect("Must be ok"));
 
     // TODO: If OTLP exporter is enabled, we need to shut off it's own logging
     // as it currently breaks the global span logic (it fires before the first span
