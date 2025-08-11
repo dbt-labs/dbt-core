@@ -35,7 +35,11 @@ pub const JWT_PRIVATE_KEY_PKCS8_PASSWORD: &str =
 pub const DISABLE_TELEMETRY: &str = "adbc.snowflake.sql.client_option.disable_telemetry";
 pub const LOG_TRACING: &str = "adbc.snowflake.sql.client_option.tracing";
 pub const CLIENT_CONFIG_FILE: &str = "adbc.snowflake.sql.client_option.config_file";
+
+// WARN: Do not set both of these for one runtime
+// Turn on caching for username password MFA tokens
 pub const CLIENT_CACHE_MFA_TOKEN: &str = "adbc.snowflake.sql.client_option.cache_mfa_token";
+// Turns on caching for several methods: externalbrowser, (later) OAuth-related methods
 pub const CLIENT_STORE_TEMP_CREDS: &str = "adbc.snowflake.sql.client_option.store_temp_creds";
 
 // Session Param Keys

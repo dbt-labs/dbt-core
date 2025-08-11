@@ -203,6 +203,7 @@ impl ConfigureBuilder for Sso {
     fn configure(self, builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
         let mut builder = builder;
         builder.with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::EXTERNAL_BROWSER)?;
+        builder.with_named_option(snowflake::CLIENT_STORE_TEMP_CREDS, "true")?;
         Ok(builder)
     }
 }
@@ -408,6 +409,8 @@ impl SnowflakeAuth {
                         .with_named_option(snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY, value),
                     "authenticator" => {
                         if value == "externalbrowser" {
+                            builder
+                                .with_named_option(snowflake::CLIENT_STORE_TEMP_CREDS, "true")?;
                             builder.with_named_option(
                                 snowflake::AUTH_TYPE,
                                 snowflake::auth_type::EXTERNAL_BROWSER,
@@ -758,6 +761,7 @@ mod tests {
             (snowflake::AUTH_TYPE, snowflake::auth_type::EXTERNAL_BROWSER),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::CLIENT_STORE_TEMP_CREDS, "true"),
         ];
         run_config_test(config, &expected);
     }
@@ -776,6 +780,7 @@ mod tests {
             (snowflake::AUTH_TYPE, snowflake::auth_type::EXTERNAL_BROWSER),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::CLIENT_STORE_TEMP_CREDS, "true"),
         ];
         run_config_test(config, &expected);
     }
