@@ -140,13 +140,13 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
             .chain(resolver_state.operations.on_run_start.iter().map(|node| {
                 (
                     node.common_attr.unique_id.clone(),
-                    DbtNode::Operation((*node).clone().into()),
+                    DbtNode::Operation((*node).clone().into_inner().into()),
                 )
             }))
             .chain(resolver_state.operations.on_run_end.iter().map(|node| {
                 (
                     node.common_attr.unique_id.clone(),
-                    DbtNode::Operation((*node).clone().into()),
+                    DbtNode::Operation((*node).clone().into_inner().into()),
                 )
             }))
             .collect(),

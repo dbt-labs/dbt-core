@@ -185,11 +185,17 @@ impl<'env> Vm<'env> {
         args: Vec<Value>,
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Option<Value>, Error> {
+        let path = context_base
+            .get_attr_fast(CURRENT_PATH)
+            .map_or(PathBuf::new(), |value| deserialize_path(&value));
+        let span = context_base
+            .get_attr_fast(CURRENT_SPAN)
+            .map_or(Span::default(), |value| deserialize_span(&value));
         let mut ctx = Context::new_with_frame(
             Frame::new(context_base),
             self.env.recursion_limit(),
-            state.ctx.current_path.clone(),
-            state.ctx.current_span,
+            path,
+            span,
         );
         ok!(ctx.push_frame(Frame::new(closure)));
         if let Some(caller) = caller {
@@ -829,6 +835,32 @@ impl<'env> Vm<'env> {
                     stack.push(Value::from(rv));
                 }
                 Instruction::CallFunction(name, arg_count, this_span) => {
+                    // reset_span is a special function that resets the current span
+                    // it is only used internally like in run_operation.rs,
+                    // where we want to set the location to yml file
+                    if *name == "reset_span" {
+                        let args = stack.get_call_args(*arg_count);
+                        let arg_count = args.len();
+                        let file_path = args[0].as_str().unwrap_or_default();
+                        let start_line = args[1].as_i64().unwrap_or_default() as u32;
+                        let start_col = args[2].as_i64().unwrap_or_default() as u32;
+                        let start_offset = args[3].as_i64().unwrap_or_default() as u32;
+                        let end_line = args[4].as_i64().unwrap_or_default() as u32;
+                        let end_col = args[5].as_i64().unwrap_or_default() as u32;
+                        let end_offset = args[6].as_i64().unwrap_or_default() as u32;
+                        state.ctx.current_path = PathBuf::from(file_path);
+                        state.ctx.current_span = Span {
+                            start_line: start_line - this_span.end_line,
+                            start_col,
+                            start_offset,
+                            end_line: end_line - this_span.end_line,
+                            end_col,
+                            end_offset,
+                        };
+                        stack.drop_top(arg_count);
+                        pc += 1;
+                        continue;
+                    }
                     listeners.iter().for_each(|listener| {
                         if *name == "return" {
                             listener.on_return(
@@ -1037,6 +1069,8 @@ impl<'env> Vm<'env> {
                                     state_id: new_state.id,
                                     closure: caller_macro.closure.clone(),
                                     caller_reference: true,
+                                    path: caller_macro.path.clone(),
+                                    span: caller_macro.span,
                                 }),
                             );
                             args[last_idx] = Kwargs::wrap(new_kwargs);
@@ -1717,6 +1751,8 @@ impl<'env> Vm<'env> {
             state_id: state.id,
             closure,
             caller_reference: (flags & MACRO_CALLER) != 0,
+            path: state.ctx.current_path.clone(),
+            span: state.ctx.current_span,
         }));
     }
 }

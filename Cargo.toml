@@ -177,7 +177,7 @@ minijinja-contrib = { path = "crates/dbt-jinja/minijinja-contrib", features = [
 snowflake-api = { path = "crates/snowflake-rs/snowflake-api" }
 
 # serde
-dbt-serde_yaml = { git = "https://github.com/sdf-labs/dbt-serde-yaml", rev = "400d293007808f4757efee5b5269b12662a7bc5c", features = [
+dbt-serde_yaml = { git = "https://github.com/sdf-labs/dbt-serde-yaml", rev = "34c6bd7bb6e7c8ab85f23471973955e0ab6c8526", features = [
   "filename",
   "schemars",
   "flatten_dunder",

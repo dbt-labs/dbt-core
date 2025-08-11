@@ -1,4 +1,5 @@
 use chrono_tz::Tz;
+use dbt_serde_yaml::Spanned;
 use std::{
     any::Any,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -19,7 +20,7 @@ use crate::schemas::{
     },
     relations::base::{BaseRelation, RelationPattern},
     selectors::ResolvedSelector,
-    serde::{FloatOrString, StringOrArrayOfStrings},
+    serde::{FloatOrString, SpannedStringOrArrayOfStrings, StringOrArrayOfStrings},
 };
 use blake3::Hasher;
 use chrono::{DateTime, Local, Utc};
@@ -326,8 +327,8 @@ pub struct Macros {
 
 #[derive(Debug, Default, Clone)]
 pub struct Operations {
-    pub on_run_start: Vec<DbtOperation>,
-    pub on_run_end: Vec<DbtOperation>,
+    pub on_run_start: Vec<Spanned<DbtOperation>>,
+    pub on_run_end: Vec<Spanned<DbtOperation>>,
 }
 
 #[derive(Debug, Clone)]
@@ -577,8 +578,8 @@ pub struct DbtRuntimeConfigInner {
     // Variables and hooks
     pub vars: BTreeMap<String, DbtVars>,
     pub cli_vars: BTreeMap<String, dbt_serde_yaml::Value>,
-    pub on_run_start: Vec<String>,
-    pub on_run_end: Vec<String>,
+    pub on_run_start: Vec<Spanned<String>>,
+    pub on_run_end: Vec<Spanned<String>>,
 
     // Version info
     pub config_version: Option<i32>,
@@ -669,13 +670,13 @@ impl DbtRuntimeConfig {
             vars: vars.clone(),
             cli_vars: cli_vars.clone(),
             on_run_start: match &*package.dbt_project.on_run_start {
-                Some(StringOrArrayOfStrings::String(s)) => vec![s.clone()],
-                Some(StringOrArrayOfStrings::ArrayOfStrings(v)) => v.clone(),
+                Some(SpannedStringOrArrayOfStrings::String(s)) => vec![s.clone()],
+                Some(SpannedStringOrArrayOfStrings::ArrayOfStrings(v)) => v.clone(),
                 _ => vec![],
             },
             on_run_end: match &*package.dbt_project.on_run_end {
-                Some(StringOrArrayOfStrings::String(s)) => vec![s.clone()],
-                Some(StringOrArrayOfStrings::ArrayOfStrings(v)) => v.clone(),
+                Some(SpannedStringOrArrayOfStrings::String(s)) => vec![s.clone()],
+                Some(SpannedStringOrArrayOfStrings::ArrayOfStrings(v)) => v.clone(),
                 _ => vec![],
             },
             config_version: package.dbt_project.config_version,

@@ -18,6 +18,7 @@ use crate::schemas::common::DbtQuoting;
 use crate::schemas::project::ProjectSemanticModelConfig;
 use crate::schemas::project::configs::saved_queries_config::ProjectSavedQueriesConfig;
 use crate::schemas::serde::FloatOrString;
+use crate::schemas::serde::SpannedStringOrArrayOfStrings;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::StringOrInteger;
 
@@ -142,9 +143,9 @@ pub struct DbtProject {
     pub dispatch: Option<Vec<_Dispatch>>,
     pub flags: Option<serde_json::Value>,
     #[serde(rename = "on-run-end")]
-    pub on_run_end: Verbatim<Option<StringOrArrayOfStrings>>,
+    pub on_run_end: Verbatim<Option<SpannedStringOrArrayOfStrings>>,
     #[serde(rename = "on-run-start")]
-    pub on_run_start: Verbatim<Option<StringOrArrayOfStrings>>,
+    pub on_run_start: Verbatim<Option<SpannedStringOrArrayOfStrings>>,
     #[serde(rename = "query-comment")]
     pub query_comment: Verbatim<Option<QueryComment>>,
     pub quoting: Spanned<Option<DbtQuoting>>,

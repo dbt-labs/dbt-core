@@ -1,10 +1,12 @@
 use std::fmt;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::arg_utils::ArgParser;
 use crate::error::{Error, ErrorKind};
 use crate::listener::RenderingEventListener;
+use crate::machinery::Span;
 use crate::output::Output;
 use crate::output_tracker;
 use crate::utils::AutoEscape;
@@ -24,6 +26,8 @@ pub(crate) struct Macro {
     pub state_id: isize,
     pub closure: Value,
     pub caller_reference: bool,
+    pub path: PathBuf,
+    pub span: Span,
 }
 
 impl fmt::Debug for Macro {
@@ -59,8 +63,10 @@ impl Object for Macro {
                 "cannot call this macro. template state went away.",
             ));
         }
-
-        let base_context = state.get_base_context();
+        let base_context = state.get_base_context_with_path_and_span(
+            &Value::from(self.path.to_string_lossy()),
+            &Value::from_serialize(self.span),
+        );
         let base_ctx = base_context
             .as_object()
             .unwrap()

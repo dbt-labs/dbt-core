@@ -7,17 +7,18 @@ use crate::utils::get_original_file_path;
 use dbt_schemas::schemas::{
     CommonAttributes, common::DbtChecksum, manifest::DbtOperation, project::DbtProject,
 };
+use dbt_serde_yaml::Spanned;
 
 pub fn resolve_operations(
     dbt_project: &DbtProject,
     package_base_path: &Path,
     project_root: &Path,
-) -> (Vec<DbtOperation>, Vec<DbtOperation>) {
+) -> (Vec<Spanned<DbtOperation>>, Vec<Spanned<DbtOperation>>) {
     let mut on_run_start = Vec::new();
     let mut on_run_end = Vec::new();
 
     for start in dbt_project.on_run_start.iter() {
-        let operations: Vec<String> = start.clone().into();
+        let operations: Vec<Spanned<String>> = start.clone().into();
         on_run_start.extend(new_operation(
             "on_run_start",
             &operations,
@@ -28,7 +29,7 @@ pub fn resolve_operations(
     }
 
     for end in dbt_project.on_run_end.iter() {
-        let operations: Vec<String> = end.clone().into();
+        let operations: Vec<Spanned<String>> = end.clone().into();
         on_run_end.extend(new_operation(
             "on_run_end",
             &operations,
@@ -43,11 +44,11 @@ pub fn resolve_operations(
 
 fn new_operation(
     operation_type: &str,
-    operations: &[String],
+    operations: &[Spanned<String>],
     dbt_project: &DbtProject,
     package_base_path: &Path,
     project_root: &Path,
-) -> Vec<DbtOperation> {
+) -> Vec<Spanned<DbtOperation>> {
     let project_name = &dbt_project.name;
     // Calculate the original file path for dbt_project.yml
     let dbt_project_yml_path = PathBuf::from("dbt_project.yml");
@@ -61,7 +62,7 @@ fn new_operation(
         .map(|(index, operation_sql)| {
             let name = format!("{project_name}-{operation_type}-{index}");
             let unique_id = format!("operation.{project_name}.{name}");
-            DbtOperation {
+            operation_sql.clone().map(|operation_sql| DbtOperation {
                 common_attr: CommonAttributes {
                     name: name.clone(),
                     package_name: project_name.to_string(),
@@ -75,7 +76,7 @@ fn new_operation(
                     ..Default::default()
                 },
                 other: BTreeMap::new(),
-            }
+            })
         })
         .collect()
 }

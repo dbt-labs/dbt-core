@@ -235,6 +235,19 @@ impl Span {
             stop: self.stop.with_offset(offset),
         }
     }
+
+    pub fn from_serde_span(span: dbt_serde_yaml::Span, file: impl Into<PathBuf>) -> Self {
+        let file = file.into();
+        Span {
+            start: CodeLocation::new(
+                span.start.line,
+                span.start.column,
+                span.start.index,
+                file.clone(),
+            ),
+            stop: CodeLocation::new(span.end.line, span.end.column, span.end.index, file),
+        }
+    }
 }
 
 pub trait AbstractSpan {

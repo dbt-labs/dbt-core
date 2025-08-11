@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 
-use dbt_serde_yaml::JsonSchema;
+use dbt_serde_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize};
 use serde::{
     self, Deserialize, Deserializer, Serialize,
     de::{self, DeserializeOwned},
@@ -207,6 +207,68 @@ impl PartialEq for StringOrArrayOfStrings {
 }
 
 impl Eq for StringOrArrayOfStrings {}
+
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, JsonSchema)]
+#[serde(untagged)]
+pub enum SpannedStringOrArrayOfStrings {
+    String(Spanned<String>),
+    ArrayOfStrings(Vec<Spanned<String>>),
+}
+
+impl From<SpannedStringOrArrayOfStrings> for Vec<Spanned<String>> {
+    fn from(value: SpannedStringOrArrayOfStrings) -> Self {
+        match value {
+            SpannedStringOrArrayOfStrings::String(s) => vec![s],
+            SpannedStringOrArrayOfStrings::ArrayOfStrings(a) => a,
+        }
+    }
+}
+
+impl SpannedStringOrArrayOfStrings {
+    pub fn to_strings(&self) -> Vec<Spanned<String>> {
+        match self {
+            SpannedStringOrArrayOfStrings::String(s) => vec![s.clone()],
+            SpannedStringOrArrayOfStrings::ArrayOfStrings(a) => a.clone(),
+        }
+    }
+}
+
+impl PartialEq for SpannedStringOrArrayOfStrings {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                SpannedStringOrArrayOfStrings::String(s1),
+                SpannedStringOrArrayOfStrings::String(s2),
+            ) => s1 == s2,
+            (
+                SpannedStringOrArrayOfStrings::ArrayOfStrings(a1),
+                SpannedStringOrArrayOfStrings::ArrayOfStrings(a2),
+            ) => a1 == a2,
+            (
+                SpannedStringOrArrayOfStrings::String(s),
+                SpannedStringOrArrayOfStrings::ArrayOfStrings(a),
+            ) => {
+                if a.len() == 1 {
+                    a[0] == *s
+                } else {
+                    false
+                }
+            }
+            (
+                SpannedStringOrArrayOfStrings::ArrayOfStrings(a),
+                SpannedStringOrArrayOfStrings::String(s),
+            ) => {
+                if a.len() == 1 {
+                    a[0] == *s
+                } else {
+                    false
+                }
+            }
+        }
+    }
+}
+
+impl Eq for SpannedStringOrArrayOfStrings {}
 
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 #[serde(untagged)]
