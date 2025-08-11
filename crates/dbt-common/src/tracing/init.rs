@@ -117,7 +117,6 @@ pub fn init_tracing(config: FsTraceConfig) -> FsResult<TelemetryHandle> {
     // Turn off logging for some common libraries that are too verbose
     let global_level_filter = global_level_filter
         .add_directive("hyper=off".parse().expect("Must be ok"))
-        .add_directive("tonic=off".parse().expect("Must be ok"))
         .add_directive("h2=off".parse().expect("Must be ok"))
         .add_directive("reqwest=off".parse().expect("Must be ok"))
         .add_directive("ureq=off".parse().expect("Must be ok"));
