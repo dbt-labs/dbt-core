@@ -69,7 +69,8 @@ models:
       - name: id
         data_tests:
           - unique:
-              severity: error
+              config:
+                severity: error
           - not_null
       - name: name
 """
