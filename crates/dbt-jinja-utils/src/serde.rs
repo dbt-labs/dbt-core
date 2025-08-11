@@ -87,6 +87,106 @@ use crate::{jinja_environment::JinjaEnv, phases::load::secret_renderer::render_s
 
 pub use dbt_common::serde_utils::Omissible;
 
+/// Deserializes a YAML file into a `Value`, using the file's absolute path for error reporting.
+pub fn value_from_file(
+    io_args: &IoArgs,
+    path: &Path,
+    show_errors_or_warnings: bool,
+) -> FsResult<Value> {
+    let input = try_read_yml_to_str(path)?;
+    value_from_str(io_args, &input, Some(path), show_errors_or_warnings)
+}
+
+/// Renders a Yaml `Value` containing Jinja expressions into a target
+/// `Deserialize` type T.
+pub fn into_typed_with_jinja<T, S>(
+    io_args: &IoArgs,
+    value: Value,
+    should_render_secrets: bool,
+    env: &JinjaEnv,
+    ctx: &S,
+    listeners: &[Rc<dyn RenderingEventListener>],
+) -> FsResult<T>
+where
+    T: DeserializeOwned,
+    S: Serialize,
+{
+    let (res, errors) =
+        into_typed_with_jinja_error(value, should_render_secrets, env, ctx, listeners)?;
+
+    for error in errors {
+        if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+            show_error!(io_args, error);
+        } else {
+            show_warning_soon_to_be_error!(io_args, error);
+        }
+    }
+
+    Ok(res)
+}
+
+/// Renders a Yaml `Value` containing Jinja expressions into a target
+/// `Deserialize` type T.
+pub fn into_typed_with_jinja_error_context<T, S>(
+    io_args: Option<&IoArgs>,
+    value: Value,
+    should_render_secrets: bool,
+    env: &JinjaEnv,
+    ctx: &S,
+    listeners: &[Rc<dyn RenderingEventListener>],
+    // A function that takes FsError and returns a string to be used as the error context
+    error_context: impl Fn(&FsError) -> String,
+) -> FsResult<T>
+where
+    T: DeserializeOwned,
+    S: Serialize,
+{
+    let (res, errors) =
+        into_typed_with_jinja_error(value, should_render_secrets, env, ctx, listeners)?;
+
+    if let Some(io_args) = io_args {
+        for error in errors {
+            let context = error_context(&error);
+            let error = error.with_context(context);
+            if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+                show_error!(io_args, error);
+            } else {
+                show_warning_soon_to_be_error!(io_args, error);
+            }
+        }
+    }
+
+    Ok(res)
+}
+
+/// Deserializes a Yaml string into a Rust type T.
+pub fn from_yaml_raw<T>(
+    io_args: &IoArgs,
+    input: &str,
+    error_display_path: Option<&Path>,
+    show_errors_or_warnings: bool,
+) -> FsResult<T>
+where
+    T: DeserializeOwned,
+{
+    let value = value_from_str(io_args, input, error_display_path, show_errors_or_warnings)?;
+    // Use the identity transform for the 'raw' version of this function.
+    let expand_jinja = |_: &Value| Ok(None);
+    let (res, errors) = into_typed_internal(value, expand_jinja)?;
+
+    if show_errors_or_warnings {
+        for error in errors {
+            if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+                show_error!(io_args, error);
+            } else {
+                show_warning_soon_to_be_error!(io_args, error);
+            }
+        }
+    }
+
+    Ok(res)
+}
+
 fn detect_yaml_indentation(input: &str) -> Option<usize> {
     for line in input.lines() {
         if let Some((indentation, _)) = line.char_indices().find(|&(_, c)| !c.is_whitespace()) {
@@ -137,18 +237,13 @@ fn trim_beginning_whitespace_for_first_line_with_content(input: &str) -> String 
     input.to_string()
 }
 
-/// Deserializes a YAML file into a `Value`, using the file's absolute path for error reporting.
-pub fn value_from_file(io_args: Option<&IoArgs>, path: &Path) -> FsResult<Value> {
-    let input = try_read_yml_to_str(path)?;
-    value_from_str(io_args, &input, Some(path))
-}
-
 /// Internal function that deserializes a YAML string into a `Value`.
 /// The error_display_path should be an absolute, canonicalized path.
 fn value_from_str(
-    io_args: Option<&IoArgs>,
+    io_args: &IoArgs,
     input: &str,
     error_display_path: Option<&Path>,
+    show_errors_or_warnings: bool,
 ) -> FsResult<Value> {
     let _f = dbt_serde_yaml::with_filename(error_display_path.map(PathBuf::from));
 
@@ -158,18 +253,18 @@ fn value_from_str(
     let input = trim_beginning_whitespace_for_first_line_with_content(&input);
     let mut value = Value::from_str(&input, |path, key, existing_key| {
         let key_repr = dbt_serde_yaml::to_string(&key).unwrap_or_else(|_| "<opaque>".to_string());
-        if let Some(io_args) = io_args {
-            let duplicate_key_error = fs_err!(
-                code => ErrorCode::DuplicateConfigKey,
-                loc => key.span(),
-                "Duplicate key `{}`. This key overwrites a previous definition of the same key \
-                 at line {} column {}. YAML path: `{}`.",
-                key_repr.trim(),
-                existing_key.span().start.line,
-                existing_key.span().start.column,
-                path
-            );
+        let duplicate_key_error = fs_err!(
+            code => ErrorCode::DuplicateConfigKey,
+            loc => key.span(),
+            "Duplicate key `{}`. This key overwrites a previous definition of the same key \
+                at line {} column {}. YAML path: `{}`.",
+            key_repr.trim(),
+            existing_key.span().start.line,
+            existing_key.span().start.column,
+            path
+        );
 
+        if show_errors_or_warnings {
             if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
                 show_error!(io_args, duplicate_key_error);
             } else {
@@ -179,47 +274,17 @@ fn value_from_str(
         // last key wins:
         dbt_serde_yaml::mapping::DuplicateKey::Overwrite
     })
-    .map_err(|e| from_yaml_error(e, error_display_path))?;
+    .map_err(|e| yaml_to_fs_error(e, error_display_path))?;
     value
         .apply_merge()
-        .map_err(|e| from_yaml_error(e, error_display_path))?;
+        .map_err(|e| yaml_to_fs_error(e, error_display_path))?;
 
     Ok(value)
 }
 
-/// Renders a Yaml `Value` containing Jinja expressions into a target
-/// `Deserialize` type T.
-pub fn into_typed_with_jinja<T, S>(
-    io_args: Option<&IoArgs>,
-    value: Value,
-    should_render_secrets: bool,
-    env: &JinjaEnv,
-    ctx: &S,
-    listeners: &[Rc<dyn RenderingEventListener>],
-) -> FsResult<T>
-where
-    T: DeserializeOwned,
-    S: Serialize,
-{
-    let (res, errors) =
-        into_typed_with_jinja_error(value, should_render_secrets, env, ctx, listeners)?;
-
-    if let Some(io_args) = io_args {
-        for error in errors {
-            if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
-                show_error!(io_args, error);
-            } else {
-                show_warning_soon_to_be_error!(io_args, error);
-            }
-        }
-    }
-
-    Ok(res)
-}
-
 /// Variant of into_typed_with_jinja which returns a Vec of warnings rather
 /// than firing them.
-pub fn into_typed_with_jinja_error<T, S>(
+fn into_typed_with_jinja_error<T, S>(
     value: Value,
     should_render_secrets: bool,
     env: &JinjaEnv,
@@ -242,29 +307,6 @@ where
     into_typed_internal(value, jinja_renderer)
 }
 
-/// Deserializes a Yaml `Value` into a target `Deserialize` type T.
-pub fn into_typed_raw<T>(io_args: Option<&IoArgs>, value: Value) -> FsResult<T>
-where
-    T: DeserializeOwned,
-{
-    // Use the identity transform for the 'raw' version of this function.
-    let expand_jinja = |_: &Value| Ok(None);
-
-    let (res, errors) = into_typed_internal(value, expand_jinja)?;
-
-    if let Some(io_args) = io_args {
-        for error in errors {
-            if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
-                show_error!(io_args, error);
-            } else {
-                show_warning_soon_to_be_error!(io_args, error);
-            }
-        }
-    }
-
-    Ok(res)
-}
-
 fn into_typed_internal<T, F>(value: Value, transform: F) -> FsResult<(T, Vec<FsError>)>
 where
     T: DeserializeOwned,
@@ -282,7 +324,7 @@ where
 
     let res = value
         .into_typed(warn_unused_keys, transform)
-        .map_err(|e| from_yaml_error(e, None))?;
+        .map_err(|e| yaml_to_fs_error(e, None))?;
     Ok((res, warnings))
 }
 
@@ -298,7 +340,7 @@ fn render_jinja_str<S: Serialize>(
         let compiled = env.compile_expression(&s[2..s.len() - 2])?;
         let eval = compiled.eval(ctx, listeners)?;
         let val = dbt_serde_yaml::to_value(eval).map_err(|e| {
-            from_yaml_error(
+            yaml_to_fs_error(
                 e,
                 // The caller will attach the error location using the span in the
                 // `Value` object, if available:
@@ -324,42 +366,6 @@ fn render_jinja_str<S: Serialize>(
     }
 }
 
-/// Deserializes a Yaml string containing Jinja expressions into a Rust type T.
-#[allow(clippy::too_many_arguments)]
-pub fn from_yaml_jinja<T, S: Serialize>(
-    io_args: Option<&IoArgs>,
-    input: &str,
-    should_render_secrets: bool,
-    env: &JinjaEnv,
-    ctx: &S,
-    listeners: &[Rc<dyn RenderingEventListener>],
-    error_display_path: Option<&Path>,
-) -> FsResult<T>
-where
-    T: DeserializeOwned,
-{
-    into_typed_with_jinja(
-        io_args,
-        value_from_str(io_args, input, error_display_path)?,
-        should_render_secrets,
-        env,
-        ctx,
-        listeners,
-    )
-}
-
-/// Deserializes a Yaml string into a Rust type T.
-pub fn from_yaml_raw<T>(
-    io_args: Option<&IoArgs>,
-    input: &str,
-    error_display_path: Option<&Path>,
-) -> FsResult<T>
-where
-    T: DeserializeOwned,
-{
-    into_typed_raw(io_args, value_from_str(io_args, input, error_display_path)?)
-}
-
 static RE_SIMPLE_EXPR: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\s*\{\{\s*[^{}]+\s*\}\}\s*$").expect("valid regex"));
 
@@ -381,7 +387,7 @@ pub fn check_single_expression_without_whitepsace_control(input: &str) -> bool {
 }
 
 /// Converts a `dbt_serde_yaml::Error` into a `FsError`, attaching the error location
-pub fn from_yaml_error(err: dbt_serde_yaml::Error, filename: Option<&Path>) -> Box<FsError> {
+pub fn yaml_to_fs_error(err: dbt_serde_yaml::Error, filename: Option<&Path>) -> Box<FsError> {
     let msg = err.display_no_mark().to_string();
     let location = err
         .span()

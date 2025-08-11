@@ -81,7 +81,7 @@ pub async fn resolve_exposures(
                 std::mem::replace(&mut mpe.schema_value, dbt_serde_yaml::Value::null());
             // ExposureProperties is for the yaml schema
             let exposure: ExposureProperties =
-                into_typed_with_jinja(Some(&args.io), schema_value, false, env, base_ctx, &[])?;
+                into_typed_with_jinja(&args.io, schema_value, false, env, base_ctx, &[])?;
 
             // Get combined properties
             let global_config = local_project_config.get_config_for_fqn(&fqn);

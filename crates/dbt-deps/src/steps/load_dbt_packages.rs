@@ -82,8 +82,9 @@ pub fn load_dbt_packages(
 
 fn read_dbt_package_yml(io: &IoArgs, package_yml_path: &Path) -> FsResult<DbtPackages> {
     dbt_jinja_utils::serde::from_yaml_raw(
-        Some(io),
+        io,
         &try_read_yml_to_str(package_yml_path)?,
         Some(package_yml_path),
+        true,
     )
 }

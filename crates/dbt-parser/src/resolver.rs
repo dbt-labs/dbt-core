@@ -24,7 +24,7 @@ use dbt_schemas::state::{DbtRuntimeConfig, Operations};
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, build_root_project_configs};
 use crate::resolve::resolve_operations::resolve_operations;
-use crate::utils::{self};
+use crate::utils::{self, clear_package_diagnostics};
 use dbt_schemas::schemas::telemetry::BuildPhaseInfo;
 use dbt_schemas::schemas::telemetry::SharedPhaseInfo;
 use dbt_schemas::schemas::telemetry::SpanAttributes;
@@ -560,6 +560,8 @@ pub async fn resolve_inner(
             .chain(analyses_rendering_results)
             .collect(),
     };
+
+    clear_package_diagnostics(&arg.io, package);
 
     Ok((nodes, disabled_nodes, collector, refs_and_sources.clone()))
 }

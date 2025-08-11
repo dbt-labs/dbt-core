@@ -11,7 +11,6 @@ use dbt_common::io_args::IoArgs;
 use dbt_common::tokiofs::read_to_string;
 use dbt_common::{
     ErrorCode, FsError, FsResult, fs_err, fsinfo, show_error, show_progress, show_warning,
-    show_warning_soon_to_be_error,
 };
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::{DefaultListenerFactory, ListenerFactory};
@@ -20,7 +19,7 @@ use dbt_jinja_utils::phases::compile::build_compile_node_context;
 use dbt_jinja_utils::phases::parse::build_resolve_model_context;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
-use dbt_jinja_utils::serde::into_typed_with_jinja_error;
+use dbt_jinja_utils::serde::into_typed_with_jinja_error_context;
 use dbt_jinja_utils::silence_base_context;
 use dbt_jinja_utils::utils::render_sql;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
@@ -81,37 +80,27 @@ fn extract_model_and_version_config<T: DefaultTo<T>, S: GetConfig<T> + Debug>(
     // Swap the schema value for Null - we are doing this so that we don't have to clone
     let schema_value = std::mem::replace(&mut mpe.schema_value, dbt_serde_yaml::Value::null());
 
-    let (maybe_model, errors) =
-        into_typed_with_jinja_error::<S, _>(schema_value, false, jinja_env, base_ctx, &[])?;
+    let maybe_model = into_typed_with_jinja_error_context::<S, _>(
+        Some(&arg.io),
+        schema_value,
+        false,
+        jinja_env,
+        base_ctx,
+        &[],
+        |error| format!("While parsing config: {}", error.context),
+    )?;
 
-    for error in errors {
-        let context = format!("While parsing config: {}", error.context);
-        let error = error.with_context(context);
-        if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
-            show_error!(arg.io, error);
-        } else {
-            show_warning_soon_to_be_error!(arg.io, error);
-        }
-    }
     let maybe_version_config = if let Some(version_info) = mpe.version_info.as_ref() {
         if let Some(version_config) = version_info.version_config.as_ref() {
-            let (version_config, errors) = into_typed_with_jinja_error::<T, _>(
+            let version_config = into_typed_with_jinja_error_context::<T, _>(
+                Some(&arg.io),
                 version_config.clone(),
                 false,
                 jinja_env,
                 base_ctx,
                 &[],
+                |error| format!("While parsing version config: {}", error.context),
             )?;
-
-            for error in errors {
-                let context = format!("While parsing version config: {}", error.context);
-                let error = error.with_context(context);
-                if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
-                    show_error!(arg.io, error);
-                } else {
-                    show_warning_soon_to_be_error!(arg.io, error);
-                }
-            }
 
             Some(version_config)
         } else {

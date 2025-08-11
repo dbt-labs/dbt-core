@@ -17,6 +17,9 @@ pub trait StatusReporter: Any + Send + Sync {
     fn collect_warning(&self, warning: &FsError);
     /// Called to show progress in the UI
     fn show_progress(&self, action: &str, target: &str, description: Option<&str>);
+    /// Clear diagnostics for a file if it's the first time processing it in this compilation.
+    /// For non-LSP implementations, this can be a no-op.
+    fn clear_file_if_first_time(&self, file_path: &Path);
 }
 
 /// Reads the contents of a file as a string.

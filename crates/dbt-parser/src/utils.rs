@@ -1,7 +1,7 @@
 //! Utility functions for the resolver
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use dbt_common::io_args::IoArgs;
-use dbt_common::{ErrorCode, FsError, FsResult, fs_err, show_error};
+use dbt_common::{ErrorCode, FsError, FsResult, fs_err, show_error, stdfs};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_jinja_utils::utils::{generate_component_name, generate_relation_name};
@@ -9,6 +9,7 @@ use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::common::{DbtMaterialization, ResolvedQuoting, normalize_quoting};
 use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::properties::ModelProperties;
+use dbt_schemas::state::DbtPackage;
 use minijinja::compiler::ast::{MacroKind, Stmt};
 use minijinja::compiler::parser::Parser;
 use minijinja::machinery::WhitespaceConfig;
@@ -444,4 +445,29 @@ pub fn convert_macro_names_to_unique_ids(macro_calls: &HashSet<String>) -> Vec<S
             }
         })
         .collect()
+}
+
+/// Clear the diagnostics for a package
+pub fn clear_package_diagnostics(io: &IoArgs, package: &DbtPackage) {
+    // 1. Clear dbt_project.yml
+    if let Some(status_reporter) = &io.status_reporter {
+        let project_file_path = package.package_root_path.join("dbt_project.yml");
+        if project_file_path.exists() {
+            // Get the relative path to the workspace root (arg.io.in_dir)
+            if let Ok(workspace_path) = stdfs::diff_paths(&project_file_path, &io.in_dir) {
+                status_reporter.clear_file_if_first_time(&io.in_dir.join(workspace_path));
+            }
+        }
+
+        // 2. Clear dbt_properties files (schema.yml, etc.), macro_files, and docs_files
+        for asset in package
+            .dbt_properties
+            .iter()
+            .chain(&package.macro_files)
+            .chain(&package.docs_files)
+        {
+            let file_path = io.in_dir.join(&asset.path);
+            status_reporter.clear_file_if_first_time(&file_path);
+        }
+    }
 }

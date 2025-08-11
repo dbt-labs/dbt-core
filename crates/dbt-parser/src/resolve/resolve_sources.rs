@@ -62,17 +62,11 @@ pub fn resolve_sources(
         },
     )?;
     for ((source_name, table_name), mpe) in source_properties.into_iter() {
-        let source: SourceProperties = into_typed_with_jinja(
-            Some(io_args),
-            mpe.schema_value,
-            false,
-            jinja_env,
-            base_ctx,
-            &[],
-        )?;
+        let source: SourceProperties =
+            into_typed_with_jinja(io_args, mpe.schema_value, false, jinja_env, base_ctx, &[])?;
 
         let table: Tables = into_typed_with_jinja(
-            Some(io_args),
+            io_args,
             mpe.table_value.unwrap(),
             false,
             jinja_env,

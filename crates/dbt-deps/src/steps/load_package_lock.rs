@@ -28,7 +28,7 @@ pub fn try_load_valid_dbt_packages_lock(
     if packages_lock_path.exists() {
         let yml_str = try_read_yml_to_str(&packages_lock_path)?;
         let rendered_yml: DbtPackagesLock =
-            match from_yaml_raw(Some(io), &yml_str, Some(&packages_lock_path)) {
+            match from_yaml_raw(io, &yml_str, Some(&packages_lock_path), true) {
                 Ok(rendered_yml) => rendered_yml,
                 Err(e) => {
                     if e.to_string()
@@ -61,7 +61,7 @@ fn try_load_from_deprecated_dbt_packages_lock(
     dbt_packages_dir: &Path,
     yml_str: &str,
 ) -> FsResult<Option<DbtPackagesLock>> {
-    match from_yaml_raw::<DeprecatedDbtPackagesLock>(Some(io), yml_str, None) {
+    match from_yaml_raw::<DeprecatedDbtPackagesLock>(io, yml_str, None, true) {
         // Here, we need to do a fuzzy lookup on the old dbt_packages_lock.yml file
         Ok(DeprecatedDbtPackagesLock {
             packages: deprecated_packages,
@@ -183,7 +183,7 @@ fn try_load_from_deprecated_dbt_packages_lock(
                         let project_yml_file = dbt_project_path.join(DBT_PROJECT_YML);
                         let dbt_project_str = try_read_yml_to_str(&project_yml_file)?;
                         let dbt_project: DbtProject =
-                            from_yaml_raw(Some(io), &dbt_project_str, Some(&project_yml_file))?;
+                            from_yaml_raw(io, &dbt_project_str, Some(&project_yml_file), true)?;
                         let package_name = dbt_project.name;
                         packages.push(DbtPackageLock::Local(LocalPackageLock {
                             name: package_name,

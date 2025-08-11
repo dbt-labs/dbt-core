@@ -88,7 +88,7 @@ pub fn resolve_seeds(
             }
             (
                 into_typed_with_jinja::<SeedProperties, _>(
-                    Some(io_args),
+                    io_args,
                     mpe.schema_value,
                     false,
                     jinja_env,

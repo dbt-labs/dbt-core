@@ -2,7 +2,7 @@ use dbt_common::FsResult;
 use dbt_common::io_args::IoArgs;
 use dbt_jinja_utils::phases::load::LoadContext;
 use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
-use dbt_jinja_utils::serde::from_yaml_error;
+use dbt_jinja_utils::serde::yaml_to_fs_error;
 use dbt_loader::args::LoadArgs;
 use dbt_loader::utils::read_profiles_and_extract_db_config;
 use dbt_schemas::schemas::profiles::{DbConfig, DbTargets};
@@ -115,7 +115,7 @@ pub fn write_db_config_to_test_profile(
         },
     )]);
     dbt_serde_yaml::to_writer(&mut file, &profile)
-        .map_err(|e| from_yaml_error(e, Some(&profile_path)))?;
+        .map_err(|e| yaml_to_fs_error(e, Some(&profile_path)))?;
     Ok(profile_path)
 }
 

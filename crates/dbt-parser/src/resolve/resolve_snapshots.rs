@@ -100,14 +100,8 @@ pub async fn resolve_snapshots(
         if !mpe.schema_value.is_null() {
             let schema_value =
                 std::mem::replace(&mut mpe.schema_value, dbt_serde_yaml::Value::null());
-            let snapshot: SnapshotProperties = into_typed_with_jinja(
-                Some(&arg.io),
-                schema_value,
-                false,
-                &jinja_env,
-                base_ctx,
-                &[],
-            )?;
+            let snapshot: SnapshotProperties =
+                into_typed_with_jinja(&arg.io, schema_value, false, &jinja_env, base_ctx, &[])?;
 
             if let Some(relation) = &snapshot.relation {
                 // check if the relation matches the pattern of ref(...)

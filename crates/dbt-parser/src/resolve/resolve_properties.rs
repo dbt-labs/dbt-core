@@ -1,13 +1,14 @@
 use crate::args::ResolveArgs;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::IoArgs;
+use dbt_common::io_utils::try_read_yml_to_str;
 use dbt_common::show_warning_soon_to_be_error;
 use dbt_common::{
     ErrorCode, FsResult, constants::PARSING, fs_err, fsinfo, show_error, show_progress,
     show_warning,
 };
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_jinja_utils::serde::{into_typed_raw, into_typed_with_jinja, value_from_file};
+use dbt_jinja_utils::serde::{from_yaml_raw, into_typed_with_jinja};
 use dbt_schemas::schemas::properties::{
     DbtPropertiesFileValues, MinimalSchemaValue, MinimalTableValue,
 };
@@ -57,7 +58,7 @@ impl MinimalProperties {
             // Extend but error on duplicate keys
             for model_value in models {
                 let model = into_typed_with_jinja::<MinimalSchemaValue, _>(
-                    Some(io_args),
+                    io_args,
                     model_value.clone(),
                     false,
                     jinja_env,
@@ -88,7 +89,7 @@ impl MinimalProperties {
         if let Some(sources) = other.sources {
             for source_value in sources {
                 let source = into_typed_with_jinja::<MinimalSchemaValue, _>(
-                    Some(io_args),
+                    io_args,
                     source_value.clone(),
                     false,
                     jinja_env,
@@ -112,7 +113,7 @@ impl MinimalProperties {
                     validate_resource_name(&source.name)?;
                     for table in tables.iter() {
                         let minimum_table_value = into_typed_with_jinja::<MinimalTableValue, _>(
-                            Some(io_args),
+                            io_args,
                             table.clone(),
                             false,
                             jinja_env,
@@ -167,7 +168,7 @@ impl MinimalProperties {
         if let Some(seeds) = other.seeds {
             for seed_value in seeds {
                 let seed = into_typed_with_jinja::<MinimalSchemaValue, _>(
-                    Some(io_args),
+                    io_args,
                     seed_value.clone(),
                     false,
                     jinja_env,
@@ -196,7 +197,7 @@ impl MinimalProperties {
         if let Some(snapshots) = other.snapshots {
             for snapshot_value in snapshots {
                 let snapshot = into_typed_with_jinja::<MinimalSchemaValue, _>(
-                    Some(io_args),
+                    io_args,
                     snapshot_value.clone(),
                     false,
                     jinja_env,
@@ -225,7 +226,7 @@ impl MinimalProperties {
         if let Some(exposures) = other.exposures {
             for exposure_value in exposures {
                 let exposure = into_typed_with_jinja::<MinimalSchemaValue, _>(
-                    Some(io_args),
+                    io_args,
                     exposure_value.clone(),
                     false,
                     jinja_env,
@@ -248,7 +249,7 @@ impl MinimalProperties {
         if let Some(unit_tests) = other.unit_tests {
             for unit_test_value in unit_tests {
                 let unit_test = into_typed_with_jinja::<MinimalSchemaValue, _>(
-                    Some(io_args),
+                    io_args,
                     unit_test_value.clone(),
                     false,
                     jinja_env,
@@ -277,7 +278,7 @@ impl MinimalProperties {
         if let Some(tests) = other.tests {
             for test_value in tests {
                 let test = into_typed_with_jinja::<MinimalSchemaValue, _>(
-                    Some(io_args),
+                    io_args,
                     test_value.clone(),
                     false,
                     jinja_env,
@@ -306,7 +307,7 @@ impl MinimalProperties {
         if let Some(data_tests) = other.data_tests {
             for test_value in data_tests {
                 let test = into_typed_with_jinja::<MinimalSchemaValue, _>(
-                    Some(io_args),
+                    io_args,
                     test_value.clone(),
                     false,
                     jinja_env,
@@ -372,9 +373,10 @@ pub fn resolve_minimal_properties(
                     .to_string()
             )
         );
-        let properties_file_value = value_from_file(Some(&arg.io), &absolute_path)?;
+        let input = try_read_yml_to_str(&absolute_path)?;
 
-        match into_typed_raw::<DbtPropertiesFileValues>(Some(&arg.io), properties_file_value) {
+        match from_yaml_raw::<DbtPropertiesFileValues>(&arg.io, &input, Some(&absolute_path), true)
+        {
             Ok(properties_file_values) => {
                 minimal_resolved_properties.extend_from_minimal_properties_file(
                     &arg.io,

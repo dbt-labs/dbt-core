@@ -76,7 +76,7 @@ pub fn resolve_unit_tests(
 
     for (unit_test_name, mpe) in unit_test_properties.into_iter() {
         let unit_test = into_typed_with_jinja::<UnitTestProperties, _>(
-            Some(io_args),
+            io_args,
             mpe.schema_value,
             false,
             jinja_env,

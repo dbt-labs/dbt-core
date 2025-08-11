@@ -6,7 +6,7 @@ use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::load::init::initialize_load_jinja_environment;
 use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
-use dbt_jinja_utils::serde::from_yaml_error;
+use dbt_jinja_utils::serde::yaml_to_fs_error;
 use dbt_schemas::schemas::serde::StringOrInteger;
 use dbt_schemas::schemas::telemetry::BuildPhaseInfo;
 use dbt_schemas::schemas::telemetry::SharedPhaseInfo;
@@ -68,7 +68,7 @@ pub async fn load(
     // Read the input file
     let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);
 
-    let raw_dbt_project_in_val = value_from_file(None, &dbt_project_path)?;
+    let raw_dbt_project_in_val = value_from_file(&arg.io, &dbt_project_path, false)?;
     let env = initialize_load_profile_jinja_environment();
     let ctx: BTreeMap<String, minijinja::Value> = BTreeMap::from([
         (
@@ -82,7 +82,7 @@ pub async fn load(
     ]);
 
     let simplified_dbt_project: DbtProjectSimplified =
-        into_typed_with_jinja(None, raw_dbt_project_in_val, true, &env, &ctx, &[])?;
+        into_typed_with_jinja(&arg.io, raw_dbt_project_in_val, true, &env, &ctx, &[])?;
 
     if simplified_dbt_project.data_paths.is_some() {
         return err!(
@@ -295,7 +295,7 @@ pub async fn load_inner(
             .as_ref()
             .map(|vars| Deserialize::deserialize(vars.clone()))
             .transpose()
-            .map_err(|e| from_yaml_error(e, Some(&dbt_project_path)))?,
+            .map_err(|e| yaml_to_fs_error(e, Some(&dbt_project_path)))?,
         collected_vars,
     )?;
     // Set dispatch config for future use
@@ -478,7 +478,7 @@ pub async fn load_inner(
         macro_files,
         docs_files,
         snapshot_files,
-        dependencies: identify_package_dependencies(package_path, package_lookup_map)?,
+        dependencies: identify_package_dependencies(&arg.io, package_path, package_lookup_map)?,
         all_paths: all_files,
     })
 }

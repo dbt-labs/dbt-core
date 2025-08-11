@@ -4,7 +4,7 @@ use dbt_common::{
     constants::{DBT_DEPENDENCIES_YML, DBT_PACKAGES_YML},
     err, fs_err, show_warning, stdfs,
 };
-use dbt_jinja_utils::serde::{from_yaml_error, value_from_file};
+use dbt_jinja_utils::serde::{value_from_file, yaml_to_fs_error};
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::Read,
@@ -116,9 +116,9 @@ pub fn read_profiles_and_extract_db_config<S: Serialize>(
     profile_str: &str,
     profile_path: PathBuf,
 ) -> Result<(String, DbConfig), Box<dbt_common::FsError>> {
-    let prepared_profile_val = value_from_file(Some(io_args), &profile_path)?;
+    let prepared_profile_val = value_from_file(io_args, &profile_path, true)?;
     let dbt_profiles = dbt_serde_yaml::from_value::<DbtProfilesIntermediate>(prepared_profile_val)
-        .map_err(|e| from_yaml_error(e, Some(&profile_path)))?;
+        .map_err(|e| yaml_to_fs_error(e, Some(&profile_path)))?;
     if dbt_profiles.config.is_some() {
         return err!(
             ErrorCode::InvalidConfig,
@@ -168,7 +168,7 @@ pub fn read_profiles_and_extract_db_config<S: Serialize>(
     }
     // render just the target output we want to use
     let rendered_db_target = into_typed_with_jinja(
-        Some(io_args),
+        io_args,
         dbt_serde_yaml::to_value(BTreeMap::from([
             (
                 "outputs".to_string(),
@@ -179,7 +179,7 @@ pub fn read_profiles_and_extract_db_config<S: Serialize>(
                 dbt_serde_yaml::to_value(&rendered_target).unwrap(),
             ),
         ]))
-        .map_err(|e| from_yaml_error(e, Some(&profile_path)))?,
+        .map_err(|e| yaml_to_fs_error(e, Some(&profile_path)))?,
         true,
         jinja_env,
         ctx,
@@ -191,7 +191,7 @@ pub fn read_profiles_and_extract_db_config<S: Serialize>(
 }
 
 // TODO: this function should read to a yaml::Value so as to avoid double-io
-pub fn load_raw_yml<T: DeserializeOwned>(path: &Path) -> FsResult<T> {
+pub fn load_raw_yml<T: DeserializeOwned>(io_args: &IoArgs, path: &Path) -> FsResult<T> {
     let mut file = std::fs::File::open(path).map_err(|e| {
         fs_err!(
             code => ErrorCode::IoError,
@@ -210,16 +210,17 @@ pub fn load_raw_yml<T: DeserializeOwned>(path: &Path) -> FsResult<T> {
         )
     })?;
 
-    from_yaml_raw(None, &data, Some(path))
+    from_yaml_raw(io_args, &data, Some(path), true)
 }
 
 fn process_package_file(
+    io_args: &IoArgs,
     package_file_path: &Path,
     package_lookup_map: &BTreeMap<String, String>,
     in_dir: &Path,
 ) -> FsResult<BTreeSet<String>> {
     let mut dependencies = BTreeSet::new();
-    let dbt_packages: DbtPackages = load_raw_yml(package_file_path)?;
+    let dbt_packages: DbtPackages = load_raw_yml(io_args, package_file_path)?;
     for package in dbt_packages.packages {
         let entry_name = match package {
             DbtPackageEntry::Hub(hub_package) => hub_package.package,
@@ -258,6 +259,7 @@ fn process_package_file(
 }
 
 pub fn identify_package_dependencies(
+    io_args: &IoArgs,
     in_dir: &Path,
     package_lookup_map: &BTreeMap<String, String>,
 ) -> FsResult<BTreeSet<String>> {
@@ -267,6 +269,7 @@ pub fn identify_package_dependencies(
     let dependencies_yml_path = in_dir.join(DBT_DEPENDENCIES_YML);
     if dependencies_yml_path.exists() {
         dependencies.extend(process_package_file(
+            io_args,
             &dependencies_yml_path,
             package_lookup_map,
             in_dir,
@@ -277,6 +280,7 @@ pub fn identify_package_dependencies(
     let packages_yml_path = in_dir.join(DBT_PACKAGES_YML);
     if packages_yml_path.exists() {
         dependencies.extend(process_package_file(
+            io_args,
             &packages_yml_path,
             package_lookup_map,
             in_dir,

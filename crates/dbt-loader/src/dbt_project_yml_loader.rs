@@ -1,9 +1,8 @@
 use dbt_common::io_args::IoArgs;
-use dbt_common::{FsResult, io_utils::try_read_yml_to_str, unexpected_fs_err};
+use dbt_common::{FsResult, unexpected_fs_err};
+use dbt_jinja_utils::serde::{into_typed_with_jinja, value_from_file};
 use dbt_jinja_utils::var_fn;
-use dbt_jinja_utils::{
-    jinja_environment::JinjaEnv, phases::parse::build_resolve_context, serde::from_yaml_jinja,
-};
+use dbt_jinja_utils::{jinja_environment::JinjaEnv, phases::parse::build_resolve_context};
 use dbt_schemas::schemas::project::DbtProject;
 use minijinja::Value;
 use std::{
@@ -17,8 +16,6 @@ pub fn load_project_yml(
     dbt_project_path: &Path,
     cli_vars: BTreeMap<String, dbt_serde_yaml::Value>,
 ) -> FsResult<DbtProject> {
-    let template = try_read_yml_to_str(dbt_project_path)?;
-
     let mut context = build_resolve_context(
         "dbt_project.yml",
         "dbt_project.yml",
@@ -29,14 +26,13 @@ pub fn load_project_yml(
     context.insert("var".to_string(), Value::from_function(var_fn(cli_vars)));
 
     // Parse the template without vars using Jinja
-    let mut dbt_project: DbtProject = from_yaml_jinja(
-        Some(io_args),
-        &template,
+    let mut dbt_project: DbtProject = into_typed_with_jinja(
+        io_args,
+        value_from_file(io_args, dbt_project_path, true)?,
         false,
         env,
         &context,
         &[],
-        Some(dbt_project_path),
     )?;
 
     // Set default model paths if not specified

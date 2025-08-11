@@ -50,7 +50,7 @@ pub fn resolve_final_selectors(
         return Ok(resolved);
     }
 
-    let raw_selectors = value_from_file(Some(&arg.io), &path)?;
+    let raw_selectors = value_from_file(&arg.io, &path, true)?;
 
     let context = build_resolve_context(
         root_package_name,
@@ -61,7 +61,7 @@ pub fn resolve_final_selectors(
 
     // Parse and resolve selectors from YAML
     let yaml: SelectorFile = match dbt_jinja_utils::serde::into_typed_with_jinja(
-        Some(&arg.io),
+        &arg.io,
         raw_selectors,
         false,
         jinja_env,

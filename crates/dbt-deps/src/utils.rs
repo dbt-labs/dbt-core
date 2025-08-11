@@ -4,7 +4,8 @@ use dbt_schemas::schemas::packages::{DbtPackageEntry, LocalPackage};
 use sha1::Digest;
 
 use dbt_common::{
-    ErrorCode, FsResult, constants::DBT_PROJECT_YML, err, fs_err, io_utils::try_read_yml_to_str,
+    ErrorCode, FsResult, constants::DBT_PROJECT_YML, err, fs_err, io_args::IoArgs,
+    io_utils::try_read_yml_to_str,
 };
 use dbt_jinja_utils::serde::from_yaml_raw;
 use dbt_schemas::schemas::project::DbtProject;
@@ -60,7 +61,7 @@ pub fn handle_git_like_package(
     Ok((tmp_dir, checkout_path, commit_sha))
 }
 
-pub fn read_and_validate_dbt_project(checkout_path: &Path) -> FsResult<DbtProject> {
+pub fn read_and_validate_dbt_project(io: &IoArgs, checkout_path: &Path) -> FsResult<DbtProject> {
     let path_to_dbt_project = checkout_path.join(DBT_PROJECT_YML);
     if !path_to_dbt_project.exists() {
         return err!(
@@ -70,8 +71,9 @@ pub fn read_and_validate_dbt_project(checkout_path: &Path) -> FsResult<DbtProjec
         );
     }
     from_yaml_raw(
-        None,
+        io,
         &try_read_yml_to_str(&path_to_dbt_project)?,
         Some(&path_to_dbt_project),
+        false,
     )
 }
