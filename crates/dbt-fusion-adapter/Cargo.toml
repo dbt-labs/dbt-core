@@ -26,6 +26,7 @@ arrow-schema = { workspace = true }
 parquet = { workspace = true }
 
 adbc-core = { workspace = true }
+crossbeam-skiplist = { workspace = true }
 dashmap = { workspace = true }
 log = { workspace = true, features = ["serde"] }
 minijinja = { workspace = true, features = ["loader", "deserialization"] }

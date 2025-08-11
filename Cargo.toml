@@ -300,13 +300,24 @@ xshell = "0.2.7"
 # async + threading
 async-trait = "0.1.83"
 crossbeam-queue = "0.3.12"
+crossbeam-skiplist = "0.1.3"
 futures = "0.3.31"
 futures-core = "0.3"
 futures-lite = "2.0"
 futures-util = "0.3"
 once_cell = "1.18"
 parking_lot = { version = "0.12.3" }
-tokio = { version = "1.41.1" }
+tokio = { version = "1.41.1", features = [
+  "fs",
+  "io-util",
+  "macros",
+  "net",
+  "process",
+  "rt-multi-thread",
+  "signal",
+  "sync",
+  "time",
+] }
 
 # atomic
 arc-swap = { version = "1.7.1" }

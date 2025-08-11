@@ -1,12 +1,13 @@
+use crate::TrackedStatement;
 use crate::auth::Auth;
 use crate::config::AdapterConfig;
-use crate::errors::AdapterResult;
+use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 
 use arrow::array::RecordBatch;
 use arrow::compute::concat_batches;
 use arrow_schema::Schema;
 use core::result::Result;
-use dbt_common::cancellation::CancellationToken;
+use dbt_common::cancellation::{Cancellable, CancellationToken};
 use dbt_common::constants::EXECUTING;
 use dbt_xdbc::semaphore::Semaphore;
 use dbt_xdbc::{Connection, Database, QueryCtx, connection, database, driver};
@@ -233,7 +234,13 @@ impl SqlEngine {
         assert!(query_ctx.sql().is_some() || !options.is_empty());
         log_query(query_ctx);
 
-        let do_execute = |conn: &'_ mut dyn Connection| -> adbc_core::error::Result<(Arc<Schema>, Vec<RecordBatch>)> {
+        let token = self.cancellation_token();
+        let do_execute = |conn: &'_ mut dyn Connection| -> Result<
+            (Arc<Schema>, Vec<RecordBatch>),
+            Cancellable<adbc_core::error::Error>,
+        > {
+            use dbt_xdbc::statement::Statement as _;
+
             let mut stmt = conn.new_statement()?;
             stmt.set_sql_query(query_ctx)?;
 
@@ -244,13 +251,37 @@ impl SqlEngine {
                 )?;
             }
 
-            let mut reader = stmt.execute()?;
+            // Make sure we don't create more statements after global cancellation.
+            token.check_cancellation()?;
+
+            // Track the statement so execution can be cancelled
+            // when the user Ctrl-C's the process.
+            let mut stmt = TrackedStatement::new(stmt);
+
+            let reader = stmt.execute()?;
             let schema = reader.schema();
-            let batches: Vec<RecordBatch> = reader.by_ref().collect::<Result<_, _>>()?;
+            let mut batches = Vec::with_capacity(1);
+            for res in reader {
+                let batch = res.map_err(adbc_core::error::Error::from)?;
+                batches.push(batch);
+                // Check for cancellation before processing the next batch
+                // or concatenating the batches produced so far.
+                token.check_cancellation()?;
+            }
             Ok((schema, batches))
         };
         let _span = span!("SqlEngine::execute");
-        let (schema, batches) = do_execute(conn)?;
+        let (schema, batches) = match do_execute(conn) {
+            Ok(res) => res,
+            Err(Cancellable::Cancelled) => {
+                let e = AdapterError::new(
+                    AdapterErrorKind::Cancelled,
+                    "SQL statement execution was cancelled",
+                );
+                return Err(e);
+            }
+            Err(Cancellable::Error(e)) => return Err(e.into()),
+        };
         let total_batch = concat_batches(&schema, &batches)?;
         Ok(total_batch)
     }

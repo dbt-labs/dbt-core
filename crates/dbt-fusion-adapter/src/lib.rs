@@ -29,6 +29,9 @@ pub mod config {
     pub use dbt_auth::AdapterConfig;
 }
 
+mod statement;
+pub use statement::{StmtCancellationReport, TrackedStatement, cancel_all_tracked_statements};
+
 // Adapters for warehouses / dbs
 /// Bigquery adapter
 pub mod bigquery;
