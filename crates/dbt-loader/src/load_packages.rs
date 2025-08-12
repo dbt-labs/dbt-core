@@ -145,7 +145,7 @@ async fn collect_packages(
         if package_path.is_dir() {
             if package_path.join(DBT_PROJECT_YML).exists() {
                 let package =
-                    load_inner(arg, env, &package_path, lookup_map, collected_vars).await?;
+                    load_inner(arg, env, &package_path, lookup_map, false, collected_vars).await?;
                 packages.push(package);
             } else {
                 show_warning!(

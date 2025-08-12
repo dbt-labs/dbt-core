@@ -2,7 +2,7 @@ use crate::{
     functions::register_base_functions, jinja_environment::JinjaEnv, listener::ListenerFactory,
 };
 use dbt_common::{FsError, FsResult, io_args::IoArgs, unexpected_fs_err};
-use dbt_fusion_adapter::BaseAdapter;
+use dbt_fusion_adapter::{BaseAdapter, ParseAdapter};
 use minijinja::{
     Environment, Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, Value,
     constants::{
@@ -77,6 +77,10 @@ impl JinjaEnvBuilder {
 
     /// Specify an adapter type (e.g. "parse", "compile") or other distinguishing feature.
     pub fn with_adapter(mut self, adapter: Arc<dyn BaseAdapter>) -> Self {
+        let adapter_value = adapter.as_value();
+        if adapter_value.downcast_object::<ParseAdapter>().is_some() {
+            self.env.add_global("parse_adapter", adapter_value);
+        }
         self.adapter = Some(adapter);
         self
     }

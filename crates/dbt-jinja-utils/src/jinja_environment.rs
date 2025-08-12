@@ -149,7 +149,12 @@ impl JinjaEnv {
         self.sql_engine = adapter.engine().cloned();
         self.env
             .add_global("dialect", Value::from(adapter.adapter_type().to_string()));
-        self.env.add_global("adapter", adapter.as_value());
+
+        let adapter_value = adapter.as_value();
+        self.env.add_global("adapter", adapter_value.clone());
+        if adapter_value.downcast_object::<ParseAdapter>().is_some() {
+            self.env.add_global("parse_adapter", adapter_value);
+        }
     }
 
     /// Get the adapter from the environment
@@ -161,7 +166,7 @@ impl JinjaEnv {
 
     /// Get the parse adapter from the environment
     pub fn get_parse_adapter(&self) -> Option<Arc<ParseAdapter>> {
-        let adapter = self.env.get_global("adapter")?;
+        let adapter = self.env.get_global("parse_adapter")?;
         adapter.downcast_object::<ParseAdapter>()
     }
 

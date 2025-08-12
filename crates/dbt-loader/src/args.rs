@@ -1,7 +1,10 @@
+use std::sync::Arc;
 use std::{collections::BTreeMap, path::PathBuf};
 
 use dbt_common::io_args::IoArgs;
 use dbt_common::io_args::{EvalArgs, Phases};
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_schemas::state::DbtState;
 
 #[derive(Clone, Default)]
 pub struct LoadArgs {
@@ -31,6 +34,11 @@ pub struct LoadArgs {
     pub add_package: Option<String>,
     // Whether to load only profiles
     pub debug_profile: bool,
+    /// This is for incremental.
+    /// The [DbtState] and [JinjaEnv] of the previouis compile.
+    /// Setting this will cause the 'load' phase to skip a lot of work
+    /// and only check the file in the root package.
+    pub prev_dbt_state: Option<(Arc<DbtState>, Arc<JinjaEnv>)>,
 }
 
 impl LoadArgs {
@@ -50,6 +58,7 @@ impl LoadArgs {
             threads: arg.num_threads,
             install_deps: arg.phase == Phases::Deps,
             debug_profile: arg.phase == Phases::Debug,
+            prev_dbt_state: None,
         }
     }
 }

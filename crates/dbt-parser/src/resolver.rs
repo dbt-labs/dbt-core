@@ -244,6 +244,7 @@ pub async fn resolve(
     // Check access
     check_access(arg, &nodes, &all_runtime_configs);
 
+
     Ok((
         ResolverState {
             root_project_name: root_project_name.to_string(),
@@ -266,6 +267,95 @@ pub async fn resolve(
         },
         jinja_env,
     ))
+}
+
+/// Only assumes that existing 'models' have changed.
+pub async fn incremental_resolve(
+    arg: &ResolveArgs,
+    prev_resolver_state: Arc<ResolverState>,
+    prev_jinija_env: Arc<JinjaEnv>,
+    dbt_state: Arc<DbtState>,
+    macros: Macros,
+    nodes: &Nodes,
+    token: &CancellationToken,
+) -> FsResult<ResolverState> {
+    let dbt_project_package = dbt_state.packages.last().expect("expeccted last package");
+    assert_eq!(
+        dbt_state.root_project_name(),
+        dbt_project_package.dbt_project.name
+    );
+
+    // Build the root project config
+    let root_project_quoting = resolve_package_quoting(
+        *dbt_state.root_project().quoting,
+        &dbt_state.dbt_profile.db_config.adapter_type(),
+    );
+
+    let root_project_configs =
+        build_root_project_configs(&arg.io, dbt_state.root_project(), root_project_quoting)?;
+    let root_project_configs = Arc::new(root_project_configs);
+
+    let base_ctx = build_resolve_context(
+        &dbt_project_package.dbt_project.name,
+        &dbt_project_package.dbt_project.name,
+        &macros.docs_macros,
+        DISPATCH_CONFIG.get().unwrap().read().unwrap().clone(),
+    );
+
+    // Resolve the dbt properties (schema.yml) files
+    let mut min_properties =
+        resolve_minimal_properties(arg, dbt_project_package, &prev_jinija_env, &base_ctx, token)?;
+
+    let mut collected_tests = Vec::new();
+
+    let mut refs_and_sources = RefsAndSources::default();
+
+    let adapter_type = dbt_state.dbt_profile.db_config.adapter_type();
+    let (models, _, _) = resolve_models(
+        arg,
+        dbt_project_package,
+        root_project_quoting,
+        &dbt_project_package.dbt_project,
+        &root_project_configs,
+        &mut min_properties.models,
+        &dbt_state.dbt_profile.database,
+        &dbt_state.dbt_profile.schema,
+        &adapter_type,
+        &dbt_project_package.dbt_project.name,
+        prev_jinija_env,
+        &base_ctx,
+        prev_resolver_state.runtime_config.clone(),
+        &mut collected_tests,
+        &mut refs_and_sources,
+        token,
+    )
+    .await?;
+
+    let mut new_nodes = nodes.clone();
+
+    for (k, v) in models {
+        new_nodes.models.insert(k, v);
+    }
+
+    Ok(ResolverState {
+        root_project_name: prev_resolver_state.root_project_name.clone(),
+        adapter_type: prev_resolver_state.adapter_type.clone(),
+        nodes: new_nodes,
+        disabled_nodes: prev_resolver_state.disabled_nodes.clone(),
+        macros,
+        operations: prev_resolver_state.operations.clone(),
+        dbt_profile: dbt_state.dbt_profile.clone(),
+        render_results: prev_resolver_state.render_results.clone(),
+        run_started_at: dbt_state.run_started_at,
+        refs_and_sources: Arc::new(refs_and_sources),
+        get_relation_calls: prev_resolver_state.get_relation_calls.clone(),
+        get_columns_in_relation_calls: prev_resolver_state.get_columns_in_relation_calls.clone(),
+        patterned_dangling_sources: prev_resolver_state.patterned_dangling_sources.clone(),
+        runtime_config: prev_resolver_state.runtime_config.clone(),
+        resolved_selectors: prev_resolver_state.resolved_selectors.clone(),
+        root_project_quoting: prev_resolver_state.root_project_quoting,
+        defer_nodes: None,
+    })
 }
 
 // Check that models accessing other models (dependecies) can do so.

@@ -14,6 +14,7 @@ use dbt_schemas::schemas::telemetry::SpanAttributes;
 use fs_deps::get_or_install_packages;
 use pathdiff::diff_paths;
 use serde::Deserialize;
+use std::collections::BTreeSet;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsStr;
 use std::fs;
@@ -178,6 +179,35 @@ pub async fn load(
         return Ok((dbt_state, final_threads, simplified_dbt_project.dbt_cloud));
     }
 
+    let arg_ref = &arg;
+    if let Some((prev_dbt_state, prev_env)) = arg.prev_dbt_state.clone() {
+        let root_package = prev_dbt_state.root_package();
+
+        let package_map_lookup = BTreeMap::new();
+        let mut dummy_collected_vars = Vec::new();
+        let mut new_root_package = load_inner(
+            arg_ref,
+            &prev_env,
+            &arg.io.in_dir,
+            &package_map_lookup,
+            true,
+            &mut dummy_collected_vars,
+        )
+        .await?;
+        new_root_package.dependencies = root_package.dependencies.clone();
+        dbt_state.vars = prev_dbt_state.vars.clone();
+
+        let packages = prev_dbt_state
+            .packages
+            .iter()
+            .map(|x| (*x).clone())
+            .collect::<Vec<_>>();
+        dbt_state.packages.extend(packages);
+        dbt_state.packages[0] = new_root_package;
+
+        return Ok((dbt_state, final_threads, simplified_dbt_project.dbt_cloud));
+    }
+
     // Load the packages.yml file, if it exists and install the packages if arg.install_deps is true
     let (packages_install_path, internal_packages_install_path) = get_packages_install_path(
         &arg.io.in_dir,
@@ -263,6 +293,7 @@ pub async fn load_inner(
     env: &JinjaEnv,
     package_path: &Path,
     package_lookup_map: &BTreeMap<String, String>,
+    skip_dependencies: bool,
     collected_vars: &mut Vec<(String, BTreeMap<String, DbtVars>)>,
 ) -> FsResult<DbtPackage> {
     // all read files
@@ -466,6 +497,11 @@ pub async fn load_inner(
         &["sql"],
         &all_files,
     );
+    let dependencies = if skip_dependencies {
+        BTreeSet::new()
+    } else {
+        identify_package_dependencies(&arg.io, package_path, package_lookup_map)?
+    };
     Ok(DbtPackage {
         dbt_project,
         package_root_path: package_path.to_path_buf(),
@@ -478,7 +514,7 @@ pub async fn load_inner(
         macro_files,
         docs_files,
         snapshot_files,
-        dependencies: identify_package_dependencies(&arg.io, package_path, package_lookup_map)?,
+        dependencies,
         all_paths: all_files,
     })
 }

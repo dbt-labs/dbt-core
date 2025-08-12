@@ -142,7 +142,7 @@ impl fmt::Display for DbtProfile {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DbtPackage {
     pub dbt_project: DbtProject,
     pub package_root_path: PathBuf,
@@ -183,8 +183,12 @@ impl DbtState {
         self.root_project().name.as_str()
     }
 
+    pub fn root_package(&self) -> &DbtPackage {
+        &self.packages[0]
+    }
+
     pub fn root_project(&self) -> &DbtProject {
-        &self.packages[0].dbt_project
+        &self.root_package().dbt_project
     }
 
     pub fn root_project_flags(&self) -> BTreeMap<String, minijinja::Value> {
