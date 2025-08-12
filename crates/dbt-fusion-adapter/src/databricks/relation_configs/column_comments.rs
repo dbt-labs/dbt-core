@@ -151,48 +151,42 @@ mod tests {
     use crate::databricks::relation_configs::base::{
         DatabricksRelationChangeSet, DatabricksRelationResultsBuilder,
     };
+    use arrow::array::{ArrayRef, RecordBatch, StringArray};
+    use arrow::csv::ReaderBuilder;
+    use arrow_schema::{DataType, Field, Schema};
     use dbt_agate::AgateTable;
     use dbt_schemas::schemas::relations::relation_configs::{ComponentConfig, RelationChangeSet};
-    use minijinja::Value;
+    use regex::Regex;
     use std::collections::BTreeMap;
+    use std::io;
+    use std::sync::{Arc, LazyLock};
+
+    static SCHEMA: LazyLock<Arc<Schema>> = LazyLock::new(|| {
+        Arc::new(Schema::new(vec![
+            Field::new("col_name", DataType::Utf8, false),
+            Field::new("data_type", DataType::Utf8, false),
+            Field::new("comment", DataType::Utf8, false),
+        ]))
+    });
+
+    // treat empty strings in CSV as empty strings, not nulls
+    static NULL: LazyLock<Regex> = LazyLock::new(|| Regex::new("NULL").unwrap());
 
     fn create_mock_describe_extended_table() -> AgateTable {
-        let column_names = vec![
-            "col_name".to_string(),
-            "data_type".to_string(),
-            "comment".to_string(),
-        ];
-
-        let column_types = vec![
-            "string".to_string(),
-            "string".to_string(),
-            "string".to_string(),
-        ];
-
-        let rows = vec![
-            Value::from(vec![
-                "id".to_string(),
-                "int".to_string(),
-                "Primary key identifier".to_string(),
-            ]),
-            Value::from(vec![
-                "name".to_string(),
-                "string".to_string(),
-                "User name".to_string(),
-            ]),
-            Value::from(vec![
-                "email".to_string(),
-                "string".to_string(),
-                "".to_string(),
-            ]),
-            Value::from(vec![
-                "# Detailed Table Information".to_string(),
-                "".to_string(),
-                "".to_string(),
-            ]),
-        ];
-
-        AgateTable::from_rows(column_names, column_types, rows)
+        let file = io::Cursor::new(
+            "col_name,data_type,comment\n\
+id,int,Primary key identifier\n\
+name,string,User name\n\
+email,string,\n\
+# Detailed Table Information,,\n",
+        );
+        let mut reader = ReaderBuilder::new(Arc::clone(&SCHEMA))
+            .with_header(true)
+            .with_null_regex(NULL.clone())
+            .build(file)
+            .unwrap();
+        let batch = reader.next().unwrap().unwrap();
+        AgateTable::from_record_batch(Arc::new(batch))
     }
 
     fn create_mock_dbt_model(
@@ -285,20 +279,17 @@ mod tests {
     fn test_from_relation_results_empty_table() {
         let processor = ColumnCommentsProcessor;
 
-        let column_names = vec![
-            "col_name".to_string(),
-            "data_type".to_string(),
-            "comment".to_string(),
-        ];
+        let record_batch = RecordBatch::try_new(
+            Arc::clone(&SCHEMA),
+            vec![
+                Arc::new(StringArray::new_null(0)) as ArrayRef,
+                Arc::new(StringArray::new_null(0)) as ArrayRef,
+                Arc::new(StringArray::new_null(0)) as ArrayRef,
+            ],
+        )
+        .unwrap();
 
-        let column_types = vec![
-            "string".to_string(),
-            "string".to_string(),
-            "string".to_string(),
-        ];
-
-        let rows = vec![]; // Empty rows
-        let table = AgateTable::from_rows(column_names, column_types, rows);
+        let table = AgateTable::from_record_batch(Arc::new(record_batch));
 
         let results = DatabricksRelationResultsBuilder::new()
             .with_describe_extended(table)
@@ -319,42 +310,20 @@ mod tests {
     fn test_from_relation_results_mixed_case_columns() {
         let processor = ColumnCommentsProcessor;
 
-        let column_names = vec![
-            "col_name".to_string(),
-            "data_type".to_string(),
-            "comment".to_string(),
-        ];
-
-        let column_types = vec![
-            "string".to_string(),
-            "string".to_string(),
-            "string".to_string(),
-        ];
-
-        let rows = vec![
-            Value::from(vec![
-                "ID".to_string(),
-                "int".to_string(),
-                "Primary key".to_string(),
-            ]),
-            Value::from(vec![
-                "Name".to_string(),
-                "string".to_string(),
-                "User name".to_string(),
-            ]),
-            Value::from(vec![
-                "EMAIL".to_string(),
-                "string".to_string(),
-                "Email address".to_string(),
-            ]),
-            Value::from(vec![
-                "# Detailed Table Information".to_string(),
-                "".to_string(),
-                "".to_string(),
-            ]),
-        ];
-
-        let table = AgateTable::from_rows(column_names, column_types, rows);
+        let file = io::Cursor::new(
+            "col_name,data_type,comment\n\
+ID,int,Primary key\n\
+Name,string,User name\n\
+EMAIL,string,Email address\n\
+# Detailed Table Information,,\n",
+        );
+        let mut reader = ReaderBuilder::new(Arc::clone(&SCHEMA))
+            .with_header(true)
+            .with_null_regex(NULL.clone())
+            .build(file)
+            .unwrap();
+        let batch = reader.next().unwrap().unwrap();
+        let table = AgateTable::from_record_batch(Arc::new(batch));
 
         let results = DatabricksRelationResultsBuilder::new()
             .with_describe_extended(table)
@@ -381,37 +350,19 @@ mod tests {
     fn test_from_relation_results_delimiter_variations() {
         let processor = ColumnCommentsProcessor;
 
-        let column_names = vec![
-            "col_name".to_string(),
-            "data_type".to_string(),
-            "comment".to_string(),
-        ];
-
-        let column_types = vec![
-            "string".to_string(),
-            "string".to_string(),
-            "string".to_string(),
-        ];
-
-        let rows = vec![
-            Value::from(vec![
-                "id".to_string(),
-                "int".to_string(),
-                "Primary key".to_string(),
-            ]),
-            Value::from(vec![
-                "#Detailed Table Information".to_string(),
-                "".to_string(),
-                "".to_string(),
-            ]),
-            Value::from(vec![
-                "name".to_string(),
-                "string".to_string(),
-                "Should not be included".to_string(),
-            ]),
-        ];
-
-        let table = AgateTable::from_rows(column_names, column_types, rows);
+        let file = io::Cursor::new(
+            "col_name,data_type,comment\n\
+id,int,Primary key\n\
+#Detailed Table Information,,\n\
+name,string,Should not be included\n",
+        );
+        let mut reader = ReaderBuilder::new(Arc::clone(&SCHEMA))
+            .with_header(true)
+            .with_null_regex(NULL.clone())
+            .build(file)
+            .unwrap();
+        let batch = reader.next().unwrap().unwrap();
+        let table = AgateTable::from_record_batch(Arc::new(batch));
 
         let results = DatabricksRelationResultsBuilder::new()
             .with_describe_extended(table)
@@ -434,20 +385,25 @@ mod tests {
     fn test_from_relation_results_missing_comment_column() {
         let processor = ColumnCommentsProcessor;
 
-        let column_names = vec![
-            "col_name".to_string(),
-            "data_type".to_string(),
-            // Missing comment column
-        ];
-
-        let column_types = vec!["string".to_string(), "string".to_string()];
-
-        let rows = vec![
-            Value::from(vec!["id".to_string(), "int".to_string()]),
-            Value::from(vec!["name".to_string(), "string".to_string()]),
-        ];
-
-        let table = AgateTable::from_rows(column_names, column_types, rows);
+        let file = io::Cursor::new(
+            "col_name,data_type\n\
+id,int\n\
+name,string\n",
+        );
+        let mut reader = ReaderBuilder::new(Arc::new(Schema::new(
+            [
+                SCHEMA.fields()[0].clone(),
+                SCHEMA.fields()[1].clone(),
+                // Missing comment column
+            ]
+            .to_vec(),
+        )))
+        .with_header(true)
+        .with_null_regex(NULL.clone())
+        .build(file)
+        .unwrap();
+        let batch = reader.next().unwrap().unwrap();
+        let table = AgateTable::from_record_batch(Arc::new(batch));
 
         let results = DatabricksRelationResultsBuilder::new()
             .with_describe_extended(table)
@@ -470,39 +426,21 @@ mod tests {
     fn test_from_relation_results_skips_empty_column_names() {
         let processor = ColumnCommentsProcessor;
 
-        let column_names = vec![
-            "col_name".to_string(),
-            "data_type".to_string(),
-            "comment".to_string(),
-        ];
-
-        let column_types = vec![
-            "string".to_string(),
-            "string".to_string(),
-            "string".to_string(),
-        ];
-
-        let rows = vec![
-            Value::from(vec![
-                "id".to_string(),
-                "int".to_string(),
-                "Primary key".to_string(),
-            ]),
-            Value::from(vec!["".to_string(), "".to_string(), "".to_string()]), // Empty metadata row
-            Value::from(vec![
-                "name".to_string(),
-                "string".to_string(),
-                "User name".to_string(),
-            ]),
-            Value::from(vec!["  ".to_string(), "".to_string(), "".to_string()]), // Whitespace-only row
-            Value::from(vec![
-                "# Detailed Table Information".to_string(),
-                "".to_string(),
-                "".to_string(),
-            ]),
-        ];
-
-        let table = AgateTable::from_rows(column_names, column_types, rows);
+        let file = io::Cursor::new(
+            "col_name,data_type,comment\n\
+id,int,Primary key\n\
+,,\n\
+name,string,User name\n\
+  ,,\n\
+# Detailed Table Information,'',''\n",
+        );
+        let mut reader = ReaderBuilder::new(Arc::clone(&SCHEMA))
+            .with_header(true)
+            .with_null_regex(NULL.clone())
+            .build(file)
+            .unwrap();
+        let batch = reader.next().unwrap().unwrap();
+        let table = AgateTable::from_record_batch(Arc::new(batch));
 
         let results = DatabricksRelationResultsBuilder::new()
             .with_describe_extended(table)
