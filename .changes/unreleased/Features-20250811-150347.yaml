@@ -1,6 +1,0 @@
-kind: Features
-body: Default require_generic_test_arguments_property flag to True - The 'arguments' property will be parsed as keyword arguments to data tests, if provided
-time: 2025-08-11T15:03:47.369377+02:00
-custom:
-    Author: michelleark
-    Issue: "11911"
