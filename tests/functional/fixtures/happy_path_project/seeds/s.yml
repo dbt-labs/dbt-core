@@ -3,7 +3,8 @@ seeds:
     description: 'test_description'
     data_tests:
       - expression_is_true:
-          expression: "b = 2"
+          arguments:
+            expression: "b = 2"
     columns:
       - name: a
         description: a description

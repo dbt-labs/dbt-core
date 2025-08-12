@@ -233,11 +233,14 @@ class TestBuilder(Generic[Testable]):
         # Extract kwargs when they are nested under new 'arguments' property separately from 'config' if require_generic_test_arguments_property is enabled
         if get_flags().require_generic_test_arguments_property:
             arguments = test_args.pop("arguments", {})
-            if not arguments and any(k not in ("config", "column_name") for k in test_args.keys()):
+            if not arguments and any(
+                k not in ("config", "column_name", "description", "name") for k in test_args.keys()
+            ):
                 deprecations.warn(
                     "missing-arguments-property-in-generic-test-deprecation", test_name=test_name
                 )
-            test_args = {**test_args, **arguments}
+            if isinstance(arguments, dict):
+                test_args = {**test_args, **arguments}
         elif "arguments" in test_args:
             deprecations.warn(
                 "arguments-property-in-generic-test-deprecation",

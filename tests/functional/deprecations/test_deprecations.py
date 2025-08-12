@@ -773,7 +773,16 @@ class TestJsonSchemaValidationGating:
         assert len(event_catcher.caught_events) == expected_events
 
 
-class TestArgumentsPropertyInGenericTestDeprecation:
+class TestArgumentsPropertyInGenericTestDeprecationFalse:
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "config-version": 2,
+            "flags": {
+                "require_generic_test_arguments_property": False,
+            },
+        }
+
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -790,7 +799,24 @@ class TestArgumentsPropertyInGenericTestDeprecation:
         assert len(event_catcher.caught_events) == 4
 
 
-class TestArgumentsPropertyInGenericTestDeprecationBehaviorChange:
+class TestArgumentsPropertyInGenericTestDeprecationBehaviorChangeDefault:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models_trivial.sql": models_trivial__model_sql,
+            "models.yml": test_with_arguments_yaml,
+        }
+
+    def test_arguments_property_in_generic_test_deprecation(self, project):
+        event_catcher = EventCatcher(ArgumentsPropertyInGenericTestDeprecation)
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 0
+
+
+class TestArgumentsPropertyInGenericTestDeprecationTrue:
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
