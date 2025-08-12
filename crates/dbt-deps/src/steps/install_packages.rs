@@ -1,7 +1,10 @@
+use dbt_common::fsinfo;
 use dbt_common::io_args::IoArgs;
 use dbt_common::stdfs::File;
 use dbt_common::{
-    ErrorCode, FsResult, constants::DBT_PACKAGES_LOCK_FILE, err, fs_err, show_warning, stdfs,
+    ErrorCode, FsResult,
+    constants::{DBT_PACKAGES_LOCK_FILE, INSTALLING},
+    err, fs_err, show_progress, show_warning, stdfs,
 };
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::packages::DbtPackagesLock;
@@ -19,6 +22,7 @@ use crate::{
     utils::{handle_git_like_package, read_and_validate_dbt_project},
 };
 
+#[allow(clippy::cognitive_complexity)]
 pub async fn install_packages(
     io_args: &IoArgs,
     vars: &BTreeMap<String, dbt_serde_yaml::Value>,
@@ -118,6 +122,15 @@ pub async fn install_packages(
                 } else {
                     return err!(ErrorCode::IoError, "No common prefix for package found");
                 }
+                if std::env::var("NEXTEST").is_err() {
+                    show_progress!(
+                        io_args,
+                        fsinfo!(
+                            INSTALLING.into(),
+                            format!("{}: {}", pinned_package.name, pinned_package.version)
+                        )
+                    );
+                }
                 if io_args.send_anonymous_usage_stats {
                     package_install_event(
                         io_args.invocation_id.to_string(),
@@ -137,18 +150,20 @@ pub async fn install_packages(
                 )?;
                 let dbt_project = read_and_validate_dbt_project(io_args, &checkout_path)?;
                 let project_name = dbt_project.name;
-                stdfs::rename(&checkout_path, packages_install_path.join(project_name))?;
+                stdfs::rename(&checkout_path, packages_install_path.join(&project_name))?;
                 // Keep tmp_dir alive until we're done with checkout_path
                 drop(tmp_dir);
-                package_install_event(
-                    io_args.invocation_id.to_string(),
-                    git_unpinned_package
-                        .name
-                        .clone()
-                        .unwrap_or("none".to_string()),
-                    commit_sha,
-                    "git".to_string(),
-                );
+                if std::env::var("NEXTEST").is_err() {
+                    show_progress!(io_args, fsinfo!(INSTALLING.into(), project_name.clone()));
+                }
+                if io_args.send_anonymous_usage_stats {
+                    package_install_event(
+                        io_args.invocation_id.to_string(),
+                        project_name,
+                        commit_sha,
+                        "git".to_string(),
+                    );
+                }
             }
             UnpinnedPackage::Local(local_unpinned_package) => {
                 let package_path = &io_args.in_dir.join(&local_unpinned_package.local);
@@ -156,15 +171,21 @@ pub async fn install_packages(
                     packages_install_path.join(local_unpinned_package.name.as_ref().unwrap());
                 let relative_package_path = stdfs::diff_paths(package_path, packages_install_path)?;
                 stdfs::symlink(&relative_package_path, &install_path)?;
-                package_install_event(
-                    io_args.invocation_id.to_string(),
-                    local_unpinned_package
-                        .name
-                        .clone()
-                        .unwrap_or("none".to_string()),
-                    "".to_string(),
-                    "local".to_string(),
-                );
+                let package_name = local_unpinned_package
+                    .name
+                    .clone()
+                    .unwrap_or(package_path.display().to_string());
+                if std::env::var("NEXTEST").is_err() {
+                    show_progress!(io_args, fsinfo!(INSTALLING.into(), package_name.clone()));
+                }
+                if io_args.send_anonymous_usage_stats {
+                    package_install_event(
+                        io_args.invocation_id.to_string(),
+                        package_name,
+                        "".to_string(),
+                        "local".to_string(),
+                    );
+                }
             }
             UnpinnedPackage::Private(private_unpinned_package) => {
                 let (tmp_dir, checkout_path, commit_sha) = handle_git_like_package(
@@ -179,15 +200,21 @@ pub async fn install_packages(
                 stdfs::rename(&checkout_path, packages_install_path.join(project_name))?;
                 // Keep tmp_dir alive until we're done with checkout_path
                 drop(tmp_dir);
-                package_install_event(
-                    io_args.invocation_id.to_string(),
-                    private_unpinned_package
-                        .name
-                        .clone()
-                        .unwrap_or("none".to_string()),
-                    commit_sha,
-                    "private".to_string(),
-                );
+                let package_name = private_unpinned_package
+                    .name
+                    .clone()
+                    .unwrap_or(private_unpinned_package.private.clone());
+                if std::env::var("NEXTEST").is_err() {
+                    show_progress!(io_args, fsinfo!(INSTALLING.into(), package_name.clone()));
+                }
+                if io_args.send_anonymous_usage_stats {
+                    package_install_event(
+                        io_args.invocation_id.to_string(),
+                        package_name,
+                        commit_sha,
+                        "private".to_string(),
+                    );
+                }
             }
             UnpinnedPackage::Tarball(tarball_unpinned_package) => {
                 // Download and extract the tarball
@@ -234,17 +261,19 @@ pub async fn install_packages(
                 let checkout_path = tar_contents[0].path();
                 let dbt_project = read_and_validate_dbt_project(io_args, &checkout_path)?;
                 let project_name = dbt_project.name;
-                stdfs::rename(&checkout_path, packages_install_path.join(project_name))?;
+                stdfs::rename(&checkout_path, packages_install_path.join(&project_name))?;
 
-                package_install_event(
-                    io_args.invocation_id.to_string(),
-                    tarball_unpinned_package
-                        .name
-                        .clone()
-                        .unwrap_or("none".to_string()),
-                    "tarball".to_string(),
-                    "tarball".to_string(),
-                );
+                if std::env::var("NEXTEST").is_err() {
+                    show_progress!(io_args, fsinfo!(INSTALLING.into(), project_name.clone()));
+                }
+                if io_args.send_anonymous_usage_stats {
+                    package_install_event(
+                        io_args.invocation_id.to_string(),
+                        project_name,
+                        "tarball".to_string(),
+                        "tarball".to_string(),
+                    );
+                }
             }
         }
     }
