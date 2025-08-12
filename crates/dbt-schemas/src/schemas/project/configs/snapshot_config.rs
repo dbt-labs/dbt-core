@@ -24,6 +24,7 @@ use crate::schemas::project::DatabricksNodeConfig;
 use crate::schemas::project::DefaultTo;
 use crate::schemas::project::IterChildren;
 use crate::schemas::project::SnowflakeNodeConfig;
+use crate::schemas::project::configs::common::MsSqlNodeConfig;
 use crate::schemas::project::configs::common::RedshiftNodeConfig;
 use crate::schemas::project::configs::common::default_hooks;
 use crate::schemas::project::configs::common::default_meta_and_tags;
@@ -264,6 +265,13 @@ pub struct ProjectSnapshotConfig {
     pub sort: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+sort_type")]
     pub sort_type: Option<String>,
+    // Adapter-specific fields (MSSQL)
+    #[serde(
+        default,
+        rename = "+as_columnstore",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub as_columnstore: Option<bool>,
     // Flattened field:
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectSnapshotConfig>>,
 }
@@ -315,6 +323,8 @@ pub struct SnapshotConfig {
     pub databricks_node_config: DatabricksNodeConfig,
     #[serde(flatten)]
     pub redshift_node_config: RedshiftNodeConfig,
+    #[serde(flatten)]
+    pub mssql_node_config: MsSqlNodeConfig,
 }
 
 #[skip_serializing_none]
@@ -454,6 +464,9 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 sort: config.sort,
                 sort_type: config.sort_type,
             },
+            mssql_node_config: MsSqlNodeConfig {
+                as_columnstore: config.as_columnstore,
+            },
         }
     }
 }
@@ -548,6 +561,8 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             sort: config.redshift_node_config.sort,
             sort_type: config.redshift_node_config.sort_type,
             transient: config.snowflake_node_config.transient,
+            // MSSQL fields
+            as_columnstore: config.mssql_node_config.as_columnstore,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -598,6 +613,7 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
             bigquery_node_config: bigquery_model_config,
             databricks_node_config: databricks_model_config,
             redshift_node_config: redshift_model_config,
+            mssql_node_config: mssql_model_config,
         } = self;
 
         // Handle flattened configs
@@ -611,6 +627,8 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
             databricks_model_config.default_to(&parent.databricks_node_config);
         #[allow(unused, clippy::let_unit_value)]
         let redshift_model_config = redshift_model_config.default_to(&parent.redshift_node_config);
+        #[allow(unused, clippy::let_unit_value)]
+        let mssql_model_config = mssql_model_config.default_to(&parent.mssql_node_config);
 
         #[allow(unused, clippy::let_unit_value)]
         let pre_hook = default_hooks(pre_hook, &parent.pre_hook);

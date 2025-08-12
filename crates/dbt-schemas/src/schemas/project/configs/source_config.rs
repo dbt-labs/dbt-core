@@ -11,10 +11,10 @@ use crate::default_to;
 use crate::schemas::common::{DbtQuoting, FreshnessDefinition};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfigLegacy};
-use crate::schemas::project::configs::common::BigQueryNodeConfig;
 use crate::schemas::project::configs::common::DatabricksNodeConfig;
 use crate::schemas::project::configs::common::RedshiftNodeConfig;
 use crate::schemas::project::configs::common::SnowflakeNodeConfig;
+use crate::schemas::project::configs::common::{BigQueryNodeConfig, MsSqlNodeConfig};
 use crate::schemas::project::configs::common::{default_meta_and_tags, default_quoting};
 use crate::schemas::project::{DefaultTo, IterChildren};
 use crate::schemas::serde::{StringOrArrayOfStrings, bool_or_string_bool, u64_or_string_u64};
@@ -217,6 +217,14 @@ pub struct ProjectSourceConfig {
     #[serde(rename = "+sort_type")]
     pub sort_type: Option<String>,
 
+    // MSSQL specific fields
+    #[serde(
+        default,
+        rename = "+as_columnstore",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub as_columnstore: Option<bool>,
+
     // Flattened fields
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectSourceConfig>>,
 }
@@ -249,6 +257,8 @@ pub struct SourceConfig {
     pub databricks_node_config: DatabricksNodeConfig,
     #[serde(flatten)]
     pub redshift_node_config: RedshiftNodeConfig,
+    #[serde(flatten)]
+    pub mssql_node_config: MsSqlNodeConfig,
 }
 
 impl From<ProjectSourceConfig> for SourceConfig {
@@ -324,6 +334,9 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 dist: config.dist,
                 sort: config.sort,
                 sort_type: config.sort_type,
+            },
+            mssql_node_config: MsSqlNodeConfig {
+                as_columnstore: config.as_columnstore,
             },
         }
     }
@@ -403,6 +416,8 @@ impl From<SourceConfig> for ProjectSourceConfig {
             dist: config.redshift_node_config.dist,
             sort: config.redshift_node_config.sort,
             sort_type: config.redshift_node_config.sort_type,
+            // MSSQL fields
+            as_columnstore: config.mssql_node_config.as_columnstore,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -428,6 +443,7 @@ impl DefaultTo<SourceConfig> for SourceConfig {
             bigquery_node_config: bigquery_source_config,
             databricks_node_config: databricks_source_config,
             redshift_node_config: redshift_source_config,
+            mssql_node_config: mssql_source_config,
         } = self;
 
         // Handle flattened configs
@@ -443,6 +459,8 @@ impl DefaultTo<SourceConfig> for SourceConfig {
         #[allow(unused, clippy::let_unit_value)]
         let redshift_source_config =
             redshift_source_config.default_to(&parent.redshift_node_config);
+        #[allow(unused, clippy::let_unit_value)]
+        let mssql_source_config = mssql_source_config.default_to(&parent.mssql_node_config);
 
         #[allow(unused, clippy::let_unit_value)]
         let quoting = default_quoting(quoting, &parent.quoting);

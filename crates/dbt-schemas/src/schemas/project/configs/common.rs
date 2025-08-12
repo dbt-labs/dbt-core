@@ -384,3 +384,18 @@ pub struct BigQueryNodeConfig {
     pub description: Option<String>,
     pub max_staleness: Option<String>,
 }
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, JsonSchema)]
+pub struct MsSqlNodeConfig {
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub as_columnstore: Option<bool>,
+}
+
+impl DefaultTo<MsSqlNodeConfig> for MsSqlNodeConfig {
+    fn default_to(&mut self, parent: &MsSqlNodeConfig) {
+        let MsSqlNodeConfig { as_columnstore } = self;
+
+        default_to!(parent, [as_columnstore]);
+    }
+}

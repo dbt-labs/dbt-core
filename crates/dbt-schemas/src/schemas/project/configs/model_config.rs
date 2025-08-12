@@ -25,6 +25,7 @@ use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfigLegacy};
 use crate::schemas::project::configs::common::BigQueryNodeConfig;
 use crate::schemas::project::configs::common::DatabricksNodeConfig;
+use crate::schemas::project::configs::common::MsSqlNodeConfig;
 use crate::schemas::project::configs::common::RedshiftNodeConfig;
 use crate::schemas::project::configs::common::SnowflakeNodeConfig;
 use crate::schemas::project::configs::common::default_column_types;
@@ -294,6 +295,12 @@ pub struct ProjectModelConfig {
     pub transient: Option<bool>,
     #[serde(rename = "+unique_key")]
     pub unique_key: Option<DbtUniqueKey>,
+    #[serde(
+        default,
+        rename = "+as_columnstore",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub as_columnstore: Option<bool>,
     // Flattened field:
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectModelConfig>>,
 }
@@ -364,6 +371,8 @@ pub struct ModelConfig {
     pub databricks_node_config: DatabricksNodeConfig,
     #[serde(flatten)]
     pub redshift_node_config: RedshiftNodeConfig,
+    #[serde(flatten)]
+    pub mssql_node_config: MsSqlNodeConfig,
 }
 
 impl From<ProjectModelConfig> for ModelConfig {
@@ -472,6 +481,9 @@ impl From<ProjectModelConfig> for ModelConfig {
                 sort: config.sort,
                 sort_type: config.sort_type,
             },
+            mssql_node_config: MsSqlNodeConfig {
+                as_columnstore: config.as_columnstore,
+            },
         }
     }
 }
@@ -575,6 +587,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             target_alias: config.databricks_node_config.target_alias,
             skip_matched_step: config.databricks_node_config.skip_matched_step,
             skip_not_matched_step: config.databricks_node_config.skip_not_matched_step,
+            as_columnstore: config.mssql_node_config.as_columnstore,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -603,6 +616,7 @@ impl DefaultTo<ModelConfig> for ModelConfig {
             bigquery_node_config: bigquery_model_config,
             databricks_node_config: databricks_model_config,
             redshift_node_config: redshift_model_config,
+            mssql_node_config: mssql_model_config,
 
             // Simple fields (handle with macro)
             enabled,
@@ -654,6 +668,8 @@ impl DefaultTo<ModelConfig> for ModelConfig {
             databricks_model_config.default_to(&parent.databricks_node_config);
         #[allow(unused, clippy::let_unit_value)]
         let redshift_model_config = redshift_model_config.default_to(&parent.redshift_node_config);
+        #[allow(unused, clippy::let_unit_value)]
+        let mssql_model_config = mssql_model_config.default_to(&parent.mssql_node_config);
 
         // Protect the mutable refs from being used in the default_to macro
         #[allow(unused, clippy::let_unit_value)]

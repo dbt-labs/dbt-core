@@ -20,6 +20,7 @@ use crate::schemas::project::DefaultTo;
 use crate::schemas::project::IterChildren;
 use crate::schemas::project::configs::common::BigQueryNodeConfig;
 use crate::schemas::project::configs::common::DatabricksNodeConfig;
+use crate::schemas::project::configs::common::MsSqlNodeConfig;
 use crate::schemas::project::configs::common::RedshiftNodeConfig;
 use crate::schemas::project::configs::common::SnowflakeNodeConfig;
 use crate::schemas::project::configs::common::default_column_types;
@@ -234,6 +235,12 @@ pub struct ProjectSeedConfig {
     pub sort: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+sort_type")]
     pub sort_type: Option<String>,
+    #[serde(
+        default,
+        rename = "+as_columnstore",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub as_columnstore: Option<bool>,
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectSeedConfig>>,
 }
 
@@ -275,6 +282,8 @@ pub struct SeedConfig {
     pub databricks_node_config: DatabricksNodeConfig,
     #[serde(flatten)]
     pub redshift_node_config: RedshiftNodeConfig,
+    #[serde(flatten)]
+    pub mssql_node_config: MsSqlNodeConfig,
 }
 
 impl From<ProjectSeedConfig> for SeedConfig {
@@ -359,6 +368,9 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 dist: config.dist,
                 sort: config.sort,
                 sort_type: config.sort_type,
+            },
+            mssql_node_config: MsSqlNodeConfig {
+                as_columnstore: config.as_columnstore,
             },
         }
     }
@@ -447,6 +459,7 @@ impl From<SeedConfig> for ProjectSeedConfig {
             dist: config.redshift_node_config.dist,
             sort: config.redshift_node_config.sort,
             sort_type: config.redshift_node_config.sort_type,
+            as_columnstore: config.mssql_node_config.as_columnstore,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -491,6 +504,7 @@ impl DefaultTo<SeedConfig> for SeedConfig {
             bigquery_node_config: bigquery_config,
             databricks_node_config: databricks_config,
             redshift_node_config: redshift_config,
+            mssql_node_config: mssql_config,
         } = self;
 
         // Handle adapter-specific configs
@@ -502,6 +516,8 @@ impl DefaultTo<SeedConfig> for SeedConfig {
         let databricks_config = databricks_config.default_to(&parent.databricks_node_config);
         #[allow(unused, clippy::let_unit_value)]
         let redshift_config = redshift_config.default_to(&parent.redshift_node_config);
+        #[allow(unused, clippy::let_unit_value)]
+        let mssql_config = mssql_config.default_to(&parent.mssql_node_config);
 
         #[allow(unused, clippy::let_unit_value)]
         let pre_hook = default_hooks(pre_hook, &parent.pre_hook);

@@ -9,12 +9,13 @@ use std::collections::{BTreeMap, btree_map::Iter};
 use crate::{
     default_to,
     schemas::{
-        manifest::GrantAccessToTarget,
-        manifest::{BigqueryClusterConfig, BigqueryPartitionConfigLegacy},
+        manifest::{BigqueryClusterConfig, BigqueryPartitionConfigLegacy, GrantAccessToTarget},
         project::{
-            DefaultTo, IterChildren, configs::common::BigQueryNodeConfig,
-            configs::common::DatabricksNodeConfig, configs::common::RedshiftNodeConfig,
-            configs::common::SnowflakeNodeConfig, configs::common::default_meta_and_tags,
+            DefaultTo, IterChildren,
+            configs::common::{
+                BigQueryNodeConfig, DatabricksNodeConfig, MsSqlNodeConfig, RedshiftNodeConfig,
+                SnowflakeNodeConfig, default_meta_and_tags,
+            },
         },
         serde::{StringOrArrayOfStrings, bool_or_string_bool, u64_or_string_u64},
     },
@@ -208,6 +209,14 @@ pub struct ProjectUnitTestConfig {
     #[serde(rename = "+sort_type")]
     pub sort_type: Option<String>,
 
+    // MSSQL specific fields
+    #[serde(
+        default,
+        rename = "+as_columnstore",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub as_columnstore: Option<bool>,
+
     // Flattened fields
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectUnitTestConfig>>,
 }
@@ -235,6 +244,8 @@ pub struct UnitTestConfig {
     pub databricks_node_config: DatabricksNodeConfig,
     #[serde(flatten)]
     pub redshift_node_config: RedshiftNodeConfig,
+    #[serde(flatten)]
+    pub mssql_node_config: MsSqlNodeConfig,
 }
 
 impl From<ProjectUnitTestConfig> for UnitTestConfig {
@@ -305,6 +316,9 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
                 dist: config.dist,
                 sort: config.sort,
                 sort_type: config.sort_type,
+            },
+            mssql_node_config: MsSqlNodeConfig {
+                as_columnstore: config.as_columnstore,
             },
         }
     }
@@ -379,6 +393,8 @@ impl From<UnitTestConfig> for ProjectUnitTestConfig {
             dist: config.redshift_node_config.dist,
             sort: config.redshift_node_config.sort,
             sort_type: config.redshift_node_config.sort_type,
+            // MSSQL fields
+            as_columnstore: config.mssql_node_config.as_columnstore,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -399,6 +415,7 @@ impl DefaultTo<UnitTestConfig> for UnitTestConfig {
             bigquery_node_config: bigquery_config,
             databricks_node_config: databricks_config,
             redshift_node_config: redshift_config,
+            mssql_node_config: mssql_config,
         } = self;
 
         // Handle adapter-specific configs
@@ -410,6 +427,8 @@ impl DefaultTo<UnitTestConfig> for UnitTestConfig {
         let databricks_config = databricks_config.default_to(&parent.databricks_node_config);
         #[allow(unused, clippy::let_unit_value)]
         let redshift_config = redshift_config.default_to(&parent.redshift_node_config);
+        #[allow(unused, clippy::let_unit_value)]
+        let mssql_config = mssql_config.default_to(&parent.mssql_node_config);
 
         #[allow(unused, clippy::let_unit_value)]
         let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
