@@ -148,7 +148,13 @@ pub async fn install_packages(
                     git_unpinned_package.warn_unpinned.unwrap_or_default(),
                     Some(packages_install_path),
                 )?;
-                let dbt_project = read_and_validate_dbt_project(io_args, &checkout_path)?;
+                let dbt_project = read_and_validate_dbt_project(
+                    io_args,
+                    &checkout_path,
+                    // do not report warnings here, since it would have alerady been reported
+                    // during package resolution phase
+                    false,
+                )?;
                 let project_name = dbt_project.name;
                 stdfs::rename(&checkout_path, packages_install_path.join(&project_name))?;
                 // Keep tmp_dir alive until we're done with checkout_path
@@ -195,7 +201,13 @@ pub async fn install_packages(
                     private_unpinned_package.warn_unpinned.unwrap_or_default(),
                     Some(packages_install_path),
                 )?;
-                let dbt_project = read_and_validate_dbt_project(io_args, &checkout_path)?;
+                let dbt_project = read_and_validate_dbt_project(
+                    io_args,
+                    &checkout_path,
+                    // do not report warnings here, since it would have alerady been reported
+                    // during package resolution phase
+                    false,
+                )?;
                 let project_name = dbt_project.name;
                 stdfs::rename(&checkout_path, packages_install_path.join(project_name))?;
                 // Keep tmp_dir alive until we're done with checkout_path
@@ -259,7 +271,13 @@ pub async fn install_packages(
                 }
 
                 let checkout_path = tar_contents[0].path();
-                let dbt_project = read_and_validate_dbt_project(io_args, &checkout_path)?;
+                let dbt_project = read_and_validate_dbt_project(
+                    io_args,
+                    &checkout_path,
+                    // do not report warnings here, since it would have alerady been reported
+                    // during package resolution phase
+                    false,
+                )?;
                 let project_name = dbt_project.name;
                 stdfs::rename(&checkout_path, packages_install_path.join(&project_name))?;
 

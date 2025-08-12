@@ -2,13 +2,14 @@ use crate::args::ResolveArgs;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::IoArgs;
 use dbt_common::io_utils::try_read_yml_to_str;
-use dbt_common::show_warning_soon_to_be_error;
 use dbt_common::{
     ErrorCode, FsResult, constants::PARSING, fs_err, fsinfo, show_error, show_progress,
     show_warning,
 };
+use dbt_common::{show_package_error, show_warning_soon_to_be_error};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::{from_yaml_raw, into_typed_with_jinja};
+use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::properties::{
     DbtPropertiesFileValues, MinimalSchemaValue, MinimalTableValue,
 };
@@ -63,6 +64,7 @@ impl MinimalProperties {
                     jinja_env,
                     base_ctx,
                     &[],
+                    dependency_package_name_from_ctx(jinja_env, base_ctx),
                 )?;
                 for (key, maybe_version_info) in collect_model_version_info(&model).into_iter() {
                     if let Some(existing_model) = self.models.get_mut(&key) {
@@ -94,6 +96,7 @@ impl MinimalProperties {
                     jinja_env,
                     base_ctx,
                     &[],
+                    dependency_package_name_from_ctx(jinja_env, base_ctx),
                 )?;
 
                 if let Some(tables) = &*source.tables {
@@ -118,6 +121,7 @@ impl MinimalProperties {
                             jinja_env,
                             base_ctx,
                             &[],
+                            dependency_package_name_from_ctx(jinja_env, base_ctx),
                         )?;
                         let key = (source.name.clone(), minimum_table_value.name.clone());
 
@@ -173,6 +177,7 @@ impl MinimalProperties {
                     jinja_env,
                     base_ctx,
                     &[],
+                    dependency_package_name_from_ctx(jinja_env, base_ctx),
                 )?;
                 if let Some(existing_seed) = self.seeds.get_mut(&seed.name) {
                     existing_seed
@@ -202,6 +207,7 @@ impl MinimalProperties {
                     jinja_env,
                     base_ctx,
                     &[],
+                    dependency_package_name_from_ctx(jinja_env, base_ctx),
                 )?;
                 if let Some(existing_snapshot) = self.snapshots.get_mut(&snapshot.name) {
                     existing_snapshot
@@ -231,6 +237,7 @@ impl MinimalProperties {
                     jinja_env,
                     base_ctx,
                     &[],
+                    dependency_package_name_from_ctx(jinja_env, base_ctx),
                 )?;
                 self.exposures.insert(
                     exposure.name.clone(),
@@ -254,6 +261,7 @@ impl MinimalProperties {
                     jinja_env,
                     base_ctx,
                     &[],
+                    dependency_package_name_from_ctx(jinja_env, base_ctx),
                 )?;
                 if let Some(existing_unit_test) = self.unit_tests.get_mut(&unit_test.name) {
                     existing_unit_test
@@ -283,6 +291,7 @@ impl MinimalProperties {
                     jinja_env,
                     base_ctx,
                     &[],
+                    dependency_package_name_from_ctx(jinja_env, base_ctx),
                 )?;
                 if let Some(existing_test) = self.tests.get_mut(&test.name) {
                     existing_test
@@ -312,6 +321,7 @@ impl MinimalProperties {
                     jinja_env,
                     base_ctx,
                     &[],
+                    dependency_package_name_from_ctx(jinja_env, base_ctx),
                 )?;
                 if let Some(existing_test) = self.tests.get_mut(&test.name) {
                     existing_test
@@ -354,6 +364,7 @@ fn validate_resource_name(name: &str) -> FsResult<String> {
 pub fn resolve_minimal_properties(
     arg: &ResolveArgs,
     package: &DbtPackage,
+    root_package_name: &str,
     jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     token: &CancellationToken,
@@ -372,10 +383,22 @@ pub fn resolve_minimal_properties(
                     .to_string()
             )
         );
+
+        let dependency_package_name = if package.dbt_project.name != root_package_name {
+            Some(package.dbt_project.name.as_str())
+        } else {
+            None
+        };
+
         let input = try_read_yml_to_str(&absolute_path)?;
 
-        match from_yaml_raw::<DbtPropertiesFileValues>(&arg.io, &input, Some(&absolute_path), true)
-        {
+        match from_yaml_raw::<DbtPropertiesFileValues>(
+            &arg.io,
+            &input,
+            Some(&absolute_path),
+            true,
+            dependency_package_name,
+        ) {
             Ok(properties_file_values) => {
                 minimal_resolved_properties.extend_from_minimal_properties_file(
                     &arg.io,
@@ -386,7 +409,13 @@ pub fn resolve_minimal_properties(
                 )?;
             }
             Err(e) => {
-                if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+                if let Some(package_name) = dependency_package_name
+                    && !&arg.io.show_all_deprecations
+                {
+                    // If we are parsing a dependency package, we use a special macros
+                    // that ensures at most one error is shown per package.
+                    show_package_error!(&arg.io, package_name);
+                } else if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
                     show_error!(arg.io, e);
                 } else {
                     show_warning_soon_to_be_error!(arg.io, e);

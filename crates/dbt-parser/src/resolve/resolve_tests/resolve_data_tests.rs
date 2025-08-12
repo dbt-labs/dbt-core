@@ -20,6 +20,7 @@ use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_utils::try_read_yml_to_str;
 use dbt_common::stdfs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::DbtTestAttr;
 use dbt_schemas::schemas::common::DbtChecksum;
 use dbt_schemas::schemas::common::DbtContract;
@@ -90,6 +91,7 @@ pub async fn resolve_data_tests(
             quoting: Some(package_quoting),
             ..Default::default()
         },
+        dependency_package_name_from_ctx(&env, base_ctx),
     )?;
 
     let mut test_assets_to_render = package.test_files.clone();

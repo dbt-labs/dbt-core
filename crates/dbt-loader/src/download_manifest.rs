@@ -73,7 +73,7 @@ pub async fn download_manifest_from_cloud(
 
     // Load dbt cloud configuration
     let dbt_cloud_config: dbt_schemas::schemas::DbtCloudConfig =
-        load_raw_yml(io, &dbt_cloud_config_path)?;
+        load_raw_yml(io, &dbt_cloud_config_path, None)?;
     // Check if defer_env_id is specified and show warning
     if let Some(defer_env_id) = &dbt_cloud_config.context.defer_env_id {
         show_progress!(

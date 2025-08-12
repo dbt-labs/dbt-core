@@ -9,12 +9,18 @@
 // we use dbt's invocation_id as key for the counters.
 
 use dashmap::DashMap;
+use std::collections::HashSet;
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub static ERROR_COUNTERS: LazyLock<DashMap<String, AtomicUsize>> = LazyLock::new(DashMap::new);
 pub static WARNING_COUNTERS: LazyLock<DashMap<String, AtomicUsize>> = LazyLock::new(DashMap::new);
 pub static AUTOFIX_SUGGESTION_COUNTERS: LazyLock<DashMap<String, AtomicUsize>> =
+    LazyLock::new(DashMap::new);
+
+// Temporary solution to emit only one warning/error per dependency package.
+// TODO: move into tracing infra
+pub static PACKAGE_WITH_ERRORS_OR_WARNING: LazyLock<DashMap<String, HashSet<String>>> =
     LazyLock::new(DashMap::new);
 
 /// Increments the error counter for the given key.
@@ -38,6 +44,22 @@ pub fn increment_autofix_suggestion_counter(key: &str) {
         .entry(key.to_string())
         .or_insert_with(|| AtomicUsize::new(0));
     counter.fetch_add(1, Ordering::SeqCst);
+}
+
+/// Marks a package with an error or warning for the given key.
+pub fn mark_package_with_error_or_warning(key: &str, package_name: &str) {
+    let mut package_set = PACKAGE_WITH_ERRORS_OR_WARNING
+        .entry(key.to_string())
+        .or_default();
+    package_set.insert(package_name.to_string());
+}
+
+/// Returns true if the given package has an error or warning for the given key (invocation id).
+pub fn has_package_with_error_or_warning(key: &str, package_name: &str) -> bool {
+    PACKAGE_WITH_ERRORS_OR_WARNING
+        .get(key)
+        .map(|set| set.contains(package_name))
+        .unwrap_or(false)
 }
 
 /// Returns the error counter for the given key.

@@ -52,6 +52,14 @@ pub struct ProjectDbtCloudConfig {
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+pub struct DbtProjectNameOnly {
+    pub name: String,
+
+    pub __ignored__: Verbatim<HashMap<String, dbt_serde_yaml::Value>>,
+}
+
+#[skip_serializing_none]
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct DbtProjectSimplified {
     #[serde(rename = "packages-install-path")]
     pub packages_install_path: Option<String>,

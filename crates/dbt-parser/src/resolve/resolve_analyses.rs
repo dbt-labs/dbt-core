@@ -5,6 +5,7 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::show_error;
 use dbt_common::{FsResult, error::AbstractLocation};
+use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_jinja_utils::{jinja_environment::JinjaEnv, refs_and_sources::RefsAndSources};
 use dbt_schemas::schemas::common::{Access, DbtMaterialization, DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_column::process_columns;
@@ -72,6 +73,7 @@ pub async fn resolve_analyses(
                 quoting: Some(package_quoting),
                 ..Default::default()
             },
+            dependency_package_name_from_ctx(&env, base_ctx),
         )?
     };
 

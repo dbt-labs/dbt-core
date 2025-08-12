@@ -43,6 +43,9 @@ pub struct IoArgs {
     pub log_level: Option<LevelFilter>,
     pub log_level_file: Option<LevelFilter>,
 
+    // Flags influencing error/warning behavior
+    pub show_all_deprecations: bool,
+
     /// Optional status reporter for reporting status messages during execution
     pub status_reporter: Option<Arc<dyn StatusReporter>>,
     pub send_anonymous_usage_stats: bool,

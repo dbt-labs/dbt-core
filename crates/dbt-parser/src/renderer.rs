@@ -67,6 +67,7 @@ fn extract_model_and_version_config<T: DefaultTo<T>, S: GetConfig<T> + Debug>(
     arg: &ResolveArgs,
     jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
+    dependency_package_name: Option<&str>,
 ) -> FsResult<(Option<S>, Option<T>)> {
     if !mpe.duplicate_paths.is_empty() {
         register_duplicate_resource(mpe, ref_name, "model", duplicate_errors);
@@ -88,6 +89,7 @@ fn extract_model_and_version_config<T: DefaultTo<T>, S: GetConfig<T> + Debug>(
         base_ctx,
         &[],
         |error| format!("While parsing config: {}", error.context),
+        dependency_package_name,
     )?;
 
     let maybe_version_config = if let Some(version_info) = mpe.version_info.as_ref() {
@@ -100,6 +102,7 @@ fn extract_model_and_version_config<T: DefaultTo<T>, S: GetConfig<T> + Debug>(
                 base_ctx,
                 &[],
                 |error| format!("While parsing version config: {}", error.context),
+                dependency_package_name,
             )?;
 
             Some(version_config)
@@ -144,6 +147,12 @@ pub async fn render_unresolved_sql_files_sequentially<
         package_quoting,
     } = &**inner;
 
+    let dependency_package_name = if package_name != root_project_name {
+        Some(package_name.as_str())
+    } else {
+        None
+    };
+
     let mut model_sql_resources_map = Vec::new();
     let mut duplicate_errors = Vec::new();
 
@@ -164,6 +173,7 @@ pub async fn render_unresolved_sql_files_sequentially<
                     args,
                     jinja_env,
                     base_ctx,
+                    dependency_package_name,
                 )
                 .map_err(|e| *e)?
             } else {
@@ -477,6 +487,12 @@ pub async fn render_unresolved_sql_files<
                 package_quoting,
             } = &*inner;
 
+            let dependency_package_name = if package_name != root_project_name {
+                Some(package_name.as_str())
+            } else {
+                None
+            };
+
             let mut local_results: Vec<SqlFileRenderResult<T, S>> = Vec::new();
             let mut local_duplicate_errors: Vec<FsError> = Vec::new();
 
@@ -493,6 +509,7 @@ pub async fn render_unresolved_sql_files<
                             args,
                             &jinja_env,
                             base_ctx,
+                            dependency_package_name,
                         )
                         .map_err(|e| *e)?
                     } else {

@@ -105,7 +105,7 @@ pub(crate) async fn download_publication_artifacts(
     let dbt_cloud_config_path = home_dir.join(".dbt").join("dbt_cloud.yml");
     let (account_id, account_host, token) = if dbt_cloud_config_path.exists() {
         let dbt_cloud_config: dbt_schemas::schemas::DbtCloudConfig =
-            load_raw_yml(io, &dbt_cloud_config_path)?;
+            load_raw_yml(io, &dbt_cloud_config_path, None)?;
 
         let project = match dbt_cloud_config.get_project_by_id(project_id.to_string().as_str()) {
             Some(p) => p,

@@ -14,6 +14,7 @@ pub fn load_project_yml(
     io_args: &IoArgs,
     env: &JinjaEnv,
     dbt_project_path: &Path,
+    dependency_package_name: Option<&str>,
     cli_vars: BTreeMap<String, dbt_serde_yaml::Value>,
 ) -> FsResult<DbtProject> {
     let mut context = build_resolve_context(
@@ -28,11 +29,12 @@ pub fn load_project_yml(
     // Parse the template without vars using Jinja
     let mut dbt_project: DbtProject = into_typed_with_jinja(
         io_args,
-        value_from_file(io_args, dbt_project_path, true)?,
+        value_from_file(io_args, dbt_project_path, true, dependency_package_name)?,
         false,
         env,
         &context,
         &[],
+        dependency_package_name,
     )?;
 
     // Set default model paths if not specified

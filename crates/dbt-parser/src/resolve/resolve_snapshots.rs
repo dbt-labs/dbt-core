@@ -31,7 +31,7 @@ use crate::utils::{RelationComponents, update_node_relation_components};
 
 use super::resolve_properties::MinimalPropertiesEntry;
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::cognitive_complexity)]
 pub async fn resolve_snapshots(
     arg: &ResolveArgs,
     package: &DbtPackage,
@@ -55,6 +55,12 @@ pub async fn resolve_snapshots(
     let mut snapshots: HashMap<String, Arc<DbtSnapshot>> = HashMap::new();
     let mut disabled_snapshots: HashMap<String, Arc<DbtSnapshot>> = HashMap::new();
 
+    let dependency_package_name = if package.dbt_project.name != root_project.name {
+        Some(package.dbt_project.name.as_str())
+    } else {
+        None
+    };
+
     let local_project_config = init_project_config(
         &arg.io,
         &package.dbt_project.snapshots,
@@ -63,6 +69,7 @@ pub async fn resolve_snapshots(
             quoting: Some(package_quoting),
             ..Default::default()
         },
+        dependency_package_name,
     )?;
     let package_name = package.dbt_project.name.to_owned();
 
@@ -100,8 +107,15 @@ pub async fn resolve_snapshots(
         if !mpe.schema_value.is_null() {
             let schema_value =
                 std::mem::replace(&mut mpe.schema_value, dbt_serde_yaml::Value::null());
-            let snapshot: SnapshotProperties =
-                into_typed_with_jinja(&arg.io, schema_value, false, &jinja_env, base_ctx, &[])?;
+            let snapshot: SnapshotProperties = into_typed_with_jinja(
+                &arg.io,
+                schema_value,
+                false,
+                &jinja_env,
+                base_ctx,
+                &[],
+                dependency_package_name,
+            )?;
 
             if let Some(relation) = &snapshot.relation {
                 // check if the relation matches the pattern of ref(...)

@@ -15,6 +15,7 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::parse::build_resolve_model_context;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
+use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_jinja_utils::utils::render_extract_ref_or_source_expr;
 use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::DbtUnitTestAttr;
@@ -65,6 +66,7 @@ pub fn resolve_unit_tests(
 )> {
     let mut unit_tests: BTreeMap<String, Arc<DbtUnitTest>> = BTreeMap::new();
     let mut disabled_unit_tests: BTreeMap<String, Arc<DbtUnitTest>> = BTreeMap::new();
+    let dependency_package_name = dependency_package_name_from_ctx(jinja_env, base_ctx);
     let local_project_config = init_project_config(
         io_args,
         &package.dbt_project.unit_tests,
@@ -72,6 +74,7 @@ pub fn resolve_unit_tests(
             enabled: Some(true),
             ..Default::default()
         },
+        dependency_package_name,
     )?;
 
     for (unit_test_name, mpe) in unit_test_properties.into_iter() {
@@ -82,6 +85,7 @@ pub fn resolve_unit_tests(
             jinja_env,
             base_ctx,
             &[],
+            dependency_package_name,
         )?;
         // todo: Unit test should have a database and schema,
         //    derived from the underlying model, correct?

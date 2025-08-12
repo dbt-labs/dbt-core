@@ -50,7 +50,7 @@ pub fn resolve_final_selectors(
         return Ok(resolved);
     }
 
-    let raw_selectors = value_from_file(&arg.io, &path, true)?;
+    let raw_selectors = value_from_file(&arg.io, &path, true, None)?;
 
     let context = build_resolve_context(
         root_package_name,
@@ -67,6 +67,7 @@ pub fn resolve_final_selectors(
         jinja_env,
         &context,
         &[],
+        None,
     ) {
         Ok(yaml) => yaml,
         Err(e) => {

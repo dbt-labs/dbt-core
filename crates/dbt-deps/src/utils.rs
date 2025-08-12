@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 
-use dbt_schemas::schemas::packages::{DbtPackageEntry, LocalPackage};
+use dbt_schemas::schemas::{
+    packages::{DbtPackageEntry, LocalPackage},
+    project::DbtProjectNameOnly,
+};
 use sha1::Digest;
 
 use dbt_common::{
@@ -61,7 +64,11 @@ pub fn handle_git_like_package(
     Ok((tmp_dir, checkout_path, commit_sha))
 }
 
-pub fn read_and_validate_dbt_project(io: &IoArgs, checkout_path: &Path) -> FsResult<DbtProject> {
+pub fn read_and_validate_dbt_project(
+    io: &IoArgs,
+    checkout_path: &Path,
+    show_errors_or_warnings: bool,
+) -> FsResult<DbtProject> {
     let path_to_dbt_project = checkout_path.join(DBT_PROJECT_YML);
     if !path_to_dbt_project.exists() {
         return err!(
@@ -70,10 +77,29 @@ pub fn read_and_validate_dbt_project(io: &IoArgs, checkout_path: &Path) -> FsRes
             checkout_path.display()
         );
     }
+    let yml_data = try_read_yml_to_str(&path_to_dbt_project)?;
+
+    // Try to deserialize only the package name for error reporting,
+    // falling back to the path if deserialization fails
+    let dependency_package_name = from_yaml_raw::<DbtProjectNameOnly>(
+        io,
+        &yml_data,
+        Some(&path_to_dbt_project),
+        // Do not report errors twice. This
+        // parse is only an attempt to get the package name. All actual errors
+        // will be reported when we parse the full `DbtProject` below.
+        false,
+        None,
+    )
+    .map(|p| p.name)
+    .ok()
+    .unwrap_or(path_to_dbt_project.to_string_lossy().to_string());
+
     from_yaml_raw(
         io,
-        &try_read_yml_to_str(&path_to_dbt_project)?,
+        &yml_data,
         Some(&path_to_dbt_project),
-        false,
+        show_errors_or_warnings,
+        Some(dependency_package_name.as_str()),
     )
 }

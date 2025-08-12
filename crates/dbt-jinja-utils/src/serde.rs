@@ -76,7 +76,7 @@ use std::{
 
 use dbt_common::{
     CodeLocation, ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs,
-    io_utils::try_read_yml_to_str, show_error, show_warning_soon_to_be_error,
+    io_utils::try_read_yml_to_str, show_error, show_package_error, show_warning_soon_to_be_error,
 };
 use dbt_serde_yaml::Value;
 use minijinja::listener::RenderingEventListener;
@@ -88,17 +88,30 @@ use crate::{jinja_environment::JinjaEnv, phases::load::secret_renderer::render_s
 pub use dbt_common::serde_utils::Omissible;
 
 /// Deserializes a YAML file into a `Value`, using the file's absolute path for error reporting.
+///
+/// `dependency_package_name` is used to determine if the file is part of a dependency package,
+/// which affects how errors are reported.
 pub fn value_from_file(
     io_args: &IoArgs,
     path: &Path,
     show_errors_or_warnings: bool,
+    dependency_package_name: Option<&str>,
 ) -> FsResult<Value> {
     let input = try_read_yml_to_str(path)?;
-    value_from_str(io_args, &input, Some(path), show_errors_or_warnings)
+    value_from_str(
+        io_args,
+        &input,
+        Some(path),
+        show_errors_or_warnings,
+        dependency_package_name,
+    )
 }
 
 /// Renders a Yaml `Value` containing Jinja expressions into a target
 /// `Deserialize` type T.
+///
+/// `dependency_package_name` is used to determine if the file is part of a dependency package,
+/// which affects how errors are reported.
 pub fn into_typed_with_jinja<T, S>(
     io_args: &IoArgs,
     value: Value,
@@ -106,6 +119,7 @@ pub fn into_typed_with_jinja<T, S>(
     env: &JinjaEnv,
     ctx: &S,
     listeners: &[Rc<dyn RenderingEventListener>],
+    dependency_package_name: Option<&str>,
 ) -> FsResult<T>
 where
     T: DeserializeOwned,
@@ -115,7 +129,13 @@ where
         into_typed_with_jinja_error(value, should_render_secrets, env, ctx, listeners)?;
 
     for error in errors {
-        if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+        if let Some(package_name) = dependency_package_name
+            && !io_args.show_all_deprecations
+        {
+            // If we are parsing a dependency package, we use a special macros
+            // that ensures at most one error is shown per package.
+            show_package_error!(io_args, package_name);
+        } else if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
             show_error!(io_args, error);
         } else {
             show_warning_soon_to_be_error!(io_args, error);
@@ -127,6 +147,10 @@ where
 
 /// Renders a Yaml `Value` containing Jinja expressions into a target
 /// `Deserialize` type T.
+///
+/// `dependency_package_name` is used to determine if the file is part of a dependency package,
+/// which affects how errors are reported.
+#[allow(clippy::too_many_arguments)]
 pub fn into_typed_with_jinja_error_context<T, S>(
     io_args: Option<&IoArgs>,
     value: Value,
@@ -136,6 +160,7 @@ pub fn into_typed_with_jinja_error_context<T, S>(
     listeners: &[Rc<dyn RenderingEventListener>],
     // A function that takes FsError and returns a string to be used as the error context
     error_context: impl Fn(&FsError) -> String,
+    dependency_package_name: Option<&str>,
 ) -> FsResult<T>
 where
     T: DeserializeOwned,
@@ -148,7 +173,13 @@ where
         for error in errors {
             let context = error_context(&error);
             let error = error.with_context(context);
-            if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+            if let Some(package_name) = dependency_package_name
+                && !io_args.show_all_deprecations
+            {
+                // If we are parsing a dependency package, we use a special macros
+                // that ensures at most one error is shown per package.
+                show_package_error!(io_args, package_name);
+            } else if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
                 show_error!(io_args, error);
             } else {
                 show_warning_soon_to_be_error!(io_args, error);
@@ -160,23 +191,40 @@ where
 }
 
 /// Deserializes a Yaml string into a Rust type T.
+///
+/// `dependency_package_name` is used to determine if the file is part of a dependency package,
+/// which affects how errors are reported.
 pub fn from_yaml_raw<T>(
     io_args: &IoArgs,
     input: &str,
     error_display_path: Option<&Path>,
     show_errors_or_warnings: bool,
+    dependency_package_name: Option<&str>,
 ) -> FsResult<T>
 where
     T: DeserializeOwned,
 {
-    let value = value_from_str(io_args, input, error_display_path, show_errors_or_warnings)?;
+    let value = value_from_str(
+        io_args,
+        input,
+        error_display_path,
+        show_errors_or_warnings,
+        dependency_package_name,
+    )?;
     // Use the identity transform for the 'raw' version of this function.
     let expand_jinja = |_: &Value| Ok(None);
+
     let (res, errors) = into_typed_internal(value, expand_jinja)?;
 
     if show_errors_or_warnings {
         for error in errors {
-            if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+            if let Some(package_name) = dependency_package_name
+                && !io_args.show_all_deprecations
+            {
+                // If we are parsing a dependency package, we use a special macros
+                // that ensures at most one error is shown per package.
+                show_package_error!(io_args, package_name);
+            } else if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
                 show_error!(io_args, error);
             } else {
                 show_warning_soon_to_be_error!(io_args, error);
@@ -239,11 +287,15 @@ fn trim_beginning_whitespace_for_first_line_with_content(input: &str) -> String 
 
 /// Internal function that deserializes a YAML string into a `Value`.
 /// The error_display_path should be an absolute, canonicalized path.
+///
+/// `dependency_package_name` is used to determine if the file is part of a dependency package,
+/// which affects how errors are reported.
 fn value_from_str(
     io_args: &IoArgs,
     input: &str,
     error_display_path: Option<&Path>,
     show_errors_or_warnings: bool,
+    dependency_package_name: Option<&str>,
 ) -> FsResult<Value> {
     let _f = dbt_serde_yaml::with_filename(error_display_path.map(PathBuf::from));
 
@@ -265,7 +317,13 @@ fn value_from_str(
         );
 
         if show_errors_or_warnings {
-            if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+            if let Some(package_name) = dependency_package_name
+                && !io_args.show_all_deprecations
+            {
+                // If we are parsing a dependency package, we use a special macros
+                // that ensures at most one error is shown per package.
+                show_package_error!(io_args, package_name);
+            } else if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
                 show_error!(io_args, duplicate_key_error);
             } else {
                 show_warning_soon_to_be_error!(io_args, duplicate_key_error);

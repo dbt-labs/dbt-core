@@ -18,7 +18,7 @@ use dbt_schemas::schemas::{
         DbtPackageEntry, DbtPackages, DbtPackagesLock, GitPackage, HubPackage, LocalPackage,
         PrivatePackage, TarballPackage,
     },
-    project::DbtProject,
+    project::{DbtProject, DbtProjectNameOnly},
 };
 
 use crate::{private_package::get_resolved_url, utils::get_local_package_full_path};
@@ -122,7 +122,15 @@ impl PackageListing {
                     let value = dbt_serde_yaml::to_value(&hub_package).map_err(|e| {
                         unexpected_fs_err!("Failed to serialize hub package spec: {e}")
                     })?;
-                    into_typed_with_jinja(&self.io_args, value, true, jinja_env, &deps_context, &[])
+                    into_typed_with_jinja(
+                        &self.io_args,
+                        value,
+                        true,
+                        jinja_env,
+                        &deps_context,
+                        &[],
+                        None,
+                    )
                 }?;
                 if let Some(unpinned_package) = self.packages.get_mut(&hub_package.package) {
                     match unpinned_package {
@@ -150,13 +158,29 @@ impl PackageListing {
                     let value = dbt_serde_yaml::to_value(&git_package).map_err(|e| {
                         unexpected_fs_err!("Failed to serialize git package spec: {e}")
                     })?;
-                    into_typed_with_jinja(&self.io_args, value, true, jinja_env, &deps_context, &[])
+                    into_typed_with_jinja(
+                        &self.io_args,
+                        value,
+                        true,
+                        jinja_env,
+                        &deps_context,
+                        &[],
+                        None,
+                    )
                 }?;
                 let git_package_url: String = {
                     let value = dbt_serde_yaml::to_value(&git_package.git).map_err(|e| {
                         unexpected_fs_err!("Failed to serialize git package URL: {e}")
                     })?;
-                    into_typed_with_jinja(&self.io_args, value, true, jinja_env, &deps_context, &[])
+                    into_typed_with_jinja(
+                        &self.io_args,
+                        value,
+                        true,
+                        jinja_env,
+                        &deps_context,
+                        &[],
+                        None,
+                    )
                 }?;
 
                 // Create key that includes subdirectory if present
@@ -188,7 +212,15 @@ impl PackageListing {
                     let value = dbt_serde_yaml::to_value(&local_package).map_err(|e| {
                         unexpected_fs_err!("Failed to serialize local package spec: {e}")
                     })?;
-                    into_typed_with_jinja(&self.io_args, value, true, jinja_env, &deps_context, &[])
+                    into_typed_with_jinja(
+                        &self.io_args,
+                        value,
+                        true,
+                        jinja_env,
+                        &deps_context,
+                        &[],
+                        None,
+                    )
                 }?;
                 // Get absolute path of local package
                 let full_path = get_local_package_full_path(self.in_dir(), &local_package);
@@ -200,11 +232,33 @@ impl PackageListing {
                         local_package.local.display()
                     );
                 };
+
+                let yml_data = try_read_yml_to_str(&path_to_dbt_project)?;
+
+                // Try to deserialize only the package name for error reporting,
+                // falling back to the path if deserialization fails
+                let dependency_package_name = from_yaml_raw::<DbtProjectNameOnly>(
+                    &self.io_args,
+                    &yml_data,
+                    Some(&path_to_dbt_project),
+                    // Do not report errors twice. This
+                    // parse is only an attempt to get the package name. All actual errors
+                    // will be reported when we parse the full `DbtProject` below.
+                    false,
+                    None,
+                )
+                .map(|p| p.name)
+                .ok()
+                .unwrap_or(path_to_dbt_project.to_string_lossy().to_string());
+
                 let dbt_project: DbtProject = from_yaml_raw(
                     &self.io_args,
-                    &try_read_yml_to_str(&path_to_dbt_project)?,
+                    &yml_data,
                     Some(&path_to_dbt_project),
                     true,
+                    // TODO: do we really want to hide errors from local packages?
+                    // maybe we want to let these ones to show up as project errors?
+                    Some(dependency_package_name.as_str()),
                 )?;
                 self.packages.insert(
                     full_path.to_string_lossy().to_string(),
@@ -219,14 +273,30 @@ impl PackageListing {
                     let value = dbt_serde_yaml::to_value(&private_package).map_err(|e| {
                         unexpected_fs_err!("Failed to serialize private package spec: {e}")
                     })?;
-                    into_typed_with_jinja(&self.io_args, value, true, jinja_env, &deps_context, &[])
+                    into_typed_with_jinja(
+                        &self.io_args,
+                        value,
+                        true,
+                        jinja_env,
+                        &deps_context,
+                        &[],
+                        None,
+                    )
                 }?;
                 let private_package_private: String = {
                     let value =
                         dbt_serde_yaml::to_value(&private_package.private).map_err(|e| {
                             unexpected_fs_err!("Failed to serialize private package URL: {e}")
                         })?;
-                    into_typed_with_jinja(&self.io_args, value, true, jinja_env, &deps_context, &[])
+                    into_typed_with_jinja(
+                        &self.io_args,
+                        value,
+                        true,
+                        jinja_env,
+                        &deps_context,
+                        &[],
+                        None,
+                    )
                 }?;
 
                 private_package.private = Verbatim::from(private_package_private);
@@ -263,14 +333,30 @@ impl PackageListing {
                     let value = dbt_serde_yaml::to_value(&tarball_package).map_err(|e| {
                         unexpected_fs_err!("Failed to serialize tarball package spec: {e}")
                     })?;
-                    into_typed_with_jinja(&self.io_args, value, true, jinja_env, &deps_context, &[])
+                    into_typed_with_jinja(
+                        &self.io_args,
+                        value,
+                        true,
+                        jinja_env,
+                        &deps_context,
+                        &[],
+                        None,
+                    )
                 }?;
                 let tarball_url: String = {
                     let value =
                         dbt_serde_yaml::to_value(&tarball_package.tarball).map_err(|e| {
                             unexpected_fs_err!("Failed to serialize tarball package URL: {e}")
                         })?;
-                    into_typed_with_jinja(&self.io_args, value, true, jinja_env, &deps_context, &[])
+                    into_typed_with_jinja(
+                        &self.io_args,
+                        value,
+                        true,
+                        jinja_env,
+                        &deps_context,
+                        &[],
+                        None,
+                    )
                 }?;
 
                 self.handle_remote_package(

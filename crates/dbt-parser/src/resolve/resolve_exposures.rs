@@ -7,7 +7,7 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::parse::build_resolve_model_context;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
-use dbt_jinja_utils::utils::render_extract_ref_or_source_expr;
+use dbt_jinja_utils::utils::{dependency_package_name_from_ctx, render_extract_ref_or_source_expr};
 use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::nodes::{
     CommonAttributes, DbtExposure, DbtExposureAttr, NodeBaseAttributes,
@@ -46,6 +46,7 @@ pub async fn resolve_exposures(
 )> {
     let mut exposures: HashMap<String, Arc<DbtExposure>> = HashMap::new();
     let mut disabled_exposures: HashMap<String, Arc<DbtExposure>> = HashMap::new();
+    let dependency_package_name = dependency_package_name_from_ctx(env, base_ctx);
     let local_project_config = init_project_config(
         &args.io,
         &package.dbt_project.exposures,
@@ -53,6 +54,7 @@ pub async fn resolve_exposures(
             enabled: Some(true),
             ..Default::default()
         },
+        dependency_package_name,
     )?;
 
     // Retrieve exposures from yaml
@@ -80,8 +82,15 @@ pub async fn resolve_exposures(
             let schema_value =
                 std::mem::replace(&mut mpe.schema_value, dbt_serde_yaml::Value::null());
             // ExposureProperties is for the yaml schema
-            let exposure: ExposureProperties =
-                into_typed_with_jinja(&args.io, schema_value, false, env, base_ctx, &[])?;
+            let exposure: ExposureProperties = into_typed_with_jinja(
+                &args.io,
+                schema_value,
+                false,
+                env,
+                base_ctx,
+                &[],
+                dependency_package_name,
+            )?;
 
             // Get combined properties
             let global_config = local_project_config.get_config_for_fqn(&fqn);

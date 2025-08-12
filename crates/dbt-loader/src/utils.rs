@@ -116,7 +116,7 @@ pub fn read_profiles_and_extract_db_config<S: Serialize>(
     profile_str: &str,
     profile_path: PathBuf,
 ) -> Result<(String, DbConfig), Box<dbt_common::FsError>> {
-    let prepared_profile_val = value_from_file(io_args, &profile_path, true)?;
+    let prepared_profile_val = value_from_file(io_args, &profile_path, true, None)?;
     let dbt_profiles = dbt_serde_yaml::from_value::<DbtProfilesIntermediate>(prepared_profile_val)
         .map_err(|e| yaml_to_fs_error(e, Some(&profile_path)))?;
     if dbt_profiles.config.is_some() {
@@ -184,6 +184,7 @@ pub fn read_profiles_and_extract_db_config<S: Serialize>(
         jinja_env,
         ctx,
         &[],
+        None,
     )?;
     let db_config = get_db_config(io_args, rendered_db_target, Some(rendered_target.clone()))?;
 
@@ -191,7 +192,14 @@ pub fn read_profiles_and_extract_db_config<S: Serialize>(
 }
 
 // TODO: this function should read to a yaml::Value so as to avoid double-io
-pub fn load_raw_yml<T: DeserializeOwned>(io_args: &IoArgs, path: &Path) -> FsResult<T> {
+///
+/// `dependency_package_name` is used to determine if the file is part of a dependency package,
+/// which affects how errors are reported.
+pub fn load_raw_yml<T: DeserializeOwned>(
+    io_args: &IoArgs,
+    path: &Path,
+    dependency_package_name: Option<&str>,
+) -> FsResult<T> {
     let mut file = std::fs::File::open(path).map_err(|e| {
         fs_err!(
             code => ErrorCode::IoError,
@@ -210,7 +218,7 @@ pub fn load_raw_yml<T: DeserializeOwned>(io_args: &IoArgs, path: &Path) -> FsRes
         )
     })?;
 
-    from_yaml_raw(io_args, &data, Some(path), true)
+    from_yaml_raw(io_args, &data, Some(path), true, dependency_package_name)
 }
 
 fn process_package_file(
@@ -218,9 +226,11 @@ fn process_package_file(
     package_file_path: &Path,
     package_lookup_map: &BTreeMap<String, String>,
     in_dir: &Path,
+    dependency_package_name: Option<&str>,
 ) -> FsResult<BTreeSet<String>> {
     let mut dependencies = BTreeSet::new();
-    let dbt_packages: DbtPackages = load_raw_yml(io_args, package_file_path)?;
+    let dbt_packages: DbtPackages =
+        load_raw_yml(io_args, package_file_path, dependency_package_name)?;
     for package in dbt_packages.packages {
         let entry_name = match package {
             DbtPackageEntry::Hub(hub_package) => hub_package.package,
@@ -262,6 +272,7 @@ pub fn identify_package_dependencies(
     io_args: &IoArgs,
     in_dir: &Path,
     package_lookup_map: &BTreeMap<String, String>,
+    dependency_package_name: Option<&str>,
 ) -> FsResult<BTreeSet<String>> {
     let mut dependencies = BTreeSet::new();
 
@@ -273,6 +284,7 @@ pub fn identify_package_dependencies(
             &dependencies_yml_path,
             package_lookup_map,
             in_dir,
+            dependency_package_name,
         )?);
     }
 
@@ -284,6 +296,7 @@ pub fn identify_package_dependencies(
             &packages_yml_path,
             package_lookup_map,
             in_dir,
+            dependency_package_name,
         )?);
     }
 

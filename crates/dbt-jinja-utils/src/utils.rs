@@ -7,6 +7,7 @@ use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::{DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, InternalDbtNode};
 use minijinja::arg_utils::ArgParser;
+use minijinja::constants::{ROOT_PACKAGE_NAME, TARGET_PACKAGE_NAME};
 use minijinja::{Error, ErrorKind, MacroSpans, State, Value, functions::debug, value::Rest};
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -477,4 +478,26 @@ pub fn render_extract_ref_or_source_expr<T: DefaultTo<T>>(
     let mut sql_resources = sql_resources.lock().unwrap();
     let sql_resource = sql_resources.pop().unwrap();
     Ok(sql_resource)
+}
+
+/// Detects & extract the name of the dependency package from the current context.
+pub fn dependency_package_name_from_ctx<'a>(
+    jinja_env: &'_ JinjaEnv,
+    ctx: &'a BTreeMap<String, Value>,
+) -> Option<&'a str> {
+    // Try getting the root package name from the context. If it doesn't exist, err on the
+    // side of caution and assume that we can't deduce whether the local package is the root package.
+    let root_package_name = jinja_env
+        .get_global(ROOT_PACKAGE_NAME)
+        .and_then(|root| root.as_str().map(|root| root.to_string()))?;
+
+    ctx.get(TARGET_PACKAGE_NAME)
+        .and_then(|local| local.as_str())
+        .and_then(|local_name| {
+            if local_name != root_package_name {
+                Some(local_name)
+            } else {
+                None
+            }
+        })
 }

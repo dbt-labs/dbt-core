@@ -9,6 +9,7 @@ use dbt_frontend_common::Dialect;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
+use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::dbt_utils::validate_delimeter;
 use dbt_schemas::schemas::common::{DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn};
 use dbt_schemas::schemas::dbt_column::process_columns;
@@ -47,6 +48,8 @@ pub fn resolve_seeds(
     let mut disabled_seeds: HashMap<String, Arc<DbtSeed>> = HashMap::new();
     let is_replay_mode = arg.replay.is_some();
     let io_args = &arg.io;
+    let dependency_package_name = dependency_package_name_from_ctx(jinja_env, base_ctx);
+
     let local_project_config = init_project_config(
         io_args,
         &package.dbt_project.seeds,
@@ -55,6 +58,7 @@ pub fn resolve_seeds(
             quoting: Some(package_quoting),
             ..Default::default()
         },
+        dependency_package_name,
     )?;
 
     // TODO: update this to be relative of the root project
@@ -94,6 +98,7 @@ pub fn resolve_seeds(
                     jinja_env,
                     base_ctx,
                     &[],
+                    dependency_package_name,
                 )?,
                 Some(mpe.relative_path.clone()),
             )
@@ -263,6 +268,7 @@ pub fn resolve_seeds(
                 seeds.insert(unique_id, Arc::new(dbt_seed));
                 seed.as_testable().persist(
                     package_name,
+                    &root_project.name,
                     collected_tests,
                     adapter_type,
                     is_replay_mode,

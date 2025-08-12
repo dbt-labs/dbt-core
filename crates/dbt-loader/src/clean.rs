@@ -43,7 +43,7 @@ pub async fn execute_clean_command(
     )?;
 
     let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);
-    let dbt_project = load_project_yml(&arg.io, &env, &dbt_project_path, arg.vars.clone())?;
+    let dbt_project = load_project_yml(&arg.io, &env, &dbt_project_path, None, arg.vars.clone())?;
 
     let protected_paths = collect_protected_paths(&dbt_project)
         .iter()

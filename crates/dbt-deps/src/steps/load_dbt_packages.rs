@@ -86,5 +86,6 @@ fn read_dbt_package_yml(io: &IoArgs, package_yml_path: &Path) -> FsResult<DbtPac
         &try_read_yml_to_str(package_yml_path)?,
         Some(package_yml_path),
         true,
+        None,
     )
 }

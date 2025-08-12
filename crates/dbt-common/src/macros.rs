@@ -610,6 +610,58 @@ macro_rules! show_warning_soon_to_be_error {
 }
 
 #[macro_export]
+macro_rules! show_package_error {
+    ($io:expr, $pkg:expr) => {{
+        use $crate::constants::{WARNING, ERROR};
+        use $crate::error_counter::{increment_error_counter, increment_warning_counter, has_package_with_error_or_warning, mark_package_with_error_or_warning, increment_autofix_suggestion_counter};
+        use $crate::pretty_string::{color_quotes, YELLOW, RED};
+
+        if !has_package_with_error_or_warning(&$io.invocation_id.to_string(), $pkg) {
+            // Mark the package with an error or warning
+            mark_package_with_error_or_warning(&$io.invocation_id.to_string(), $pkg);
+
+            let err = $crate::fs_err!(
+                $crate::error::ErrorCode::DependencyWarning,
+                "Package `{}` issued one or more compatibility warnings. To display all warnings associated with this package, run with `--show-all-deprecations`.",
+                $pkg
+            );
+
+            if let Some(status_reporter) = &$io.status_reporter {
+                status_reporter.collect_warning(&err);
+            }
+
+            if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+                // Increment once per invocation
+                increment_error_counter(&$io.invocation_id.to_string());
+
+                $crate::_log!(
+                    $crate::macros::log_adapter::log::Level::Error,
+                    _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+                    code = err.code.to_string();
+                    "{} {}",
+                    RED.apply_to(ERROR),
+                    color_quotes(err.pretty().as_str())
+                );
+            } else {
+                // Increment once per invocation
+                increment_warning_counter(&$io.invocation_id.to_string());
+                increment_autofix_suggestion_counter(&$io.invocation_id.to_string());
+
+                $crate::_log!(
+                    $crate::macros::log_adapter::log::Level::Warn,
+                    _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+                    code = err.code.to_string();
+                    "{} {} {}",
+                    YELLOW.apply_to(WARNING),
+                    "(will error post beta)",
+                    color_quotes(err.pretty().as_str())
+                );
+            }
+        }
+    }};
+}
+
+#[macro_export]
 macro_rules! show_error {
     ($io:expr,$err:expr) => {{
         use std::path::Path;

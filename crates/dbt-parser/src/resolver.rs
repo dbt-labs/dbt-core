@@ -303,8 +303,14 @@ pub async fn incremental_resolve(
     );
 
     // Resolve the dbt properties (schema.yml) files
-    let mut min_properties =
-        resolve_minimal_properties(arg, dbt_project_package, &prev_jinija_env, &base_ctx, token)?;
+    let mut min_properties = resolve_minimal_properties(
+        arg,
+        dbt_project_package,
+        dbt_state.root_project_name(),
+        &prev_jinija_env,
+        &base_ctx,
+        token,
+    )?;
 
     let mut collected_tests = Vec::new();
 
@@ -477,8 +483,14 @@ pub async fn resolve_inner(
         DISPATCH_CONFIG.get().unwrap().read().unwrap().clone(),
     );
     // Resolve the dbt properties (schema.yml) files
-    let mut min_properties =
-        resolve_minimal_properties(arg, package, &jinja_env, &base_ctx, token)?;
+    let mut min_properties = resolve_minimal_properties(
+        arg,
+        package,
+        root_package_name,
+        &jinja_env,
+        &base_ctx,
+        token,
+    )?;
 
     let package_name = package.dbt_project.name.as_str();
 
@@ -492,6 +504,7 @@ pub async fn resolve_inner(
         arg,
         package,
         package_quoting,
+        root_package_name,
         root_project_configs,
         min_properties.source_tables,
         database,

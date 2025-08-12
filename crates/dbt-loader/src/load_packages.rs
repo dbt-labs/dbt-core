@@ -33,6 +33,9 @@ pub async fn load_packages(
     packages_install_path: &Path,
     token: &CancellationToken,
 ) -> FsResult<Vec<DbtPackage>> {
+    // Collect dependency package paths with a flag set to `true`
+    // indicating that they are indeed dependencies. This is necessary
+    // to differentiate between root project and dependencies later on.
     let mut dirs = if packages_install_path.exists() {
         stdfs::read_dir(packages_install_path)?
             .filter_map(|e| e.ok())
@@ -41,7 +44,7 @@ pub async fn load_packages(
                     .map(|ft| ft.is_dir() || ft.is_symlink())
                     .unwrap_or(false)
             })
-            .map(|e| e.path())
+            .map(|e| (e.path(), true))
             .collect()
     } else {
         vec![]
@@ -49,7 +52,8 @@ pub async fn load_packages(
     // Sort packages to make the output deterministic
     dirs.sort();
     // Add root package to the front of the list
-    dirs.insert(0, arg.io.in_dir.clone());
+    // `false` indicates that this is a root project
+    dirs.insert(0, (arg.io.in_dir.clone(), false));
 
     collect_packages(arg, env, collected_vars, dirs, lookup_map, token).await
 }
@@ -61,11 +65,11 @@ pub async fn load_internal_packages(
     internal_packages_install_path: &Path,
     token: &CancellationToken,
 ) -> FsResult<Vec<DbtPackage>> {
-    let mut dbt_internal_packages_dirs: Vec<PathBuf> =
+    let mut dbt_internal_packages_dirs: Vec<(PathBuf, bool)> =
         stdfs::read_dir(internal_packages_install_path)?
             .filter_map(|e| e.ok())
-            .filter(|e| e.file_type().map(|ft| ft.is_dir()).unwrap_or(false))
-            .map(|e| e.path())
+            .filter(|e| e.file_type().map(|ft| ft.is_dir()).unwrap_or(false)) // `true` indicates that this package path is a "dependency", not a root project
+            .map(|e| (e.path(), true))
             .collect();
     dbt_internal_packages_dirs.sort();
     collect_packages(
@@ -135,17 +139,26 @@ async fn collect_packages(
     arg: &LoadArgs,
     env: &JinjaEnv,
     collected_vars: &mut Vec<(String, BTreeMap<String, DbtVars>)>,
-    package_paths: Vec<PathBuf>,
+    package_paths: Vec<(PathBuf, bool)>,
     lookup_map: &BTreeMap<String, String>,
     token: &CancellationToken,
 ) -> FsResult<Vec<DbtPackage>> {
     let mut packages = vec![];
-    for package_path in package_paths {
+    // `is_dependency` Indicates if we are loading a dependency or a root project
+    for (package_path, is_dependency) in package_paths {
         token.check_cancellation()?;
         if package_path.is_dir() {
             if package_path.join(DBT_PROJECT_YML).exists() {
-                let package =
-                    load_inner(arg, env, &package_path, lookup_map, false, collected_vars).await?;
+                let package = load_inner(
+                    arg,
+                    env,
+                    &package_path,
+                    is_dependency,
+                    lookup_map,
+                    false,
+                    collected_vars,
+                )
+                .await?;
                 packages.push(package);
             } else {
                 show_warning!(

@@ -270,6 +270,11 @@ pub struct CommonArgs {
     #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new())]
     pub no_send_anonymous_usage_stats: bool,
 
+    // TODO: currently only used to avoid suppressing warnings/errors from dependencies
+    /// Show all deprecations warnings/errors instead of one per package
+    #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, env = "DBT_SHOW_ALL_DEPRECATIONS",hide = true, value_parser = BoolishValueParser::new())]
+    pub show_all_deprecations: bool,
+
     /// Debug flag
     #[arg(global = true, long, short = 'd', default_value = "false", action = ArgAction::SetTrue,  env = "DBT_DEBUG", value_parser = BoolishValueParser::new(),hide = true)]
     pub debug: bool,
@@ -412,6 +417,7 @@ impl InitArgs {
                 otm_file_name: self.common_args.otm_file_name.clone(),
                 #[cfg(all(debug_assertions, feature = "otlp"))]
                 export_to_otlp: false,
+                show_all_deprecations: self.common_args.show_all_deprecations,
                 show_timings: arg.from_main,
                 build_cache_mode: arg.io.build_cache_mode,
                 build_cache_url: arg.io.build_cache_url,
@@ -498,6 +504,7 @@ impl CommonArgs {
                 otm_file_name: self.otm_file_name.clone(),
                 #[cfg(all(debug_assertions, feature = "otlp"))]
                 export_to_otlp: false,
+                show_all_deprecations: arg.io.show_all_deprecations,
                 show_timings: arg.from_main,
                 build_cache_mode: arg.io.build_cache_mode,
                 build_cache_url: arg.io.build_cache_url,
@@ -586,6 +593,7 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             otm_file_name: cli.common_args().otm_file_name,
             #[cfg(all(debug_assertions, feature = "otlp"))]
             export_to_otlp: false,
+            show_all_deprecations: cli.common_args().show_all_deprecations,
             show_timings: true, // always true for main
             build_cache_mode: None,
             build_cache_url: None,
@@ -615,6 +623,7 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             otm_file_name: cli.common_args().otm_file_name,
             #[cfg(all(debug_assertions, feature = "otlp"))]
             export_to_otlp: false,
+            show_all_deprecations: cli.common_args().show_all_deprecations,
             show_timings: false, // always false for lib
             build_cache_mode: None,
             build_cache_url: None,

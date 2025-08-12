@@ -8,7 +8,8 @@ use std::{
 };
 
 use dbt_common::{
-    ErrorCode, FsResult, fs_err, io_args::IoArgs, show_error, show_warning_soon_to_be_error,
+    ErrorCode, FsResult, fs_err, io_args::IoArgs, show_error, show_package_error,
+    show_warning_soon_to_be_error,
 };
 use dbt_schemas::schemas::project::{
     DataTestConfig, DefaultTo, ExposureConfig, IterChildren, ModelConfig, SeedConfig,
@@ -49,8 +50,9 @@ impl<T: DefaultTo<T>> DbtProjectConfig<T> {
         io: &IoArgs,
         dbt_config: &T,
         configs: &S,
+        dependency_package_name: Option<&str>,
     ) -> FsResult<Self> {
-        recur_build_dbt_project_config(io, dbt_config, configs, "")
+        recur_build_dbt_project_config(io, dbt_config, configs, "", dependency_package_name)
     }
 
     /// Get the configuration for a ref path
@@ -135,6 +137,7 @@ pub fn recur_build_dbt_project_config<T: DefaultTo<T>, S: Into<T> + IterChildren
     parent_config: &T,
     child: &S,
     key_path: &str,
+    dependency_package_name: Option<&str>,
 ) -> FsResult<DbtProjectConfig<T>> {
     let mut child_config: T = child.clone().into();
     child_config.default_to(parent_config);
@@ -161,7 +164,13 @@ pub fn recur_build_dbt_project_config<T: DefaultTo<T>, S: Into<T> + IterChildren
                     loc => raw.as_ref().map(|r| r.span()).unwrap_or_default(),
                     "Ignored unexpected key '{trimmed_key}'.{suggestion} YAML path: '{key_path}'."
                 );
-                if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+                if let Some(package_name) = dependency_package_name
+                    && !io.show_all_deprecations
+                {
+                    // If we are parsing a dependency package, we use a special macros
+                    // that ensures at most one error is shown per package.
+                    show_package_error!(io, package_name);
+                } else if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
                     show_error!(io, err);
                 } else {
                     show_warning_soon_to_be_error!(io, err);
@@ -172,7 +181,13 @@ pub fn recur_build_dbt_project_config<T: DefaultTo<T>, S: Into<T> + IterChildren
 
         children.insert(
             key.clone(),
-            recur_build_dbt_project_config(io, &child_config, child_config_variant, &key_path)?,
+            recur_build_dbt_project_config(
+                io,
+                &child_config,
+                child_config_variant,
+                &key_path,
+                dependency_package_name,
+            )?,
         );
     }
 
@@ -225,6 +240,7 @@ pub fn build_root_project_configs(
                 quoting: Some(root_project_quoting),
                 ..Default::default()
             },
+            None,
         )?,
         sources: init_project_config(
             io_args,
@@ -234,6 +250,7 @@ pub fn build_root_project_configs(
                 quoting: Some(root_project_quoting),
                 ..Default::default()
             },
+            None,
         )?,
         snapshots: init_project_config(
             io_args,
@@ -243,6 +260,7 @@ pub fn build_root_project_configs(
                 quoting: Some(root_project_quoting),
                 ..Default::default()
             },
+            None,
         )?,
         seeds: init_project_config(
             io_args,
@@ -252,6 +270,7 @@ pub fn build_root_project_configs(
                 quoting: Some(root_project_quoting),
                 ..Default::default()
             },
+            None,
         )?,
         tests: init_project_config(
             io_args,
@@ -261,6 +280,7 @@ pub fn build_root_project_configs(
                 quoting: Some(root_project_quoting),
                 ..Default::default()
             },
+            None,
         )?,
         unit_tests: init_project_config(
             io_args,
@@ -269,6 +289,7 @@ pub fn build_root_project_configs(
                 enabled: Some(true),
                 ..Default::default()
             },
+            None,
         )?,
         exposures: init_project_config(
             io_args,
@@ -277,6 +298,7 @@ pub fn build_root_project_configs(
                 enabled: Some(true),
                 ..Default::default()
             },
+            None,
         )?,
     })
 }
@@ -286,9 +308,10 @@ pub fn init_project_config<T: DefaultTo<T>, S: Into<T> + IterChildren<S> + Clone
     io_args: &IoArgs,
     dbt_project_configs: &Option<S>,
     default_config: T,
+    dependency_package_name: Option<&str>,
 ) -> FsResult<DbtProjectConfig<T>> {
     let project_config = if let Some(configs) = dbt_project_configs {
-        DbtProjectConfig::try_new(io_args, &default_config, configs)?
+        DbtProjectConfig::try_new(io_args, &default_config, configs, dependency_package_name)?
     } else {
         DbtProjectConfig {
             config: default_config,

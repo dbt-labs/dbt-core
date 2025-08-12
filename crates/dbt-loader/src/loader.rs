@@ -69,7 +69,7 @@ pub async fn load(
     // Read the input file
     let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);
 
-    let raw_dbt_project_in_val = value_from_file(&arg.io, &dbt_project_path, false)?;
+    let raw_dbt_project_in_val = value_from_file(&arg.io, &dbt_project_path, false, None)?;
     let env = initialize_load_profile_jinja_environment();
     let ctx: BTreeMap<String, minijinja::Value> = BTreeMap::from([
         (
@@ -83,7 +83,7 @@ pub async fn load(
     ]);
 
     let simplified_dbt_project: DbtProjectSimplified =
-        into_typed_with_jinja(&arg.io, raw_dbt_project_in_val, true, &env, &ctx, &[])?;
+        into_typed_with_jinja(&arg.io, raw_dbt_project_in_val, true, &env, &ctx, &[], None)?;
 
     if simplified_dbt_project.data_paths.is_some() {
         return err!(
@@ -189,6 +189,7 @@ pub async fn load(
             arg_ref,
             &prev_env,
             &arg.io.in_dir,
+            false,
             &package_map_lookup,
             true,
             &mut dummy_collected_vars,
@@ -292,6 +293,8 @@ pub async fn load_inner(
     arg: &LoadArgs,
     env: &JinjaEnv,
     package_path: &Path,
+    // Indicates if we are loading a dependency or a root project
+    is_dependency: bool,
     package_lookup_map: &BTreeMap<String, String>,
     skip_dependencies: bool,
     collected_vars: &mut Vec<(String, BTreeMap<String, DbtVars>)>,
@@ -319,7 +322,29 @@ pub async fn load_inner(
         fsinfo!(LOADING.into(), show_project_path.display().to_string())
     );
 
-    let dbt_project = load_project_yml(&arg.io, env, &dbt_project_path, arg.vars.clone())?;
+    let dependency_package_name = if is_dependency {
+        Some(
+            dbt_project_path
+                .parent()
+                .and_then(|p| p.file_name())
+                .map(|os_str| os_str.to_string_lossy().to_string())
+                .ok_or(fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "Failed to get package name from path: {}",
+                    &dbt_project_path.display()
+                ))?,
+        )
+    } else {
+        None
+    };
+
+    let dbt_project = load_project_yml(
+        &arg.io,
+        env,
+        &dbt_project_path,
+        dependency_package_name.as_deref(),
+        arg.vars.clone(),
+    )?;
     load_vars(
         &dbt_project.name,
         (*dbt_project.vars)
@@ -500,7 +525,12 @@ pub async fn load_inner(
     let dependencies = if skip_dependencies {
         BTreeSet::new()
     } else {
-        identify_package_dependencies(&arg.io, package_path, package_lookup_map)?
+        identify_package_dependencies(
+            &arg.io,
+            package_path,
+            package_lookup_map,
+            dependency_package_name.as_deref(),
+        )?
     };
     Ok(DbtPackage {
         dbt_project,

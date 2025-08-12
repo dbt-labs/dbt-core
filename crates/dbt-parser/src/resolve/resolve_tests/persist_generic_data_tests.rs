@@ -6,6 +6,7 @@ use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use dbt_common::io_args;
 use dbt_common::io_args::IoArgs;
 use dbt_common::show_error;
+use dbt_common::show_package_error;
 use dbt_common::show_warning_soon_to_be_error;
 use dbt_common::{ErrorCode, err};
 use dbt_common::{fs_err, stdfs};
@@ -46,6 +47,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
     pub fn persist(
         &self,
         project_name: &str,
+        root_project_name: &str,
         collected_tests: &mut Vec<DbtAsset>,
         adapter_type: &str,
         is_replay_mode: bool,
@@ -62,6 +64,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                     let column_test: DataTests = test.clone();
                     let dbt_asset = persist_inner(
                         project_name,
+                        root_project_name,
                         &test_config,
                         test.column_name(),
                         &column_test,
@@ -91,6 +94,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                         };
                         let dbt_asset = persist_inner(
                             project_name,
+                            root_project_name,
                             &test_config,
                             Some(&quoted_column_name),
                             test,
@@ -109,13 +113,27 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
 
 fn persist_inner(
     project_name: &str,
+    root_project_name: &str,
     test_config: &GenericTestConfig,
     column_name: Option<&str>,
     test: &DataTests,
     is_replay_mode: bool,
     io_args: &IoArgs,
 ) -> FsResult<DbtAsset> {
-    let details = get_test_details(test, test_config, column_name, io_args)?;
+    // If this is not the root project, we need to pass the project name as a dependency package name
+    let dependecy_package_name = if project_name != root_project_name {
+        Some(project_name)
+    } else {
+        None
+    };
+
+    let details = get_test_details(
+        test,
+        test_config,
+        column_name,
+        io_args,
+        dependecy_package_name,
+    )?;
     let TestDetails {
         test_macro_name,
         custom_test_name,
@@ -167,6 +185,7 @@ fn get_test_details(
     test_config: &GenericTestConfig,
     column_name: Option<&str>,
     io_args: &IoArgs,
+    dependency_package_name: Option<&str>,
 ) -> FsResult<TestDetails> {
     let mut kwargs = BTreeMap::new();
     let mut config: Option<DataTestConfig> = None;
@@ -218,6 +237,7 @@ fn get_test_details(
                     &mk.deprecated_args_and_configs,
                     &mk.config,
                     io_args,
+                    dependency_package_name,
                 )?;
                 kwargs.extend(extraction_result.kwargs);
                 jinja_set_vars.extend(extraction_result.jinja_set_vars);
@@ -239,6 +259,7 @@ fn get_test_details(
                     &inner.deprecated_args_and_configs,
                     &inner.config,
                     io_args,
+                    dependency_package_name,
                 )?;
                 kwargs.extend(extraction_result.kwargs);
                 jinja_set_vars.extend(extraction_result.jinja_set_vars);
@@ -267,11 +288,13 @@ struct KwargsExtractionResult {
 }
 
 /// Simplified extraction of kwargs and Jinja variables for strongly typed custom tests
+#[allow(clippy::cognitive_complexity)]
 fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
     arguments: &Verbatim<Option<dbt_serde_yaml::Value>>,
     deprecated_args_and_configs: &Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
     existing_config: &Option<DataTestConfig>,
     io_args: &IoArgs,
+    dependency_package_name: Option<&str>,
 ) -> FsResult<KwargsExtractionResult> {
     // Start with existing config
     let mut final_config = existing_config.clone();
@@ -316,7 +339,14 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
             "{}",
             message
         );
-        if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+
+        if let Some(package_name) = dependency_package_name
+            && !io_args.show_all_deprecations
+        {
+            // If we are parsing a dependency package, we use a special macros
+            // that ensures at most one error is shown per package.
+            show_package_error!(io_args, package_name);
+        } else if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
             show_error!(io_args, schema_error);
         } else {
             show_warning_soon_to_be_error!(io_args, schema_error);
@@ -1183,6 +1213,7 @@ mod tests {
             &empty_deprecated,
             &existing_config,
             &io_args,
+            None,
         )
         .unwrap();
         let kwargs = extraction_result.kwargs;

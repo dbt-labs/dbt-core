@@ -32,6 +32,7 @@ pub fn resolve_sources(
     arg: &ResolveArgs,
     package: &DbtPackage,
     package_quoting: DbtQuoting,
+    root_package_name: &str,
     root_project_configs: &RootProjectConfigs,
     source_properties: BTreeMap<(String, String), MinimalPropertiesEntry>,
     database: &str,
@@ -50,6 +51,12 @@ pub fn resolve_sources(
     let mut disabled_sources: HashMap<String, Arc<DbtSource>> = HashMap::new();
     let package_name = package.dbt_project.name.as_ref();
 
+    let dependency_package_name = if package.dbt_project.name != root_package_name {
+        Some(package.dbt_project.name.as_str())
+    } else {
+        None
+    };
+
     let special_chars = Regex::new(r"[^a-zA-Z0-9_]").unwrap();
 
     let local_project_config = init_project_config(
@@ -60,10 +67,18 @@ pub fn resolve_sources(
             quoting: Some(package_quoting),
             ..Default::default()
         },
+        dependency_package_name,
     )?;
     for ((source_name, table_name), mpe) in source_properties.into_iter() {
-        let source: SourceProperties =
-            into_typed_with_jinja(io_args, mpe.schema_value, false, jinja_env, base_ctx, &[])?;
+        let source: SourceProperties = into_typed_with_jinja(
+            io_args,
+            mpe.schema_value,
+            false,
+            jinja_env,
+            base_ctx,
+            &[],
+            dependency_package_name,
+        )?;
 
         let table: Tables = into_typed_with_jinja(
             io_args,
@@ -72,6 +87,7 @@ pub fn resolve_sources(
             jinja_env,
             base_ctx,
             &[],
+            dependency_package_name,
         )?;
         let database: String = source
             .database
@@ -285,6 +301,7 @@ pub fn resolve_sources(
                 .as_testable()
                 .persist(
                     package_name,
+                    root_package_name,
                     collected_tests,
                     adapter_type,
                     is_replay_mode,

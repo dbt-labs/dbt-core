@@ -23,6 +23,7 @@ use dbt_common::show_error;
 use dbt_common::show_warning;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
+use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::CommonAttributes;
 use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::DbtModelAttr;
@@ -94,6 +95,7 @@ pub async fn resolve_models(
                 quoting: Some(package_quoting),
                 ..Default::default()
             },
+            dependency_package_name_from_ctx(&env, base_ctx),
         )?
     };
 
@@ -367,6 +369,7 @@ pub async fn resolve_models(
 
                 properties.as_testable().persist(
                     package_name,
+                    &root_project.name,
                     collected_tests,
                     adapter_type,
                     is_replay_mode,
