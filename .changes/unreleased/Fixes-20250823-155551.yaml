@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fixes issue with package locking, where using environment variables would cause lockfile regeneration in different environments
+time: 2025-08-23T15:55:51.916929-07:00
+custom:
+    Author: ttusing
+    Issue: "11953"

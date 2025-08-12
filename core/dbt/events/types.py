@@ -1517,6 +1517,14 @@ class DepsFoundDuplicatePackage(InfoLevel):
         return f"Found duplicate package in packages.yml, removing: {self.removed_package}"
 
 
+class DepsLockfileRegenerating(WarnLevel):
+    def code(self):
+        return "M034"
+
+    def message(self) -> str:
+        return f"Package lockfile is out of sync with packages.yml. Regenerating lockfile at: {self.lock_filepath}"
+
+
 class DepsScrubbedPackageName(WarnLevel):
     def code(self):
         return "M035"
