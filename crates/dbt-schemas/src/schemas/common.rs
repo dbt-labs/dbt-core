@@ -494,7 +494,7 @@ pub enum DbtIncrementalStrategy {
     Unknown,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, JsonSchema)]
 #[serde(untagged)]
 pub enum DbtUniqueKey {
     Single(String),
@@ -590,11 +590,17 @@ pub enum ConstraintType {
     Custom,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize)]
 #[serde(untagged)]
 pub enum DbtChecksum {
     String(String),
-    Object { name: String, checksum: String },
+    Object(DbtChecksumObject),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DbtChecksumObject {
+    pub name: String,
+    pub checksum: String,
 }
 
 impl Default for DbtChecksum {
@@ -607,30 +613,11 @@ impl PartialEq for DbtChecksum {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::String(s1), Self::String(s2)) => s1 == s2,
-            (
-                Self::Object {
-                    name: n1,
-                    checksum: c1,
-                },
-                Self::Object {
-                    name: n2,
-                    checksum: c2,
-                },
-            ) => n1.to_lowercase() == n2.to_lowercase() && c1 == c2,
-            (
-                Self::String(c1),
-                Self::Object {
-                    name: _,
-                    checksum: c2,
-                },
-            ) => c1 == c2,
-            (
-                Self::Object {
-                    name: _,
-                    checksum: c1,
-                },
-                Self::String(c2),
-            ) => c1 == c2,
+            (Self::Object(o1), Self::Object(o2)) => {
+                o1.name.to_lowercase() == o2.name.to_lowercase() && o1.checksum == o2.checksum
+            }
+            (Self::String(c1), Self::Object(o2)) => *c1 == o2.checksum,
+            (Self::Object(o1), Self::String(c2)) => o1.checksum == *c2,
         }
     }
 }
@@ -640,10 +627,10 @@ impl DbtChecksum {
         let mut hasher = Sha256::new();
         hasher.update(s);
         let checksum = hasher.finalize();
-        Self::Object {
+        Self::Object(DbtChecksumObject {
             name: "SHA256".to_string(),
             checksum: hex::encode(checksum),
-        }
+        })
     }
 }
 
@@ -683,7 +670,7 @@ pub struct Given {
     pub fixture: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, UntaggedEnumDeserialize, Clone, JsonSchema)]
 #[serde(untagged)]
 pub enum Rows {
     String(String),

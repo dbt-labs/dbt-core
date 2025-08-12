@@ -177,7 +177,7 @@ pub fn try_string_to_type<T: DeserializeOwned>(
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, JsonSchema)]
 #[serde(untagged)]
 pub enum StringOrInteger {
     String(String),
@@ -234,14 +234,14 @@ impl StringOrInteger {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, UntaggedEnumDeserialize, Clone, PartialEq, JsonSchema)]
 #[serde(untagged)]
 pub enum StringOrMap {
     StringValue(String),
     MapValue(HashMap<String, YmlValue>),
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Serialize, UntaggedEnumDeserialize, Debug, Clone, JsonSchema)]
 #[serde(untagged)]
 pub enum StringOrArrayOfStrings {
     String(String),
@@ -347,7 +347,7 @@ impl PartialEq for SpannedStringOrArrayOfStrings {
 
 impl Eq for SpannedStringOrArrayOfStrings {}
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, JsonSchema)]
 #[serde(untagged)]
 pub enum FloatOrString {
     Number(f32),

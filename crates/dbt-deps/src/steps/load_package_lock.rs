@@ -118,7 +118,9 @@ fn try_load_from_deprecated_dbt_packages_lock(
             let mut packages = Vec::new();
             for package in deprecated_packages {
                 match package {
-                    DeprecatedDbtPackageLock::Hub { package, version } => {
+                    DeprecatedDbtPackageLock::Hub(hub) => {
+                        let package = hub.package;
+                        let version = hub.version;
                         // Split package name and version (if "/" exists)
                         let parts: Vec<&str> = package.split('/').collect();
                         let package_name = parts.last().expect("Package name should exist");
@@ -141,13 +143,13 @@ fn try_load_from_deprecated_dbt_packages_lock(
                             return Ok(None);
                         }
                     }
-                    DeprecatedDbtPackageLock::Git {
-                        git,
-                        revision,
-                        warn_unpinned,
-                        subdirectory,
-                        unrendered,
-                    } => {
+                    DeprecatedDbtPackageLock::Git(package) => {
+                        let git = package.git;
+                        let revision = package.revision;
+                        let warn_unpinned = package.warn_unpinned;
+                        let subdirectory = package.subdirectory;
+                        let unrendered = package.unrendered;
+
                         let parts: Vec<&str> = git.split('/').collect();
                         let package_name = parts.last().expect("Package name should exist");
                         if avail_packages.contains(package_name.to_lowercase().as_str()) {
@@ -172,7 +174,8 @@ fn try_load_from_deprecated_dbt_packages_lock(
                             return Ok(None);
                         }
                     }
-                    DeprecatedDbtPackageLock::Local { local } => {
+                    DeprecatedDbtPackageLock::Local(local) => {
+                        let local = local.local;
                         // Find the package name from the `dbt_project.yml` file located in the local package
                         let dbt_project_path =
                             if let Ok(dbt_project_path) = stdfs::diff_paths(&local, &io.in_dir) {

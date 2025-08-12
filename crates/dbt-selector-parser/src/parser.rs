@@ -15,8 +15,8 @@ use dbt_common::{
 };
 
 use dbt_schemas::schemas::selectors::{
-    AtomExpr, CompositeExpr, CompositeKind, SelectorDefinition, SelectorDefinitionValue,
-    SelectorExpr,
+    AtomExpr, CompositeExpr, CompositeKind, MethodAtomExpr, SelectorDefinition,
+    SelectorDefinitionValue, SelectorExpr,
 };
 
 #[derive(Debug, Clone)]
@@ -64,12 +64,11 @@ impl<'a> SelectorParser<'a> {
 
         for value in values {
             // Check if this value is an exclude expression
-            if let SelectorDefinitionValue::Full(SelectorExpr::Atom(AtomExpr::Exclude {
-                exclude,
-            })) = value
+            if let SelectorDefinitionValue::Full(SelectorExpr::Atom(AtomExpr::Exclude(exclude))) =
+                value
             {
                 // Handle exclude as a special case within composite expressions
-                let exprs = self.collect_definition_includes(exclude)?;
+                let exprs = self.collect_definition_includes(&exclude.exclude)?;
                 let exclude_expression = match exprs.len() {
                     0 => return Err(fs_err!(ErrorCode::SelectorError, "Empty exclude list")),
                     1 => exprs.into_iter().next().unwrap(),
@@ -107,30 +106,20 @@ impl<'a> SelectorParser<'a> {
 
     fn parse_atom(&self, atom: &AtomExpr) -> FsResult<SelectExpression> {
         match atom {
-            AtomExpr::Method {
-                method,
-                value,
-                childrens_parents,
-                parents,
-                children,
-                parents_depth,
-                children_depth,
-                indirect_selection,
-                exclude,
-            } => {
+            AtomExpr::Method(expr) => {
                 // Special handling for selector method - recursively resolve the referenced selector
-                if method == "selector" {
+                if expr.method == "selector" {
                     // Recursively resolve the referenced selector
-                    let referenced_selector = self.parse_named(value)?;
+                    let referenced_selector = self.parse_named(&expr.value)?;
 
                     // Note: Per the docs, graph operators (parents, children, etc.) are NOT
                     // supported for selector inheritance, so we ignore them and return the
                     // referenced selector's include expression as-is
-                    if *childrens_parents
-                        || *parents
-                        || *children
-                        || parents_depth.is_some()
-                        || children_depth.is_some()
+                    if expr.childrens_parents
+                        || expr.parents
+                        || expr.children
+                        || expr.parents_depth.is_some()
+                        || expr.children_depth.is_some()
                     {
                         let warning = fs_err!(
                             ErrorCode::SelectorError,
@@ -143,17 +132,17 @@ impl<'a> SelectorParser<'a> {
                     Ok(referenced_selector)
                 } else {
                     // Use atom_to_select_expression which handles the exclude field properly
-                    self.atom_to_select_expression(AtomExpr::Method {
-                        method: method.clone(),
-                        value: value.clone(),
-                        childrens_parents: *childrens_parents,
-                        parents: *parents,
-                        children: *children,
-                        parents_depth: *parents_depth,
-                        children_depth: *children_depth,
-                        indirect_selection: *indirect_selection,
-                        exclude: exclude.clone(),
-                    })
+                    self.atom_to_select_expression(AtomExpr::Method(MethodAtomExpr {
+                        method: expr.method.clone(),
+                        value: expr.value.clone(),
+                        childrens_parents: expr.childrens_parents,
+                        parents: expr.parents,
+                        children: expr.children,
+                        parents_depth: expr.parents_depth,
+                        children_depth: expr.children_depth,
+                        indirect_selection: expr.indirect_selection,
+                        exclude: expr.exclude.clone(),
+                    }))
                 }
             }
 
@@ -165,7 +154,7 @@ impl<'a> SelectorParser<'a> {
                     ));
                 }
                 let (m, v) = method_value.iter().next().unwrap();
-                let wrapper = AtomExpr::Method {
+                let wrapper = AtomExpr::Method(MethodAtomExpr {
                     method: m.clone(),
                     value: v.clone(),
                     childrens_parents: false,
@@ -175,11 +164,11 @@ impl<'a> SelectorParser<'a> {
                     children_depth: None,
                     indirect_selection: Some(IndirectSelection::default()),
                     exclude: None,
-                };
+                });
                 self.atom_to_select_expression(wrapper)
             }
 
-            AtomExpr::Exclude { exclude: _ } => {
+            AtomExpr::Exclude(_) => {
                 err!(
                     ErrorCode::SelectorError,
                     "Top level exclude not allowed in YAML selectors"
@@ -197,17 +186,16 @@ impl<'a> SelectorParser<'a> {
 
     fn atom_to_select_expression(&self, atom: AtomExpr) -> FsResult<SelectExpression> {
         match atom {
-            AtomExpr::Method {
-                method,
-                value,
-                childrens_parents,
-                parents,
-                children,
-                parents_depth,
-                children_depth,
-                indirect_selection,
-                exclude,
-            } => {
+            AtomExpr::Method(expr) => {
+                let method = expr.method.clone();
+                let value = expr.value.clone();
+                let childrens_parents = expr.childrens_parents;
+                let parents = expr.parents;
+                let children = expr.children;
+                let parents_depth = expr.parents_depth;
+                let children_depth = expr.children_depth;
+                let indirect_selection = expr.indirect_selection;
+                let exclude = expr.exclude;
                 // ── 1️⃣  resolve method / args ────────────────────────────────
                 let (name, args) = {
                     let mut parts = method.split('.').map(|s| s.to_string());
@@ -277,9 +265,9 @@ impl<'a> SelectorParser<'a> {
                     None,
                 )))
             }
-            AtomExpr::Exclude { exclude } => {
+            AtomExpr::Exclude(expr) => {
                 // A standalone exclude atom - this becomes a top-level exclude
-                let exprs = self.collect_definition_includes(&exclude)?;
+                let exprs = self.collect_definition_includes(&expr.exclude)?;
                 let exclude_expr = match exprs.len() {
                     0 => return Err(fs_err!(ErrorCode::SelectorError, "Empty exclude list")),
                     1 => exprs.into_iter().next().unwrap(),
@@ -293,6 +281,8 @@ impl<'a> SelectorParser<'a> {
 
 #[cfg(test)]
 mod tests {
+    use dbt_schemas::schemas::selectors::ExcludeAtomExpr;
+
     use super::*;
 
     #[test]
@@ -367,7 +357,7 @@ mod tests {
         let parser = SelectorParser::new(defs, &io_args);
 
         // Test single exclude - should be nested within SelectionCriteria
-        let single_result = parser.parse_atom(&AtomExpr::Method {
+        let single_result = parser.parse_atom(&AtomExpr::Method(MethodAtomExpr {
             method: "tag".to_string(),
             value: "nightly".to_string(),
             childrens_parents: false,
@@ -379,7 +369,7 @@ mod tests {
             exclude: Some(vec![SelectorDefinitionValue::String(
                 "model_to_exclude".to_string(),
             )]),
-        })?;
+        }))?;
 
         // The result should be an Atom with nested exclude
         if let SelectExpression::Atom(criteria) = single_result {
@@ -401,7 +391,7 @@ mod tests {
         }
 
         // Test multiple excludes - should be nested within SelectionCriteria as Or
-        let multiple_result = parser.parse_atom(&AtomExpr::Method {
+        let multiple_result = parser.parse_atom(&AtomExpr::Method(MethodAtomExpr {
             method: "tag".to_string(),
             value: "nightly".to_string(),
             childrens_parents: false,
@@ -414,7 +404,7 @@ mod tests {
                 SelectorDefinitionValue::String("model_a".to_string()),
                 SelectorDefinitionValue::String("model_b".to_string()),
             ]),
-        })?;
+        }))?;
 
         // The result should be an Atom with nested exclude containing Or
         if let SelectExpression::Atom(criteria) = multiple_result {
@@ -452,9 +442,9 @@ mod tests {
         let io_args = IoArgs::default();
         let parser = SelectorParser::new(defs, &io_args);
 
-        let result = parser.parse_atom(&AtomExpr::Exclude {
+        let result = parser.parse_atom(&AtomExpr::Exclude(ExcludeAtomExpr {
             exclude: vec![SelectorDefinitionValue::String("model_exclude".to_string())],
-        });
+        }));
 
         assert!(result.is_err());
         if let Err(e) = result {
@@ -504,19 +494,21 @@ mod tests {
         let composite_with_exclude = parser.parse_composite(&CompositeExpr {
             kind: CompositeKind::Union(vec![
                 SelectorDefinitionValue::String("tag:bar".to_string()),
-                SelectorDefinitionValue::Full(SelectorExpr::Atom(AtomExpr::Method {
-                    method: "tag".to_string(),
-                    value: "baz".to_string(),
-                    childrens_parents: false,
-                    parents: false,
-                    children: false,
-                    parents_depth: None,
-                    children_depth: None,
-                    indirect_selection: None,
-                    exclude: Some(vec![SelectorDefinitionValue::String(
-                        "single_exclude".to_string(),
-                    )]),
-                })),
+                SelectorDefinitionValue::Full(SelectorExpr::Atom(AtomExpr::Method(
+                    MethodAtomExpr {
+                        method: "tag".to_string(),
+                        value: "baz".to_string(),
+                        childrens_parents: false,
+                        parents: false,
+                        children: false,
+                        parents_depth: None,
+                        children_depth: None,
+                        indirect_selection: None,
+                        exclude: Some(vec![SelectorDefinitionValue::String(
+                            "single_exclude".to_string(),
+                        )]),
+                    },
+                ))),
             ]),
         })?;
 
@@ -577,7 +569,7 @@ mod tests {
         let parser = SelectorParser::new(defs, &io_args);
 
         // Test basic inheritance with additional exclude
-        let result = parser.parse_atom(&AtomExpr::Method {
+        let result = parser.parse_atom(&AtomExpr::Method(MethodAtomExpr {
             method: "selector".to_string(),
             value: "foo_and_bar".to_string(),
             childrens_parents: false,
@@ -589,7 +581,7 @@ mod tests {
             exclude: Some(vec![SelectorDefinitionValue::String(
                 "tag:buzz".to_string(),
             )]),
-        })?;
+        }))?;
 
         // Should inherit the intersection from foo_and_bar
         if let SelectExpression::And(exprs) = result {
@@ -619,19 +611,21 @@ mod tests {
                 name: "base_with_exclude".to_string(),
                 description: None,
                 default: None,
-                definition: SelectorDefinitionValue::Full(SelectorExpr::Atom(AtomExpr::Method {
-                    method: "tag".to_string(),
-                    value: "production".to_string(),
-                    childrens_parents: false,
-                    parents: false,
-                    children: false,
-                    parents_depth: None,
-                    children_depth: None,
-                    indirect_selection: None,
-                    exclude: Some(vec![SelectorDefinitionValue::String(
-                        "base_exclude".to_string(),
-                    )]),
-                })),
+                definition: SelectorDefinitionValue::Full(SelectorExpr::Atom(AtomExpr::Method(
+                    MethodAtomExpr {
+                        method: "tag".to_string(),
+                        value: "production".to_string(),
+                        childrens_parents: false,
+                        parents: false,
+                        children: false,
+                        parents_depth: None,
+                        children_depth: None,
+                        indirect_selection: None,
+                        exclude: Some(vec![SelectorDefinitionValue::String(
+                            "base_exclude".to_string(),
+                        )]),
+                    },
+                ))),
             },
         );
 
@@ -639,7 +633,7 @@ mod tests {
         let parser = SelectorParser::new(defs, &io_args);
 
         // Reference the base selector and add more excludes
-        let result = parser.parse_atom(&AtomExpr::Method {
+        let result = parser.parse_atom(&AtomExpr::Method(MethodAtomExpr {
             method: "selector".to_string(),
             value: "base_with_exclude".to_string(),
             childrens_parents: false,
@@ -651,7 +645,7 @@ mod tests {
             exclude: Some(vec![SelectorDefinitionValue::String(
                 "additional_exclude".to_string(),
             )]),
-        })?;
+        }))?;
 
         // Should return the base selector's include expression (which has nested exclude)
         if let SelectExpression::Atom(criteria) = result {
@@ -716,7 +710,7 @@ mod tests {
         }
 
         // Test unknown selector in inheritance
-        let inheritance_result = parser.parse_atom(&AtomExpr::Method {
+        let inheritance_result = parser.parse_atom(&AtomExpr::Method(MethodAtomExpr {
             method: "selector".to_string(),
             value: "unknown_selector".to_string(),
             childrens_parents: false,
@@ -726,7 +720,7 @@ mod tests {
             children_depth: None,
             indirect_selection: None,
             exclude: None,
-        });
+        }));
         assert!(inheritance_result.is_err());
     }
 
@@ -736,7 +730,7 @@ mod tests {
         let io_args = IoArgs::default();
         let parser = SelectorParser::new(defs, &io_args);
 
-        let result = parser.parse_atom(&AtomExpr::Method {
+        let result = parser.parse_atom(&AtomExpr::Method(MethodAtomExpr {
             method: "tag".to_string(),
             value: "nightly".to_string(),
             childrens_parents: true,
@@ -746,7 +740,7 @@ mod tests {
             children_depth: Some(3),
             indirect_selection: Some(IndirectSelection::Cautious),
             exclude: None,
-        })?;
+        }))?;
 
         if let SelectExpression::Atom(criteria) = result {
             assert_eq!(criteria.method, MethodName::Tag);
@@ -767,7 +761,7 @@ mod tests {
         let io_args = IoArgs::default();
         let parser = SelectorParser::new(defs, &io_args);
 
-        let expr = SelectorExpr::Atom(AtomExpr::Method {
+        let expr = SelectorExpr::Atom(AtomExpr::Method(MethodAtomExpr {
             method: "tag".to_string(),
             value: "nightly".to_string(),
             childrens_parents: false,
@@ -777,7 +771,7 @@ mod tests {
             children_depth: None,
             indirect_selection: Some(IndirectSelection::default()),
             exclude: None,
-        });
+        }));
 
         let result = parser.parse_definition(&SelectorDefinitionValue::Full(expr))?;
 

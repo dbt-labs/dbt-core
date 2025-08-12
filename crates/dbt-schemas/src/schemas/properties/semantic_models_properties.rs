@@ -1,6 +1,6 @@
 use crate::schemas::{common::Dimension, project::SemanticModelConfig};
 
-use dbt_serde_yaml::JsonSchema;
+use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
@@ -47,7 +47,7 @@ pub struct EntityConfig {
     pub meta: Option<BTreeMap<String, YmlValue>>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, JsonSchema)]
 #[serde(untagged)]
 pub enum EntityExpr {
     String(String),
@@ -110,7 +110,7 @@ pub enum MeasureAgg {
     median,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, JsonSchema)]
 #[serde(untagged)]
 pub enum _MeasureExpr {
     String(String),

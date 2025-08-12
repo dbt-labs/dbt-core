@@ -1,5 +1,5 @@
 use chrono_tz::Tz;
-use dbt_serde_yaml::Spanned;
+use dbt_serde_yaml::{Spanned, UntaggedEnumDeserialize};
 use std::{
     any::Any,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -159,7 +159,7 @@ pub struct DbtPackage {
     pub all_paths: HashMap<ResourcePathKind, Vec<(PathBuf, SystemTime)>>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, UntaggedEnumDeserialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum DbtVars {
     Vars(BTreeMap<String, DbtVars>),

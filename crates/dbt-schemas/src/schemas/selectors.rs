@@ -85,46 +85,12 @@ pub enum CompositeKind {
 //
 
 /// The true leaves: either a method, a shorthand, or an exclude
-#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+#[derive(Serialize, UntaggedEnumDeserialize, Debug, Clone, JsonSchema)]
 #[serde(untagged)]
 pub enum AtomExpr {
-    // TODO: UntaggedEnumDeserialize does not support inlined struct variants --
-    // these must be converted into named structs.
-    /// Leaf node that corresponds to a single CLI-style selector
-    /// with optional graph-walk modifiers.
-    Method {
-        method: String,
-        value: String,
-
-        // graph-walk flags (all optional / default = false)
-        #[serde(default)]
-        childrens_parents: bool,
-        #[serde(default)]
-        parents: bool,
-        #[serde(default)]
-        children: bool,
-
-        // depth limits
-        #[serde(default)]
-        parents_depth: Option<u32>,
-        #[serde(default)]
-        children_depth: Option<u32>,
-
-        // indirect selection
-        #[serde(default)]
-        indirect_selection: Option<IndirectSelection>,
-
-        // exclude
-        #[serde(default)]
-        exclude: Option<Vec<SelectorDefinitionValue>>,
-    },
-
-    Exclude {
-        exclude: Vec<SelectorDefinitionValue>,
-    },
-
+    Method(MethodAtomExpr),
+    Exclude(ExcludeAtomExpr),
     /// Direct method name as key with value
-    #[serde(untagged)]
     MethodKey(BTreeMap<String, String>),
 }
 
@@ -143,4 +109,37 @@ pub struct SelectorEntry {
     pub include: SelectExpression, // the include expression (which may contain nested excludes)
     pub is_default: bool,          // original `default: true`
     pub description: Option<String>, // docs string from YAML
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct MethodAtomExpr {
+    pub method: String,
+    pub value: String,
+
+    // graph-walk flags (all optional / default = false)
+    #[serde(default)]
+    pub childrens_parents: bool,
+    #[serde(default)]
+    pub parents: bool,
+    #[serde(default)]
+    pub children: bool,
+
+    // depth limits
+    #[serde(default)]
+    pub parents_depth: Option<u32>,
+    #[serde(default)]
+    pub children_depth: Option<u32>,
+
+    // indirect selection
+    #[serde(default)]
+    pub indirect_selection: Option<IndirectSelection>,
+
+    // exclude
+    #[serde(default)]
+    pub exclude: Option<Vec<SelectorDefinitionValue>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ExcludeAtomExpr {
+    pub exclude: Vec<SelectorDefinitionValue>,
 }

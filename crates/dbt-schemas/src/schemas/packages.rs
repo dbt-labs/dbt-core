@@ -301,27 +301,34 @@ pub struct DeprecatedDbtPackagesLock {
     pub sha1_hash: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, UntaggedEnumDeserialize, Clone)]
 #[serde(untagged)]
 pub enum DeprecatedDbtPackageLock {
-    // TODO: UntaggedEnumDeserialize does not support inlined struct variants --
-    // these must be converted into named structs.
-    Hub {
-        package: String,
-        #[serde(rename = "version")]
-        version: PackageVersion,
-    },
-    Git {
-        git: String,
-        revision: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        warn_unpinned: Option<bool>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        subdirectory: Option<String>,
-        #[serde(flatten)]
-        unrendered: HashMap<String, YmlValue>,
-    },
-    Local {
-        local: PathBuf,
-    },
+    Hub(DeprecatedHubPackageLock),
+    Git(DeprecatedGitPackageLock),
+    Local(DeprecatedLocalPackageLock),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DeprecatedHubPackageLock {
+    pub package: String,
+    #[serde(rename = "version")]
+    pub version: PackageVersion,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DeprecatedGitPackageLock {
+    pub git: String,
+    pub revision: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warn_unpinned: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subdirectory: Option<String>,
+    #[serde(flatten)]
+    pub unrendered: HashMap<String, YmlValue>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DeprecatedLocalPackageLock {
+    pub local: PathBuf,
 }
