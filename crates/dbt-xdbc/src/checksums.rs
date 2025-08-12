@@ -11,7 +11,7 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         &str, // version
     ),
     &str, // checksum
-); 64] = [
+); 69] = [
     (
         ("bigquery", "apple-darwin", "aarch64", "0.18.0+dbt0.0.10"),
         "2fd7deeb5e71f322a6d71e0b28070493c0efb6766436b49d65669d59e96c42cb",
@@ -213,6 +213,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "0ce8a9de9ce44e3066a40b8a19b03db06e5967c6aa24057693f8954ab89250f7",
     ),
     (
+        ("snowflake", "apple-darwin", "aarch64", "0.18.0+dbt0.0.11"),
+        "a9b88af6a8b15cb47c386b8700c55cdb861a8eb5746ef14c9296e236b16a355f",
+    ),
+    (
         ("snowflake", "apple-darwin", "aarch64", "0.18.0+dbt0.0.7"),
         "37514e28d36d9626770a42e1c77fdd433ed852ad4e29b744987b91ce744b16a6",
     ),
@@ -223,6 +227,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("snowflake", "apple-darwin", "x86_64", "0.18.0+dbt0.0.10"),
         "494a7f5d3e12db02bcbc33ab6a28f00ee912d63cf60d7db940a8040aec078189",
+    ),
+    (
+        ("snowflake", "apple-darwin", "x86_64", "0.18.0+dbt0.0.11"),
+        "625bbd3b9d4f9e0a1af8d02ef75b4b20106b4ae05700ea5ce899972d03c579f2",
     ),
     (
         ("snowflake", "apple-darwin", "x86_64", "0.18.0+dbt0.0.7"),
@@ -237,6 +245,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "7fea332ea4a951bcc9dcffc99d8307c2592832781b98492fb7ec2ecedb57a5ae",
     ),
     (
+        ("snowflake", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.11"),
+        "2a90257858af2e4133b0274a34bb9431d2f846a8e80e67937df3c4ce36844904",
+    ),
+    (
         ("snowflake", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.7"),
         "1f2d4bacee219ea68b21cf32e15179271f43ee51090bf133ee5c4d67d6645286",
     ),
@@ -249,6 +261,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "c2b4a32eefb112ed0af9b9704f2377cb538b25b5cd90539282987f556941b533",
     ),
     (
+        ("snowflake", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.11"),
+        "a96cad78dd1e97dd4d7d31a1556014fc46c8733007f78751236a275e98e6d8b3",
+    ),
+    (
         ("snowflake", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.7"),
         "73310197405920e50f563a099123f7626f3e446d37cf57465701d3de682ec32b",
     ),
@@ -259,6 +275,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("snowflake", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.10"),
         "e5f65f57625647a1da7f9cd46523c3076c557f6c77e7afadf9f92a20c1600aac",
+    ),
+    (
+        ("snowflake", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.11"),
+        "81a761e1a94c4ffe2db5dbb07587c48635cdb1f3098ccd9f6edfe81d80f9ffdc",
     ),
     (
         ("snowflake", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.7"),
