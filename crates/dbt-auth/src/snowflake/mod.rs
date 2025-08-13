@@ -1,4 +1,4 @@
-use crate::auth_utils::ensure_private_key_header_footer;
+mod key_format;
 
 use crate::{AdapterConfig, Auth, AuthError};
 use database::Builder as DatabaseBuilder;
@@ -63,23 +63,21 @@ impl Keypair {
     ) -> Result<Vec<(&'static str, String)>, AuthError> {
         let mut pairs = vec![(snowflake::AUTH_TYPE, snowflake::auth_type::JWT.to_owned())];
         match source {
-            PrivateKeySource::Literal(key) => {
-                let is_encrypted_key = if let Some(pass) = passphrase {
-                    pairs.push((snowflake::JWT_PRIVATE_KEY_PKCS8_PASSWORD, pass));
-                    true
-                } else {
-                    false
-                };
+            PrivateKeySource::Literal(ref key) => {
                 pairs.push((
                     snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
-                    ensure_private_key_header_footer(&key, is_encrypted_key),
+                    key_format::normalize_key(key)?,
                 ));
+                if let Some(pass) = passphrase {
+                    pairs.push((snowflake::JWT_PRIVATE_KEY_PKCS8_PASSWORD, pass));
+                }
             }
             PrivateKeySource::FilePath(path) => {
                 if let Some(pass) = passphrase {
+                    let key = fs::read_to_string(path)?;
                     pairs.push((
                         snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
-                        ensure_private_key_header_footer(&fs::read_to_string(path)?, true),
+                        key_format::normalize_key(&key)?,
                     ));
                     pairs.push((snowflake::JWT_PRIVATE_KEY_PKCS8_PASSWORD, pass));
                 } else {
@@ -344,7 +342,6 @@ impl SnowflakeAuth {
     ) -> Result<DatabaseBuilder, AuthError> {
         let mut builder = DatabaseBuilder::new(self.backend());
 
-        let is_encrypted_key = config.maybe_get_str("private_key_passphrase")?.is_some();
         for key in [
             "user",
             "password",
@@ -378,10 +375,7 @@ impl SnowflakeAuth {
                             .with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::JWT)?;
                         // TODO: maybe it's safe to assume from a file we always get header and footer formatted private key
                         // the same for the same logics in `fn build_keypair_parameter_key_value_pairs`
-                        let key_contents = ensure_private_key_header_footer(
-                            &fs::read_to_string(value)?,
-                            is_encrypted_key,
-                        );
+                        let key_contents = fs::read_to_string(value)?;
                         builder.with_named_option(
                             snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
                             &key_contents,
@@ -392,7 +386,7 @@ impl SnowflakeAuth {
                             .with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::JWT)?;
                         builder.with_named_option(
                             snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
-                            ensure_private_key_header_footer(&value, is_encrypted_key),
+                            key_format::normalize_key(&value)?,
                         )
                     }
                     "private_key_passphrase" => {
@@ -508,10 +502,14 @@ impl Auth for SnowflakeAuth {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::auth_utils::{
+    use adbc_core::options::{OptionDatabase, OptionValue};
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    use key_format::{
         PEM_ENCRYPTED_END, PEM_ENCRYPTED_START, PEM_UNENCRYPTED_END, PEM_UNENCRYPTED_START,
     };
-    use adbc_core::options::{OptionDatabase, OptionValue};
+    use pkcs8::EncodePrivateKey;
+    use rsa::RsaPrivateKey;
+    use rsa::rand_core::OsRng;
     use serde_json::json;
     use std::collections::HashMap;
 
@@ -568,6 +566,23 @@ mod tests {
     left: {results:?}
     right: {expected:?}",
         );
+    }
+
+    fn wrap_pem_64(begin: &str, body_b64: &str, end: &str) -> String {
+        let mut out = String::new();
+        out.push_str(begin);
+        out.push('\n');
+        let bytes = body_b64.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            let j = (i + 64).min(bytes.len());
+            // body_b64 is ASCII, so this is safe
+            out.push_str(std::str::from_utf8(&bytes[i..j]).unwrap());
+            out.push('\n');
+            i = j;
+        }
+        out.push_str(end);
+        out
     }
 
     #[test]
@@ -641,7 +656,14 @@ mod tests {
     fn test_keypair_value_with_method_param() {
         let mut config = base_config();
         config.insert("method".to_string(), json!("keypair"));
-        config.insert("private_key".to_string(), json!("private_key"));
+        let b64_der = {
+            let rsa = RsaPrivateKey::new(&mut OsRng, 2048).expect("generate RSA key");
+            let der = rsa.to_pkcs8_der().expect("encode PKCS#8 DER");
+            STANDARD.encode(der.as_bytes())
+        };
+
+        let expected_pem = wrap_pem_64(PEM_UNENCRYPTED_START, &b64_der, PEM_UNENCRYPTED_END);
+        config.insert("private_key".to_string(), json!(b64_der));
         let expected = [
             ("user", "U"),
             ("password", "P"),
@@ -650,10 +672,7 @@ mod tests {
             (snowflake::WAREHOUSE, "warehouse"),
             (
                 snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
-                &format!(
-                    "{}\n{}\n{}",
-                    PEM_UNENCRYPTED_START, "private_key", PEM_UNENCRYPTED_END
-                ),
+                expected_pem.as_str(),
             ),
             (snowflake::AUTH_TYPE, "auth_jwt"),
             (snowflake::APPLICATION_NAME, APP_NAME),
@@ -683,33 +702,36 @@ mod tests {
         run_config_test(config, &expected);
     }
 
+    // No library function to generate an encrypted key; made manually from
+    // openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | \
+    // openssl pkcs8 -topk8 -v2 aes-256-cbc -passout pass:private_key_passphrase -inform PEM -outform DER | \
+    // base64 -w0
+    const ENCRYPTED_PKCS8_DER_B64: &str = "MIIFNTBfBgkqhkiG9w0BBQ0wUjAxBgkqhkiG9w0BBQwwJAQQTicT7AlFo6LN0RdUzkuo4AICCAAwDAYIKoZIhvcNAgkFADAdBglghkgBZQMEASoEEOnNZh3Day9astKrOi93uxgEggTQp2Z0RUN8e9pMhU3OUt+Jjz1HVVIILogdkDKktKbY4KOB/dT7qYDBa3pHqcHbIQm8frhpzKH4wDLptEblasFPcA0kaLHaDE8wQj6YalnMGWxF5T1aGKXqIRXr9xQFDzpllXrf2b5LIHKw1SzFX/qy8jv5KtXG6910fDVRM7h02eJFWYmm0uqbS9WHcU7IeSEgdiiER2Zvx0fsEZ3oM+gDnhg4/eW9QTRqqAU3oISSEstl+BXBYWYQFUf7wl2SEiKyDdQRzBhzSO8h00EQtiGcXviJUUoksktmQkJfIjjZBz/nHHjtNpQpTKa+uev/IY6/E2adxX3qkroSvdsK1phLq8a/JUhvVDTDxAOSNzaNQndnXJnhbpNAnnq32TilhnZhRXYjMJVXNlutTkoV90yyXara9WJ9Es2zZntuGathTYSre8VR0JAIgYvpqPP7DzD1hcbDzVES6q75gtaI+KD+af3QUnlReLP/c8roXsm27BGE2z5eo1j+gjzbOLqF/6EmkKzuLrJGl9pitSXVZBDeOzXOEIlvFytmhz+HjIGMGgBiPpBcOv73Whb91KF4PuCciXVGBhAlHlXNG5nvhL2NdfXxxHHTIGgGe9dQMAP5ap7z6sfjcLv/osp+jPqaizPZtUF3V/4OdiGFtJMRcD8Rnw/CTv/wWZksIpQ+PCJYR82dRY9Bu7F4v77ts1096otHI7dwA0SetZ2xeDngNiGlMVls3mygXknp5x8Tq737uyXId6vD/6fSBrI14gtJB6yFhbc5oc77UcWJQdvi+gOu4daLNuXdj7qlLFbQvWMNR5+LeJDsoW8jiULYX1vN+TKwzlszTBpi2+788LXWUtOC6wFxSk8SM9nVhXM4i8ONH3lioFy+N5MG9q4BGbvBiTLFfvn/MEp6fpVD1xrE9qfTfDqJjaNo3WBuSvFruLSS1Ih+ikPFHt8KV3chakByLGunOZKhkJV0B+Eh7HOD/TRoo0bf6EJ+I/WruQ/FvMRnKahuHX8Lr7nGFIg+VbNz/pMHevw1Tg9bD3koyVNbG3hpe4DFBd2gk8edIauCSAVJjt+JpJyiCfsYZw7RaCdbmjgw9Q8n43H5nAaiIfAU0hjya5RWA4HPH4e5RuZYQfvVsNUxcVTCE1BeZwZy+lFQFzd/DHW0EJQmhQwCBiy72xgn72Yv6XEkQDZOqNipcc7kja3JYSujSeXRPuWgmiQHyMQlDaz0qdJjmd5vUbFjoVFWsT3xAynddEl5hn7KCyOGDEvwdMLQI0CWP9MG+ZK8dXTE24u0oULZkWo2m2Zsqey05Erl0iKppu0d24HsJz8q9ueE5rWHOLV4L01fB5wiUvLBSkm3K9TLUeMdl/pw/3qxYe709ggQgqrM3UBcBzckEQ0sO8vBhDfbTZzKSquBS1ve29u/PUAM/g78AgcMwmiJpNrRVF5LNyLbBukSNxBigJkG61Tsqe9hfY9GsjKEefi6P0FTmaAmsw1vROCJSwqceWO+ldrYbOov0ViDYM1UfDO1lS7AItii8U1JCeuZkrMjcCZdoyhET3LTHM+NOHwLqce2RwVvoQMPk4kYftRohjR+M7/4WC9vwt5GmoK4NeNCBNdwphHLM/k5Dogu9/OOe8xrNRvunYunrU8w6ZOKR+s=";
+
     #[test]
     fn test_encrypted_keypair_without_method_param() {
         let mut config = base_config();
-        config.insert("private_key".to_string(), json!("private_key"));
-        config.insert(
-            "private_key_passphrase".to_string(),
-            json!("private_key_passphrase"),
+        let expected_pem = wrap_pem_64(
+            PEM_ENCRYPTED_START,
+            ENCRYPTED_PKCS8_DER_B64,
+            PEM_ENCRYPTED_END,
         );
+        let passphrase = "private_key_passphrase";
+        config.insert("private_key".to_string(), json!(ENCRYPTED_PKCS8_DER_B64));
+        config.insert("private_key_passphrase".to_string(), json!(passphrase));
         let expected = [
             ("user", "U"),
             ("password", "P"),
             (snowflake::ACCOUNT, "A"),
             (snowflake::ROLE, "role"),
             (snowflake::WAREHOUSE, "warehouse"),
-            (snowflake::APPLICATION_NAME, APP_NAME),
             (
                 snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
-                &format!(
-                    "{}\n{}\n{}",
-                    PEM_ENCRYPTED_START, "private_key", PEM_ENCRYPTED_END
-                ),
+                expected_pem.as_str(),
             ),
-            (
-                snowflake::JWT_PRIVATE_KEY_PKCS8_PASSWORD,
-                "private_key_passphrase",
-            ),
+            (snowflake::JWT_PRIVATE_KEY_PKCS8_PASSWORD, passphrase),
             (snowflake::AUTH_TYPE, "auth_jwt"),
+            (snowflake::APPLICATION_NAME, APP_NAME),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
         ];
@@ -720,11 +742,16 @@ mod tests {
     fn test_encrypted_keypair_with_method_param() {
         let mut config = base_config();
         config.insert("method".to_string(), json!("keypair"));
-        config.insert("private_key".to_string(), json!("private_key"));
-        config.insert(
-            "private_key_passphrase".to_string(),
-            json!("private_key_passphrase"),
+
+        let passphrase = "private_key_passphrase";
+        let expected_pem = format!(
+            "{}\n{}\n{}",
+            PEM_ENCRYPTED_START, "private_key", PEM_ENCRYPTED_END
         );
+
+        config.insert("private_key".to_string(), json!(expected_pem));
+        config.insert("private_key_passphrase".to_string(), json!(passphrase));
+
         let expected = [
             ("user", "U"),
             ("password", "P"),
@@ -734,12 +761,9 @@ mod tests {
             (snowflake::APPLICATION_NAME, APP_NAME),
             (
                 snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
-                "-----BEGIN ENCRYPTED PRIVATE KEY-----\nprivate_key\n-----END ENCRYPTED PRIVATE KEY-----",
+                expected_pem.as_str(),
             ),
-            (
-                snowflake::JWT_PRIVATE_KEY_PKCS8_PASSWORD,
-                "private_key_passphrase",
-            ),
+            (snowflake::JWT_PRIVATE_KEY_PKCS8_PASSWORD, passphrase),
             (snowflake::AUTH_TYPE, "auth_jwt"),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),

@@ -22,6 +22,8 @@ base64 = { workspace = true }
 minijinja = { workspace = true }
 parquet = { workspace = true }
 percent-encoding = "2.3.1"
+pkcs8 = { workspace = true }
+rsa = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 shellexpand = { workspace = true }

@@ -2,7 +2,6 @@ use std::io;
 
 use dbt_xdbc::{Backend, database};
 
-mod auth_utils;
 mod config;
 
 // Database-specific auth implementations
