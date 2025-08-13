@@ -241,7 +241,10 @@ impl AdapterTyping for ParseAdapter {
 }
 
 impl BaseAdapter for ParseAdapter {
-    fn new_connection(&self) -> Result<Box<dyn Connection>, MinijinjaError> {
+    fn new_connection(
+        &self,
+        _node_id: Option<String>,
+    ) -> Result<Box<dyn Connection>, MinijinjaError> {
         unimplemented!("new_connection is not implemented for ParseAdapter")
     }
 
@@ -572,7 +575,7 @@ impl BaseAdapter for ParseAdapter {
         Ok(none_value())
     }
 
-    fn describe_relation(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn describe_relation(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 

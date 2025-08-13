@@ -68,7 +68,10 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     }
 
     /// Create a new connection
-    fn new_connection(&self) -> Result<Box<dyn Connection>, MinijinjaError>;
+    fn new_connection(
+        &self,
+        node_id: Option<String>,
+    ) -> Result<Box<dyn Connection>, MinijinjaError>;
 
     /// Cache added
     fn cache_added(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
@@ -422,7 +425,7 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     }
 
     /// describe_relation
-    fn describe_relation(&self, _args: &[Value]) -> Result<Value, MinijinjaError>;
+    fn describe_relation(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError>;
 
     /// grant_access_to
     fn grant_access_to(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError>;

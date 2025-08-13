@@ -127,6 +127,7 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
     /// List relations and their schemas
     fn list_relations_schemas(
         &self,
+        unique_id: Option<String>,
         relations: &[Arc<dyn BaseRelation>],
     ) -> AsyncAdapterResult<HashMap<String, AdapterResult<Arc<Schema>>>>;
 
@@ -177,7 +178,11 @@ pub fn create_schemas_if_not_exists(
     type Acc = Vec<(String, String, AdapterResult<()>)>;
     let catalog_schemas = flatten_catalog_schemas(catalog_schemas);
     let adapter_clone = adapter.clone();
-    let new_connection_f = move || adapter_clone.new_connection().map_err(Cancellable::Error);
+    let new_connection_f = move || {
+        adapter_clone
+            .new_connection(None)
+            .map_err(Cancellable::Error)
+    };
     let map_f = move |conn: &'_ mut dyn Connection,
                       (catalog, schema): &(String, String)|
           -> AdapterResult<AdapterResult<()>> {

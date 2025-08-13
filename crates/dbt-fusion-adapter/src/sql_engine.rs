@@ -146,7 +146,7 @@ impl ActualEngine {
         Ok(conn)
     }
 
-    fn new_connection(&self) -> AdapterResult<Box<dyn Connection>> {
+    fn new_connection(&self, _node_id: Option<String>) -> AdapterResult<Box<dyn Connection>> {
         // TODO(felipecrv): Make this codepath more efficient
         // (no need to reconfigure the default database)
         self.new_connection_with_config(&self.config)
@@ -200,18 +200,18 @@ impl SqlEngine {
         let _span = span!("ActualEngine::new_connection");
         let conn = match &self {
             Self::Warehouse(actual_engine) => actual_engine.new_connection_with_config(config),
-            Self::Record(record_engine) => record_engine.new_connection(),
-            Self::Replay(replay_engine) => replay_engine.new_connection(),
+            Self::Record(record_engine) => record_engine.new_connection(None),
+            Self::Replay(replay_engine) => replay_engine.new_connection(None),
         }?;
         Ok(conn)
     }
 
     /// Create a new connection to the warehouse.
-    pub fn new_connection(&self) -> AdapterResult<Box<dyn Connection>> {
+    pub fn new_connection(&self, node_id: Option<String>) -> AdapterResult<Box<dyn Connection>> {
         match &self {
-            Self::Warehouse(actual_engine) => actual_engine.new_connection(),
-            Self::Record(record_engine) => record_engine.new_connection(),
-            Self::Replay(replay_engine) => replay_engine.new_connection(),
+            Self::Warehouse(actual_engine) => actual_engine.new_connection(node_id),
+            Self::Record(record_engine) => record_engine.new_connection(node_id),
+            Self::Replay(replay_engine) => replay_engine.new_connection(node_id),
         }
     }
 

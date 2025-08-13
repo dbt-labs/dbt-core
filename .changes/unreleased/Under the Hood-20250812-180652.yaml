@@ -1,0 +1,3 @@
+kind: Under the Hood
+body: (fix adapters/bigquery) fix compile referencing time partitioning sources
+time: 2025-08-12T18:06:52.546421788-07:00

@@ -6,7 +6,7 @@ use adbc_core::error::{Error as AdbcError, Result as AdbcResult, Status as AdbcS
 use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::{RecordBatch, RecordBatchIterator, RecordBatchReader};
 use arrow_json::writer::LineDelimitedWriter;
-use arrow_schema::{ArrowError, Field, Schema};
+use arrow_schema::{ArrowError, Field, Schema, SchemaBuilder};
 use dashmap::DashMap;
 use dbt_common::cancellation::CancellationToken;
 use dbt_xdbc::{Connection, QueryCtx, Statement};
@@ -16,6 +16,7 @@ use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::file::properties::WriterProperties;
 use regex::Regex;
 
+use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::fmt;
 use std::fs::{self, File, create_dir_all, metadata};
@@ -75,6 +76,14 @@ fn compute_file_name(query_ctx: &QueryCtx) -> AdbcResult<String> {
     Ok(file_name)
 }
 
+fn compute_file_name_from_node_id(id: &str) -> AdbcResult<String> {
+    let mut entry = COUNTERS.entry(id.to_string()).or_insert(0);
+    let file_name = format!("{}-{}", id, *entry);
+    *entry += 1;
+
+    Ok(file_name)
+}
+
 pub struct RecordEngineInner {
     /// Path to recordings
     path: PathBuf,
@@ -93,9 +102,9 @@ impl RecordEngine {
         RecordEngine(Arc::new(inner))
     }
 
-    pub fn new_connection(&self) -> AdapterResult<Box<dyn Connection>> {
-        let actual_conn = self.0.engine.new_connection()?;
-        let conn = RecordEngineConnection(self.0.clone(), actual_conn);
+    pub fn new_connection(&self, node_id: Option<String>) -> AdapterResult<Box<dyn Connection>> {
+        let actual_conn = self.0.engine.new_connection(None)?;
+        let conn = RecordEngineConnection(self.0.clone(), actual_conn, node_id);
         Ok(Box::new(conn))
     }
 
@@ -112,7 +121,7 @@ impl RecordEngine {
     }
 }
 
-struct RecordEngineConnection(Arc<RecordEngineInner>, Box<dyn Connection>);
+struct RecordEngineConnection(Arc<RecordEngineInner>, Box<dyn Connection>, Option<String>);
 
 impl fmt::Debug for RecordEngineConnection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -145,8 +154,61 @@ impl Connection for RecordEngineConnection {
         db_schema: Option<&str>,
         table_name: &str,
     ) -> AdbcResult<Schema> {
-        // TODO: implement recording of table schema
-        self.1.get_table_schema(catalog, db_schema, table_name)
+        let result = self.1.get_table_schema(catalog, db_schema, table_name);
+
+        let path = self.0.path.clone();
+        create_dir_all(&path).map_err(|e| from_io_error(e, Some(&path)))?;
+
+        if let Some(node_id) = &self.2 {
+            let file_name = compute_file_name_from_node_id(node_id)?;
+
+            let connection_path = path.join(format!("{file_name}.connection"));
+            let err_path = path.join(format!("{file_name}.connection.err"));
+            let parquet_path = path.join(format!("{file_name}.connection.parquet"));
+            let metadata_path = path.join(format!("{file_name}.connection.metadata.json"));
+
+            fs::write(&connection_path, "get_table_schema")
+                .map_err(|e| from_io_error(e, Some(&connection_path)))?;
+
+            match result {
+                Ok(schema) => {
+                    // create empty record batch with schema
+                    let schema_ref = Arc::new(schema.clone());
+                    let batch = RecordBatch::new_empty(schema_ref.clone());
+
+                    let file = File::create(&parquet_path)
+                        .map_err(|e| from_io_error(e, Some(&parquet_path)))?;
+                    let props = WriterProperties::builder().build();
+                    let mut writer = ArrowWriter::try_new(file, schema_ref, Some(props))
+                        .map_err(from_parquet_error)?;
+                    writer.write(&batch).map_err(from_parquet_error)?;
+                    writer.close().map_err(from_parquet_error)?;
+
+                    let metadata = schema.metadata();
+                    let metadata_json = serde_json::to_string(&metadata)
+                        .map_err(|e| from_serde_error(e, Some(&metadata_path)))?;
+                    fs::write(&metadata_path, metadata_json)
+                        .map_err(|e| from_io_error(e, Some(&metadata_path)))?;
+
+                    Ok(schema)
+                }
+                Err(err) => {
+                    let err_msg = format!("{err}");
+                    fs::write(&err_path, err_msg.clone())
+                        .map_err(|e| from_io_error(e, Some(&err_path)))?;
+                    // do not create json or parquet, relay original error
+                    Err(AdbcError::with_message_and_status(
+                        err_msg,
+                        AdbcStatus::Internal,
+                    ))
+                }
+            }
+        } else {
+            Err(AdbcError::with_message_and_status(
+                "Node id is required to record table schema",
+                AdbcStatus::Internal,
+            ))
+        }
     }
 }
 
@@ -316,8 +378,8 @@ impl ReplayEngine {
         ReplayEngine(Arc::new(inner))
     }
 
-    pub fn new_connection(&self) -> AdapterResult<Box<dyn Connection>> {
-        let conn = ReplayEngineConnection(self.0.clone());
+    pub fn new_connection(&self, node_id: Option<String>) -> AdapterResult<Box<dyn Connection>> {
+        let conn = ReplayEngineConnection(self.0.clone(), node_id);
         Ok(Box::new(conn))
     }
 
@@ -331,7 +393,8 @@ impl ReplayEngine {
     }
 }
 
-struct ReplayEngineConnection(Arc<ReplayEngineInner>);
+#[allow(dead_code)]
+struct ReplayEngineConnection(Arc<ReplayEngineInner>, Option<String>);
 
 impl fmt::Debug for ReplayEngineConnection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -363,7 +426,61 @@ impl Connection for ReplayEngineConnection {
         _db_schema: Option<&str>,
         _table_name: &str,
     ) -> AdbcResult<Schema> {
-        unimplemented!("ADBC table schema retrieval in replay engine")
+        if let Some(node_id) = &self.1 {
+            let file_name = compute_file_name_from_node_id(node_id)?;
+            let path = self.0.path.clone();
+            let connection_path = path.join(format!("{file_name}.connection"));
+            let err_path = path.join(format!("{file_name}.connection.err"));
+            let parquet_path = path.join(format!("{file_name}.connection.parquet"));
+            let metadata_path = path.join(format!("{file_name}.connection.metadata.json"));
+
+            // content from connection_path is "get_table_schema"
+            let content = fs::read_to_string(&connection_path)
+                .map_err(|e| from_io_error(e, Some(&connection_path)))?;
+            if content != "get_table_schema" {
+                return Err(AdbcError::with_message_and_status(
+                    "Connection path content is not get_table_schema",
+                    AdbcStatus::Internal,
+                ));
+            }
+
+            // replay the error
+            if err_path.exists() {
+                let msg =
+                    fs::read_to_string(&err_path).map_err(|e| from_io_error(e, Some(&err_path)))?;
+                return Err(AdbcError::with_message_and_status(
+                    msg,
+                    AdbcStatus::Internal,
+                ));
+            }
+
+            // read the schema
+            let file =
+                File::open(&parquet_path).map_err(|e| from_io_error(e, Some(&parquet_path)))?;
+            let builder =
+                ParquetRecordBatchReaderBuilder::try_new(file).map_err(from_parquet_error)?;
+            let reader = builder.build().map_err(from_parquet_error)?;
+            let schema = reader.schema();
+
+            // read the metadata
+            let metadata_json = fs::read_to_string(&metadata_path)
+                .map_err(|e| from_io_error(e, Some(&metadata_path)))?;
+            let metadata: HashMap<String, String> = serde_json::from_str(&metadata_json)
+                .map_err(|e| from_serde_error(e, Some(&metadata_path)))?;
+
+            let mut schema_builder = SchemaBuilder::from(schema.fields());
+            for (key, value) in metadata {
+                schema_builder.metadata_mut().insert(key, value);
+            }
+
+            let schema = schema_builder.finish();
+            Ok(schema)
+        } else {
+            Err(AdbcError::with_message_and_status(
+                "Node id is required to record table schema",
+                AdbcStatus::Internal,
+            ))
+        }
     }
 }
 
@@ -393,6 +510,15 @@ fn from_io_error(e: std::io::Error, path: Option<&Path>) -> adbc_core::error::Er
         format!("IO error: {:?} ({:?})", e, path.display())
     } else {
         format!("IO error: {e:?}")
+    };
+    adbc_core::error::Error::with_message_and_status(message, adbc_core::error::Status::IO)
+}
+
+fn from_serde_error(e: serde_json::Error, path: Option<&Path>) -> adbc_core::error::Error {
+    let message = if let Some(path) = path {
+        format!("Serde error: {:?} ({:?})", e, path.display())
+    } else {
+        format!("Serde error: {e:?}")
     };
     adbc_core::error::Error::with_message_and_status(message, adbc_core::error::Status::IO)
 }

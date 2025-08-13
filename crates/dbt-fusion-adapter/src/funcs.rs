@@ -140,7 +140,7 @@ pub fn dispatch_adapter_calls(
         "load_dataframe" => adapter.load_dataframe(state, args),
         "upload_file" => adapter.upload_file(state, args),
         "get_bq_table" => adapter.get_bq_table(state, args),
-        "describe_relation" => adapter.describe_relation(args),
+        "describe_relation" => adapter.describe_relation(state, args),
         "grant_access_to" => adapter.grant_access_to(state, args),
         "get_dataset_location" => adapter.get_dataset_location(state, args),
         "get_column_schema_from_query" => adapter.get_column_schema_from_query(state, args),

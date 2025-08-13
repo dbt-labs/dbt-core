@@ -164,6 +164,16 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         }
     }
 
+    fn database_as_quoted_str(&self) -> Result<String, MinijinjaError> {
+        match self.database().as_str() {
+            Some(val) => Ok(self.quoted(val)),
+            None => jinja_err!(
+                MinijinjaErrorKind::InvalidOperation,
+                "expect database as string"
+            ),
+        }
+    }
+
     /// Get the schema name
     fn schema(&self) -> Value;
 
@@ -171,6 +181,16 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     fn schema_as_str(&self) -> Result<String, MinijinjaError> {
         match self.schema().as_str() {
             Some(val) => Ok(val.to_string()),
+            None => jinja_err!(
+                MinijinjaErrorKind::InvalidOperation,
+                "expect schema as string"
+            ),
+        }
+    }
+
+    fn schema_as_quoted_str(&self) -> Result<String, MinijinjaError> {
+        match self.schema().as_str() {
+            Some(val) => Ok(self.quoted(val)),
             None => jinja_err!(
                 MinijinjaErrorKind::InvalidOperation,
                 "expect schema as string"

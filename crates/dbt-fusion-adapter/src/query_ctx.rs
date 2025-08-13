@@ -23,38 +23,40 @@ pub fn query_ctx_from_state(state: &State) -> AdapterResult<QueryCtx> {
         )
     })?;
 
+    // TODO: The following should really be an error, but
+    // our tests (functional tests in particular) do not
+    // set anything about model in the state.
+    //
+    // TODO: The following should be an error but there
+    // are tests that do not include model.
+    //return Err(AdapterError::new(
+    //AdapterErrorKind::Configuration,
+    //"Missing model in the state",
+    //));
     let query = QueryCtx::new(dialect_str);
     // TODO: use node_metadata_from_state
-    match state.lookup("model") {
-        // TODO: This is a hack to get the node id from the state, but for now good enough
-        Some(node) => {
-            // Try to deserialize as different node types
-            if let Ok(model) = DbtModel::deserialize(&node) {
-                Ok(query.with_node_id(model.common_attr.unique_id))
-            } else if let Ok(test) = DbtTest::deserialize(&node) {
-                Ok(query.with_node_id(test.common_attr.unique_id))
-            } else if let Ok(snapshot) = DbtSnapshot::deserialize(&node) {
-                Ok(query.with_node_id(snapshot.common_attr.unique_id))
-            } else if let Ok(seed) = DbtSeed::deserialize(&node) {
-                Ok(query.with_node_id(seed.common_attr.unique_id))
-            } else if let Ok(unit_test) = DbtUnitTest::deserialize(&node) {
-                Ok(query.with_node_id(unit_test.common_attr.unique_id))
-            } else {
-                // TODO: The following should really be an error, but
-                // our tests (functional tests in particular) do not
-                // set anything about model in the state.
-                Ok(query)
-            }
-        }
-        None => {
-            // TODO: The following should be an error but there
-            // are tests that do not include model.
-            //return Err(AdapterError::new(
-            //AdapterErrorKind::Configuration,
-            //"Missing model in the state",
-            //));
-            Ok(query)
-        }
+    if let Some(node_id) = node_id_from_state(state) {
+        Ok(query.with_node_id(node_id))
+    } else {
+        Ok(query)
+    }
+}
+
+pub fn node_id_from_state(state: &State) -> Option<String> {
+    let node = state.lookup("model").as_ref()?.clone();
+    // Try to deserialize as different node types
+    if let Ok(model) = DbtModel::deserialize(&node) {
+        Some(model.common_attr.unique_id)
+    } else if let Ok(test) = DbtTest::deserialize(&node) {
+        Some(test.common_attr.unique_id)
+    } else if let Ok(snapshot) = DbtSnapshot::deserialize(&node) {
+        Some(snapshot.common_attr.unique_id)
+    } else if let Ok(seed) = DbtSeed::deserialize(&node) {
+        Some(seed.common_attr.unique_id)
+    } else if let Ok(unit_test) = DbtUnitTest::deserialize(&node) {
+        Some(unit_test.common_attr.unique_id)
+    } else {
+        None
     }
 }
 

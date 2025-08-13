@@ -38,7 +38,7 @@ pub fn use_warehouse_inner(
     node_id: &str,
 ) -> FsResult<()> {
     let mut conn = adapter
-        .borrow_tlocal_connection()
+        .borrow_tlocal_connection(Some(node_id.to_string()))
         .map_err(|e| FsError::from_jinja_err(e, "Failed to create a connection"))?;
 
     let query_ctx = QueryCtx::new(adapter.adapter_type().to_string())

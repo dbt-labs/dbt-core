@@ -77,7 +77,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     }
 
     /// Create a new connection
-    fn new_connection(&self) -> AdapterResult<Box<dyn Connection>>;
+    fn new_connection(&self, node_id: Option<String>) -> AdapterResult<Box<dyn Connection>>;
 
     /// Split a sql statement into a list of statements
     fn self_split_statements(&self, sql: &str, dialect: Dialect) -> Vec<String>;
@@ -185,7 +185,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         fetch: bool,
         limit: Option<i64>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
-        let mut conn = self.new_connection()?;
+        let mut conn = self.new_connection(None)?;
         self.execute(&mut *conn, query_ctx, auto_begin, fetch, limit)
     }
 
