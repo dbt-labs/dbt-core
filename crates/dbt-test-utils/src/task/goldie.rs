@@ -1,4 +1,4 @@
-use crate::task::utils::relative_to_git_root;
+use crate::task::utils::{maybe_normalize_tmp_paths, relative_to_git_root};
 
 use super::{
     ProjectEnv, TestEnv,
@@ -34,6 +34,7 @@ fn postprocess_actual(content: String, sort_output: bool) -> String {
         maybe_normalize_schema_name,
         maybe_normalize_time,
         normalize_version,
+        maybe_normalize_tmp_paths,
     ]
     .iter()
     .fold(content, |acc, transform| transform(acc));
@@ -46,6 +47,7 @@ fn postprocess_golden(content: String, sort_output: bool) -> String {
         maybe_normalize_slashes,
         maybe_normalize_schema_name,
         normalize_version,
+        maybe_normalize_tmp_paths,
     ]
     .iter()
     .fold(content, |acc, transform| transform(acc));

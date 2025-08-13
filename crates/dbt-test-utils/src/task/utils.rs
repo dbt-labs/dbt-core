@@ -133,6 +133,12 @@ pub fn check_set_user_env_var() {
     }
 }
 
+/// Collapse mktemp-style segments like /.tmpabcdef -> /.tmpXXXXXX
+pub fn maybe_normalize_tmp_paths(output: String) -> String {
+    let re = Regex::new(r"/\.tmp[0-9A-Za-z_-]+").unwrap();
+    re.replace_all(&output, "/.tmpXXXXXX").to_string()
+}
+
 /// On Windows, this normalizes forward/backward slashes to '|' so as to ignore
 /// the difference in path separators.
 ///
