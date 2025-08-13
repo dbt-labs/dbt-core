@@ -9,6 +9,20 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// Represents the different phases of node processing
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ProcessingPhase {
+    Rendering,
+    Analyzing,
+}
+
+/// Represents the status of a completed phase
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PhaseStatus {
+    Succeeded,
+    Failed,
+}
+
 /// A trait for reporting status messages and errors that occur during execution.
 /// This is primarily used in LSP mode to report errors and progress to the client.
 pub trait StatusReporter: Any + Send + Sync {
@@ -20,6 +34,18 @@ pub trait StatusReporter: Any + Send + Sync {
     /// Clear diagnostics for a file if it's the first time processing it in this compilation.
     /// For non-LSP implementations, this can be a no-op.
     fn clear_file_if_first_time(&self, file_path: &Path);
+    /// Combined async operation to clear diagnostics and optionally mark phase completion.
+    /// This is non-blocking and should be the preferred method for task implementations.
+    fn process_node_async(
+        &self,
+        file_path: &Path,
+        unique_id: Option<&str>,
+        phase: Option<ProcessingPhase>,
+        status: Option<PhaseStatus>,
+    );
+    /// Bulk clear diagnostics for multiple files asynchronously.
+    /// Used by the resolver to clear many files at once.
+    fn bulk_clear_files_async(&self, file_paths: Vec<PathBuf>);
 }
 
 /// Reads the contents of a file as a string.
