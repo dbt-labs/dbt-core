@@ -454,19 +454,17 @@ pub fn convert_macro_names_to_unique_ids(macro_calls: &HashSet<String>) -> Vec<S
 
 /// Clear the diagnostics for a package
 pub fn clear_package_diagnostics(io: &IoArgs, package: &DbtPackage) {
+    // 1. Clear dbt_project.yml
     if let Some(status_reporter) = &io.status_reporter {
-        let mut file_paths = Vec::new();
-        
-        // 1. Add dbt_project.yml if it exists
         let project_file_path = package.package_root_path.join("dbt_project.yml");
         if project_file_path.exists() {
             // Get the relative path to the workspace root (arg.io.in_dir)
             if let Ok(workspace_path) = stdfs::diff_paths(&project_file_path, &io.in_dir) {
-                file_paths.push(io.in_dir.join(workspace_path));
+                status_reporter.clear_file_if_first_time(&io.in_dir.join(workspace_path));
             }
         }
 
-        // 2. Add dbt_properties files (schema.yml, etc.), macro_files, and docs_files
+        // 2. Clear dbt_properties files (schema.yml, etc.), macro_files, and docs_files
         for asset in package
             .dbt_properties
             .iter()
@@ -474,12 +472,7 @@ pub fn clear_package_diagnostics(io: &IoArgs, package: &DbtPackage) {
             .chain(&package.docs_files)
         {
             let file_path = io.in_dir.join(&asset.path);
-            file_paths.push(file_path);
-        }
-        
-        // Use bulk operation for better performance
-        if !file_paths.is_empty() {
-            status_reporter.bulk_clear_files_async(file_paths);
+            status_reporter.clear_file_if_first_time(&file_path);
         }
     }
 }
