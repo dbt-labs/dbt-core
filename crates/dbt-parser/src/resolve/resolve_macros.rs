@@ -139,12 +139,14 @@ pub fn resolve_macros(
                             description: String::new(),                    // Populate as needed
                             meta: BTreeMap::new(),                         // Populate as needed
                             patch_path: None,
+                            funcsign: None,
+                            args: vec![],
                             other: BTreeMap::new(),
                         };
 
                         nodes.insert(unique_id, dbt_macro);
                     }
-                    SqlResource::Macro(name, span) => {
+                    SqlResource::Macro(name, span, func_sign, args) => {
                         let unique_id = format!("macro.{package_name}.{name}");
                         let split_macro_sql =
                             &macro_sql[span.start_offset as usize..span.end_offset as usize];
@@ -161,6 +163,8 @@ pub fn resolve_macros(
                             description: String::new(),                    // Populate as needed
                             meta: BTreeMap::new(),                         // Populate as needed
                             patch_path: None,
+                            funcsign: func_sign.clone(),
+                            args: args.clone(),
                             other: BTreeMap::new(),
                         };
 
@@ -183,6 +187,8 @@ pub fn resolve_macros(
                             description: String::new(),
                             meta: BTreeMap::new(),
                             patch_path: None,
+                            funcsign: None,
+                            args: vec![],
                             other: BTreeMap::new(),
                         };
 
@@ -205,6 +211,8 @@ pub fn resolve_macros(
                             description: String::new(),                    // Populate as needed
                             meta: BTreeMap::new(),                         // Populate as needed
                             patch_path: None,
+                            funcsign: None,
+                            args: vec![],
                             other: BTreeMap::new(),
                         };
 

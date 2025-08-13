@@ -1,3 +1,4 @@
+-- funcsign: (string, ANY, optional[string], optional[string]) -> string
 {% macro optional(name, value, quote_char = '', equals_char = '= ') %}
 {#-
 --  Insert optional DDL parameters only when their value is provided; makes DDL statements more readable
@@ -14,3 +15,4 @@
 {%- set quote_char_right = ')' if quote_char == '(' else quote_char -%}
 {% if value is not none %}{{ name }} {{ equals_char }}{{ quote_char }}{{ value }}{{ quote_char_right }}{% endif %}
 {% endmacro %}
+-- 

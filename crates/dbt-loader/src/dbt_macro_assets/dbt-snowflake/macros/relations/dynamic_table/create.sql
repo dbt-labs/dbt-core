@@ -1,3 +1,4 @@
+-- funcsign: (relation, string) -> string
 {% macro snowflake__get_create_dynamic_table_as_sql(relation, sql) -%}
 {#-
 --  Produce DDL that creates a dynamic table
@@ -23,7 +24,7 @@
 
 {%- endmacro %}
 
-
+-- funcsign: (snowflake_node_config, relation, string) -> string
 {% macro _get_create_dynamic_standard_table_as_sql(dynamic_table, relation, sql) -%}
 {#-
 --  Produce DDL that creates a standard dynamic table
@@ -52,7 +53,7 @@
 
 {%- endmacro %}
 
-
+-- funcsign: (snowflake_node_config, relation, string) -> string
 {% macro _get_create_dynamic_iceberg_table_as_sql(dynamic_table, relation, sql) -%}
 {#-
 --  Produce DDL that creates a dynamic iceberg table

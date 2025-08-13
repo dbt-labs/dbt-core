@@ -7,7 +7,9 @@ mod tests {
     use dbt_common::cancellation::never_cancels;
     use dbt_common::io_args::IoArgs;
     use dbt_jinja_utils::invocation_args::InvocationArgs;
-    use dbt_jinja_utils::listener::{DefaultListenerFactory, ListenerFactory};
+    use dbt_jinja_utils::listener::{
+        DefaultRenderingEventListenerFactory, RenderingEventListenerFactory,
+    };
     use dbt_jinja_utils::phases::parse::init::initialize_parse_jinja_environment;
     use dbt_jinja_utils::utils::render_sql;
     use dbt_schemas::schemas::profiles::{DbConfig, PostgresDbConfig};
@@ -82,7 +84,7 @@ mod tests {
             }),
         );
 
-        let listener_factory = DefaultListenerFactory::default();
+        let listener_factory = DefaultRenderingEventListenerFactory::default();
         let test_path = PathBuf::from("test_basic.sql");
 
         let _result = render_sql(test_sql, &env, &ctx, &listener_factory, &test_path);
@@ -115,7 +117,7 @@ mod tests {
         );
         // Note: undefined_macro is not in context, so rendering will fail
 
-        let listener_factory = DefaultListenerFactory::default();
+        let listener_factory = DefaultRenderingEventListenerFactory::default();
         let test_path = PathBuf::from("test_error.sql");
 
         let result = render_sql(test_sql, &env, &ctx, &listener_factory, &test_path);

@@ -13,7 +13,9 @@ use dbt_common::{
     ErrorCode, FsError, FsResult, fs_err, fsinfo, show_error, show_progress, show_warning,
 };
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_jinja_utils::listener::{DefaultListenerFactory, ListenerFactory};
+use dbt_jinja_utils::listener::{
+    DefaultRenderingEventListenerFactory, RenderingEventListenerFactory,
+};
 use dbt_jinja_utils::phases::build_compile_and_run_base_context;
 use dbt_jinja_utils::phases::compile::build_compile_node_context;
 use dbt_jinja_utils::phases::parse::build_resolve_model_context;
@@ -246,7 +248,7 @@ pub async fn render_unresolved_sql_files_sequentially<
             args.io,
             fsinfo!(PARSING.into(), display_path.display().to_string())
         );
-        let listener_factory = DefaultListenerFactory::default();
+        let listener_factory = DefaultRenderingEventListenerFactory::default();
         match render_sql(
             &sql,
             jinja_env,
@@ -589,7 +591,7 @@ pub async fn render_unresolved_sql_files<
                     args.io,
                     fsinfo!(PARSING.into(), display_path.display().to_string())
                 );
-                let listener_factory = DefaultListenerFactory::default();
+                let listener_factory = DefaultRenderingEventListenerFactory::default();
                 match render_sql(
                     &sql,
                     &jinja_env,
@@ -899,7 +901,7 @@ async fn process_model_chunk_for_unsafe_detection(
             &sql,
             jinja_env,
             &render_resolved_context,
-            &DefaultListenerFactory::default(),
+            &DefaultRenderingEventListenerFactory::default(),
             &display_path,
         );
         if parse_adapter
@@ -1054,7 +1056,7 @@ pub fn collect_hook_dependencies_from_config<T: DefaultTo<T> + 'static>(
 
     // Helper function to render hook SQL and collect dependencies into the shared sql_resources
     let render_hook_for_deps = |sql: &str| -> FsResult<()> {
-        let listener_factory = DefaultListenerFactory::default();
+        let listener_factory = DefaultRenderingEventListenerFactory::default();
 
         match render_sql(
             sql,

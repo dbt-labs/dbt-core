@@ -2,6 +2,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 
 use dbt_serde_yaml::Value;
 use minijinja::{
+    ArgSpec,
     machinery::Span,
     macro_unit::{MacroInfo, MacroUnit},
 };
@@ -24,6 +25,9 @@ pub struct DbtMacro {
     pub description: String,
     pub meta: BTreeMap<String, Value>,
     pub patch_path: Option<PathBuf>,
+    pub funcsign: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub args: Vec<ArgSpec>,
     #[serde(flatten)]
     pub other: BTreeMap<String, Value>,
 }
@@ -56,6 +60,8 @@ pub fn build_macro_units(nodes: &BTreeMap<String, DbtMacro>) -> BTreeMap<String,
                     name: inner_macro.name.clone(),
                     path: inner_macro.original_file_path.clone(),
                     span: inner_macro.span.expect("span is required"),
+                    funcsign: inner_macro.funcsign.clone(),
+                    args: inner_macro.args.clone(),
                 },
                 sql: inner_macro.macro_sql.clone(),
             });

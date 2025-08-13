@@ -132,7 +132,7 @@ impl fmt::Display for Token<'_> {
 }
 
 /// Token span information
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Deserialize, PartialOrd, Ord)]
 #[cfg_attr(feature = "unstable_machinery_serde", derive(serde::Serialize))]
 pub struct Span {
     pub start_line: u32,

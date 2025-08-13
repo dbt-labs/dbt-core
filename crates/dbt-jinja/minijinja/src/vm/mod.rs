@@ -1757,11 +1757,13 @@ impl<'env> Vm<'env> {
     }
 }
 
-fn deserialize_path(value: &Value) -> PathBuf {
+/// Deserialize a path from a value
+pub fn deserialize_path(value: &Value) -> PathBuf {
     PathBuf::from(value.as_str().unwrap())
 }
 
-fn deserialize_span(value: &Value) -> Span {
+/// Deserialize a span from a value
+pub fn deserialize_span(value: &Value) -> Span {
     Span {
         start_line: value
             .get_attr_fast("start_line")

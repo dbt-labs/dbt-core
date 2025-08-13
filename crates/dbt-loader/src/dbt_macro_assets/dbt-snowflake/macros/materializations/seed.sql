@@ -1,3 +1,4 @@
+-- funcsign: (model, agate_table) -> string
 {% macro snowflake__load_csv_rows(model, agate_table) %}
     {% set batch_size = get_batch_size() %}
     {% set cols_sql = get_seed_column_quoted_csv(model, agate_table.column_names) %}

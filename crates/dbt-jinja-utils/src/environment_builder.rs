@@ -1,20 +1,23 @@
 use crate::{
-    functions::register_base_functions, jinja_environment::JinjaEnv, listener::ListenerFactory,
+    functions::register_base_functions, jinja_environment::JinjaEnv,
+    listener::RenderingEventListenerFactory,
 };
-use dbt_common::{FsError, FsResult, io_args::IoArgs, unexpected_fs_err};
+use dbt_common::{ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs, unexpected_fs_err};
 use dbt_fusion_adapter::{BaseAdapter, ParseAdapter};
 use minijinja::{
-    Environment, Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, Value,
+    AdapterDispatchFunction, Argument, DynTypeObject, Environment, Error as MinijinjaError,
+    ErrorKind as MinijinjaErrorKind, UndefinedFunctionType, UserDefinedFunctionType, Value,
     constants::{
         DBT_AND_ADAPTERS_NAMESPACE, MACRO_NAMESPACE_REGISTRY, MACRO_TEMPLATE_REGISTRY,
         NON_INTERNAL_PACKAGES, ROOT_PACKAGE_NAME,
     },
     dispatch_object::get_internal_packages,
+    funcsign_parser, load_builtins,
     macro_unit::MacroUnit,
     value::ValueKind,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, path::PathBuf};
 use std::{path::Path, sync::Arc};
 
 type PackageName = String;
@@ -43,6 +46,7 @@ pub struct JinjaEnvBuilder {
     root_package: Option<String>,
     undefined_behavior: minijinja::UndefinedBehavior,
     io_args: IoArgs,
+    function_registry: Arc<minijinja::compiler::typecheck::FunctionRegistry>,
 }
 
 impl JinjaEnvBuilder {
@@ -55,6 +59,7 @@ impl JinjaEnvBuilder {
             root_package: None,
             undefined_behavior: Default::default(),
             io_args: IoArgs::default(),
+            function_registry: Arc::new(BTreeMap::new()),
         }
     }
 
@@ -102,7 +107,7 @@ impl JinjaEnvBuilder {
     pub fn try_with_macros(
         mut self,
         macros: MacroUnitsWrapper,
-        listener_factory: Option<Arc<dyn ListenerFactory>>,
+        listener_factory: Option<Arc<dyn RenderingEventListenerFactory>>,
     ) -> FsResult<Self> {
         let adapter = self.adapter.as_ref().ok_or_else(|| {
             unexpected_fs_err!("try_with_macros requires adapter configuration to be set")
@@ -119,14 +124,17 @@ impl JinjaEnvBuilder {
 
         // Initialize all registries
         let mut macro_namespace_registry = BTreeMap::new(); // package_name → [macro_names]
+        let mut macro_namespace_registry_for_builtins = Vec::new(); // package_name → DynTypeObject
         let mut macro_template_registry = BTreeMap::new(); // template_name → macro_info
 
         let mut non_internal_packages: BTreeMap<Value, Value> = BTreeMap::new(); // package_name → [macro_names]
         let mut internal_packages_macros: BTreeMap<String, BTreeMap<String, Value>> =
             BTreeMap::new(); // package_name → {macro_name → info}
+        let mut function_registry: minijinja::compiler::typecheck::FunctionRegistry =
+            BTreeMap::new(); // macro_name → DynObject
 
         // Process all macros
-        for (package_name, macro_units) in macros.macros {
+        for (package_name, macro_units) in macros.macros.clone() {
             // Add package to namespace registry
             macro_namespace_registry.insert(
                 Value::from(package_name.clone()),
@@ -137,6 +145,12 @@ impl JinjaEnvBuilder {
                         .collect::<Vec<_>>(),
                 ),
             );
+            macro_namespace_registry_for_builtins.push(package_name.clone());
+        }
+        // Load jinja typecheck builtins
+        let builtins = load_builtins(macro_namespace_registry_for_builtins)
+            .map_err(|e| unexpected_fs_err!("Failed to load jinja typecheck builtins: {}", e))?;
+        for (package_name, macro_units) in macros.macros {
             // Internal packages (dbt, dbt_postgres, etc.)
             let is_internal = internal_packages.contains(&package_name);
 
@@ -180,6 +194,66 @@ impl JinjaEnvBuilder {
                     };
                 }
 
+                let funcsign = match macro_unit.info.funcsign.clone() {
+                    Some(funcsign) => {
+                        let (args, returns) = funcsign_parser::parse(&funcsign, builtins.clone())
+                            .map_err(|e| {
+                            fs_err!(
+                                ErrorCode::JinjaError,
+                                "Failed to parse function signature: {}",
+                                e
+                            )
+                        })?;
+                        if args.len() != macro_unit.info.args.len() {
+                            return Err(fs_err!(
+                                ErrorCode::JinjaError,
+                                "Function {} signature '{}' has {} args: {}, but macro has {} args: {}",
+                                macro_name,
+                                funcsign,
+                                args.len(),
+                                args.iter()
+                                    .map(|a| a.to_string())
+                                    .collect::<Vec<_>>()
+                                    .join(", "),
+                                macro_unit.info.args.len(),
+                                macro_unit
+                                    .info
+                                    .args
+                                    .iter()
+                                    .map(|a| a.name.clone())
+                                    .collect::<Vec<_>>()
+                                    .join(", "),
+                            ));
+                        }
+                        let args = macro_unit
+                            .info
+                            .args
+                            .iter()
+                            .zip(args.iter())
+                            .map(|(arg_spec, arg_type)| Argument {
+                                name: arg_spec.name.clone(),
+                                type_: arg_type.clone(),
+                                is_optional: arg_spec.is_optional,
+                            })
+                            .collect::<Vec<_>>();
+
+                        DynTypeObject::new(Arc::new(UserDefinedFunctionType::new(
+                            &macro_name,
+                            args,
+                            returns,
+                        )))
+                    }
+                    None => DynTypeObject::new(Arc::new(UndefinedFunctionType::new(
+                        &macro_name,
+                        minijinja::CodeLocation::new(
+                            offset.line as u32,
+                            offset.col as u32,
+                            PathBuf::from(filename.clone()),
+                        ),
+                    ))),
+                };
+                function_registry.insert(template_name.clone(), funcsign.clone());
+
                 macro_template_registry.insert(
                     Value::from(template_name),
                     Value::from_serialize(macro_unit.info.clone()),
@@ -196,6 +270,9 @@ impl JinjaEnvBuilder {
                 }
             }
         }
+
+        self.function_registry = Arc::new(function_registry);
+        AdapterDispatchFunction::instance().set_function_registry(self.function_registry.clone());
 
         // Process internal packages in reverse order (like dbt)
         let mut dbt_and_adapters_namespace = BTreeMap::new();
@@ -267,6 +344,7 @@ impl JinjaEnvBuilder {
         if let Some(adapter) = self.adapter {
             jinja_env.set_adapter(adapter);
         }
+        jinja_env.jinja_function_registry = self.function_registry.clone();
 
         jinja_env
     }
@@ -436,6 +514,8 @@ mod tests {
                     end_col: 0,
                     end_offset: 0,
                 },
+                funcsign: None,
+                args: vec![],
             },
             sql: sql.to_string(),
         }
@@ -679,6 +759,8 @@ all okay!");
                                 end_col: 1,
                                 end_offset: 0,
                             },
+                            funcsign: None,
+                            args: vec![],
                         },
                         sql: "{% macro some_macro() %}hello{% endmacro %}".to_string(),
                     },
@@ -687,6 +769,8 @@ all okay!");
                             name: "macro_b".to_string(),
                             path: PathBuf::from("test"),
                             span: Span::default(),
+                            funcsign: None,
+                            args: vec![],
                         },
                         sql: "{% macro macro_b() %}{%- set small_macro_name = some_macro -%} {{ small_macro_name() }}{% endmacro %}".to_string(),
                     },

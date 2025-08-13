@@ -59,6 +59,8 @@ pub struct JinjaEnv {
     pub env: Environment<'static>,
     /// An optional SqlEngine instance.
     pub sql_engine: Option<Arc<SqlEngine>>,
+    /// The Jinja function registry.
+    pub jinja_function_registry: Arc<minijinja::compiler::typecheck::FunctionRegistry>,
 }
 
 impl AsRef<JinjaEnv> for JinjaEnv {
@@ -73,6 +75,7 @@ impl JinjaEnv {
         Self {
             env,
             sql_engine: None,
+            jinja_function_registry: Arc::new(BTreeMap::new()),
         }
     }
 

@@ -10,9 +10,10 @@ use dbt_schemas::schemas::common::{DbtMaterialization, ResolvedQuoting, normaliz
 use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::state::DbtPackage;
+use minijinja::ArgSpec;
 use minijinja::compiler::ast::{MacroKind, Stmt};
 use minijinja::compiler::parser::Parser;
-use minijinja::machinery::WhitespaceConfig;
+use minijinja::machinery::{Span, WhitespaceConfig};
 use minijinja::syntax::SyntaxConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -387,18 +388,49 @@ pub fn parse_macro_statements(
         .parse_top_level_statements(statement_types)
         .map_err(|e| FsError::from_jinja_err(e, "Failed to parse macro SQL"))?;
     let mut sql_resources = Vec::new();
-    parse_macro_ast(&ast, &mut sql_resources);
+    let mut last_func_sign = None;
+    extract_sql_resources_from_ast(&ast, &mut sql_resources, &mut last_func_sign);
     Ok(sql_resources)
 }
 
-fn parse_macro_ast<T: DefaultTo<T>>(ast: &Stmt, sql_resources: &mut Vec<SqlResource<T>>) {
+fn extract_sql_resources_from_ast<T: DefaultTo<T>>(
+    ast: &Stmt,
+    sql_resources: &mut Vec<SqlResource<T>>,
+    last_func_sign: &mut Option<(Span, String)>,
+) {
     match ast {
         Stmt::Macro((macro_node, macro_kind, meta)) => {
             let span = macro_node.span;
             let macro_name = macro_node.name;
+            let func_sign = if let Some((span, func_sign)) = last_func_sign.take() {
+                if span.start_line >= macro_node.span.start_line {
+                    panic!("[BUG] funcsign is after macro declaration");
+                }
+                Some(func_sign)
+            } else {
+                None
+            };
+            let non_optional_args_len = macro_node.args.len() - macro_node.defaults.len();
+            let args = macro_node
+                .args
+                .iter()
+                .enumerate()
+                .map(|(i, arg)| match arg {
+                    minijinja::compiler::ast::Expr::Var(spanned) => ArgSpec {
+                        name: spanned.id.to_string(),
+                        is_optional: i >= non_optional_args_len,
+                    },
+                    _ => todo!(),
+                })
+                .collect::<Vec<_>>();
             match macro_kind {
                 MacroKind::Macro => {
-                    sql_resources.push(SqlResource::Macro(macro_name.to_string(), span));
+                    sql_resources.push(SqlResource::Macro(
+                        macro_name.to_string(),
+                        span,
+                        func_sign,
+                        args,
+                    ));
                 }
                 MacroKind::Test => {
                     sql_resources.push(SqlResource::Test(macro_name.to_string(), span));
@@ -420,14 +452,30 @@ fn parse_macro_ast<T: DefaultTo<T>>(ast: &Stmt, sql_resources: &mut Vec<SqlResou
             }
             // recursively parse the body of the macro for nested macros
             for stmt in &macro_node.body {
-                parse_macro_ast(stmt, sql_resources);
+                extract_sql_resources_from_ast(stmt, sql_resources, last_func_sign);
             }
         }
         Stmt::Template(template_stmt) => {
             template_stmt
                 .children
                 .iter()
-                .for_each(|x| parse_macro_ast(x, sql_resources));
+                .for_each(|x| extract_sql_resources_from_ast(x, sql_resources, last_func_sign));
+        }
+        Stmt::EmitRaw(emit_raw) => {
+            // find "-- funcsign: " in emit_raw.raw
+            let raw = emit_raw.raw.trim();
+            if raw.contains("-- funcsign: ") {
+                *last_func_sign = Some((
+                    emit_raw.span,
+                    raw.split("-- funcsign: ")
+                        .nth(1)
+                        .unwrap()
+                        .trim()
+                        .to_string(),
+                ));
+            } else {
+                *last_func_sign = None;
+            }
         }
         _ => {}
     }

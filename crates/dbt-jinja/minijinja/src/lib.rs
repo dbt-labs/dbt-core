@@ -226,6 +226,7 @@ mod types;
 mod utils;
 mod vm;
 pub use vm::find_macro_signatures;
+pub use vm::listeners::DefaultTypecheckingEventListener;
 pub use vm::listeners::TypecheckingEventListener;
 
 pub mod cache_key;
@@ -264,10 +265,15 @@ pub use self::utils::{AutoEscape, HtmlEscape, UndefinedBehavior};
 pub use self::value::Value;
 
 pub use self::macros::__context;
-pub use self::vm::State;
+pub use self::vm::{deserialize_path, deserialize_span, State};
 pub use crate::types::adapter::AdapterDispatchFunction;
 pub use crate::types::builtins::load_builtins;
+pub use crate::types::funcsign_parser;
+pub use crate::types::function::{
+    ArgSpec, Argument, UndefinedFunctionType, UserDefinedFunctionType,
+};
 pub use crate::types::utils::CodeLocation;
+pub use crate::types::DynObject as DynTypeObject;
 pub use crate::types::Type;
 // forwards compatibility
 #[cfg(not(feature = "serde"))]

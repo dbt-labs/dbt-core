@@ -3,24 +3,28 @@ use dashmap::DashMap;
 use crate::compiler::cfg::CFG;
 use crate::compiler::codegen::{TypeConstraintOperation, Variable};
 use crate::compiler::instructions::Instruction;
+use crate::compiler::tokens::Span;
 use crate::compiler::typecheck::FunctionRegistry;
-use crate::types::function::UserDefinedFunctionType;
+use crate::constants::{DBT_AND_ADAPTERS_NAMESPACE, ROOT_PACKAGE_NAME, TARGET_PACKAGE_NAME};
+use crate::types::function::{LambdaType, UserDefinedFunctionType};
 use crate::types::list::ListType;
 use crate::types::struct_::StructType;
 use crate::types::tuple::TupleType;
 use crate::types::utils::{infer_type_from_const_value, instr_name, CodeLocation};
+use crate::types::DynObject;
 use crate::types::Type;
+use crate::value::ValueMap;
 use crate::vm::listeners::{DefaultTypecheckingEventListener, TypecheckingEventListener};
 use crate::{ErrorKind, Value};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use std::fmt;
 use std::hash::Hash;
 use std::ops::RangeBounds;
 use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::{fmt, vec};
 
 #[derive(Clone, Debug)]
 pub struct TypeWithConstraint {
@@ -119,6 +123,10 @@ impl TypeWithConstraint {
         self.inner.is_any()
     }
 
+    pub fn is_namespace(&self) -> bool {
+        self.inner.is_namespace()
+    }
+
     pub fn call(
         &self,
         positional_args: &[Type],
@@ -175,6 +183,40 @@ impl TypeWithConstraint {
         }
         Ok(())
     }
+
+    pub fn get_simple_name(&self) -> String {
+        match &self.inner {
+            Type::String(_) => "String".to_string(),
+            Type::Integer(_) => "Integer".to_string(),
+            Type::Float => "Float".to_string(),
+            Type::Bool => "Bool".to_string(),
+            Type::Bytes => "Bytes".to_string(),
+            Type::TimeStamp => "TimeStamp".to_string(),
+            Type::Tuple(_) => "Tuple".to_string(),
+            Type::List(_) => "List".to_string(),
+            Type::Struct(_) => "Struct".to_string(),
+            Type::Iterable(_) => "Iterable".to_string(),
+            Type::Dict(_) => "Dict".to_string(),
+            Type::Plain => "Plain".to_string(),
+            Type::None => "None".to_string(),
+            Type::Undefined => "Undefined".to_string(),
+            Type::Invalid => "Invalid".to_string(),
+            Type::Exception => "Exception".to_string(),
+            Type::Union(_) => "Union".to_string(),
+            Type::Any { .. } => "Any".to_string(),
+            Type::Kwargs(_) => "Kwargs".to_string(),
+            Type::Frame => "Frame".to_string(),
+            Type::Object(arg0) => {
+                if arg0.downcast_ref::<LambdaType>().is_some() {
+                    "Lambda".to_string()
+                } else {
+                    format!("{arg0:?}")
+                }
+            }
+            Type::StdColumn => "StdColumn".to_string(),
+            Type::Namespace(_) => "Namespace".to_string(),
+        }
+    }
 }
 
 /// symbol table mapping local variable names to their types
@@ -182,6 +224,7 @@ impl TypeWithConstraint {
 pub struct SymbolTable {
     pub builtins: Arc<DashMap<String, Type>>,
     pub locals: BTreeMap<String, TypeWithConstraint>,
+    pub locals_definitions_location: BTreeMap<String, Vec<Span>>,
 }
 
 impl SymbolTable {
@@ -189,6 +232,7 @@ impl SymbolTable {
         Self {
             builtins,
             locals: BTreeMap::new(),
+            locals_definitions_location: BTreeMap::new(),
         }
     }
 
@@ -262,11 +306,16 @@ impl SymbolTable {
         variable: impl Into<Variable>,
         value: Type,
         listener: Rc<dyn TypecheckingEventListener>,
+        span_location: Option<Span>,
     ) -> Result<(), crate::Error> {
         let variable = variable.into();
         match variable {
             Variable::String(name) => {
-                self.locals.insert(name, value.into());
+                self.locals.insert(name.clone(), value.into());
+                if let Some(span_location) = span_location {
+                    self.locals_definitions_location
+                        .insert(name, vec![span_location]);
+                }
                 Ok(())
             }
             Variable::GetAttr(path) => {
@@ -286,6 +335,15 @@ impl SymbolTable {
                             },
                             type_.value().clone().into(),
                         );
+                        if let Some(span_location) = span_location {
+                            self.locals_definitions_location.insert(
+                                match &path[0] {
+                                    Part::String(s) => s.clone(),
+                                    _ => unreachable!(),
+                                },
+                                vec![span_location],
+                            );
+                        }
                         self.locals.get_mut(&match &path[0] {
                             Part::String(s) => s.clone(),
                             _ => unreachable!(),
@@ -475,8 +533,10 @@ impl<'src> TypeChecker<'src> {
     pub fn check(
         &mut self,
         listener: Rc<dyn TypecheckingEventListener>,
+        typecheck_resolved_context: BTreeMap<String, Value>,
     ) -> Result<(), crate::Error> {
         // println!("{}", self.cfg.dump_blocks(self.instr));
+        // println!("CFG: {}", self.cfg.to_dot());
         let mut worklist = VecDeque::new();
         let mut visited = vec![false; self.cfg.blocks.len()];
         let mut first_merge = vec![true; self.cfg.blocks.len()];
@@ -493,7 +553,8 @@ impl<'src> TypeChecker<'src> {
 
         while let Some(bb_id) = worklist.pop_front() {
             listener.clone().new_block(bb_id);
-            let out_state = self.transfer_block(bb_id, listener.clone());
+            let out_state =
+                self.transfer_block(bb_id, listener.clone(), typecheck_resolved_context.clone());
 
             match out_state {
                 Ok(out_state) => {
@@ -588,10 +649,12 @@ impl<'src> TypeChecker<'src> {
         &mut self,
         bb_id: usize,
         listener: Rc<dyn TypecheckingEventListener>,
+        typecheck_resolved_context: BTreeMap<String, Value>,
     ) -> Result<TypecheckState, crate::Error> {
         let suppressed_listener = Rc::new(DefaultTypecheckingEventListener::default());
         let mut typestate = self.in_states[bb_id].clone();
         let slice = self.cfg.instructions(bb_id, self.instr);
+        let attempts: &mut Vec<std::string::String> = &mut Vec::new();
 
         for (offset, inst) in slice.iter().enumerate() {
             let global_idx = self.cfg.blocks[bb_id].start + offset;
@@ -639,8 +702,26 @@ impl<'src> TypeChecker<'src> {
                 Instruction::StoreLocal(name, span) => {
                     // TYPECHECK: NO
                     listener.set_span(span);
-                    let value_type = match typestate.stack.pop_inner() {
-                        Some(val) => val,
+                    let value_type = match typestate.stack.pop() {
+                        Some(val) => {
+                            if *name != "_internal_tmp"
+                                && macro_namespace_template_resolver(
+                                    &typecheck_resolved_context,
+                                    self.function_registry.clone(),
+                                    name,
+                                    attempts,
+                                )
+                                .is_none()
+                            {
+                                listener.on_lookup(
+                                    span,
+                                    &val.get_simple_name(),
+                                    &format!("{val}"),
+                                    vec![*span],
+                                );
+                            }
+                            val.inner
+                        }
                         None => {
                             return Err(crate::Error::new(
                                 crate::error::ErrorKind::InvalidOperation,
@@ -648,10 +729,21 @@ impl<'src> TypeChecker<'src> {
                             ));
                         }
                     };
+                    let block = self.cfg.get_block(bb_id).unwrap();
+                    let span_location = if let Some(macro_name) = &block.current_macro {
+                        if *name == macro_name {
+                            None
+                        } else {
+                            Some(*span)
+                        }
+                    } else {
+                        None
+                    };
                     typestate.locals.insert(
                         name.to_string(),
                         value_type.clone(),
                         listener.clone(),
+                        span_location,
                     )?;
                 }
                 Instruction::Lookup(name, span) => {
@@ -665,8 +757,28 @@ impl<'src> TypeChecker<'src> {
                                 &format!("Variable '{name_str}' is not defined in one of its predecessor blocks."),
                             );
                             typestate.stack.push(Type::Any { hard: false });
+                            if name_str != "_internal_tmp" {
+                                // get the spans from locals_definitions_location
+                                if let Some(spans) =
+                                    typestate.locals.locals_definitions_location.get(name_str)
+                                {
+                                    listener.on_lookup(span, "any", "any", spans.clone());
+                                }
+                            }
                         } else {
                             typestate.stack.push(ty.clone());
+                            if name_str != "_internal_tmp" {
+                                if let Some(spans) =
+                                    typestate.locals.locals_definitions_location.get(name_str)
+                                {
+                                    listener.on_lookup(
+                                        span,
+                                        &ty.get_simple_name(),
+                                        &format!("{ty}"),
+                                        spans.clone(),
+                                    );
+                                }
+                            }
                         }
                     } else if let Some(function) = self.function_registry.get(name_str) {
                         typestate.stack.push(Type::Object(function.clone()));
@@ -1407,7 +1519,6 @@ impl<'src> TypeChecker<'src> {
                     // else {
                     // TYPECHECK: YES
                     // check the parameter types
-
                     if *name == "return" {
                         if let Some(arg) = typestate.stack.pop_inner() {
                             return Err(crate::Error::abrupt_return(Value::from_object(arg))
@@ -1490,6 +1601,23 @@ impl<'src> TypeChecker<'src> {
                                 listener.clone(),
                             )?);
                         }
+                    } else if let Some(template_name) = macro_namespace_template_resolver(
+                        &typecheck_resolved_context,
+                        self.function_registry.clone(),
+                        name,
+                        attempts,
+                    ) {
+                        if let Some(funcsign) = self.function_registry.get(&template_name) {
+                            if let Some(arg_cnt) = arg_count {
+                                let (args, kwargs) = typestate.get_call_args(*arg_cnt);
+
+                                typestate.stack.push(funcsign.call(
+                                    &args,
+                                    &kwargs,
+                                    listener.clone(),
+                                )?);
+                            }
+                        }
                     } else if let Some(arg_cnt) = arg_count {
                         let _ = typestate.get_call_args(*arg_cnt);
                         listener.warn(&format!(
@@ -1522,6 +1650,22 @@ impl<'src> TypeChecker<'src> {
                                 ))
                             }
                         };
+
+                        if self_type.is_namespace() {
+                            let namespace_name = match self_type.inner.clone() {
+                                Type::Namespace(name) => name,
+                                _ => unreachable!(),
+                            };
+                            let qualified_name = format!("{namespace_name}.{name}");
+                            if let Some(funcsign) = self.function_registry.get(&qualified_name) {
+                                typestate.stack.push(funcsign.call(
+                                    &method_args,
+                                    &kwargs,
+                                    listener.clone(),
+                                )?);
+                            }
+                            continue;
+                        }
 
                         if self_type.is_any() {
                             typestate.stack.push(self_type);
@@ -1682,7 +1826,21 @@ impl<'src> TypeChecker<'src> {
                         ));
                     }
                     // look up the function in the function registry
-                    if let Some(function) = self.function_registry.get(*name) {
+                    if let Some(macro_qualified_name) = macro_namespace_template_resolver(
+                        &typecheck_resolved_context,
+                        self.function_registry.clone(),
+                        name,
+                        attempts,
+                    ) {
+                        if let Some(function) = self.function_registry.get(&macro_qualified_name) {
+                            typestate.stack.push(Type::Object(function.clone()));
+                        } else {
+                            listener.warn(&format!(
+                                "Macro '{macro_qualified_name}' is not defined in the function registry."
+                            ));
+                            typestate.stack.push(Type::Any { hard: false });
+                        }
+                    } else if let Some(function) = self.function_registry.get(*name) {
                         typestate.stack.push(Type::Object(function.clone()));
                     } else if *name == "caller" {
                         typestate
@@ -1737,12 +1895,14 @@ impl<'src> TypeChecker<'src> {
                                             name,
                                             non_optional_type,
                                             listener.clone(),
+                                            None,
                                         )?;
                                     } else if type_.is_none() {
                                         typestate.locals.insert(
                                             name,
                                             Type::Any { hard: true },
                                             listener.clone(),
+                                            None,
                                         )?;
                                     }
                                 }
@@ -1750,9 +1910,12 @@ impl<'src> TypeChecker<'src> {
                                 typestate.locals.get(name, suppressed_listener.clone())
                             {
                                 if type_.is_optional() {
-                                    typestate
-                                        .locals
-                                        .insert(name, Type::None, listener.clone())?;
+                                    typestate.locals.insert(
+                                        name,
+                                        Type::None,
+                                        listener.clone(),
+                                        None,
+                                    )?;
                                 }
                             }
                         }
@@ -1766,12 +1929,15 @@ impl<'src> TypeChecker<'src> {
                                         name,
                                         type_.exclude(&test_type),
                                         listener.clone(),
+                                        None,
                                     )?;
                                 }
                             } else if let Ok(_type_) =
                                 typestate.locals.get(name, suppressed_listener.clone())
                             {
-                                typestate.locals.insert(name, test_type, listener.clone())?;
+                                typestate
+                                    .locals
+                                    .insert(name, test_type, listener.clone(), None)?;
                             }
                         }
                     }
@@ -1876,6 +2042,28 @@ impl<'src> TypeChecker<'src> {
             .collect();
 
         for name in all_keys {
+            dst.locals
+                .locals_definitions_location
+                .entry(name.clone())
+                .or_default()
+                .extend(
+                    src.locals
+                        .locals_definitions_location
+                        .get(&name)
+                        .cloned()
+                        .unwrap_or_default(),
+                );
+            // remove duplicated locations
+            dst.locals
+                .locals_definitions_location
+                .get_mut(&name)
+                .unwrap()
+                .sort_unstable();
+            dst.locals
+                .locals_definitions_location
+                .get_mut(&name)
+                .unwrap()
+                .dedup();
             match (dst.locals.get_mut(&name), src.locals.get_ref(&name)) {
                 (Some(dst_type), Some(src_type)) => {
                     let union_type = dst_type.union(src_type);
@@ -1890,7 +2078,12 @@ impl<'src> TypeChecker<'src> {
                         dst.single_branch_definition_vars.insert(name.clone());
                     }
                     dst.locals
-                        .insert(name.clone(), Type::Any { hard: true }, listener.clone())
+                        .insert(
+                            name.clone(),
+                            Type::Any { hard: true },
+                            listener.clone(),
+                            None,
+                        )
                         .unwrap();
                     changed = true;
                 }
@@ -1900,4 +2093,59 @@ impl<'src> TypeChecker<'src> {
 
         changed
     }
+}
+
+pub fn macro_namespace_template_resolver(
+    typecheck_resolved_context: &BTreeMap<String, Value>,
+    function_registry: Arc<BTreeMap<String, DynObject>>,
+    search_name: &str,
+    attempts: &mut Vec<String>,
+) -> Option<String> {
+    // Get necessary values from state
+    let current_package_name = typecheck_resolved_context
+        .get(TARGET_PACKAGE_NAME)
+        .cloned()
+        .unwrap_or(Value::from("dbt"));
+    let current_package_name = current_package_name.as_str().unwrap();
+    let root_package = typecheck_resolved_context
+        .get(ROOT_PACKAGE_NAME)
+        .cloned()
+        .unwrap_or(Value::from("dbt"));
+    let root_package = root_package.as_str().unwrap();
+    let dbt_and_adapters = typecheck_resolved_context
+        .get(DBT_AND_ADAPTERS_NAMESPACE)
+        .cloned()
+        .unwrap_or_default();
+    let dbt_and_adapters = dbt_and_adapters
+        .as_object()
+        .unwrap()
+        .downcast_ref::<ValueMap>()
+        .unwrap();
+
+    // 1. Local namespace (current package)
+    let template_name = format!("{current_package_name}.{search_name}");
+    attempts.push(template_name.clone());
+    if function_registry.contains_key(&template_name) {
+        return Some(template_name);
+    }
+
+    // 2. Root package namespace
+    let template_name = format!("{root_package}.{search_name}");
+    attempts.push(template_name.clone());
+    if function_registry.contains_key(&template_name) {
+        return Some(template_name);
+    }
+
+    // 3. Internal packages
+    let search_name_value = Value::from(search_name);
+    if let Some(pkg) = dbt_and_adapters.get(&search_name_value) {
+        let template_name = format!("{pkg}.{search_name}");
+        attempts.push(template_name.clone());
+        if function_registry.contains_key(&template_name) {
+            return Some(template_name);
+        }
+    }
+
+    // No template found
+    None
 }

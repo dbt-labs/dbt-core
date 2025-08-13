@@ -1,3 +1,4 @@
+-- funcsign: (relation, snowflake_node_config, relation, string) -> string
 {% macro snowflake__get_alter_dynamic_table_as_sql(
     existing_relation,
     configuration_changes,

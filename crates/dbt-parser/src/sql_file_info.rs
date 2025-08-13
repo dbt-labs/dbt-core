@@ -3,7 +3,7 @@
 use dbt_frontend_common::error::CodeLocation;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_schemas::schemas::{common::DbtChecksum, project::DefaultTo};
-use minijinja::machinery::Span;
+use minijinja::{ArgSpec, machinery::Span};
 
 /// Collected details about processed sql files
 #[derive(Debug, Clone)]
@@ -19,7 +19,7 @@ pub struct SqlFileInfo<T: DefaultTo<T>> {
     /// e.g. tests
     pub tests: Vec<(String, Span)>,
     /// e.g. macros
-    pub macros: Vec<(String, Span)>,
+    pub macros: Vec<(String, Span, Option<String>, Vec<ArgSpec>)>,
     /// e.g. materializations
     pub materializations: Vec<(String, String, Span)>,
     /// e.g. docs
@@ -77,7 +77,9 @@ impl<T: DefaultTo<T>> SqlFileInfo<T> {
                     config = resource_config;
                 }
                 SqlResource::Test(name, span) => tests.push((name, span)),
-                SqlResource::Macro(name, span) => macros.push((name, span)),
+                SqlResource::Macro(name, span, func_sign, args) => {
+                    macros.push((name, span, func_sign, args))
+                }
                 SqlResource::Materialization(name, adapter, span) => {
                     materializations.push((name, adapter, span))
                 }

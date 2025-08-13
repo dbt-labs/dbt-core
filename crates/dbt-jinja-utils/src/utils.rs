@@ -20,7 +20,7 @@ use std::{
 };
 
 use crate::{
-    jinja_environment::JinjaEnv, listener::ListenerFactory,
+    jinja_environment::JinjaEnv, listener::RenderingEventListenerFactory,
     phases::parse::sql_resource::SqlResource,
 };
 
@@ -229,7 +229,7 @@ pub fn render_sql(
     sql: &str,
     env: &JinjaEnv,
     ctx: &BTreeMap<String, Value>,
-    listener_factory: &dyn ListenerFactory,
+    listener_factory: &dyn RenderingEventListenerFactory,
     filename: &Path,
 ) -> FsResult<String> {
     let listeners = listener_factory.create_listeners(filename, &CodeLocation::start_of_file());

@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::types::iterable::IterableType;
 use crate::types::list::ListType;
 use crate::types::utils::CodeLocation;
@@ -7,9 +9,12 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::rc::Rc;
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+/// The argument specification of a function.
+#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 pub struct ArgSpec {
+    /// The name of the argument.
     pub name: String,
+    /// Whether the argument is optional.
     pub is_optional: bool,
 }
 
@@ -22,6 +27,7 @@ impl From<Argument> for ArgSpec {
     }
 }
 impl ArgSpec {
+    /// Create a new argument specification.
     pub fn new(name: &str, is_optional: bool) -> Self {
         Self {
             name: name.to_string(),
@@ -105,10 +111,14 @@ impl<T: FunctionType> Object for T {
     }
 }
 
+/// The argument of a function.
 #[derive(Clone)]
 pub struct Argument {
+    /// The name of the argument.
     pub name: String,
+    /// The type of the argument.
     pub type_: Type,
+    /// Whether the argument is optional.
     pub is_optional: bool,
 }
 
@@ -169,10 +179,14 @@ impl From<UserDefinedFunctionType> for LambdaType {
     }
 }
 
+/// The user defined function type.
 #[derive(Clone)]
 pub struct UserDefinedFunctionType {
+    /// The name of the function.
     pub name: String,
+    /// The arguments of the function.
     pub args: Vec<Argument>,
+    /// The return type of the function.
     pub ret_type: Type,
 }
 
@@ -183,6 +197,7 @@ impl fmt::Debug for UserDefinedFunctionType {
 }
 
 impl UserDefinedFunctionType {
+    /// Create a new user defined function type.
     pub fn new(name: &str, args: Vec<Argument>, ret_type: Type) -> Self {
         Self {
             name: name.to_string(),
@@ -223,8 +238,12 @@ impl FunctionType for UserDefinedFunctionType {
     }
 }
 
+/// The undefined function type.
+#[derive(Clone)]
 pub struct UndefinedFunctionType {
+    /// The name of the function.
     pub name: String,
+    /// The location of the function.
     pub location: CodeLocation,
 }
 
@@ -235,6 +254,7 @@ impl fmt::Debug for UndefinedFunctionType {
 }
 
 impl UndefinedFunctionType {
+    /// Create a new undefined function type.
     pub fn new(name: &str, location: CodeLocation) -> Self {
         Self {
             name: name.to_string(),

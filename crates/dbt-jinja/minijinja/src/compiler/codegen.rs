@@ -14,6 +14,7 @@ use crate::types::function::UserDefinedFunctionType;
 use crate::types::Type;
 use crate::value::ops::neg;
 use crate::value::{Kwargs, Value, ValueMap};
+use crate::vm::typemeta::macro_namespace_template_resolver;
 use crate::vm::typemeta::Part;
 
 use serde::{Deserialize, Serialize};
@@ -56,7 +57,7 @@ enum PendingBlock {
 
 #[derive(Clone)]
 pub enum CodeGenerationProfile {
-    TypeCheck(Arc<FunctionRegistry>),
+    TypeCheck(Arc<FunctionRegistry>, BTreeMap<String, Value>),
     Render,
 }
 
@@ -280,10 +281,12 @@ impl<'source> CodeGenerator<'source> {
                     unreachable!();
                 }
             }
-            CodeGenerationProfile::TypeCheck(_) => {
+            CodeGenerationProfile::TypeCheck(_, _) => {
                 if and {
-                    self.instructions.add(Instruction::StoreLocal("tmp", span));
-                    self.instructions.add(Instruction::Lookup("tmp", span));
+                    self.instructions
+                        .add(Instruction::StoreLocal("_internal_tmp", span));
+                    self.instructions
+                        .add(Instruction::Lookup("_internal_tmp", span));
 
                     self.start_sc_bool();
 
@@ -303,7 +306,8 @@ impl<'source> CodeGenerator<'source> {
                         ));
                     }
 
-                    self.instructions.add(Instruction::Lookup("tmp", span));
+                    self.instructions
+                        .add(Instruction::Lookup("_internal_tmp", span));
                     if let Some(PendingBlock::ScBool {
                         ref mut jump_instrs,
                     }) = self.pending_block.first_mut()
@@ -318,8 +322,10 @@ impl<'source> CodeGenerator<'source> {
                         self.add(Instruction::TypeConstraint(inverted, true, span));
                     }
                 } else {
-                    self.instructions.add(Instruction::StoreLocal("tmp", span));
-                    self.instructions.add(Instruction::Lookup("tmp", span));
+                    self.instructions
+                        .add(Instruction::StoreLocal("_internal_tmp", span));
+                    self.instructions
+                        .add(Instruction::Lookup("_internal_tmp", span));
 
                     self.start_sc_bool();
 
@@ -339,7 +345,8 @@ impl<'source> CodeGenerator<'source> {
                         ));
                     }
 
-                    self.instructions.add(Instruction::Lookup("tmp", span));
+                    self.instructions
+                        .add(Instruction::Lookup("_internal_tmp", span));
                     if let Some(PendingBlock::ScBool {
                         ref mut jump_instrs,
                     }) = self.pending_block.first_mut()
@@ -566,7 +573,7 @@ impl<'source> CodeGenerator<'source> {
                             }
                         }
                     }
-                    CodeGenerationProfile::TypeCheck(_) => {
+                    CodeGenerationProfile::TypeCheck(_, _) => {
                         // do nothing
                     }
                 }
@@ -649,37 +656,65 @@ impl<'source> CodeGenerator<'source> {
                         self.compile_expr(default, listeners);
                         self.end_if();
                     }
-                    CodeGenerationProfile::TypeCheck(function_registry) => {
-                        if let Some(signature) = function_registry.get(macro_decl.name) {
-                            if let Some(udf) = signature.downcast_ref::<UserDefinedFunctionType>() {
-                                let type_ = &udf.args[i].type_;
-                                // the parameter has default value, so we need to exclude the none from arg type and check with the default
-                                let type_ = type_.get_non_optional_type();
-                                self.add(Instruction::LoadType(Value::from_object(type_)));
-                                self.compile_expr(default, listeners);
-                                self.add(Instruction::UnionType);
+                    CodeGenerationProfile::TypeCheck(
+                        function_registry,
+                        typecheck_resolved_context,
+                    ) => {
+                        let mut attempts = Vec::new();
+                        if let Some(macro_qualified_name) = macro_namespace_template_resolver(
+                            typecheck_resolved_context,
+                            function_registry.clone(),
+                            macro_decl.name,
+                            &mut attempts,
+                        ) {
+                            if let Some(signature) = function_registry.get(&macro_qualified_name) {
+                                if let Some(udf) =
+                                    signature.downcast_ref::<UserDefinedFunctionType>()
+                                {
+                                    let type_ = &udf.args[i].type_;
+                                    // the parameter has default value, so we need to exclude the none from arg type and check with the default
+                                    let type_ = type_.get_non_optional_type();
+                                    self.add(Instruction::LoadType(Value::from_object(type_)));
+                                    self.compile_expr(default, listeners);
+                                    self.add(Instruction::UnionType);
+                                } else {
+                                    self.add(Instruction::LoadType(Value::from_object(
+                                        Type::Any { hard: false },
+                                    )));
+                                }
                             } else {
-                                self.add(Instruction::LoadType(Value::from_object(Type::Any {
-                                    hard: false,
-                                })));
+                                panic!(
+                                    "Function signature not found for macro {}",
+                                    macro_decl.name
+                                );
                             }
-                        } else {
-                            panic!("Function signature not found for macro {}", macro_decl.name);
                         }
                     }
                 }
-            } else if let CodeGenerationProfile::TypeCheck(function_registry) = &self.profile {
-                if let Some(signature) = function_registry.get(macro_decl.name) {
-                    if let Some(udf) = signature.downcast_ref::<UserDefinedFunctionType>() {
-                        let type_ = &udf.args[i].type_;
-                        self.add(Instruction::LoadType(Value::from_object(type_.clone())));
+            } else if let CodeGenerationProfile::TypeCheck(
+                function_registry,
+                typecheck_resolved_context,
+            ) = &self.profile
+            {
+                let mut attempts = Vec::new();
+                if let Some(macro_qualified_name) = macro_namespace_template_resolver(
+                    typecheck_resolved_context,
+                    function_registry.clone(),
+                    macro_decl.name,
+                    &mut attempts,
+                ) {
+                    if let Some(signature) = function_registry.get(&macro_qualified_name) {
+                        if let Some(udf) = signature.downcast_ref::<UserDefinedFunctionType>() {
+                            let type_ = &udf.args[i].type_;
+                            self.add(Instruction::LoadType(Value::from_object(type_.clone())));
+                        } else {
+                            self.add(Instruction::LoadType(Value::from_object(Type::Any {
+                                hard: false,
+                            })));
+                        }
                     } else {
-                        self.add(Instruction::LoadType(Value::from_object(Type::Any {
-                            hard: false,
-                        })));
+                        panic!("Function signature not found for macro {}", macro_decl.name);
                     }
-                } else {
-                    panic!("Function signature not found for macro {}", macro_decl.name);
                 }
             }
             self.compile_assignment(arg, listeners);
@@ -797,7 +832,7 @@ impl<'source> CodeGenerator<'source> {
             self.compile_stmt(node, listeners);
         }
         if !if_cond.false_body.is_empty()
-            || matches!(self.profile, CodeGenerationProfile::TypeCheck(_))
+            || matches!(self.profile, CodeGenerationProfile::TypeCheck(_, _))
         {
             self.start_else(span);
             if type_constraints.len() == 1 {
@@ -1198,7 +1233,7 @@ impl<'source> CodeGenerator<'source> {
                     pending_args += 1;
                 }
                 ast::CallArg::PosSplat(_expr)
-                    if matches!(self.profile, CodeGenerationProfile::TypeCheck(_)) =>
+                    if matches!(self.profile, CodeGenerationProfile::TypeCheck(_, _)) =>
                 {
                     // Type check mode, we need to push a placeholder for the any type
                     self.add(Instruction::LoadType(Value::from_object(Type::Any {
@@ -1373,7 +1408,7 @@ impl<'source> CodeGenerator<'source> {
     }
 
     pub fn get_type_constraints(&self, expr: &ast::Expr<'source>) -> Vec<TypeConstraint> {
-        if matches!(self.profile, CodeGenerationProfile::TypeCheck(_)) {
+        if matches!(self.profile, CodeGenerationProfile::TypeCheck(_, _)) {
             get_type_constraints(expr).unwrap_or_default()
         } else {
             vec![]
@@ -1444,7 +1479,7 @@ fn get_type_constraints<'source>(expr: &ast::Expr<'source>) -> Result<Vec<TypeCo
                 .collect())
         }
         ast::Expr::Call(_) => Ok(vec![TypeConstraint {
-            name: "tmp".into(),
+            name: "_internal_tmp".into(),
             operation: TypeConstraintOperation::NotNull(true),
         }]),
         ast::Expr::Filter(filter) => {
@@ -1459,7 +1494,7 @@ fn get_type_constraints<'source>(expr: &ast::Expr<'source>) -> Result<Vec<TypeCo
                 }
             }
             Ok(vec![TypeConstraint {
-                name: "tmp".into(),
+                name: "_internal_tmp".into(),
                 operation: TypeConstraintOperation::NotNull(true),
             }])
         }

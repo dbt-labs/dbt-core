@@ -68,7 +68,8 @@ pub struct Environment<'source> {
     #[cfg(feature = "fuel")]
     fuel: Option<u64>,
     recursion_limit: usize,
-    profile: CodeGenerationProfile,
+    /// The code generation profile for this environment.
+    pub profile: CodeGenerationProfile,
 }
 
 impl Default for Environment<'_> {
@@ -931,7 +932,7 @@ impl<'source> Environment<'source> {
     }
 
     /// package_name -> macro_names
-    pub(crate) fn get_macro_namespace_registry(&self) -> Arc<ValueMap> {
+    pub fn get_macro_namespace_registry(&self) -> Arc<ValueMap> {
         self.get_global(MACRO_NAMESPACE_REGISTRY)
             .unwrap_or_default()
             .downcast_object::<ValueMap>()
@@ -939,7 +940,7 @@ impl<'source> Environment<'source> {
     }
 
     /// The name of the root project
-    pub(crate) fn get_root_package_name(&self) -> String {
+    pub fn get_root_package_name(&self) -> String {
         // NOTE: These "unwrap_or_default" are super dangerous (because of the many call sites)
         self.get_global(ROOT_PACKAGE_NAME)
             .unwrap_or_default()
@@ -948,7 +949,8 @@ impl<'source> Environment<'source> {
             .to_string()
     }
 
-    pub(crate) fn get_macro_template_registry(&self) -> Arc<ValueMap> {
+    /// template_name -> template_registry_item including path and span
+    pub fn get_macro_template_registry(&self) -> Arc<ValueMap> {
         self.get_global(MACRO_TEMPLATE_REGISTRY)
             .unwrap_or_default()
             .downcast_object::<ValueMap>()

@@ -62,8 +62,10 @@ impl FunctionType for AdapterDispatchFunction {
                 if let Some(ref registry) = *registry_opt {
                     for prefix in prefixes.iter() {
                         let key = format!("{prefix}{name}");
-                        if let Some(func) = registry.get(&key) {
-                            return Ok(Type::Object(func.clone()));
+                        for (registry_key, func) in registry.iter() {
+                            if registry_key.ends_with(&key) {
+                                return Ok(Type::Object(func.clone()));
+                            }
                         }
                     }
                     listener.warn(&format!(

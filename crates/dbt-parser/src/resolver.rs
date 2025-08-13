@@ -70,7 +70,7 @@ pub async fn resolve(
     dbt_state: Arc<DbtState>,
     macros: Macros,
     nodes: Nodes,
-    listener_factory: Option<Arc<dyn dbt_jinja_utils::listener::ListenerFactory>>,
+    listener_factory: Option<Arc<dyn dbt_jinja_utils::listener::RenderingEventListenerFactory>>,
     token: &CancellationToken,
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
     let _pb = with_progress!(arg.io, spinner => RESOLVING);

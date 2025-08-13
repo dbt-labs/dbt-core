@@ -9,7 +9,7 @@ mod assets {
 
 use std::sync::{Arc, OnceLock};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 fn load_definitions() -> Vec<Definition> {
     let filename = "builtins.sdf.yml".to_string();
@@ -75,7 +75,7 @@ pub struct Call {
     pub return_type: String,
 }
 
-#[derive(Deserialize, PartialEq, Debug, Clone, Default)]
+#[derive(Deserialize, PartialEq, Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct Argument {
     pub name: String,

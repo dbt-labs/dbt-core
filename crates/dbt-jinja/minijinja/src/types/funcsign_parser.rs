@@ -7,13 +7,17 @@ use crate::types::{
     tuple::TupleType, union::UnionType, DynObject, Type,
 };
 
+/// The error type for the funcsign parser.
 #[derive(Debug, Clone)]
 pub struct ParseError {
+    /// The error message.
     pub message: String,
+    /// The location of the error.
     pub location: CodeLocation,
 }
 
 impl ParseError {
+    /// Create a new parse error.
     pub fn new(message: String, location: CodeLocation) -> Self {
         Self { message, location }
     }
@@ -31,16 +35,20 @@ impl std::fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
+/// The location of a token in the funcsign.
 #[derive(Debug, Clone)]
 pub struct CodeLocation {
+    /// The line number of the token.
     pub line: u32,
+    /// The column number of the token.
     pub col: u32,
+    /// The index of the token.
     #[allow(dead_code)]
     pub index: u32,
 }
 
-impl CodeLocation {
-    pub fn default() -> Self {
+impl Default for CodeLocation {
+    fn default() -> Self {
         Self {
             line: 1,
             col: 1,
@@ -53,7 +61,7 @@ fn get_token_location(tokens: &[Token], index: usize) -> CodeLocation {
     tokens
         .get(index)
         .and_then(|t| t.location())
-        .unwrap_or_else(CodeLocation::default)
+        .unwrap_or_default()
 }
 
 #[derive(Debug)]
@@ -587,6 +595,16 @@ fn parse_fields(
     }
 }
 
+/// Parse a funcsign string into a function signature.
+///
+/// # Arguments
+///
+/// * `s` - The funcsign string to parse.
+/// * `registry` - The registry of types to use for parsing.
+///
+/// # Returns
+///
+/// A tuple containing the arguments and return type of the function.
 pub fn parse(
     s: &str,
     registry: Arc<DashMap<String, Type>>,
@@ -596,7 +614,10 @@ pub fn parse(
     Ok((args, ret_type))
 }
 
-pub fn parse_type(s: &str, registry: Arc<DashMap<String, Type>>) -> Result<Type, ParseError> {
+pub(crate) fn parse_type(
+    s: &str,
+    registry: Arc<DashMap<String, Type>>,
+) -> Result<Type, ParseError> {
     let tokens = tokenize(s);
     let (type_, _) = _parse_type(&tokens, 0, registry)?;
     Ok(type_)

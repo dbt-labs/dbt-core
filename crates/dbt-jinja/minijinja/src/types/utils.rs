@@ -119,6 +119,13 @@ pub struct CodeLocation {
     pub file: PathBuf,
 }
 
+impl CodeLocation {
+    /// Create a new code location.
+    pub fn new(line: u32, col: u32, file: PathBuf) -> Self {
+        Self { line, col, file }
+    }
+}
+
 impl fmt::Display for CodeLocation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.line == 0 && self.col == 0 {

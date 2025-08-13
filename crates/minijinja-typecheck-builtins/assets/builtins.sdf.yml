@@ -924,7 +924,7 @@ object:
         type: integer
         is-optional: false
       - name: end
-        type: integer
+        type: optional[integer]
         is-optional: true
     return-type: list[integer]
 ---
@@ -978,6 +978,17 @@ object:
       type: relation.scd_args
     - name: get_ddl_prefix_for_alter
       type: relation.get_ddl_prefix_for_alter
+    - name: from_config
+      type: relation.from_config
+---
+object:
+  id: relation.from_config
+  call:
+    arguments:
+      - name: config
+        type: model
+        is-optional: false
+    return-type: snowflake_node_config
 --- 
 object:
   id: relation.get_ddl_prefix_for_alter
@@ -1263,3 +1274,37 @@ alias:
 alias:
   id: row_number
   type: integer
+---
+object:
+  id: snowflake_node_config
+  attributes:
+    - name: requires_full_refresh
+      type: bool
+    - name: target_lag
+      type: optional[target_lag]
+    - name: snowflake_warehouse
+      type: optional[snowflake_warehouse]
+    - name: catalog
+      type: catalog
+    - name: refresh_mode
+      type: optional[string]
+    - name: initialize
+      type: optional[string]
+---
+object:
+  id: snowflake_warehouse
+  attributes:
+    - name: context 
+      type: string
+---
+object:
+  id: target_lag
+  attributes:
+    - name: context 
+      type: string
+---
+object:
+  id: catalog
+  attributes:
+    - name: table_format
+      type: string

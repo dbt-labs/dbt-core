@@ -1,3 +1,4 @@
+-- funcsign: (relation, string) -> string
 {% macro snowflake__get_replace_dynamic_table_sql(relation, sql) -%}
 {#-
 --  Produce DDL that replaces a dynamic table with a new dynamic table
@@ -23,6 +24,7 @@
 
 {%- endmacro %}
 
+-- funcsign: (snowflake_node_config, relation, string) -> string
 {% macro _get_replace_dynamic_standard_table_as_sql(dynamic_table, relation, sql) -%}
 {#-
 --  Produce DDL that replaces a standard dynamic table with a new standard dynamic table
@@ -51,7 +53,7 @@
 
 {%- endmacro %}
 
-
+-- funcsign: (snowflake_node_config, relation, string) -> string
 {% macro _get_replace_dynamic_iceberg_table_as_sql(dynamic_table, relation, sql) -%}
 {#-
 --  Produce DDL that replaces a dynamic iceberg table with a new dynamic iceberg table

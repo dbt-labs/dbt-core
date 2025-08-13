@@ -4,7 +4,6 @@ use dashmap::DashMap;
 
 use crate::{
     types::{
-        dbt::DbtType,
         funcsign_parser::parse_type,
         function::{
             Argument, BatchFunctionType, FirstFunctionType, FunctionType, ListFunctionType,
@@ -16,14 +15,12 @@ use crate::{
     TypecheckingEventListener,
 };
 
-/// Load built-in types from yml
-///
-/// This function is used to load built-in types from yml.
-/// It is used to type check the template.
-///
-/// # Returns
-/// A map of object id to Type.
-pub fn load_builtins() -> Result<Arc<DashMap<String, Type>>, crate::Error> {
+// Singleton for builtins registry
+static BUILTINS_REGISTRY: std::sync::OnceLock<Arc<DashMap<String, Type>>> =
+    std::sync::OnceLock::new();
+
+/// Initialize built-in types registry (internal function)
+fn init_builtins(namespace_registry: Vec<String>) -> Arc<DashMap<String, Type>> {
     let definitions = minijinja_typecheck_builtins::get_definitions();
     let registry = Arc::new(DashMap::new()); // key is object id, value is Type
 
@@ -49,11 +46,6 @@ pub fn load_builtins() -> Result<Arc<DashMap<String, Type>>, crate::Error> {
     registry.insert(
         "list".to_string(),
         Type::Object(DynObject::new(Arc::new(ListFunctionType::default()))),
-    );
-    // TODO: dbt is a namespace
-    registry.insert(
-        "dbt".to_string(),
-        Type::Object(DynObject::new(Arc::new(DbtType::default()))),
     );
     registry.insert(
         "try_or_compiler_error".to_string(),
@@ -82,7 +74,26 @@ pub fn load_builtins() -> Result<Arc<DashMap<String, Type>>, crate::Error> {
         Type::Object(DynObject::new(Arc::new(BatchFunctionType::default()))),
     );
 
-    Ok(registry)
+    for name in namespace_registry {
+        registry.insert(name.clone(), Type::Namespace(name));
+    }
+
+    registry
+}
+
+/// Load built-in types from yml (singleton version)
+///
+/// This function returns a cached version of the built-in types registry.
+/// The registry is initialized only once and reused for subsequent calls.
+///
+/// # Returns
+/// A shared reference to the cached map of object id to Type.
+pub fn load_builtins(
+    namespace_registry: Vec<String>,
+) -> Result<Arc<DashMap<String, Type>>, crate::Error> {
+    Ok(BUILTINS_REGISTRY
+        .get_or_init(|| init_builtins(namespace_registry))
+        .clone())
 }
 
 #[derive(Clone)]

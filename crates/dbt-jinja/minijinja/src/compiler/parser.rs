@@ -1722,7 +1722,7 @@ impl<'a> Parser<'a> {
         statement_type: &[&str],
     ) -> Result<Vec<ast::Stmt<'a>>, Error> {
         let mut rv = Vec::new();
-        while let Some((token, _span)) = ok!(self.stream.next()) {
+        while let Some((token, span)) = ok!(self.stream.next()) {
             match token {
                 Token::BlockStart => {
                     let (tok, _span) = match ok!(self.stream.current()) {
@@ -1750,6 +1750,10 @@ impl<'a> Parser<'a> {
                         // Skip non-identifier tokens
                         self.skip_until_block_end()?;
                     }
+                }
+                // parse TemplateData because it can be a signature string
+                Token::TemplateData(raw) => {
+                    rv.push(ast::Stmt::EmitRaw(Spanned::new(ast::EmitRaw { raw }, span)));
                 }
                 // Skip all other token types
                 _ => continue,

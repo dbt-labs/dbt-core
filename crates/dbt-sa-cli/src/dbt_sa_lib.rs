@@ -242,7 +242,7 @@ async fn execute_all_phases(
         Macros::default(),
         Nodes::default(),
         Some(Arc::new(
-            dbt_jinja_utils::listener::DefaultListenerFactory::default(),
+            dbt_jinja_utils::listener::DefaultRenderingEventListenerFactory::default(),
         )),
         token,
     )

@@ -7,7 +7,9 @@ mod tests {
     use dbt_common::cancellation::never_cancels;
     use dbt_common::io_args::IoArgs;
     use dbt_jinja_utils::invocation_args::InvocationArgs;
-    use dbt_jinja_utils::listener::{DefaultListenerFactory, ListenerFactory};
+    use dbt_jinja_utils::listener::{
+        DefaultRenderingEventListenerFactory, RenderingEventListenerFactory,
+    };
     use dbt_jinja_utils::phases::parse::init::initialize_parse_jinja_environment;
     use dbt_jinja_utils::utils::render_sql;
     use dbt_schemas::schemas::profiles::{DbConfig, PostgresDbConfig};
@@ -75,7 +77,7 @@ mod tests {
             )
             .unwrap();
 
-        let listener_factory = DefaultListenerFactory::default();
+        let listener_factory = DefaultRenderingEventListenerFactory::default();
         let test_path = PathBuf::from("test_namespaced.sql");
         let env = Arc::new(env);
 

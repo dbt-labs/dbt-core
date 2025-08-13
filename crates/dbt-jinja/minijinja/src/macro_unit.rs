@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::machinery::Span;
+use crate::{machinery::Span, ArgSpec};
 
 /// A unit of a macro.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -24,4 +24,8 @@ pub struct MacroInfo {
     pub path: PathBuf,
     /// The start span of the macro.
     pub span: Span,
+    /// The funcsign of the macro.
+    pub funcsign: Option<String>,
+    /// The args of the macro.
+    pub args: Vec<ArgSpec>,
 }

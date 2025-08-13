@@ -1,7 +1,7 @@
 pub mod adapter;
 pub mod builtins;
-pub mod dbt;
 pub mod dict;
+/// Types for function signatures
 pub mod funcsign_parser;
 pub mod function;
 pub mod iterable;
@@ -91,6 +91,8 @@ pub enum Type {
     Object(DynObject),
     /// StdColumn type
     StdColumn,
+    /// Namespace type
+    Namespace(String),
 }
 
 impl fmt::Debug for Type {
@@ -120,6 +122,7 @@ impl fmt::Debug for Type {
             Self::Frame => write!(f, "Frame"),
             Self::Object(arg0) => f.write_fmt(format_args!("{arg0:?}")),
             Self::StdColumn => write!(f, "StdColumn"),
+            Self::Namespace(name) => write!(f, "Namespace({name})"),
         }
     }
 }
@@ -642,6 +645,11 @@ impl Type {
     ///
     pub fn is_any(&self) -> bool {
         matches!(self, Type::Any { .. })
+    }
+
+    /// Check if the type is a namespace
+    pub fn is_namespace(&self) -> bool {
+        matches!(self, Type::Namespace(_))
     }
 
     /// Flatten the type

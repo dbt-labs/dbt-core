@@ -15,7 +15,7 @@ mod tests {
     use dbt_fusion_adapter::parse::adapter::create_parse_adapter;
     use dbt_jinja_utils::invocation_args::InvocationArgs;
     use dbt_jinja_utils::jinja_environment::JinjaEnv;
-    use dbt_jinja_utils::listener::DefaultListenerFactory;
+    use dbt_jinja_utils::listener::DefaultRenderingEventListenerFactory;
     use dbt_jinja_utils::phases::parse::build_resolve_model_context;
     use dbt_jinja_utils::phases::parse::init::initialize_parse_jinja_environment;
     use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
@@ -126,7 +126,7 @@ mod tests {
                 sql,
                 &env,
                 &resolve_model_context,
-                &DefaultListenerFactory::default(),
+                &DefaultRenderingEventListenerFactory::default(),
                 &PathBuf::from("test"),
             )
             .unwrap();
@@ -164,7 +164,7 @@ mod tests {
                 sql,
                 &env,
                 &resolve_model_scope,
-                &DefaultListenerFactory::default(),
+                &DefaultRenderingEventListenerFactory::default(),
                 &PathBuf::from("test"),
             )
             .unwrap();
@@ -201,7 +201,7 @@ mod tests {
                 sql,
                 &env,
                 &resolve_model_scope,
-                &DefaultListenerFactory::default(),
+                &DefaultRenderingEventListenerFactory::default(),
                 &PathBuf::from("test"),
             )
             .unwrap();
@@ -242,7 +242,7 @@ mod tests {
                 sql,
                 &env,
                 &resolve_model_scope,
-                &DefaultListenerFactory::default(),
+                &DefaultRenderingEventListenerFactory::default(),
                 &PathBuf::from("test"),
             )
             .unwrap();
@@ -323,7 +323,7 @@ mod tests {
             sql,
             &env,
             &BTreeMap::new(),
-            &DefaultListenerFactory::default(),
+            &DefaultRenderingEventListenerFactory::default(),
             &PathBuf::from("test"),
         )
         .unwrap();
@@ -345,7 +345,7 @@ mod tests {
             sql,
             &env,
             &BTreeMap::new(),
-            &DefaultListenerFactory::default(),
+            &DefaultRenderingEventListenerFactory::default(),
             &PathBuf::from("test"),
         )
         .unwrap();
@@ -368,7 +368,7 @@ mod tests {
             sql,
             &env,
             &BTreeMap::new(),
-            &DefaultListenerFactory::default(),
+            &DefaultRenderingEventListenerFactory::default(),
             &PathBuf::from("test"),
         )
         .unwrap();
@@ -391,7 +391,7 @@ mod tests {
             sql,
             &env,
             &BTreeMap::new(),
-            &DefaultListenerFactory::default(),
+            &DefaultRenderingEventListenerFactory::default(),
             &PathBuf::from("test"),
         )
         .unwrap();
@@ -417,7 +417,7 @@ mod tests {
             sql,
             &env,
             &BTreeMap::new(),
-            &DefaultListenerFactory::default(),
+            &DefaultRenderingEventListenerFactory::default(),
             &PathBuf::from("test"),
         )
         .unwrap();
@@ -440,7 +440,7 @@ mod tests {
             sql,
             &env,
             &BTreeMap::new(),
-            &DefaultListenerFactory::default(),
+            &DefaultRenderingEventListenerFactory::default(),
             &PathBuf::from("test"),
         )
         .unwrap();
@@ -464,7 +464,7 @@ mod tests {
             sql,
             &env,
             &BTreeMap::new(),
-            &DefaultListenerFactory::default(),
+            &DefaultRenderingEventListenerFactory::default(),
             &PathBuf::from("test"),
         )
         .unwrap();
@@ -489,7 +489,7 @@ mod tests {
             sql_error,
             &env,
             &BTreeMap::new(),
-            &DefaultListenerFactory::default(),
+            &DefaultRenderingEventListenerFactory::default(),
             &PathBuf::from("test"),
         );
 
@@ -509,7 +509,7 @@ mod tests {
             sql,
             &env,
             &BTreeMap::new(),
-            &DefaultListenerFactory::default(),
+            &DefaultRenderingEventListenerFactory::default(),
             &PathBuf::from("test"),
         )
         .unwrap();
@@ -537,7 +537,9 @@ mod tests {
                     end_line: 4,
                     end_col: 27,
                     end_offset: 94
-                }
+                },
+                None,
+                vec![]
             )]
         );
         Ok(())
@@ -601,7 +603,9 @@ mod tests {
                         end_line: 4,
                         end_col: 27,
                         end_offset: 84
-                    }
+                    },
+                    None,
+                    vec![]
                 ),
                 SqlResource::Test(
                     "test_second".to_string(),
@@ -623,7 +627,9 @@ mod tests {
                         end_line: 12,
                         end_col: 27,
                         end_offset: 275
-                    }
+                    },
+                    None,
+                    vec![]
                 ),
             ]
         );
@@ -653,7 +659,9 @@ mod tests {
                         end_line: 6,
                         end_col: 27,
                         end_offset: 155
-                    }
+                    },
+                    None,
+                    vec![]
                 ),
                 SqlResource::Macro(
                     "inner".to_string(),
@@ -664,7 +672,9 @@ mod tests {
                         end_line: 5,
                         end_col: 31,
                         end_offset: 128
-                    }
+                    },
+                    None,
+                    vec![]
                 ),
             ]
         );
@@ -757,7 +767,7 @@ mod tests {
             sql,
             &env,
             &BTreeMap::new(),
-            &DefaultListenerFactory::default(),
+            &DefaultRenderingEventListenerFactory::default(),
             &PathBuf::from("test"),
         )
         .unwrap();

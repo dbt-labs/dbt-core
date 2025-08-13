@@ -140,6 +140,7 @@ impl<'env, 'source> Template<'env, 'source> {
         funcsigns: Arc<FunctionRegistry>,
         builtins: Arc<DashMap<String, Type>>,
         warning_printer: Rc<dyn TypecheckingEventListener>,
+        typecheck_resolved_context: BTreeMap<String, Value>,
     ) -> Result<(), crate::Error> {
         let instructions = &self.compiled.instructions.instructions;
         // build CFG
@@ -147,12 +148,14 @@ impl<'env, 'source> Template<'env, 'source> {
         // create a typechecker
         let mut typechecker = TypeChecker::new(instructions, cfg, funcsigns, builtins);
 
-        typechecker.check(warning_printer).map_err(|err| {
-            crate::Error::new(
-                crate::error::ErrorKind::InvalidOperation,
-                format!("Type checking failed: {err}"),
-            )
-        })
+        typechecker
+            .check(warning_printer, typecheck_resolved_context)
+            .map_err(|err| {
+                crate::Error::new(
+                    crate::error::ErrorKind::InvalidOperation,
+                    format!("Type checking failed: {err}"),
+                )
+            })
     }
 
     /// Like [`render`](Self::render) but also return the evaluated [`State`].

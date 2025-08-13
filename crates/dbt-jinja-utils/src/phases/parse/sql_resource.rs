@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use dbt_schemas::schemas::project::DefaultTo;
 
 use dbt_frontend_common::error::CodeLocation;
-use minijinja::machinery::Span;
+use minijinja::{ArgSpec, machinery::Span};
 
 /// Resources that are encountered while rendering sql and macros
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,7 +22,7 @@ pub enum SqlResource<T: DefaultTo<T>> {
     /// A test definition (e.g. `{% test foo() %}`)
     Test(String, Span),
     /// A macro definition (e.g. `{% macro my_macro(a, b) %}`)
-    Macro(String, Span),
+    Macro(String, Span, Option<String>, Vec<ArgSpec>), // name, span, funcsign, args
     /// A docs definition (e.g. `{% docs my_docs %}`)
     Doc(String, Span),
     /// A snapshot definition (e.g. `{% snapshot my_snapshot %}`)
@@ -45,7 +45,7 @@ impl<T: DefaultTo<T>> std::fmt::Display for SqlResource<T> {
             }
             SqlResource::Config(config) => write!(f, "Config({config:?})"),
             SqlResource::Test(name, span) => write!(f, "Test({name} {span:#?})"),
-            SqlResource::Macro(name, span) => write!(f, "Macro({name} {span:#?})"),
+            SqlResource::Macro(name, span, _, _) => write!(f, "Macro({name} {span:#?})"),
             SqlResource::Doc(name, span) => write!(f, "Docs({name} {span:#?})"),
             SqlResource::Materialization(name, adapter, span) => {
                 write!(f, "Materialization({name} {adapter} {span:#?})")
