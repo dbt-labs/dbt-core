@@ -460,7 +460,9 @@ pub fn clear_package_diagnostics(io: &IoArgs, package: &DbtPackage) {
         if project_file_path.exists() {
             // Get the relative path to the workspace root (arg.io.in_dir)
             if let Ok(workspace_path) = stdfs::diff_paths(&project_file_path, &io.in_dir) {
-                status_reporter.clear_file_if_first_time(&io.in_dir.join(workspace_path));
+                status_reporter.publish_empty_diagnostics_if_no_diagostics_collected(
+                    &io.in_dir.join(workspace_path),
+                );
             }
         }
 
@@ -472,7 +474,7 @@ pub fn clear_package_diagnostics(io: &IoArgs, package: &DbtPackage) {
             .chain(&package.docs_files)
         {
             let file_path = io.in_dir.join(&asset.path);
-            status_reporter.clear_file_if_first_time(&file_path);
+            status_reporter.publish_empty_diagnostics_if_no_diagostics_collected(&file_path);
         }
     }
 }
