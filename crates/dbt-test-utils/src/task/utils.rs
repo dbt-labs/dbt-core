@@ -182,7 +182,7 @@ pub fn maybe_normalize_time(output: String) -> String {
     result = time_regex.replace_all(&result, "HH:MM:SS").to_string();
 
     // Replace duration formats like "1ms", "123s", etc. and multiple durations with spaces
-    let duration_regex = Regex::new(r"(?:\b\d+(?:ms|s|ns|us)\b\s*)+").unwrap();
+    let duration_regex = Regex::new(r"(?:\b\d+(?:h|m|s|ms|us|ns)\b\s*)+").unwrap();
     result = duration_regex
         .replace_all(&result, "duration\n")
         .to_string();
