@@ -117,10 +117,6 @@ pub(super) fn get_span_event_attrs(values: Recordable<'_>) -> Option<SpanAttribu
 ///
 /// Should always return `Some(R)`. None means thread local subscriber missing,
 /// which should not happen in our case.
-///
-/// # Panics
-///
-/// This function will panic if it is called outside of an open span.
 pub(super) fn with_current_span<F, R>(f: F) -> Option<R>
 where
     F: FnOnce(&SpanRef<Registry>) -> R,
@@ -153,7 +149,8 @@ where
 ///
 /// # Panics
 ///
-/// This function will panic if it is called outside of an open span.
+/// This function will panic if it is called with a span that does not exist
+/// in the current context.
 pub(super) fn with_span<F, R>(span: &Span, f: F) -> Option<R>
 where
     F: FnOnce(&SpanRef<Registry>) -> R,

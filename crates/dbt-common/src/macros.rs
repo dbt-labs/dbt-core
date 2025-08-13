@@ -4,6 +4,10 @@ pub use humantime as _vendored_human_time;
 // macros using dbt_error without having to add it as a dependency explicitly.
 pub use dbt_error as _dbt_error;
 
+// Re-export dbt-telemetry to allow using it in macros without requiring
+// the call-site crate to declare it as a dependency explicitly
+pub use dbt_telemetry as _dbt_telemetry;
+
 /// fsinfo! constructs an FsInfo struct with optional data and desc fields
 #[macro_export]
 macro_rules! fsinfo {
@@ -510,21 +514,23 @@ macro_rules! show_warning {
 
         // New tracing based logic
         use $crate::tracing::{ToTracingValue, log_level_to_severity};
+        use $crate::tracing::emit::_tracing::Level as TracingLevel;
         use $crate::tracing::metrics::{increment_metric, MetricKey};
         use $crate::tracing::constants::TRACING_ATTR_FIELD;
-        use dbt_schemas::schemas::telemetry::{LogAttributes, RecordCodeLocation};
+        use $crate::macros::_dbt_telemetry::{LogAttributes, RecordCodeLocation};
         increment_metric(MetricKey::TotalWarnings, 1);
 
         let (original_severity_number, original_severity_text) = log_level_to_severity(&$crate::macros::log_adapter::log::Level::Warn);
 
-        tracing::warn!(
-            { TRACING_ATTR_FIELD } = LogAttributes::Log {
+        $crate::emit_tracing_event!(
+            level: TracingLevel::WARN,
+            LogAttributes::Log {
                 code: Some(err.code as u16 as u32),
                 dbt_core_code: None,
                 original_severity_number,
                 original_severity_text,
                 location: RecordCodeLocation::none(), // Will be auto injected
-            }.to_tracing_value(),
+            },
             "{}",
             err.pretty().as_str()
         );

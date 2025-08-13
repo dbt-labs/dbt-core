@@ -1,10 +1,10 @@
 use std::sync::{Arc, RwLock};
 
-use dbt_telemetry::{LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryRecordRef};
+use dbt_telemetry::{SpanEndInfo, SpanStartInfo, TelemetryRecordRef};
 use tracing::{Subscriber, span};
 use tracing_subscriber::{Layer, layer::Context};
 
-use super::super::{file_writer::TelemetryFileWriter, init::process_span};
+use super::super::{event_info::with_current_thread_event_data, file_writer::TelemetryFileWriter};
 
 /// A tracing layer that reads telemetry data from extensions and writes it as JSON.
 ///
@@ -60,23 +60,13 @@ where
         }
     }
 
-    fn on_event(&self, _event: &tracing::Event<'_>, ctx: Context<'_, S>) {
-        // Get the current span to extract span information
-        let Some(current_span) = ctx.lookup_current().or_else(|| process_span(&ctx)) else {
-            // If no current span is found, we can't get the event data
-            // This may happen if tracing is not initialized (e.g. in tests)
-            return;
-        };
-
-        // Extract a LogRecord in the extensions (from TelemetryDataLayer)
-        if let Some(log_record) = current_span.extensions().get::<LogRecordInfo>() {
+    fn on_event(&self, _event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
+        with_current_thread_event_data(|log_record| {
             if let Ok(json) = serde_json::to_string(&TelemetryRecordRef::LogRecord(log_record)) {
                 if let Ok(w) = self.writer.try_read() {
                     w.write(json)
                 }
             }
-        } else {
-            unreachable!("Unexpectedly missing log record data!");
-        }
+        });
     }
 }

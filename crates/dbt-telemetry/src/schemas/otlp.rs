@@ -10,7 +10,7 @@ use schemars::JsonSchema_repr;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-#[derive(Serialize_repr, Deserialize_repr, Debug, JsonSchema_repr, Clone)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, JsonSchema_repr, Clone, PartialEq, Eq)]
 #[repr(i32)]
 #[derive(Default)]
 pub enum StatusCode {
@@ -32,7 +32,9 @@ pub struct SpanStatus {
 }
 
 /// Possible values for LogRecord.SeverityNumber.
-#[derive(Serialize_repr, Deserialize_repr, Debug, JsonSchema_repr, Clone, Default)]
+#[derive(
+    Serialize_repr, Deserialize_repr, Debug, JsonSchema_repr, Clone, Default, PartialEq, Eq,
+)]
 #[repr(i32)]
 pub enum SeverityNumber {
     #[default]

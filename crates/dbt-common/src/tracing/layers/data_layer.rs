@@ -1,7 +1,7 @@
 use super::super::{
     convert::{current_time_nanos, tracing_level_to_severity},
+    event_info::{get_log_event_attrs, get_log_message, store_event_data, take_event_attributes},
     init::process_span,
-    log_info::{get_log_event_attrs, get_log_message},
     span_info::{get_span_debug_extra_attrs, get_span_event_attrs},
 };
 use tracing_log::NormalizeEvent;
@@ -20,7 +20,7 @@ use dbt_telemetry::{
 ///
 /// This layer captures span events and converts them to structured telemetry
 /// records that include the trace ID for correlation across systems.
-pub struct TelemetryDataLayer<S>
+pub(in crate::tracing) struct TelemetryDataLayer<S>
 where
     S: Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
 {
@@ -95,8 +95,8 @@ where
         let start_time = current_time_nanos();
         let (severity_number, severity_text) = tracing_level_to_severity(metadata.level());
 
-        // Extract event attributes if any. To avoid leakage, we only extract internal metadata
-        // such as location, name etc. in debug builds
+        // Extract event attributes if any. To avoid leakage, we extract internal metadata
+        // such as location, name etc. only in debug builds
 
         // TODO: auto-inject location if missing for attr types that have them. See log for example
         let attributes = get_span_event_attrs(attrs.values().into()).unwrap_or_else(|| {
@@ -127,12 +127,14 @@ where
             severity_text,
         };
 
+        let mut ext_mut = span.extensions_mut();
+
         // Store the record in span extensions
-        span.extensions_mut().insert(record);
+        ext_mut.insert(record);
 
         // And store the attributes in the span extensions as well,
         // we use this to update them post creation and add to closing span record
-        span.extensions_mut().insert(attributes);
+        ext_mut.insert(attributes);
     }
 
     fn on_close(&self, id: span::Id, ctx: Context<'_, S>) {
@@ -202,46 +204,62 @@ where
     }
 
     fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
-        // Get the current span to extract span information
-        let Some(current_span) = ctx.lookup_current().or_else(|| process_span(&ctx)) else {
-            // If no current span is found, we can't log the event.
-            // This may happen if tracing is not initialized (e.g. in tests)
-            return;
-        };
+        // Extract information about the current span
+        let (span_id, span_name) = ctx
+            .event_span(event)
+            .or_else(|| process_span(&ctx))
+            // Get the parent span to extract span information
+            .and_then(|current_span| {
+                current_span
+                    .extensions()
+                    .get::<SpanStartInfo>()
+                    .map(|parent_span_start_info| {
+                        (
+                            Some(parent_span_start_info.span_id),
+                            Some(parent_span_start_info.name.clone()),
+                        )
+                    })
+            })
+            .unwrap_or_default();
 
-        // Extract needed data from span record and release the immutable borrow
-        let (span_id, span_name) = {
-            if let Some(SpanStartInfo { span_id, name, .. }) =
-                current_span.extensions().get::<SpanStartInfo>()
-            {
-                (*span_id, name.clone())
-            } else {
-                unreachable!(
-                    "SpanStartInfo should always be present in the current span extensions"
-                )
-            }
-        }; // span_record is dropped here, releasing the immutable borrow
+        // Get event metadata. If the event is coming from `tracing-log` bridge,
+        // it will have normalized metadata, otherwise it will be None and we will use
+        // the event metadata directly.
+        let bridged_log_meta = event.normalized_metadata();
+        let metadata = bridged_log_meta
+            .as_ref()
+            .unwrap_or_else(|| event.metadata());
 
         let time_unix_nano = current_time_nanos();
         // TODO: calculate modified severity based on user config when such feature is implemented
-        let (severity_number, severity_text) = tracing_level_to_severity(event.metadata().level());
+        let (severity_number, severity_text) = tracing_level_to_severity(metadata.level());
 
         // Extract message from event
         let message = get_log_message(event);
 
-        let attributes = if let Some(legacy_log_meta) = event.normalized_metadata() {
+        // Extract attributes in the following priority:
+        // - Pre-populated attributes (most efficient way, but requires the caller to use our custom logging APIs)
+        // - Legacy log metadata (if the event is coming from `tracing-log` bridge)
+        // - Attributes from the event itself (if any, otherwise use default log attributes)
+        let attributes = if let Some(attrs) = take_event_attributes() {
+            if attrs.has_empty_location() {
+                attrs.with_location(self.get_location(metadata))
+            } else {
+                attrs
+            }
+        } else if event.is_log() {
             // This means the event is coming from `tracing-log` bridge
             LogAttributes::LegacyLog {
                 original_severity_number: severity_number.clone(),
                 original_severity_text: severity_text.clone(),
-                location: self.get_location(&legacy_log_meta),
+                location: self.get_location(metadata),
             }
         } else {
             get_log_event_attrs(event.into())
                 // Auto-inject location if missing
                 .map(|attrs| {
                     if attrs.has_empty_location() {
-                        attrs.with_location(self.get_location(event.metadata()))
+                        attrs.with_location(self.get_location(metadata))
                     } else {
                         attrs
                     }
@@ -251,7 +269,7 @@ where
                     dbt_core_code: None,
                     original_severity_number: severity_number.clone(),
                     original_severity_text: severity_text.clone(),
-                    location: self.get_location(event.metadata()),
+                    location: self.get_location(metadata),
                 })
         };
 
@@ -266,7 +284,7 @@ where
             attributes,
         };
 
-        // Now safe to get mutable borrow since immutable borrow is released
-        current_span.extensions_mut().replace(log_record);
+        // Set the data for this event
+        store_event_data(log_record);
     }
 }

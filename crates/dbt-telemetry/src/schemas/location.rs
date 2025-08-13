@@ -4,7 +4,7 @@ use serde_with::skip_serializing_none;
 use tracing::Metadata;
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
 #[serde(default)]
 pub struct RecordCodeLocation {
     /// The file path

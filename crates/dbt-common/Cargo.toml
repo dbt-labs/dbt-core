@@ -65,20 +65,11 @@ tracing = { workspace = true }
 tracing-log = { workspace = true } # temporary until we migrate to tracing exclusively
 tracing-subscriber = { workspace = true }
 
-# Optional embedded OTLP exporter for traces
-opentelemetry = { workspace = true, optional = true }
-opentelemetry-otlp = { workspace = true, optional = true }
-opentelemetry-semantic-conventions = { workspace = true, optional = true }
-opentelemetry_sdk = { workspace = true, optional = true }
-
-[features]
-default = []
-otlp = [
-  "opentelemetry",
-  "opentelemetry_sdk",
-  "opentelemetry-semantic-conventions",
-  "opentelemetry-otlp",
-]
+# Embedded OTLP exporter for traces
+opentelemetry = { workspace = true }
+opentelemetry-otlp = { workspace = true }
+opentelemetry-semantic-conventions = { workspace = true }
+opentelemetry_sdk = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 dunce = "1.0.5"

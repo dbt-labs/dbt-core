@@ -1,23 +1,21 @@
+use std::collections::HashMap;
 use std::time::SystemTime;
 
-use super::super::{TelemetryShutdown, init::process_span};
+use super::super::{TelemetryShutdown, event_info::with_current_thread_event_data};
 use crate::constants::DBT_FUSION;
 use crate::{ErrorCode, FsResult};
 
-use dbt_telemetry::{
-    LogAttributes, LogRecordInfo, SeverityNumber, SpanEndInfo, SpanStatus, StatusCode,
-};
+use datafusion::parquet::data_type::AsBytes;
+use dbt_telemetry::{LogAttributes, SeverityNumber, SpanEndInfo, SpanStatus, StatusCode};
 
-use opentelemetry::logs::AnyValue;
-use opentelemetry::trace::SamplingResult;
 use opentelemetry::{
-    KeyValue, TraceFlags,
+    KeyValue, SpanId, TraceFlags, Value as OtelValue,
     context::Context as OtelContext,
     global,
-    logs::{LogRecord, Logger, LoggerProvider, Severity as OtelSeverity},
+    logs::{AnyValue, LogRecord, Logger, LoggerProvider, Severity as OtelSeverity},
     trace::{
-        Span as OtelSpanTrait, SpanContext, SpanKind, Status as OtelStatus, TraceContextExt,
-        TraceState, Tracer, TracerProvider,
+        SamplingResult, Span as OtelSpanTrait, SpanContext, SpanKind, Status as OtelStatus,
+        TraceContextExt, TraceState, Tracer, TracerProvider,
     },
 };
 use opentelemetry_otlp::WithExportConfig;
@@ -30,9 +28,6 @@ use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION
 use tracing::{Subscriber, span};
 use tracing_subscriber::Layer;
 use tracing_subscriber::layer::Context;
-
-// Type used to collect events for batch export on span close
-type SpanEventVec = Vec<LogRecordInfo>;
 
 const fn level_to_otel_severity(severity_number: &SeverityNumber) -> OtelSeverity {
     match severity_number {
@@ -60,6 +55,102 @@ const fn level_to_otel_severity(severity_number: &SeverityNumber) -> OtelSeverit
         SeverityNumber::Fatal2 => OtelSeverity::Fatal2,
         SeverityNumber::Fatal3 => OtelSeverity::Fatal3,
         SeverityNumber::Fatal4 => OtelSeverity::Fatal4,
+    }
+}
+
+const fn level_to_otel_severity_text(severity_number: &SeverityNumber) -> &'static str {
+    match severity_number {
+        SeverityNumber::Trace => "TRACE",
+        SeverityNumber::Trace2 => "TRACE",
+        SeverityNumber::Trace3 => "TRACE",
+        SeverityNumber::Trace4 => "TRACE",
+        SeverityNumber::Debug => "DEBUG",
+        SeverityNumber::Debug2 => "DEBUG",
+        SeverityNumber::Debug3 => "DEBUG",
+        SeverityNumber::Debug4 => "DEBUG",
+        SeverityNumber::Info => "INFO",
+        SeverityNumber::Info2 => "INFO",
+        SeverityNumber::Info3 => "INFO",
+        SeverityNumber::Info4 => "INFO",
+        SeverityNumber::Warn => "WARN",
+        SeverityNumber::Warn2 => "WARN",
+        SeverityNumber::Warn3 => "WARN",
+        SeverityNumber::Warn4 => "WARN",
+        SeverityNumber::Error => "ERROR",
+        SeverityNumber::Error2 => "ERROR",
+        SeverityNumber::Error3 => "ERROR",
+        SeverityNumber::Error4 => "ERROR",
+        SeverityNumber::Fatal => "FATAL",
+        SeverityNumber::Fatal2 => "FATAL",
+        SeverityNumber::Fatal3 => "FATAL",
+        SeverityNumber::Fatal4 => "FATAL",
+    }
+}
+
+fn serde_json_value_to_otel(value: &serde_json::Value) -> OtelValue {
+    match value {
+        serde_json::Value::Bool(b) => OtelValue::from(*b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                OtelValue::from(i)
+            } else if let Some(u) = n.as_u64() {
+                if u > i64::MAX as u64 {
+                    // If the number is too large for i64, we convert it to a string
+                    return OtelValue::from(u.to_string());
+                } else {
+                    // Otherwise, we can safely convert it to i64
+                    OtelValue::from(u as i64)
+                }
+            } else if let Some(f) = n.as_f64() {
+                OtelValue::from(f)
+            } else {
+                // Should not be reached
+                OtelValue::from(n.to_string())
+            }
+        }
+        serde_json::Value::String(s) => OtelValue::from(s.clone()),
+        _ => value.to_string().into(),
+    }
+}
+
+fn serde_json_value_to_otel_any_value(value: &serde_json::Value) -> AnyValue {
+    match value {
+        serde_json::Value::Bool(b) => AnyValue::from(*b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                AnyValue::from(i)
+            } else if let Some(u) = n.as_u64() {
+                if u > i64::MAX as u64 {
+                    // If the number is too large for i64, we convert it to bytes
+                    return AnyValue::from(u.as_bytes());
+                } else {
+                    // Otherwise, we can safely convert it to i64
+                    AnyValue::from(u as i64)
+                }
+            } else if let Some(f) = n.as_f64() {
+                AnyValue::from(f)
+            } else {
+                // Should not be reached
+                AnyValue::from(n.to_string())
+            }
+        }
+        serde_json::Value::String(s) => AnyValue::from(s.clone()),
+        serde_json::Value::Array(arr) => AnyValue::ListAny(Box::new(
+            arr.iter()
+                .map(serde_json_value_to_otel_any_value)
+                .collect::<Vec<_>>(),
+        )),
+        serde_json::Value::Object(obj) => AnyValue::Map(Box::new(
+            obj.iter()
+                .map(|(k, v)| {
+                    (
+                        opentelemetry::Key::from(k.clone()),
+                        serde_json_value_to_otel_any_value(v),
+                    )
+                })
+                .collect::<HashMap<_, _>>(),
+        )),
+        _ => AnyValue::from(value.to_string()),
     }
 }
 
@@ -188,15 +279,7 @@ impl<S> Layer<S> for OTLPExporterLayer<S>
 where
     S: Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
 {
-    fn on_new_span(&self, _attrs: &span::Attributes<'_>, id: &span::Id, ctx: Context<'_, S>) {
-        let span = ctx
-            .span(id)
-            .expect("Span must exist for id in the current context");
-
-        // Create an empty vector where we'll collect log records while within this span
-        span.extensions_mut().insert::<SpanEventVec>(Vec::new());
-    }
-
+    // We record spans to OTLP only when they are closed, so we don't need to do anything on new span
     fn on_close(&self, id: span::Id, ctx: Context<'_, S>) {
         let span = ctx
             .span(&id)
@@ -213,15 +296,10 @@ where
         let otel_trace_id = span_data.trace_id.into();
         let otel_span_id = span_data.span_id.into();
 
-        // Get the vector of logs recorded within the span
-        let Some(span_log_vector) = extensions.get::<SpanEventVec>() else {
-            unreachable!("Unexpectedly missing span logs data!");
-        };
-
         // OTEL sdk doesn't allow "just" specifying the parent span id, so we
         // use this faked remote context to achieve that...
         let otel_parent_cx = if let Some(parent_span_id) = span_data.parent_span_id {
-            OtelContext::current().with_remote_span_context(SpanContext::new(
+            OtelContext::new().with_remote_span_context(SpanContext::new(
                 otel_trace_id,
                 parent_span_id.into(),
                 TraceFlags::SAMPLED,
@@ -229,22 +307,26 @@ where
                 TraceState::NONE,
             ))
         } else {
-            OtelContext::current()
+            OtelContext::new()
         };
 
         let span_attrs = serde_json::to_value(&span_data.attributes)
-            .map(|val| val.as_object().cloned())
             .ok()
-            .map_or(Vec::new(), |maybe_pairs| {
-                maybe_pairs
-                    .map(|pairs| {
-                        pairs
-                            .iter()
-                            .map(|(k, v)| KeyValue::new(k.clone(), v.to_string()))
-                            .collect()
+            .and_then(|val| {
+                // We are using external tag for attributes enum, so value is a map with 2
+                // keys: "attributes" and "eventName". We only care about the attributes.
+                val.as_object().and_then(|top| {
+                    top.get("attributes").and_then(|attrs| {
+                        attrs.as_object().map(|pairs| {
+                            pairs
+                                .iter()
+                                .map(|(k, v)| KeyValue::new(k.clone(), serde_json_value_to_otel(v)))
+                                .collect::<Vec<_>>()
+                        })
                     })
-                    .unwrap_or_default()
-            });
+                })
+            })
+            .unwrap_or_default();
 
         // Create OpenTelemetry span
         let mut otel_span = self
@@ -260,7 +342,7 @@ where
             .with_trace_id(otel_trace_id)
             .with_span_id(otel_span_id)
             .with_start_time(
-                // Yes, stupid. We have convert that back to SystemTime just to satisfy the SDK, which will
+                // Yes, stupid. We have to convert that back to SystemTime just to satisfy the SDK, which will
                 // convert it back to a timestamp during export...
                 SystemTime::UNIX_EPOCH
                     + std::time::Duration::from_nanos(span_data.start_time_unix_nano),
@@ -268,8 +350,26 @@ where
             .with_attributes(span_attrs)
             .start_with_context(&self.tracer, &otel_parent_cx);
 
-        // Add log records as events
-        for log_record in span_log_vector {
+        // Set span status as OK
+        if let Some(SpanStatus { code, message }) = &span_data.status {
+            match code {
+                StatusCode::Ok => otel_span.set_status(OtelStatus::Ok),
+                StatusCode::Error => otel_span.set_status(OtelStatus::Error {
+                    description: message.clone().unwrap_or_default().into(),
+                }),
+                _ => {}
+            }
+        };
+
+        // End the span
+        otel_span.end_with_timestamp(
+            SystemTime::UNIX_EPOCH + std::time::Duration::from_nanos(span_data.end_time_unix_nano),
+        );
+    }
+
+    fn on_event(&self, _event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
+        // Add log record as events
+        with_current_thread_event_data(|log_record| {
             // Create a new log record
             let mut otel_log_record = self.logger.create_log_record();
 
@@ -277,8 +377,8 @@ where
             otel_log_record
                 .set_severity_number(level_to_otel_severity(&log_record.severity_number));
 
-            // Requires static lifetime...skipping for now
-            // otel_log_record.set_severity_text(log_record.severity_text.unwrap_or_default());
+            otel_log_record
+                .set_severity_text(level_to_otel_severity_text(&log_record.severity_number));
 
             // Message
             otel_log_record.set_body(AnyValue::from(log_record.body.clone()));
@@ -315,82 +415,42 @@ where
             }
 
             let log_attrs = serde_json::to_value(&log_record.attributes)
-                .map(|val| val.as_object().cloned())
                 .ok()
-                .flatten()
-                .map_or(Vec::new(), |pairs| {
-                    pairs
-                        .iter()
-                        // TODO filter out duplicates from code location
-                        .map(|(k, v)| (opentelemetry::Key::from(k.clone()), v.to_string()))
-                        .collect()
-                });
+                .and_then(|val| {
+                    // We are using external tag for attributes enum, so value is a map with 2
+                    // keys: "attributes" and "eventName". We only care about the attributes.
+                    val.as_object().and_then(|top| {
+                        top.get("attributes").and_then(|attrs| {
+                            attrs.as_object().map(|pairs| {
+                                pairs
+                                    .iter()
+                                    // TODO filter out duplicates from code location
+                                    .map(|(k, v)| {
+                                        (
+                                            opentelemetry::Key::from(k.clone()),
+                                            serde_json_value_to_otel_any_value(v),
+                                        )
+                                    })
+                                    .collect::<Vec<_>>()
+                            })
+                        })
+                    })
+                })
+                .unwrap_or_default();
 
             otel_log_record.set_event_name((&log_record.attributes).into());
             otel_log_record.add_attributes(log_attrs);
-            // log_attrs.push(KeyValue::new("message", log_record.body.clone()));
-            // log_attrs.push(KeyValue::new(
-            //     "level",
-            //     log_record.severity_number.clone() as i32 as i64,
-            // ));
 
             otel_log_record.set_trace_context(
-                otel_trace_id,
-                otel_span_id,
+                log_record.trace_id.into(),
+                log_record
+                    .span_id
+                    .map(|span_id| span_id.into())
+                    .unwrap_or(SpanId::INVALID),
                 Some(TraceFlags::SAMPLED),
             );
 
-            // otel_span.add_event_with_timestamp(
-            //     otel_log_record.event_name().unwrap_or("log"),
-            //     SystemTime::UNIX_EPOCH + std::time::Duration::from_nanos(log_record.time_unix_nano),
-            //     otel_log_record
-            //         .attributes_iter()
-            //         .map(|(k, v)| KeyValue::new(k.clone(), v.into()))
-            //         .collect(),
-            // );
-
             self.logger.emit(otel_log_record);
-        }
-
-        // Set span status as OK
-        if let Some(SpanStatus { code, message }) = &span_data.status {
-            match code {
-                StatusCode::Ok => otel_span.set_status(OtelStatus::Ok),
-                StatusCode::Error => otel_span.set_status(OtelStatus::Error {
-                    description: message.clone().unwrap_or_default().into(),
-                }),
-                _ => {}
-            }
-        };
-
-        // End the span
-        otel_span.end_with_timestamp(
-            SystemTime::UNIX_EPOCH + std::time::Duration::from_nanos(span_data.end_time_unix_nano),
-        );
-    }
-
-    fn on_event(&self, _event: &tracing::Event<'_>, ctx: Context<'_, S>) {
-        // Get the current span to extract span information
-        let Some(current_span) = ctx.lookup_current().or_else(|| process_span(&ctx)) else {
-            // If no current span is found, we can't get the event data
-            // This may happen if tracing is not initialized (e.g. in tests)
-            return;
-        };
-
-        // Extract & remove a LogRecord in the extensions (from TelemetryDataLayer)
-        let log_record = {
-            if let Some(log_record) = current_span.extensions().get::<LogRecordInfo>() {
-                log_record.clone()
-            } else {
-                unreachable!("Unexpectedly missing log record data!");
-            }
-        }; // span_record is dropped here, releasing the immutable borrow
-
-        // Get the log vector to store event data (we emit at the end of the span)
-        if let Some(log_vector) = current_span.extensions_mut().get_mut::<SpanEventVec>() {
-            log_vector.push(log_record);
-        } else {
-            unreachable!("Unexpectedly missing log record storage!");
-        };
+        });
     }
 }

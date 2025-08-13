@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use strum::{AsRefStr, EnumDiscriminants, IntoStaticStr};
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SpanStartInfo {
     /// A unique identifier for a trace. All spans from the same trace share
@@ -84,7 +84,7 @@ pub struct SpanStartInfo {
     pub severity_text: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SpanEndInfo {
     /// A unique identifier for a trace. All spans from the same trace share
@@ -198,17 +198,17 @@ pub struct LogRecordInfo {
     /// other than 8 bytes is considered invalid (empty string in OTLP/JSON
     /// is zero-length and thus is also invalid).
     #[serde(
-        serialize_with = "serialize_span_id",
-        deserialize_with = "deserialize_span_id"
+        serialize_with = "serialize_optional_span_id",
+        deserialize_with = "deserialize_optional_span_id"
     )]
-    #[schemars(with = "String")]
-    pub span_id: u64,
+    #[schemars(with = "Option<String>")]
+    pub span_id: Option<u64>,
     /// The name of the span that is active when the log is created.
     ///
     /// NOTE: this is not part of the OTLP schema, but is used to
     /// simplify log grouping avoiding the need to
     /// look up the span name by trace_id/span_id.
-    pub span_name: String,
+    pub span_name: Option<String>,
     /// Numerical value of the severity, normalized to values described in Log Data Model.
     pub severity_number: SeverityNumber,
     /// The severity text (also known as log level). The original string representation as
@@ -362,18 +362,24 @@ pub enum BuildPhaseInfo {
     Analyzing {
         #[serde(flatten)]
         shared: SharedPhaseInfo,
+        #[serde(rename = "dbt.fusion.phase.node.count")]
+        node_count: u64,
     },
     /// # Compiling
     /// Dbt compile (called render) and Sql analysis
     Compiling {
         #[serde(flatten)]
         shared: SharedPhaseInfo,
+        #[serde(rename = "dbt.fusion.phase.node.count")]
+        node_count: u64,
     },
     /// # Executing
     /// Execution against the target database
     Executing {
         #[serde(flatten)]
         shared: SharedPhaseInfo,
+        #[serde(rename = "dbt.fusion.phase.node.count")]
+        node_count: u64,
     },
 }
 
@@ -518,7 +524,9 @@ pub enum SpanAttributes {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, IntoStaticStr)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, IntoStaticStr, PartialEq, Eq,
+)]
 #[serde(tag = "eventName", content = "attributes")]
 pub enum LogAttributes {
     /// # Regular log record

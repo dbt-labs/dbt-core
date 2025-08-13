@@ -37,10 +37,6 @@ uuid = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 
-[features]
-default = []
-otlp = ["dbt-common/otlp"]
-
 [[bin]]
 doctest = false
 name = "dbt-sa-cli"
