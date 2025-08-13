@@ -902,7 +902,10 @@ impl From<DataFusionError> for FsError {
             | DataFusionError::Context(_, _)
             | DataFusionError::Substrait(_)
             | DataFusionError::External(_)
-            | DataFusionError::ObjectStore(_) => {
+            | DataFusionError::ObjectStore(_)
+            | DataFusionError::Diagnostic(_, _)
+            | DataFusionError::Collection(_)
+            | DataFusionError::Shared(_) => {
                 FsError::new(ErrorCode::GenericDatafusionError, "Datafusion error")
                     .with_cause(WrappedError::Datafusion(err))
             }

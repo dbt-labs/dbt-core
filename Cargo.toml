@@ -57,34 +57,43 @@ version = "2.0.0-preview.8"
 # However, note that we declare dependencies in our crates with the same version
 # numbers as crates.io / the upstream repository.
 # See https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html#the-patch-section
-datafusion = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
-datafusion-common = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
-datafusion-catalog = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
-datafusion-expr = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
-datafusion-functions = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
-datafusion-functions-aggregate = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
-datafusion-functions-nested = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
-datafusion-functions-window = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
-datafusion-physical-expr = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
-datafusion-physical-plan = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
+datafusion = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
+datafusion-common = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
+datafusion-catalog = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
+datafusion-expr = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
+datafusion-functions = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
+datafusion-functions-aggregate = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
+datafusion-functions-nested = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
+datafusion-functions-window = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
+datafusion-physical-expr = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
+datafusion-physical-plan = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
 # OR, when working locally
 #datafusion = { path = "../datafusion/datafusion/core" }
+#datafusion-common = { path = "../datafusion/datafusion/common" }
+#datafusion-catalog = { path = "../datafusion/datafusion/catalog" }
+#datafusion-expr = { path = "../datafusion/datafusion/expr" }
+#datafusion-functions = { path = "../datafusion/datafusion/functions" }
+#datafusion-functions-aggregate = { path = "../datafusion/datafusion/functions-aggregate" }
+#datafusion-functions-nested = { path = "../datafusion/datafusion/functions-nested" }
+#datafusion-functions-window = { path = "../datafusion/datafusion/functions-window" }
+#datafusion-physical-expr = { path = "../datafusion/datafusion/physical-expr" }
+#datafusion-physical-plan = { path = "../datafusion/datafusion/physical-plan" }
 
 # All arrow dependencies (run `cargo tree --prefix none | grep ^arrow | cut -d ' ' -f1 | sort -u` to get this list)
-arrow = { git = "https://github.com/sdf-labs/arrow-rs", rev = "ad6ab6fcf06156ae084de4d49625ca52c66b310f" } # @ sdf/54.2.1
-arrow-arith = { git = "https://github.com/sdf-labs/arrow-rs", rev = "ad6ab6fcf06156ae084de4d49625ca52c66b310f" } # @ sdf/54.2.1
-arrow-array = { git = "https://github.com/sdf-labs/arrow-rs", rev = "ad6ab6fcf06156ae084de4d49625ca52c66b310f" } # @ sdf/54.2.1
-arrow-buffer = { git = "https://github.com/sdf-labs/arrow-rs", rev = "ad6ab6fcf06156ae084de4d49625ca52c66b310f" } # @ sdf/54.2.1
-arrow-cast = { git = "https://github.com/sdf-labs/arrow-rs", rev = "ad6ab6fcf06156ae084de4d49625ca52c66b310f" } # @ sdf/54.2.1
-arrow-csv = { git = "https://github.com/sdf-labs/arrow-rs", rev = "ad6ab6fcf06156ae084de4d49625ca52c66b310f" } # @ sdf/54.2.1
-arrow-data = { git = "https://github.com/sdf-labs/arrow-rs", rev = "ad6ab6fcf06156ae084de4d49625ca52c66b310f" } # @ sdf/54.2.1
-arrow-ipc = { git = "https://github.com/sdf-labs/arrow-rs", rev = "ad6ab6fcf06156ae084de4d49625ca52c66b310f" } # @ sdf/54.2.1
-arrow-json = { git = "https://github.com/sdf-labs/arrow-rs", rev = "ad6ab6fcf06156ae084de4d49625ca52c66b310f" } # @ sdf/54.2.1
-arrow-ord = { git = "https://github.com/sdf-labs/arrow-rs", rev = "ad6ab6fcf06156ae084de4d49625ca52c66b310f" } # @ sdf/54.2.1
-arrow-row = { git = "https://github.com/sdf-labs/arrow-rs", rev = "ad6ab6fcf06156ae084de4d49625ca52c66b310f" } # @ sdf/54.2.1
-arrow-schema = { git = "https://github.com/sdf-labs/arrow-rs", rev = "ad6ab6fcf06156ae084de4d49625ca52c66b310f" } # @ sdf/54.2.1
-arrow-select = { git = "https://github.com/sdf-labs/arrow-rs", rev = "ad6ab6fcf06156ae084de4d49625ca52c66b310f" } # @ sdf/54.2.1
-arrow-string = { git = "https://github.com/sdf-labs/arrow-rs", rev = "ad6ab6fcf06156ae084de4d49625ca52c66b310f" } # @ sdf/54.2.1
+arrow = { git = "https://github.com/sdf-labs/arrow-rs", rev = "253647cf5fe650d0cdc50557e0fb73957d3de616" } # @ sdf/55.1.0
+arrow-arith = { git = "https://github.com/sdf-labs/arrow-rs", rev = "253647cf5fe650d0cdc50557e0fb73957d3de616" } # @ sdf/55.1.0
+arrow-array = { git = "https://github.com/sdf-labs/arrow-rs", rev = "253647cf5fe650d0cdc50557e0fb73957d3de616" } # @ sdf/55.1.0
+arrow-buffer = { git = "https://github.com/sdf-labs/arrow-rs", rev = "253647cf5fe650d0cdc50557e0fb73957d3de616" } # @ sdf/55.1.0
+arrow-cast = { git = "https://github.com/sdf-labs/arrow-rs", rev = "253647cf5fe650d0cdc50557e0fb73957d3de616" } # @ sdf/55.1.0
+arrow-csv = { git = "https://github.com/sdf-labs/arrow-rs", rev = "253647cf5fe650d0cdc50557e0fb73957d3de616" } # @ sdf/55.1.0
+arrow-data = { git = "https://github.com/sdf-labs/arrow-rs", rev = "253647cf5fe650d0cdc50557e0fb73957d3de616" } # @ sdf/55.1.0
+arrow-ipc = { git = "https://github.com/sdf-labs/arrow-rs", rev = "253647cf5fe650d0cdc50557e0fb73957d3de616" } # @ sdf/55.1.0
+arrow-json = { git = "https://github.com/sdf-labs/arrow-rs", rev = "253647cf5fe650d0cdc50557e0fb73957d3de616" } # @ sdf/55.1.0
+arrow-ord = { git = "https://github.com/sdf-labs/arrow-rs", rev = "253647cf5fe650d0cdc50557e0fb73957d3de616" } # @ sdf/55.1.0
+arrow-row = { git = "https://github.com/sdf-labs/arrow-rs", rev = "253647cf5fe650d0cdc50557e0fb73957d3de616" } # @ sdf/55.1.0
+arrow-schema = { git = "https://github.com/sdf-labs/arrow-rs", rev = "253647cf5fe650d0cdc50557e0fb73957d3de616" } # @ sdf/55.1.0
+arrow-select = { git = "https://github.com/sdf-labs/arrow-rs", rev = "253647cf5fe650d0cdc50557e0fb73957d3de616" } # @ sdf/55.1.0
+arrow-string = { git = "https://github.com/sdf-labs/arrow-rs", rev = "253647cf5fe650d0cdc50557e0fb73957d3de616" } # @ sdf/55.1.0
 # OR, when working locally
 # arrow = { path = "../arrow-rs/arrow" }
 # arrow-arith = { path = "../arrow-rs/arrow-arith" }
@@ -212,16 +221,16 @@ aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
 aws-sdk-s3 = "1.78.0"
 
 # arrow + parquet
-arrow = { version = "=54.2.1", features = ["prettyprint"] }
-arrow-array = { version = "=54.2.1" }
-arrow-buffer = { version = "=54.2.1" }
-arrow-csv = { version = "=54.2.1" }
-arrow-data = { version = "=54.2.1" }
-arrow-ipc = { version = "=54.2.1" }
-arrow-json = { version = "=54.2.1" }
-arrow-schema = { version = "=54.2.1", features = ["serde"] }
-parquet = { version = "=54.2.1" }
-serde_arrow = { version = "0.13.4", features = ["arrow-54"] }
+arrow = { version = "=55.1.0", features = ["prettyprint"] }
+arrow-array = { version = "=55.1.0" }
+arrow-buffer = { version = "=55.1.0" }
+arrow-csv = { version = "=55.1.0" }
+arrow-data = { version = "=55.1.0" }
+arrow-ipc = { version = "=55.1.0" }
+arrow-json = { version = "=55.1.0" }
+arrow-schema = { version = "=55.1.0", features = ["serde"] }
+parquet = { version = "=55.1.0" }
+serde_arrow = { version = "0.13.4", features = ["arrow-55"] }
 
 # xdbc
 adbc-core = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_core", version = "0.20.0", rev = "34c0a6f7cd039334683bc0b05b9bc3430e0b7e86" } # @ apache-arrow-adbc-20-rust
@@ -246,15 +255,14 @@ antlr-rust = { git = "https://github.com/sdf-labs/antlr4", rev = "b8179d265532a5
 # other crates, you should prefer using the individual datafusion-xxx crates
 # directly whenever possible.
 
-# datafusion = { version = "45.0.0", default-features = false }
-datafusion-catalog = { version = "45.0.0" }
-datafusion-common = { version = "45.0.0", default-features = false, features = [
+datafusion = { version = "48.0.1", default-features = false }
+datafusion-catalog = { version = "48.0.1" }
+datafusion-common = { version = "48.0.1", default-features = false, features = [
   "object_store",
   "parquet",
 ] }
-datafusion-expr = { version = "45.0.0" }
-datafusion-functions = { version = "45.0.0", default-features = false, features = [
-  "core_expressions",
+datafusion-expr = { version = "48.0.1" }
+datafusion-functions = { version = "48.0.1", default-features = false, features = [
   "crypto_expressions",
   "datetime_expressions",
   "encoding_expressions",
@@ -263,11 +271,11 @@ datafusion-functions = { version = "45.0.0", default-features = false, features 
   "string_expressions",
   "unicode_expressions",
 ] }
-datafusion-functions-aggregate = { version = "45.0.0" }
-datafusion-functions-nested = { version = "45.0.0" }
-datafusion-functions-window = { version = "45.0.0" }
-datafusion-physical-expr = { version = "45.0.0" }
-datafusion-physical-plan = { version = "45.0.0" }
+datafusion-functions-aggregate = { version = "48.0.1" }
+datafusion-functions-nested = { version = "48.0.1" }
+datafusion-functions-window = { version = "48.0.1" }
+datafusion-physical-expr = { version = "48.0.1" }
+datafusion-physical-plan = { version = "48.0.1" }
 
 # uuid
 uuid = { version = "1.16.0", features = ["v4"] }
@@ -380,7 +388,7 @@ rustyline = { version = "15.0.0", default-features = false, features = [
 base64 = "0.22.1"
 bigdecimal = "0.4.7"
 blake3 = "1.5.0"
-chrono = { version = "0.4.31", features = ["std", "clock", "serde"] }
+chrono = { version = "0.4.41", features = ["std", "clock", "serde"] }
 chrono-tz = { version = "0.10" }
 clap = { version = "4.4.4", features = ["derive"] }
 counter = "0.6.0"
