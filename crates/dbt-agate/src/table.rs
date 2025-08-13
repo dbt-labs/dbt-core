@@ -577,6 +577,7 @@ mod tests {
     use arrow::array::{GenericListArray, StringArray};
     use arrow::datatypes::{DataType, Field, Schema};
     use arrow::record_batch::RecordBatch;
+    use arrow_array::{ListArray, RecordBatchOptions};
     use arrow_schema::Fields;
     use minijinja::Environment;
     use minijinja::value::ValueMap;
@@ -845,6 +846,39 @@ mod tests {
         let batch = nested_record_batch();
         let _batch = FlatRecordBatch::new(Arc::new(batch));
         // TODO(felipcrv); implement CSV serialization to assert here
+    }
+
+    #[test]
+    fn test_empty_batch() {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("id", DataType::Int32, false),
+            Field::new("name", DataType::Utf8, false),
+            Field::new(
+                "event_tags",
+                DataType::List(Arc::new(Field::new("item", DataType::Utf8, false))),
+                true,
+            ),
+        ]));
+        let opts = RecordBatchOptions::default().with_row_count(Some(0));
+        let batch = RecordBatch::try_new_with_options(
+            schema,
+            vec![
+                Arc::new(Int32Array::new_null(0)) as ArrayRef,
+                Arc::new(StringArray::new_null(0)) as ArrayRef,
+                Arc::new(ListArray::new_null(
+                    Arc::new(Field::new_list_field(
+                        DataType::Utf8,
+                        false, // the values are non-nullable!
+                    )),
+                    0,
+                )) as ArrayRef,
+            ],
+            &opts,
+        )
+        .unwrap();
+        let table = AgateTable::from_record_batch(Arc::new(batch));
+        let column_names = table.column_names();
+        assert_eq!(column_names, vec!["id", "name", "event_tags.0"]);
     }
 
     #[test]

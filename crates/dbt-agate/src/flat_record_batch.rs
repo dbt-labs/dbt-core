@@ -92,7 +92,17 @@ impl FlattenRecordBatchState {
         inner_field: &Field,
         list_array: &GenericListArray<O>,
     ) {
-        let (min_size, max_size) = Self::list_size_range::<O>(list_array);
+        let (min_size, mut max_size) = {
+            if list_array.is_empty() {
+                (O::zero(), O::zero())
+            } else {
+                Self::list_size_range::<O>(list_array)
+            }
+        };
+        // If max_size is 0, we push an empty or all-NULL collumn of the inner type.
+        if max_size == O::zero() {
+            max_size = O::one();
+        }
         let mut i = max_size.sub(O::one());
         while i >= O::zero() {
             let nullable = inner_field.is_nullable() || i >= min_size;
@@ -105,7 +115,6 @@ impl FlattenRecordBatchState {
             self.stack.push((ith_field, ith_column));
             i = i.sub(O::one());
         }
-        // XXX: if max_size is 0, should we push an all-NULL collumn of inner_field's type?
     }
 
     /// Take one field from the stack, flatten it, and push the flattened
@@ -236,7 +245,13 @@ impl FlattenRecordBatchState {
     }
 
     /// Minimum and maximum size of the list elements in a list array.
+    ///
+    /// PRE-CONDITION: the list array is not empty.
     fn list_size_range<O: OffsetSizeTrait>(list_array: &GenericListArray<O>) -> (O, O) {
+        debug_assert!(
+            !list_array.is_empty(),
+            "list_size_range called on an empty list array"
+        );
         let len = list_array.len();
         let nulls = list_array.nulls();
         let offsets = list_array.value_offsets();
