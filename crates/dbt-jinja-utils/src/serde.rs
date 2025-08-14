@@ -190,6 +190,40 @@ where
     Ok(res)
 }
 
+/// Deserializes a Yaml `Value` into a target `Deserialize` type T.
+pub fn into_typed_with_error<T>(
+    io_args: &IoArgs,
+    value: Value,
+    show_errors_or_warnings: bool,
+    dependency_package_name: Option<&str>,
+    error_path: Option<PathBuf>,
+) -> FsResult<T>
+where
+    T: DeserializeOwned,
+{
+    let (res, errors) = into_typed_internal(value, |_value| Ok(None))?;
+
+    if show_errors_or_warnings {
+        for error in errors {
+            let error =
+                error.with_location(CodeLocation::from(error_path.clone().unwrap_or_default()));
+            if let Some(package_name) = dependency_package_name
+                && !io_args.show_all_deprecations
+            {
+                // If we are parsing a dependency package, we use a special macros
+                // that ensures at most one error is shown per package.
+                show_package_error!(io_args, package_name);
+            } else if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
+                show_error!(io_args, error);
+            } else {
+                show_warning_soon_to_be_error!(io_args, error);
+            }
+        }
+    }
+
+    Ok(res)
+}
+
 /// Deserializes a Yaml string into a Rust type T.
 ///
 /// `dependency_package_name` is used to determine if the file is part of a dependency package,
@@ -305,6 +339,7 @@ fn value_from_str(
     let input = trim_beginning_whitespace_for_first_line_with_content(&input);
     let mut value = Value::from_str(&input, |path, key, existing_key| {
         let key_repr = dbt_serde_yaml::to_string(&key).unwrap_or_else(|_| "<opaque>".to_string());
+        let path = strip_dunder_fields_from_path(&path.to_string());
         let duplicate_key_error = fs_err!(
             code => ErrorCode::DuplicateConfigKey,
             loc => key.span(),
@@ -373,6 +408,7 @@ where
     let mut warnings: Vec<FsError> = Vec::new();
     let warn_unused_keys = |path: dbt_serde_yaml::path::Path, key: &Value, _: &Value| {
         let key_repr = dbt_serde_yaml::to_string(key).unwrap_or_else(|_| "<opaque>".to_string());
+        let path = strip_dunder_fields_from_path(&path.to_string());
         warnings.push(*fs_err!(
             code => ErrorCode::UnusedConfigKey,
             loc => key.span(),
@@ -384,6 +420,18 @@ where
         .into_typed(warn_unused_keys, transform)
         .map_err(|e| yaml_to_fs_error(e, None))?;
     Ok((res, warnings))
+}
+
+/// Strips any dunder fields (fields of the form `__<something>__`) from a dot-separated path string.
+/// For example, "foo.__bar__.baz" becomes "foo.baz".
+pub fn strip_dunder_fields_from_path(path: &str) -> String {
+    path.split('.')
+        .filter(|segment| {
+            // Check if the segment is a dunder field: starts and ends with double underscores
+            !(segment.starts_with("__") && segment.ends_with("__") && segment.len() > 4)
+        })
+        .collect::<Vec<_>>()
+        .join(".")
 }
 
 /// Render a Jinja expression to a Value

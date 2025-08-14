@@ -228,7 +228,7 @@ pub fn resolve_sources(
         }
 
         let dbt_source = DbtSource {
-            common_attr: CommonAttributes {
+            __common_attr__: CommonAttributes {
                 name: table_name.to_owned(),
                 package_name: package_name.to_owned(),
                 // original_file_path: dbt_asset.base_path.join(&dbt_asset.path),
@@ -246,7 +246,7 @@ pub fn resolve_sources(
                 checksum: DbtChecksum::default(),
                 language: None,
             },
-            base_attr: NodeBaseAttributes {
+            __base_attr__: NodeBaseAttributes {
                 database: database.to_owned(),
                 schema: schema.to_owned(),
                 alias: identifier.to_owned(),
@@ -265,7 +265,7 @@ pub fn resolve_sources(
                 depends_on: NodeDependsOn::default(),
                 metrics: vec![],
             },
-            source_attr: DbtSourceAttr {
+            __source_attr__: DbtSourceAttr {
                 freshness: merged_freshness.clone(),
                 identifier,
                 source_name: source_name.to_owned(),
@@ -275,7 +275,7 @@ pub fn resolve_sources(
                 loaded_at_query: merged_loaded_at_query.clone(),
             },
             deprecated_config: source_properties_config.clone(),
-            other: BTreeMap::new(),
+            __other__: BTreeMap::new(),
         };
         let status = if is_enabled {
             ModelStatus::Enabled

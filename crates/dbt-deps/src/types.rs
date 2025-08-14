@@ -192,7 +192,7 @@ impl TryFrom<GitPackage> for GitUnpinnedPackage {
                 .map(|v| vec![v])
                 .unwrap_or_default(),
             subdirectory: git_package.subdirectory.clone(),
-            unrendered: git_package.unrendered.clone(),
+            unrendered: git_package.__unrendered__.clone(),
             original_entry: git_package,
         })
     }
@@ -298,7 +298,7 @@ impl TryFrom<PrivatePackage> for PrivateUnpinnedPackage {
                 .map(|v| vec![v])
                 .unwrap_or_default(),
             subdirectory: private_package.subdirectory.clone(),
-            unrendered: private_package.unrendered.clone(),
+            unrendered: private_package.__unrendered__.clone(),
             original_entry: private_package,
         })
     }
@@ -366,7 +366,7 @@ impl TryFrom<TarballPackage> for TarballUnpinnedPackage {
         Ok(Self {
             tarball: (*tarball_package.tarball).clone(),
             name: None,
-            unrendered: tarball_package.unrendered.clone(),
+            unrendered: tarball_package.__unrendered__.clone(),
             original_entry: tarball_package,
         })
     }

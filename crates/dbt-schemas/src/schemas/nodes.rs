@@ -5,10 +5,9 @@ use std::{any::Any, collections::BTreeMap, fmt::Display, path::PathBuf, sync::Ar
 use dbt_common::{ErrorCode, FsResult, err, io_args::StaticAnalysisKind};
 use dbt_telemetry::NodeIdentifier;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
 use serde_with::skip_serializing_none;
 type YmlValue = dbt_serde_yaml::Value;
-
+use crate::schemas::common::{NodeInfo, NodeInfoWrapper};
 use crate::schemas::{
     common::{
         Access, DbtChecksum, DbtContract, DbtIncrementalStrategy, DbtMaterialization, Expect,
@@ -26,6 +25,7 @@ use crate::schemas::{
     ref_and_source::{DbtRef, DbtSourceWrapper},
     serde::StringOrInteger,
 };
+use dbt_serde_yaml::UntaggedEnumDeserialize;
 
 #[derive(
     Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize,
@@ -80,12 +80,12 @@ impl FromStr for IntrospectionKind {
 /// ```rust
 ///
 /// // Deserialize a node from Jinja
-/// let node = InternalDbtNodeWrapper::deserialize(value).unwrap();
+/// let node = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(value).unwrap();
 ///
 /// // Access the underlying node attributes
 /// let attributes = node.as_internal_node();
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize)]
 #[serde(tag = "resource_type")]
 #[serde(rename_all = "snake_case")]
 pub enum InternalDbtNodeWrapper {
@@ -148,17 +148,17 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     }
     fn resource_type(&self) -> &str;
     fn as_any(&self) -> &dyn Any;
-    fn serialize(&self) -> Value {
+    fn serialize(&self) -> YmlValue {
         let mut ret = self.serialize_inner();
-        if let Value::Object(ref mut map) = ret {
+        if let YmlValue::Mapping(ref mut map, _) = ret {
             map.insert(
-                "resource_type".to_string(),
-                Value::String(self.resource_type().to_string()),
+                YmlValue::string("resource_type".to_string()),
+                YmlValue::string(self.resource_type().to_string()),
             );
         }
         ret
     }
-    fn serialize_inner(&self) -> Value;
+    fn serialize_inner(&self) -> YmlValue;
 
     // Selector functions
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool;
@@ -177,26 +177,42 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         Ok(())
     }
 
-    fn get_node_start_data(&self) -> Value {
-        json!({
-            "node_info":{
-                "node_name": self.common().name,
-                "unique_id": self.common().unique_id,
-                "node_started_at": chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.6f").to_string(),
-                "node_status": "executing"
-            }
-        })
+    fn get_node_start_data(&self) -> YmlValue {
+        let node_info_wrapper = NodeInfoWrapper {
+            unique_id: None,
+            skipped_nodes: None,
+            node_info: NodeInfo {
+                node_name: self.common().name.clone(),
+                unique_id: self.common().unique_id.clone(),
+                node_started_at: Some(
+                    chrono::Utc::now()
+                        .format("%Y-%m-%dT%H:%M:%S%.6f")
+                        .to_string(),
+                ),
+                node_finished_at: None,
+                node_status: "executing".to_string(),
+            },
+        };
+        dbt_serde_yaml::to_value(node_info_wrapper).expect("Failed to serialize NodeInfoWrapper")
     }
 
-    fn get_node_end_data(&self, status: &str) -> Value {
-        json!({
-            "node_info":{
-                "node_name": self.common().name,
-                "unique_id": self.common().unique_id,
-                "node_finished_at": chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.6f").to_string(),
-                "node_status": status
+    fn get_node_end_data(&self, status: &str) -> YmlValue {
+        dbt_serde_yaml::to_value(NodeInfoWrapper {
+            unique_id: None,
+            skipped_nodes: None,
+            node_info: NodeInfo {
+                node_name: self.common().name.clone(),
+                unique_id: self.common().unique_id.clone(),
+                node_finished_at: Some(
+                    chrono::Utc::now()
+                        .format("%Y-%m-%dT%H:%M:%S%.6f")
+                        .to_string(),
+                ),
+                node_started_at: None,
+                node_status: status.to_string(),
             },
         })
+        .expect("Failed to serialize NodeInfoWrapper")
     }
 }
 
@@ -269,36 +285,36 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
     }
 
     // TO BE DEPRECATED
-    fn serialized_config(&self) -> Value;
+    fn serialized_config(&self) -> YmlValue;
 }
 
 impl InternalDbtNode for DbtModel {
     fn common(&self) -> &CommonAttributes {
-        &self.common_attr
+        &self.__common_attr__
     }
 
     fn base(&self) -> &NodeBaseAttributes {
-        &self.base_attr
+        &self.__base_attr__
     }
 
     fn version(&self) -> Option<StringOrInteger> {
-        self.model_attr.version.clone()
+        self.__model_attr__.version.clone()
     }
 
     fn latest_version(&self) -> Option<StringOrInteger> {
-        self.model_attr.latest_version.clone()
+        self.__model_attr__.latest_version.clone()
     }
 
     fn event_time(&self) -> Option<String> {
-        self.model_attr.event_time.clone()
+        self.__model_attr__.event_time.clone()
     }
 
     fn is_versioned(&self) -> bool {
-        self.model_attr.version.is_some()
+        self.__model_attr__.version.is_some()
     }
 
     fn is_extended_model(&self) -> bool {
-        self.base_attr.extended_model
+        self.__base_attr__.extended_model
     }
 
     fn resource_type(&self) -> &str {
@@ -306,18 +322,18 @@ impl InternalDbtNode for DbtModel {
     }
 
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
-        &mut self.base_attr
+        &mut self.__base_attr__
     }
 
     fn common_mut(&mut self) -> &mut CommonAttributes {
-        &mut self.common_attr
+        &mut self.__common_attr__
     }
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn serialize_inner(&self) -> Value {
-        serde_json::to_value(self).expect("Failed to serialize DbtModel")
+    fn serialize_inner(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
     }
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
@@ -334,20 +350,20 @@ impl InternalDbtNode for DbtModel {
             return true;
         }
         if let Some(other_model) = other.as_any().downcast_ref::<DbtModel>() {
-            self.common_attr.checksum == other_model.common_attr.checksum
+            self.__common_attr__.checksum == other_model.__common_attr__.checksum
         } else {
             false
         }
     }
     fn set_detected_introspection(&mut self, introspection: IntrospectionKind) {
-        self.model_attr.introspection = introspection;
+        self.__model_attr__.introspection = introspection;
     }
     fn introspection(&self) -> IntrospectionKind {
-        self.model_attr.introspection
+        self.__model_attr__.introspection
     }
 
     fn warn_on_microbatch(&self) -> FsResult<()> {
-        if let Some(DbtIncrementalStrategy::Microbatch) = self.model_attr.incremental_strategy {
+        if let Some(DbtIncrementalStrategy::Microbatch) = self.__model_attr__.incremental_strategy {
             return err!(
                 code => ErrorCode::UnsupportedFeature,
                 loc => self.path(),
@@ -360,39 +376,39 @@ impl InternalDbtNode for DbtModel {
 
 impl InternalDbtNodeAttributes for DbtModel {
     fn static_analysis(&self) -> StaticAnalysisKind {
-        self.base_attr.static_analysis
+        self.__base_attr__.static_analysis
     }
 
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
-        self.base_attr.quoting = quoting;
+        self.__base_attr__.quoting = quoting;
     }
 
     fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
-        self.base_attr.static_analysis = static_analysis;
+        self.__base_attr__.static_analysis = static_analysis;
     }
 
     fn get_access(&self) -> Option<Access> {
-        Some(self.model_attr.access.clone())
+        Some(self.__model_attr__.access.clone())
     }
 
     fn get_group(&self) -> Option<String> {
-        self.model_attr.group.clone()
+        self.__model_attr__.group.clone()
     }
 
     fn search_name(&self) -> String {
-        if let Some(version) = &self.model_attr.version {
-            format!("{}.v{}", self.common_attr.name, version)
+        if let Some(version) = &self.__model_attr__.version {
+            format!("{}.v{}", self.__common_attr__.name, version)
         } else {
-            self.common_attr.name.clone()
+            self.__common_attr__.name.clone()
         }
     }
 
     fn selector_string(&self) -> String {
-        self.common_attr.fqn.join(".")
+        self.__common_attr__.fqn.join(".")
     }
 
-    fn serialized_config(&self) -> Value {
-        serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
+    fn serialized_config(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 }
 
@@ -402,26 +418,26 @@ impl InternalDbtNode for DbtSeed {
     }
 
     fn common(&self) -> &CommonAttributes {
-        &self.common_attr
+        &self.__common_attr__
     }
 
     fn common_mut(&mut self) -> &mut CommonAttributes {
-        &mut self.common_attr
+        &mut self.__common_attr__
     }
 
     fn base(&self) -> &NodeBaseAttributes {
-        &self.base_attr
+        &self.__base_attr__
     }
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
-        &mut self.base_attr
+        &mut self.__base_attr__
     }
 
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn serialize_inner(&self) -> Value {
-        serde_json::to_value(self).expect("Failed to serialize DbtSeed")
+    fn serialize_inner(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
     }
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
@@ -448,11 +464,11 @@ impl InternalDbtNode for DbtSeed {
 
 impl InternalDbtNodeAttributes for DbtSeed {
     fn static_analysis(&self) -> StaticAnalysisKind {
-        self.base_attr.static_analysis
+        self.__base_attr__.static_analysis
     }
 
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
-        self.base_attr.quoting = quoting;
+        self.__base_attr__.quoting = quoting;
     }
 
     fn set_static_analysis(&mut self, _static_analysis: StaticAnalysisKind) {
@@ -460,25 +476,25 @@ impl InternalDbtNodeAttributes for DbtSeed {
     }
 
     fn search_name(&self) -> String {
-        self.common_attr.name.clone()
+        self.__common_attr__.name.clone()
     }
 
     fn selector_string(&self) -> String {
-        self.common_attr.fqn.join(".")
+        self.__common_attr__.fqn.join(".")
     }
 
-    fn serialized_config(&self) -> Value {
-        serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
+    fn serialized_config(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 }
 
 impl InternalDbtNode for DbtTest {
     fn common(&self) -> &CommonAttributes {
-        &self.common_attr
+        &self.__common_attr__
     }
 
     fn base(&self) -> &NodeBaseAttributes {
-        &self.base_attr
+        &self.__base_attr__
     }
 
     fn resource_type(&self) -> &str {
@@ -486,19 +502,19 @@ impl InternalDbtNode for DbtTest {
     }
 
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
-        &mut self.base_attr
+        &mut self.__base_attr__
     }
 
     fn common_mut(&mut self) -> &mut CommonAttributes {
-        &mut self.common_attr
+        &mut self.__common_attr__
     }
 
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn serialize_inner(&self) -> Value {
-        serde_json::to_value(self).expect("Failed to serialize DbtTest")
+    fn serialize_inner(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
     }
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
@@ -528,37 +544,37 @@ impl InternalDbtNode for DbtTest {
 
 impl InternalDbtNodeAttributes for DbtTest {
     fn static_analysis(&self) -> StaticAnalysisKind {
-        self.base_attr.static_analysis
+        self.__base_attr__.static_analysis
     }
 
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
-        self.base_attr.quoting = quoting;
+        self.__base_attr__.quoting = quoting;
     }
 
     fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
-        self.base_attr.static_analysis = static_analysis;
+        self.__base_attr__.static_analysis = static_analysis;
     }
 
     fn search_name(&self) -> String {
-        self.common_attr.name.clone()
+        self.__common_attr__.name.clone()
     }
 
     fn selector_string(&self) -> String {
-        self.common_attr.fqn.join(".")
+        self.__common_attr__.fqn.join(".")
     }
 
-    fn serialized_config(&self) -> Value {
-        serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
+    fn serialized_config(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 }
 
 impl InternalDbtNode for DbtUnitTest {
     fn common(&self) -> &CommonAttributes {
-        &self.common_attr
+        &self.__common_attr__
     }
 
     fn base(&self) -> &NodeBaseAttributes {
-        &self.base_attr
+        &self.__base_attr__
     }
 
     fn resource_type(&self) -> &str {
@@ -566,19 +582,19 @@ impl InternalDbtNode for DbtUnitTest {
     }
 
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
-        &mut self.base_attr
+        &mut self.__base_attr__
     }
 
     fn common_mut(&mut self) -> &mut CommonAttributes {
-        &mut self.common_attr
+        &mut self.__common_attr__
     }
 
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn serialize_inner(&self) -> Value {
-        serde_json::to_value(self).expect("Failed to serialize DbtUnitTest")
+    fn serialize_inner(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
     }
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
@@ -611,46 +627,46 @@ impl InternalDbtNode for DbtUnitTest {
 
 impl InternalDbtNodeAttributes for DbtUnitTest {
     fn static_analysis(&self) -> StaticAnalysisKind {
-        self.base_attr.static_analysis
+        self.__base_attr__.static_analysis
     }
 
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
-        self.base_attr.quoting = quoting;
+        self.__base_attr__.quoting = quoting;
     }
 
     fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
-        self.base_attr.static_analysis = static_analysis;
+        self.__base_attr__.static_analysis = static_analysis;
     }
 
     fn search_name(&self) -> String {
         // Based on Python implementation, unit tests can have a versioned name
-        if let Some(version) = &self.unit_test_attr.version {
-            format!("{}_v{}", self.common_attr.name, version)
+        if let Some(version) = &self.__unit_test_attr__.version {
+            format!("{}_v{}", self.__common_attr__.name, version)
         } else {
-            self.common_attr.name.clone()
+            self.__common_attr__.name.clone()
         }
     }
 
     fn selector_string(&self) -> String {
         format!(
             "unit_test:{}.{}",
-            self.common_attr.package_name,
+            self.__common_attr__.package_name,
             self.search_name()
         )
     }
 
-    fn serialized_config(&self) -> Value {
-        serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
+    fn serialized_config(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 }
 
 impl InternalDbtNode for DbtSource {
     fn common(&self) -> &CommonAttributes {
-        &self.common_attr
+        &self.__common_attr__
     }
 
     fn base(&self) -> &NodeBaseAttributes {
-        &self.base_attr
+        &self.__base_attr__
     }
 
     fn resource_type(&self) -> &str {
@@ -662,19 +678,19 @@ impl InternalDbtNode for DbtSource {
     }
 
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
-        &mut self.base_attr
+        &mut self.__base_attr__
     }
 
     fn common_mut(&mut self) -> &mut CommonAttributes {
-        &mut self.common_attr
+        &mut self.__common_attr__
     }
 
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn serialize_inner(&self) -> Value {
-        serde_json::to_value(self).expect("Failed to serialize DbtSource")
+    fn serialize_inner(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
     }
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
@@ -688,12 +704,12 @@ impl InternalDbtNode for DbtSource {
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_source) = other.as_any().downcast_ref::<DbtSource>() {
             // Relation name capture database, schema and identifier
-            self.base_attr.relation_name == other_source.base_attr.relation_name
-                && self.common_attr.fqn == other_source.common_attr.fqn
+            self.__base_attr__.relation_name == other_source.__base_attr__.relation_name
+                && self.__common_attr__.fqn == other_source.__common_attr__.fqn
                 //TODO: uncomment this when we have a way to compare the config
                 // && self.deprecated_config == other_source.deprecated_config
                 // && self.base_attr.quoting == other_source.base_attr.quoting
-                && self.source_attr.loader == other_source.source_attr.loader
+                && self.__source_attr__.loader == other_source.__source_attr__.loader
         } else {
             false
         }
@@ -705,40 +721,45 @@ impl InternalDbtNode for DbtSource {
 
 impl InternalDbtNodeAttributes for DbtSource {
     fn static_analysis(&self) -> StaticAnalysisKind {
-        self.base_attr.static_analysis
+        self.__base_attr__.static_analysis
     }
 
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
-        self.base_attr.quoting = quoting;
+        self.__base_attr__.quoting = quoting;
     }
 
     fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
-        self.base_attr.static_analysis = static_analysis;
+        self.__base_attr__.static_analysis = static_analysis;
     }
 
     fn search_name(&self) -> String {
-        format!("{}.{}", self.source_attr.source_name, self.common_attr.name)
+        format!(
+            "{}.{}",
+            self.__source_attr__.source_name, self.__common_attr__.name
+        )
     }
 
     fn selector_string(&self) -> String {
         format!(
             "source:{}.{}.{}",
-            self.common_attr.package_name, self.source_attr.source_name, self.common_attr.name
+            self.__common_attr__.package_name,
+            self.__source_attr__.source_name,
+            self.__common_attr__.name
         )
     }
 
-    fn serialized_config(&self) -> Value {
-        serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
+    fn serialized_config(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
     }
 }
 
 impl InternalDbtNode for DbtSnapshot {
     fn common(&self) -> &CommonAttributes {
-        &self.common_attr
+        &self.__common_attr__
     }
 
     fn base(&self) -> &NodeBaseAttributes {
-        &self.base_attr
+        &self.__base_attr__
     }
 
     fn resource_type(&self) -> &str {
@@ -746,19 +767,19 @@ impl InternalDbtNode for DbtSnapshot {
     }
 
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
-        &mut self.base_attr
+        &mut self.__base_attr__
     }
 
     fn common_mut(&mut self) -> &mut CommonAttributes {
-        &mut self.common_attr
+        &mut self.__common_attr__
     }
 
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn serialize_inner(&self) -> Value {
-        serde_json::to_value(self).expect("Failed to serialize DbtSnapshot")
+    fn serialize_inner(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
     }
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
@@ -786,35 +807,35 @@ impl InternalDbtNode for DbtSnapshot {
 
 impl InternalDbtNodeAttributes for DbtSnapshot {
     fn static_analysis(&self) -> StaticAnalysisKind {
-        self.base_attr.static_analysis
+        self.__base_attr__.static_analysis
     }
 
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
-        self.base_attr.quoting = quoting;
+        self.__base_attr__.quoting = quoting;
     }
 
     fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
-        self.base_attr.static_analysis = static_analysis;
+        self.__base_attr__.static_analysis = static_analysis;
     }
 
     fn tags(&self) -> Vec<String> {
-        self.common_attr.tags.clone()
+        self.__common_attr__.tags.clone()
     }
 
     fn meta(&self) -> BTreeMap<String, YmlValue> {
-        self.common_attr.meta.clone()
+        self.__common_attr__.meta.clone()
     }
 
     fn search_name(&self) -> String {
-        self.common_attr.name.clone()
+        self.__common_attr__.name.clone()
     }
 
     fn selector_string(&self) -> String {
-        self.common_attr.fqn.join(".")
+        self.__common_attr__.fqn.join(".")
     }
 
-    fn serialized_config(&self) -> Value {
-        serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
+    fn serialized_config(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 }
 
@@ -843,8 +864,8 @@ impl InternalDbtNode for DbtSemanticModel {
         self
     }
 
-    fn serialize_inner(&self) -> Value {
-        serde_json::to_value(self).expect("Failed to serialize DbtSnapshot")
+    fn serialize_inner(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
     }
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
@@ -866,16 +887,16 @@ impl InternalDbtNode for DbtSemanticModel {
 
 impl InternalDbtNode for DbtExposure {
     fn common(&self) -> &CommonAttributes {
-        &self.common_attr
+        &self.__common_attr__
     }
     fn base(&self) -> &NodeBaseAttributes {
-        &self.base_attr
+        &self.__base_attr__
     }
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
-        &mut self.base_attr
+        &mut self.__base_attr__
     }
     fn common_mut(&mut self) -> &mut CommonAttributes {
-        &mut self.common_attr
+        &mut self.__common_attr__
     }
     fn resource_type(&self) -> &str {
         "exposure"
@@ -883,8 +904,8 @@ impl InternalDbtNode for DbtExposure {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn serialize_inner(&self) -> Value {
-        serde_json::to_value(self).expect("Failed to serialize DbtExposure")
+    fn serialize_inner(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
     }
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_exposure) = other.as_any().downcast_ref::<DbtExposure>() {
@@ -896,8 +917,8 @@ impl InternalDbtNode for DbtExposure {
 
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_exposure) = other.as_any().downcast_ref::<DbtExposure>() {
-            self.common_attr.name == other_exposure.common_attr.name
-                && self.common_attr.fqn == other_exposure.common_attr.fqn
+            self.__common_attr__.name == other_exposure.__common_attr__.name
+                && self.__common_attr__.fqn == other_exposure.__common_attr__.fqn
         } else {
             false
         }
@@ -909,35 +930,35 @@ impl InternalDbtNode for DbtExposure {
 
 impl InternalDbtNodeAttributes for DbtExposure {
     fn static_analysis(&self) -> StaticAnalysisKind {
-        self.base_attr.static_analysis
+        self.__base_attr__.static_analysis
     }
 
     fn materialized(&self) -> DbtMaterialization {
-        self.base_attr.materialized.clone()
+        self.__base_attr__.materialized.clone()
     }
     fn quoting(&self) -> ResolvedQuoting {
-        self.base_attr.quoting
+        self.__base_attr__.quoting
     }
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
-        self.base_attr.quoting = quoting;
+        self.__base_attr__.quoting = quoting;
     }
     fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
-        self.base_attr.static_analysis = static_analysis;
+        self.__base_attr__.static_analysis = static_analysis;
     }
     fn tags(&self) -> Vec<String> {
-        self.common_attr.tags.clone()
+        self.__common_attr__.tags.clone()
     }
     fn meta(&self) -> BTreeMap<String, YmlValue> {
-        self.common_attr.meta.clone()
+        self.__common_attr__.meta.clone()
     }
-    fn serialized_config(&self) -> Value {
-        serde_json::to_value(&self.deprecated_config).expect("Failed to serialize DbtExposure")
+    fn serialized_config(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
     fn search_name(&self) -> String {
-        self.common_attr.name.clone()
+        self.__common_attr__.name.clone()
     }
     fn selector_string(&self) -> String {
-        self.common_attr.fqn.join(".")
+        self.__common_attr__.fqn.join(".")
     }
 }
 
@@ -960,8 +981,8 @@ impl InternalDbtNode for DbtSavedQuery {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn serialize_inner(&self) -> Value {
-        serde_json::to_value(self).expect("Failed to serialize DbtSavedQuery")
+    fn serialize_inner(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
     }
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_saved_query) = other.as_any().downcast_ref::<DbtSavedQuery>() {
@@ -997,8 +1018,8 @@ impl InternalDbtNode for DbtMetric {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn serialize_inner(&self) -> Value {
-        serde_json::to_value(self).expect("Failed to serialize DbtMetric")
+    fn serialize_inner(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
     }
     fn has_same_config(&self, _other: &dyn InternalDbtNode) -> bool {
         unimplemented!("metric config comparison")
@@ -1030,8 +1051,8 @@ impl InternalDbtNode for DbtMacro {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn serialize_inner(&self) -> Value {
-        serde_json::to_value(self).expect("Failed to serialize DbtMacro")
+    fn serialize_inner(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
     }
     fn has_same_config(&self, _other: &dyn InternalDbtNode) -> bool {
         unimplemented!("macro config comparison")
@@ -1544,21 +1565,17 @@ pub struct NodeBaseAttributes {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtSeed {
-    #[serde(flatten)]
-    pub common_attr: CommonAttributes,
+    pub __common_attr__: CommonAttributes,
 
-    #[serde(flatten)]
-    pub base_attr: NodeBaseAttributes,
+    pub __base_attr__: NodeBaseAttributes,
 
-    #[serde(flatten)]
-    pub seed_attr: DbtSeedAttr,
+    pub __seed_attr__: DbtSeedAttr,
 
     // To be deprecated
     #[serde(rename = "config")]
     pub deprecated_config: SeedConfig,
 
-    #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub __other__: BTreeMap<String, YmlValue>,
 }
 
 #[skip_serializing_none]
@@ -1580,14 +1597,11 @@ fn is_false(b: &bool) -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtExposure {
-    #[serde(flatten)]
-    pub common_attr: CommonAttributes,
+    pub __common_attr__: CommonAttributes,
 
-    #[serde(flatten)]
-    pub base_attr: NodeBaseAttributes,
+    pub __base_attr__: NodeBaseAttributes,
 
-    #[serde(flatten)]
-    pub exposure_attr: DbtExposureAttr,
+    pub __exposure_attr__: DbtExposureAttr,
 
     // To be deprecated
     #[serde(rename = "config")]
@@ -1604,7 +1618,7 @@ pub struct DbtExposureAttr {
     #[serde(rename = "type")]
     pub type_: String,
     pub url: Option<String>,
-    pub unrendered_config: BTreeMap<String, Value>,
+    pub unrendered_config: BTreeMap<String, YmlValue>,
     pub created_at: Option<f64>,
 }
 
@@ -1612,14 +1626,11 @@ pub struct DbtExposureAttr {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtUnitTest {
-    #[serde(flatten)]
-    pub common_attr: CommonAttributes,
+    pub __common_attr__: CommonAttributes,
 
-    #[serde(flatten)]
-    pub base_attr: NodeBaseAttributes,
+    pub __base_attr__: NodeBaseAttributes,
 
-    #[serde(flatten)]
-    pub unit_test_attr: DbtUnitTestAttr,
+    pub __unit_test_attr__: DbtUnitTestAttr,
 
     // To be deprecated
     #[serde(rename = "config")]
@@ -1643,19 +1654,15 @@ pub struct DbtUnitTestAttr {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtTest {
-    #[serde(flatten)]
-    pub common_attr: CommonAttributes,
-    #[serde(flatten)]
-    pub base_attr: NodeBaseAttributes,
-    #[serde(flatten)]
-    pub test_attr: DbtTestAttr,
+    pub __common_attr__: CommonAttributes,
+    pub __base_attr__: NodeBaseAttributes,
+    pub __test_attr__: DbtTestAttr,
 
     // To be deprecated
     #[serde(rename = "config")]
     pub deprecated_config: DataTestConfig,
 
-    #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub __other__: BTreeMap<String, YmlValue>,
 }
 
 #[skip_serializing_none]
@@ -1673,7 +1680,7 @@ pub struct DbtTestAttr {
 #[serde(rename_all = "snake_case")]
 pub struct TestMetadata {
     pub name: String,
-    pub kwargs: BTreeMap<String, Value>,
+    pub kwargs: BTreeMap<String, YmlValue>,
     pub namespace: Option<String>,
 }
 
@@ -1681,12 +1688,9 @@ pub struct TestMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtSnapshot {
-    #[serde(flatten)]
-    pub common_attr: CommonAttributes,
-    #[serde(flatten)]
-    pub base_attr: NodeBaseAttributes,
-    #[serde(flatten)]
-    pub snapshot_attr: DbtSnapshotAttr,
+    pub __common_attr__: CommonAttributes,
+    pub __base_attr__: NodeBaseAttributes,
+    pub __snapshot_attr__: DbtSnapshotAttr,
 
     /// To be deprecated
     #[serde(rename = "config")]
@@ -1696,8 +1700,7 @@ pub struct DbtSnapshot {
     pub compiled: Option<bool>,
     pub compiled_code: Option<String>,
 
-    #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub __other__: BTreeMap<String, YmlValue>,
 }
 
 #[skip_serializing_none]
@@ -1711,22 +1714,18 @@ pub struct DbtSnapshotAttr {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtSource {
-    #[serde(flatten)]
-    pub common_attr: CommonAttributes,
+    pub __common_attr__: CommonAttributes,
 
-    #[serde(flatten)]
-    pub base_attr: NodeBaseAttributes,
+    pub __base_attr__: NodeBaseAttributes,
 
     // Source Specific Attributes
-    #[serde(flatten)]
-    pub source_attr: DbtSourceAttr,
+    pub __source_attr__: DbtSourceAttr,
 
     // To be deprecated
     #[serde(rename = "config")]
     pub deprecated_config: SourceConfig,
 
-    #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub __other__: BTreeMap<String, YmlValue>,
 }
 
 #[skip_serializing_none]
@@ -1744,11 +1743,11 @@ pub struct DbtSourceAttr {
 
 impl DbtSource {
     pub fn get_base_attr(&self) -> NodeBaseAttributes {
-        self.base_attr.clone()
+        self.__base_attr__.clone()
     }
 
     pub fn get_loaded_at_field(&self) -> &str {
-        self.source_attr
+        self.__source_attr__
             .loaded_at_field
             .as_ref()
             .map(AsRef::as_ref)
@@ -1756,7 +1755,7 @@ impl DbtSource {
     }
 
     pub fn get_loaded_at_query(&self) -> &str {
-        self.source_attr
+        self.__source_attr__
             .loaded_at_query
             .as_ref()
             .map(AsRef::as_ref)
@@ -1768,21 +1767,17 @@ impl DbtSource {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtModel {
-    #[serde(flatten)]
-    pub common_attr: CommonAttributes,
+    pub __common_attr__: CommonAttributes,
 
-    #[serde(flatten)]
-    pub base_attr: NodeBaseAttributes,
+    pub __base_attr__: NodeBaseAttributes,
 
-    #[serde(flatten)]
-    pub model_attr: DbtModelAttr,
+    pub __model_attr__: DbtModelAttr,
 
     // TO BE DEPRECATED
     #[serde(rename = "config")]
     pub deprecated_config: ModelConfig,
 
-    #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub __other__: BTreeMap<String, YmlValue>,
 }
 
 fn default_false() -> bool {
@@ -1804,7 +1799,7 @@ pub struct DbtModelAttr {
     pub deprecation_date: Option<String>,
     // TODO: Investigate why primary_key is needed here (constraints already exist)
     pub primary_key: Vec<String>,
-    pub time_spine: Option<Value>,
+    pub time_spine: Option<YmlValue>,
     pub event_time: Option<String>,
 }
 
@@ -1814,15 +1809,20 @@ fn default_introspection() -> IntrospectionKind {
 
 #[cfg(test)]
 mod tests {
-    use super::ModelConfig;
     use serde::Deserialize;
+
+    use super::ModelConfig;
+
+    type YmlValue = dbt_serde_yaml::Value;
 
     #[test]
     fn test_deserialize_wo_meta() {
-        let config = serde_json::json!({
-            "enabled": true,
-            // "meta" is missing
-        });
+        let config: YmlValue = dbt_serde_yaml::from_str(
+            r#"
+            enabled: true
+            "#,
+        )
+        .expect("Failed to deserialize model config");
 
         let config = ModelConfig::deserialize(config);
         if let Err(err) = config {

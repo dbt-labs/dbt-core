@@ -8,7 +8,7 @@ mod tests {
     fn test_tarball_package_creation() {
         let tarball_package = TarballPackage {
             tarball: Verbatim::from("https://example.com/package.tar.gz".to_string()),
-            unrendered: HashMap::new(),
+            __unrendered__: HashMap::new(),
         };
 
         assert_eq!(
@@ -22,7 +22,7 @@ mod tests {
         let tarball_package_lock = TarballPackageLock {
             tarball: Verbatim::from("https://example.com/package.tar.gz".to_string()),
             name: "test-package".to_string(),
-            unrendered: HashMap::new(),
+            __unrendered__: HashMap::new(),
         };
 
         assert_eq!(
@@ -37,7 +37,7 @@ mod tests {
         let tarball_package_lock = TarballPackageLock {
             tarball: Verbatim::from("https://example.com/package.tar.gz".to_string()),
             name: "test-package".to_string(),
-            unrendered: HashMap::new(),
+            __unrendered__: HashMap::new(),
         };
 
         let tarball_package = TarballPackage::from(tarball_package_lock);

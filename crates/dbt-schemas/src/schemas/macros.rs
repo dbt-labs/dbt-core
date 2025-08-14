@@ -29,7 +29,7 @@ pub struct DbtMacro {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub args: Vec<ArgSpec>,
     #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub __other__: BTreeMap<String, Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]

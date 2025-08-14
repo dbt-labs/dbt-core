@@ -2,7 +2,7 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 
 // Type aliases for clarity
-type JsonValue = serde_json::Value;
+type YmlValue = dbt_serde_yaml::Value;
 
 use super::{DbtGroup, DbtMetric, DbtSelector, DbtSemanticModel};
 use crate::schemas::{
@@ -23,7 +23,7 @@ pub struct DbtManifestV11 {
     pub child_map: BTreeMap<String, Vec<String>>,
     pub parent_map: BTreeMap<String, Vec<String>>,
     pub group_map: BTreeMap<String, Vec<String>>,
-    pub disabled: BTreeMap<String, Vec<JsonValue>>,
+    pub disabled: BTreeMap<String, Vec<YmlValue>>,
     pub selectors: BTreeMap<String, DbtSelector>,
     pub groups: BTreeMap<String, DbtGroup>,
 }

@@ -63,7 +63,7 @@ fn new_operation(
             let name = format!("{project_name}-{operation_type}-{index}");
             let unique_id = format!("operation.{project_name}.{name}");
             operation_sql.clone().map(|operation_sql| DbtOperation {
-                common_attr: CommonAttributes {
+                __common_attr__: CommonAttributes {
                     name: name.clone(),
                     package_name: project_name.to_string(),
                     path: PathBuf::from("hooks").join(&name),
@@ -75,7 +75,7 @@ fn new_operation(
                     language: Some("sql".to_string()),
                     ..Default::default()
                 },
-                other: BTreeMap::new(),
+                __other__: BTreeMap::new(),
             })
         })
         .collect()

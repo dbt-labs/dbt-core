@@ -6,7 +6,7 @@ use std::{
 };
 
 use dashmap::DashMap;
-use dbt_common::serde_utils::convert_json_to_dash_map;
+use dbt_common::serde_utils::convert_yml_to_dash_map;
 use dbt_fusion_adapter::{load_store::ResultStore, relation_object::create_relation};
 use dbt_schemas::schemas::{CommonAttributes, NodeBaseAttributes, relations::base::BaseRelation};
 use dbt_schemas::state::{DbtRuntimeConfig, RefsAndSourcesTracker};
@@ -15,12 +15,13 @@ use minijinja::{
     constants::{CURRENT_PATH, CURRENT_SPAN, TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID},
     machinery::Span,
 };
-use serde_json::Value;
 
 use crate::phases::MacroLookupContext;
 
 use super::super::compile_and_run_context::RefFunction;
 use super::compile_config::CompileConfig;
+
+type YmlValue = dbt_serde_yaml::Value;
 
 /// Build a compile model context
 /// Returns a context and the current relation
@@ -29,7 +30,7 @@ pub fn build_compile_node_context(
     model: &MinijinjaValue,
     common_attr: &CommonAttributes,
     base_attr: &NodeBaseAttributes,
-    config: &Value,
+    config: &YmlValue,
     adapter_type: &str,
     base_context: &BTreeMap<String, MinijinjaValue>,
     root_project_name: &str,
@@ -79,7 +80,7 @@ pub fn build_compile_node_context(
         MinijinjaValue::from(base_attr.alias.clone()),
     );
 
-    let config_map = Arc::new(convert_json_to_dash_map(config.clone()));
+    let config_map = Arc::new(convert_yml_to_dash_map(config.clone()));
     let compile_config = CompileConfig {
         config: config_map.clone(),
     };

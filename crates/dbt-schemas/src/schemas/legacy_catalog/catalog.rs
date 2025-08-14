@@ -90,20 +90,24 @@ pub fn build_catalog(
             .map(|(id, node)| {
                 let fully_qualified_name = format!(
                     "{}.{}.{}",
-                    node.base_attr.database.clone(),
-                    node.base_attr.schema.clone(),
-                    node.base_attr.alias.clone()
+                    node.__base_attr__.database.clone(),
+                    node.__base_attr__.schema.clone(),
+                    node.__base_attr__.alias.clone()
                 );
                 let mut partial_node = match node_stats_and_stuff.get(&fully_qualified_name) {
                     Some(node) => node.to_owned(),
                     None => CatalogTable {
                         unique_id: Some(id.clone()),
                         metadata: TableMetadata {
-                            materialization_type: node.base_attr.materialized.clone().to_string(),
-                            schema: node.base_attr.schema.clone(),
-                            name: node.base_attr.alias.clone(),
-                            database: Some(node.base_attr.database.clone()),
-                            comment: node.common_attr.description.clone(),
+                            materialization_type: node
+                                .__base_attr__
+                                .materialized
+                                .clone()
+                                .to_string(),
+                            schema: node.__base_attr__.schema.clone(),
+                            name: node.__base_attr__.alias.clone(),
+                            database: Some(node.__base_attr__.database.clone()),
+                            comment: node.__common_attr__.description.clone(),
                             owner: None,
                         },
                         columns: BTreeMap::new(),
@@ -121,20 +125,24 @@ pub fn build_catalog(
             .chain(resolver_state.nodes.snapshots.iter().map(|(id, node)| {
                 let fully_qualified_name = format!(
                     "{}.{}.{}",
-                    node.base_attr.database.clone(),
-                    node.base_attr.schema.clone(),
-                    node.base_attr.alias.clone()
+                    node.__base_attr__.database.clone(),
+                    node.__base_attr__.schema.clone(),
+                    node.__base_attr__.alias.clone()
                 );
                 let mut partial_node = match node_stats_and_stuff.get(&fully_qualified_name) {
                     Some(node) => node.to_owned(),
                     None => CatalogTable {
                         unique_id: Some(id.clone()),
                         metadata: TableMetadata {
-                            materialization_type: node.base_attr.materialized.clone().to_string(),
-                            schema: node.base_attr.schema.clone(),
-                            name: node.base_attr.alias.clone(),
-                            database: Some(node.base_attr.database.clone()),
-                            comment: node.common_attr.description.clone(),
+                            materialization_type: node
+                                .__base_attr__
+                                .materialized
+                                .clone()
+                                .to_string(),
+                            schema: node.__base_attr__.schema.clone(),
+                            name: node.__base_attr__.alias.clone(),
+                            database: Some(node.__base_attr__.database.clone()),
+                            comment: node.__common_attr__.description.clone(),
                             owner: None,
                         },
                         columns: BTreeMap::new(),
@@ -152,20 +160,24 @@ pub fn build_catalog(
             .chain(resolver_state.nodes.seeds.iter().map(|(id, node)| {
                 let fully_qualified_name = format!(
                     "{}.{}.{}",
-                    node.base_attr.database.clone(),
-                    node.base_attr.schema.clone(),
-                    node.base_attr.alias.clone()
+                    node.__base_attr__.database.clone(),
+                    node.__base_attr__.schema.clone(),
+                    node.__base_attr__.alias.clone()
                 );
                 let mut partial_node = match node_stats_and_stuff.get(&fully_qualified_name) {
                     Some(node) => node.to_owned(),
                     None => CatalogTable {
                         unique_id: Some(id.clone()),
                         metadata: TableMetadata {
-                            materialization_type: node.base_attr.materialized.clone().to_string(),
-                            schema: node.base_attr.schema.clone(),
-                            name: node.base_attr.alias.clone(),
-                            database: Some(node.base_attr.database.clone()),
-                            comment: node.common_attr.description.clone(),
+                            materialization_type: node
+                                .__base_attr__
+                                .materialized
+                                .clone()
+                                .to_string(),
+                            schema: node.__base_attr__.schema.clone(),
+                            name: node.__base_attr__.alias.clone(),
+                            database: Some(node.__base_attr__.database.clone()),
+                            comment: node.__common_attr__.description.clone(),
                             owner: None,
                         },
                         columns: BTreeMap::new(),
@@ -188,20 +200,24 @@ pub fn build_catalog(
             .map(|(id, source)| {
                 let fully_qualified_name = format!(
                     "{}.{}.{}",
-                    source.base_attr.database.clone(),
-                    source.base_attr.schema.clone(),
-                    source.base_attr.alias.clone()
+                    source.__base_attr__.database.clone(),
+                    source.__base_attr__.schema.clone(),
+                    source.__base_attr__.alias.clone()
                 );
                 let mut partial_node = match node_stats_and_stuff.get(&fully_qualified_name) {
                     Some(node) => node.to_owned(),
                     None => CatalogTable {
                         unique_id: Some(id.clone()),
                         metadata: TableMetadata {
-                            materialization_type: source.base_attr.materialized.clone().to_string(),
-                            schema: source.base_attr.schema.clone(),
-                            name: source.base_attr.alias.clone(),
-                            database: Some(source.base_attr.database.clone()),
-                            comment: source.common_attr.description.clone(),
+                            materialization_type: source
+                                .__base_attr__
+                                .materialized
+                                .clone()
+                                .to_string(),
+                            schema: source.__base_attr__.schema.clone(),
+                            name: source.__base_attr__.alias.clone(),
+                            database: Some(source.__base_attr__.database.clone()),
+                            comment: source.__common_attr__.description.clone(),
                             owner: None,
                         },
                         columns: BTreeMap::new(),

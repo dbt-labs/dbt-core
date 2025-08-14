@@ -1,6 +1,6 @@
 use super::{ProjectEnv, Task, TestEnv, TestResult};
 use async_trait::async_trait;
-use dbt_common::{constants::DBT_MANIFEST_JSON, stdfs};
+use dbt_common::constants::DBT_MANIFEST_JSON;
 use dbt_schemas::schemas::manifest::DbtManifest;
 use std::sync::{Arc, Mutex};
 
@@ -39,9 +39,9 @@ impl Task for CaptureDbtManifest {
     ) -> TestResult<()> {
         // Read the manifest from the target directory
         let target_dir = test_env.temp_dir.join("target");
-        let manifest_content = stdfs::read_to_string(target_dir.join(DBT_MANIFEST_JSON))?;
-        let manifest: DbtManifest = serde_json::from_str(&manifest_content)?;
-
+        let manifest: DbtManifest = dbt_schemas::schemas::serde::typed_struct_from_json_file(
+            target_dir.join(DBT_MANIFEST_JSON).as_path(),
+        )?;
         // Store the captured manifest
         *self.captured_manifest.lock().unwrap() = Some(manifest);
 

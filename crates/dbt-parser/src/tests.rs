@@ -62,6 +62,7 @@ mod tests {
             sql_resources.clone(),
             Arc::new(AtomicBool::new(false)),
             &PathBuf::from("test"),
+            &IoArgs::default(),
         );
         context.insert(TARGET_PACKAGE_NAME.to_string(), Value::from("common"));
         context
@@ -255,8 +256,9 @@ mod tests {
                 map.insert("alias".to_string(), Value::from("my_aliassuffix"));
                 map.insert("materialized".to_string(), Value::from("view"));
                 map.insert("enabled".to_string(), Value::from(true)); // this gets inhertied from the global config which is true if not specified (important that this is not overridden)
-                let config = serde_json::from_value(serde_json::to_value(map).unwrap()).unwrap();
-                SqlResource::Config(config)
+                let config: ModelConfig =
+                    dbt_serde_yaml::from_value(dbt_serde_yaml::to_value(map).unwrap()).unwrap();
+                SqlResource::Config(Box::new(config))
             };
 
             let sql_resources_locked = sql_resources.lock().unwrap().clone();

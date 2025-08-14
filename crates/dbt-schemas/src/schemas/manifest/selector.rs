@@ -11,8 +11,6 @@ pub struct DbtSelector {
     pub name: String,
     #[serde(default)]
     pub description: String,
-    #[serde(flatten)]
-    pub definition: Value,
-    #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub __definition__: Value,
+    pub __other__: BTreeMap<String, Value>,
 }

@@ -243,6 +243,7 @@ pub async fn render_unresolved_sql_files_sequentially<
             sql_resources.clone(),
             execute_exists.clone(),
             &display_path,
+            &args.io,
         ));
         show_progress!(
             args.io,
@@ -586,6 +587,7 @@ pub async fn render_unresolved_sql_files<
                     sql_resources.clone(),
                     execute_exists.clone(),
                     &display_path,
+                    &args.io,
                 ));
                 show_progress!(
                     args.io,

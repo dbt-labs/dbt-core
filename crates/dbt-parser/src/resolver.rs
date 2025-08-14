@@ -286,7 +286,7 @@ fn check_access(
             all_runtime_configs,
             |target_node, diffent_packages| {
                 // Models can access private models if they're in the same group and same package
-                node.model_attr.group != target_node.model_attr.group || diffent_packages
+                node.__model_attr__.group != target_node.__model_attr__.group || diffent_packages
             },
         );
     }
@@ -303,7 +303,7 @@ fn check_access(
             |target_node, diffent_packages| {
                 // Exposures don't have groups, so they can't access private models
                 // unless the private model has no group and they're in the same package
-                target_node.model_attr.group.is_some() || diffent_packages
+                target_node.__model_attr__.group.is_some() || diffent_packages
             },
         );
     }
@@ -330,7 +330,7 @@ fn check_node_access<F>(
             let diffent_packages =
                 target_node.common().package_name != node_package_name && restricted_access;
 
-            if target_node.model_attr.access == Access::Private
+            if target_node.__model_attr__.access == Access::Private
                 && should_deny_private_access(target_node, diffent_packages)
             {
                 let err = fs_err!(
@@ -339,10 +339,10 @@ fn check_node_access<F>(
                     "Node '{}' attempted to reference node '{}', which is not allowed because the referenced node is private to the '{}' group",
                     unique_id,
                     target_unique_id,
-                    target_node.model_attr.group.as_deref().unwrap_or(""),
+                    target_node.__model_attr__.group.as_deref().unwrap_or(""),
                 );
                 show_error!(arg.io, err);
-            } else if target_node.model_attr.access == Access::Protected && diffent_packages {
+            } else if target_node.__model_attr__.access == Access::Protected && diffent_packages {
                 let err = fs_err!(
                     code => ErrorCode::AccessDenied,
                     loc => location.clone(),

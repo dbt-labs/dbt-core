@@ -234,7 +234,7 @@ fn get_test_details(
                 let (test_name, namespace) = parse_test_name_and_namespace(&mk.test_name);
                 let extraction_result = extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
                     &mk.arguments,
-                    &mk.deprecated_args_and_configs,
+                    &mk.__deprecated_args_and_configs__,
                     &mk.config,
                     io_args,
                     dependency_package_name,
@@ -256,7 +256,7 @@ fn get_test_details(
 
                 let extraction_result = extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
                     &inner.arguments,
-                    &inner.deprecated_args_and_configs,
+                    &inner.__deprecated_args_and_configs__,
                     &inner.config,
                     io_args,
                     dependency_package_name,
@@ -391,8 +391,11 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
             merged_map.extend(config_from_deprecated);
         }
 
+        let merged_config_yaml: dbt_serde_yaml::Value =
+            serde_json::from_value(merged_config_json).unwrap();
+
         // Deserialize the final merged config
-        if let Ok(merged_config) = serde_json::from_value::<DataTestConfig>(merged_config_json) {
+        if let Ok(merged_config) = merged_config_yaml.into_typed(|_, _, _| {}, |_| Ok(None)) {
             final_config = Some(merged_config);
         }
     }
@@ -1383,7 +1386,7 @@ mod tests {
                     )),
                     column_name: None,
                     config: None,
-                    deprecated_args_and_configs: Verbatim::from(BTreeMap::new()),
+                    __deprecated_args_and_configs__: Verbatim::from(BTreeMap::new()),
                     name: Some("noop?=p+:".to_string()),
                     test_name: "noop?=p+:".to_string(),
                     description: None,

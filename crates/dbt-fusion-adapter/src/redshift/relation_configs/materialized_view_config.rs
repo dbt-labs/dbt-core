@@ -106,7 +106,11 @@ impl TryFrom<&DbtModel> for RedshiftDistConfig {
     type Error = String;
     // https://github.com/dbt-labs/dbt-adapters/blob/f492c919d3bd415bf5065b3cd8cd1af23562feb0/dbt-redshift/src/dbt/adapters/redshift/relation_configs/dist.py#L80
     fn try_from(model: &DbtModel) -> Result<Self, Self::Error> {
-        let dist = model.deprecated_config.redshift_node_config.dist.as_deref();
+        let dist = model
+            .deprecated_config
+            .__redshift_node_config__
+            .dist
+            .as_deref();
 
         match dist {
             Some(dist) => Ok(RedshiftDistConfig {
@@ -199,7 +203,7 @@ impl TryFrom<&DbtModel> for RedshiftSortConfig {
     type Error = String;
 
     fn try_from(model: &DbtModel) -> Result<Self, Self::Error> {
-        let redshift_config = &model.deprecated_config.redshift_node_config;
+        let redshift_config = &model.deprecated_config.__redshift_node_config__;
 
         let sort = redshift_config.sort.as_ref().map(|s| match s {
             StringOrArrayOfStrings::String(single) => vec![single.clone()],
@@ -258,9 +262,9 @@ impl TryFrom<&DbtModel> for RedshiftMaterializedViewConfig {
     type Error = String;
 
     fn try_from(model: &DbtModel) -> Result<Self, Self::Error> {
-        let database_name = model.base_attr.database.clone();
-        let schema_name = model.base_attr.schema.clone();
-        let mv_name = model.common_attr.name.clone();
+        let database_name = model.__base_attr__.database.clone();
+        let schema_name = model.__base_attr__.schema.clone();
+        let mv_name = model.__common_attr__.name.clone();
 
         let backup = model.deprecated_config.backup.unwrap_or(true);
         let auto_refresh = model.deprecated_config.auto_refresh.unwrap_or(false);

@@ -288,6 +288,7 @@ pub fn generate_relation_components(
 }
 
 /// Relation components for a node
+#[derive(Debug)]
 pub struct RelationComponents {
     /// The database name
     pub database: Option<String>,
@@ -324,6 +325,7 @@ pub fn update_node_relation_components(
         node,
         adapter_type,
     )?;
+
     {
         let base_attr = node.base_mut();
 

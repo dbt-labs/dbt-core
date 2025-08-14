@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use dbt_common::node_selector::{IndirectSelection, SelectExpression};
 use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize};
+use serde::de::{self, IgnoredAny, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
@@ -65,11 +66,85 @@ pub enum SelectorExpr {
 }
 
 /// A boolean composition of other selectors
-#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+#[derive(Serialize, Debug, Clone, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub struct CompositeExpr {
-    #[serde(flatten)]
-    pub kind: CompositeKind,
+    pub kind: BTreeMap<String, CompositeKind>,
+}
+
+impl<'de> Deserialize<'de> for CompositeExpr {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct CompositeExprVisitor;
+
+        impl<'de> Visitor<'de> for CompositeExprVisitor {
+            type Value = CompositeExpr;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(
+                    f,
+                    "a map with exactly one of the keys 'union' or 'intersection'"
+                )
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut composite_kind: Option<CompositeKind> = None;
+                let mut found_key: Option<String> = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "union" => {
+                            if composite_kind.is_some() {
+                                let _: IgnoredAny = map.next_value()?;
+                                return Err(de::Error::custom(
+                                    "multiple keys provided; expected only one of 'union' or 'intersection'",
+                                ));
+                            }
+                            let values: Vec<SelectorDefinitionValue> = map.next_value()?;
+                            composite_kind = Some(CompositeKind::Union(values));
+                            found_key = Some("union".to_string());
+                        }
+                        "intersection" => {
+                            if composite_kind.is_some() {
+                                let _: IgnoredAny = map.next_value()?;
+                                return Err(de::Error::custom(
+                                    "multiple keys provided; expected only one of 'union' or 'intersection'",
+                                ));
+                            }
+                            let values: Vec<SelectorDefinitionValue> = map.next_value()?;
+                            composite_kind = Some(CompositeKind::Intersection(values));
+                            found_key = Some("intersection".to_string());
+                        }
+                        other => {
+                            let _: IgnoredAny = map.next_value()?;
+                            return Err(de::Error::unknown_field(
+                                other,
+                                &["union", "intersection"],
+                            ));
+                        }
+                    }
+                }
+
+                match (found_key, composite_kind) {
+                    (Some(key), Some(kind)) => {
+                        let mut m = BTreeMap::new();
+                        m.insert(key, kind);
+                        Ok(CompositeExpr { kind: m })
+                    }
+                    _ => Err(de::Error::custom(
+                        "expected a map with a 'union' or 'intersection' key",
+                    )),
+                }
+            }
+        }
+
+        deserializer.deserialize_map(CompositeExprVisitor)
+    }
 }
 
 /// Is this an `OR` or an `AND`?

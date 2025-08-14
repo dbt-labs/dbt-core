@@ -2,6 +2,7 @@
 
 use crate::schemas::relations::DEFAULT_DATABRICKS_DATABASE;
 use crate::schemas::serde::{StringOrInteger, StringOrMap};
+use dbt_serde_yaml::UntaggedEnumDeserialize;
 
 use dbt_serde_yaml::JsonSchema;
 use merge::Merge;
@@ -11,7 +12,6 @@ use serde_derive::Serialize;
 use std::collections::HashMap;
 
 // Type aliases for clarity
-type JsonValue = serde_json::Value;
 type YmlValue = dbt_serde_yaml::Value;
 use std::convert::TryFrom;
 use std::fmt::{self, Debug, Display};
@@ -29,11 +29,10 @@ pub struct DbtProfilesIntermediate {
 
 #[derive(Debug, Deserialize, Clone, PartialEq, JsonSchema)]
 pub struct DbtProfiles {
-    #[serde(flatten)]
-    pub profiles: HashMap<ProfileName, DbConfig>,
+    pub __profiles__: HashMap<ProfileName, DbConfig>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, UntaggedEnumDeserialize, JsonSchema)]
 #[serde(tag = "type")]
 #[serde(rename_all = "lowercase")]
 #[allow(clippy::large_enum_variant)]
@@ -104,15 +103,15 @@ impl DbConfig {
         }
     }
 
-    pub fn get_credential_value(&self) -> JsonValue {
+    pub fn get_credential_value(&self) -> YmlValue {
         match self {
-            DbConfig::Snowflake(config) => serde_json::to_value(config).unwrap(),
-            DbConfig::Postgres(config) => serde_json::to_value(config).unwrap(),
-            DbConfig::Bigquery(config) => serde_json::to_value(config).unwrap(),
-            DbConfig::Trino(config) => serde_json::to_value(config).unwrap(),
-            DbConfig::Datafusion(config) => serde_json::to_value(config).unwrap(),
-            DbConfig::Redshift(config) => serde_json::to_value(config).unwrap(),
-            DbConfig::Databricks(config) => serde_json::to_value(config).unwrap(),
+            DbConfig::Snowflake(config) => dbt_serde_yaml::to_value(config).unwrap(),
+            DbConfig::Postgres(config) => dbt_serde_yaml::to_value(config).unwrap(),
+            DbConfig::Bigquery(config) => dbt_serde_yaml::to_value(config).unwrap(),
+            DbConfig::Trino(config) => dbt_serde_yaml::to_value(config).unwrap(),
+            DbConfig::Datafusion(config) => dbt_serde_yaml::to_value(config).unwrap(),
+            DbConfig::Redshift(config) => dbt_serde_yaml::to_value(config).unwrap(),
+            DbConfig::Databricks(config) => dbt_serde_yaml::to_value(config).unwrap(),
         }
     }
 
@@ -273,7 +272,7 @@ impl DbConfig {
         }
     }
 
-    pub fn to_connection_dict(&self) -> HashMap<String, JsonValue> {
+    pub fn to_connection_dict(&self) -> HashMap<String, YmlValue> {
         let all_dict = self.to_dict();
         let connection_keys = self.get_connection_keys();
         all_dict
@@ -282,28 +281,28 @@ impl DbConfig {
             .collect()
     }
 
-    pub fn to_dict(&self) -> HashMap<String, JsonValue> {
+    pub fn to_dict(&self) -> HashMap<String, YmlValue> {
         match self {
             DbConfig::Snowflake(config) => {
                 // Serialize into json, then deserialize into a dictionary
-                let json = serde_json::to_value(config).unwrap();
-                serde_json::from_value(json).expect("Failed to deserialize Snowflake config")
+                let yml = dbt_serde_yaml::to_value(config).unwrap();
+                dbt_serde_yaml::from_value(yml).expect("Failed to deserialize Snowflake config")
             }
             DbConfig::Postgres(config) => {
-                let json = serde_json::to_value(config).unwrap();
-                serde_json::from_value(json).expect("Failed to deserialize Postgres config")
+                let yml = dbt_serde_yaml::to_value(config).unwrap();
+                dbt_serde_yaml::from_value(yml).expect("Failed to deserialize Postgres config")
             }
             DbConfig::Bigquery(config) => {
-                let json = serde_json::to_value(config).unwrap();
-                serde_json::from_value(json).expect("Failed to deserialize Bigquery config")
+                let yml = dbt_serde_yaml::to_value(config).unwrap();
+                dbt_serde_yaml::from_value(yml).expect("Failed to deserialize Bigquery config")
             }
             DbConfig::Redshift(config) => {
-                let json = serde_json::to_value(config).unwrap();
-                serde_json::from_value(json).expect("Failed to deserialize Redshift config")
+                let yml = dbt_serde_yaml::to_value(config).unwrap();
+                dbt_serde_yaml::from_value(yml).expect("Failed to deserialize Redshift config")
             }
             DbConfig::Databricks(config) => {
-                let json = serde_json::to_value(config).unwrap();
-                serde_json::from_value(json).expect("Failed to deserialize Databricks config")
+                let yml = dbt_serde_yaml::to_value(config).unwrap();
+                dbt_serde_yaml::from_value(yml).expect("Failed to deserialize Databricks config")
             }
             _ => panic!("Unsupported database type: {self:?}"),
         }
@@ -312,18 +311,6 @@ impl DbConfig {
     pub fn get_aliases(&self) -> Vec<String> {
         // TODO: Implement Aliases for databases that need them. Snowflake does not need aliases.
         vec![]
-    }
-
-    pub fn ignored_properties(&self) -> HashMap<String, YmlValue> {
-        match self {
-            DbConfig::Snowflake(config) => config.ignored_properties.clone(),
-            DbConfig::Postgres(config) => config.ignored_properties.clone(),
-            DbConfig::Bigquery(config) => config.ignored_properties.clone(),
-            DbConfig::Trino(config) => config.ignored_properties.clone(),
-            DbConfig::Datafusion(config) => config.ignored_properties.clone(),
-            DbConfig::Redshift(config) => config.ignored_properties.clone(),
-            DbConfig::Databricks(config) => config.ignored_properties.clone(),
-        }
     }
 
     pub fn get_unique_field(&self) -> Option<String> {
@@ -388,7 +375,7 @@ impl Execute {
 pub struct DbTargets {
     #[serde(rename = "target", default = "default_target")]
     pub default_target: DefaultTargetName,
-    pub outputs: HashMap<TargetName, JsonValue>,
+    pub outputs: HashMap<TargetName, YmlValue>,
 }
 
 fn default_target() -> String {
@@ -435,9 +422,6 @@ pub struct RedshiftDbConfig {
     pub cluster_id: Option<String>,
     pub region: Option<String>,
     pub threads: Option<StringOrInteger>,
-    #[serde(flatten)]
-    #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub ignored_properties: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, Merge)]
@@ -501,9 +485,6 @@ pub struct SnowflakeDbConfig {
     pub token: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub s3_stage_vpce_dns_name: Option<String>,
-    #[serde(flatten)]
-    #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub ignored_properties: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, Merge)]
@@ -545,9 +526,6 @@ pub struct PostgresDbConfig {
     pub user: Option<String>, // Setting as Option but required as of dbt 1.7.1
     #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
-    #[serde(flatten)]
-    #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub ignored_properties: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Merge)]
@@ -589,10 +567,6 @@ pub struct BigqueryDbConfig {
     pub job_retries: Option<i64>,
     pub job_retry_deadline_seconds: Option<i64>,
     pub target_name: Option<String>,
-
-    #[serde(flatten)]
-    #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub ignored_properties: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Merge)]
@@ -608,9 +582,6 @@ pub struct TrinoDbConfig {
     pub threads: Option<StringOrInteger>,
     pub password: Option<String>,
     pub role: Option<String>,
-    #[serde(flatten)]
-    #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub ignored_properties: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Merge)]
@@ -621,9 +592,6 @@ pub struct DatafusionDbConfig {
     pub schema: Option<String>,
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub execute: Execute,
-    #[serde(flatten)]
-    #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub ignored_properties: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, Merge)]
@@ -652,9 +620,6 @@ pub struct DatabricksDbConfig {
     pub retry_all: Option<bool>,
     pub connect_max_idle: Option<i32>,
     pub threads: Option<StringOrInteger>,
-    #[serde(flatten)]
-    #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub ignored_properties: HashMap<String, YmlValue>,
 }
 
 fn default_databricks_database() -> Option<String> {
@@ -679,16 +644,14 @@ pub enum TargetContext {
 #[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct TrinoTargetEnv {
-    #[serde(flatten)]
-    pub common: CommonTargetContext,
+    pub __common__: CommonTargetContext,
 }
 
 #[derive(Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct DatafusionTargetEnv {
     pub database: String,
-    #[serde(flatten)]
-    pub common: CommonTargetContext,
+    pub __common__: CommonTargetContext,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -698,8 +661,7 @@ pub struct PostgresTargetEnv {
     pub host: String,
     pub user: String,
     pub port: StringOrInteger,
-    #[serde(flatten)]
-    pub common: CommonTargetContext,
+    pub __common__: CommonTargetContext,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -708,8 +670,7 @@ pub struct SnowflakeTargetEnv {
     pub user: String,
     pub role: Option<String>,
     pub account: String,
-    #[serde(flatten)]
-    pub common: CommonTargetContext,
+    pub __common__: CommonTargetContext,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -737,8 +698,7 @@ pub struct BigqueryTargetEnv {
     pub target_name: Option<String>,
     pub timeout_seconds: Option<i64>,
     pub token_uri: Option<String>,
-    #[serde(flatten)]
-    pub common: CommonTargetContext,
+    pub __common__: CommonTargetContext,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -752,8 +712,7 @@ pub struct CommonTargetContext {
 
 #[derive(Serialize, JsonSchema)]
 pub struct DatabricksTargetEnv {
-    #[serde(flatten)]
-    pub common: CommonTargetContext,
+    pub __common__: CommonTargetContext,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -762,8 +721,7 @@ pub struct RedshiftTargetEnv {
     pub host: String,
     pub user: String,
     pub port: StringOrInteger,
-    #[serde(flatten)]
-    pub common: CommonTargetContext,
+    pub __common__: CommonTargetContext,
 }
 
 fn missing(field: &str) -> String {
@@ -786,7 +744,7 @@ impl TryFrom<DbConfig> for TargetContext {
                     user: config.user.ok_or_else(|| missing("user"))?,
                     role: config.role.clone(),
                     account: config.account.ok_or_else(|| missing("account"))?,
-                    common: CommonTargetContext {
+                    __common__: CommonTargetContext {
                         database,
                         schema: config.schema.ok_or_else(|| missing("schema"))?,
                         type_: adapter_type,
@@ -807,7 +765,7 @@ impl TryFrom<DbConfig> for TargetContext {
             DbConfig::Trino(config) => {
                 let database = config.database.ok_or_else(|| missing("database"))?;
                 Ok(TargetContext::Trino(TrinoTargetEnv {
-                    common: CommonTargetContext {
+                    __common__: CommonTargetContext {
                         database,
                         schema: config.schema.ok_or_else(|| missing("schema"))?,
                         type_: adapter_type,
@@ -829,7 +787,7 @@ impl TryFrom<DbConfig> for TargetContext {
                 let database = config.database.ok_or_else(|| missing("database"))?;
                 Ok(TargetContext::Datafusion(DatafusionTargetEnv {
                     database: database.clone(),
-                    common: CommonTargetContext {
+                    __common__: CommonTargetContext {
                         database,
                         schema: config.schema.ok_or_else(|| missing("schema"))?,
                         type_: adapter_type,
@@ -847,7 +805,7 @@ impl TryFrom<DbConfig> for TargetContext {
                     host: config.host.ok_or_else(|| missing("host"))?,
                     user: config.user.ok_or_else(|| missing("user"))?,
                     port: config.port.ok_or_else(|| missing("port"))?,
-                    common: CommonTargetContext {
+                    __common__: CommonTargetContext {
                         database,
                         schema: config.schema.ok_or_else(|| missing("schema"))?,
                         type_: adapter_type,
@@ -865,7 +823,7 @@ impl TryFrom<DbConfig> for TargetContext {
                 Ok(TargetContext::Bigquery(BigqueryTargetEnv {
                     project: database.clone(),
                     dataset: schema.clone(),
-                    common: CommonTargetContext {
+                    __common__: CommonTargetContext {
                         database,
                         schema,
                         type_: adapter_type,
@@ -899,7 +857,7 @@ impl TryFrom<DbConfig> for TargetContext {
                     .database
                     .unwrap_or_else(|| DEFAULT_DATABRICKS_DATABASE.to_string());
                 Ok(TargetContext::Databricks(DatabricksTargetEnv {
-                    common: CommonTargetContext {
+                    __common__: CommonTargetContext {
                         database,
                         schema: config.schema.ok_or_else(|| missing("schema"))?,
                         type_: adapter_type,
@@ -917,7 +875,7 @@ impl TryFrom<DbConfig> for TargetContext {
                     host: config.host.ok_or_else(|| missing("host"))?,
                     user: config.user.ok_or_else(|| missing("user"))?,
                     port: config.port.ok_or_else(|| missing("port"))?,
-                    common: CommonTargetContext {
+                    __common__: CommonTargetContext {
                         database,
                         schema: config.schema.ok_or_else(|| missing("schema"))?,
                         type_: adapter_type,

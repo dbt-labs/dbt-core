@@ -4,7 +4,6 @@ use crate::AdapterConfig;
 use crate::Auth;
 use crate::AuthError;
 use dbt_xdbc::{Backend, bigquery, database};
-use serde_json::Map;
 
 pub mod types;
 use types::{BigQueryAuthConfig, BigQueryAuthMethod, KeyFileJson, OAuthSecretsVariants};
@@ -17,9 +16,10 @@ impl TryFrom<&AdapterConfig> for BigQueryAuthConfig {
     type Error = AuthError;
 
     fn try_from(value: &AdapterConfig) -> Result<Self, Self::Error> {
-        let json = serde_json::Value::Object(Map::from_iter(value.raw_config()));
+        let yml = dbt_serde_yaml::to_value(value.raw_config())
+            .map_err(|e| AuthError::config(format!("Error parsing BigQuery auth config: {e}")))?;
 
-        let config: BigQueryAuthConfig = serde_json::from_value(json).map_err(|e| {
+        let config: BigQueryAuthConfig = dbt_serde_yaml::from_value(yml).map_err(|e| {
             AuthError::config(format!(
                 "Error parsing BigQuery auth config: {}, seeing top level config keys:\n{}",
                 e,
@@ -150,17 +150,18 @@ mod tests {
     use super::types::*;
     use super::*;
     use adbc_core::options::OptionValue;
-    use serde_json::Value;
     use std::{
         collections::HashMap,
         fs::{File, remove_file},
     };
 
-    fn base_config_oauth() -> HashMap<String, Value> {
+    type YmlValue = dbt_serde_yaml::Value;
+
+    fn base_config_oauth() -> HashMap<String, YmlValue> {
         HashMap::from([
-            ("method".to_string(), Value::from("oauth")),
-            ("database".to_string(), Value::from("my_db")),
-            ("schema".to_string(), Value::from("my_schema")),
+            ("method".to_string(), YmlValue::from("oauth")),
+            ("database".to_string(), YmlValue::from("my_db")),
+            ("schema".to_string(), YmlValue::from("my_schema")),
         ])
     }
 
@@ -171,23 +172,23 @@ mod tests {
         }
     }
 
-    fn base_config_keyfile() -> HashMap<String, Value> {
+    fn base_config_keyfile() -> HashMap<String, YmlValue> {
         HashMap::from([
-            ("method".to_string(), Value::from("service-account")),
-            ("database".to_string(), Value::from("my_db")),
-            ("schema".to_string(), Value::from("my_schema")),
-            ("keyfile".to_string(), Value::from("keyfile.json")),
+            ("method".to_string(), YmlValue::from("service-account")),
+            ("database".to_string(), YmlValue::from("my_db")),
+            ("schema".to_string(), YmlValue::from("my_schema")),
+            ("keyfile".to_string(), YmlValue::from("keyfile.json")),
         ])
     }
 
-    fn base_config_keyfile_json_base64() -> HashMap<String, Value> {
+    fn base_config_keyfile_json_base64() -> HashMap<String, YmlValue> {
         HashMap::from([
-            ("method".to_string(), Value::from("service-account-json")),
-            ("database".to_string(), Value::from("my_db")),
-            ("schema".to_string(), Value::from("my_schema")),
+            ("method".to_string(), YmlValue::from("service-account-json")),
+            ("database".to_string(), YmlValue::from("my_db")),
+            ("schema".to_string(), YmlValue::from("my_schema")),
             (
                 "keyfile_json".to_string(),
-                Value::from(
+                YmlValue::from(
                     "ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsCiAgInByb2plY3RfaWQiOiAiYnEtcHJvamVjdCIsCiAgInByaXZhdGVfa2V5X2lkIjogInh5ejEyMyIsCiAgInByaXZhdGVfa2V5IjogIi0tLS0tQkVHSU4gUFJJVkFURSBLRVktLS0tLVxuWFlaXG4tLS0tLUVORCBQUklWQVRFIEtFWS0tLS0tIiwKICAiY2xpZW50X2VtYWlsIjogInh5ekAxMjMuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iLAogICJjbGllbnRfaWQiOiAiMTExMjIyMzMzIiwKICAiYXV0aF91cmkiOiAiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tL28vb2F1dGgyL2F1dGgiLAogICJ0b2tlbl91cmkiOiAiaHR0cHM6Ly9vYXV0aDIuZ29vZ2xlYXBpcy5jb20vdG9rZW4iLAogICJhdXRoX3Byb3ZpZGVyX3g1MDlfY2VydF91cmwiOiAiaHR0cHM6Ly93d3cuZ29vZ2xlYXBpcy5jb20vb2F1dGgyL3YxL2NlcnRzIiwKICAiY2xpZW50X3g1MDlfY2VydF91cmwiOiAiaHR0cHM6Ly93d3cuZ29vZ2xlYXBpcy5jb20vcm9ib3QvdjEvbWV0YWRhdGEveDUwOS9mZGUtYmlncXVlcnklNDBmZGUtdGVzdGluZy00NTA4MTYuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iCn0=",
                 ),
             ),
@@ -204,7 +205,7 @@ mod tests {
     #[test]
     fn test_auth_config_from_adapter_config_mismatch() {
         let mut config = base_config_keyfile();
-        config.insert("method".to_string(), Value::from("service-account-json"));
+        config.insert("method".to_string(), YmlValue::from("service-account-json"));
         let adapter_config: &AdapterConfig = &AdapterConfig::new(config);
         let result: Result<BigQueryAuthConfig, AuthError> = adapter_config.try_into();
         assert!(result.is_err(), "Expected error with mismatch");
@@ -276,8 +277,10 @@ mod tests {
                         adbc_core::options::OptionDatabase::Other(o) => match o.as_str() {
                             bigquery::AUTH_CREDENTIALS => {
                                 let mc = bq_auth_config.clone().method_config;
-                                let actual: &Value = &serde_json::from_str(value.as_str()).unwrap();
-                                let expected = &serde_json::to_value(&mc).unwrap()["keyfile_json"];
+                                let actual: &YmlValue =
+                                    &dbt_serde_yaml::from_str(value.as_str()).unwrap();
+                                let expected =
+                                    &dbt_serde_yaml::to_value(&mc).unwrap()["keyfile_json"];
                                 assert_eq!(expected, actual);
                             }
                             bigquery::PROJECT_ID => {
@@ -457,7 +460,7 @@ mod tests {
     #[test]
     fn test_auth_config_oauth_allow_redundant_fields() {
         let mut cfg_map = base_config_oauth();
-        cfg_map.insert("keyfile".into(), Value::from("some.json")); // invalid extra
+        cfg_map.insert("keyfile".into(), YmlValue::from("some.json")); // invalid extra
 
         let adapter_cfg = &AdapterConfig::new(cfg_map);
         let result: Result<BigQueryAuthConfig, AuthError> = adapter_cfg.try_into();

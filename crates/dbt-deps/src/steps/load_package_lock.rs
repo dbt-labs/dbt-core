@@ -148,7 +148,7 @@ fn try_load_from_deprecated_dbt_packages_lock(
                         let revision = package.revision;
                         let warn_unpinned = package.warn_unpinned;
                         let subdirectory = package.subdirectory;
-                        let unrendered = package.unrendered;
+                        let unrendered = package.__unrendered__;
 
                         let parts: Vec<&str> = git.split('/').collect();
                         let package_name = parts.last().expect("Package name should exist");
@@ -159,7 +159,7 @@ fn try_load_from_deprecated_dbt_packages_lock(
                                 revision,
                                 warn_unpinned,
                                 subdirectory,
-                                unrendered,
+                                __unrendered__: unrendered,
                             }));
                         } else {
                             show_warning!(

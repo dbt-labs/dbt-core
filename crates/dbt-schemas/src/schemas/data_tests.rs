@@ -27,8 +27,7 @@ pub struct CustomTestInner {
     pub config: Option<DataTestConfig>,
     pub column_name: Option<String>,
     pub arguments: Verbatim<Option<dbt_serde_yaml::Value>>,
-    #[serde(flatten)]
-    pub deprecated_args_and_configs: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
+    pub __deprecated_args_and_configs__: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
 }
 
 #[skip_serializing_none]
@@ -40,8 +39,7 @@ pub struct CustomTestMultiKey {
     pub config: Option<DataTestConfig>,
     pub column_name: Option<String>,
     pub arguments: Verbatim<Option<dbt_serde_yaml::Value>>,
-    #[serde(flatten)]
-    pub deprecated_args_and_configs: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
+    pub __deprecated_args_and_configs__: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
 }
 
 // Helper to extract column name from DataTests

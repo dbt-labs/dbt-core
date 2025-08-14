@@ -2,7 +2,7 @@ use dbt_common::io_args::IoArgs;
 use dbt_common::{
     ErrorCode, FsResult,
     constants::{DBT_DEPENDENCIES_YML, DBT_PACKAGES_YML},
-    err, fs_err, show_warning, stdfs,
+    err, fs_err, stdfs,
 };
 use dbt_jinja_utils::serde::{value_from_file, yaml_to_fs_error};
 use std::{
@@ -76,7 +76,7 @@ pub fn coalesce<T: Clone>(values: &[&Option<T>]) -> Option<T> {
 }
 
 pub fn get_db_config(
-    io_args: &IoArgs,
+    _io_args: &IoArgs,
     db_targets: DbTargets,
     maybe_target: Option<String>,
 ) -> FsResult<DbConfig> {
@@ -87,24 +87,30 @@ pub fn get_db_config(
         "Could not find target {} in profiles.yml",
         target_name,
     ))?;
-    let db_config: DbConfig = serde_json::from_value(db_config.clone())?;
+    let db_config: DbConfig = dbt_serde_yaml::from_value(db_config.clone()).map_err(|e| {
+        fs_err!(
+            ErrorCode::InvalidConfig,
+            "Failed to parse profiles.yml: {}",
+            e
+        )
+    })?;
 
-    if !db_config.ignored_properties().is_empty() {
-        show_warning!(
-            io_args,
-            fs_err!(
-                ErrorCode::InvalidConfig,
-                "Unused keys in profiles.yml target '{}': {}",
-                target_name,
-                db_config
-                    .ignored_properties()
-                    .keys()
-                    .map(|k| format!("'{k}'"))
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            )
-        );
-    }
+    // if !db_config.ignored_properties().is_empty() {
+    //     show_warning!(
+    //         io_args,
+    //         fs_err!(
+    //             ErrorCode::InvalidConfig,
+    //             "Unused keys in profiles.yml target '{}': {}",
+    //             target_name,
+    //             db_config
+    //                 .ignored_properties()
+    //                 .keys()
+    //                 .map(|k| format!("'{k}'"))
+    //                 .collect::<Vec<String>>()
+    //                 .join(", ")
+    //         )
+    //     );
+    // }
     Ok(db_config)
 }
 

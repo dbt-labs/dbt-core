@@ -2,7 +2,7 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 
 // Type aliases for clarity
-type JsonValue = serde_json::Value;
+type YmlValue = dbt_serde_yaml::Value;
 
 use super::{DbtGroup, DbtSelector};
 use crate::schemas::{
@@ -28,9 +28,9 @@ pub struct DbtMetricV10 {
     pub label: Option<String>,
     pub type_params: MetricTypeParamsV10,
     pub filter: Option<MetricFilterV10>,
-    pub metadata: Option<JsonValue>,
+    pub metadata: Option<YmlValue>,
     pub time_granularity: Option<String>,
-    pub unrendered_config: BTreeMap<String, JsonValue>,
+    pub unrendered_config: BTreeMap<String, YmlValue>,
     pub sources: Vec<Vec<String>>,
     pub depends_on: MetricDependsOnV10,
     pub refs: Vec<DbtRef>,
@@ -49,25 +49,25 @@ pub struct MetricDependsOnV10 {
 #[derive(Debug, Clone, Deserialize)]
 pub struct MetricTypeParamsV10 {
     pub measure: Option<MetricMeasureV10>,
-    pub input_measures: Option<Vec<JsonValue>>,
-    pub numerator: Option<JsonValue>,
-    pub denominator: Option<JsonValue>,
+    pub input_measures: Option<Vec<YmlValue>>,
+    pub numerator: Option<YmlValue>,
+    pub denominator: Option<YmlValue>,
     pub expr: Option<String>,
-    pub window: Option<JsonValue>,
-    pub grain_to_date: Option<JsonValue>,
-    pub metrics: Option<Vec<JsonValue>>,
-    pub conversion_type_params: Option<JsonValue>,
-    pub cumulative_type_params: Option<JsonValue>,
+    pub window: Option<YmlValue>,
+    pub grain_to_date: Option<YmlValue>,
+    pub metrics: Option<Vec<YmlValue>>,
+    pub conversion_type_params: Option<YmlValue>,
+    pub cumulative_type_params: Option<YmlValue>,
 }
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Deserialize)]
 pub struct MetricMeasureV10 {
     pub name: String,
-    pub filter: Option<JsonValue>,
+    pub filter: Option<YmlValue>,
     pub alias: Option<String>,
     pub join_to_timespine: Option<bool>,
-    pub fill_nulls_with: Option<JsonValue>,
+    pub fill_nulls_with: Option<YmlValue>,
 }
 
 #[skip_serializing_none]
@@ -94,7 +94,7 @@ pub struct DbtSemanticModelV10 {
     pub entities: Vec<SemanticModelEntityV10>,
     pub measures: Vec<SemanticModelMeasureV10>,
     pub dimensions: Vec<Dimension>,
-    pub metadata: Option<JsonValue>,
+    pub metadata: Option<YmlValue>,
     pub depends_on: SemanticModelDependsOn,
     pub refs: Vec<DbtRef>,
     pub created_at: Option<f64>,
@@ -129,7 +129,7 @@ pub struct SemanticModelEntityV10 {
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct EntityConfigV10 {
-    pub meta: BTreeMap<String, JsonValue>,
+    pub meta: BTreeMap<String, YmlValue>,
 }
 
 #[skip_serializing_none]
@@ -138,7 +138,7 @@ pub struct SemanticModelMeasureV10 {
     pub name: String,
     pub description: Option<String>,
     pub agg: String,
-    pub agg_params: Option<JsonValue>,
+    pub agg_params: Option<YmlValue>,
     pub agg_time_dimension: Option<String>,
     pub label: Option<String>,
     pub expr: Option<String>,
@@ -149,7 +149,7 @@ pub struct SemanticModelMeasureV10 {
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct MeasureConfigV10 {
-    pub meta: BTreeMap<String, JsonValue>,
+    pub meta: BTreeMap<String, YmlValue>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -165,7 +165,7 @@ pub struct DbtManifestV10 {
     pub child_map: BTreeMap<String, Vec<String>>,
     pub parent_map: BTreeMap<String, Vec<String>>,
     pub group_map: BTreeMap<String, Vec<String>>,
-    pub disabled: BTreeMap<String, Vec<JsonValue>>,
+    pub disabled: BTreeMap<String, Vec<YmlValue>>,
     pub selectors: BTreeMap<String, DbtSelector>,
     pub groups: BTreeMap<String, DbtGroup>,
 }

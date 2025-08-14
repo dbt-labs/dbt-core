@@ -2,6 +2,7 @@ use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
 use crate::utils::get_node_fqn;
 use dbt_common::error::AbstractLocation;
+use dbt_common::io_args::IoArgs;
 use dbt_common::{ErrorCode, FsResult, err, fs_err, show_error};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::parse::build_resolve_model_context;
@@ -127,13 +128,14 @@ pub async fn resolve_exposures(
                     &root_project.name,
                     fqn.clone(),
                     &mpe.relative_path.to_string_lossy(),
+                    &args.io,
                 )?
             } else {
                 (vec![], vec![], vec![])
             };
 
             let dbt_exposure = DbtExposure {
-                common_attr: CommonAttributes {
+                __common_attr__: CommonAttributes {
                     name: exposure_name.to_string(),
                     package_name: package_name.to_string(),
                     path: mpe.relative_path.clone(),
@@ -152,7 +154,7 @@ pub async fn resolve_exposures(
                         .unwrap_or_default(),
                     meta: exposure_properties_config.meta.clone().unwrap_or_default(),
                 },
-                base_attr: NodeBaseAttributes {
+                __base_attr__: NodeBaseAttributes {
                     database: "".to_string(),
                     schema: "".to_string(),
                     alias: "".to_string(),
@@ -169,7 +171,7 @@ pub async fn resolve_exposures(
                     depends_on: NodeDependsOn::default(),
                     quoting_ignore_case: false,
                 },
-                exposure_attr: DbtExposureAttr {
+                __exposure_attr__: DbtExposureAttr {
                     owner: exposure.owner,
                     label: exposure.label.to_owned(),
                     maturity: exposure.maturity.to_owned(),
@@ -207,6 +209,7 @@ pub fn resolve_yaml_depends_on(
     root_project_name: &str,
     fqn: Vec<String>,
     relative_path: &str,
+    io_args: &IoArgs,
 ) -> FsResult<(Vec<DbtRef>, Vec<DbtSourceWrapper>, Vec<Vec<String>>)> {
     let mut dependent_refs = vec![];
     let mut dependent_sources = vec![];
@@ -232,6 +235,7 @@ pub fn resolve_yaml_depends_on(
             sql_resources.clone(),
             Arc::new(AtomicBool::new(false)),
             &PathBuf::from(relative_path),
+            io_args,
         ));
 
         let sql_resource = render_extract_ref_or_source_expr(

@@ -228,7 +228,7 @@ pub async fn resolve_snapshots(
 
             // Create initial snapshot with default values
             let mut dbt_snapshot = DbtSnapshot {
-                common_attr: CommonAttributes {
+                __common_attr__: CommonAttributes {
                     name: snapshot_name.to_string(),
                     package_name: package_name.clone(),
                     path: dbt_asset.path.clone(),
@@ -248,7 +248,7 @@ pub async fn resolve_snapshots(
                         .unwrap_or_default(),
                     meta: final_config.meta.clone().unwrap_or_default(),
                 },
-                base_attr: NodeBaseAttributes {
+                __base_attr__: NodeBaseAttributes {
                     database: database.to_owned(), // will be updated below
                     schema: schema.to_owned(),     // will be updated below
                     alias: "".to_owned(),          // will be updated below
@@ -294,7 +294,7 @@ pub async fn resolve_snapshots(
                         .collect(),
                     metrics: vec![],
                 },
-                snapshot_attr: DbtSnapshotAttr {
+                __snapshot_attr__: DbtSnapshotAttr {
                     snapshot_meta_column_names: final_config
                         .snapshot_meta_column_names
                         .clone()
@@ -303,7 +303,7 @@ pub async fn resolve_snapshots(
                 deprecated_config: final_config.clone(),
                 compiled: None,
                 compiled_code: None,
-                other: BTreeMap::new(),
+                __other__: BTreeMap::new(),
             };
 
             let components = RelationComponents {

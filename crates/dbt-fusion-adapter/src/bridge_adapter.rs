@@ -33,6 +33,7 @@ use dbt_schemas::schemas::manifest::{
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
+use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use dbt_xdbc::Connection;
 use minijinja::arg_utils::{ArgParser, ArgsIter, check_num_args};
 use minijinja::dispatch_object::DispatchObject;
@@ -40,7 +41,6 @@ use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Kwargs, Object};
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
 use minijinja::{Value, invalid_argument, invalid_argument_inner, jinja_err};
-use serde::Deserialize;
 use tracing;
 use tracy_client::span;
 
@@ -403,7 +403,10 @@ impl BaseAdapter for BridgeAdapter {
 
         let raw_constraints = parser.get::<Value>("raw_constraints")?;
 
-        let constraints = <Vec<ModelConstraint>>::deserialize(raw_constraints)?;
+        let constraints = minijinja_value_to_typed_struct::<Vec<ModelConstraint>>(raw_constraints)
+            .map_err(|e| {
+                MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+            })?;
         let mut result = vec![];
         for constraint in constraints {
             let rendered = render_model_constraint(self.adapter_type(), constraint);
@@ -425,7 +428,10 @@ impl BaseAdapter for BridgeAdapter {
 
         let raw_columns = parser.get::<Value>("raw_columns")?;
 
-        let columns_map = BTreeMap::<String, DbtColumn>::deserialize(raw_columns)?;
+        let columns_map =
+            minijinja_value_to_typed_struct::<BTreeMap<String, DbtColumn>>(raw_columns).map_err(
+                |e| MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string()),
+            )?;
         let result = self
             .typed_adapter
             .render_raw_columns_constraints(columns_map)?;
@@ -632,11 +638,23 @@ impl BaseAdapter for BridgeAdapter {
         let column_names = if column_names.is_none() {
             None
         } else {
-            Some(BTreeMap::<String, String>::deserialize(column_names)?)
+            Some(
+                minijinja_value_to_typed_struct::<BTreeMap<String, String>>(column_names).map_err(
+                    |e| {
+                        MinijinjaError::new(
+                            MinijinjaErrorKind::SerdeDeserializeError,
+                            e.to_string(),
+                        )
+                    },
+                )?,
+            )
         };
 
         let strategy = parser.get::<Value>("strategy")?;
-        let strategy = SnapshotStrategy::deserialize(strategy)?;
+        let strategy =
+            minijinja_value_to_typed_struct::<SnapshotStrategy>(strategy).map_err(|e| {
+                MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+            })?;
 
         self.typed_adapter
             .assert_valid_snapshot_target_given_strategy(
@@ -886,7 +904,7 @@ impl BaseAdapter for BridgeAdapter {
         let excluded_schemas = parser
             .get_optional::<Value>("excluded_schemas")
             .unwrap_or(Value::from_iter::<Vec<String>>(vec![]));
-        let _ = Vec::<String>::deserialize(excluded_schemas).map_err(|e| {
+        let _ = minijinja_value_to_typed_struct::<Vec<String>>(excluded_schemas).map_err(|e| {
             MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
         })?;
 
@@ -947,7 +965,8 @@ impl BaseAdapter for BridgeAdapter {
 
         // TODO: 'constraints' arg are ignored; didn't find an usage example, implement later
         let columns = parser.get::<Value>("columns")?;
-        let columns_map = BTreeMap::<String, DbtColumn>::deserialize(columns).map_err(|e| {
+        let columns_map = minijinja_value_to_typed_struct::<BTreeMap<String, DbtColumn>>(columns)
+            .map_err(|e| {
             MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
         })?;
 
@@ -979,14 +998,32 @@ impl BaseAdapter for BridgeAdapter {
         let partition_by = if partition_by.is_none() {
             None
         } else {
-            Some(BigqueryPartitionConfig::deserialize(partition_by)?)
+            Some(
+                minijinja_value_to_typed_struct::<BigqueryPartitionConfig>(partition_by).map_err(
+                    |e| {
+                        MinijinjaError::new(
+                            MinijinjaErrorKind::SerdeDeserializeError,
+                            e.to_string(),
+                        )
+                    },
+                )?,
+            )
         };
 
         let cluster_by = parser.get::<Value>("cluster_by")?;
         let cluster_by = if cluster_by.is_none() {
             None
         } else {
-            Some(BigqueryClusterConfig::deserialize(cluster_by)?)
+            Some(
+                minijinja_value_to_typed_struct::<BigqueryClusterConfig>(cluster_by).map_err(
+                    |e| {
+                        MinijinjaError::new(
+                            MinijinjaErrorKind::SerdeDeserializeError,
+                            e.to_string(),
+                        )
+                    },
+                )?,
+            )
         };
 
         let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
@@ -1023,19 +1060,20 @@ impl BaseAdapter for BridgeAdapter {
             .unwrap_or_default()
             .is_true();
 
-        let config = ModelConfig::deserialize(config).map_err(|e| {
+        let config = minijinja_value_to_typed_struct::<ModelConfig>(config).map_err(|e| {
             MinijinjaError::new(
                 MinijinjaErrorKind::SerdeDeserializeError,
                 format!("get_table_options: Failed to deserialize config: {e}"),
             )
         })?;
 
-        let node_wrapper = InternalDbtNodeWrapper::deserialize(node).map_err(|e| {
-            MinijinjaError::new(
-                MinijinjaErrorKind::SerdeDeserializeError,
-                format!("get_table_options: Failed to deserialize InternalDbtNodeWrapper: {e}"),
-            )
-        })?;
+        let node_wrapper = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(node)
+            .map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError,
+                    format!("get_table_options: Failed to deserialize InternalDbtNodeWrapper: {e}"),
+                )
+            })?;
         let node = node_wrapper.as_internal_node();
 
         let options = self
@@ -1052,19 +1090,20 @@ impl BaseAdapter for BridgeAdapter {
         let config = parser.get::<Value>("config")?;
         let node = parser.get::<Value>("node")?;
 
-        let config = ModelConfig::deserialize(config).map_err(|e| {
+        let config = minijinja_value_to_typed_struct::<ModelConfig>(config).map_err(|e| {
             MinijinjaError::new(
                 MinijinjaErrorKind::SerdeDeserializeError,
                 format!("get_view_options: Failed to deserialize config: {e}"),
             )
         })?;
 
-        let node_wrapper = InternalDbtNodeWrapper::deserialize(node).map_err(|e| {
-            MinijinjaError::new(
-                MinijinjaErrorKind::SerdeDeserializeError,
-                format!("get_table_options: Failed to deserialize InternalDbtNodeWrapper: {e}"),
-            )
-        })?;
+        let node_wrapper = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(node)
+            .map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError,
+                    format!("get_view_options: Failed to deserialize InternalDbtNodeWrapper: {e}"),
+                )
+            })?;
         let node = node_wrapper.as_internal_node();
 
         let options = self.typed_adapter.get_view_options(config, node.common())?;
@@ -1084,7 +1123,7 @@ impl BaseAdapter for BridgeAdapter {
         let columns = parser.get::<Value>("columns")?;
 
         let partition_by =
-            BigqueryPartitionConfigLegacy::deserialize(partition_by.clone()).map_err(|e| {
+            minijinja_value_to_typed_struct::<BigqueryPartitionConfigLegacy>(partition_by.clone()).map_err(|e| {
                 MinijinjaError::new(
                     MinijinjaErrorKind::SerdeDeserializeError,
                     format!("adapter.add_time_ingestion_partition_column failed on partition_by {partition_by:?}: {e}"),
@@ -1105,8 +1144,12 @@ impl BaseAdapter for BridgeAdapter {
         let entity = parser.get::<Value>("entity")?;
         let entity_type = parser.get::<String>("entity_type")?;
         let role = parser.get::<Value>("role")?;
-        let grant_target =
-            GrantAccessToTarget::deserialize(parser.get::<Value>("grant_target_dict")?)?;
+        let grant_target = minijinja_value_to_typed_struct::<GrantAccessToTarget>(
+            parser.get::<Value>("grant_target_dict")?,
+        )
+        .map_err(|e| {
+            MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+        })?;
 
         let (database, schema) = (
             grant_target
@@ -1210,7 +1253,8 @@ impl BaseAdapter for BridgeAdapter {
 
         let relation = parser.get::<Value>("relation")?;
         let columns = parser.get::<Value>("columns")?;
-        let columns_map = BTreeMap::<String, DbtColumn>::deserialize(columns).map_err(|e| {
+        let columns_map = minijinja_value_to_typed_struct::<BTreeMap<String, DbtColumn>>(columns)
+            .map_err(|e| {
             MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
         })?;
 
@@ -1278,21 +1322,25 @@ impl BaseAdapter for BridgeAdapter {
         check_num_args(current_function_name!(), &parser, 2, 3)?;
 
         let config = parser.get::<Value>("config")?;
+
         let model = parser.get::<Value>("model")?;
         let is_incremental = parser
             .get_optional::<bool>("is_incremental")
             .unwrap_or_default();
 
-        let config = ModelConfig::deserialize(config).map_err(|e| {
+        let config = minijinja_value_to_typed_struct::<ModelConfig>(config).map_err(|e| {
             MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
         })?;
 
-        let node = InternalDbtNodeWrapper::deserialize(model).map_err(|e| {
-            MinijinjaError::new(
-                MinijinjaErrorKind::SerdeDeserializeError,
-                format!("adapter.compute_external_path expected an InternalDbtNodeWrapper: {e}"),
-            )
-        })?;
+        let node =
+            minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(model).map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError,
+                    format!(
+                        "adapter.compute_external_path expected an InternalDbtNodeWrapper: {e}"
+                    ),
+                )
+            })?;
 
         let result = self.typed_adapter.compute_external_path(
             config,
@@ -1312,14 +1360,16 @@ impl BaseAdapter for BridgeAdapter {
         check_num_args(current_function_name!(), &parser, 1, 2)?;
 
         let config = parser.get::<Value>("config")?;
-        let config = ModelConfig::deserialize(config).map_err(|e| {
+        let config = minijinja_value_to_typed_struct::<ModelConfig>(config).map_err(|e| {
             MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
         })?;
 
         let mut tblproperties = match parser.get_optional::<Value>("tblproperties") {
-            Some(v) if !v.is_none() => BTreeMap::<String, Value>::deserialize(v).map_err(|e| {
-                MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
-            })?,
+            Some(v) if !v.is_none() => {
+                minijinja_value_to_typed_struct::<BTreeMap<String, Value>>(v).map_err(|e| {
+                    MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+                })?
+            }
             _ => BTreeMap::new(),
         };
 
@@ -1431,8 +1481,14 @@ impl BaseAdapter for BridgeAdapter {
 
         let model_columns = parser.get::<Value>("model_columns")?;
 
-        let existing_columns = Vec::<StdColumn>::deserialize(existing_columns)?;
-        let model_columns = BTreeMap::<String, DbtColumn>::deserialize(model_columns)?;
+        let existing_columns = minijinja_value_to_typed_struct::<Vec<StdColumn>>(existing_columns)
+            .map_err(|e| {
+                MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+            })?;
+        let model_columns =
+            minijinja_value_to_typed_struct::<BTreeMap<String, DbtColumn>>(model_columns).map_err(
+                |e| MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string()),
+            )?;
 
         Ok(Value::from_serialize(
             self.typed_adapter
@@ -1466,12 +1522,15 @@ impl BaseAdapter for BridgeAdapter {
 
         let model = parser.get::<Value>("model")?;
 
-        let deserialized_node = InternalDbtNodeWrapper::deserialize(model).map_err(|e| {
-            MinijinjaError::new(
-                MinijinjaErrorKind::SerdeDeserializeError,
-                format!("adapter.get_config_from_model expected an InternalDbtNodeWrapper: {e}"),
-            )
-        })?;
+        let deserialized_node = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(model)
+            .map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError,
+                    format!(
+                        "adapter.get_config_from_model expected an InternalDbtNodeWrapper: {e}"
+                    ),
+                )
+            })?;
 
         Ok(self
             .typed_adapter

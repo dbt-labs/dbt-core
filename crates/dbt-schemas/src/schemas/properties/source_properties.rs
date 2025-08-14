@@ -9,7 +9,7 @@ use dbt_common::serde_utils::Omissible;
 use dbt_serde_yaml::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
@@ -47,8 +47,6 @@ pub struct Tables {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Default)]
 pub struct TablesConfig {
-    #[serde(flatten)]
-    pub additional_properties: HashMap<String, YmlValue>,
     pub event_time: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,

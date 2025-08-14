@@ -25,7 +25,6 @@ pub struct ProjectExposureConfig {
     pub tags: Option<StringOrArrayOfStrings>,
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    #[serde(flatten)]
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectExposureConfig>>,
 }
 

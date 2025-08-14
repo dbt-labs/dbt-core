@@ -5,7 +5,9 @@ use std::{
 
 use dbt_common::{node_selector::SelectExpression, pretty_table::DisplayFormat};
 use dbt_schemas::schemas::Nodes;
-use serde_json::{Map, Value};
+use serde_json::Map;
+
+type JsonValue = serde_json::Value;
 
 #[derive(Debug, Clone, Default)]
 pub struct Schedule<T> {
@@ -50,7 +52,7 @@ impl Schedule<String> {
     }
 
     /// Generate JSON output for a single node based on the specified keys
-    fn generate_json_output(node_value: &Value, output_keys: &[String]) -> String {
+    fn generate_json_output(node_value: &JsonValue, output_keys: &[String]) -> String {
         let mut json_map = Map::new();
 
         // If output_keys is empty, use a default set
@@ -86,7 +88,10 @@ impl Schedule<String> {
                 if let Some(depends_on_obj) = depends_on_value.as_object() {
                     let mut cleaned_depends_on = depends_on_obj.clone();
                     cleaned_depends_on.remove("nodes_with_ref_location");
-                    json_map.insert("depends_on".to_string(), Value::Object(cleaned_depends_on));
+                    json_map.insert(
+                        "depends_on".to_string(),
+                        JsonValue::Object(cleaned_depends_on),
+                    );
                 } else {
                     json_map.insert("depends_on".to_string(), depends_on_value.clone());
                 }
@@ -119,7 +124,8 @@ impl Schedule<String> {
                 .expect("selected node not in manifest");
             match output_format {
                 DisplayFormat::Json => {
-                    let node_value = node.serialize();
+                    let node_yaml_value = dbt_serde_yaml::to_value(node.serialize()).unwrap();
+                    let node_value = serde_json::to_value(node_yaml_value).unwrap();
                     let json_string = Self::generate_json_output(&node_value, output_keys);
                     res.push(json_string);
                 }

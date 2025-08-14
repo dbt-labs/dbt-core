@@ -227,7 +227,7 @@ impl DatabricksComponentProcessor for ConstraintsProcessor {
             .as_any()
             .downcast_ref::<dbt_schemas::schemas::nodes::DbtModel>(
         ) {
-            model.model_attr.constraints.as_slice()
+            model.__model_attr__.constraints.as_slice()
         } else {
             &[]
         };
@@ -531,7 +531,7 @@ mod tests {
         };
 
         DbtModel {
-            base_attr: base_attrs,
+            __base_attr__: base_attrs,
             ..Default::default()
         }
     }

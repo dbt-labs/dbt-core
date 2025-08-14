@@ -10,7 +10,6 @@ use hex;
 use serde::{Deserialize, Deserializer, Serialize};
 // Type alias for clarity
 type YmlValue = dbt_serde_yaml::Value;
-type JsonValue = serde_json::Value;
 use serde_with::skip_serializing_none;
 use sha2::{Digest, Sha256};
 use strum::{Display, EnumIter, EnumString};
@@ -674,7 +673,7 @@ pub struct Given {
 #[serde(untagged)]
 pub enum Rows {
     String(String),
-    List(Vec<BTreeMap<String, JsonValue>>),
+    List(Vec<BTreeMap<String, YmlValue>>),
 }
 
 #[skip_serializing_none]
@@ -850,6 +849,26 @@ pub struct Versions {
     pub v: YmlValue,
     pub config: Verbatim<Option<dbt_serde_yaml::Value>>,
     pub __additional_properties__: Verbatim<HashMap<String, YmlValue>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodeInfoWrapper {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unique_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skipped_nodes: Option<i32>,
+    pub node_info: NodeInfo,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodeInfo {
+    pub node_name: String,
+    pub unique_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub node_started_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub node_finished_at: Option<String>,
+    pub node_status: String,
 }
 
 /// Get the semantic names for database, schema, and identifier

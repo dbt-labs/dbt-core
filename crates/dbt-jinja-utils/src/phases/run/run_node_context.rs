@@ -14,7 +14,7 @@ use dbt_common::constants::DBT_COMPILED_DIR_NAME;
 use dbt_common::constants::DBT_RUN_DIR_NAME;
 use dbt_common::fs_err;
 use dbt_common::io_args::IoArgs;
-use dbt_common::serde_utils::convert_json_to_map;
+use dbt_common::serde_utils::convert_yml_to_map;
 use dbt_common::show_warning;
 use dbt_common::tokiofs;
 use dbt_fusion_adapter::load_store::ResultStore;
@@ -28,17 +28,18 @@ use minijinja::listener::RenderingEventListener;
 use minijinja::machinery::Span;
 use minijinja::{Error, ErrorKind, Value as MinijinjaValue, value::Object};
 use serde::Serialize;
-use serde_json::Value;
 
 use crate::phases::MacroLookupContext;
 
 use super::run_config::RunConfig;
 
+type YmlValue = dbt_serde_yaml::Value;
+
 /// Build model-specific context (model, common_attr, alias, quoting, config, resource_type, sql_header)
 #[allow(clippy::too_many_arguments)]
 async fn extend_with_model_context<S: Serialize>(
     base_context: &mut BTreeMap<String, MinijinjaValue>,
-    model: Value,
+    model: YmlValue,
     common_attr: &CommonAttributes,
     base_attr: &NodeBaseAttributes,
     deprecated_config: &S,
@@ -73,13 +74,16 @@ async fn extend_with_model_context<S: Serialize>(
         MinijinjaValue::from(common_attr.name.clone()),
     );
 
-    let config_json = serde_json::to_value(deprecated_config).expect("Failed to serialize object");
+    let config_yml =
+        dbt_serde_yaml::to_value(deprecated_config).expect("Failed to serialize object");
 
-    if let Some(pre_hook) = config_json.get("pre_hook") {
+    if let Some(pre_hook) = config_yml.get("pre_hook") {
         let values: Vec<HookConfig> = match pre_hook {
-            Value::String(_) | Value::Object(_) => parse_hook_item(pre_hook).into_iter().collect(),
-            Value::Array(arr) => arr.iter().filter_map(parse_hook_item).collect(),
-            Value::Null => vec![],
+            YmlValue::String(_, _) | YmlValue::Mapping(_, _) => {
+                parse_hook_item(pre_hook).into_iter().collect()
+            }
+            YmlValue::Sequence(arr, _) => arr.iter().filter_map(parse_hook_item).collect(),
+            YmlValue::Null(_) => vec![],
             _ => {
                 show_warning!(
                     io_args,
@@ -95,11 +99,13 @@ async fn extend_with_model_context<S: Serialize>(
             .into();
         base_context.insert("pre_hooks".to_owned(), pre_hooks_vals);
     }
-    if let Some(post_hook) = config_json.get("post_hook") {
+    if let Some(post_hook) = config_yml.get("post_hook") {
         let values: Vec<HookConfig> = match post_hook {
-            Value::String(_) | Value::Object(_) => parse_hook_item(post_hook).into_iter().collect(),
-            Value::Array(arr) => arr.iter().filter_map(parse_hook_item).collect(),
-            Value::Null => vec![],
+            YmlValue::String(_, _) | YmlValue::Mapping(_, _) => {
+                parse_hook_item(post_hook).into_iter().collect()
+            }
+            YmlValue::Sequence(arr, _) => arr.iter().filter_map(parse_hook_item).collect(),
+            YmlValue::Null(_) => vec![],
             _ => {
                 show_warning!(
                     io_args,
@@ -120,12 +126,12 @@ async fn extend_with_model_context<S: Serialize>(
         base_context.insert("post_hooks".to_owned(), post_hooks_vals);
     }
 
-    let mut config_map = convert_json_to_map(config_json);
+    let mut config_map = convert_yml_to_map(config_yml);
     if let Some(sql_header) = sql_header {
         config_map.insert("sql_header".to_string(), sql_header);
     }
 
-    let mut model_map = convert_json_to_map(model);
+    let mut model_map = convert_yml_to_map(model);
 
     // We are reading the raw_sql here for snapshots and models
     let raw_sql_path = match resource_type {
@@ -197,7 +203,7 @@ pub fn extend_base_context_stateful_fn(
 /// Build a run context - parent function that orchestrates the context building
 #[allow(clippy::too_many_arguments)]
 pub async fn build_run_node_context<S: Serialize>(
-    model: Value,
+    model: YmlValue,
     common_attr: &CommonAttributes,
     base_attr: &NodeBaseAttributes,
     deprecated_config: &S,
@@ -291,13 +297,13 @@ pub async fn build_run_node_context<S: Serialize>(
     context
 }
 
-fn parse_hook_item(item: &Value) -> Option<HookConfig> {
+fn parse_hook_item(item: &YmlValue) -> Option<HookConfig> {
     match item {
-        Value::String(s) => Some(HookConfig {
+        YmlValue::String(s, _) => Some(HookConfig {
             sql: s.to_string(),
             transaction: true,
         }),
-        Value::Object(map) => {
+        YmlValue::Mapping(map, _) => {
             let sql = map.get("sql")?.as_str()?.to_string();
             let transaction = map
                 .get("transaction")

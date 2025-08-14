@@ -141,7 +141,7 @@ pub fn resolve_macros(
                             patch_path: None,
                             funcsign: None,
                             args: vec![],
-                            other: BTreeMap::new(),
+                            __other__: BTreeMap::new(),
                         };
 
                         nodes.insert(unique_id, dbt_macro);
@@ -165,7 +165,7 @@ pub fn resolve_macros(
                             patch_path: None,
                             funcsign: func_sign.clone(),
                             args: args.clone(),
-                            other: BTreeMap::new(),
+                            __other__: BTreeMap::new(),
                         };
 
                         nodes.insert(unique_id, dbt_macro);
@@ -189,7 +189,7 @@ pub fn resolve_macros(
                             patch_path: None,
                             funcsign: None,
                             args: vec![],
-                            other: BTreeMap::new(),
+                            __other__: BTreeMap::new(),
                         };
 
                         nodes.insert(unique_id, dbt_macro);
@@ -213,7 +213,7 @@ pub fn resolve_macros(
                             patch_path: None,
                             funcsign: None,
                             args: vec![],
-                            other: BTreeMap::new(),
+                            __other__: BTreeMap::new(),
                         };
 
                         nodes.insert(unique_id, dbt_macro);

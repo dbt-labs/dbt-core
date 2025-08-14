@@ -1,12 +1,13 @@
 use crate::schemas::columns::base::{BaseColumn, BaseColumnProperties, StaticBaseColumn};
 use crate::schemas::dbt_column::DbtColumn;
+use crate::schemas::serde::minijinja_value_to_typed_struct;
 
 use dbt_adapter_proc_macros::{BaseColumnObject, StaticBaseColumnObject};
 use dbt_common::current_function_name;
 use minijinja::arg_utils::ArgParser;
 use minijinja::arg_utils::check_num_args;
 use minijinja::value::Enumerator;
-use minijinja::{Error as MinijinjaError, Value};
+use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, Value};
 use serde::{Deserialize, Serialize};
 
 use std::any::Any;
@@ -48,7 +49,10 @@ impl StaticBaseColumn for DatabricksColumnType {
         let mut args: ArgParser = ArgParser::new(args, None);
         let columns = args.get::<Value>("columns")?;
 
-        let columns = Vec::<DatabricksColumn>::deserialize(columns)?;
+        let columns =
+            minijinja_value_to_typed_struct::<Vec<DatabricksColumn>>(columns).map_err(|e| {
+                MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+            })?;
         Ok(Value::from(
             columns
                 .iter()
@@ -69,7 +73,10 @@ impl StaticBaseColumn for DatabricksColumnType {
         let mut args: ArgParser = ArgParser::new(args, None);
         let columns = args.get::<Value>("columns")?;
 
-        let columns = Vec::<DatabricksColumn>::deserialize(columns)?;
+        let columns =
+            minijinja_value_to_typed_struct::<Vec<DatabricksColumn>>(columns).map_err(|e| {
+                MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+            })?;
         Ok(Value::from(
             columns
                 .iter()
@@ -88,7 +95,9 @@ impl StaticBaseColumn for DatabricksColumnType {
     fn get_name(args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut args: ArgParser = ArgParser::new(args, None);
         let column = args.get::<Value>("column")?;
-        let column = DbtColumn::deserialize(column)?;
+        let column = minijinja_value_to_typed_struct::<DbtColumn>(column).map_err(|e| {
+            MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+        })?;
 
         if column.quote.unwrap_or(false) {
             Ok(Value::from(quote(&column.name)))

@@ -68,7 +68,7 @@ pub async fn compute_package_lock(
                         revision: pinned_package.revision,
                         warn_unpinned: pinned_package.warn_unpinned,
                         subdirectory: pinned_package.subdirectory,
-                        unrendered: pinned_package.unrendered,
+                        __unrendered__: pinned_package.unrendered,
                     }));
             }
             UnpinnedPackage::Local(local_package) => {
@@ -94,7 +94,7 @@ pub async fn compute_package_lock(
                         revision: pinned_package.revision,
                         warn_unpinned: pinned_package.warn_unpinned,
                         subdirectory: pinned_package.subdirectory,
-                        unrendered: pinned_package.unrendered,
+                        __unrendered__: pinned_package.unrendered,
                     }));
             }
             UnpinnedPackage::Tarball(tarball_unpinned_package) => {
@@ -109,7 +109,7 @@ pub async fn compute_package_lock(
                     .push(DbtPackageLock::Tarball(TarballPackageLock {
                         tarball: tarball_unpinned_package.original_entry.tarball.clone(),
                         name: pinned_package.name,
-                        unrendered,
+                        __unrendered__: unrendered,
                     }));
             }
         }

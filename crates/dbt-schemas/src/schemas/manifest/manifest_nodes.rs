@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
 // Type aliases for clarity
-type JsonValue = serde_json::Value;
+type YmlValue = dbt_serde_yaml::Value;
 
 use crate::schemas::{
     DbtExposure, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest,
@@ -73,12 +73,12 @@ pub struct ManifestNodeBaseAttributes {
     pub compiled: Option<bool>,
     pub compiled_code: Option<String>,
     #[serde(default)]
-    pub unrendered_config: BTreeMap<String, JsonValue>,
+    pub unrendered_config: BTreeMap<String, YmlValue>,
 
     // Metadata
-    pub doc_blocks: Option<Vec<JsonValue>>,
+    pub doc_blocks: Option<Vec<YmlValue>>,
     pub extra_ctes_injected: Option<bool>,
-    pub extra_ctes: Option<Vec<JsonValue>>,
+    pub extra_ctes: Option<Vec<YmlValue>>,
     #[serde(default)]
     pub metrics: Vec<Vec<String>>,
     pub checksum: DbtChecksum,
@@ -92,48 +92,45 @@ pub struct ManifestNodeBaseAttributes {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestSeed {
-    #[serde(flatten)]
-    pub common_attr: ManifestCommonAttributes,
+    pub __common_attr__: ManifestCommonAttributes,
 
-    #[serde(flatten)]
-    pub base_attr: ManifestNodeBaseAttributes,
+    pub __base_attr__: ManifestNodeBaseAttributes,
 
     // Test Specific Attributes
     pub config: SeedConfig,
     pub root_path: Option<PathBuf>,
 
-    #[serde(flatten)]
-    pub other: BTreeMap<String, JsonValue>,
+    pub __other__: BTreeMap<String, YmlValue>,
 }
 
 impl From<DbtSeed> for ManifestSeed {
     fn from(seed: DbtSeed) -> Self {
         Self {
-            common_attr: ManifestCommonAttributes {
-                unique_id: seed.common_attr.unique_id,
-                database: seed.base_attr.database,
-                schema: seed.base_attr.schema,
-                name: seed.common_attr.name,
-                package_name: seed.common_attr.package_name,
-                fqn: seed.common_attr.fqn,
-                path: seed.common_attr.path,
-                original_file_path: seed.common_attr.original_file_path,
-                patch_path: seed.common_attr.patch_path,
-                description: seed.common_attr.description,
+            __common_attr__: ManifestCommonAttributes {
+                unique_id: seed.__common_attr__.unique_id,
+                database: seed.__base_attr__.database,
+                schema: seed.__base_attr__.schema,
+                name: seed.__common_attr__.name,
+                package_name: seed.__common_attr__.package_name,
+                fqn: seed.__common_attr__.fqn,
+                path: seed.__common_attr__.path,
+                original_file_path: seed.__common_attr__.original_file_path,
+                patch_path: seed.__common_attr__.patch_path,
+                description: seed.__common_attr__.description,
             },
-            base_attr: ManifestNodeBaseAttributes {
-                alias: seed.base_attr.alias,
-                relation_name: seed.base_attr.relation_name,
-                columns: seed.base_attr.columns,
-                depends_on: seed.base_attr.depends_on,
-                refs: seed.base_attr.refs,
-                sources: seed.base_attr.sources,
-                metrics: seed.base_attr.metrics,
-                raw_code: seed.common_attr.raw_code,
+            __base_attr__: ManifestNodeBaseAttributes {
+                alias: seed.__base_attr__.alias,
+                relation_name: seed.__base_attr__.relation_name,
+                columns: seed.__base_attr__.columns,
+                depends_on: seed.__base_attr__.depends_on,
+                refs: seed.__base_attr__.refs,
+                sources: seed.__base_attr__.sources,
+                metrics: seed.__base_attr__.metrics,
+                raw_code: seed.__common_attr__.raw_code,
                 compiled: None,
                 compiled_code: None,
-                checksum: seed.common_attr.checksum,
-                language: seed.common_attr.language,
+                checksum: seed.__common_attr__.checksum,
+                language: seed.__common_attr__.language,
                 unrendered_config: Default::default(),
                 doc_blocks: Default::default(),
                 extra_ctes_injected: Default::default(),
@@ -144,8 +141,8 @@ impl From<DbtSeed> for ManifestSeed {
                 contract: Default::default(),
             },
             config: seed.deprecated_config,
-            root_path: seed.seed_attr.root_path,
-            other: seed.other,
+            root_path: seed.__seed_attr__.root_path,
+            __other__: seed.__other__,
         }
     }
 }
@@ -154,11 +151,9 @@ impl From<DbtSeed> for ManifestSeed {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestUnitTest {
-    #[serde(flatten)]
-    pub common_attr: ManifestCommonAttributes,
+    pub __common_attr__: ManifestCommonAttributes,
 
-    #[serde(flatten)]
-    pub base_attr: ManifestNodeBaseAttributes,
+    pub __base_attr__: ManifestNodeBaseAttributes,
     /// Unit Test Specific Attributes
     pub config: UnitTestConfig,
     pub model: String,
@@ -172,31 +167,31 @@ pub struct ManifestUnitTest {
 impl From<DbtUnitTest> for ManifestUnitTest {
     fn from(unit_test: DbtUnitTest) -> Self {
         Self {
-            common_attr: ManifestCommonAttributes {
-                unique_id: unit_test.common_attr.unique_id,
-                database: unit_test.base_attr.database,
-                schema: unit_test.base_attr.schema,
-                name: unit_test.common_attr.name,
-                package_name: unit_test.common_attr.package_name,
-                fqn: unit_test.common_attr.fqn,
-                path: unit_test.common_attr.path,
-                original_file_path: unit_test.common_attr.original_file_path,
-                patch_path: unit_test.common_attr.patch_path,
-                description: unit_test.common_attr.description,
+            __common_attr__: ManifestCommonAttributes {
+                unique_id: unit_test.__common_attr__.unique_id,
+                database: unit_test.__base_attr__.database,
+                schema: unit_test.__base_attr__.schema,
+                name: unit_test.__common_attr__.name,
+                package_name: unit_test.__common_attr__.package_name,
+                fqn: unit_test.__common_attr__.fqn,
+                path: unit_test.__common_attr__.path,
+                original_file_path: unit_test.__common_attr__.original_file_path,
+                patch_path: unit_test.__common_attr__.patch_path,
+                description: unit_test.__common_attr__.description,
             },
-            base_attr: ManifestNodeBaseAttributes {
-                alias: unit_test.base_attr.alias,
-                relation_name: unit_test.base_attr.relation_name,
-                columns: unit_test.base_attr.columns,
-                depends_on: unit_test.base_attr.depends_on,
-                refs: unit_test.base_attr.refs,
-                sources: unit_test.base_attr.sources,
-                metrics: unit_test.base_attr.metrics,
-                raw_code: unit_test.common_attr.raw_code,
+            __base_attr__: ManifestNodeBaseAttributes {
+                alias: unit_test.__base_attr__.alias,
+                relation_name: unit_test.__base_attr__.relation_name,
+                columns: unit_test.__base_attr__.columns,
+                depends_on: unit_test.__base_attr__.depends_on,
+                refs: unit_test.__base_attr__.refs,
+                sources: unit_test.__base_attr__.sources,
+                metrics: unit_test.__base_attr__.metrics,
+                raw_code: unit_test.__common_attr__.raw_code,
                 compiled: None,
                 compiled_code: None,
-                checksum: unit_test.common_attr.checksum,
-                language: unit_test.common_attr.language,
+                checksum: unit_test.__common_attr__.checksum,
+                language: unit_test.__common_attr__.language,
                 unrendered_config: Default::default(),
                 doc_blocks: Default::default(),
                 extra_ctes_injected: Default::default(),
@@ -207,12 +202,12 @@ impl From<DbtUnitTest> for ManifestUnitTest {
                 contract: Default::default(),
             },
             config: unit_test.deprecated_config,
-            model: unit_test.unit_test_attr.model,
-            given: unit_test.unit_test_attr.given,
-            expect: unit_test.unit_test_attr.expect,
-            versions: unit_test.unit_test_attr.versions,
-            version: unit_test.unit_test_attr.version,
-            overrides: unit_test.unit_test_attr.overrides,
+            model: unit_test.__unit_test_attr__.model,
+            given: unit_test.__unit_test_attr__.given,
+            expect: unit_test.__unit_test_attr__.expect,
+            versions: unit_test.__unit_test_attr__.versions,
+            version: unit_test.__unit_test_attr__.version,
+            overrides: unit_test.__unit_test_attr__.overrides,
         }
     }
 }
@@ -221,10 +216,8 @@ impl From<DbtUnitTest> for ManifestUnitTest {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestDataTest {
-    #[serde(flatten)]
-    pub common_attr: ManifestCommonAttributes,
-    #[serde(flatten)]
-    pub base_attr: ManifestNodeBaseAttributes,
+    pub __common_attr__: ManifestCommonAttributes,
+    pub __base_attr__: ManifestNodeBaseAttributes,
 
     /// Test Specific Attributes
     pub config: DataTestConfig,
@@ -233,38 +226,37 @@ pub struct ManifestDataTest {
     pub test_metadata: Option<TestMetadata>,
     pub file_key_name: Option<String>,
 
-    #[serde(flatten)]
-    pub other: BTreeMap<String, JsonValue>,
+    pub __other__: BTreeMap<String, YmlValue>,
 }
 
 impl From<DbtTest> for ManifestDataTest {
     fn from(test: DbtTest) -> Self {
         Self {
-            common_attr: ManifestCommonAttributes {
-                unique_id: test.common_attr.unique_id,
-                database: test.base_attr.database,
-                schema: test.base_attr.schema,
-                name: test.common_attr.name,
-                package_name: test.common_attr.package_name,
-                fqn: test.common_attr.fqn,
-                path: test.common_attr.path,
-                original_file_path: test.common_attr.original_file_path,
-                patch_path: test.common_attr.patch_path,
-                description: test.common_attr.description,
+            __common_attr__: ManifestCommonAttributes {
+                unique_id: test.__common_attr__.unique_id,
+                database: test.__base_attr__.database,
+                schema: test.__base_attr__.schema,
+                name: test.__common_attr__.name,
+                package_name: test.__common_attr__.package_name,
+                fqn: test.__common_attr__.fqn,
+                path: test.__common_attr__.path,
+                original_file_path: test.__common_attr__.original_file_path,
+                patch_path: test.__common_attr__.patch_path,
+                description: test.__common_attr__.description,
             },
-            base_attr: ManifestNodeBaseAttributes {
-                alias: test.base_attr.alias,
-                relation_name: test.base_attr.relation_name,
-                columns: test.base_attr.columns,
-                depends_on: test.base_attr.depends_on,
-                refs: test.base_attr.refs,
-                sources: test.base_attr.sources,
-                metrics: test.base_attr.metrics,
-                raw_code: test.common_attr.raw_code,
+            __base_attr__: ManifestNodeBaseAttributes {
+                alias: test.__base_attr__.alias,
+                relation_name: test.__base_attr__.relation_name,
+                columns: test.__base_attr__.columns,
+                depends_on: test.__base_attr__.depends_on,
+                refs: test.__base_attr__.refs,
+                sources: test.__base_attr__.sources,
+                metrics: test.__base_attr__.metrics,
+                raw_code: test.__common_attr__.raw_code,
                 compiled: None,
                 compiled_code: None,
-                checksum: test.common_attr.checksum,
-                language: test.common_attr.language,
+                checksum: test.__common_attr__.checksum,
+                language: test.__common_attr__.language,
                 unrendered_config: Default::default(),
                 doc_blocks: Default::default(),
                 extra_ctes_injected: Default::default(),
@@ -275,11 +267,11 @@ impl From<DbtTest> for ManifestDataTest {
                 contract: Default::default(),
             },
             config: test.deprecated_config,
-            column_name: test.test_attr.column_name,
-            attached_node: test.test_attr.attached_node,
-            test_metadata: test.test_attr.test_metadata,
-            file_key_name: test.test_attr.file_key_name,
-            other: test.other,
+            column_name: test.__test_attr__.column_name,
+            attached_node: test.__test_attr__.attached_node,
+            test_metadata: test.__test_attr__.test_metadata,
+            file_key_name: test.__test_attr__.file_key_name,
+            __other__: test.__other__,
         }
     }
 }
@@ -288,46 +280,43 @@ impl From<DbtTest> for ManifestDataTest {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestSnapshot {
-    #[serde(flatten)]
-    pub common_attr: ManifestCommonAttributes,
-    #[serde(flatten)]
-    pub base_attr: ManifestNodeBaseAttributes,
+    pub __common_attr__: ManifestCommonAttributes,
+    pub __base_attr__: ManifestNodeBaseAttributes,
 
     /// Snapshot Specific Attributes
     pub config: SnapshotConfig,
 
-    #[serde(flatten)]
-    pub other: BTreeMap<String, JsonValue>,
+    pub __other__: BTreeMap<String, YmlValue>,
 }
 
 impl From<DbtSnapshot> for ManifestSnapshot {
     fn from(snapshot: DbtSnapshot) -> Self {
         Self {
-            common_attr: ManifestCommonAttributes {
-                unique_id: snapshot.common_attr.unique_id,
-                database: snapshot.base_attr.database,
-                schema: snapshot.base_attr.schema,
-                name: snapshot.common_attr.name,
-                package_name: snapshot.common_attr.package_name,
-                fqn: snapshot.common_attr.fqn,
-                path: snapshot.common_attr.path,
-                original_file_path: snapshot.common_attr.original_file_path,
-                patch_path: snapshot.common_attr.patch_path,
-                description: snapshot.common_attr.description,
+            __common_attr__: ManifestCommonAttributes {
+                unique_id: snapshot.__common_attr__.unique_id,
+                database: snapshot.__base_attr__.database,
+                schema: snapshot.__base_attr__.schema,
+                name: snapshot.__common_attr__.name,
+                package_name: snapshot.__common_attr__.package_name,
+                fqn: snapshot.__common_attr__.fqn,
+                path: snapshot.__common_attr__.path,
+                original_file_path: snapshot.__common_attr__.original_file_path,
+                patch_path: snapshot.__common_attr__.patch_path,
+                description: snapshot.__common_attr__.description,
             },
-            base_attr: ManifestNodeBaseAttributes {
-                alias: snapshot.base_attr.alias,
-                relation_name: snapshot.base_attr.relation_name,
-                columns: snapshot.base_attr.columns,
-                depends_on: snapshot.base_attr.depends_on,
-                refs: snapshot.base_attr.refs,
-                sources: snapshot.base_attr.sources,
-                metrics: snapshot.base_attr.metrics,
-                raw_code: snapshot.common_attr.raw_code,
+            __base_attr__: ManifestNodeBaseAttributes {
+                alias: snapshot.__base_attr__.alias,
+                relation_name: snapshot.__base_attr__.relation_name,
+                columns: snapshot.__base_attr__.columns,
+                depends_on: snapshot.__base_attr__.depends_on,
+                refs: snapshot.__base_attr__.refs,
+                sources: snapshot.__base_attr__.sources,
+                metrics: snapshot.__base_attr__.metrics,
+                raw_code: snapshot.__common_attr__.raw_code,
                 compiled: None,
                 compiled_code: None,
-                checksum: snapshot.common_attr.checksum,
-                language: snapshot.common_attr.language,
+                checksum: snapshot.__common_attr__.checksum,
+                language: snapshot.__common_attr__.language,
                 unrendered_config: Default::default(),
                 doc_blocks: Default::default(),
                 extra_ctes_injected: Default::default(),
@@ -338,7 +327,7 @@ impl From<DbtSnapshot> for ManifestSnapshot {
                 contract: Default::default(),
             },
             config: snapshot.deprecated_config,
-            other: snapshot.other,
+            __other__: snapshot.__other__,
         }
     }
 }
@@ -347,8 +336,7 @@ impl From<DbtSnapshot> for ManifestSnapshot {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestSource {
-    #[serde(flatten)]
-    pub common_attr: ManifestCommonAttributes,
+    pub __common_attr__: ManifestCommonAttributes,
 
     // Source Specific Attributes
     pub relation_name: Option<String>,
@@ -358,7 +346,7 @@ pub struct ManifestSource {
     pub config: SourceConfig,
     pub quoting: Option<DbtQuoting>,
     pub source_description: String,
-    pub unrendered_config: BTreeMap<String, JsonValue>,
+    pub unrendered_config: BTreeMap<String, YmlValue>,
     pub unrendered_database: Option<String>,
     pub unrendered_schema: Option<String>,
     #[serde(default)]
@@ -367,45 +355,44 @@ pub struct ManifestSource {
     pub loaded_at_query: Option<String>,
     pub freshness: Option<FreshnessDefinition>,
 
-    #[serde(flatten)]
-    pub other: BTreeMap<String, JsonValue>,
+    pub __other__: BTreeMap<String, YmlValue>,
 }
 
 impl From<DbtSource> for ManifestSource {
     fn from(source: DbtSource) -> Self {
         Self {
-            common_attr: ManifestCommonAttributes {
-                unique_id: source.common_attr.unique_id,
-                database: source.base_attr.database,
-                schema: source.base_attr.schema,
-                name: source.common_attr.name,
-                package_name: source.common_attr.package_name,
-                fqn: source.common_attr.fqn,
-                path: source.common_attr.path,
-                original_file_path: source.common_attr.original_file_path,
-                patch_path: source.common_attr.patch_path,
-                description: source.common_attr.description,
+            __common_attr__: ManifestCommonAttributes {
+                unique_id: source.__common_attr__.unique_id,
+                database: source.__base_attr__.database,
+                schema: source.__base_attr__.schema,
+                name: source.__common_attr__.name,
+                package_name: source.__common_attr__.package_name,
+                fqn: source.__common_attr__.fqn,
+                path: source.__common_attr__.path,
+                original_file_path: source.__common_attr__.original_file_path,
+                patch_path: source.__common_attr__.patch_path,
+                description: source.__common_attr__.description,
             },
-            relation_name: source.base_attr.relation_name,
-            identifier: source.source_attr.identifier,
-            source_name: source.source_attr.source_name,
-            columns: source.base_attr.columns,
+            relation_name: source.__base_attr__.relation_name,
+            identifier: source.__source_attr__.identifier,
+            source_name: source.__source_attr__.source_name,
+            columns: source.__base_attr__.columns,
             config: source.deprecated_config,
             quoting: Some(DbtQuoting {
-                database: Some(source.base_attr.quoting.database),
-                schema: Some(source.base_attr.quoting.schema),
-                identifier: Some(source.base_attr.quoting.identifier),
+                database: Some(source.__base_attr__.quoting.database),
+                schema: Some(source.__base_attr__.quoting.schema),
+                identifier: Some(source.__base_attr__.quoting.identifier),
                 snowflake_ignore_case: None,
             }),
-            source_description: source.source_attr.source_description,
+            source_description: source.__source_attr__.source_description,
             unrendered_config: BTreeMap::new(),
             unrendered_database: None,
             unrendered_schema: None,
-            loader: source.source_attr.loader,
-            loaded_at_field: source.source_attr.loaded_at_field,
-            loaded_at_query: source.source_attr.loaded_at_query,
-            freshness: source.source_attr.freshness,
-            other: source.other,
+            loader: source.__source_attr__.loader,
+            loaded_at_field: source.__source_attr__.loaded_at_field,
+            loaded_at_query: source.__source_attr__.loaded_at_query,
+            freshness: source.__source_attr__.freshness,
+            __other__: source.__other__,
         }
     }
 }
@@ -414,11 +401,9 @@ impl From<DbtSource> for ManifestSource {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestModel {
-    #[serde(flatten)]
-    pub common_attr: ManifestCommonAttributes,
+    pub __common_attr__: ManifestCommonAttributes,
 
-    #[serde(flatten)]
-    pub base_attr: ManifestNodeBaseAttributes,
+    pub __base_attr__: ManifestNodeBaseAttributes,
 
     // Model Specific Attributes
     pub config: ModelConfig,
@@ -427,40 +412,39 @@ pub struct ManifestModel {
     pub constraints: Option<Vec<ModelConstraint>>,
     pub deprecation_date: Option<String>,
     pub primary_key: Option<Vec<String>>,
-    pub time_spine: Option<JsonValue>,
+    pub time_spine: Option<YmlValue>,
 
-    #[serde(flatten)]
-    pub other: BTreeMap<String, JsonValue>,
+    pub __other__: BTreeMap<String, YmlValue>,
 }
 
 impl From<DbtModel> for ManifestModel {
     fn from(model: DbtModel) -> Self {
         Self {
-            common_attr: ManifestCommonAttributes {
-                unique_id: model.common_attr.unique_id,
-                database: model.base_attr.database,
-                schema: model.base_attr.schema,
-                name: model.common_attr.name,
-                package_name: model.common_attr.package_name,
-                fqn: model.common_attr.fqn,
-                path: model.common_attr.path,
-                original_file_path: model.common_attr.original_file_path,
-                patch_path: model.common_attr.patch_path,
-                description: model.common_attr.description,
+            __common_attr__: ManifestCommonAttributes {
+                unique_id: model.__common_attr__.unique_id,
+                database: model.__base_attr__.database,
+                schema: model.__base_attr__.schema,
+                name: model.__common_attr__.name,
+                package_name: model.__common_attr__.package_name,
+                fqn: model.__common_attr__.fqn,
+                path: model.__common_attr__.path,
+                original_file_path: model.__common_attr__.original_file_path,
+                patch_path: model.__common_attr__.patch_path,
+                description: model.__common_attr__.description,
             },
-            base_attr: ManifestNodeBaseAttributes {
-                alias: model.base_attr.alias,
-                relation_name: model.base_attr.relation_name,
-                columns: model.base_attr.columns,
-                depends_on: model.base_attr.depends_on,
-                refs: model.base_attr.refs,
-                sources: model.base_attr.sources,
-                metrics: model.base_attr.metrics,
-                raw_code: model.common_attr.raw_code,
+            __base_attr__: ManifestNodeBaseAttributes {
+                alias: model.__base_attr__.alias,
+                relation_name: model.__base_attr__.relation_name,
+                columns: model.__base_attr__.columns,
+                depends_on: model.__base_attr__.depends_on,
+                refs: model.__base_attr__.refs,
+                sources: model.__base_attr__.sources,
+                metrics: model.__base_attr__.metrics,
+                raw_code: model.__common_attr__.raw_code,
                 compiled: None,
                 compiled_code: None,
-                checksum: model.common_attr.checksum,
-                language: model.common_attr.language,
+                checksum: model.__common_attr__.checksum,
+                language: model.__common_attr__.language,
                 unrendered_config: Default::default(),
                 doc_blocks: Default::default(),
                 extra_ctes_injected: Default::default(),
@@ -471,13 +455,13 @@ impl From<DbtModel> for ManifestModel {
                 contract: Default::default(),
             },
             config: model.deprecated_config,
-            version: model.model_attr.version,
-            latest_version: model.model_attr.latest_version,
-            constraints: Some(model.model_attr.constraints),
-            deprecation_date: model.model_attr.deprecation_date,
-            primary_key: Some(model.model_attr.primary_key),
-            time_spine: model.model_attr.time_spine,
-            other: model.other,
+            version: model.__model_attr__.version,
+            latest_version: model.__model_attr__.latest_version,
+            constraints: Some(model.__model_attr__.constraints),
+            deprecation_date: model.__model_attr__.deprecation_date,
+            primary_key: Some(model.__model_attr__.primary_key),
+            time_spine: model.__model_attr__.time_spine,
+            __other__: model.__other__,
         }
     }
 }
@@ -486,32 +470,29 @@ impl From<DbtModel> for ManifestModel {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestOperation {
-    #[serde(flatten)]
-    pub common_attr: ManifestCommonAttributes,
+    pub __common_attr__: ManifestCommonAttributes,
 
-    #[serde(flatten)]
-    pub base_attr: ManifestNodeBaseAttributes,
+    pub __base_attr__: ManifestNodeBaseAttributes,
 
-    #[serde(flatten)]
-    pub other: BTreeMap<String, JsonValue>,
+    pub __other__: BTreeMap<String, YmlValue>,
 }
 
 impl From<DbtOperation> for ManifestOperation {
     fn from(operation: DbtOperation) -> Self {
         Self {
-            common_attr: ManifestCommonAttributes {
-                unique_id: operation.common_attr.unique_id,
-                name: operation.common_attr.name,
-                package_name: operation.common_attr.package_name,
-                fqn: operation.common_attr.fqn,
-                path: operation.common_attr.path,
-                original_file_path: operation.common_attr.original_file_path,
-                patch_path: operation.common_attr.patch_path,
-                description: operation.common_attr.description,
+            __common_attr__: ManifestCommonAttributes {
+                unique_id: operation.__common_attr__.unique_id,
+                name: operation.__common_attr__.name,
+                package_name: operation.__common_attr__.package_name,
+                fqn: operation.__common_attr__.fqn,
+                path: operation.__common_attr__.path,
+                original_file_path: operation.__common_attr__.original_file_path,
+                patch_path: operation.__common_attr__.patch_path,
+                description: operation.__common_attr__.description,
                 ..Default::default()
             },
-            base_attr: ManifestNodeBaseAttributes::default(),
-            other: operation.other,
+            __base_attr__: ManifestNodeBaseAttributes::default(),
+            __other__: operation.__other__,
         }
     }
 }
@@ -549,7 +530,7 @@ pub struct ManifestExposureNodeBaseAttributes {
     pub sources: Vec<DbtSourceWrapper>,
 
     #[serde(default)]
-    pub unrendered_config: BTreeMap<String, JsonValue>,
+    pub unrendered_config: BTreeMap<String, YmlValue>,
 
     // Metadata
     #[serde(default)]
@@ -562,11 +543,9 @@ pub struct ManifestExposureNodeBaseAttributes {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestExposure {
-    #[serde(flatten)]
-    pub common_attr: ManifestExposureCommonAttributes,
+    pub __common_attr__: ManifestExposureCommonAttributes,
 
-    #[serde(flatten)]
-    pub base_attr: ManifestExposureNodeBaseAttributes,
+    pub __base_attr__: ManifestExposureNodeBaseAttributes,
 
     // Exposure Specific Attributes
     pub owner: DbtOwner,
@@ -577,37 +556,36 @@ pub struct ManifestExposure {
     pub url: Option<String>,
     pub config: ExposureConfig,
 
-    #[serde(flatten)]
-    pub other: BTreeMap<String, JsonValue>,
+    pub __other__: BTreeMap<String, YmlValue>,
 }
 
 impl From<DbtExposure> for ManifestExposure {
     fn from(exposure: DbtExposure) -> Self {
         Self {
-            common_attr: ManifestExposureCommonAttributes {
-                unique_id: exposure.common_attr.unique_id,
-                name: exposure.common_attr.name,
-                package_name: exposure.common_attr.package_name,
-                fqn: exposure.common_attr.fqn,
-                path: exposure.common_attr.path,
-                original_file_path: exposure.common_attr.original_file_path,
-                description: exposure.common_attr.description,
+            __common_attr__: ManifestExposureCommonAttributes {
+                unique_id: exposure.__common_attr__.unique_id,
+                name: exposure.__common_attr__.name,
+                package_name: exposure.__common_attr__.package_name,
+                fqn: exposure.__common_attr__.fqn,
+                path: exposure.__common_attr__.path,
+                original_file_path: exposure.__common_attr__.original_file_path,
+                description: exposure.__common_attr__.description,
             },
-            base_attr: ManifestExposureNodeBaseAttributes {
-                depends_on: exposure.base_attr.depends_on,
-                refs: exposure.base_attr.refs,
-                sources: exposure.base_attr.sources,
-                metrics: exposure.base_attr.metrics,
-                unrendered_config: exposure.exposure_attr.unrendered_config,
+            __base_attr__: ManifestExposureNodeBaseAttributes {
+                depends_on: exposure.__base_attr__.depends_on,
+                refs: exposure.__base_attr__.refs,
+                sources: exposure.__base_attr__.sources,
+                metrics: exposure.__base_attr__.metrics,
+                unrendered_config: exposure.__exposure_attr__.unrendered_config,
                 created_at: None,
             },
-            owner: exposure.exposure_attr.owner,
-            label: exposure.exposure_attr.label,
-            maturity: exposure.exposure_attr.maturity,
-            type_: exposure.exposure_attr.type_,
-            url: exposure.exposure_attr.url,
+            owner: exposure.__exposure_attr__.owner,
+            label: exposure.__exposure_attr__.label,
+            maturity: exposure.__exposure_attr__.maturity,
+            type_: exposure.__exposure_attr__.type_,
+            url: exposure.__exposure_attr__.url,
             config: exposure.deprecated_config,
-            other: Default::default(),
+            __other__: Default::default(),
         }
     }
 }

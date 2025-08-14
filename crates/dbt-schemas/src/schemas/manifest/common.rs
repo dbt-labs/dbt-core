@@ -12,6 +12,5 @@ use crate::schemas::serde::StringOrArrayOfStrings;
 pub struct DbtOwner {
     pub email: Option<StringOrArrayOfStrings>,
     pub name: Option<String>,
-    #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub __other__: BTreeMap<String, Value>,
 }

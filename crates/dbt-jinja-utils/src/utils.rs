@@ -430,28 +430,28 @@ pub fn node_metadata_from_state(state: &State) -> Option<(NodeId, PathBuf)> {
         Some(node) => {
             if let Ok(model) = DbtModel::deserialize(&node) {
                 Some((
-                    model.common_attr.unique_id,
-                    model.common_attr.original_file_path,
+                    model.__common_attr__.unique_id,
+                    model.__common_attr__.original_file_path,
                 ))
             } else if let Ok(test) = DbtTest::deserialize(&node) {
                 Some((
-                    test.common_attr.unique_id,
-                    test.common_attr.original_file_path,
+                    test.__common_attr__.unique_id,
+                    test.__common_attr__.original_file_path,
                 ))
             } else if let Ok(snapshot) = DbtSnapshot::deserialize(&node) {
                 Some((
-                    snapshot.common_attr.unique_id,
-                    snapshot.common_attr.original_file_path,
+                    snapshot.__common_attr__.unique_id,
+                    snapshot.__common_attr__.original_file_path,
                 ))
             } else if let Ok(seed) = DbtSeed::deserialize(&node) {
                 Some((
-                    seed.common_attr.unique_id,
-                    seed.common_attr.original_file_path,
+                    seed.__common_attr__.unique_id,
+                    seed.__common_attr__.original_file_path,
                 ))
             } else if let Ok(unit_test) = DbtUnitTest::deserialize(&node) {
                 Some((
-                    unit_test.common_attr.unique_id,
-                    unit_test.common_attr.original_file_path,
+                    unit_test.__common_attr__.unique_id,
+                    unit_test.__common_attr__.original_file_path,
                 ))
             } else {
                 None

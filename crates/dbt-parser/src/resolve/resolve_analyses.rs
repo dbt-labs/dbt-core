@@ -165,7 +165,7 @@ pub async fn resolve_analyses(
         )?;
 
         let mut dbt_model = DbtModel {
-            common_attr: CommonAttributes {
+            __common_attr__: CommonAttributes {
                 name: analysis_name.to_owned(),
                 package_name: package_name.to_owned(),
                 path: dbt_asset.path.to_owned(),
@@ -180,7 +180,7 @@ pub async fn resolve_analyses(
                 tags: vec![],
                 meta: BTreeMap::new(),
             },
-            base_attr: NodeBaseAttributes {
+            __base_attr__: NodeBaseAttributes {
                 database: database.to_string(), // will be updated below
                 schema: schema.to_string(),     // will be updated below
                 alias: "".to_owned(),           // will be updated below
@@ -221,7 +221,7 @@ pub async fn resolve_analyses(
                 group: analysis_config.group.clone(),
                 ..Default::default()
             },
-            model_attr: DbtModelAttr {
+            __model_attr__: DbtModelAttr {
                 introspection: IntrospectionKind::None,
                 access: Access::default(),
                 group: None,
@@ -236,7 +236,7 @@ pub async fn resolve_analyses(
                 freshness: None,
                 event_time: None,
             },
-            other: BTreeMap::new(),
+            __other__: BTreeMap::new(),
         };
 
         let components = RelationComponents {

@@ -201,7 +201,7 @@ impl PackageListing {
                             .map(|v| vec![v])
                             .unwrap_or_default(),
                         subdirectory: git_package.subdirectory.clone(),
-                        unrendered: git_package.unrendered.clone(),
+                        unrendered: git_package.__unrendered__.clone(),
                         original_entry: git_package,
                     }),
                     "git",
@@ -322,7 +322,7 @@ impl PackageListing {
                             .map(|v| vec![v])
                             .unwrap_or_default(),
                         subdirectory: private_package.subdirectory.clone(),
-                        unrendered: private_package.unrendered.clone(),
+                        unrendered: private_package.__unrendered__.clone(),
                         original_entry: private_package,
                     }),
                     "private",
@@ -364,7 +364,7 @@ impl PackageListing {
                     UnpinnedPackage::Tarball(TarballUnpinnedPackage {
                         tarball: tarball_url,
                         name: None,
-                        unrendered: tarball_package.unrendered.clone(),
+                        unrendered: tarball_package.__unrendered__.clone(),
                         original_entry: tarball_package,
                     }),
                     "tarball",
@@ -584,7 +584,7 @@ mod tests {
                 revision: Some("main".to_string()),
                 warn_unpinned: None,
                 subdirectory: Some("core".to_string()),
-                unrendered: HashMap::new(),
+                __unrendered__: HashMap::new(),
             },
         });
 
@@ -600,7 +600,7 @@ mod tests {
                 revision: Some("main".to_string()),
                 warn_unpinned: None,
                 subdirectory: Some("adapters".to_string()),
-                unrendered: HashMap::new(),
+                __unrendered__: HashMap::new(),
             },
         });
 
@@ -654,7 +654,7 @@ mod tests {
                 revision: Some("main".to_string()),
                 warn_unpinned: None,
                 subdirectory: None,
-                unrendered: HashMap::new(),
+                __unrendered__: HashMap::new(),
             },
         });
 
@@ -670,7 +670,7 @@ mod tests {
                 revision: Some("develop".to_string()),
                 warn_unpinned: None,
                 subdirectory: None,
-                unrendered: HashMap::new(),
+                __unrendered__: HashMap::new(),
             },
         });
 

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use dbt_common::FsResult;
 use dbt_serde_yaml::JsonSchema;
@@ -63,8 +63,6 @@ pub enum ColumnPropertiesGranularity {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Default, PartialEq, Eq)]
 pub struct ColumnConfig {
-    #[serde(flatten)]
-    pub additional_properties: HashMap<String, YmlValue>,
     #[serde(default)]
     pub tags: Option<StringOrArrayOfStrings>,
     pub meta: Option<BTreeMap<String, YmlValue>>,

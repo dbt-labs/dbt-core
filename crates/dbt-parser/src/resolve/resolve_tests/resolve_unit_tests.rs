@@ -97,9 +97,9 @@ pub fn resolve_unit_tests(
         let model_name = format!("model.{}.{}", package_name, unit_test.model);
         let (database, schema, alias, model_found) = match models.get(&model_name) {
             Some(model) => (
-                model.base_attr.database.clone(),
-                model.base_attr.schema.clone(),
-                model.base_attr.alias.clone(),
+                model.__base_attr__.database.clone(),
+                model.__base_attr__.schema.clone(),
+                model.__base_attr__.alias.clone(),
                 true,
             ),
             None => (String::new(), String::new(), unit_test.model.clone(), false),
@@ -170,6 +170,7 @@ pub fn resolve_unit_tests(
                         sql_resources.clone(),
                         Arc::new(AtomicBool::new(false)),
                         &relative_path,
+                        io_args,
                     ));
                     let sql_resource = render_extract_ref_or_source_expr(
                         jinja_env,
@@ -252,7 +253,7 @@ pub fn resolve_unit_tests(
         };
 
         let base_unit_test = DbtUnitTest {
-            common_attr: CommonAttributes {
+            __common_attr__: CommonAttributes {
                 name: unit_test_name.to_owned(),
                 package_name: package_name.to_owned(),
                 original_file_path: mpe.relative_path.clone(),
@@ -271,7 +272,7 @@ pub fn resolve_unit_tests(
                     .unwrap_or_default(),
                 meta: properties_config.meta.clone().unwrap_or_default(),
             },
-            base_attr: NodeBaseAttributes {
+            __base_attr__: NodeBaseAttributes {
                 database: database.to_owned(),
                 schema: schema.to_owned(),
                 alias: alias.to_owned(), // alias will be used to constrcut `this` relation.
@@ -290,7 +291,7 @@ pub fn resolve_unit_tests(
                 columns: BTreeMap::new(),
                 metrics: vec![],
             },
-            unit_test_attr: DbtUnitTestAttr {
+            __unit_test_attr__: DbtUnitTestAttr {
                 model: unit_test.model.to_owned(),
                 given,
                 expect,
@@ -347,14 +348,16 @@ pub fn resolve_unit_tests(
                     .expect("Version should exist in lookup");
 
                 let mut versioned_test = base_unit_test.clone();
-                versioned_test.common_attr.unique_id = format!("{base_unique_id}.v{version}");
-                versioned_test.unit_test_attr.version = Some(version.clone().into());
-                versioned_test.base_attr.depends_on.nodes = vec![versioned_model_id.clone()];
-                versioned_test.base_attr.depends_on.nodes_with_ref_location =
-                    vec![(versioned_model_id.clone(), location.clone())];
+                versioned_test.__common_attr__.unique_id = format!("{base_unique_id}.v{version}");
+                versioned_test.__unit_test_attr__.version = Some(version.clone().into());
+                versioned_test.__base_attr__.depends_on.nodes = vec![versioned_model_id.clone()];
+                versioned_test
+                    .__base_attr__
+                    .depends_on
+                    .nodes_with_ref_location = vec![(versioned_model_id.clone(), location.clone())];
 
                 unit_tests.insert(
-                    versioned_test.common_attr.unique_id.clone(),
+                    versioned_test.__common_attr__.unique_id.clone(),
                     Arc::new(versioned_test),
                 );
             }

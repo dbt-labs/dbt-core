@@ -1,5 +1,5 @@
-use dbt_common::FsResult;
 use dbt_common::io_args::IoArgs;
+use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_jinja_utils::phases::load::LoadContext;
 use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
 use dbt_jinja_utils::serde::yaml_to_fs_error;
@@ -111,7 +111,16 @@ pub fn write_db_config_to_test_profile(
         TEST_PROFILE,
         DbTargets {
             default_target: adapter_type.to_string(),
-            outputs: HashMap::from([(adapter_type, serde_json::to_value(db_config)?)]),
+            outputs: HashMap::from([(
+                adapter_type,
+                dbt_serde_yaml::to_value(db_config).map_err(|e| {
+                    fs_err!(
+                        ErrorCode::InvalidConfig,
+                        "Failed to serialize db config: {}",
+                        e
+                    )
+                })?,
+            )]),
         },
     )]);
     dbt_serde_yaml::to_writer(&mut file, &profile)

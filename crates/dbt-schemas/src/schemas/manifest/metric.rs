@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
 // Type aliases for clarity
-type JsonValue = serde_json::Value;
+type YmlValue = dbt_serde_yaml::Value;
 
 use crate::schemas::ref_and_source::DbtRef;
 
@@ -22,9 +22,9 @@ pub struct DbtMetric {
     pub label: Option<String>,
     pub type_params: MetricTypeParams,
     pub filter: Option<MetricFilter>,
-    pub metadata: Option<JsonValue>,
+    pub metadata: Option<YmlValue>,
     pub time_granularity: Option<String>,
-    pub unrendered_config: BTreeMap<String, JsonValue>,
+    pub unrendered_config: BTreeMap<String, YmlValue>,
     pub sources: Vec<Vec<String>>,
     pub depends_on: MetricDependsOn,
     pub refs: Vec<DbtRef>,
@@ -43,25 +43,25 @@ pub struct MetricDependsOn {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetricTypeParams {
     pub measure: Option<MetricMeasure>,
-    pub input_measures: Option<Vec<JsonValue>>,
-    pub numerator: Option<JsonValue>,
-    pub denominator: Option<JsonValue>,
+    pub input_measures: Option<Vec<YmlValue>>,
+    pub numerator: Option<YmlValue>,
+    pub denominator: Option<YmlValue>,
     pub expr: Option<String>,
-    pub window: Option<JsonValue>,
-    pub grain_to_date: Option<JsonValue>,
-    pub metrics: Option<Vec<JsonValue>>,
-    pub conversion_type_params: Option<JsonValue>,
-    pub cumulative_type_params: Option<JsonValue>,
+    pub window: Option<YmlValue>,
+    pub grain_to_date: Option<YmlValue>,
+    pub metrics: Option<Vec<YmlValue>>,
+    pub conversion_type_params: Option<YmlValue>,
+    pub cumulative_type_params: Option<YmlValue>,
 }
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetricMeasure {
     pub name: String,
-    pub filter: Option<JsonValue>,
+    pub filter: Option<YmlValue>,
     pub alias: Option<String>,
     pub join_to_timespine: Option<bool>,
-    pub fill_nulls_with: Option<JsonValue>,
+    pub fill_nulls_with: Option<YmlValue>,
 }
 
 #[skip_serializing_none]

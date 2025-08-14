@@ -1,11 +1,13 @@
 use chrono::{DateTime, Utc};
-use dbt_common::{ErrorCode, FsResult, fs_err, stdfs};
+use dbt_common::FsResult;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::{collections::BTreeMap, path::Path};
 
+use crate::schemas::serde::typed_struct_from_json_file;
+
 // Type aliases for clarity
-type JsonValue = serde_json::Value;
+type YmlValue = dbt_serde_yaml::Value;
 
 /// Metadata about the dbt run invocation.
 #[skip_serializing_none]
@@ -55,7 +57,7 @@ pub struct RunResult {
     /// Total execution time for the node in seconds.
     pub execution_time: f64,
     /// Adapter-specific response information.
-    pub adapter_response: BTreeMap<String, JsonValue>,
+    pub adapter_response: BTreeMap<String, YmlValue>,
     /// Execution message (e.g., error message).
     pub message: Option<String>,
     /// Information about failures (often used for tests).
@@ -83,8 +85,7 @@ pub struct RunResultsArgs {
     /// Alias for the command executed.
     pub which: String,
     /// Capture any other arguments passed via CLI using flatten
-    #[serde(flatten)]
-    pub other: BTreeMap<String, JsonValue>,
+    pub __other__: BTreeMap<String, YmlValue>,
 }
 
 /// Represents the structure of the run_results.json artifact.
@@ -104,20 +105,6 @@ pub struct RunResultsArtifact {
 
 impl RunResultsArtifact {
     pub fn from_file(path: &Path) -> FsResult<Self> {
-        let run_results = stdfs::read_to_string(path).map_err(|_| {
-            fs_err!(
-                ErrorCode::IoError,
-                "Failed to read run_results.json from {}",
-                path.display()
-            )
-        })?;
-        let run_results: RunResultsArtifact = serde_json::from_str(&run_results).map_err(|_| {
-            fs_err!(
-                ErrorCode::FileNotFound,
-                "Failed to parse run_results.json at {}",
-                path.display()
-            )
-        })?;
-        Ok(run_results)
+        typed_struct_from_json_file(path)
     }
 }

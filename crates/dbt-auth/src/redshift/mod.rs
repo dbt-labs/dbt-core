@@ -90,8 +90,8 @@ impl Auth for RedshiftAuth {
 mod tests {
     use super::*;
     use adbc_core::options::{OptionDatabase, OptionValue};
-    use serde_json::json;
     use std::collections::HashMap;
+    type YmlValue = dbt_serde_yaml::Value;
 
     fn str_value(value: &OptionValue) -> &str {
         match value {
@@ -106,11 +106,14 @@ mod tests {
         let auth = RedshiftAuth {};
 
         let mut config = HashMap::new();
-        config.insert("server".to_string(), json!("redshift-cluster.aws.com"));
-        config.insert("port".to_string(), json!("5439"));
-        config.insert("database".to_string(), json!("dev"));
-        config.insert("user".to_string(), json!("admin"));
-        config.insert("password".to_string(), json!("secretpass"));
+        config.insert(
+            "server".to_string(),
+            YmlValue::from("redshift-cluster.aws.com"),
+        );
+        config.insert("port".to_string(), YmlValue::from("5439"));
+        config.insert("database".to_string(), YmlValue::from("dev"));
+        config.insert("user".to_string(), YmlValue::from("admin"));
+        config.insert("password".to_string(), YmlValue::from("secretpass"));
 
         let builder = auth
             .configure(&AdapterConfig::new(config))

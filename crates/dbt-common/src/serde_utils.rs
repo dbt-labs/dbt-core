@@ -2,58 +2,71 @@ use std::collections::BTreeMap;
 use std::{fmt, marker::PhantomData};
 
 use dashmap::DashMap;
-use minijinja::Value;
 use serde::{
     Deserialize, Deserializer, Serialize,
     de::{Visitor, value::UnitDeserializer},
 };
 
+type YmlValue = dbt_serde_yaml::Value;
+type MinijinjaValue = minijinja::Value;
+
 /// Converts a serde_json::Value to a minijinja::Value
-fn convert_json_value(json: serde_json::Value) -> Value {
-    match json {
-        serde_json::Value::Object(map) => {
+fn convert_yml_value(yml: YmlValue) -> MinijinjaValue {
+    match yml {
+        YmlValue::Mapping(map, _) => {
             let mut value_map = BTreeMap::new();
             for (k, v) in map {
-                value_map.insert(k, convert_json_value(v));
+                value_map.insert(
+                    k.as_str().expect("key is not a string").to_string(),
+                    convert_yml_value(v),
+                );
             }
-            Value::from(value_map)
+            MinijinjaValue::from(value_map)
         }
-        serde_json::Value::Array(arr) => Value::from_iter(arr.into_iter().map(convert_json_value)),
-        _ => Value::from_serialize(json),
+        YmlValue::Sequence(arr, _) => {
+            MinijinjaValue::from_iter(arr.into_iter().map(convert_yml_value))
+        }
+        _ => MinijinjaValue::from_serialize(yml),
     }
 }
 
 /// Converts a serde_json::Value to a BTreeMap<String, Value>, only converting the first level to a map
-pub fn convert_json_to_map(json: serde_json::Value) -> BTreeMap<String, Value> {
-    match json {
-        serde_json::Value::Object(map) => {
+pub fn convert_yml_to_map(yml: YmlValue) -> BTreeMap<String, MinijinjaValue> {
+    match yml {
+        YmlValue::Mapping(map, _) => {
             let mut value_map = BTreeMap::new();
             for (k, v) in map {
-                value_map.insert(k, convert_json_value(v));
+                value_map.insert(
+                    k.as_str().expect("key is not a string").to_string(),
+                    convert_yml_value(v),
+                );
             }
             value_map
         }
         _ => {
             let mut map = BTreeMap::new();
-            map.insert("value".to_string(), convert_json_value(json));
+            map.insert("value".to_string(), convert_yml_value(yml));
             map
         }
     }
 }
 
 /// Converts a serde_json::Value to a DashMap<String, Value>, only converting the first level to a map
-pub fn convert_json_to_dash_map(json: serde_json::Value) -> DashMap<String, Value> {
-    match json {
-        serde_json::Value::Object(map) => {
+pub fn convert_yml_to_dash_map(yml: YmlValue) -> DashMap<String, MinijinjaValue> {
+    match yml {
+        YmlValue::Mapping(map, _) => {
             let value_map = DashMap::new();
             for (k, v) in map {
-                value_map.insert(k, convert_json_value(v));
+                value_map.insert(
+                    k.as_str().expect("key is not a string").to_string(),
+                    convert_yml_value(v),
+                );
             }
             value_map
         }
         _ => {
             let map = DashMap::new();
-            map.insert("value".to_string(), convert_json_value(json));
+            map.insert("value".to_string(), convert_yml_value(yml));
             map
         }
     }

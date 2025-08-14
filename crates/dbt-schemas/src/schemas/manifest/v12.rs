@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
 // Type aliases for clarity
-type JsonValue = serde_json::Value;
+type YmlValue = dbt_serde_yaml::Value;
 
 use crate::schemas::{
     InternalDbtNode,
@@ -31,7 +31,7 @@ pub struct DbtManifestV12 {
     pub child_map: BTreeMap<String, Vec<String>>,
     pub parent_map: BTreeMap<String, Vec<String>>,
     pub group_map: BTreeMap<String, Vec<String>>,
-    pub disabled: BTreeMap<String, Vec<JsonValue>>,
+    pub disabled: BTreeMap<String, Vec<YmlValue>>,
     pub selectors: BTreeMap<String, DbtSelector>,
     pub groups: BTreeMap<String, DbtGroup>,
 }
@@ -41,12 +41,12 @@ impl DbtManifestV12 {
         self.nodes
             .into_iter()
             .filter_map(|(id, node)| match node {
-                DbtNode::Model(model) => Some((id, model.base_attr.compiled_code)),
-                DbtNode::Test(test) => Some((id, test.base_attr.compiled_code)),
-                DbtNode::Snapshot(snapshot) => Some((id, snapshot.base_attr.compiled_code)),
-                DbtNode::Seed(seed) => Some((id, seed.base_attr.compiled_code)),
+                DbtNode::Model(model) => Some((id, model.__base_attr__.compiled_code)),
+                DbtNode::Test(test) => Some((id, test.__base_attr__.compiled_code)),
+                DbtNode::Snapshot(snapshot) => Some((id, snapshot.__base_attr__.compiled_code)),
+                DbtNode::Seed(seed) => Some((id, seed.__base_attr__.compiled_code)),
                 DbtNode::Operation(_operation) => None,
-                DbtNode::Analysis(analysis) => Some((id, analysis.base_attr.compiled_code)),
+                DbtNode::Analysis(analysis) => Some((id, analysis.__base_attr__.compiled_code)),
             })
             .collect::<HashMap<_, _>>()
     }
@@ -57,25 +57,25 @@ impl Serialize for DbtManifestV12 {
     where
         S: serde::Serializer,
     {
-        let mut map = BTreeMap::new();
+        let mut map: BTreeMap<String, YmlValue> = BTreeMap::new();
         map.insert(
             "metadata".to_string(),
-            serde_json::to_value(&self.metadata).map_err(serde::ser::Error::custom)?,
+            dbt_serde_yaml::to_value(&self.metadata).map_err(serde::ser::Error::custom)?,
         );
         map.insert(
             "nodes".to_string(),
-            serde_json::to_value(&self.nodes).map_err(serde::ser::Error::custom)?,
+            dbt_serde_yaml::to_value(&self.nodes).map_err(serde::ser::Error::custom)?,
         );
 
         // Serialize sources using InternalDbtNode trait
-        let sources_serialized: BTreeMap<String, JsonValue> = self
+        let sources_serialized: BTreeMap<String, YmlValue> = self
             .sources
             .iter()
             .map(|(k, v)| {
                 Ok((
                     k.clone(),
                     serialize_with_resource_type(
-                        serde_json::to_value(v).map_err(serde::ser::Error::custom)?,
+                        dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?,
                         "source",
                     ),
                 ))
@@ -83,29 +83,29 @@ impl Serialize for DbtManifestV12 {
             .collect::<Result<_, _>>()?;
         map.insert(
             "sources".to_string(),
-            serde_json::to_value(sources_serialized).map_err(serde::ser::Error::custom)?,
+            dbt_serde_yaml::to_value(sources_serialized).map_err(serde::ser::Error::custom)?,
         );
 
         // Serialize macros using InternalDbtNode trait
-        let macros_serialized: BTreeMap<String, JsonValue> = self
+        let macros_serialized: BTreeMap<String, YmlValue> = self
             .macros
             .iter()
             .map(|(k, v)| (k.clone(), InternalDbtNode::serialize(v)))
             .collect();
         map.insert(
             "macros".to_string(),
-            serde_json::to_value(macros_serialized).map_err(serde::ser::Error::custom)?,
+            dbt_serde_yaml::to_value(macros_serialized).map_err(serde::ser::Error::custom)?,
         );
 
         // Serialize unit_tests using InternalDbtNode trait
-        let unit_tests_serialized: BTreeMap<String, JsonValue> = self
+        let unit_tests_serialized: BTreeMap<String, YmlValue> = self
             .unit_tests
             .iter()
             .map(|(k, v)| {
                 Ok((
                     k.clone(),
                     serialize_with_resource_type(
-                        serde_json::to_value(v).map_err(serde::ser::Error::custom)?,
+                        dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?,
                         "unit_test",
                     ),
                 ))
@@ -113,45 +113,47 @@ impl Serialize for DbtManifestV12 {
             .collect::<Result<_, _>>()?;
         map.insert(
             "unit_tests".to_string(),
-            serde_json::to_value(unit_tests_serialized).map_err(serde::ser::Error::custom)?,
+            dbt_serde_yaml::to_value(unit_tests_serialized).map_err(serde::ser::Error::custom)?,
         );
 
         map.insert(
             "docs".to_string(),
-            serde_json::to_value(&self.docs).map_err(serde::ser::Error::custom)?,
+            dbt_serde_yaml::to_value(&self.docs).map_err(serde::ser::Error::custom)?,
         );
 
         // Serialize semantic_models using InternalDbtNode trait
-        let semantic_models_serialized: BTreeMap<String, JsonValue> = self
+        let semantic_models_serialized: BTreeMap<String, YmlValue> = self
             .semantic_models
             .iter()
             .map(|(k, v)| (k.clone(), InternalDbtNode::serialize(v)))
             .collect();
         map.insert(
             "semantic_models".to_string(),
-            serde_json::to_value(semantic_models_serialized).map_err(serde::ser::Error::custom)?,
+            dbt_serde_yaml::to_value(semantic_models_serialized)
+                .map_err(serde::ser::Error::custom)?,
         );
 
         // Serialize saved_queries using InternalDbtNode trait
-        let saved_queries_serialized: BTreeMap<String, JsonValue> = self
+        let saved_queries_serialized: BTreeMap<String, YmlValue> = self
             .saved_queries
             .iter()
             .map(|(k, v)| (k.clone(), InternalDbtNode::serialize(v)))
             .collect();
         map.insert(
             "saved_queries".to_string(),
-            serde_json::to_value(saved_queries_serialized).map_err(serde::ser::Error::custom)?,
+            dbt_serde_yaml::to_value(saved_queries_serialized)
+                .map_err(serde::ser::Error::custom)?,
         );
 
         // Serialize exposures
-        let exposures_serialized: BTreeMap<String, JsonValue> = self
+        let exposures_serialized: BTreeMap<String, YmlValue> = self
             .exposures
             .iter()
             .map(|(k, v)| {
                 Ok((
                     k.clone(),
                     serialize_with_resource_type(
-                        serde_json::to_value(v).map_err(serde::ser::Error::custom)?,
+                        dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?,
                         "exposure",
                     ),
                 ))
@@ -159,43 +161,43 @@ impl Serialize for DbtManifestV12 {
             .collect::<Result<_, _>>()?;
         map.insert(
             "exposures".to_string(),
-            serde_json::to_value(exposures_serialized).map_err(serde::ser::Error::custom)?,
+            dbt_serde_yaml::to_value(exposures_serialized).map_err(serde::ser::Error::custom)?,
         );
 
         // Serialize metrics using InternalDbtNode trait
-        let metrics_serialized: BTreeMap<String, JsonValue> = self
+        let metrics_serialized: BTreeMap<String, YmlValue> = self
             .metrics
             .iter()
             .map(|(k, v)| (k.clone(), InternalDbtNode::serialize(v)))
             .collect();
         map.insert(
             "metrics".to_string(),
-            serde_json::to_value(metrics_serialized).map_err(serde::ser::Error::custom)?,
+            dbt_serde_yaml::to_value(metrics_serialized).map_err(serde::ser::Error::custom)?,
         );
 
         map.insert(
             "child_map".to_string(),
-            serde_json::to_value(&self.child_map).map_err(serde::ser::Error::custom)?,
+            dbt_serde_yaml::to_value(&self.child_map).map_err(serde::ser::Error::custom)?,
         );
         map.insert(
             "parent_map".to_string(),
-            serde_json::to_value(&self.parent_map).map_err(serde::ser::Error::custom)?,
+            dbt_serde_yaml::to_value(&self.parent_map).map_err(serde::ser::Error::custom)?,
         );
         map.insert(
             "group_map".to_string(),
-            serde_json::to_value(&self.group_map).map_err(serde::ser::Error::custom)?,
+            dbt_serde_yaml::to_value(&self.group_map).map_err(serde::ser::Error::custom)?,
         );
         map.insert(
             "disabled".to_string(),
-            serde_json::to_value(&self.disabled).map_err(serde::ser::Error::custom)?,
+            dbt_serde_yaml::to_value(&self.disabled).map_err(serde::ser::Error::custom)?,
         );
         map.insert(
             "selectors".to_string(),
-            serde_json::to_value(&self.selectors).map_err(serde::ser::Error::custom)?,
+            dbt_serde_yaml::to_value(&self.selectors).map_err(serde::ser::Error::custom)?,
         );
         map.insert(
             "groups".to_string(),
-            serde_json::to_value(&self.groups).map_err(serde::ser::Error::custom)?,
+            dbt_serde_yaml::to_value(&self.groups).map_err(serde::ser::Error::custom)?,
         );
 
         map.serialize(serializer)

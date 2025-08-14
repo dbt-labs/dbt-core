@@ -3,7 +3,7 @@ use serde_with::skip_serializing_none;
 use std::{collections::BTreeMap, path::PathBuf};
 
 // Type aliases for clarity
-type JsonValue = serde_json::Value;
+type YmlValue = dbt_serde_yaml::Value;
 
 use crate::schemas::project::SavedQueriesConfig;
 use crate::schemas::serde::bool_or_string_bool;
@@ -22,15 +22,14 @@ pub struct DbtSavedQuery {
     pub exports: Vec<DbtSavedQueryExport>,
     pub description: Option<String>,
     pub label: Option<String>,
-    pub metadata: Option<JsonValue>,
+    pub metadata: Option<YmlValue>,
     pub config: SavedQueriesConfig,
-    pub unrendered_config: BTreeMap<String, JsonValue>,
+    pub unrendered_config: BTreeMap<String, YmlValue>,
     pub depends_on: SavedQueryDependsOn,
     pub created_at: f64,
-    pub refs: Vec<JsonValue>,
+    pub refs: Vec<YmlValue>,
     pub tags: Option<Vec<String>>,
-    #[serde(flatten)]
-    pub other: BTreeMap<String, JsonValue>,
+    pub __other__: BTreeMap<String, YmlValue>,
 }
 
 #[skip_serializing_none]
@@ -46,16 +45,15 @@ pub struct SavedQueryDependsOn {
 #[serde(rename_all = "snake_case")]
 pub struct DbtSavedQueryParams {
     pub metrics: Vec<String>,
-    pub group_by: Vec<JsonValue>,
-    pub where_clause: Option<JsonValue>,
+    pub group_by: Vec<YmlValue>,
+    pub where_clause: Option<YmlValue>,
     #[serde(rename = "where")]
-    pub where_condition: Option<JsonValue>,
+    pub where_condition: Option<YmlValue>,
     // According to the the V12 JSON schema the `order_by` field is required, however in reality
     // many manifests omit it. To allow these to be parsed the `order_by` field needs to be optional
-    pub order_by: Option<Vec<JsonValue>>,
-    pub limit: Option<JsonValue>,
-    #[serde(flatten)]
-    pub other: BTreeMap<String, JsonValue>,
+    pub order_by: Option<Vec<YmlValue>>,
+    pub limit: Option<YmlValue>,
+    pub __other__: BTreeMap<String, YmlValue>,
 }
 
 #[skip_serializing_none]
@@ -64,9 +62,8 @@ pub struct DbtSavedQueryParams {
 pub struct DbtSavedQueryExport {
     pub name: String,
     pub config: DbtSavedQueryExportConfig,
-    pub unrendered_config: BTreeMap<String, JsonValue>,
-    #[serde(flatten)]
-    pub other: BTreeMap<String, JsonValue>,
+    pub unrendered_config: BTreeMap<String, YmlValue>,
+    pub __other__: BTreeMap<String, YmlValue>,
 }
 
 #[skip_serializing_none]
@@ -78,8 +75,7 @@ pub struct DbtSavedQueryExportConfig {
     pub schema: String,
     pub alias: String,
     pub database: Option<String>,
-    #[serde(flatten)]
-    pub other: BTreeMap<String, JsonValue>,
+    pub __other__: BTreeMap<String, YmlValue>,
 }
 
 #[skip_serializing_none]
@@ -89,12 +85,11 @@ pub struct DbtSavedQueryConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub group: Option<String>,
-    pub meta: BTreeMap<String, JsonValue>,
+    pub meta: BTreeMap<String, YmlValue>,
     pub export_as: Option<String>,
     pub schema: Option<String>,
     pub cache: Option<DbtSavedQueryCacheConfig>,
-    #[serde(flatten)]
-    pub other: BTreeMap<String, JsonValue>,
+    pub __other__: BTreeMap<String, YmlValue>,
 }
 
 #[skip_serializing_none]
@@ -102,6 +97,5 @@ pub struct DbtSavedQueryConfig {
 #[serde(rename_all = "snake_case")]
 pub struct DbtSavedQueryCacheConfig {
     pub enabled: bool,
-    #[serde(flatten)]
-    pub other: BTreeMap<String, JsonValue>,
+    pub __other__: BTreeMap<String, YmlValue>,
 }

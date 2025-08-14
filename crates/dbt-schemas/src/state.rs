@@ -24,7 +24,7 @@ use crate::schemas::{
 };
 use blake3::Hasher;
 use chrono::{DateTime, Local, Utc};
-use dbt_common::{ErrorCode, FsResult, fs_err, serde_utils::convert_json_to_map};
+use dbt_common::{ErrorCode, FsResult, fs_err, serde_utils::convert_yml_to_map};
 use minijinja::compiler::parser::materialization_macro_name;
 use minijinja::{MacroSpans, Value as MinijinjaValue, value::Object};
 use serde::Deserialize;
@@ -692,12 +692,12 @@ impl DbtRuntimeConfig {
         };
 
         let mut runtime_config = Self {
-            runtime_config: convert_json_to_map(
-                serde_json::to_value(&runtime_config_inner).unwrap(),
+            runtime_config: convert_yml_to_map(
+                dbt_serde_yaml::to_value(&runtime_config_inner).unwrap(),
             ),
             dependencies: BTreeMap::new(),
-            vars: minijinja::Value::from_object(VarProvider::new(convert_json_to_map(
-                serde_json::to_value(&runtime_config_inner.vars).unwrap(),
+            vars: minijinja::Value::from_object(VarProvider::new(convert_yml_to_map(
+                dbt_serde_yaml::to_value(&runtime_config_inner.vars).unwrap(),
             ))),
             inner: runtime_config_inner,
         };

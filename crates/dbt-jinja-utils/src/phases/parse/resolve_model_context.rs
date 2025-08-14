@@ -13,7 +13,10 @@ use std::{
 
 use chrono::TimeZone;
 use chrono_tz::{Europe::London, Tz};
-use dbt_common::{io_args::StaticAnalysisKind, serde_utils::convert_json_to_map};
+use dbt_common::{
+    io_args::{IoArgs, StaticAnalysisKind},
+    serde_utils::convert_yml_to_map,
+};
 use dbt_frontend_common::error::CodeLocation;
 use dbt_fusion_adapter::{load_store::ResultStore, relation_object::create_relation};
 use dbt_schemas::schemas::{
@@ -39,7 +42,7 @@ use minijinja::{
 };
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
 
-use crate::phases::MacroLookupContext;
+use crate::{phases::MacroLookupContext, serde::into_typed_with_error};
 
 use super::sql_resource::SqlResource;
 
@@ -71,6 +74,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
     sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
     execute_exists: Arc<AtomicBool>,
     display_path: &Path,
+    io_args: &IoArgs,
 ) -> BTreeMap<String, MinijinjaValue> {
     // Create a relation for 'this' using config values
     let mut context = BTreeMap::new();
@@ -159,12 +163,20 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
         .unwrap()
         .push(SqlResource::Config(Box::new(config.clone())));
 
+    let package_dependency = if package_name == root_project_name {
+        None
+    } else {
+        Some(package_name.to_string())
+    };
     let is_enabled = config.get_enabled().unwrap_or(true);
     context.insert(
         "config".to_owned(),
         MinijinjaValue::from_object(ParseConfig {
             enabled: is_enabled,
             sql_resources: sql_resources.clone(),
+            io_args: io_args.clone().into(),
+            package_dependency: package_dependency.clone(),
+            error_path: Some(display_path.to_path_buf()),
         }),
     );
     builtins.insert(
@@ -172,12 +184,15 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
         MinijinjaValue::from_object(ParseConfig {
             enabled: is_enabled,
             sql_resources,
+            io_args: io_args.clone().into(),
+            package_dependency,
+            error_path: Some(display_path.to_path_buf()),
         }),
     );
 
     // TODO (Ani): Make this more extensible and depending on the resouce it could be model, macro, or source
     let model = DbtModel {
-        common_attr: CommonAttributes {
+        __common_attr__: CommonAttributes {
             name: model_name.to_owned(),
             package_name: package_name.to_owned(),
             path: PathBuf::from(""),
@@ -192,7 +207,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
             tags: vec![],
             meta: BTreeMap::new(),
         },
-        base_attr: NodeBaseAttributes {
+        __base_attr__: NodeBaseAttributes {
             database: database.to_string(),
             schema: schema.to_string(),
             alias: model_name.to_string(),
@@ -213,7 +228,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
             sources: vec![],
             metrics: vec![],
         },
-        model_attr: DbtModelAttr {
+        __model_attr__: DbtModelAttr {
             introspection: IntrospectionKind::None,
             version: None,
             latest_version: None,
@@ -228,11 +243,11 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
             contract: None,
             event_time: None,
         },
-        other: BTreeMap::new(),
+        __other__: BTreeMap::new(),
         deprecated_config: ModelConfig::default(),
     };
 
-    let mut model_map = convert_json_to_map(model.serialize());
+    let mut model_map = convert_yml_to_map(model.serialize());
     model_map.insert(
         "batch".to_string(),
         MinijinjaValue::from_object(init_batch_context()),
@@ -387,8 +402,7 @@ impl<T: DefaultTo<T>> Object for ResolveRefFunction<T> {
             location,
         )));
 
-        // At resolve time, fqn do not have to be accurate
-        Ok(create_relation(
+        let relation = create_relation(
             self.adapter_type.clone(),
             self.database.clone(),
             self.schema.clone(),
@@ -399,7 +413,9 @@ impl<T: DefaultTo<T>> Object for ResolveRefFunction<T> {
                 .expect("Failed to convert quoting to resolved quoting"),
         )
         .unwrap()
-        .as_value())
+        .as_value();
+        // At resolve time, fqn do not have to be accurate
+        Ok(relation)
     }
 }
 
@@ -498,6 +514,12 @@ pub struct ParseConfig<T: DefaultTo<T> + 'static> {
     pub sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
     /// Whether the model is enabled (based on upstream config)
     pub enabled: bool,
+    /// IoArgs to be used for error reporting
+    pub io_args: Arc<IoArgs>,
+    // Current package name
+    pub package_dependency: Option<String>,
+    /// Error path to be used for error reporting
+    pub error_path: Option<PathBuf>,
 }
 
 impl<T: DefaultTo<T>> Object for ParseConfig<T> {
@@ -568,13 +590,20 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
             .unwrap_or(MinijinjaValue::from(self.enabled));
         result.insert("enabled".to_string(), enabled.clone());
 
-        let value = serde_json::to_value(result).map_err(|e| {
+        let yaml_value = dbt_serde_yaml::to_value(result).map_err(|e| {
             MinijinjaError::new(
                 MinijinjaErrorKind::InvalidOperation,
-                format!("Failed to serialize config into json: {e}"),
+                format!("Failed to serialize config into yaml: {e}"),
             )
         })?;
-        let config: T = serde_json::from_value(value).map_err(|e| {
+        let config: T = into_typed_with_error(
+            &self.io_args,
+            yaml_value,
+            true,
+            self.package_dependency.as_deref(),
+            self.error_path.clone(),
+        )
+        .map_err(|e| {
             MinijinjaError::new(
                 MinijinjaErrorKind::InvalidOperation,
                 format!("Failed to parse node configuration: {e}"),

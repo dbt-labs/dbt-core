@@ -180,7 +180,7 @@ pub fn resolve_seeds(
 
         // Create initial seed with default values
         let mut dbt_seed = DbtSeed {
-            common_attr: CommonAttributes {
+            __common_attr__: CommonAttributes {
                 name: seed_name.to_owned(),
                 package_name: package_name.to_owned(),
                 path: path.to_owned(),
@@ -208,7 +208,7 @@ pub fn resolve_seeds(
                     .unwrap_or_default(),
                 meta: properties_config.meta.clone().unwrap_or_default(),
             },
-            base_attr: NodeBaseAttributes {
+            __base_attr__: NodeBaseAttributes {
                 database: database.to_string(), // will be updated below
                 schema: schema.to_string(),     // will be updated below
                 alias: "".to_owned(),           // will be updated below
@@ -223,13 +223,13 @@ pub fn resolve_seeds(
                 materialized: DbtMaterialization::Table,
                 ..Default::default()
             },
-            seed_attr: DbtSeedAttr {
+            __seed_attr__: DbtSeedAttr {
                 quote_columns: properties_config.quote_columns.unwrap_or(false),
                 column_types: properties_config.column_types.clone(),
                 delimiter: properties_config.delimiter.clone().map(|d| d.into_inner()),
                 root_path: Some(seed_file.base_path.clone()),
             },
-            other: BTreeMap::new(),
+            __other__: BTreeMap::new(),
             deprecated_config: properties_config.clone(),
         };
 

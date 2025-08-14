@@ -82,8 +82,7 @@ pub struct GitPackage {
     pub warn_unpinned: Option<bool>,
     #[serde(rename = "subdirectory", skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
-    #[serde(flatten)]
-    pub unrendered: HashMap<String, YmlValue>,
+    pub __unrendered__: HashMap<String, YmlValue>,
 }
 
 impl From<GitPackageLock> for GitPackage {
@@ -93,7 +92,7 @@ impl From<GitPackageLock> for GitPackage {
             revision: Some(git_package_lock.revision),
             warn_unpinned: git_package_lock.warn_unpinned,
             subdirectory: git_package_lock.subdirectory,
-            unrendered: git_package_lock.unrendered,
+            __unrendered__: git_package_lock.__unrendered__,
         }
     }
 }
@@ -109,8 +108,7 @@ pub struct PrivatePackage {
     pub warn_unpinned: Option<bool>,
     #[serde(rename = "subdirectory", skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
-    #[serde(flatten)]
-    pub unrendered: HashMap<String, YmlValue>,
+    pub __unrendered__: HashMap<String, YmlValue>,
 }
 
 impl From<PrivatePackageLock> for PrivatePackage {
@@ -121,7 +119,7 @@ impl From<PrivatePackageLock> for PrivatePackage {
             revision: Some(private_package_lock.revision),
             warn_unpinned: private_package_lock.warn_unpinned,
             subdirectory: private_package_lock.subdirectory,
-            unrendered: private_package_lock.unrendered,
+            __unrendered__: private_package_lock.__unrendered__,
         }
     }
 }
@@ -246,8 +244,7 @@ pub struct GitPackageLock {
     pub warn_unpinned: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
-    #[serde(flatten)]
-    pub unrendered: HashMap<String, YmlValue>,
+    pub __unrendered__: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -267,30 +264,27 @@ pub struct PrivatePackageLock {
     pub warn_unpinned: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
-    #[serde(flatten)]
-    pub unrendered: HashMap<String, YmlValue>,
+    pub __unrendered__: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TarballPackageLock {
     pub tarball: Verbatim<String>,
     pub name: String,
-    #[serde(flatten)]
-    pub unrendered: HashMap<String, YmlValue>,
+    pub __unrendered__: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TarballPackage {
     pub tarball: Verbatim<String>,
-    #[serde(flatten)]
-    pub unrendered: HashMap<String, YmlValue>,
+    pub __unrendered__: HashMap<String, YmlValue>,
 }
 
 impl From<TarballPackageLock> for TarballPackage {
     fn from(tarball_package_lock: TarballPackageLock) -> Self {
         TarballPackage {
             tarball: tarball_package_lock.tarball,
-            unrendered: tarball_package_lock.unrendered,
+            __unrendered__: tarball_package_lock.__unrendered__,
         }
     }
 }
@@ -324,8 +318,7 @@ pub struct DeprecatedGitPackageLock {
     pub warn_unpinned: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
-    #[serde(flatten)]
-    pub unrendered: HashMap<String, YmlValue>,
+    pub __unrendered__: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

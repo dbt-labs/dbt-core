@@ -242,7 +242,7 @@ pub async fn resolve_models(
 
         // Create the DbtModel with all properties already set
         let mut dbt_model = DbtModel {
-            common_attr: CommonAttributes {
+            __common_attr__: CommonAttributes {
                 name: model_name.to_owned(),
                 package_name: package_name.to_owned(),
                 path: dbt_asset.path.to_owned(),
@@ -261,7 +261,7 @@ pub async fn resolve_models(
                     .unwrap_or_default(),
                 meta: model_config.meta.clone().unwrap_or_default(),
             },
-            base_attr: NodeBaseAttributes {
+            __base_attr__: NodeBaseAttributes {
                 database: database.to_string(), // will be updated below
                 schema: schema.to_string(),     // will be updated below
                 alias: "".to_owned(),           // will be updated below
@@ -311,7 +311,7 @@ pub async fn resolve_models(
                     .static_analysis
                     .unwrap_or(StaticAnalysisKind::On),
             },
-            model_attr: DbtModelAttr {
+            __model_attr__: DbtModelAttr {
                 introspection: IntrospectionKind::None,
                 version: maybe_version.map(|v| v.into()),
                 latest_version: maybe_latest_version.map(|v| v.into()),
@@ -328,7 +328,7 @@ pub async fn resolve_models(
             },
             // Derived from the model config
             deprecated_config: model_config.clone(),
-            other: BTreeMap::new(),
+            __other__: BTreeMap::new(),
         };
 
         let components = RelationComponents {

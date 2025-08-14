@@ -1,8 +1,9 @@
 use super::{RunResultsArtifact, manifest::DbtManifest};
 use crate::schemas::common::{DbtQuoting, ResolvedQuoting};
 use crate::schemas::manifest::nodes_from_dbt_manifest;
+use crate::schemas::serde::typed_struct_from_json_file;
 use crate::schemas::{InternalDbtNode, Nodes};
-use dbt_common::{ErrorCode, FsResult, constants::DBT_MANIFEST_JSON, fs_err, stdfs};
+use dbt_common::{FsResult, constants::DBT_MANIFEST_JSON};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -31,21 +32,8 @@ impl fmt::Display for PreviousState {
 }
 impl PreviousState {
     pub fn try_new(state_path: &Path, root_project_quoting: ResolvedQuoting) -> FsResult<Self> {
-        let file = stdfs::File::open(state_path.join(DBT_MANIFEST_JSON)).map_err(|_| {
-            fs_err!(
-                ErrorCode::FileNotFound,
-                "Failed to open previous state file at {}",
-                state_path.join(DBT_MANIFEST_JSON).display()
-            )
-        })?;
-        let manifest: DbtManifest = serde_json::from_reader(file).map_err(|_| {
-            fs_err!(
-                ErrorCode::FileNotFound,
-                "Failed to parse manifest file at {}",
-                state_path.join(DBT_MANIFEST_JSON).display()
-            )
-        })?;
-
+        let manifest: DbtManifest =
+            typed_struct_from_json_file(&state_path.join(DBT_MANIFEST_JSON))?;
         let dbt_quoting = DbtQuoting {
             database: Some(root_project_quoting.database),
             schema: Some(root_project_quoting.schema),

@@ -226,7 +226,7 @@ email,string,\n\
         };
 
         DbtModel {
-            base_attr: base_attrs,
+            __base_attr__: base_attrs,
             deprecated_config,
             ..Default::default()
         }

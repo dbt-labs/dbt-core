@@ -198,7 +198,7 @@ pub async fn resolve_data_tests(
         test_config.enabled = Some(!(*status == ModelStatus::Disabled));
 
         let mut dbt_test = DbtTest {
-            common_attr: CommonAttributes {
+            __common_attr__: CommonAttributes {
                 name: model_name.to_owned(),
                 package_name: package_name.to_owned(),
                 path: dbt_asset.path.to_owned(),
@@ -221,7 +221,7 @@ pub async fn resolve_data_tests(
                     .unwrap_or_default(),
                 meta: test_config.meta.clone().unwrap_or_default(),
             },
-            base_attr: NodeBaseAttributes {
+            __base_attr__: NodeBaseAttributes {
                 database: database.to_owned(),
                 schema: schema.to_owned(),
                 alias: "will_be_updated_below".to_owned(),
@@ -268,14 +268,14 @@ pub async fn resolve_data_tests(
                     .collect(),
                 metrics: vec![],
             },
-            test_attr: DbtTestAttr {
+            __test_attr__: DbtTestAttr {
                 column_name: None,
                 attached_node: None,
                 test_metadata: None,
                 file_key_name: None,
             },
             deprecated_config: *test_config.clone(),
-            other: BTreeMap::new(),
+            __other__: BTreeMap::new(),
         };
 
         let components = RelationComponents {

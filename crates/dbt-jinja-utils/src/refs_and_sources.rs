@@ -228,21 +228,21 @@ impl RefsAndSourcesTracker for RefsAndSources {
         self.sources
             .entry(format!(
                 "{}.{}.{}",
-                package_name, source.source_attr.source_name, source.common_attr.name
+                package_name, source.__source_attr__.source_name, source.__common_attr__.name
             ))
             .or_default()
             .push((
-                source.common_attr.unique_id.clone(),
+                source.__common_attr__.unique_id.clone(),
                 relation.clone(),
                 status,
             ));
         self.sources
             .entry(format!(
                 "{}.{}",
-                source.source_attr.source_name, source.common_attr.name
+                source.__source_attr__.source_name, source.__common_attr__.name
             ))
             .or_default()
-            .push((source.common_attr.unique_id.clone(), relation, status));
+            .push((source.__common_attr__.unique_id.clone(), relation, status));
         Ok(())
     }
 

@@ -1,11 +1,12 @@
 use crate::AuthError;
-use serde_json::Value;
 use std::collections::HashMap;
+
+type YmlValue = dbt_serde_yaml::Value;
 
 /// Configuration for adapters
 #[derive(Debug, Default)]
 pub struct AdapterConfig {
-    db_config: HashMap<String, Value>,
+    db_config: HashMap<String, YmlValue>,
 }
 
 impl AdapterConfig {
@@ -15,7 +16,7 @@ impl AdapterConfig {
     }
 
     /// Make new config
-    pub fn new(db_config: HashMap<String, Value>) -> Self {
+    pub fn new(db_config: HashMap<String, YmlValue>) -> Self {
         Self { db_config }
     }
 
@@ -37,7 +38,7 @@ impl AdapterConfig {
                 Ok(None)
             } else {
                 let err = AuthError::Config(format!(
-                    "{key} value: {value} is not a string, integer, float, or boolean"
+                    "{key} value: {value:?} is not a string, integer, float, or boolean"
                 ));
                 Err(err)
             }
@@ -57,7 +58,7 @@ impl AdapterConfig {
     }
 
     /// Get the raw config as a HashMap
-    pub fn raw_config(&self) -> HashMap<String, Value> {
+    pub fn raw_config(&self) -> HashMap<String, YmlValue> {
         self.db_config.clone()
     }
 }

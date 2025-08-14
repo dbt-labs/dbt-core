@@ -144,7 +144,7 @@ mod tests {
             provider: None,
             subdirectory: None,
             warn_unpinned: None,
-            unrendered: HashMap::new(),
+            __unrendered__: HashMap::new(),
         };
 
         let resolved_url = get_resolved_url(&private_package).unwrap();
@@ -168,7 +168,7 @@ mod tests {
             provider: Some("github".to_string()),
             subdirectory: None,
             warn_unpinned: None,
-            unrendered: HashMap::new(),
+            __unrendered__: HashMap::new(),
         };
 
         let resolved_url = get_resolved_url(&private_package).unwrap();
@@ -194,7 +194,7 @@ mod tests {
             provider: Some("gitlab".to_string()),
             subdirectory: None,
             warn_unpinned: None,
-            unrendered: HashMap::new(),
+            __unrendered__: HashMap::new(),
         };
 
         let resolved_url = get_resolved_url(&private_package).unwrap();
@@ -220,7 +220,7 @@ mod tests {
             provider: Some("ado".to_string()),
             subdirectory: None,
             warn_unpinned: None,
-            unrendered: HashMap::new(),
+            __unrendered__: HashMap::new(),
         };
 
         let resolved_url = get_resolved_url(&private_package).unwrap();
@@ -246,7 +246,7 @@ mod tests {
             provider: Some("unknown".to_string()),
             subdirectory: None,
             warn_unpinned: None,
-            unrendered: HashMap::new(),
+            __unrendered__: HashMap::new(),
         };
 
         let resolved_url = get_resolved_url(&private_package);

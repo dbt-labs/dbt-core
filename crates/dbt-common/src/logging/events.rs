@@ -20,7 +20,8 @@ use crate::{
 };
 use log::Level;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+
+type YmlValue = dbt_serde_yaml::Value;
 
 /// Events related to statistics gathering
 #[derive(Clone, Serialize, Deserialize)]
@@ -375,7 +376,7 @@ impl From<&str> for LogEvent {
 pub struct FsInfo {
     pub event: LogEvent,
     pub target: String,
-    pub data: Option<Value>,
+    pub data: Option<YmlValue>,
     pub desc: Option<String>,
 }
 impl FsInfo {

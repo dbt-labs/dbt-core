@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumIter, EnumString, IntoEnumIterator};
 
 use crate::schemas::columns::bigquery::BigqueryColumn;
+use crate::schemas::serde::minijinja_value_to_typed_struct;
 
 use std::convert::AsRef;
 use std::{rc::Rc, sync::Arc};
@@ -33,8 +34,7 @@ pub struct BigqueryPartitionConfig {
     pub field: String,
     #[serde(default = "BigqueryPartitionConfig::default_data_type")]
     pub data_type: String,
-    #[serde(flatten)]
-    pub inner: BigqueryPartitionConfigInner,
+    pub __inner__: BigqueryPartitionConfigInner,
     #[serde(default)]
     pub copy_partitions: bool,
 }
@@ -109,7 +109,7 @@ impl BigqueryPartitionConfig {
     pub const PARTITION_TIME: &str = "_PARTITIONTIME";
 
     pub fn time_ingestion_partitioning(&self) -> bool {
-        match &self.inner {
+        match &self.__inner__ {
             BigqueryPartitionConfigInner::Time(TimeConfig {
                 time_ingestion_partitioning,
                 ..
@@ -119,7 +119,7 @@ impl BigqueryPartitionConfig {
     }
 
     pub fn granularity(&self) -> Result<String, MinijinjaError> {
-        match &self.inner {
+        match &self.__inner__ {
             BigqueryPartitionConfigInner::Time(TimeConfig { granularity, .. }) => {
                 Ok(granularity.to_string())
             }
@@ -131,7 +131,7 @@ impl BigqueryPartitionConfig {
     }
 
     pub fn range(&self) -> Result<Range, MinijinjaError> {
-        match &self.inner {
+        match &self.__inner__ {
             BigqueryPartitionConfigInner::Range(RangeConfig { range }) => Ok(range.clone()),
             BigqueryPartitionConfigInner::Time(_) => Err(MinijinjaError::new(
                 MinijinjaErrorKind::InvalidArgument,
@@ -167,7 +167,7 @@ impl BigqueryPartitionConfig {
         parser.check_num_args(current_function_name!(), 0, 1)?;
 
         let columns = parser.get::<MinijinjaValue>("columns")?;
-        if let Ok(columns) = Vec::<BigqueryColumn>::deserialize(columns) {
+        if let Ok(columns) = minijinja_value_to_typed_struct::<Vec<BigqueryColumn>>(columns) {
             let columns = columns
                 .into_iter()
                 .filter_map(|c| {
@@ -191,7 +191,7 @@ impl BigqueryPartitionConfig {
     pub fn data_type_should_be_truncated(&self) -> bool {
         !(self.data_type == "int64"
             || (self.data_type == "date"
-                && match &self.inner {
+                && match &self.__inner__ {
                     BigqueryPartitionConfigInner::Time(TimeConfig { granularity, .. }) => {
                         granularity == "day"
                     }
@@ -357,35 +357,44 @@ pub struct GrantAccessToTarget {
 
 #[cfg(test)]
 mod tests {
+    use crate::schemas::serde::minijinja_value_to_typed_struct;
+
     use super::*;
     use minijinja::value::Value as MinijinjaValue;
-    use serde_json::json;
+
+    type YmlValue = dbt_serde_yaml::Value;
 
     #[test]
     fn test_bigquery_partition_config_legacy_deserialize_from_jinja_values() {
         // Test String variant
         let string_value = MinijinjaValue::from("partition_field");
-        let result = BigqueryPartitionConfigLegacy::deserialize(string_value).unwrap();
+        let result =
+            minijinja_value_to_typed_struct::<BigqueryPartitionConfigLegacy>(string_value).unwrap();
         assert!(
             matches!(result, BigqueryPartitionConfigLegacy::String(s) if s == "partition_field")
         );
 
         // Test List variant
         let list_value = MinijinjaValue::from(vec!["field1", "field2"]);
-        let result = BigqueryPartitionConfigLegacy::deserialize(list_value).unwrap();
+        let result =
+            minijinja_value_to_typed_struct::<BigqueryPartitionConfigLegacy>(list_value).unwrap();
         assert!(
             matches!(result, BigqueryPartitionConfigLegacy::List(ref list) if list == &vec!["field1".to_string(), "field2".to_string()])
         );
 
         // Test BigqueryPartitionConfig variant with time partitioning
-        let config_json = json!({
-            "field": "partition_date",
-            "data_type": "date",
-            "granularity": "day",
-            "time_ingestion_partitioning": true
-        });
+        let config_json: YmlValue = dbt_serde_yaml::from_str(
+            r#"
+            field: "partition_date"
+            data_type: "date"
+            granularity: "day"
+            time_ingestion_partitioning: true
+        "#,
+        )
+        .unwrap();
         let config_value = MinijinjaValue::from_serialize(&config_json);
-        let result = BigqueryPartitionConfigLegacy::deserialize(config_value).unwrap();
+        let result =
+            minijinja_value_to_typed_struct::<BigqueryPartitionConfigLegacy>(config_value).unwrap();
         if let BigqueryPartitionConfigLegacy::BigqueryPartitionConfig(config) = result {
             assert_eq!(config.field, "partition_date");
             assert_eq!(config.data_type, "date");
@@ -398,34 +407,39 @@ mod tests {
 
     #[test]
     fn test_deserialize_time_partition_config() {
-        let json = json!({
-            "field": "created_at",
-            "data_type": "timestamp",
-            "granularity": "hour",
-        });
+        let json = dbt_serde_yaml::from_str(
+            r#"
+            field: created_at
+            data_type: timestamp
+            granularity: hour
+        "#,
+        )
+        .unwrap();
 
-        let config: BigqueryPartitionConfig = serde_json::from_value(json).unwrap();
+        let config: BigqueryPartitionConfig = dbt_serde_yaml::from_value(json).unwrap();
         assert!(matches!(
-            config.inner,
+            config.__inner__,
             BigqueryPartitionConfigInner::Time(_)
         ));
     }
 
     #[test]
     fn test_deserialize_range_partition_config() {
-        let json = json!({
-            "field": "user_id",
-            "data_type": "int64",
-            "range": {
-                "start": 0,
-                "end": 100,
-                "interval": 10
-            },
-        });
+        let json = dbt_serde_yaml::from_str(
+            r#"
+            field: "user_id"
+            data_type: "int64"
+            range:
+                start: 0
+                end: 100
+                interval: 10
+        "#,
+        )
+        .unwrap();
 
-        let config: BigqueryPartitionConfig = serde_json::from_value(json).unwrap();
+        let config: BigqueryPartitionConfig = dbt_serde_yaml::from_value(json).unwrap();
         assert!(matches!(
-            config.inner,
+            config.__inner__,
             BigqueryPartitionConfigInner::Range(_)
         ));
         assert!(!config.time_ingestion_partitioning());
@@ -434,15 +448,18 @@ mod tests {
 
     #[test]
     fn test_deserialize_with_defaults() {
-        let json = json!({
-            "field": "created_at"
-        });
+        let json = dbt_serde_yaml::from_str(
+            r#"
+            field: created_at
+        "#,
+        )
+        .unwrap();
 
-        let config: BigqueryPartitionConfig = serde_json::from_value(json).unwrap();
+        let config: BigqueryPartitionConfig = dbt_serde_yaml::from_value(json).unwrap();
         assert_eq!(config.field, "created_at");
         assert_eq!(config.data_type, "date"); // default
         assert!(
-            matches!(config.inner, BigqueryPartitionConfigInner::Time(TimeConfig { ref granularity, .. }) if granularity == "day")
+            matches!(config.__inner__, BigqueryPartitionConfigInner::Time(TimeConfig { ref granularity, .. }) if granularity == "day")
         ); // default
         assert!(!config.time_ingestion_partitioning()); // default
         assert!(!config.copy_partitions); // default
@@ -454,7 +471,7 @@ mod tests {
         let config = BigqueryPartitionConfig {
             field: "test_field".to_string(),
             data_type: "date".to_string(),
-            inner: BigqueryPartitionConfigInner::Time(TimeConfig {
+            __inner__: BigqueryPartitionConfigInner::Time(TimeConfig {
                 granularity: "day".to_string(),
                 time_ingestion_partitioning: false,
             }),
@@ -462,14 +479,17 @@ mod tests {
         };
 
         // Serialize to JSON to get all field names
-        let json_value = serde_json::to_value(&config).unwrap();
-        let json_object = json_value.as_object().unwrap();
+        let json_value = dbt_serde_yaml::to_value(&config).unwrap();
+        let json_object = json_value.as_mapping().unwrap();
 
         // Test that all JSON fields can be parsed by our enum (except flattened fields)
         for field_name in json_object.keys() {
             assert!(
-                PartitionConfigField::try_from(field_name.as_str()).is_ok(),
-                "Field '{field_name}' should be parseable by PartitionConfigField enum"
+                PartitionConfigField::try_from(
+                    field_name.as_str().expect("field_name should be a string")
+                )
+                .is_ok(),
+                "Field '{field_name:?}' should be parseable by PartitionConfigField enum"
             );
         }
 
@@ -483,7 +503,7 @@ mod tests {
         let config = BigqueryPartitionConfig {
             field: "user_id".to_string(),
             data_type: "int64".to_string(),
-            inner: BigqueryPartitionConfigInner::Range(RangeConfig {
+            __inner__: BigqueryPartitionConfigInner::Range(RangeConfig {
                 range: Range {
                     start: 0,
                     end: 100,
@@ -494,14 +514,17 @@ mod tests {
         };
 
         // Serialize to JSON to get all field names
-        let json_value = serde_json::to_value(&config).unwrap();
-        let json_object = json_value.as_object().unwrap();
+        let json_value = dbt_serde_yaml::to_value(&config).unwrap();
+        let json_object = json_value.as_mapping().unwrap();
 
         // Test that all JSON fields can be parsed by our enum (except nested range fields)
         for field_name in json_object.keys() {
             assert!(
-                PartitionConfigField::try_from(field_name.as_str()).is_ok(),
-                "Field '{field_name}' should be parseable by PartitionConfigField enum"
+                PartitionConfigField::try_from(
+                    field_name.as_str().expect("field_name should be a string")
+                )
+                .is_ok(),
+                "Field '{field_name:?}' should be parseable by PartitionConfigField enum"
             );
         }
     }
@@ -512,7 +535,7 @@ mod tests {
         let time_config = Arc::new(BigqueryPartitionConfig {
             field: "created_at".to_string(),
             data_type: "timestamp".to_string(),
-            inner: BigqueryPartitionConfigInner::Time(TimeConfig {
+            __inner__: BigqueryPartitionConfigInner::Time(TimeConfig {
                 granularity: "hour".to_string(),
                 time_ingestion_partitioning: true,
             }),
@@ -555,7 +578,7 @@ mod tests {
         let range_config = Arc::new(BigqueryPartitionConfig {
             field: "user_id".to_string(),
             data_type: "int64".to_string(),
-            inner: BigqueryPartitionConfigInner::Range(RangeConfig {
+            __inner__: BigqueryPartitionConfigInner::Range(RangeConfig {
                 range: Range {
                     start: 0,
                     end: 100,

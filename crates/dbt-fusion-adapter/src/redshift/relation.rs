@@ -312,12 +312,12 @@ fn node_value_to_redshift_materialized_view(
         }
     };
 
-    if model.base_attr.materialized != DbtMaterialization::MaterializedView {
+    if model.__base_attr__.materialized != DbtMaterialization::MaterializedView {
         return Err(MinijinjaError::new(
             MinijinjaErrorKind::InvalidOperation,
             format!(
                 "Unsupported operation for materialization type {}",
-                &model.base_attr.materialized
+                &model.__base_attr__.materialized
             ),
         ));
     }

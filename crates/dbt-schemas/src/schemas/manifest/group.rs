@@ -16,6 +16,5 @@ pub struct DbtGroup {
     pub original_file_path: PathBuf,
     pub unique_id: String,
     pub owner: DbtOwner,
-    #[serde(flatten)]
-    pub other: BTreeMap<String, Value>,
+    pub __other__: BTreeMap<String, Value>,
 }
