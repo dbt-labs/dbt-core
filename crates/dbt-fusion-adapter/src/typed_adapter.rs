@@ -354,6 +354,17 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         let schema = table.to_record_batch().schema();
         let data_type = schema.field(col_idx as usize).data_type();
 
+        // XXX: There is divergence here with Core's behavior as Agate only supports a limited
+        // set of datatypes. Our Agate implementation is lossless here and we have conversions with Arrow types.
+        //
+        // https://github.com/dbt-labs/dbt-fusion/issues/456
+        // It looks like core defaults to a numeric type when the given type is null
+        let data_type = if data_type.is_null() {
+            &DataType::Int32
+        } else {
+            data_type
+        };
+
         self.convert_type_inner(data_type)
     }
 

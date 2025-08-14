@@ -1,0 +1,4 @@
+kind: Fixes
+body: Fix null type conversion to match Python Agate and Core behavior. Null will
+  now be converted to a number type, allowing seeding with an empty column.
+time: 2025-08-06T18:39:32.377196417-07:00
