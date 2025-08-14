@@ -145,11 +145,88 @@ pub fn get_profile_name_from_project() -> FsResult<String> {
     let project: serde_json::Value = dbt_serde_yaml::from_str(&content)
         .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to parse dbt_project.yml: {}", e))?;
 
-    project
-        .get("profile")
-        .and_then(|p| p.as_str())
-        .map(|p| p.to_string())
-        .ok_or_else(|| fs_err!(ErrorCode::IoError, "No profile found in dbt_project.yml"))
+    if let Some(profile_value) = project.get("profile") {
+        if let Some(profile_str) = profile_value.as_str() {
+            return Ok(profile_str.to_string());
+        }
+    }
+
+    // No profile found in dbt_project.yml, ask user to provide one
+    use dialoguer::Input;
+
+    let default_profile = project
+        .get("name")
+        .and_then(|n| n.as_str())
+        .unwrap_or("my_profile");
+
+    let profile_name: String = Input::new()
+        .with_prompt(
+            "No profile found in dbt_project.yml. What profile name would you like to use?",
+        )
+        .default(default_profile.to_string())
+        .interact_text()
+        .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to get profile name: {}", e))?;
+
+    // Now update the dbt_project.yml file to include the profile
+    update_dbt_project_profile(&profile_name)?;
+
+    Ok(profile_name)
+}
+
+/// Update dbt_project.yml to include the profile field
+fn update_dbt_project_profile(profile_name: &str) -> FsResult<()> {
+    let content = fs::read_to_string("dbt_project.yml")?;
+
+    // Simple approach: find the first line that starts with a field name and add profile before it
+    // or add it after the 'name:' field if found
+    let lines: Vec<&str> = content.lines().collect();
+    let mut new_lines = Vec::new();
+    let mut profile_added = false;
+
+    for line in lines.iter() {
+        new_lines.push(line.to_string());
+
+        // If we find the 'name:' field, add the profile field right after it
+        if !profile_added && line.trim_start().starts_with("name:") {
+            new_lines.push(format!("profile: {profile_name}"));
+            profile_added = true;
+        }
+        // If we find another top-level field (not name) and haven't added profile yet, add it before
+        else if !profile_added
+            && !line.trim().is_empty()
+            && !line.starts_with(' ')
+            && !line.starts_with('\t')
+            && !line.starts_with('#')
+            && !line.trim_start().starts_with("name:")
+            && line.contains(':')
+        {
+            // Insert profile before this line
+            new_lines.pop(); // Remove the current line
+            new_lines.push(format!("profile: {profile_name}"));
+            new_lines.push(line.to_string());
+            profile_added = true;
+        }
+    }
+
+    // If we still haven't added it, add it at the end
+    if !profile_added {
+        new_lines.push(format!("profile: {profile_name}"));
+    }
+
+    let updated_content = new_lines.join("\n");
+    if !updated_content.ends_with('\n') {
+        fs::write("dbt_project.yml", updated_content + "\n")?;
+    } else {
+        fs::write("dbt_project.yml", updated_content)?;
+    }
+
+    log::info!(
+        "{} Added profile '{}' to dbt_project.yml",
+        GREEN.apply_to("Success"),
+        profile_name
+    );
+
+    Ok(())
 }
 
 /// Check if a profile exists in profiles.yml

@@ -2,6 +2,7 @@
 pub mod macros;
 
 pub mod adapter;
+pub mod adapter_config;
 pub mod atomic;
 pub mod cancellation;
 pub mod constants;
@@ -16,6 +17,7 @@ pub mod stats;
 pub mod stdfs;
 pub mod string_utils;
 pub mod tokiofs;
+pub mod yaml_utils;
 #[macro_use]
 pub extern crate dbt_error as error;
 pub use dbt_error::{
