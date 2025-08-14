@@ -1,14 +1,12 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use dbt_telemetry::SeverityNumber;
 
-pub fn tracing_level_to_severity(level: &tracing::Level) -> (SeverityNumber, Option<String>) {
+pub fn tracing_level_to_severity(level: &tracing::Level) -> (SeverityNumber, &'static str) {
     match *level {
-        tracing::Level::ERROR => (SeverityNumber::Error, Some("ERROR".to_string())),
-        tracing::Level::WARN => (SeverityNumber::Warn, Some("WARN".to_string())),
-        tracing::Level::INFO => (SeverityNumber::Info, Some("INFO".to_string())),
-        tracing::Level::DEBUG => (SeverityNumber::Debug, Some("DEBUG".to_string())),
-        tracing::Level::TRACE => (SeverityNumber::Trace, Some("TRACE".to_string())),
+        tracing::Level::ERROR => (SeverityNumber::Error, "ERROR"),
+        tracing::Level::WARN => (SeverityNumber::Warn, "WARN"),
+        tracing::Level::INFO => (SeverityNumber::Info, "INFO"),
+        tracing::Level::DEBUG => (SeverityNumber::Debug, "DEBUG"),
+        tracing::Level::TRACE => (SeverityNumber::Trace, "TRACE"),
     }
 }
 
@@ -25,19 +23,12 @@ pub fn log_level_filter_to_tracing(
     }
 }
 
-pub fn log_level_to_severity(level: &log::Level) -> (SeverityNumber, Option<String>) {
+pub fn log_level_to_severity(level: &log::Level) -> (SeverityNumber, &'static str) {
     match *level {
-        log::Level::Error => (SeverityNumber::Error, Some("ERROR".to_string())),
-        log::Level::Warn => (SeverityNumber::Warn, Some("WARN".to_string())),
-        log::Level::Info => (SeverityNumber::Info, Some("INFO".to_string())),
-        log::Level::Debug => (SeverityNumber::Debug, Some("DEBUG".to_string())),
-        log::Level::Trace => (SeverityNumber::Trace, Some("TRACE".to_string())),
+        log::Level::Error => (SeverityNumber::Error, "ERROR"),
+        log::Level::Warn => (SeverityNumber::Warn, "WARN"),
+        log::Level::Info => (SeverityNumber::Info, "INFO"),
+        log::Level::Debug => (SeverityNumber::Debug, "DEBUG"),
+        log::Level::Trace => (SeverityNumber::Trace, "TRACE"),
     }
-}
-
-pub fn current_time_nanos() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos() as u64
 }

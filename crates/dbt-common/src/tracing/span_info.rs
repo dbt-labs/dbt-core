@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use super::{constants::TRACING_ATTR_FIELD, shared::Recordable};
-use dbt_telemetry::{DebugValue, SpanAttributes, SpanStatus, StatusCode};
+use dbt_telemetry::{DebugValue, SpanStatus, StatusCode, TelemetryAttributes};
 
 use tracing::Span;
 use tracing_subscriber::{
@@ -81,8 +81,8 @@ pub(super) fn get_span_debug_extra_attrs(
 }
 
 /// Helper that extracts a `SpanEventAttributes` from a `ValueSet`.
-pub(super) fn get_span_event_attrs(values: Recordable<'_>) -> Option<SpanAttributes> {
-    struct SpanEventAttributesVisitor(Option<SpanAttributes>);
+pub(super) fn get_span_event_attrs(values: Recordable<'_>) -> Option<TelemetryAttributes> {
+    struct SpanEventAttributesVisitor(Option<TelemetryAttributes>);
 
     impl tracing::field::Visit for SpanEventAttributesVisitor {
         fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
@@ -216,7 +216,7 @@ pub fn record_span_status(span: &Span, error_message: Option<&str>) {
 /// return new attributes to replace the current ones.
 pub fn record_span_status_with_attrs<F>(span: &Span, attrs_updater: F, error_message: Option<&str>)
 where
-    F: FnOnce(Option<&mut SpanAttributes>) -> Option<SpanAttributes>,
+    F: FnOnce(Option<&mut TelemetryAttributes>) -> Option<TelemetryAttributes>,
 {
     with_span(span, |span_ref| {
         let mut span_ext_mut = span_ref.extensions_mut();
@@ -225,7 +225,7 @@ where
         record_span_status_on_ref(&mut span_ext_mut, error_message);
 
         // Get the current attributes, if any, and update or replace them
-        let attrs = span_ext_mut.get_mut::<SpanAttributes>();
+        let attrs = span_ext_mut.get_mut::<TelemetryAttributes>();
         if let Some(new_attrs) = attrs_updater(attrs) {
             span_ext_mut.replace(new_attrs);
         }
@@ -242,7 +242,7 @@ where
 /// return new attributes to replace the current ones.
 pub fn record_current_span_status_with_attrs<F>(attrs_updater: F, error_message: Option<&str>)
 where
-    F: FnOnce(Option<&mut SpanAttributes>) -> Option<SpanAttributes>,
+    F: FnOnce(Option<&mut TelemetryAttributes>) -> Option<TelemetryAttributes>,
 {
     with_current_span(|span_ref| {
         let mut span_ext_mut = span_ref.extensions_mut();
@@ -251,7 +251,7 @@ where
         record_span_status_on_ref(&mut span_ext_mut, error_message);
 
         // Get the current attributes, if any, and update or replace them
-        let attrs = span_ext_mut.get_mut::<SpanAttributes>();
+        let attrs = span_ext_mut.get_mut::<TelemetryAttributes>();
         if let Some(new_attrs) = attrs_updater(attrs) {
             span_ext_mut.replace(new_attrs);
         }

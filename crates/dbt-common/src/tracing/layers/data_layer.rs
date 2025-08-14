@@ -1,19 +1,18 @@
 use super::super::{
-    convert::{current_time_nanos, tracing_level_to_severity},
+    convert::tracing_level_to_severity,
     event_info::{get_log_event_attrs, get_log_message, store_event_data, take_event_attributes},
     init::process_span,
     span_info::{get_span_debug_extra_attrs, get_span_event_attrs},
 };
 use tracing_log::NormalizeEvent;
 
-use std::sync::atomic::AtomicU64;
+use std::{sync::atomic::AtomicU64, time::SystemTime};
 
 use tracing::{Level, Subscriber, span};
 use tracing_subscriber::{Layer, layer::Context};
 
 use dbt_telemetry::{
-    LogAttributes, LogRecordInfo, RecordCodeLocation, SpanAttributes, SpanEndInfo, SpanStartInfo,
-    SpanStatus,
+    LogRecordInfo, RecordCodeLocation, SpanEndInfo, SpanStartInfo, SpanStatus, TelemetryAttributes,
 };
 
 /// A tracing layer that creates structured telemetry data and stores it in span extensions.
@@ -92,7 +91,7 @@ where
                     .map(|parent_span_record| parent_span_record.span_id)
             });
 
-        let start_time = current_time_nanos();
+        let start_time = SystemTime::now();
         let (severity_number, severity_text) = tracing_level_to_severity(metadata.level());
 
         // Extract event attributes if any. To avoid leakage, we extract internal metadata
@@ -102,13 +101,13 @@ where
         let attributes = get_span_event_attrs(attrs.values().into()).unwrap_or_else(|| {
             if metadata.level() == &Level::TRACE {
                 // Trace spans without explicit attributes considered dev internal
-                SpanAttributes::DevInternal {
+                TelemetryAttributes::DevInternal {
                     name: metadata.name().to_string(),
                     location: self.get_location(metadata),
                     extra: get_span_debug_extra_attrs(attrs.values().into()),
                 }
             } else {
-                SpanAttributes::Unknown {
+                TelemetryAttributes::Unknown {
                     name: metadata.name().to_string(),
                     location: self.get_location(metadata),
                 }
@@ -118,13 +117,12 @@ where
         let record = SpanStartInfo {
             trace_id: self.trace_id,
             span_id: global_span_id,
+            span_name: attributes.to_string(),
             parent_span_id: global_parent_span_id,
-            name: attributes.to_string(),
             start_time_unix_nano: start_time,
-            attributes: attributes.clone(),
-            time_unix_nano: start_time,
             severity_number,
-            severity_text,
+            severity_text: severity_text.to_string(),
+            attributes: attributes.clone(),
         };
 
         let mut ext_mut = span.extensions_mut();
@@ -143,60 +141,70 @@ where
             .expect("Span must exist for id in the current context");
         let metadata = span.metadata();
 
-        // Get the span_id and start_time from the stored SpanStart record
-        let (span_id, start_time_unix_nano, parent_span_id, start_attributes) =
-            if let Some(SpanStartInfo {
-                span_id,
-                start_time_unix_nano,
-                parent_span_id,
-                attributes,
-                ..
-            }) = span.extensions().get::<SpanStartInfo>()
-            {
-                (
-                    *span_id,
-                    *start_time_unix_nano,
-                    *parent_span_id,
-                    attributes.clone(),
-                )
-            } else {
-                (
-                    self.next_span_id(),
-                    current_time_nanos(),
-                    None,
-                    SpanAttributes::Unknown {
-                        name: metadata.name().to_string(),
-                        location: self.get_location(metadata),
-                    },
-                ) // Fallback. Should not happen
-            };
+        // Get the shared info from the stored SpanStart record
+        let (
+            span_id,
+            parent_span_id,
+            start_time_unix_nano,
+            severity_number,
+            severity_text,
+            start_attributes,
+        ) = if let Some(SpanStartInfo {
+            span_id,
+            parent_span_id,
+            start_time_unix_nano,
+            severity_number,
+            severity_text,
+            attributes,
+            ..
+        }) = span.extensions().get::<SpanStartInfo>()
+        {
+            (
+                *span_id,
+                *parent_span_id,
+                *start_time_unix_nano,
+                *severity_number,
+                severity_text.clone(),
+                attributes.clone(),
+            )
+        } else {
+            let (severity_number, severity_text) = tracing_level_to_severity(metadata.level());
+
+            (
+                self.next_span_id(),
+                None,
+                SystemTime::now(),
+                severity_number,
+                severity_text.to_string(),
+                TelemetryAttributes::Unknown {
+                    name: metadata.name().to_string(),
+                    location: self.get_location(metadata),
+                },
+            ) // Fallback. Should not happen
+        };
 
         let status = span.extensions().get::<SpanStatus>().cloned();
 
         let attributes = span
             .extensions()
-            .get::<SpanAttributes>()
+            .get::<TelemetryAttributes>()
             .cloned()
             .unwrap_or({
                 // If no attributes were recorded, use the start attributes
                 start_attributes
             });
 
-        let end_time = current_time_nanos();
-        let (severity_number, severity_text) = tracing_level_to_severity(metadata.level());
-
         let record = SpanEndInfo {
             trace_id: self.trace_id,
             span_id,
+            span_name: attributes.to_string(),
             parent_span_id,
-            name: attributes.to_string(),
             start_time_unix_nano,
-            end_time_unix_nano: end_time,
-            attributes,
-            status,
-            time_unix_nano: end_time,
+            end_time_unix_nano: SystemTime::now(),
             severity_number,
             severity_text,
+            status,
+            attributes,
         };
 
         // Store the record in span extensions
@@ -216,7 +224,7 @@ where
                     .map(|parent_span_start_info| {
                         (
                             Some(parent_span_start_info.span_id),
-                            Some(parent_span_start_info.name.clone()),
+                            Some(parent_span_start_info.span_name.clone()),
                         )
                     })
             })
@@ -230,7 +238,6 @@ where
             .as_ref()
             .unwrap_or_else(|| event.metadata());
 
-        let time_unix_nano = current_time_nanos();
         // TODO: calculate modified severity based on user config when such feature is implemented
         let (severity_number, severity_text) = tracing_level_to_severity(metadata.level());
 
@@ -249,9 +256,9 @@ where
             }
         } else if event.is_log() {
             // This means the event is coming from `tracing-log` bridge
-            LogAttributes::LegacyLog {
-                original_severity_number: severity_number.clone(),
-                original_severity_text: severity_text.clone(),
+            TelemetryAttributes::LegacyLog {
+                original_severity_number: severity_number,
+                original_severity_text: severity_text.to_string(),
                 location: self.get_location(metadata),
             }
         } else {
@@ -264,22 +271,22 @@ where
                         attrs
                     }
                 })
-                .unwrap_or_else(|| LogAttributes::Log {
+                .unwrap_or_else(|| TelemetryAttributes::Log {
                     code: None,
                     dbt_core_code: None,
-                    original_severity_number: severity_number.clone(),
-                    original_severity_text: severity_text.clone(),
+                    original_severity_number: severity_number,
+                    original_severity_text: severity_text.to_string(),
                     location: self.get_location(metadata),
                 })
         };
 
         let log_record = LogRecordInfo {
-            time_unix_nano,
+            time_unix_nano: SystemTime::now(),
             trace_id: self.trace_id,
             span_id,
             span_name,
             severity_number,
-            severity_text,
+            severity_text: severity_text.to_string(),
             body: message,
             attributes,
         };

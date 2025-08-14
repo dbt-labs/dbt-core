@@ -1,6 +1,6 @@
 use std::sync::{Arc, OnceLock, RwLock};
 
-use dbt_telemetry::SpanAttributes;
+use dbt_telemetry::TelemetryAttributes;
 use tracing::{Subscriber, level_filters::LevelFilter, span};
 
 use tracing_subscriber::{
@@ -15,7 +15,8 @@ use super::{
     constants::TRACING_ATTR_FIELD,
     file_writer::TelemetryFileWriter,
     layers::{
-        data_layer::TelemetryDataLayer, jsonl_writer::TelemetryWriterLayer, otlp::OTLPExporterLayer,
+        data_layer::TelemetryDataLayer, jsonl_writer::TelemetryWriterLayer,
+        otlp::OTLPExporterLayer, parquet_writer::TelemetryParquetWriterLayer,
     },
 };
 use crate::{FsError, FsResult, stdfs::File, tracing::layers::progress_bar::ProgressBarLayer};
@@ -153,7 +154,7 @@ where
     // Create the process span and store it in the global PROCESS_SPAN
     let process_span = tracing::info_span!(
         "Process",
-        { TRACING_ATTR_FIELD } = SpanAttributes::Process {
+        { TRACING_ATTR_FIELD } = TelemetryAttributes::Process {
             version: env!("CARGO_PKG_VERSION").to_string(),
             host_os: std::env::consts::OS.to_string(),
             host_arch: std::env::consts::ARCH.to_string(),
@@ -242,6 +243,18 @@ where
         None
     };
 
+    // Create parquet writer layer if file path provided
+    let parquet_writer_layer = if let Some(file_path) = config.otm_parquet_file_path {
+        let (parquet_layer, writer_handle) = TelemetryParquetWriterLayer::new(file_path)?;
+
+        shutdown_items.push(Box::new(writer_handle));
+
+        // Create layer. User specified filtering is not applied here
+        Some(parquet_layer)
+    } else {
+        None
+    };
+
     // Create progress bar layer if log-format fancy enabled
     let progress_bar_layer = if config.enable_progress {
         // Create layer and apply user specified filtering
@@ -266,6 +279,7 @@ where
     // and disables all tracing
     let layers = data_layer
         .and_then(jsonl_writer_layer)
+        .and_then(parquet_writer_layer)
         .and_then(progress_bar_layer)
         .and_then(maybe_otlp_layer)
         .and_then(extra_layer);

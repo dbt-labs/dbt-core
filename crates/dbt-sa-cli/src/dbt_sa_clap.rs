@@ -9,7 +9,7 @@ use std::{
     collections::{BTreeMap, HashSet},
     path::{Path, PathBuf},
 };
-use strum::IntoEnumIterator;
+use strum::{Display, IntoEnumIterator};
 
 use dbt_common::io_args::{
     ClapResourceType, DisplayFormat, EvalArgs, IoArgs, JsonSchemaTypes, Phases, ShowOptions,
@@ -62,7 +62,7 @@ pub struct Cli {
     pub common_args: CommonArgs,
 }
 
-#[derive(Subcommand, Debug, Clone)]
+#[derive(Subcommand, Debug, Clone, Display)]
 pub enum Commands {
     /// Initialize a new dbt project
     Init(InitArgs),
@@ -415,6 +415,7 @@ impl InitArgs {
                 log_level_file: self.common_args.log_level_file,
                 log_path: self.common_args.log_path.clone(),
                 otm_file_name: self.common_args.otm_file_name.clone(),
+                otm_parquet_file_name: None,
                 export_to_otlp: false,
                 show_all_deprecations: self.common_args.show_all_deprecations,
                 show_timings: arg.from_main,
@@ -501,6 +502,7 @@ impl CommonArgs {
                 log_level_file: self.log_level_file,
                 log_path: self.log_path.clone(),
                 otm_file_name: self.otm_file_name.clone(),
+                otm_parquet_file_name: None,
                 export_to_otlp: false,
                 show_all_deprecations: arg.io.show_all_deprecations,
                 show_timings: arg.from_main,
@@ -589,6 +591,7 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             },
             log_path: cli.common_args().log_path,
             otm_file_name: cli.common_args().otm_file_name,
+            otm_parquet_file_name: None,
             export_to_otlp: false,
             show_all_deprecations: cli.common_args().show_all_deprecations,
             show_timings: true, // always true for main
@@ -618,6 +621,7 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             log_level_file: cli.common_args().log_level_file,
             log_path: cli.common_args().log_path,
             otm_file_name: cli.common_args().otm_file_name,
+            otm_parquet_file_name: None,
             export_to_otlp: false,
             show_all_deprecations: cli.common_args().show_all_deprecations,
             show_timings: false, // always false for lib

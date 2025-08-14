@@ -1,4 +1,4 @@
-use dbt_telemetry::{LogAttributes, LogRecordInfo};
+use dbt_telemetry::{LogRecordInfo, TelemetryAttributes};
 use std::cell::RefCell;
 use tracing::Event;
 
@@ -19,7 +19,7 @@ thread_local! {
     static CURRENT_EVENT_DATA: RefCell<Option<LogRecordInfo>> = const { RefCell::new(None) };
     /// Thread-local storage for structured event attributes. Can be used to efficiently
     /// pass structured data to data layer without serialization through tracing fields.
-    static CURRENT_EVENT_ATTRIBUTES: RefCell<Option<LogAttributes>> = const { RefCell::new(None) };
+    static CURRENT_EVENT_ATTRIBUTES: RefCell<Option<TelemetryAttributes>> = const { RefCell::new(None) };
 }
 
 /// A private API for tracing infra to set structured event data. Only data layer
@@ -33,14 +33,14 @@ pub(super) fn store_event_data(record: LogRecordInfo) {
 /// A "private" API for tracing infra to pre-populate structured event attributes.
 /// Only our custom logging/event APIs are allowed to update it. Do NOT use outside
 /// of `tracing::emit::...` macros.
-pub fn store_event_attributes(attrs: LogAttributes) {
+pub fn store_event_attributes(attrs: TelemetryAttributes) {
     CURRENT_EVENT_ATTRIBUTES.with(|cell| {
         *cell.borrow_mut() = Some(attrs);
     });
 }
 
 /// A private API for Data Layer to access pre-populated structured event attributes.
-pub(super) fn take_event_attributes() -> Option<LogAttributes> {
+pub(super) fn take_event_attributes() -> Option<TelemetryAttributes> {
     CURRENT_EVENT_ATTRIBUTES.with(|cell| cell.take())
 }
 
@@ -84,8 +84,8 @@ pub(super) fn get_log_message(event: &Event<'_>) -> String {
 }
 
 /// Helper that extracts a `LogEventAttributes` from a `ValueSet`.
-pub(super) fn get_log_event_attrs(values: Recordable<'_>) -> Option<LogAttributes> {
-    struct LogEventAttributesVisitor(Option<LogAttributes>);
+pub(super) fn get_log_event_attrs(values: Recordable<'_>) -> Option<TelemetryAttributes> {
+    struct LogEventAttributesVisitor(Option<TelemetryAttributes>);
 
     impl tracing::field::Visit for LogEventAttributesVisitor {
         fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {

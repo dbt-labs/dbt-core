@@ -20,15 +20,17 @@ pub use shared::ToTracingValue;
 mod tests {
     use super::*;
 
+    use constants::TRACING_ATTR_FIELD;
     use dbt_telemetry::{
-        LogAttributes, LogRecordInfo, RecordCodeLocation, SeverityNumber, SpanAttributes,
-        SpanEndInfo, SpanStartInfo, TelemetryRecord,
+        DebugValue, LogRecordInfo, RecordCodeLocation, SeverityNumber, SpanEndInfo, SpanStartInfo,
+        TelemetryAttributes, TelemetryRecord,
+        serialize::arrow::{create_arrow_schema, deserialize_from_arrow},
     };
     use event_info::with_current_thread_event_data;
     use init::{TelemetryHandle, create_tracing_subcriber_with_layer};
-    use std::fs;
-    use std::panic::Location;
     use std::sync::{Arc, Mutex};
+    use std::{collections::BTreeMap, fs};
+    use std::{panic::Location, time::SystemTime};
     use tracing::{Subscriber, span};
     use tracing_subscriber::{
         EnvFilter, Layer, Registry,
@@ -112,6 +114,7 @@ mod tests {
                 max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
                 invocation_id,
                 otm_file_path: None,
+                otm_parquet_file_path: None,
                 enable_progress: false,
                 export_to_otlp: false,
             },
@@ -123,11 +126,11 @@ mod tests {
 
         let mut telemetry_handle = TelemetryHandle::new(shutdown_items, dummy_root_span);
 
-        let test_attrs = LogAttributes::Log {
+        let test_attrs = TelemetryAttributes::Log {
             code: Some(42),
             dbt_core_code: Some("test_code".to_string()),
             original_severity_number: SeverityNumber::Warn,
-            original_severity_text: Some("WARN".to_string()),
+            original_severity_text: "WARN".to_string(),
             // This is important. Our infra will auto-populate the location from the callsite,
             // and we want to test that it works correctly, capturing real callsite
             location: RecordCodeLocation::none(),
@@ -161,7 +164,7 @@ mod tests {
         // Verify captured data
         assert_eq!(span_ends.len(), 1, "Expected 1 span end record");
 
-        let (span_id, span_name) = (span_ends[0].span_id, span_ends[0].name.clone());
+        let (span_id, span_name) = (span_ends[0].span_id, span_ends[0].span_name.clone());
 
         assert_eq!(log_records.len(), 1, "Expected 1 log record");
         let log_record = &log_records[0];
@@ -170,14 +173,13 @@ mod tests {
         assert_eq!(log_record.span_id, Some(span_id));
         assert_eq!(log_record.span_name, Some(span_name));
         assert_eq!(log_record.severity_number, SeverityNumber::Info);
-        assert_eq!(log_record.severity_text, Some("INFO".to_string()));
+        assert_eq!(log_record.severity_text, "INFO".to_string());
         assert_eq!(log_record.body, "Test info event".to_string());
 
         // Now, the actual attributes that we should get back must include the location
         let expected_location = RecordCodeLocation {
             file: Some(test_location.file().to_string()),
             line: Some(test_location.line() + 1),
-            column: None, // Tracing lib doesn't report column number...
             module_path: Some(std::module_path!().to_string()),
             target: Some(std::module_path!().to_string()),
         };
@@ -205,6 +207,7 @@ mod tests {
                 max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
                 invocation_id,
                 otm_file_path: Some(temp_file_path.clone()),
+                otm_parquet_file_path: None,
                 enable_progress: false,
                 export_to_otlp: false,
             },
@@ -258,9 +261,9 @@ mod tests {
             r,
             TelemetryRecord::SpanStart(SpanStartInfo {
                 trace_id: deserialized_trace_id,
-                name: span_type,
+                span_name: span_type,
                 parent_span_id: None,
-                attributes: SpanAttributes::Unknown { name, .. },
+                attributes: TelemetryAttributes::Unknown { name, .. },
                 ..
             }) if span_type == "Unknown" && name == "test_root_span" && *deserialized_trace_id == trace_id
         )));
@@ -268,9 +271,9 @@ mod tests {
             r,
             TelemetryRecord::SpanEnd(SpanEndInfo {
                 trace_id: deserialized_trace_id,
-                name: span_type,
+                span_name: span_type,
                 parent_span_id: None,
-                attributes: SpanAttributes::Unknown { name, .. },
+                attributes: TelemetryAttributes::Unknown { name, .. },
                 ..
             }) if span_type == "Unknown" && name == "test_root_span" && *deserialized_trace_id == trace_id
         )));
@@ -281,7 +284,7 @@ mod tests {
             .find_map(|r| {
                 if let TelemetryRecord::SpanStart(SpanStartInfo {
                     span_id,
-                    attributes: SpanAttributes::Unknown { name, .. },
+                    attributes: TelemetryAttributes::Unknown { name, .. },
                     ..
                 }) = r
                     && name == "test_root_span"
@@ -298,9 +301,9 @@ mod tests {
             r,
             TelemetryRecord::SpanStart(SpanStartInfo {
                 trace_id: deserialized_trace_id,
-                name: span_type,
+                span_name: span_type,
                 parent_span_id: Some(parent_id),
-                attributes: SpanAttributes::Unknown { name, .. },
+                attributes: TelemetryAttributes::Unknown { name, .. },
                 ..
             }) if span_type == "Unknown" && name == "test_child_span" && *deserialized_trace_id == trace_id && *parent_id == root_span_id
         )));
@@ -308,9 +311,9 @@ mod tests {
             r,
             TelemetryRecord::SpanEnd(SpanEndInfo {
                 trace_id: deserialized_trace_id,
-                name: span_type,
+                span_name: span_type,
                 parent_span_id: Some(parent_id),
-                attributes: SpanAttributes::Unknown { name, .. },
+                attributes: TelemetryAttributes::Unknown { name, .. },
                 ..
             }) if span_type == "Unknown" && name == "test_child_span" && *deserialized_trace_id == trace_id && *parent_id == root_span_id
         )));
@@ -354,6 +357,7 @@ mod tests {
                 max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
                 invocation_id,
                 otm_file_path: None,
+                otm_parquet_file_path: None,
                 enable_progress: false,
                 export_to_otlp: false,
             },
@@ -407,9 +411,9 @@ mod tests {
             r,
             SpanStartInfo {
                 trace_id: deserialized_trace_id,
-                name: span_type,
+                span_name: span_type,
                 parent_span_id: None,
-                attributes: SpanAttributes::Unknown { name, .. },
+                attributes: TelemetryAttributes::Unknown { name, .. },
                 ..
             } if span_type == "Unknown" && name == "test_root_span" && *deserialized_trace_id == trace_id
         )));
@@ -417,9 +421,9 @@ mod tests {
             r,
             SpanEndInfo {
                 trace_id: deserialized_trace_id,
-                name: span_type,
+                span_name: span_type,
                 parent_span_id: None,
-                attributes: SpanAttributes::Unknown { name, .. },
+                attributes: TelemetryAttributes::Unknown { name, .. },
                 ..
             } if span_type == "Unknown" && name == "test_root_span" && *deserialized_trace_id == trace_id
         )));
@@ -430,7 +434,7 @@ mod tests {
             .find_map(|r| {
                 if let SpanStartInfo {
                     span_id,
-                    attributes: SpanAttributes::Unknown { name, .. },
+                    attributes: TelemetryAttributes::Unknown { name, .. },
                     ..
                 } = r
                     && name == "test_root_span"
@@ -447,9 +451,9 @@ mod tests {
             r,
             SpanStartInfo {
                 trace_id: deserialized_trace_id,
-                name: span_type,
+                span_name: span_type,
                 parent_span_id: Some(parent_id),
-                attributes: SpanAttributes::Unknown { name, .. },
+                attributes: TelemetryAttributes::Unknown { name, .. },
                 ..
             } if span_type == "Unknown" && name == "test_child_span" && *deserialized_trace_id == trace_id && *parent_id == root_span_id
         )));
@@ -457,9 +461,9 @@ mod tests {
             r,
             SpanEndInfo {
                 trace_id: deserialized_trace_id,
-                name: span_type,
+                span_name: span_type,
                 parent_span_id: Some(parent_id),
-                attributes: SpanAttributes::Unknown { name, .. },
+                attributes: TelemetryAttributes::Unknown { name, .. },
                 ..
             } if span_type == "Unknown" && name == "test_child_span" && *deserialized_trace_id == trace_id && *parent_id == root_span_id
         )));
@@ -535,6 +539,7 @@ mod tests {
                 max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
                 invocation_id,
                 otm_file_path: None,
+                otm_parquet_file_path: None,
                 enable_progress: false,
                 export_to_otlp: false,
             },
@@ -583,5 +588,185 @@ mod tests {
         // Shutdown telemetry to ensure all data is processed
         let shutdown_errs = telemetry_handle.shutdown();
         assert_eq!(shutdown_errs.len(), 0);
+    }
+
+    #[test]
+    #[allow(clippy::cognitive_complexity)]
+    fn test_tracing_parquet_filtering() {
+        let invocation_id = uuid::Uuid::new_v4();
+
+        // Create a temporary file for the parquet output
+        let temp_dir = std::env::temp_dir();
+        let temp_file_path = temp_dir.join("test_telemetry_filtering.parquet");
+
+        // Init telemetry using internal API allowing to set thread local subscriber.
+        // This avoids collisions with other unit tests, but prevents us from testing
+        // the fallback logic with the global parent span
+        let (subscriber, shutdown_items) = create_tracing_subcriber_with_layer(
+            FsTraceConfig {
+                max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
+                invocation_id,
+                otm_file_path: None,
+                otm_parquet_file_path: Some(temp_file_path.clone()),
+                enable_progress: false,
+                export_to_otlp: false,
+            },
+            None::<Box<dyn Layer<Layered<EnvFilter, Registry>> + Send + Sync>>,
+        )
+        .expect("Failed to initialize tracing");
+
+        let dummy_root_span = tracing::info_span!("not used");
+        let mut telemetry_handle = TelemetryHandle::new(shutdown_items, dummy_root_span);
+
+        // Pre-create attrs to compare them later
+        let test_legacy_log_attrs = TelemetryAttributes::LegacyLog {
+            original_severity_number: SeverityNumber::Warn,
+            original_severity_text: "WARN".to_string(),
+            location: RecordCodeLocation::none(),
+        };
+
+        let test_log_attrs = TelemetryAttributes::Log {
+            code: Some(42),
+            dbt_core_code: Some("test_code".to_string()),
+            original_severity_number: SeverityNumber::Warn,
+            original_severity_text: "WARN".to_string(),
+            location: RecordCodeLocation::none(),
+        };
+
+        let mut extra_map = BTreeMap::new();
+        extra_map.insert("key".to_string(), DebugValue::Bool(true));
+
+        let dev_span_attrs = TelemetryAttributes::DevInternal {
+            name: "dev_test".to_string(),
+            location: RecordCodeLocation::none(),
+            // Add extra attributes to ensure they are filtered out
+            extra: Some(extra_map),
+        };
+
+        let before_start = SystemTime::now();
+
+        let dev_span_attrs_expected = TelemetryAttributes::DevInternal {
+            name: "dev_test".to_string(),
+            location: RecordCodeLocation::none(),
+            extra: None,
+        };
+
+        // We do not need location here, but this is easier than unwrapping later
+        let mut test_location = Location::caller();
+
+        tracing::subscriber::with_default(subscriber, || {
+            // Use DevInternal type as we currently forced to include it in the output
+            let _dev_span = tracing::trace_span!(
+                "dev_internal_span",
+                { TRACING_ATTR_FIELD } = dev_span_attrs.clone().to_tracing_value()
+            )
+            .entered();
+
+            // Emit a log with Log attributes (should be included) & save the location (almost, one line off)
+            test_location = Location::caller();
+            emit_tracing_event!(test_log_attrs.clone(), "Valid log message");
+
+            // Emit a log with LegacyLog attributes (should be filtered out)
+            emit_tracing_event!(test_legacy_log_attrs.clone(), "Legacy log message");
+        });
+
+        // Shutdown telemetry to ensure all data is flushed to the file
+        let shutdown_errs = telemetry_handle.shutdown();
+        assert_eq!(shutdown_errs.len(), 0);
+
+        // Verify the parquet file was created
+        assert!(temp_file_path.exists(), "Parquet file should exist");
+
+        // Read back and deserialize the parquet file
+        let file = fs::File::open(&temp_file_path).unwrap();
+        let reader = parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(file)
+            .unwrap()
+            .build()
+            .unwrap();
+
+        let mut all_records = Vec::new();
+        for batch_result in reader {
+            let batch = batch_result.unwrap();
+            let (serialisable_schema, _) = create_arrow_schema().unwrap();
+            let records = deserialize_from_arrow(&batch, &serialisable_schema).unwrap();
+            all_records.extend(records);
+        }
+
+        // Verify filtering worked correctly - should have 2 records (1 SpanEnd with Process attrs, 1 LogRecord with Log attrs)
+        assert_eq!(all_records.len(), 2, "Expected 2 records after filtering");
+
+        // Verify we have the correct records
+        let span_end_record = all_records
+            .iter()
+            .find(|r| matches!(r, TelemetryRecord::SpanEnd(_)))
+            .expect("Expected a SpanEnd record");
+        let log_record_record = all_records
+            .iter()
+            .find(|r| matches!(r, TelemetryRecord::LogRecord(_)))
+            .expect("Expected a LogRecord");
+
+        // Verify the SpanEnd record is the valid one
+        if let TelemetryRecord::SpanEnd(SpanEndInfo {
+            trace_id,
+            span_id,
+            span_name,
+            parent_span_id,
+            start_time_unix_nano,
+            end_time_unix_nano,
+            severity_number,
+            severity_text,
+            status,
+            attributes,
+        }) = span_end_record
+        {
+            assert_eq!(*trace_id, invocation_id.as_u128());
+            assert_eq!(*span_id, 1);
+            assert_eq!(span_name, "DevInternal(dev_test | log)");
+            assert!(parent_span_id.is_none());
+            assert_eq!(*severity_number, SeverityNumber::Trace);
+            assert_eq!(severity_text, "TRACE");
+            assert!(*start_time_unix_nano > before_start);
+            assert!(*end_time_unix_nano > before_start);
+            assert_eq!(*status, None);
+            assert_eq!(*attributes, dev_span_attrs_expected);
+        } else {
+            panic!("Expected a SpanEnd record");
+        };
+
+        // Verify the LogRecord is the valid one (Log attributes)
+        if let TelemetryRecord::LogRecord(LogRecordInfo {
+            trace_id,
+            span_id,
+            span_name,
+            time_unix_nano,
+            body,
+            severity_number,
+            severity_text,
+            attributes,
+        }) = log_record_record
+        {
+            assert_eq!(*trace_id, invocation_id.as_u128());
+            assert_eq!(*span_id, Some(1));
+            assert_eq!(*span_name, Some("DevInternal(dev_test | log)".to_string()));
+            assert!(*time_unix_nano > before_start);
+            assert_eq!(body, "Valid log message");
+            assert_eq!(*severity_number, SeverityNumber::Info);
+            assert_eq!(*severity_text, "INFO");
+
+            // Now, the actual attributes that we should get back must include the location
+            let expected_location = RecordCodeLocation {
+                file: Some(test_location.file().to_string()),
+                line: Some(test_location.line() + 1),
+                module_path: Some(std::module_path!().to_string()),
+                target: Some(std::module_path!().to_string()),
+            };
+
+            assert_eq!(*attributes, test_log_attrs.with_location(expected_location));
+        } else {
+            panic!("Expected a LogRecord");
+        }
+
+        // Clean up
+        let _ = fs::remove_file(&temp_file_path);
     }
 }

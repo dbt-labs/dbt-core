@@ -1,8 +1,11 @@
 //! Custom serialization and deserialization functions for telemetry records.
 
+pub mod arrow;
+
 use serde::de::{self, Visitor};
 use serde::{Deserializer, Serializer};
 use std::fmt;
+use std::time::SystemTime;
 
 /// Custom serialization for trace_id as 32-character hexadecimal string
 pub fn serialize_trace_id<S>(trace_id: &u128, serializer: S) -> Result<S::Ok, S::Error>
@@ -134,23 +137,31 @@ where
     deserializer.deserialize_option(OptionalSpanIdVisitor)
 }
 
+#[inline]
+fn to_nanos(timestamp: &SystemTime) -> u64 {
+    timestamp
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos() as u64
+}
+
 /// Custom serialization for timestamps as string
-pub fn serialize_timestamp<S>(timestamp: &u64, serializer: S) -> Result<S::Ok, S::Error>
+pub fn serialize_timestamp<S>(timestamp: &SystemTime, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
-    serializer.serialize_str(&timestamp.to_string())
+    serializer.serialize_str(to_nanos(timestamp).to_string().as_str())
 }
 
 /// Custom deserialization for timestamps from string
-pub fn deserialize_timestamp<'de, D>(deserializer: D) -> Result<u64, D::Error>
+pub fn deserialize_timestamp<'de, D>(deserializer: D) -> Result<SystemTime, D::Error>
 where
     D: Deserializer<'de>,
 {
     struct TimestampVisitor;
 
     impl<'de> Visitor<'de> for TimestampVisitor {
-        type Value = u64;
+        type Value = SystemTime;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
             formatter.write_str("a timestamp as string")
@@ -163,6 +174,7 @@ where
             value
                 .parse::<u64>()
                 .map_err(|_| E::custom(format!("invalid timestamp string: {value}")))
+                .map(|nanos| SystemTime::UNIX_EPOCH + std::time::Duration::from_nanos(nanos))
         }
     }
 
@@ -272,11 +284,12 @@ mod tests {
 
     #[test]
     fn test_timestamp_serialization() {
-        let timestamp: u64 = 1234567890123456789;
+        let timestamp =
+            SystemTime::UNIX_EPOCH + std::time::Duration::from_nanos(1234567890123456700);
         let serializer = serde_json::value::Serializer;
         let result = serialize_timestamp(&timestamp, serializer).unwrap();
         if let serde_json::Value::String(s) = result {
-            assert_eq!(s, "1234567890123456789");
+            assert_eq!(s, "1234567890123456700");
         } else {
             panic!("Expected string value");
         }
@@ -284,10 +297,12 @@ mod tests {
 
     #[test]
     fn test_timestamp_deserialization() {
-        let json_str = "\"1234567890123456789\"";
+        let json_str = "\"1234567890123456700\"";
         let deserializer = &mut serde_json::Deserializer::from_str(json_str);
         let timestamp = deserialize_timestamp(deserializer).unwrap();
-        assert_eq!(timestamp, 1234567890123456789);
+        let expected =
+            SystemTime::UNIX_EPOCH + std::time::Duration::from_nanos(1234567890123456700);
+        assert_eq!(timestamp, expected);
     }
 
     #[test]

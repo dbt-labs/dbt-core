@@ -37,6 +37,7 @@ pub struct IoArgs {
     pub out_dir: PathBuf,
     pub log_path: Option<PathBuf>,
     pub otm_file_name: Option<String>,
+    pub otm_parquet_file_name: Option<String>,
     pub export_to_otlp: bool,
     pub log_format: LogFormat,
     pub log_level: Option<LevelFilter>,

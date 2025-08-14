@@ -13,9 +13,11 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
+arrow = { workspace = true }
 dbt-serde_yaml = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
+serde_arrow = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
 serde_repr = { workspace = true }

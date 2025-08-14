@@ -10,7 +10,7 @@ use dbt_jinja_utils::serde::yaml_to_fs_error;
 use dbt_schemas::schemas::serde::StringOrInteger;
 use dbt_schemas::schemas::telemetry::BuildPhaseInfo;
 use dbt_schemas::schemas::telemetry::SharedPhaseInfo;
-use dbt_schemas::schemas::telemetry::SpanAttributes;
+use dbt_schemas::schemas::telemetry::TelemetryAttributes;
 use fs_deps::get_or_install_packages;
 use pathdiff::diff_paths;
 use serde::Deserialize;
@@ -52,7 +52,7 @@ use dbt_common::tracing::ToTracingValue;
 #[tracing::instrument(
     skip_all,
     fields(
-        __event = SpanAttributes::Phase(BuildPhaseInfo::Loading {
+        __event = TelemetryAttributes::Phase(BuildPhaseInfo::Loading {
             shared: SharedPhaseInfo {
                 invocation_id: iarg.invocation_id.to_string(),
             }

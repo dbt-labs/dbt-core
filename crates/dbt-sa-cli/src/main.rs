@@ -2,7 +2,7 @@ use clap::Parser;
 use clap::error::ErrorKind;
 
 use dbt_common::cancellation::CancellationTokenSource;
-use dbt_common::tracing::init_tracing;
+use dbt_common::tracing::{FsTraceConfig, init_tracing};
 use dbt_common::{constants::PANIC, pretty_string::GREEN, pretty_string::RED};
 use dbt_sa_lib::dbt_sa_clap::Cli;
 use dbt_sa_lib::dbt_sa_clap::from_main;
@@ -46,14 +46,17 @@ fn main() -> ExitCode {
     let arg = from_main(&cli);
 
     // Init tracing
-    let mut telemetry_handle = match init_tracing((&arg.io).into()) {
-        Ok(handle) => handle,
-        Err(e) => {
-            let msg = e.to_string();
-            print_trimmed_error(msg);
-            std::process::exit(1);
-        }
-    };
+    let mut telemetry_handle =
+        match FsTraceConfig::new(cli.project_dir(), cli.target_path(), &arg.io)
+            .and_then(init_tracing)
+        {
+            Ok(handle) => handle,
+            Err(e) => {
+                let msg = e.to_string();
+                print_trimmed_error(msg);
+                std::process::exit(1);
+            }
+        };
 
     // Setup tokio runtime and set stack-size to 8MB
     // DO NOT USE Rayon, it is not compatible with Tokio

@@ -1,5 +1,6 @@
 use dbt_telemetry::{
-    BuildPhase, BuildPhaseInfo, SpanAttributes, SpanEndInfo, SpanStartInfo, SpanStatus, StatusCode,
+    BuildPhase, BuildPhaseInfo, SpanEndInfo, SpanStartInfo, SpanStatus, StatusCode,
+    TelemetryAttributes,
 };
 use tracing::{Subscriber, span};
 use tracing_subscriber::{Layer, layer::Context};
@@ -15,9 +16,11 @@ use crate::{
 /// should own the progress bar manager itself
 pub struct ProgressBarLayer;
 
-fn get_progress_params(attributes: &SpanAttributes) -> Option<(&'static str, u64, Option<&str>)> {
+fn get_progress_params(
+    attributes: &TelemetryAttributes,
+) -> Option<(&'static str, u64, Option<&str>)> {
     match attributes {
-        SpanAttributes::Phase(phase_info) => {
+        TelemetryAttributes::Phase(phase_info) => {
             match phase_info {
                 BuildPhaseInfo::Compiling {
                     node_count: total, ..
@@ -34,7 +37,7 @@ fn get_progress_params(attributes: &SpanAttributes) -> Option<(&'static str, u64
                 }
             }
         }
-        SpanAttributes::Node { node_id, phase, .. } => {
+        TelemetryAttributes::Node { node_id, phase, .. } => {
             match phase {
                 BuildPhase::Compiling => Some((RENDERING, 0, Some(node_id.unique_id.as_str()))),
                 BuildPhase::Analyzing => Some((ANALYZING, 0, Some(node_id.unique_id.as_str()))),

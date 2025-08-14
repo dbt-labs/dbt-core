@@ -1,12 +1,11 @@
 use std::collections::HashMap;
-use std::time::SystemTime;
 
 use super::super::{TelemetryShutdown, event_info::with_current_thread_event_data};
 use crate::constants::DBT_FUSION;
 use crate::{ErrorCode, FsResult};
 
 use datafusion::parquet::data_type::AsBytes;
-use dbt_telemetry::{LogAttributes, SeverityNumber, SpanEndInfo, SpanStatus, StatusCode};
+use dbt_telemetry::{SeverityNumber, SpanEndInfo, SpanStatus, StatusCode, TelemetryAttributes};
 
 use opentelemetry::{
     KeyValue, SpanId, TraceFlags, Value as OtelValue,
@@ -32,58 +31,22 @@ use tracing_subscriber::layer::Context;
 const fn level_to_otel_severity(severity_number: &SeverityNumber) -> OtelSeverity {
     match severity_number {
         SeverityNumber::Trace => OtelSeverity::Trace,
-        SeverityNumber::Trace2 => OtelSeverity::Trace2,
-        SeverityNumber::Trace3 => OtelSeverity::Trace3,
-        SeverityNumber::Trace4 => OtelSeverity::Trace4,
         SeverityNumber::Debug => OtelSeverity::Debug,
-        SeverityNumber::Debug2 => OtelSeverity::Debug2,
-        SeverityNumber::Debug3 => OtelSeverity::Debug3,
-        SeverityNumber::Debug4 => OtelSeverity::Debug4,
         SeverityNumber::Info => OtelSeverity::Info,
-        SeverityNumber::Info2 => OtelSeverity::Info2,
-        SeverityNumber::Info3 => OtelSeverity::Info3,
-        SeverityNumber::Info4 => OtelSeverity::Info4,
         SeverityNumber::Warn => OtelSeverity::Warn,
-        SeverityNumber::Warn2 => OtelSeverity::Warn2,
-        SeverityNumber::Warn3 => OtelSeverity::Warn3,
-        SeverityNumber::Warn4 => OtelSeverity::Warn4,
         SeverityNumber::Error => OtelSeverity::Error,
-        SeverityNumber::Error2 => OtelSeverity::Error2,
-        SeverityNumber::Error3 => OtelSeverity::Error3,
-        SeverityNumber::Error4 => OtelSeverity::Error4,
         SeverityNumber::Fatal => OtelSeverity::Fatal,
-        SeverityNumber::Fatal2 => OtelSeverity::Fatal2,
-        SeverityNumber::Fatal3 => OtelSeverity::Fatal3,
-        SeverityNumber::Fatal4 => OtelSeverity::Fatal4,
     }
 }
 
 const fn level_to_otel_severity_text(severity_number: &SeverityNumber) -> &'static str {
     match severity_number {
         SeverityNumber::Trace => "TRACE",
-        SeverityNumber::Trace2 => "TRACE",
-        SeverityNumber::Trace3 => "TRACE",
-        SeverityNumber::Trace4 => "TRACE",
         SeverityNumber::Debug => "DEBUG",
-        SeverityNumber::Debug2 => "DEBUG",
-        SeverityNumber::Debug3 => "DEBUG",
-        SeverityNumber::Debug4 => "DEBUG",
         SeverityNumber::Info => "INFO",
-        SeverityNumber::Info2 => "INFO",
-        SeverityNumber::Info3 => "INFO",
-        SeverityNumber::Info4 => "INFO",
         SeverityNumber::Warn => "WARN",
-        SeverityNumber::Warn2 => "WARN",
-        SeverityNumber::Warn3 => "WARN",
-        SeverityNumber::Warn4 => "WARN",
         SeverityNumber::Error => "ERROR",
-        SeverityNumber::Error2 => "ERROR",
-        SeverityNumber::Error3 => "ERROR",
-        SeverityNumber::Error4 => "ERROR",
         SeverityNumber::Fatal => "FATAL",
-        SeverityNumber::Fatal2 => "FATAL",
-        SeverityNumber::Fatal3 => "FATAL",
-        SeverityNumber::Fatal4 => "FATAL",
     }
 }
 
@@ -331,7 +294,7 @@ where
         // Create OpenTelemetry span
         let mut otel_span = self
             .tracer
-            .span_builder(span_data.name.clone())
+            .span_builder(span_data.span_name.clone())
             // This forces all spans to be exported
             .with_sampling_result(SamplingResult {
                 attributes: Default::default(),
@@ -341,12 +304,7 @@ where
             .with_kind(SpanKind::Internal)
             .with_trace_id(otel_trace_id)
             .with_span_id(otel_span_id)
-            .with_start_time(
-                // Yes, stupid. We have to convert that back to SystemTime just to satisfy the SDK, which will
-                // convert it back to a timestamp during export...
-                SystemTime::UNIX_EPOCH
-                    + std::time::Duration::from_nanos(span_data.start_time_unix_nano),
-            )
+            .with_start_time(span_data.start_time_unix_nano)
             .with_attributes(span_attrs)
             .start_with_context(&self.tracer, &otel_parent_cx);
 
@@ -362,9 +320,7 @@ where
         };
 
         // End the span
-        otel_span.end_with_timestamp(
-            SystemTime::UNIX_EPOCH + std::time::Duration::from_nanos(span_data.end_time_unix_nano),
-        );
+        otel_span.end_with_timestamp(span_data.end_time_unix_nano);
     }
 
     fn on_event(&self, _event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
@@ -384,14 +340,11 @@ where
             otel_log_record.set_body(AnyValue::from(log_record.body.clone()));
 
             // Set timestamp ourselves, since sdk only sets the observed timestamp.
-            let ts =
-                SystemTime::UNIX_EPOCH + std::time::Duration::from_nanos(log_record.time_unix_nano);
-
-            otel_log_record.set_timestamp(ts);
-            otel_log_record.set_observed_timestamp(ts);
+            otel_log_record.set_timestamp(log_record.time_unix_nano);
+            otel_log_record.set_observed_timestamp(log_record.time_unix_nano);
 
             // Set source code attributes
-            if let LogAttributes::Log { location, .. } = &log_record.attributes {
+            if let TelemetryAttributes::Log { location, .. } = &log_record.attributes {
                 if let Some(file) = location.file.clone() {
                     otel_log_record.add_attribute(
                         opentelemetry::Key::new(CODE_FILE_PATH),

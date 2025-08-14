@@ -17,13 +17,13 @@ use dbt_common::{
     tracing::{ToTracingValue, constants::TRACING_ATTR_FIELD, span_info::record_span_status},
 };
 
-use dbt_schemas::schemas::{Nodes, telemetry::SpanAttributes};
+use dbt_schemas::schemas::{Nodes, telemetry::TelemetryAttributes};
 use dbt_schemas::state::Macros;
 #[allow(unused_imports)]
 use git_version::git_version;
 
 use dbt_schemas::schemas::manifest::build_manifest;
-use tracing::instrument;
+use tracing::{Instrument, instrument};
 
 use std::{path::Path, sync::Arc, time::SystemTime};
 
@@ -42,8 +42,9 @@ pub async fn execute_fs(arg: SystemArgs, cli: Cli, token: CancellationToken) -> 
     let invocation_span = tracing::info_span!(
         parent: None,
         "Invocation",
-        { TRACING_ATTR_FIELD } = SpanAttributes::Invocation {
+        { TRACING_ATTR_FIELD } = TelemetryAttributes::Invocation {
             invocation_id: arg.io.invocation_id.to_string(),
+            command: cli.command.to_string().to_lowercase(),
             version: env!("CARGO_PKG_VERSION").to_string(),
             host_os: std::env::consts::OS.to_string(),
             host_arch: std::env::consts::ARCH.to_string(),
@@ -53,8 +54,8 @@ pub async fn execute_fs(arg: SystemArgs, cli: Cli, token: CancellationToken) -> 
         .to_tracing_value(),
     );
 
-    let result = invocation_span
-        .in_scope(|| async { do_execute_fs(arg, cli, token).await })
+    let result = do_execute_fs(arg, cli, token)
+        .instrument(invocation_span.clone())
         .await;
 
     // Record span run result

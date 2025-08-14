@@ -1,245 +1,190 @@
 //! Telemetry record definitions for dbt Fusion.
 
+use std::time::SystemTime;
+
 use super::{
+    super::serialize::{
+        deserialize_optional_span_id, deserialize_span_id, deserialize_timestamp,
+        deserialize_trace_id, serialize_optional_span_id, serialize_span_id, serialize_timestamp,
+        serialize_trace_id,
+    },
     location::RecordCodeLocation,
     otlp::{SeverityNumber, SpanStatus},
 };
-use crate::serialize::*;
 use dbt_serde_yaml::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use strum::{AsRefStr, EnumDiscriminants, IntoStaticStr};
 
-#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema, PartialEq)]
 pub struct SpanStartInfo {
-    /// A unique identifier for a trace. All spans from the same trace share
-    /// the same `trace_id`. The ID is a 16-byte array. An ID with all zeroes OR
-    /// of length other than 16 bytes is considered invalid (empty string in OTLP/JSON
-    /// is zero-length and thus is also invalid).
+    /// Unique identifier for a trace. All spans from the same trace share
+    /// the same `trace_id`. 16-byte identifier stored as 32-character hex string (invalid if all zeroes).
     #[serde(
         serialize_with = "serialize_trace_id",
         deserialize_with = "deserialize_trace_id"
     )]
     #[schemars(with = "String")]
     pub trace_id: u128,
-    /// A unique identifier for a span within a trace, assigned when the span
-    /// is created. The ID is an 8-byte array. An ID with all zeroes OR of length
-    /// other than 8 bytes is considered invalid (empty string in OTLP/JSON
-    /// is zero-length and thus is also invalid).
+
+    /// Unique identifier for a span within a trace, assigned when the span
+    /// is created. 8-byte identifier stored as 16-character hex string (invalid if all zeroes).
     #[serde(
         serialize_with = "serialize_span_id",
         deserialize_with = "deserialize_span_id"
     )]
     #[schemars(with = "String")]
     pub span_id: u64,
-    /// The `span_id` of this span's parent span. If this is a root span, then this
-    /// field must be empty. The ID is an 8-byte array.
+
+    /// A description of the span's operation.
+    pub span_name: String,
+
+    /// The `span_id` of this span's parent span. Empty for root spans.
     #[serde(
         serialize_with = "serialize_optional_span_id",
         deserialize_with = "deserialize_optional_span_id"
     )]
     #[schemars(with = "Option<String>")]
     pub parent_span_id: Option<u64>,
-    /// A description of the span's operation.
-    pub name: String,
-    /// start_time_unix_nano is the start time of the span. On the client side, this is the time
-    /// kept by the local machine where the span execution starts. On the server side, this
-    /// is the time when the server's application handler starts running.
-    /// Value is UNIX Epoch time in nanoseconds since 00:00:00 UTC on 1 January 1970.
-    #[serde(
-        serialize_with = "serialize_timestamp",
-        deserialize_with = "deserialize_timestamp"
-    )]
-    #[schemars(with = "String")]
-    pub start_time_unix_nano: u64,
-    /// Attributes are a collection of key/value pairs in OTEL. Our schema
-    /// uses a stricter discriminated union type `SpanEventAttributes` to provide
-    /// a structured schema for attributes.
-    ///
-    /// A unique identifier of event category/type is available via `eventName`.
-    /// All events with the same `eventName` will have a corresponding
-    /// schema for their attributes, with `SpanEventAttributes` type title matching
-    /// the `event_name`.
-    ///
-    /// NOTE: OTLP schema doesn't not restrict attributes or provides an `eventName` field,
-    /// to discriminate between different attribute schemas.
-    #[serde(flatten)]
-    pub attributes: SpanAttributes,
 
-    // Below are LogRecord fields that are not strictly necessary for a span,
-    // but are included to make span model a superset of LogRecord model.
-    /// time_unix_nano is the time when the span was started. It is the same as
-    /// `start_time_unix_nano`.
+    /// Start time of the span as UNIX timestamp in nanoseconds.
     #[serde(
         serialize_with = "serialize_timestamp",
         deserialize_with = "deserialize_timestamp"
     )]
     #[schemars(with = "String")]
-    pub time_unix_nano: u64,
-    /// Numerical value of the severity, normalized to values described in Log Data Model.
+    pub start_time_unix_nano: SystemTime,
+
+    /// Severity level as a number (OpenTelemetry standard values).
     pub severity_number: SeverityNumber,
-    /// The severity text (also known as log level). The original string representation as
-    /// it is known at the source.
-    pub severity_text: Option<String>,
+
+    /// Severity level as text: "DEBUG", "INFO", "WARNING", "ERROR", "TRACE".
+    pub severity_text: String,
+
+    /// Structured attributes for this span using a discriminated union type.
+    /// Serialized as: `{ trace_id: "...", ..., "event_type": "discriminator", "attributes": { ... } }`
+    #[serde(flatten)]
+    pub attributes: TelemetryAttributes,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema, PartialEq)]
 pub struct SpanEndInfo {
-    /// A unique identifier for a trace. All spans from the same trace share
-    /// the same `trace_id`. The ID is a 16-byte array. An ID with all zeroes OR
-    /// of length other than 16 bytes is considered invalid (empty string in OTLP/JSON
-    /// is zero-length and thus is also invalid).
+    /// Unique identifier for a trace. All spans from the same trace share
+    /// the same `trace_id`. 16-byte identifier stored as 32-character hex string (invalid if all zeroes).
     #[serde(
         serialize_with = "serialize_trace_id",
         deserialize_with = "deserialize_trace_id"
     )]
     #[schemars(with = "String")]
     pub trace_id: u128,
-    /// A unique identifier for a span within a trace, assigned when the span
-    /// is created. The ID is an 8-byte array. An ID with all zeroes OR of length
-    /// other than 8 bytes is considered invalid (empty string in OTLP/JSON
-    /// is zero-length and thus is also invalid).
+
+    /// Unique identifier for a span within a trace, assigned when the span
+    /// is created. 8-byte identifier stored as 16-character hex string (invalid if all zeroes).
     #[serde(
         serialize_with = "serialize_span_id",
         deserialize_with = "deserialize_span_id"
     )]
     #[schemars(with = "String")]
     pub span_id: u64,
-    /// The `span_id` of this span's parent span. If this is a root span, then this
-    /// field must be empty. The ID is an 8-byte array.
+
+    /// A description of the span's operation.
+    pub span_name: String,
+
+    /// The `span_id` of this span's parent span. Empty for root spans.
     #[serde(
         serialize_with = "serialize_optional_span_id",
         deserialize_with = "deserialize_optional_span_id"
     )]
     #[schemars(with = "Option<String>")]
     pub parent_span_id: Option<u64>,
-    /// A description of the span's operation.
-    pub name: String,
-    /// start_time_unix_nano is the start time of the span. On the client side, this is the time
-    /// kept by the local machine where the span execution starts. On the server side, this
-    /// is the time when the server's application handler starts running.
-    /// Value is UNIX Epoch time in nanoseconds since 00:00:00 UTC on 1 January 1970.
+
+    /// Start time of the span as UNIX timestamp in nanoseconds.
     #[serde(
         serialize_with = "serialize_timestamp",
         deserialize_with = "deserialize_timestamp"
     )]
     #[schemars(with = "String")]
-    pub start_time_unix_nano: u64,
-    /// end_time_unix_nano is the end time of the span. On the client side, this is the time
-    /// kept by the local machine where the span execution ends. On the server side, this
-    /// is the time when the server application handler stops running.
-    /// Value is UNIX Epoch time in nanoseconds since 00:00:00 UTC on 1 January 1970.
+    pub start_time_unix_nano: SystemTime,
+
+    /// End time of the span as UNIX timestamp in nanoseconds.
     #[serde(
         serialize_with = "serialize_timestamp",
         deserialize_with = "deserialize_timestamp"
     )]
     #[schemars(with = "String")]
-    pub end_time_unix_nano: u64,
-    /// attributes is a collection of key/value pairs in OTEL. Our schema
-    /// uses a stricter discriminated union type `SpanEventAttributes` to provide
-    /// a structured schema for attributes.
-    ///
-    /// A unique identifier of event category/type is available via `eventName`.
-    /// All events with the same `eventName` will have a correspinding
-    /// schema for their attributes, with `SpanEventAttributes` type title matching
-    /// the `event_name`.
-    ///
-    /// NOTE: OTLP schema doesn't not restrict attributes or provides an `eventName` field,
-    /// to discriminate between different attribute schemas.
-    #[serde(flatten)]
-    pub attributes: SpanAttributes,
-    /// An optional final status for this span. Semantically when Status isn't set, it means
-    /// span's status code is unset, i.e. assume STATUS_CODE_UNSET (code = 0).
+    pub end_time_unix_nano: SystemTime,
+
+    /// Severity level as a number (OpenTelemetry standard values).
+    pub severity_number: SeverityNumber,
+
+    /// Severity level as text: "DEBUG", "INFO", "WARNING", "ERROR", "TRACE".
+    pub severity_text: String,
+
+    /// Final status for this span. When not set, assumes unset status (code = 0).
     pub status: Option<SpanStatus>,
 
-    // Below are LogRecord fields that are not strictly necessary for a span,
-    // but are included to make span model a superset of LogRecord model.
-    /// time_unix_nano is the time when the span was completed. It is the same as
-    /// `end_time_unix_nano`.
-    #[serde(
-        serialize_with = "serialize_timestamp",
-        deserialize_with = "deserialize_timestamp"
-    )]
-    #[schemars(with = "String")]
-    pub time_unix_nano: u64,
-    /// Numerical value of the severity, normalized to values described in Log Data Model.
-    pub severity_number: SeverityNumber,
-    /// The severity text (also known as log level). The original string representation as
-    /// it is known at the source.
-    pub severity_text: Option<String>,
+    /// Structured attributes for this span using a discriminated union type.
+    /// Serialized as: `{ trace_id: "...", ..., "event_type": "discriminator", "attributes": { ... } }`
+    #[serde(flatten)]
+    pub attributes: TelemetryAttributes,
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
-#[serde(rename_all = "camelCase")]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, PartialEq)]
 pub struct LogRecordInfo {
-    /// time_unix_nano is the time when the event occurred.
-    /// Value is UNIX Epoch time in nanoseconds since 00:00:00 UTC on 1 January 1970.
-    /// Value of 0 indicates unknown or missing timestamp.
-    #[serde(
-        serialize_with = "serialize_timestamp",
-        deserialize_with = "deserialize_timestamp"
-    )]
-    #[schemars(with = "String")]
-    pub time_unix_nano: u64,
-    /// A unique identifier for a trace. All logs from the same trace share
-    /// the same `trace_id`. The ID is a 16-byte array. An ID with all zeroes OR
-    /// of length other than 16 bytes is considered invalid (empty string in OTLP/JSON
-    /// is zero-length and thus is also invalid).
+    /// Unique identifier for a trace. All logs from the same trace share
+    /// the same `trace_id`. 16-byte identifier stored as 32-character hex string (invalid if all zeroes).
     #[serde(
         serialize_with = "serialize_trace_id",
         deserialize_with = "deserialize_trace_id"
     )]
     #[schemars(with = "String")]
     pub trace_id: u128,
-    /// A unique identifier for a span within a trace, active when the log
-    /// is created. The ID is an 8-byte array. An ID with all zeroes OR of length
-    /// other than 8 bytes is considered invalid (empty string in OTLP/JSON
-    /// is zero-length and thus is also invalid).
+
+    /// Unique identifier for the span active when the log is created.
+    /// 8-byte identifier stored as 16-character hex string (invalid if all zeroes).
     #[serde(
         serialize_with = "serialize_optional_span_id",
         deserialize_with = "deserialize_optional_span_id"
     )]
     #[schemars(with = "Option<String>")]
     pub span_id: Option<u64>,
-    /// The name of the span that is active when the log is created.
-    ///
-    /// NOTE: this is not part of the OTLP schema, but is used to
-    /// simplify log grouping avoiding the need to
-    /// look up the span name by trace_id/span_id.
+
+    /// Name of the span active when the log is created.
+    /// Used to simplify log grouping without span lookups.
     pub span_name: Option<String>,
-    /// Numerical value of the severity, normalized to values described in Log Data Model.
+
+    /// Time when the event occurred as UNIX timestamp in nanoseconds.
+    /// Value of 0 indicates unknown or missing timestamp.
+    #[serde(
+        serialize_with = "serialize_timestamp",
+        deserialize_with = "deserialize_timestamp"
+    )]
+    #[schemars(with = "String")]
+    pub time_unix_nano: SystemTime,
+
+    /// Severity level as a number (OpenTelemetry standard values).
     pub severity_number: SeverityNumber,
-    /// The severity text (also known as log level). The original string representation as
-    /// it is known at the source.
-    pub severity_text: Option<String>,
-    /// A value containing the body (message) of the log record. A human-readable
-    /// string message (including multi-line) describing the event in a free form
+
+    /// Severity level as text: "DEBUG", "INFO", "WARNING", "ERROR", "TRACE".
+    pub severity_text: String,
+
+    /// Human-readable message describing the event.
     pub body: String,
-    /// attributes is a collection of key/value pairs in OTEL. Our schema
-    /// uses a stricter discriminated union type `LogEventAttributes` to provide
-    /// a structured schema for attributes.
-    /// A unique identifier of event category/type is available via `eventName`.
-    /// All events with the same eventName will have a correspinding
-    /// schema for their attributes, with `LogEventAttributes` type title matching
-    /// the event_name.
+
+    /// Structured attributes for this log using a discriminated union type.
+    /// Serialized as: `{ trace_id: "...", ..., "event_type": "discriminator", "attributes": { ... } }`
     #[serde(flatten)]
-    pub attributes: LogAttributes,
+    pub attributes: TelemetryAttributes,
 }
 
-/// Represents a telemetry record which loosely follows OpenTelemetry's
+/// Represents a telemetry record which loosely follows OpenTelemetry
 /// log and trace signal logical models & semantics (but not OTLP schema!)
 /// and combines them under a single enum type.
 ///
-/// This is a discriminated union on `recordType` field, which is not part of the OTLP schema.
-///
-/// `SpanStart` and `SpanEnd` top-level fields are a strict superset of
-/// `LogRecord` which introduces some data redundancy, but simplifies
-/// reading records in some use-cases.
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
-#[serde(tag = "recordType")]
-#[serde(rename_all = "camelCase")]
+/// This is a discriminated union on `record_type` field, which is not part of the OTLP schema.
+#[derive(Serialize, Deserialize, Debug, JsonSchema, EnumDiscriminants, PartialEq)]
+#[serde(tag = "record_type")]
+#[strum_discriminants(derive(Serialize, Deserialize), name(TelemetryRecordType))]
 pub enum TelemetryRecord {
     /// # Span Start
     /// Represents the start of a span in a trace.
@@ -247,27 +192,25 @@ pub enum TelemetryRecord {
     /// This is a partial-span record emitted as soon as the span is created.
     /// The corresponding `SpanEnd` event is guaranteed to have the same
     /// values for all same-named fields except attributes and
-    #[serde(rename_all = "camelCase")]
     SpanStart(SpanStartInfo),
+
     /// # Span
-    /// Represents a span in a trace.
+    /// Represents a completed span in a trace.
     ///
     /// This is a full-span record emitted when the span is completed.
-    #[serde(rename_all = "camelCase")]
     SpanEnd(SpanEndInfo),
+
     /// # Log Record
     ///
     /// Represents a log record, which is a structured point in time event that can be emitted
     /// during the execution of a span.
-    #[serde(rename_all = "camelCase")]
     LogRecord(LogRecordInfo),
 }
 
 /// A reference to a telemetry record, used in tracing to avoiding cloning. Make sure
 /// it matches the `TelemetryRecord` enum.
 #[derive(Serialize)]
-#[serde(tag = "recordType")]
-#[serde(rename_all = "camelCase")]
+#[serde(tag = "record_type")]
 pub enum TelemetryRecordRef<'a> {
     /// # Span Start
     /// Represents the start of a span in a trace.
@@ -275,29 +218,32 @@ pub enum TelemetryRecordRef<'a> {
     /// This is a partial-span record emitted as soon as the span is created.
     /// The corresponding `SpanEnd` event is guaranteed to have the same
     /// values for all same-named fields except attributes and
-    #[serde(rename_all = "camelCase")]
     SpanStart(&'a SpanStartInfo),
+
     /// # Span
     /// Represents a span in a trace.
     ///
     /// This is a full-span record emitted when the span is completed.
-    #[serde(rename_all = "camelCase")]
     SpanEnd(&'a SpanEndInfo),
+
     /// # Log Record
     ///
     /// Represents a log record, which is a structured point in time event that can be emitted
     /// during the execution of a span.
-    #[serde(rename_all = "camelCase")]
     LogRecord(&'a LogRecordInfo),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Default)]
 pub struct SharedPhaseInfo {
-    #[serde(rename = "dbt.fusion.invocation.id")]
+    // Invocation id is added to all phase for consumer convenience.
+    // It will always match the `invocation_id` in the root `Invocation` span.
+    /// Unique identifier for the invocation
     pub invocation_id: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, EnumDiscriminants, strum::Display)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, EnumDiscriminants, strum::Display,
+)]
 #[strum_discriminants(derive(
     Serialize,
     Deserialize,
@@ -307,89 +253,80 @@ pub struct SharedPhaseInfo {
     Hash
 ))]
 #[strum_discriminants(name(BuildPhase))]
-#[serde(tag = "dbt.fusion.phase.name")]
+#[serde(tag = "phase")]
 pub enum BuildPhaseInfo {
     /// # File Discovery
     /// Analyzing dbt_project, profiles.yml and scanning files
     Loading {
         #[serde(flatten)]
         shared: SharedPhaseInfo,
-        // EXAMPLE: The number of files discovered
-        // #[serde(rename = "dbt.fusion.phase.file_count")]
-        // file_count: u64,
     },
+
     /// # Dependency Loading
     /// Check that dependencies are met
     DependencyLoading {
         #[serde(flatten)]
         shared: SharedPhaseInfo,
-        // EXAMPLE: The number of dependencies loaded
-        // #[serde(rename = "dbt.fusion.phase.dependency_loading.dependency_count")]
-        // dependency_count: u64,
     },
+
     /// # Parsing
     /// Parsing and macro name resolution of all dbt files
     Parsing {
         #[serde(flatten)]
         shared: SharedPhaseInfo,
-        // EXAMPLE: The number of dbt files parsed
-        // #[serde(rename = "dbt.fusion.phase.parsing.parsed_file_count")]
-        // parsed_file_count: u64,
     },
+
     /// # Scheduling
     /// Graph construction and graph slicing
     Scheduling {
         #[serde(flatten)]
         shared: SharedPhaseInfo,
-        // EXAMPLE: The number of nodes in the graph
-        // #[serde(rename = "dbt.fusion.phase.scheduling.node_count")]
-        // node_count: u64,
     },
+
     /// # Freshness Analysis
     /// Freshness analysis of sources and models
     FreshnessAnalysis {
         #[serde(flatten)]
         shared: SharedPhaseInfo,
     },
+
     /// # Lineage
     /// Analysis of individual node lineages
     Lineage {
         #[serde(flatten)]
         shared: SharedPhaseInfo,
     },
+
     /// # Analyzing
     /// Dbt compile (called render) and Sql analysis
     Analyzing {
         #[serde(flatten)]
         shared: SharedPhaseInfo,
-        #[serde(rename = "dbt.fusion.phase.node.count")]
         node_count: u64,
     },
+
     /// # Compiling
     /// Dbt compile (called render) and Sql analysis
     Compiling {
         #[serde(flatten)]
         shared: SharedPhaseInfo,
-        #[serde(rename = "dbt.fusion.phase.node.count")]
         node_count: u64,
     },
+
     /// # Executing
     /// Execution against the target database
     Executing {
         #[serde(flatten)]
         shared: SharedPhaseInfo,
-        #[serde(rename = "dbt.fusion.phase.node.count")]
         node_count: u64,
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 pub struct NodeIdentifier {
     /// The unique ID of the node.
-    #[serde(rename = "dbt.fusion.node.unique.id")]
     pub unique_id: String,
     /// The name of the node.
-    #[serde(rename = "dbt.fusion.node.fqn")]
     pub fqn: String,
 }
 
@@ -402,7 +339,7 @@ impl std::fmt::Display for NodeIdentifier {
 /// TODO: this is a duplicate from `dbt-schemas` crate due to current circular dependency
 /// remove redundancy when `dbt-schemas` crate is available
 /// Represents the detailed status of a phase in the execution of a node.
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Default, JsonSchema)]
 pub enum NodeExecutionStatus {
     #[default]
     Success,
@@ -415,17 +352,14 @@ pub enum NodeExecutionStatus {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 pub struct InvocationMetrics {
-    #[serde(rename = "dbt.fusion.invocation.metrics.total.errors")]
     pub total_errors: Option<u64>,
-    #[serde(rename = "dbt.fusion.invocation.metrics.total.warnings")]
     pub total_warnings: Option<u64>,
-    #[serde(rename = "dbt.fusion.invocation.metrics.autofix.suggestions")]
     pub autofix_suggestions: Option<u64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(untagged)]
 pub enum DebugValue {
     Float64(f64),
@@ -438,50 +372,66 @@ pub enum DebugValue {
 
 /// Top-level event enum, tagged by `event_type` for downstream routing
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, strum::Display)]
-#[serde(tag = "eventName", content = "attributes")]
-pub enum SpanAttributes {
+#[derive(
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    AsRefStr,
+    IntoStaticStr,
+    PartialEq,
+    strum::Display,
+    EnumDiscriminants,
+)]
+#[serde(tag = "event_type", content = "attributes")]
+#[strum_discriminants(derive(Serialize, Deserialize), name(TelemetryAttributesType))]
+pub enum TelemetryAttributes {
+    // ---------------------
+    // Span attributes first
+    // ---------------------
     /// # Process attributes
     /// Fusion produces one process span per execution of the cli or lsp.
     /// There can be multiple Invocations per Process.
     Process {
-        #[serde(rename = "dbt.fusion.version")] // In OTEL `service.version`
+        /// dbt fusion version, e.g. "1.2.3"
         version: String,
-        #[serde(rename = "dbt.fusion.host.os")]
+        /// The host operating system, e.g. "linux", "darwin", "windows"
         host_os: String,
-        #[serde(rename = "dbt.fusion.host.arch")]
+        /// The host architecture, e.g. "x86_64", "aarch64"
         host_arch: String,
     },
+
     /// # Invocation attributes
     Invocation {
-        #[serde(rename = "dbt.fusion.invocation.id")]
+        /// Unique identifier for the invocation
         invocation_id: String,
-        #[serde(rename = "dbt.fusion.session.start.target")]
+        /// The dbt command that was executed, e.g. "run", "test", "build"
+        command: String,
+        /// dbt target, e.g. "dev", "prod"
         target: Option<String>,
 
         // The following process-wide attributes are duplicated for convenience
-        #[serde(rename = "dbt.fusion.version")] // In OTEL `service.version`
+        /// dbt fusion version, e.g. "1.2.3"
         version: String,
-        #[serde(rename = "dbt.fusion.host.os")]
+        /// The host operating system, e.g. "linux", "darwin", "windows"
         host_os: String,
-        #[serde(rename = "dbt.fusion.host.arch")]
+        /// The host architecture, e.g. "x86_64", "aarch64"
         host_arch: String,
 
         // Metrics
         #[serde(flatten)]
         metrics: Option<InvocationMetrics>,
     },
+
     // Operation spans
     /// # Session attributes
     Update {
         /// Update dbt to this version (e.g. 1.2.3) [default: latest version]
-        #[serde(rename = "dbt.fusion.update.version")]
         version: Option<String>,
         /// Package to update (e.g. dbt) [default: dbt]
-        #[serde(rename = "dbt.fusion.update.package")]
         package: Option<String>,
         /// The discovered path to the dbt executable
-        #[serde(rename = "dbt.fusion.exe.path")]
         exe_path: Option<String>,
     },
 
@@ -489,67 +439,66 @@ pub enum SpanAttributes {
     /// # Phase attributes
     #[strum(to_string = "Phase({0})")]
     Phase(BuildPhaseInfo),
+
     /// # Node attributes
     #[strum(to_string = "Node({phase}|{node_id})")]
     Node {
         #[serde(flatten)]
         node_id: NodeIdentifier, // this is flattened into inner attrs, hence `node_id` and not `id`
-        #[serde(rename = "dbt.fusion.node.phase")]
         phase: BuildPhase,
         /// Final status of the node execution.
-        #[serde(rename = "dbt.fusion.node.status")]
         status: Option<NodeExecutionStatus>,
         /// The number of resulting rows produced by the node, if recorded.
-        #[serde(rename = "dbt.fusion.node.num.rows")]
         num_rows: Option<u64>,
     },
+
+    /// # Trace level span attributes
+    ///
+    /// This is used for detailed tracing of internal operations and only available
+    /// when TRACE level is explicitly enabled.
     #[strum(to_string = "DevInternal({name} | {location})")]
     DevInternal {
         /// Internal developer span name, often the function
-        #[serde(rename = "dbt.fusion.dev.span.name")]
         name: String,
         #[serde(flatten)]
         location: RecordCodeLocation,
         /// Arbitrary extra string for debugging purposes.
-        #[serde(rename = "dbt.fusion.dev.span.extra")]
         extra: Option<std::collections::BTreeMap<String, DebugValue>>,
     },
+
+    /// # Fallback span attributes
+    ///
+    /// This is used for spans that weren't properly instrumented. Report a bug if you see this.
     Unknown {
         /// Internal developer span name, often the function
-        #[serde(rename = "dbt.fusion.dev.span.name")]
         name: String,
         #[serde(flatten)]
         location: RecordCodeLocation,
     },
-}
-
-#[skip_serializing_none]
-#[derive(
-    Debug, Clone, Serialize, Deserialize, JsonSchema, AsRefStr, IntoStaticStr, PartialEq, Eq,
-)]
-#[serde(tag = "eventName", content = "attributes")]
-pub enum LogAttributes {
+    // ---------------------
+    // Log attributes
+    // ---------------------
     /// # Regular log record
     ///
     /// Is used for all log levels, messages that do not have specific meaning
     Log {
         // TODO: use ErrorCode enum for error codes
         /// Option error/warning code
-        #[serde(rename = "dbt.fusion.event.error.code")]
         code: Option<u32>,
+
         /// An optional legacy codes dbt-core code (e.g. "Z048")
-        #[serde(rename = "dbt.fusion.event.legacy.code")]
         dbt_core_code: Option<String>,
+
         /// Numerical value of the severity, normalized to values described in OTEL Log Data Model.
         ///
         /// This is the original severity before user up/down-grade configuration applied
-        #[serde(rename = "dbt.fusion.event.original.severity.number")]
         original_severity_number: SeverityNumber,
+
         /// The severity text (also known as log level).
         ///
         /// This is the original severity before user up/down-grade configuration applied
-        #[serde(rename = "dbt.fusion.event.original.severity.text")]
-        original_severity_text: Option<String>,
+        original_severity_text: String,
+
         #[serde(flatten)]
         location: RecordCodeLocation,
     },
@@ -561,13 +510,13 @@ pub enum LogAttributes {
         /// Numerical value of the severity, normalized to values described in OTEL Log Data Model.
         ///
         /// This is the original severity before user up/down-grade configuration applied
-        #[serde(rename = "dbt.fusion.event.original.severity.number")]
         original_severity_number: SeverityNumber,
+
         /// The severity text (also known as log level).
         ///
         /// This is the original severity before user up/down-grade configuration applied
-        #[serde(rename = "dbt.fusion.event.original.severity.text")]
-        original_severity_text: Option<String>,
+        original_severity_text: String,
+
         #[serde(flatten)]
         location: RecordCodeLocation,
     },
@@ -575,46 +524,56 @@ pub enum LogAttributes {
     /// # Write Artifact
     WriteArtifact {
         /// The path to the artifact.
-        #[serde(rename = "dbt.fusion.artifact.relative.path")]
         relative_path: Option<String>,
         /// Time it took to write the artifact in milliseconds.
-        #[serde(rename = "dbt.fusion.artifact.duration.ms")]
         duration_ms: Option<u64>,
     },
 }
 
-impl LogAttributes {
+impl TelemetryAttributes {
     pub fn has_empty_location(&self) -> bool {
         match self {
-            LogAttributes::Log { location, .. } => location.is_none(),
-            LogAttributes::LegacyLog { location, .. } => location.is_none(),
+            TelemetryAttributes::Log { location, .. } => location.is_none(),
+            TelemetryAttributes::LegacyLog { location, .. } => location.is_none(),
+            TelemetryAttributes::DevInternal { location, .. } => location.is_none(),
+            TelemetryAttributes::Unknown { location, .. } => location.is_none(),
             _ => false,
         }
     }
     pub fn with_location(self, location: RecordCodeLocation) -> Self {
         match self {
-            LogAttributes::Log {
+            TelemetryAttributes::Log {
                 code,
                 dbt_core_code,
                 original_severity_number,
                 original_severity_text,
                 ..
-            } => LogAttributes::Log {
+            } => TelemetryAttributes::Log {
                 code,
                 dbt_core_code,
                 original_severity_number,
                 original_severity_text,
                 location,
             },
-            LogAttributes::LegacyLog {
+            TelemetryAttributes::LegacyLog {
                 original_severity_number,
                 original_severity_text,
                 ..
-            } => LogAttributes::LegacyLog {
+            } => TelemetryAttributes::LegacyLog {
                 original_severity_number,
                 original_severity_text,
                 location,
             },
+            TelemetryAttributes::DevInternal { name, extra, .. } => {
+                TelemetryAttributes::DevInternal {
+                    name,
+                    location,
+                    extra,
+                }
+            }
+            TelemetryAttributes::Unknown { name, .. } => {
+                TelemetryAttributes::Unknown { name, location }
+            }
             _ => {
                 // For other variants, we don't have a location, so we just return self
                 self
