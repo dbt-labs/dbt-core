@@ -1,0 +1,3 @@
+kind: Features
+body: Upgrade lsp to use channels instead of locking
+time: 2025-08-13T18:11:59.699608329-07:00
