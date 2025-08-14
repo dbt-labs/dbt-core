@@ -1,7 +1,9 @@
+-- funcsign: (string, string, int) -> string
 {% macro split_part(string_text, delimiter_text, part_number) %}
   {{ return(adapter.dispatch('split_part', 'dbt') (string_text, delimiter_text, part_number)) }}
 {% endmacro %}
 
+-- funcsign: (string, string, int) -> string
 {% macro default__split_part(string_text, delimiter_text, part_number) %}
 
     split_part(
@@ -12,6 +14,7 @@
 
 {% endmacro %}
 
+-- funcsign: (string, string, int) -> string
 {% macro _split_part_negative(string_text, delimiter_text, part_number) %}
 
     split_part(

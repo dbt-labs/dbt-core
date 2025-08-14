@@ -428,6 +428,8 @@ pub struct TypecheckState {
     pub frame_base: usize,
     pub cur_loop_obj_type: Option<Type>,
     pub single_branch_definition_vars: BTreeSet<String>,
+    pub rv_type: Type,
+    pub return_span: Span,
 }
 
 impl TypecheckState {
@@ -438,6 +440,8 @@ impl TypecheckState {
             frame_base: 0,
             cur_loop_obj_type: None,
             single_branch_definition_vars: BTreeSet::new(),
+            rv_type: Type::None,
+            return_span: Span::default(),
         }
     }
 
@@ -535,7 +539,7 @@ impl<'src> TypeChecker<'src> {
         typecheck_resolved_context: BTreeMap<String, Value>,
     ) -> Result<(), crate::Error> {
         // println!("{}", self.cfg.dump_blocks(self.instr));
-        // println!("CFG: {}", self.cfg.to_dot());
+        // println!("{}", self.cfg.to_dot());
         let mut worklist = VecDeque::new();
         let mut visited = vec![false; self.cfg.blocks.len()];
         let mut first_merge = vec![true; self.cfg.blocks.len()];
@@ -555,39 +559,28 @@ impl<'src> TypeChecker<'src> {
             let out_state =
                 self.transfer_block(bb_id, listener.clone(), typecheck_resolved_context.clone())?;
 
-            // TODO: check return type
-            // let rv_type = rv
-            //     .downcast_object_ref::<Type>()
-            //     .cloned()
-            //     .unwrap_or(Type::Any { hard: false });
-            // if matches!(rv_type, Type::Exception) {
-            //     continue;
-            // }
-            // if let Some(macro_block) = self.cfg.get_block(bb_id) {
-            //     if let Some(macro_name) = macro_block.current_macro.as_ref() {
-            //         if let Some(funcsign) = self.function_registry.get(macro_name) {
-            //             if let Some(user_defined_func) =
-            //                 funcsign.downcast_ref::<UserDefinedFunctionType>()
-            //             {
-            //                 let expected_ret_type = user_defined_func.ret_type.clone();
-            //                 // try match rv with registry_ret_type
-            //                 let rv_type = rv
-            //                     .downcast_object_ref::<Type>()
-            //                     .cloned()
-            //                     .unwrap_or(Type::Any { hard: false });
-            //                 let span = e.get_abrupt_return_span();
-            //                 if !rv_type.is_subtype_of(&expected_ret_type) {
-            //                     listener.set_span(&span);
-            //                     listener.warn(
-            //                         &format!(
-            //                             "Type mismatch: expected return type {expected_ret_type}, got {rv_type}"
-            //                         ),
-            //                     );
-            //                 }
-            //             }
-            //         }
-            //     }
-            // }
+            let rv_type = out_state.rv_type.clone();
+            if let Some(macro_block) = self.cfg.get_block(bb_id) {
+                if let Some(macro_name) = macro_block.current_macro.as_ref() {
+                    if let Some(funcsign) = self.function_registry.get(macro_name) {
+                        if let Some(user_defined_func) =
+                            funcsign.downcast_ref::<UserDefinedFunctionType>()
+                        {
+                            let expected_ret_type = user_defined_func.ret_type.clone();
+                            // try match rv with registry_ret_type
+                            let span = out_state.return_span;
+                            if !rv_type.is_subtype_of(&expected_ret_type) {
+                                listener.set_span(&span);
+                                listener.warn(
+                                    &format!(
+                                        "Type mismatch: expected return type {expected_ret_type}, got {rv_type}"
+                                    ),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
 
             for (succ, _) in self.cfg.successor(bb_id) {
                 let changed = if first_merge[*succ] {
@@ -1351,7 +1344,6 @@ impl<'src> TypeChecker<'src> {
                             "Stack underflow on push loop",
                         ));
                     }
-
                     typestate.push_frame();
                 }
                 Instruction::Iterate(_jump_target, _span) => {
@@ -1659,22 +1651,7 @@ impl<'src> TypeChecker<'src> {
                         }
 
                         let result = match function.call(&method_args, &kwargs, listener.clone()) {
-                            Ok(rv) => {
-                                // TODO: handle exception
-                                // if *name == "raise_not_implemented"
-                                //     || *name == "raise_compiler_error"
-                                //     || *name == "column_type_missing"
-                                //     || *name == "raise_fail_fast_error"
-                                // {
-                                //     return Err(crate::Error::abrupt_return(Value::from_object(
-                                //         Type::Exception,
-                                //     ))
-                                //     .with_span(Path::new(""), span));
-                                // } else {
-                                //     rv
-                                // }
-                                rv
-                            }
+                            Ok(rv) => rv,
                             Err(e) => {
                                 listener
                                     .warn(&format!("Method call failed '{self_type}.{name}': {e}"));
@@ -1835,9 +1812,22 @@ impl<'src> TypeChecker<'src> {
                     }
                 }
                 #[cfg(feature = "macros")]
-                Instruction::Return { .. } => {
+                Instruction::Return { explicit } => {
                     // TYPECHECK: NO
                     // do nothing instead of break because we want to cover all instructions
+                    if *explicit {
+                        // pop the stack as the return value
+                        let rv_type = match typestate.stack.pop() {
+                            Some(val) => val.inner,
+                            None => {
+                                return Err(crate::Error::new(
+                                    crate::error::ErrorKind::InvalidOperation,
+                                    "Stack underflow on return",
+                                ))
+                            }
+                        };
+                        typestate.rv_type = rv_type;
+                    }
                 }
                 #[cfg(feature = "macros")]
                 Instruction::Enclose(_name) => {

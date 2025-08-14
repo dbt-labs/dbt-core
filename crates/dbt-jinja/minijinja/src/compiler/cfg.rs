@@ -140,7 +140,8 @@ fn branch_targets(cur_idx: usize, inst: &Instruction) -> Vec<(usize, EdgeKind)> 
             vec![(cur_idx + 1, Cond(false)), (*t, Cond(true))]
         }
         Instruction::PopFrame => vec![(cur_idx + 1, EdgeKind::FallThrough)],
-        Instruction::Return { .. } => vec![],
+        Instruction::Return { explicit: true } => vec![(cur_idx + 1, EdgeKind::FallThrough)],
+        Instruction::Return { explicit: false } => vec![],
         _ => vec![(cur_idx + 1, FallThrough)],
     }
 }

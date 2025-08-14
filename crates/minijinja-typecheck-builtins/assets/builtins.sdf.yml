@@ -122,6 +122,9 @@ object:
       - name: abridge_sql_log
         type: optional[bool]
         is-optional: true
+      - name: auto_begin
+        type: optional[bool]
+        is-optional: true
     return-type: string
 ---
 object:
@@ -489,7 +492,8 @@ object:
       expected_rows: list[ANY],
       expected_sql: string,
       query_tag: string,
-      model: model
+      model: model,
+      tmp_relation_type: optional[string]
     }
 ---
 object:
@@ -1024,6 +1028,9 @@ object:
       - name: type
         type: optional[string]
         is-optional: true
+      - name: table_format
+        type: optional[string]
+        is-optional: true
     return-type: relation
 ---
 object:
@@ -1255,7 +1262,13 @@ alias:
 object:
   id: namespace
   call:
-    arguments: []
+    arguments: 
+      - name: paginated_results
+        type: optional[list[ANY]]
+        is-optional: true
+      - name: watermark
+        type: optional[ANY]
+        is-optional: true
     return-type: "struct{dbt_updated_at_data_type: ANY, column_added: bool}"
 ---
 object: 

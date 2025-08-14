@@ -20,10 +20,12 @@
     This is also due to fs doesnt support `context` globals, adapter.dispatch will not work as expected for this case.
     Therefore, we rename the macro to `snowflake__get_incremental_insert_overwrite_sql` as a workaround.
 #}
+-- funcsign: (struct{ target_relation: relation, temp_relation: relation, unique_key: optional[string], dest_columns: list[base_column], incremental_predicates: optional[string]}) -> string
 {% macro snowflake__get_incremental_insert_overwrite_sql(arg_dict) -%}
   {{ adapter.dispatch('insert_overwrite_get_sql', 'dbt')(arg_dict["target_relation"], arg_dict["temp_relation"], arg_dict["unique_key"], arg_dict["dest_columns"]) }}
 {%- endmacro %}
 
+-- funcsign: (relation, relation, optional[string], list[base_column]) -> string
 {% macro snowflake__insert_overwrite_get_sql(target, source, unique_key, dest_columns) -%}
 
     {%- set dml -%}

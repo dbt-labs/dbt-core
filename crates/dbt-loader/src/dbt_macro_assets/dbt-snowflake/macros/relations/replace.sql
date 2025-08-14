@@ -1,3 +1,4 @@
+-- funcsign: (relation, relation, string) -> string
 {% macro snowflake__get_replace_sql(existing_relation, target_relation, sql) %}
 
     {% if existing_relation.is_dynamic_table and target_relation.is_dynamic_table %}
