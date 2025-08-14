@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use super::convert::log_level_filter_to_tracing;
 use crate::{
-    FsResult,
     constants::{DBT_METADATA_DIR_NAME, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME},
     io_args::IoArgs,
     io_utils::determine_project_dir,
@@ -47,31 +46,35 @@ impl Default for FsTraceConfig {
 
 /// Helper function to calculate in_dir and out_dir for tracing configuration.
 /// This implements the same logic as execute_setup_and_all_phases but without canonicalization.
+/// Unlike the project setup logic, this function never fails - it falls back to using the current
+/// working directory if no project directory can be determined.
 fn calculate_trace_dirs(
     project_dir: Option<PathBuf>,
     target_path: Option<PathBuf>,
-) -> FsResult<(PathBuf, PathBuf)> {
-    let in_dir = if let Some(project_dir) = project_dir {
-        project_dir
-    } else {
-        determine_project_dir(&[], DBT_PROJECT_YML)?
-    };
+) -> (PathBuf, PathBuf) {
+    let in_dir = project_dir.unwrap_or_else(|| {
+        // If no project directory is provided, try to determine it
+        // Fallback to empty path if not found
+        determine_project_dir(&[], DBT_PROJECT_YML).unwrap_or_else(|_| PathBuf::new())
+    });
 
+    // If no target path is provided, determine the output directory
     let out_dir = target_path.unwrap_or_else(|| in_dir.join(DBT_TARGET_DIR_NAME));
 
-    Ok((in_dir, out_dir))
+    (in_dir, out_dir)
 }
 
 impl FsTraceConfig {
     /// Creates a new FsTraceConfig with proper path resolution.
+    /// This method never fails - it uses fallback logic for directory resolution.
     pub fn new(
         project_dir: Option<PathBuf>,
         target_path: Option<PathBuf>,
         io_args: &IoArgs,
-    ) -> FsResult<Self> {
-        let (in_dir, out_dir) = calculate_trace_dirs(project_dir, target_path)?;
+    ) -> Self {
+        let (in_dir, out_dir) = calculate_trace_dirs(project_dir, target_path);
 
-        Ok(Self {
+        Self {
             max_log_verbosity: io_args
                 .log_level
                 .map(|lf| log_level_filter_to_tracing(&lf))
@@ -110,6 +113,6 @@ impl FsTraceConfig {
             // TODO. For now never print to stdout. Maybe remove with the debug layer?
             enable_progress: io_args.log_format == LogFormat::Fancy,
             export_to_otlp: io_args.export_to_otlp,
-        })
+        }
     }
 }

@@ -46,17 +46,18 @@ fn main() -> ExitCode {
     let arg = from_main(&cli);
 
     // Init tracing
-    let mut telemetry_handle =
-        match FsTraceConfig::new(cli.project_dir(), cli.target_path(), &arg.io)
-            .and_then(init_tracing)
-        {
-            Ok(handle) => handle,
-            Err(e) => {
-                let msg = e.to_string();
-                print_trimmed_error(msg);
-                std::process::exit(1);
-            }
-        };
+    let mut telemetry_handle = match init_tracing(FsTraceConfig::new(
+        cli.project_dir(),
+        cli.target_path(),
+        &arg.io,
+    )) {
+        Ok(handle) => handle,
+        Err(e) => {
+            let msg = e.to_string();
+            print_trimmed_error(msg);
+            std::process::exit(1);
+        }
+    };
 
     // Setup tokio runtime and set stack-size to 8MB
     // DO NOT USE Rayon, it is not compatible with Tokio
