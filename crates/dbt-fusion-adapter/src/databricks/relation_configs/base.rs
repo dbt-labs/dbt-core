@@ -174,6 +174,12 @@ impl ComponentConfig for DatabricksComponentConfig {
                 Arc::new(DatabricksComponentConfig::ColumnComments(diff))
                     as Arc<dyn ComponentConfig>
             }),
+            (
+                DatabricksComponentConfig::Constraints(a),
+                DatabricksComponentConfig::Constraints(b),
+            ) => a.get_diff(b).map(|diff| {
+                Arc::new(DatabricksComponentConfig::Constraints(diff)) as Arc<dyn ComponentConfig>
+            }),
             _ => {
                 if self != other {
                     Some(Arc::new(self.clone()) as Arc<dyn ComponentConfig>)

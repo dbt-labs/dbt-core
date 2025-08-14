@@ -72,6 +72,10 @@ pub struct DatabricksRelation {
     pub metadata: Option<BTreeMap<String, String>>,
     /// Whether the relation is a delta table
     pub is_delta: bool,
+    /// Constraints to be created with the table
+    pub create_constraints: Vec<crate::databricks::constraints::TypedConstraint>,
+    /// Constraints to be applied during ALTER operations
+    pub alter_constraints: Vec<crate::databricks::constraints::TypedConstraint>,
 }
 
 impl BaseRelationProperties for DatabricksRelation {
@@ -141,6 +145,8 @@ impl DatabricksRelation {
             native_schema,
             metadata,
             is_delta,
+            create_constraints: Vec::new(),
+            alter_constraints: Vec::new(),
         }
     }
 
@@ -161,6 +167,22 @@ impl DatabricksRelation {
             native_schema: None,
             metadata,
             is_delta,
+            create_constraints: Vec::new(),
+            alter_constraints: Vec::new(),
+        }
+    }
+
+    /// Add a constraint, routing to create_constraints or alter_constraints based on type
+    pub fn add_constraint(&mut self, constraint: crate::databricks::constraints::TypedConstraint) {
+        use dbt_schemas::schemas::common::ConstraintType;
+
+        match constraint.constraint_type() {
+            ConstraintType::Check => {
+                self.alter_constraints.push(constraint);
+            }
+            _ => {
+                self.create_constraints.push(constraint);
+            }
         }
     }
 }
@@ -207,7 +229,7 @@ impl BaseRelation for DatabricksRelation {
     }
 
     fn include_inner(&self, policy: Policy) -> Result<Value, MinijinjaError> {
-        let relation = Self::new_with_policy(
+        let mut relation = Self::new_with_policy(
             self.path.clone(),
             self.relation_type,
             policy,
@@ -215,6 +237,10 @@ impl BaseRelation for DatabricksRelation {
             self.metadata.clone(),
             self.is_delta,
         );
+
+        // Preserve constraints
+        relation.create_constraints = self.create_constraints.clone();
+        relation.alter_constraints = self.alter_constraints.clone();
 
         Ok(relation.as_value())
     }
@@ -409,5 +435,41 @@ mod tests {
             false,
         );
         assert!(relation.is_system());
+    }
+
+    #[test]
+    fn test_constraint_methods() {
+        use crate::databricks::constraints::TypedConstraint;
+
+        let mut relation = DatabricksRelation::new(
+            Some("test_db".to_string()),
+            Some("test_schema".to_string()),
+            Some("test_table".to_string()),
+            Some(RelationType::Table),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+            None,
+            false,
+        );
+
+        // Test check constraint goes to alter_constraints
+        let check_constraint = TypedConstraint::Check {
+            name: Some("positive_id".to_string()),
+            expression: "id > 0".to_string(),
+            columns: None,
+        };
+        relation.add_constraint(check_constraint);
+        assert_eq!(relation.alter_constraints.len(), 1);
+        assert_eq!(relation.create_constraints.len(), 0);
+
+        // Test primary key constraint goes to create_constraints
+        let pk_constraint = TypedConstraint::PrimaryKey {
+            name: Some("pk_users".to_string()),
+            columns: vec!["id".to_string()],
+            expression: None,
+        };
+        relation.add_constraint(pk_constraint);
+        assert_eq!(relation.alter_constraints.len(), 1);
+        assert_eq!(relation.create_constraints.len(), 1);
     }
 }

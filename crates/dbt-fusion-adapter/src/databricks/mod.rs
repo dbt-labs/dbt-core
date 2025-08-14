@@ -1,3 +1,5 @@
+/// Databricks constraint utilities
+pub mod constraints;
 /// Databricks formatter
 pub(crate) mod formatter;
 /// Databricks relation
