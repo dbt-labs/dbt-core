@@ -258,17 +258,8 @@ pub fn execute_macro_with_package(
     let func = state
         .lookup(macro_name)
         .unwrap_or_else(|| panic!("{macro_name} exists"));
-    let rv = match func.call(&state, args, &[]) {
-        Ok(rv) => rv,
-        Err(err) => {
-            let v = err.try_abrupt_return().ok_or(AdapterError::new(
-                AdapterErrorKind::UnexpectedResult,
-                err.to_string(),
-            ))?;
-            v.clone()
-        }
-    };
-    Ok(rv)
+    func.call(&state, args, &[])
+        .map_err(|err| AdapterError::new(AdapterErrorKind::UnexpectedResult, err.to_string()))
 }
 
 /// Returns a value that represents the absence of a value of a Object method return.

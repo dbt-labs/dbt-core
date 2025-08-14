@@ -7,9 +7,6 @@ use crate::arg_utils::ArgParser;
 use crate::error::{Error, ErrorKind};
 use crate::listener::RenderingEventListener;
 use crate::machinery::Span;
-use crate::output::Output;
-use crate::output_tracker;
-use crate::utils::AutoEscape;
 use crate::value::mutable_map::MutableMap;
 use crate::value::{Enumerator, Kwargs, Object, Value, ValueMap};
 use crate::vm::state::State;
@@ -99,10 +96,6 @@ impl Object for Macro {
 
         let (instructions, offset) = &state.macros[self.macro_ref_id];
         let vm = Vm::new(state.env());
-        let mut rv = String::new();
-        let mut output_tracker = output_tracker::OutputTracker::new(&mut rv);
-        let current_location = output_tracker.location.clone();
-        let mut out = Output::with_write(&mut output_tracker);
 
         // This requires some explanation here.  Because we get the state as &State and
         // not &mut State we are required to create a new state here.  This is unfortunate
@@ -110,7 +103,7 @@ impl Object for Macro {
         // Because macros cannot return anything other than strings (most importantly they)
         // can't return other macros this is however not an issue, as modifications in the
         // macro cannot leak out.
-        ok!(vm.eval_macro(
+        let rv = vm.eval_macro(
             instructions,
             *offset,
             self.closure.clone(),
@@ -118,18 +111,12 @@ impl Object for Macro {
             caller,
             extra_args,
             extra_kwargs,
-            &mut out,
-            current_location,
             state,
             arg_values,
-            listeners
-        ));
+            listeners,
+        )?;
 
-        Ok(if !matches!(state.auto_escape(), AutoEscape::None) {
-            Value::from_safe_string(rv)
-        } else {
-            Value::from(rv)
-        })
+        Ok(rv)
     }
 
     fn render(self: &Arc<Self>, f: &mut fmt::Formatter<'_>) -> fmt::Result {

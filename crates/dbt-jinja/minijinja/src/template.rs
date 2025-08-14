@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, HashSet};
+use std::fmt;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::{fmt, io};
 
 use dashmap::DashMap;
 use serde::Serialize;
@@ -17,8 +17,6 @@ use crate::compiler::typecheck::FunctionRegistry;
 use crate::environment::Environment;
 use crate::error::Error;
 use crate::listener::RenderingEventListener;
-use crate::output::{Output, WriteWrapper};
-use crate::output_tracker::{OutputTracker, OutputTrackerLocation};
 use crate::syntax::SyntaxConfig;
 use crate::utils::AutoEscape;
 use crate::value::{self, Value};
@@ -191,50 +189,8 @@ impl<'env, 'source> Template<'env, 'source> {
         root: Value,
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<(String, State<'_, 'env>), Error> {
-        let mut rv = String::with_capacity(self.compiled.buffer_size_hint);
-        let mut output_tracker = OutputTracker::new(&mut rv);
-        let current_location = output_tracker.location.clone();
-        let mut out = Output::with_write(&mut output_tracker);
-        self._eval(root, &mut out, current_location, listeners)
-            .map(|(_, state)| (rv, state))
-    }
-
-    /// Renders the template into an [`io::Write`].
-    ///
-    /// This works exactly like [`render`](Self::render) but instead writes the template
-    /// as it's evaluating into an [`io::Write`].  It also returns the [`State`] like
-    /// [`render_and_return_state`](Self::render_and_return_state) does.
-    ///
-    /// ```
-    /// # use minijinja::{Environment, context, listener::DefaultRenderingEventListener};
-    /// # use std::rc::Rc;
-    /// # let mut env = Environment::new();
-    /// # env.add_template("hello", "Hello {{ name }}!").unwrap();
-    /// use std::io::stdout;
-    ///
-    /// let tmpl = env.get_template("hello").unwrap();
-    /// tmpl.render_to_write(context!(name => "John"), &mut stdout(), &[Rc::new(DefaultRenderingEventListener::default())]).unwrap();
-    /// ```
-    ///
-    /// **Note on values:** The [`Value`] type implements `Serialize` and can be
-    /// efficiently passed to render.  It does not undergo actual serialization.
-    pub fn render_to_write<S: Serialize, W: io::Write>(
-        &self,
-        ctx: S,
-        w: W,
-        listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<State<'_, 'env>, Error> {
-        let mut wrapper = WriteWrapper { w, err: None };
-        let mut output_tracker = OutputTracker::new(&mut wrapper);
-        let current_location = output_tracker.location.clone();
-        self._eval(
-            Value::from_serialize(&ctx),
-            &mut Output::with_write(&mut output_tracker),
-            current_location,
-            listeners,
-        )
-        .map(|(_, state)| state)
-        .map_err(|err| wrapper.take_err(err))
+        self._eval(root, listeners)
+            .map(|(rv, state)| (rv.as_str().unwrap_or_default().to_string(), state))
     }
 
     /// Evaluates the template into a [`State`].
@@ -275,14 +231,11 @@ impl<'env, 'source> Template<'env, 'source> {
         outer_stack_depth: usize,
     ) -> Result<State<'_, 'env>, Error> {
         let root = Value::from_serialize(&ctx);
-        let mut out = Output::null();
         let vm = Vm::new(self.env);
         let state = ok!(vm.eval_with_outer_stack_depth(
             &self.compiled.instructions,
             root,
             &self.compiled.blocks,
-            &mut out,
-            Rc::new(OutputTrackerLocation::default()),
             self.compiled.initial_auto_escape,
             listeners,
             outer_stack_depth
@@ -294,18 +247,14 @@ impl<'env, 'source> Template<'env, 'source> {
     fn _eval(
         &self,
         root: Value,
-        out: &mut Output,
-        current_location: Rc<OutputTrackerLocation>,
         listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<(Option<Value>, State<'_, 'env>), Error> {
+    ) -> Result<(Value, State<'_, 'env>), Error> {
         let vm = Vm::new(self.env);
 
         vm.eval(
             &self.compiled.instructions,
             root,
             &self.compiled.blocks,
-            out,
-            current_location,
             self.compiled.initial_auto_escape,
             listeners,
         )
@@ -467,7 +416,7 @@ impl<'source> CompiledTemplate<'source> {
             config.ws_config
         ));
         let mut gen = CodeGenerator::new_with_filename(name, source, filename, profile);
-        gen.compile_stmt(&ast, listeners);
+        gen.compile_stmt(&ast, listeners)?;
         let buffer_size_hint = gen.buffer_size_hint();
         let (instructions, blocks) = gen.finish();
         Ok(CompiledTemplate {

@@ -20,7 +20,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::hash::Hash;
 use std::ops::RangeBounds;
-use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -554,90 +553,79 @@ impl<'src> TypeChecker<'src> {
         while let Some(bb_id) = worklist.pop_front() {
             listener.clone().new_block(bb_id);
             let out_state =
-                self.transfer_block(bb_id, listener.clone(), typecheck_resolved_context.clone());
+                self.transfer_block(bb_id, listener.clone(), typecheck_resolved_context.clone())?;
 
-            match out_state {
-                Ok(out_state) => {
-                    for (succ, _) in self.cfg.successor(bb_id) {
-                        let changed = if first_merge[*succ] {
-                            self.in_states[*succ] = out_state.clone();
-                            first_merge[*succ] = false;
-                            true
-                        } else {
-                            Self::merge_into(
-                                &mut self.in_states[*succ],
-                                &out_state,
-                                visited[*succ],
-                                listener.clone(),
-                            )
-                        };
-                        if !visited[*succ] || changed {
-                            worklist.push_back(*succ);
-                            visited[*succ] = true;
-                        }
-                    }
-                    if let Some(macro_block) = self.cfg.get_block(bb_id) {
-                        // find the last block in a macro
-                        if macro_block.successor.is_empty() {
-                            if let Some(macro_name) = macro_block.current_macro.as_ref() {
-                                if let Some(funcsign) = self.function_registry.get(macro_name) {
-                                    if let Some(user_defined_func) =
-                                        funcsign.downcast_ref::<UserDefinedFunctionType>()
-                                    {
-                                        let expected_ret_type = user_defined_func.ret_type.clone();
-                                        if !expected_ret_type.is_subtype_of(&Type::String(None)) {
-                                            listener
-                                                .set_span(&macro_block.span.unwrap_or_default());
-                                            listener.warn(
-                                                &format!("Type mismatch: expected return type {expected_ret_type}, got String"),
-                                            );
-                                        }
-                                    }
+            // TODO: check return type
+            // let rv_type = rv
+            //     .downcast_object_ref::<Type>()
+            //     .cloned()
+            //     .unwrap_or(Type::Any { hard: false });
+            // if matches!(rv_type, Type::Exception) {
+            //     continue;
+            // }
+            // if let Some(macro_block) = self.cfg.get_block(bb_id) {
+            //     if let Some(macro_name) = macro_block.current_macro.as_ref() {
+            //         if let Some(funcsign) = self.function_registry.get(macro_name) {
+            //             if let Some(user_defined_func) =
+            //                 funcsign.downcast_ref::<UserDefinedFunctionType>()
+            //             {
+            //                 let expected_ret_type = user_defined_func.ret_type.clone();
+            //                 // try match rv with registry_ret_type
+            //                 let rv_type = rv
+            //                     .downcast_object_ref::<Type>()
+            //                     .cloned()
+            //                     .unwrap_or(Type::Any { hard: false });
+            //                 let span = e.get_abrupt_return_span();
+            //                 if !rv_type.is_subtype_of(&expected_ret_type) {
+            //                     listener.set_span(&span);
+            //                     listener.warn(
+            //                         &format!(
+            //                             "Type mismatch: expected return type {expected_ret_type}, got {rv_type}"
+            //                         ),
+            //                     );
+            //                 }
+            //             }
+            //         }
+            //     }
+            // }
+
+            for (succ, _) in self.cfg.successor(bb_id) {
+                let changed = if first_merge[*succ] {
+                    self.in_states[*succ] = out_state.clone();
+                    first_merge[*succ] = false;
+                    true
+                } else {
+                    Self::merge_into(
+                        &mut self.in_states[*succ],
+                        &out_state,
+                        visited[*succ],
+                        listener.clone(),
+                    )
+                };
+                if !visited[*succ] || changed {
+                    worklist.push_back(*succ);
+                    visited[*succ] = true;
+                }
+            }
+            if let Some(macro_block) = self.cfg.get_block(bb_id) {
+                // find the last block in a macro
+                if macro_block.successor.is_empty() {
+                    if let Some(macro_name) = macro_block.current_macro.as_ref() {
+                        if let Some(funcsign) = self.function_registry.get(macro_name) {
+                            if let Some(user_defined_func) =
+                                funcsign.downcast_ref::<UserDefinedFunctionType>()
+                            {
+                                let expected_ret_type = user_defined_func.ret_type.clone();
+                                if !expected_ret_type.is_subtype_of(&Type::String(None)) {
+                                    listener.set_span(&macro_block.span.unwrap_or_default());
+                                    listener.warn(
+                                        &format!("Type mismatch: expected return type {expected_ret_type}, got String"),
+                                    );
                                 }
                             }
                         }
                     }
                 }
-                Err(e) => match e.try_abrupt_return() {
-                    Some(rv) => {
-                        let rv_type = rv
-                            .downcast_object_ref::<Type>()
-                            .cloned()
-                            .unwrap_or(Type::Any { hard: false });
-                        if matches!(rv_type, Type::Exception) {
-                            continue;
-                        }
-                        if let Some(macro_block) = self.cfg.get_block(bb_id) {
-                            if let Some(macro_name) = macro_block.current_macro.as_ref() {
-                                if let Some(funcsign) = self.function_registry.get(macro_name) {
-                                    if let Some(user_defined_func) =
-                                        funcsign.downcast_ref::<UserDefinedFunctionType>()
-                                    {
-                                        let expected_ret_type = user_defined_func.ret_type.clone();
-                                        // try match rv with registry_ret_type
-                                        let rv_type = rv
-                                            .downcast_object_ref::<Type>()
-                                            .cloned()
-                                            .unwrap_or(Type::Any { hard: false });
-                                        let span = e.get_abrupt_return_span();
-                                        if !rv_type.is_subtype_of(&expected_ret_type) {
-                                            listener.set_span(&span);
-                                            listener.warn(
-                                                &format!(
-                                                    "Type mismatch: expected return type {expected_ret_type}, got {rv_type}"
-                                                ),
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        continue;
-                    }
-                    None => {
-                        return Err(e);
-                    }
-                },
             }
         }
         Ok(())
@@ -1519,17 +1507,8 @@ impl<'src> TypeChecker<'src> {
                     // else {
                     // TYPECHECK: YES
                     // check the parameter types
-                    if *name == "return" {
-                        if let Some(arg) = typestate.stack.pop_inner() {
-                            return Err(crate::Error::abrupt_return(Value::from_object(arg))
-                                .with_span(Path::new(""), span));
-                        }
-                        return Err(crate::Error::new(
-                            crate::error::ErrorKind::InvalidOperation,
-                            "Stack underflow on return",
-                        )
-                        .with_span(Path::new(""), span));
-                    } else if *name == "caller" {
+
+                    if *name == "caller" {
                         // judge whether current block is a macro
                         if let Some(block) = self.cfg.get_block(bb_id) {
                             if let Some(_macro_name) = &block.current_macro {
@@ -1681,18 +1660,20 @@ impl<'src> TypeChecker<'src> {
 
                         let result = match function.call(&method_args, &kwargs, listener.clone()) {
                             Ok(rv) => {
-                                if *name == "raise_not_implemented"
-                                    || *name == "raise_compiler_error"
-                                    || *name == "column_type_missing"
-                                    || *name == "raise_fail_fast_error"
-                                {
-                                    return Err(crate::Error::abrupt_return(Value::from_object(
-                                        Type::Exception,
-                                    ))
-                                    .with_span(Path::new(""), span));
-                                } else {
-                                    rv
-                                }
+                                // TODO: handle exception
+                                // if *name == "raise_not_implemented"
+                                //     || *name == "raise_compiler_error"
+                                //     || *name == "column_type_missing"
+                                //     || *name == "raise_fail_fast_error"
+                                // {
+                                //     return Err(crate::Error::abrupt_return(Value::from_object(
+                                //         Type::Exception,
+                                //     ))
+                                //     .with_span(Path::new(""), span));
+                                // } else {
+                                //     rv
+                                // }
+                                rv
                             }
                             Err(e) => {
                                 listener
@@ -1854,7 +1835,7 @@ impl<'src> TypeChecker<'src> {
                     }
                 }
                 #[cfg(feature = "macros")]
-                Instruction::Return => {
+                Instruction::Return { .. } => {
                     // TYPECHECK: NO
                     // do nothing instead of break because we want to cover all instructions
                 }
@@ -1868,7 +1849,7 @@ impl<'src> TypeChecker<'src> {
                     // TYPECHECK: NO?
                     typestate.stack.push(Type::Any { hard: false });
                 }
-                Instruction::MacroStart(_line, _col, _index, _, _, _) => {
+                Instruction::MacroStart(_line, _col, _index) => {
                     // TYPECHECK: NO
                     // Nothing to do with the stack
                 }

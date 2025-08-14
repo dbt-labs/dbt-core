@@ -39,7 +39,6 @@ pub fn register_base_functions(env: &mut Environment, io_args: IoArgs) {
         Value::from_object(Exceptions { io_args }),
     );
 
-    env.add_function("return", return_macro);
     env.add_func_func("fromjson", fromjson);
     env.add_func_func("tojson", tojson);
     env.add_func_func("fromyaml", fromyaml);
@@ -286,19 +285,6 @@ pub fn env_var(
             Err(err)
         }
     }
-}
-
-/// The return function can be used in macros to return data to the caller.
-/// The type of the data (dict, list, int, etc) will be preserved through the return call.
-///
-/// Example:
-/// ```jinja
-/// {% macro my_macro() %}
-///   {{ return([1,2,3]) }}
-/// {% endmacro %}
-/// ```
-pub fn return_macro(arg: Value) -> Result<Value, Error> {
-    Ok(arg)
 }
 
 /// Deserialize a JSON string into a Python object primitive (e.g., a dict or list).

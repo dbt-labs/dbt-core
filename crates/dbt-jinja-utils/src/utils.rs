@@ -322,20 +322,16 @@ pub fn generate_component_name(
         args.push(Value::from_serialize(node.serialize()));
     }
     // Call the macro
-    let result = match new_state.call_macro(macro_name.as_str(), &args, &[]) {
-        Ok(value) => value,
-        Err(e) => {
-            // These macros can call do return which returns an abrupt return error
-            // with the value of the macro response in the error value
-            if let Some(value) = e.try_abrupt_return() {
-                value.to_string()
-            } else {
-                return Err(fs_err!(ErrorCode::JinjaError, "Failed to call macro"));
-            }
-        }
-    }
-    .trim()
-    .to_string();
+    let result = new_state
+        .call_macro(macro_name.as_str(), &args, &[])
+        .map_err(|err| {
+            Box::new(FsError::from_jinja_err(
+                err,
+                format!("Failed to run macro {macro_name} for component {component}"),
+            ))
+        })?
+        .trim()
+        .to_string();
     // Return the result
     Ok(result)
 }

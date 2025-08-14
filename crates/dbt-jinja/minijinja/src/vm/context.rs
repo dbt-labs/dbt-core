@@ -123,10 +123,6 @@ impl Stack {
         self.values.truncate(self.values.len() - n);
     }
 
-    pub fn try_pop(&mut self) -> Option<Value> {
-        self.values.pop()
-    }
-
     #[track_caller]
     pub fn peek(&self) -> &Value {
         self.values.last().unwrap()

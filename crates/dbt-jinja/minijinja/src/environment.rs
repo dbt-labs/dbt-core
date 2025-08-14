@@ -757,10 +757,11 @@ impl<'source> Environment<'source> {
         expr: &'expr str,
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Instructions<'expr>, Error> {
-        parse_expr(expr).map(|ast| {
+        parse_expr(expr).and_then(|ast| {
             let mut gen = CodeGenerator::new("<expression>", expr, self.profile.clone());
-            gen.compile_expr(&ast, listeners);
-            gen.finish().0
+            gen.compile_expr(&ast, listeners)?;
+            gen.add(crate::machinery::Instruction::Return { explicit: true });
+            Ok(gen.finish().0)
         })
     }
 

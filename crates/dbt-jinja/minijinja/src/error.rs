@@ -58,7 +58,6 @@ struct ErrorRepr {
     detail: Option<Cow<'static, str>>,
     stack: Vec<ErrorStackItem>,
     source: Option<Arc<dyn std::error::Error + Send + Sync>>,
-    return_value: Option<crate::value::Value>,
 }
 
 impl fmt::Debug for Error {
@@ -247,32 +246,8 @@ impl Error {
                 detail: Some(detail.into()),
                 stack: Vec::new(),
                 source: None,
-                return_value: None,
             }),
         }
-    }
-
-    /// Creates a new error for an abrupt return with the given value.
-    pub fn abrupt_return(value: crate::value::Value) -> Error {
-        Error {
-            repr: Box::new(ErrorRepr {
-                kind: ErrorKind::InvalidOperation,
-                detail: Some("abrupt return".into()),
-                stack: Vec::new(),
-                source: None,
-                return_value: Some(value),
-            }),
-        }
-    }
-
-    /// Returns the value if the error was caused by an abrupt return.
-    pub fn try_abrupt_return(&self) -> Option<&crate::value::Value> {
-        self.repr.return_value.as_ref()
-    }
-
-    /// Returns the span of the abrupt return if available.
-    pub fn get_abrupt_return_span(&self) -> Span {
-        self.span().unwrap_or_default()
     }
 
     pub(crate) fn internal_clone(&self) -> Error {
@@ -447,7 +422,6 @@ impl From<ErrorKind> for Error {
                 detail: None,
                 stack: Vec::new(),
                 source: None,
-                return_value: None,
             }),
         }
     }

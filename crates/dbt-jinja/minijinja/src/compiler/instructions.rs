@@ -233,7 +233,9 @@ pub enum Instruction<'source> {
 
     /// Breaks from the interpreter loop (exists a function)
     #[cfg(feature = "macros")]
-    Return,
+    Return {
+        explicit: bool,
+    },
 
     /// True if the value is undefined
     #[cfg(feature = "macros")]
@@ -247,7 +249,7 @@ pub enum Instruction<'source> {
     #[cfg(feature = "macros")]
     GetClosure,
 
-    MacroStart(u32, u32, u32, u32, u32, u32),
+    MacroStart(u32, u32, u32),
     MacroStop(u32, u32, u32),
 
     // A label instruction to indicate the start of a macro

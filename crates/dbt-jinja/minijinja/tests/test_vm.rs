@@ -3,7 +3,7 @@ use minijinja::compiler::codegen::CodeGenerationProfile;
 use minijinja::constants::{CURRENT_PATH, CURRENT_SPAN};
 use minijinja::machinery::{CodeGenerator, Instruction, Instructions, Span, Vm};
 use minijinja::value::Value;
-use minijinja::{AutoEscape, Environment, Error, Output, OutputTracker};
+use minijinja::{AutoEscape, Environment, Error};
 use std::collections::BTreeMap;
 
 use similar_asserts::assert_eq;
@@ -16,20 +16,12 @@ pub fn simple_eval<S: serde::Serialize>(
     let empty_blocks = BTreeMap::new();
     let vm = Vm::new(&env);
     let root = Value::from_serialize(&ctx);
-    let mut rv = String::new();
-    let mut output_tracker = OutputTracker::new(&mut rv);
-    let current_location = output_tracker.location.clone();
-    let mut output = Output::with_write(&mut output_tracker);
-    vm.eval(
-        instructions,
-        root,
-        &empty_blocks,
-        &mut output,
-        current_location,
-        AutoEscape::None,
-        &[],
-    )?;
-    Ok(rv)
+    Ok(vm
+        .eval(instructions, root, &empty_blocks, AutoEscape::None, &[])?
+        .0
+        .as_str()
+        .unwrap()
+        .to_string())
 }
 
 #[test]

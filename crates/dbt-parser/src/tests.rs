@@ -28,7 +28,7 @@ mod tests {
     use minijinja::constants::TARGET_PACKAGE_NAME;
     use minijinja::machinery::Span;
     use minijinja::{AutoEscape, Error};
-    use minijinja::{Environment, Output, OutputTracker, Value};
+    use minijinja::{Environment, Value};
 
     use crate::utils::{get_node_fqn, parse_macro_statements};
 
@@ -290,21 +290,13 @@ mod tests {
             let empty_blocks = BTreeMap::new();
             let vm = Vm::new(&env);
             let root = Value::from_serialize(&ctx);
-            let mut rv = String::new();
-            let mut output_tracker = OutputTracker::new(&mut rv);
-            let current_location = output_tracker.location.clone();
-            let mut output = Output::with_write(&mut output_tracker);
 
-            vm.eval(
-                instructions,
-                root,
-                &empty_blocks,
-                &mut output,
-                current_location,
-                AutoEscape::None,
-                &[],
-            )?;
-            Ok(rv)
+            Ok(vm
+                .eval(instructions, root, &empty_blocks, AutoEscape::None, &[])?
+                .0
+                .as_str()
+                .unwrap()
+                .to_string())
         }
         panic!("test code disabled below");
     }

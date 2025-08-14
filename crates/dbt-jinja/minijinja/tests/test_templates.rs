@@ -595,9 +595,7 @@ fn test_render_to_write_state() {
             &[],
         )
         .unwrap();
-    let mut out = Vec::<u8>::new();
-    let state = tmpl.render_to_write((), &mut out, &[]).unwrap();
-    assert_eq!(String::from_utf8_lossy(&out), "root");
+    let state = tmpl.eval_to_state((), &[]).unwrap();
     assert_eq!(state.lookup("foo"), Some(Value::from(42)));
     assert_eq!(state.call_macro("bar", &[], &[]).ok().as_deref(), Some("x"));
 }
@@ -621,7 +619,6 @@ fn test_functions() {
 #[test]
 fn test_invalid_value_iteration() {
     let env = Environment::new();
-    let mut out = Vec::<u8>::new();
 
     #[derive(Debug)]
     struct FailingIteration;
@@ -642,14 +639,11 @@ fn test_invalid_value_iteration() {
         .template_from_str("{% for item in iter %}[{{ item }}]{% endfor %}", &[])
         .unwrap();
     let err = t
-        .render_to_write(
+        .render(
             context! { iter => Value::from_object(FailingIteration) },
-            &mut out,
             &[],
         )
         .unwrap_err();
-    let out = String::from_utf8_lossy(&out);
-    assert_eq!(out, "[0][1][2][3]");
     assert_eq!(err.kind(), ErrorKind::InvalidOperation);
     assert_eq!(err.detail(), Some("failed during iteration"));
 }

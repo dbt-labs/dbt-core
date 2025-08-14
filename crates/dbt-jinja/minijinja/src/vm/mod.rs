@@ -18,7 +18,6 @@ use crate::error::{Error, ErrorKind};
 use crate::listener::RenderingEventListener;
 use crate::machinery::Span;
 use crate::output::{CaptureMode, Output};
-use crate::output_tracker::OutputTrackerLocation;
 use crate::utils::{untrusted_size_hint, AutoEscape};
 use crate::value::mutable_vec::MutableVec;
 use crate::value::namespace_name::NamespaceName;
@@ -37,6 +36,7 @@ use crate::vm::closure_object::Closure;
 
 pub(crate) use crate::vm::context::{Context, Frame};
 pub use crate::vm::state::State;
+use crate::OutputTracker;
 
 #[cfg(feature = "macros")]
 mod closure_object;
@@ -91,6 +91,19 @@ where
     }
 }
 
+#[derive(Clone, Debug)]
+struct CallerReturn {
+    value: Value,
+}
+
+impl Object for CallerReturn {}
+
+impl CallerReturn {
+    pub fn new(value: Value) -> Self {
+        CallerReturn { value }
+    }
+}
+
 impl<'env> Vm<'env> {
     /// Creates a new VM.
     pub fn new(env: &'env Environment<'env>) -> Vm<'env> {
@@ -107,21 +120,10 @@ impl<'env> Vm<'env> {
         instructions: &'template Instructions<'env>,
         root: Value,
         blocks: &'template BTreeMap<&'env str, Instructions<'env>>,
-        out: &mut Output,
-        current_location: Rc<OutputTrackerLocation>,
         auto_escape: AutoEscape,
         listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<(Option<Value>, State<'template, 'env>), Error> {
-        self.eval_with_outer_stack_depth(
-            instructions,
-            root,
-            blocks,
-            out,
-            current_location,
-            auto_escape,
-            listeners,
-            0,
-        )
+    ) -> Result<(Value, State<'template, 'env>), Error> {
+        self.eval_with_outer_stack_depth(instructions, root, blocks, auto_escape, listeners, 0)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -130,12 +132,10 @@ impl<'env> Vm<'env> {
         instructions: &'template Instructions<'env>,
         root: Value,
         blocks: &'template BTreeMap<&'env str, Instructions<'env>>,
-        out: &mut Output,
-        current_location: Rc<OutputTrackerLocation>,
         auto_escape: AutoEscape,
         listeners: &[Rc<dyn RenderingEventListener>],
         outer_stack_depth: usize,
-    ) -> Result<(Option<Value>, State<'template, 'env>), Error> {
+    ) -> Result<(Value, State<'template, 'env>), Error> {
         let _guard = value_optimization();
 
         let ctx = Context::new_with_frame_and_stack_depth(
@@ -155,16 +155,7 @@ impl<'env> Vm<'env> {
             instructions,
             prepare_blocks(blocks),
         );
-        listeners.iter().for_each(|listener| {
-            listener.on_enter_func_body();
-        });
-        let result = self
-            .eval_state(&mut state, out, current_location, listeners)
-            .map(|x| (x, state));
-        listeners.iter().for_each(|listener| {
-            listener.on_exit_func_body();
-        });
-        result
+        self.eval_state(&mut state, listeners).map(|x| (x, state))
     }
 
     /// Evaluate a macro in a state.
@@ -179,12 +170,10 @@ impl<'env> Vm<'env> {
         caller: Option<Value>,
         varargs: Vec<Value>,
         kwargs: ValueMap,
-        out: &mut Output,
-        current_location: Rc<OutputTrackerLocation>,
         state: &State,
         args: Vec<Value>,
         listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Option<Value>, Error> {
+    ) -> Result<Value, Error> {
         let path = context_base
             .get_attr_fast(CURRENT_PATH)
             .map_or(PathBuf::new(), |value| deserialize_path(&value));
@@ -223,8 +212,6 @@ impl<'env> Vm<'env> {
                 #[cfg(feature = "fuel")]
                 fuel_tracker: state.fuel_tracker.clone(),
             },
-            out,
-            current_location,
             Stack::from(args),
             pc,
             listeners,
@@ -236,11 +223,9 @@ impl<'env> Vm<'env> {
     fn eval_state(
         &self,
         state: &mut State<'_, 'env>,
-        out: &mut Output,
-        current_location: Rc<OutputTrackerLocation>,
         listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Option<Value>, Error> {
-        self.do_eval(state, out, current_location, Stack::default(), 0, listeners)
+    ) -> Result<Value, Error> {
+        self.do_eval(state, Stack::default(), 0, listeners)
     }
 
     /// Performs the actual evaluation, optionally with stack growth functionality.
@@ -248,21 +233,19 @@ impl<'env> Vm<'env> {
     fn do_eval(
         &self,
         state: &mut State<'_, 'env>,
-        out: &mut Output,
-        current_location: Rc<OutputTrackerLocation>,
         stack: Stack,
         pc: usize,
         listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Option<Value>, Error> {
+    ) -> Result<Value, Error> {
         #[cfg(feature = "stacker")]
         {
             stacker::maybe_grow(32 * 1024, 1024 * 1024, || {
-                self.eval_impl(state, out, current_location, stack, pc, listeners)
+                self.eval_impl(state, stack, pc, listeners)
             })
         }
         #[cfg(not(feature = "stacker"))]
         {
-            self.eval_impl(state, out, current_location, stack, pc, listeners)
+            self.eval_impl(state, stack, pc, listeners)
         }
     }
 
@@ -271,18 +254,24 @@ impl<'env> Vm<'env> {
     fn eval_impl(
         &self,
         state: &mut State<'_, 'env>,
-        out: &mut Output,
-        current_location: Rc<OutputTrackerLocation>,
         mut stack: Stack,
         mut pc: usize,
         listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Option<Value>, Error> {
+    ) -> Result<Value, Error> {
+        let mut rv = String::new();
+        let mut output_tracker = OutputTracker::new(&mut rv);
+        let current_location = output_tracker.location.clone();
+        let mut out = Output::with_write(&mut output_tracker);
+
         let initial_auto_escape = state.auto_escape;
         let undefined_behavior = state.undefined_behavior();
         let mut auto_escape_stack = vec![];
         let mut next_loop_recursion_jump = None;
         let mut loaded_filters = [None; MAX_LOCALS];
         let mut loaded_tests = [None; MAX_LOCALS];
+        let mut current_macro_name: Option<String> = None;
+        let mut is_caller_return = false;
+        let mut is_explicit_return = false;
 
         // If we are extending we are holding the instructions of the target parent
         // template here.  This is used to detect multiple extends and the evaluation
@@ -392,7 +381,7 @@ impl<'env> Vm<'env> {
                 }
                 Instruction::Emit(span) => {
                     self.env
-                        .format(&stack.pop(), state, out)
+                        .format(&stack.pop(), state, &mut out)
                         .map_err(|e| state.with_span_error(e, span))?;
                 }
                 Instruction::StoreLocal(name, _) => {
@@ -782,7 +771,11 @@ impl<'env> Vm<'env> {
                 #[cfg(feature = "multi_template")]
                 Instruction::CallBlock(name) => {
                     if parent_instructions.is_none() && !out.is_discarding() {
-                        self.call_block(name, state, out, current_location.clone(), listeners)?;
+                        out.write_str(
+                            self.call_block(name, state, listeners)?
+                                .as_str()
+                                .unwrap_or_default(),
+                        )?;
                     }
                 }
                 Instruction::PushAutoEscape(span) => {
@@ -858,20 +851,12 @@ impl<'env> Vm<'env> {
                             end_offset,
                         };
                         stack.drop_top(arg_count);
+                        stack.push(Value::UNDEFINED);
                         pc += 1;
                         continue;
                     }
                     listeners.iter().for_each(|listener| {
-                        if *name == "return" {
-                            listener.on_return(
-                                Some(state.ctx.current_path.as_path()),
-                                &current_location.line(),
-                                &current_location.col(),
-                                &current_location.index(),
-                            );
-                        } else {
-                            listener.on_reference(name);
-                        }
+                        listener.on_reference(name);
                     });
                     let args = stack.get_call_args(*arg_count);
                     // super is a special function reserved for super-ing into blocks.
@@ -885,7 +870,7 @@ impl<'env> Vm<'env> {
                                 this_span,
                             ));
                         }
-                        self.perform_super(state, out, current_location.clone(), true, listeners)
+                        self.perform_super(state, listeners)
                             .map_err(|e| state.with_span_error(e, this_span))?
                     // loop is a special name which when called recurses the current loop.
                     } else if *name == "loop" {
@@ -939,22 +924,8 @@ impl<'env> Vm<'env> {
                                 state.ctx.depth() + INCLUDE_RECURSION_COST,
                             )?;
                         let func = inner_state.lookup(name).unwrap();
-                        listeners.iter().for_each(|listener| {
-                            listener.on_enter_func_body();
-                        });
-                        let rv = match func.call(&inner_state, args, listeners) {
-                            Ok(rv) => rv,
-                            Err(err) => match err.try_abrupt_return() {
-                                Some(rv) => rv.clone(),
-                                None => {
-                                    return Err(state.with_span_error(err, this_span));
-                                }
-                            },
-                        };
-                        listeners.iter().for_each(|listener| {
-                            listener.on_exit_func_body();
-                        });
-                        rv
+                        func.call(&inner_state, args, listeners)
+                            .map_err(|err| state.with_span_error(err, this_span))?
                     } else if let Some(func) =
                         state.lookup(name).filter(|func| !func.is_undefined())
                     {
@@ -979,48 +950,14 @@ impl<'env> Vm<'env> {
                                 args.to_vec()
                             };
 
-                        if *name != "return" {
-                            listeners.iter().for_each(|listener| {
-                                listener.on_enter_func_body();
-                            });
-                        }
-
-                        let rv = match func.call(state, &args, listeners) {
-                            Ok(rv) => {
-                                // return implements  https://docs.getdbt.com/reference/dbt-jinja-functions/return
-                                if *name == "return" {
-                                    return Err(Error::abrupt_return(rv));
-                                } else {
-                                    rv
-                                }
+                        let rv = func
+                            .call(state, &args, listeners)
+                            .map_err(|err| state.with_span_error(err, this_span))?;
+                        if let Some(obj) = rv.as_object() {
+                            if let Some(caller_return) = obj.downcast_ref::<CallerReturn>() {
+                                stack.push(caller_return.value.clone());
+                                break;
                             }
-                            Err(err) => match err.try_abrupt_return() {
-                                Some(rv) => {
-                                    if *name == "caller" {
-                                        if rv.as_str().is_some() {
-                                            return Err(err);
-                                        } else {
-                                            return Err(state.with_span_error(
-                                                Error::new(
-                                                    ErrorKind::InvalidOperation,
-                                                    "caller() must return a string",
-                                                ),
-                                                this_span,
-                                            ));
-                                        }
-                                    } else {
-                                        rv.clone()
-                                    }
-                                }
-                                None => {
-                                    return Err(state.with_span_error(err, this_span));
-                                }
-                            },
-                        };
-                        if *name != "return" {
-                            listeners.iter().for_each(|listener| {
-                                listener.on_exit_func_body();
-                            });
                         }
                         rv
                     // Resolve the template using the dbt macro namespace resolution logic
@@ -1082,29 +1019,8 @@ impl<'env> Vm<'env> {
 
                         // look up and evaluate the macro
                         let func = new_state.lookup(name).unwrap();
-                        listeners.iter().for_each(|listener| {
-                            listener.on_enter_func_body();
-                        });
-                        let rv = match func.call(&new_state, &args, listeners) {
-                            Ok(rv) => {
-                                // return implements  https://docs.getdbt.com/reference/dbt-jinja-functions/return
-                                if *name == "return" {
-                                    return Err(Error::abrupt_return(rv));
-                                } else {
-                                    rv
-                                }
-                            }
-                            Err(err) => match err.try_abrupt_return() {
-                                Some(rv) => rv.clone(),
-                                None => {
-                                    return Err(state.with_span_error(err, this_span));
-                                }
-                            },
-                        };
-                        listeners.iter().for_each(|listener| {
-                            listener.on_exit_func_body();
-                        });
-                        rv
+                        func.call(&new_state, &args, listeners)
+                            .map_err(|err| state.with_span_error(err, this_span))?
                     } else if *name == "render" {
                         let raw = args[0].as_str().unwrap_or_default();
                         let template = state.env().template_from_str(raw, listeners)?;
@@ -1177,30 +1093,8 @@ impl<'env> Vm<'env> {
                             state.ctx.depth() + MACRO_RECURSION_COST,
                         )?;
                         let func = macro_state.lookup(name).unwrap();
-                        listeners.iter().for_each(|listener| {
-                            listener.on_enter_func_body();
-                        });
-                        let rv = match func.call(&macro_state, args, listeners) {
-                            Ok(rv) => {
-                                // return implements  https://docs.getdbt.com/reference/dbt-jinja-functions/return
-
-                                if *name == "return" {
-                                    return Err(Error::abrupt_return(rv));
-                                } else {
-                                    rv
-                                }
-                            }
-                            Err(err) => match err.try_abrupt_return() {
-                                Some(rv) => rv.clone(),
-                                None => {
-                                    return Err(state.with_span_error(err, this_span));
-                                }
-                            },
-                        };
-                        listeners.iter().for_each(|listener| {
-                            listener.on_exit_func_body();
-                        });
-                        rv
+                        func.call(&macro_state, args, listeners)
+                            .map_err(|err| state.with_span_error(err, this_span))?
                     } else {
                         // For non-namespaced calls, report just the name
                         listeners
@@ -1260,8 +1154,12 @@ impl<'env> Vm<'env> {
                     stack.pop();
                 }
                 Instruction::FastSuper(span) => {
-                    self.perform_super(state, out, current_location.clone(), false, listeners)
-                        .map_err(|e| state.with_span_error(e, span))?;
+                    out.write_str(
+                        self.perform_super(state, listeners)
+                            .map_err(|e| state.with_span_error(e, span))?
+                            .as_str()
+                            .unwrap_or_default(),
+                    )?;
                 }
                 Instruction::FastRecurse(span) => {
                     recurse_loop!(false, &span);
@@ -1310,15 +1208,11 @@ impl<'env> Vm<'env> {
                 #[cfg(feature = "multi_template")]
                 Instruction::Include(ignore_missing, span) => {
                     let a = stack.pop();
-                    self.perform_include(
-                        a,
-                        state,
-                        out,
-                        current_location.clone(),
-                        *ignore_missing,
-                        listeners,
-                    )
-                    .map_err(|e| state.with_span_error(e, span))?;
+                    out.write_str(
+                        self.perform_include(a, state, *ignore_missing, listeners)
+                            .map_err(|e| state.with_span_error(e, span))?
+                            .as_str(),
+                    )?;
                 }
                 #[cfg(feature = "multi_template")]
                 Instruction::ExportLocals => {
@@ -1337,7 +1231,13 @@ impl<'env> Vm<'env> {
                     self.build_macro(&mut stack, state, *offset, name, *flags);
                 }
                 #[cfg(feature = "macros")]
-                Instruction::Return => break,
+                Instruction::Return { explicit } => {
+                    is_explicit_return = *explicit;
+                    if *explicit && current_macro_name == Some("caller".to_string()) {
+                        is_caller_return = true;
+                    }
+                    break;
+                }
                 #[cfg(feature = "macros")]
                 Instruction::Enclose(name) => {
                     // the first time we enclose a value, we need to create a closure
@@ -1359,7 +1259,7 @@ impl<'env> Vm<'env> {
                             .map_or(Value::UNDEFINED, |x| Value::from_dyn_object(x.clone())),
                     );
                 }
-                Instruction::MacroStart(line, col, index, stop_line, stop_col, stop_offset) => {
+                Instruction::MacroStart(line, col, index) => {
                     let path = state.ctx.current_path.as_path();
                     let span = state.ctx.current_span;
                     let line = span.start_line + *line - 1;
@@ -1379,9 +1279,6 @@ impl<'env> Vm<'env> {
                             &current_location.line(),
                             &current_location.col(),
                             &current_location.index(),
-                            stop_line,
-                            stop_col,
-                            stop_offset,
                         )
                     });
                 }
@@ -1408,8 +1305,8 @@ impl<'env> Vm<'env> {
                         )
                     });
                 }
-                Instruction::MacroName(_, _) => {
-                    // no-op, we don't need to do anything here
+                Instruction::MacroName(name, _) => {
+                    current_macro_name = Some(name.to_string());
                 }
                 Instruction::TypeConstraint(_type_constraint, _is_true, _span) => {
                     // no-op, we don't need to do anything here
@@ -1424,7 +1321,20 @@ impl<'env> Vm<'env> {
             pc += 1;
         }
 
-        Ok(stack.try_pop())
+        if is_caller_return {
+            let rv = stack.pop();
+            if rv.as_str().is_none() {
+                return Err(Error::new(
+                    ErrorKind::InvalidOperation,
+                    "caller() must return a string",
+                ));
+            }
+            Ok(Value::from_object(CallerReturn::new(rv)))
+        } else if is_explicit_return {
+            Ok(stack.pop())
+        } else {
+            Ok(Value::from(rv))
+        }
     }
 
     #[cfg(feature = "multi_template")]
@@ -1433,11 +1343,9 @@ impl<'env> Vm<'env> {
         &self,
         name: Value,
         state: &mut State<'_, 'env>,
-        out: &mut Output,
-        current_location: Rc<OutputTrackerLocation>,
         ignore_missing: bool,
         listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<(), Error> {
+    ) -> Result<String, Error> {
         let obj = name.as_object();
         let choices = obj
             .as_ref()
@@ -1479,7 +1387,7 @@ impl<'env> Vm<'env> {
             #[cfg(feature = "macros")]
             {
                 let old_closure = state.ctx.take_closure();
-                rv = self.eval_state(state, out, current_location, listeners);
+                rv = self.eval_state(state, listeners);
                 state.ctx.reset_closure(old_closure);
             }
             #[cfg(not(feature = "macros"))]
@@ -1491,14 +1399,14 @@ impl<'env> Vm<'env> {
             state.auto_escape = old_escape;
             state.instructions = old_instructions;
             state.blocks = old_blocks;
-            ok!(rv.map_err(|err| {
+            let rv = ok!(rv.map_err(|err| {
                 Error::new(
                     ErrorKind::BadInclude,
                     format!("error in \"{}\"", tmpl.name()),
                 )
                 .with_source(err)
             }));
-            return Ok(());
+            return Ok(rv.as_str().unwrap().to_string());
         }
         if !templates_tried.is_empty() && !ignore_missing {
             Err(Error::new(
@@ -1516,16 +1424,13 @@ impl<'env> Vm<'env> {
                 },
             ))
         } else {
-            Ok(())
+            Ok(String::new())
         }
     }
 
     fn perform_super(
         &self,
         state: &mut State<'_, 'env>,
-        out: &mut Output,
-        current_location: Rc<OutputTrackerLocation>,
-        capture: bool,
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
         let name = ok!(state.current_block.ok_or_else(|| {
@@ -1540,25 +1445,14 @@ impl<'env> Vm<'env> {
             ));
         }
 
-        if capture {
-            out.begin_capture(CaptureMode::Capture);
-        }
-
         let old_instructions = mem::replace(&mut state.instructions, block_stack.instructions());
         ok!(state.ctx.push_frame(Frame::default()));
-        let rv = self.eval_state(state, out, current_location, listeners);
+        let rv = self.eval_state(state, listeners);
         state.ctx.pop_frame();
         state.instructions = old_instructions;
         state.blocks.get_mut(name).unwrap().pop();
 
-        ok!(rv.map_err(|err| {
-            Error::new(ErrorKind::EvalBlock, "error in super block").with_source(err)
-        }));
-        if capture {
-            Ok(out.end_capture(state.auto_escape))
-        } else {
-            Ok(Value::UNDEFINED)
-        }
+        rv.map_err(|err| Error::new(ErrorKind::EvalBlock, "error in super block").with_source(err))
     }
 
     fn prepare_loop_recursion(&self, state: &mut State) -> Result<usize, Error> {
@@ -1619,16 +1513,14 @@ impl<'env> Vm<'env> {
         &self,
         name: &str,
         state: &mut State<'_, 'env>,
-        out: &mut Output,
-        current_location: Rc<OutputTrackerLocation>,
         listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Option<Value>, Error> {
+    ) -> Result<Value, Error> {
         if let Some((name, block_stack)) = state.blocks.get_key_value(name) {
             let old_block = state.current_block.replace(name);
             let old_instructions =
                 mem::replace(&mut state.instructions, block_stack.instructions());
             state.ctx.push_frame(Frame::default())?;
-            let rv = self.eval_state(state, out, current_location, listeners);
+            let rv = self.eval_state(state, listeners);
             state.ctx.pop_frame();
             state.instructions = old_instructions;
             state.current_block = old_block;
@@ -1744,7 +1636,7 @@ impl<'env> Vm<'env> {
         let closure = stack.pop();
         let macro_ref_id = state.macros.len();
         Arc::make_mut(&mut state.macros).push((state.instructions, offset));
-        stack.push(Value::from_object(Macro {
+        let m = Macro {
             name: Value::from(name),
             arg_spec,
             macro_ref_id,
@@ -1753,7 +1645,8 @@ impl<'env> Vm<'env> {
             caller_reference: (flags & MACRO_CALLER) != 0,
             path: state.ctx.current_path.clone(),
             span: state.ctx.current_span,
-        }));
+        };
+        stack.push(Value::from_object(m));
     }
 }
 

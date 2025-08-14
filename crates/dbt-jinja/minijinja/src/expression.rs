@@ -11,8 +11,6 @@ use crate::compiler::parser::parse_expr;
 use crate::environment::Environment;
 use crate::error::Error;
 use crate::listener::RenderingEventListener;
-use crate::output::Output;
-use crate::output_tracker::OutputTrackerLocation;
 use crate::value::Value;
 use crate::vm::Vm;
 
@@ -125,12 +123,9 @@ impl<'env, 'source> Expression<'env, 'source> {
             self.instructions(),
             root,
             &BTreeMap::new(),
-            &mut Output::null(),
-            Rc::new(OutputTrackerLocation::default()),
             crate::AutoEscape::None,
             listeners
         ))
-        .0
-        .expect("expression evaluation did not leave value on stack"))
+        .0)
     }
 }

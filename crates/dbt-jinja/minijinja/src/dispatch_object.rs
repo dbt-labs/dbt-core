@@ -289,13 +289,7 @@ impl DispatchObject {
             )
             .expect("function should exist in template");
 
-        match func.call(&template_state, args, listeners) {
-            Ok(rv) => Ok(rv),
-            Err(err) => match err.try_abrupt_return() {
-                Some(rv) => Ok(rv.clone()),
-                None => Err(err),
-            },
-        }
+        func.call(&template_state, args, listeners)
     }
 }
 

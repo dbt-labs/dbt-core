@@ -311,45 +311,8 @@ impl<'template, 'env> State<'template, 'env> {
         block: &str,
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<String, Error> {
-        use crate::output_tracker;
-
-        let mut buf = String::new();
-        let mut output_tracker = output_tracker::OutputTracker::new(&mut buf);
-        let current_location = output_tracker.location.clone();
-        let mut out = Output::with_write(&mut output_tracker);
-        let value = crate::vm::Vm::new(self.env)
-            .call_block(block, self, &mut out, current_location, listeners)
-            .map(|_| buf)?;
-        Ok(value)
-    }
-
-    /// Renders a block with the given name into an [`io::Write`](std::io::Write).
-    ///
-    /// For details see [`render_block`](Self::render_block).
-    #[cfg(feature = "multi_template")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "multi_template")))]
-    pub fn render_block_to_write<W>(
-        &mut self,
-        block: &str,
-        w: W,
-        listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<(), Error>
-    where
-        W: std::io::Write,
-    {
-        use crate::{
-            output::{self},
-            output_tracker::OutputTracker,
-        };
-
-        let mut wrapper = crate::output::WriteWrapper { w, err: None };
-        let output_tracker = OutputTracker::new(&mut wrapper);
-        let current_location = output_tracker.location;
-        let mut out = output::Output::with_write(&mut wrapper);
-        crate::vm::Vm::new(self.env)
-            .call_block(block, self, &mut out, current_location, listeners)
-            .map(|_| ())
-            .map_err(|err| wrapper.take_err(err))
+        let value = crate::vm::Vm::new(self.env).call_block(block, self, listeners)?;
+        Ok(value.as_str().unwrap().to_string())
     }
 
     /// Returns a list of the names of all exports (top-level variables).

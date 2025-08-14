@@ -3,7 +3,6 @@ use std::{fmt, io};
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{Error, ErrorKind};
 use crate::machinery::Span;
 use crate::utils::AutoEscape;
 use crate::value::Value;
@@ -40,17 +39,6 @@ impl<'a> Output<'a> {
         Self {
             w,
             capture_stack: Vec::new(),
-        }
-    }
-
-    /// Creates a null output that writes nowhere.
-    pub(crate) fn null() -> Self {
-        // The null writer also has a single entry on the discarding capture
-        // stack.  In fact, `w` is more or less useless here as we always
-        // shadow it.  This is done so that `is_discarding` returns true.
-        Self {
-            w: NullWriter::get_mut(),
-            capture_stack: vec![None],
         }
     }
 
@@ -146,19 +134,6 @@ impl fmt::Write for NullWriter {
 pub struct WriteWrapper<W> {
     pub w: W,
     pub err: Option<io::Error>,
-}
-
-impl<W> WriteWrapper<W> {
-    /// Replaces the given error with the held error if available.
-    pub fn take_err(&mut self, original: Error) -> Error {
-        self.err
-            .take()
-            .map(|io_err| {
-                Error::new(ErrorKind::WriteFailure, "I/O error during rendering")
-                    .with_source(io_err)
-            })
-            .unwrap_or(original)
-    }
 }
 
 impl<W: io::Write> fmt::Write for WriteWrapper<W> {
