@@ -3,7 +3,7 @@ use crate::{
     listener::RenderingEventListenerFactory,
 };
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs, unexpected_fs_err};
-use dbt_fusion_adapter::{BaseAdapter, ParseAdapter};
+use dbt_fusion_adapter::BaseAdapter;
 use minijinja::{
     AdapterDispatchFunction, Argument, DynTypeObject, Environment, Error as MinijinjaError,
     ErrorKind as MinijinjaErrorKind, UndefinedFunctionType, UserDefinedFunctionType, Value,
@@ -82,10 +82,6 @@ impl JinjaEnvBuilder {
 
     /// Specify an adapter type (e.g. "parse", "compile") or other distinguishing feature.
     pub fn with_adapter(mut self, adapter: Arc<dyn BaseAdapter>) -> Self {
-        let adapter_value = adapter.as_value();
-        if adapter_value.downcast_object::<ParseAdapter>().is_some() {
-            self.env.add_global("parse_adapter", adapter_value);
-        }
         self.adapter = Some(adapter);
         self
     }

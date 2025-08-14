@@ -179,15 +179,28 @@ pub async fn load(
         return Ok((dbt_state, final_threads, simplified_dbt_project.dbt_cloud));
     }
 
+    let flags: BTreeMap<String, minijinja::Value> = iarg.to_dict();
+
+    let env = initialize_load_jinja_environment(
+        &dbt_state.dbt_profile.profile,
+        &dbt_state.dbt_profile.target,
+        &dbt_state.dbt_profile.db_config.adapter_type(),
+        &dbt_state.dbt_profile.db_config,
+        dbt_state.run_started_at,
+        &flags,
+        arg.io.clone(),
+        token.clone(),
+    )?;
+
     let arg_ref = &arg;
-    if let Some((prev_dbt_state, prev_env)) = arg.prev_dbt_state.clone() {
+    if let Some(prev_dbt_state) = arg.prev_dbt_state.clone() {
         let root_package = prev_dbt_state.root_package();
 
         let package_map_lookup = BTreeMap::new();
         let mut dummy_collected_vars = Vec::new();
         let mut new_root_package = load_inner(
             arg_ref,
-            &prev_env,
+            &env,
             &arg.io.in_dir,
             false,
             &package_map_lookup,
@@ -220,18 +233,6 @@ pub async fn load(
     persist_internal_packages(
         &internal_packages_install_path,
         &dbt_state.dbt_profile.db_config.adapter_type(),
-    )?;
-    let flags: BTreeMap<String, minijinja::Value> = iarg.to_dict();
-
-    let env = initialize_load_jinja_environment(
-        &dbt_state.dbt_profile.profile,
-        &dbt_state.dbt_profile.target,
-        &dbt_state.dbt_profile.db_config.adapter_type(),
-        &dbt_state.dbt_profile.db_config,
-        dbt_state.run_started_at,
-        &flags,
-        arg.io.clone(),
-        token.clone(),
     )?;
 
     let (packages_lock, upstream_projects) = get_or_install_packages(
