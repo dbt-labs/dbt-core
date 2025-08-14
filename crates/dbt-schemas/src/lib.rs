@@ -42,7 +42,11 @@ pub mod schemas {
     pub use sources::{FreshnessResultsArtifact, FreshnessResultsMetadata, FreshnessResultsNode};
     pub mod legacy_catalog {
         mod catalog;
+        pub use catalog::CatalogNodeStats;
+        pub use catalog::CatalogTable;
+        pub use catalog::ColumnMetadata;
         pub use catalog::DbtCatalog;
+        pub use catalog::TableMetadata;
         pub use catalog::build_catalog;
     }
     pub mod manifest {

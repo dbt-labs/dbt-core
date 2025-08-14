@@ -7,7 +7,11 @@ use arrow::array::RecordBatch;
 use arrow_schema::Schema;
 use dbt_common::cancellation::{Cancellable, CancellationToken};
 use dbt_common::io_args::IoArgs;
-use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, RelationPattern};
+use dbt_schemas::schemas::{
+    legacy_catalog::{CatalogTable, ColumnMetadata},
+    relations::base::{BaseRelation, ComponentName, RelationPattern},
+};
+use dbt_schemas::state::ResolverState;
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -115,6 +119,22 @@ pub enum UDFKind {
 
 /// Adapter that supports metadata query
 pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
+    // TODO: (Snowflake only) make this work for all adapters
+    fn get_stats_from_nodes(
+        &self,
+        _: &ResolverState,
+    ) -> AsyncAdapterResult<BTreeMap<String, CatalogTable>> {
+        unimplemented!()
+    }
+
+    // TODO: (Snowflake only) make this work for all adapters
+    fn get_columns_from_nodes(
+        &self,
+        _: &ResolverState,
+    ) -> AsyncAdapterResult<BTreeMap<String, BTreeMap<String, ColumnMetadata>>> {
+        unimplemented!()
+    }
+
     /// List UDFs under a given set of catalog and schemas
     fn list_user_defined_functions(
         &self,
