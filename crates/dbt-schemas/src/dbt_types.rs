@@ -40,6 +40,21 @@ impl RelationType {
             _ => panic!("unknown table type: {table_type}"),
         }
     }
+
+    /// Convert Databricks table type to dbt RelationType
+    ///
+    /// https://docs.databricks.com/aws/en/sql/language-manual/information-schema/tables#table-types
+    pub fn from_databricks_table_type(table_type: &String) -> Self {
+        match table_type.to_uppercase().as_str() {
+            "TABLE" => RelationType::Table,
+            "VIEW" => RelationType::View,
+            "MATERIALIZED_VIEW" => RelationType::MaterializedView,
+            "EXTERNAL" | "EXTERNAL_SHALLOW_CLONE" | "FOREIGN" => RelationType::External,
+            "STREAMING_TABLE" => RelationType::StreamingTable,
+            "MANAGED" | "MANAGED_SHALLOW_CLONE" => RelationType::Table,
+            _ => panic!("unknown table type: {table_type}"),
+        }
+    }
 }
 
 // Implement Display so that we can easily get a string representation.

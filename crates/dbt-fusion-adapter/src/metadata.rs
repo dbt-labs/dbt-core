@@ -31,6 +31,8 @@ pub type RelationVec = Vec<Arc<dyn BaseRelation>>;
 pub struct CatalogAndSchema {
     pub rendered_catalog: String,
     pub rendered_schema: String,
+    pub resolved_catalog: String,
+    pub resolved_schema: String,
 }
 
 impl fmt::Display for CatalogAndSchema {
@@ -51,10 +53,18 @@ impl From<&Arc<dyn BaseRelation>> for CatalogAndSchema {
                 .schema_as_resolved_str()
                 .expect("schema is required for relation"),
         );
+        let resolved_catalog = relation
+            .database_as_resolved_str()
+            .expect("Database is required for relation");
+        let resolved_schema = relation
+            .schema_as_resolved_str()
+            .expect("Schema is required for relation");
 
         Self {
             rendered_catalog,
             rendered_schema,
+            resolved_catalog,
+            resolved_schema,
         }
     }
 }
