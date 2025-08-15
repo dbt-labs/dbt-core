@@ -1,4 +1,5 @@
 //! Utility functions for the resolver
+use crate::dbt_project_config::strip_resource_paths_from_ref_path;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use dbt_common::io_args::IoArgs;
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err, show_error, stdfs};
@@ -50,19 +51,20 @@ pub fn get_node_fqn(
     package_name: &str,
     original_file_path: PathBuf,
     fqn_components: Vec<String>,
+    resource_paths: &[String],
 ) -> Vec<String> {
     let mut fqn = vec![package_name.to_owned()];
 
-    let mut components = if let Some(parent) = original_file_path.parent() {
+    // Strip resource paths from the file path
+    let stripped_path = strip_resource_paths_from_ref_path(&original_file_path, resource_paths);
+
+    let components = if let Some(parent) = stripped_path.parent() {
         parent.components().collect::<Vec<_>>()
     } else {
-        original_file_path.components().collect::<Vec<_>>()
+        stripped_path.components().collect::<Vec<_>>()
     };
 
-    // Remove the first component, which is the root directory
-    if !components.is_empty() {
-        components.remove(0);
-    }
+    // Add path components to fqn (after stripping resource paths)
     for component in components {
         let component_str = component.as_os_str().to_str().unwrap().to_string();
         fqn.push(component_str);

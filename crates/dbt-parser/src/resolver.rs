@@ -18,7 +18,7 @@ use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::state::RenderResults;
-use dbt_schemas::state::{DbtPackage, Macros};
+use dbt_schemas::state::{DbtPackage, GenericTestAsset, Macros};
 use dbt_schemas::state::{DbtRuntimeConfig, Operations};
 
 use crate::args::ResolveArgs;
@@ -399,7 +399,7 @@ pub async fn resolve_inner(
 
     let package_name = package.dbt_project.name.as_str();
 
-    let mut collected_tests = Vec::new();
+    let mut collected_generic_tests: Vec<GenericTestAsset> = Vec::new();
 
     let dbt_tests_dir = arg.io.out_dir.join(DBT_GENERIC_TESTS_DIR_NAME);
     stdfs::create_dir_all(&dbt_tests_dir)?;
@@ -416,7 +416,7 @@ pub async fn resolve_inner(
         adapter_type,
         &base_ctx,
         &jinja_env,
-        &mut collected_tests,
+        &mut collected_generic_tests,
         refs_and_sources,
     )?;
     nodes.sources.extend(sources);
@@ -436,7 +436,7 @@ pub async fn resolve_inner(
         package_name,
         &jinja_env,
         &base_ctx,
-        &mut collected_tests,
+        &mut collected_generic_tests,
         refs_and_sources,
     )?;
     nodes.seeds.extend(seeds);
@@ -479,7 +479,7 @@ pub async fn resolve_inner(
         jinja_env.clone(),
         &base_ctx,
         runtime_config.clone(),
-        &mut collected_tests,
+        &mut collected_generic_tests,
         refs_and_sources,
         token,
     )
@@ -537,7 +537,7 @@ pub async fn resolve_inner(
         jinja_env.clone(),
         &base_ctx,
         runtime_config.clone(),
-        &collected_tests,
+        &collected_generic_tests,
         token,
     )
     .await?;

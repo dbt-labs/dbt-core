@@ -115,13 +115,13 @@ pub fn resolve_unit_tests(
             package_name,
             mpe.relative_path.to_owned(),
             vec![unit_test.model.to_owned(), unit_test_name.to_owned()],
+            &package.dbt_project.all_source_paths(),
         );
 
-        let global_config =
-            local_project_config.get_config_for_path(&mpe.relative_path, package_name, &[]);
+        let global_config = local_project_config.get_config_for_fqn(&fqn);
         let mut project_config = root_project_configs
             .unit_tests
-            .get_config_for_path(&mpe.relative_path, package_name, &[])
+            .get_config_for_fqn(&fqn)
             .clone();
         project_config.default_to(global_config);
         let properties_config = if let Some(properties) = &unit_test.config {

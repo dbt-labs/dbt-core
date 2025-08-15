@@ -55,42 +55,6 @@ impl<T: DefaultTo<T>> DbtProjectConfig<T> {
         recur_build_dbt_project_config(io, dbt_config, configs, "", dependency_package_name)
     }
 
-    /// Get the configuration for a ref path
-    pub fn get_config_for_path(
-        &self,
-        ref_path: &Path,
-        project_name: &str,
-        resource_paths: &[String],
-    ) -> &T {
-        let stripped_path = strip_resource_paths_from_ref_path(ref_path, resource_paths);
-        let mut components = stripped_path.components().rev().collect::<Vec<_>>();
-
-        let mut current_config = self;
-        // If the project name is not in the children, return the root config
-        if let Some(project_config) = current_config.children.get(project_name) {
-            current_config = project_config;
-            while let Some(component) = components.pop() {
-                // look for filestem specific configs on the last component
-                let component_str: String = if components.is_empty() {
-                    stripped_path
-                        .file_stem()
-                        .unwrap()
-                        .to_str()
-                        .unwrap()
-                        .to_string()
-                } else {
-                    component.as_os_str().to_str().unwrap().to_string()
-                };
-                if let Some(child) = current_config.children.get(&component_str) {
-                    current_config = child;
-                } else {
-                    break;
-                }
-            }
-        }
-        &current_config.config
-    }
-
     /// Get the configuration for a fully qualified name (fqn)
     ///
     /// This method is recommended for nodes that don't derive from SQL files or where
@@ -324,7 +288,7 @@ pub fn init_project_config<T: DefaultTo<T>, S: Into<T> + IterChildren<S> + Clone
 /// Strip resource paths from the beginning of a reference path
 /// This function tries to find which resource path is a prefix of the ref_path
 /// and returns the path with that prefix stripped
-fn strip_resource_paths_from_ref_path(ref_path: &Path, resource_paths: &[String]) -> PathBuf {
+pub fn strip_resource_paths_from_ref_path(ref_path: &Path, resource_paths: &[String]) -> PathBuf {
     // Try to find a resource path that is a prefix of the ref_path
     for resource_path in resource_paths {
         let resource_pathbuf = PathBuf::from(resource_path);
@@ -414,247 +378,6 @@ mod tests {
     }
 
     #[test]
-    fn test_get_config_for_path_basic() {
-        let mut config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        config.config.enabled = Some(true);
-
-        // Add a child config for project "test_project"
-        let mut project_config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        project_config.config.enabled = Some(false);
-        config
-            .children
-            .insert("test_project".to_string(), project_config);
-
-        let result = config.get_config_for_path(
-            Path::new("models/my_model.sql"),
-            "test_project",
-            &["models".to_string()],
-        );
-
-        assert_eq!(result.enabled, Some(false));
-    }
-
-    #[test]
-    fn test_get_config_for_path_nested_directory() {
-        let mut config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        config.config.enabled = Some(true);
-
-        // Add project config
-        let mut project_config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        project_config.config.enabled = Some(false);
-
-        // Add example subdirectory config
-        let mut example_config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        example_config.config.enabled = Some(true);
-        example_config.config.materialized =
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Table);
-
-        project_config
-            .children
-            .insert("example".to_string(), example_config);
-        config
-            .children
-            .insert("test_project".to_string(), project_config);
-
-        let result = config.get_config_for_path(
-            Path::new("dbt/models/example/my_model.sql"),
-            "test_project",
-            &["dbt/models".to_string()],
-        );
-
-        assert_eq!(result.enabled, Some(true));
-        assert_eq!(
-            result.materialized,
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Table)
-        );
-    }
-
-    #[test]
-    fn test_get_config_for_path_file_specific_config() {
-        let mut config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        config.config.enabled = Some(true);
-
-        // Add project config
-        let mut project_config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        project_config.config.enabled = Some(false);
-
-        // Add example subdirectory config
-        let mut example_config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        example_config.config.enabled = Some(true);
-
-        // Add file-specific config
-        let mut file_config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        file_config.config.enabled = Some(false);
-        file_config.config.materialized =
-            Some(dbt_schemas::schemas::common::DbtMaterialization::View);
-
-        example_config
-            .children
-            .insert("my_model".to_string(), file_config);
-        project_config
-            .children
-            .insert("example".to_string(), example_config);
-        config
-            .children
-            .insert("test_project".to_string(), project_config);
-
-        let result = config.get_config_for_path(
-            Path::new("dbt/models/example/my_model.sql"),
-            "test_project",
-            &["dbt/models".to_string()],
-        );
-
-        assert_eq!(result.enabled, Some(false));
-        assert_eq!(
-            result.materialized,
-            Some(dbt_schemas::schemas::common::DbtMaterialization::View)
-        );
-    }
-
-    #[test]
-    fn test_get_config_for_path_nonexistent_project() {
-        let mut config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        config.config.enabled = Some(true);
-        config.config.materialized = Some(dbt_schemas::schemas::common::DbtMaterialization::Table);
-
-        let result = config.get_config_for_path(
-            Path::new("models/my_model.sql"),
-            "nonexistent_project",
-            &["models".to_string()],
-        );
-
-        // Should return root config
-        assert_eq!(result.enabled, Some(true));
-        assert_eq!(
-            result.materialized,
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Table)
-        );
-    }
-
-    #[test]
-    fn test_get_config_for_path_partial_match() {
-        let mut config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        config.config.enabled = Some(true);
-
-        // Add project config
-        let mut project_config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        project_config.config.enabled = Some(false);
-
-        // Add staging subdirectory config - now with enabled field set
-        let mut staging_config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        staging_config.config.enabled = Some(false);
-        staging_config.config.materialized =
-            Some(dbt_schemas::schemas::common::DbtMaterialization::View);
-
-        project_config
-            .children
-            .insert("staging".to_string(), staging_config);
-        config
-            .children
-            .insert("test_project".to_string(), project_config);
-
-        // Path has staging/finance but only staging config exists
-        let result = config.get_config_for_path(
-            Path::new("models/staging/finance/customers.sql"),
-            "test_project",
-            &["models".to_string()],
-        );
-
-        // Should get staging config since finance doesn't exist
-        assert_eq!(result.enabled, Some(false));
-        assert_eq!(
-            result.materialized,
-            Some(dbt_schemas::schemas::common::DbtMaterialization::View)
-        );
-    }
-
-    #[test]
-    fn test_get_config_for_path_empty_resource_paths() {
-        let mut config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        config.config.enabled = Some(true);
-
-        // Add project config with subdirectory
-        let mut project_config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        let mut models_config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        let mut example_config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        example_config.config.materialized =
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Table);
-
-        models_config
-            .children
-            .insert("example".to_string(), example_config);
-        project_config
-            .children
-            .insert("models".to_string(), models_config);
-        config
-            .children
-            .insert("test_project".to_string(), project_config);
-
-        let result = config.get_config_for_path(
-            Path::new("models/example/my_model.sql"),
-            "test_project",
-            &[], // Empty resource paths
-        );
-
-        // Should traverse full path since no stripping occurs
-        assert_eq!(
-            result.materialized,
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Table)
-        );
-    }
-
-    #[test]
     fn test_strip_resource_paths_first_match_wins() {
         // Test that the function uses the first matching path in the array
         let ref_path = Path::new("models/staging/customers.sql");
@@ -665,68 +388,6 @@ mod tests {
         let result = strip_resource_paths_from_ref_path(ref_path, &resource_paths);
         // Should strip "models" (first match), not "models/staging"
         assert_eq!(result, PathBuf::from("staging/customers.sql"));
-    }
-
-    #[test]
-    fn test_integration_real_dbt_project_structure() {
-        // Integration test: Test a realistic DBT project scenario end-to-end
-        let mut config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        config.config.enabled = Some(true);
-        config.config.materialized = Some(dbt_schemas::schemas::common::DbtMaterialization::View);
-
-        // Set up project structure like: my_project -> staging -> +materialized: table
-        let mut project_config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        project_config.config.enabled = Some(true);
-
-        let mut staging_config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        staging_config.config.materialized =
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Table);
-        staging_config.config.enabled = Some(true);
-
-        // Add specific model config
-        let mut customers_config = DbtProjectConfig {
-            config: ModelConfig::default(),
-            children: HashMap::new(),
-        };
-        customers_config.config.materialized =
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Incremental);
-        customers_config.config.enabled = Some(false);
-
-        staging_config
-            .children
-            .insert("stg_customers".to_string(), customers_config);
-        project_config
-            .children
-            .insert("staging".to_string(), staging_config);
-        config
-            .children
-            .insert("my_project".to_string(), project_config);
-
-        // Test path: warehouse/dbt/models/staging/stg_customers.sql
-        // With resource_paths: ["warehouse/dbt/models"]
-        // Should strip to: staging/stg_customers.sql
-        // Should find config: my_project -> staging -> stg_customers
-        let result = config.get_config_for_path(
-            Path::new("warehouse/dbt/models/staging/stg_customers.sql"),
-            "my_project",
-            &["warehouse/dbt/models".to_string()],
-        );
-
-        // Should get the most specific config (file-level)
-        assert_eq!(result.enabled, Some(false));
-        assert_eq!(
-            result.materialized,
-            Some(dbt_schemas::schemas::common::DbtMaterialization::Incremental)
-        );
     }
 
     #[test]
@@ -1081,6 +742,122 @@ mod tests {
 
         // Should get the most specific config (node-level)
         assert_eq!(result.enabled, Some(true));
+        assert_eq!(
+            result.materialized,
+            Some(dbt_schemas::schemas::common::DbtMaterialization::Incremental)
+        );
+    }
+
+    #[test]
+    fn test_get_config_for_fqn_deep_nested_path() {
+        // Test equivalent to get_config_for_path_empty_resource_paths
+        // This tests traversing a full deep path hierarchy
+        let mut config = DbtProjectConfig {
+            config: ModelConfig::default(),
+            children: HashMap::new(),
+        };
+        config.config.enabled = Some(true);
+
+        // Add project config with nested subdirectory structure
+        let mut project_config = DbtProjectConfig {
+            config: ModelConfig::default(),
+            children: HashMap::new(),
+        };
+        let mut models_config = DbtProjectConfig {
+            config: ModelConfig::default(),
+            children: HashMap::new(),
+        };
+        let mut example_config = DbtProjectConfig {
+            config: ModelConfig::default(),
+            children: HashMap::new(),
+        };
+        example_config.config.materialized =
+            Some(dbt_schemas::schemas::common::DbtMaterialization::Table);
+
+        models_config
+            .children
+            .insert("example".to_string(), example_config);
+        project_config
+            .children
+            .insert("models".to_string(), models_config);
+        config
+            .children
+            .insert("test_project".to_string(), project_config);
+
+        // FQN represents the full hierarchy: test_project -> models -> example -> my_model
+        let fqn = vec![
+            "test_project".to_string(),
+            "models".to_string(),
+            "example".to_string(),
+            "my_model".to_string(),
+        ];
+        let result = config.get_config_for_fqn(&fqn);
+
+        // Should traverse the full path and get the example config
+        // (since my_model doesn't exist, it stops at example)
+        assert_eq!(
+            result.materialized,
+            Some(dbt_schemas::schemas::common::DbtMaterialization::Table)
+        );
+    }
+
+    #[test]
+    fn test_get_config_for_fqn_integration_realistic_dbt_structure() {
+        // Integration test equivalent to test_integration_real_dbt_project_structure
+        // Test a realistic DBT project scenario end-to-end with FQN
+        let mut config = DbtProjectConfig {
+            config: ModelConfig::default(),
+            children: HashMap::new(),
+        };
+        config.config.enabled = Some(true);
+        config.config.materialized = Some(dbt_schemas::schemas::common::DbtMaterialization::View);
+
+        // Set up project structure like: my_project -> staging -> +materialized: table
+        let mut project_config = DbtProjectConfig {
+            config: ModelConfig::default(),
+            children: HashMap::new(),
+        };
+        project_config.config.enabled = Some(true);
+
+        let mut staging_config = DbtProjectConfig {
+            config: ModelConfig::default(),
+            children: HashMap::new(),
+        };
+        staging_config.config.materialized =
+            Some(dbt_schemas::schemas::common::DbtMaterialization::Table);
+        staging_config.config.enabled = Some(true);
+
+        // Add specific model config
+        let mut customers_config = DbtProjectConfig {
+            config: ModelConfig::default(),
+            children: HashMap::new(),
+        };
+        customers_config.config.materialized =
+            Some(dbt_schemas::schemas::common::DbtMaterialization::Incremental);
+        customers_config.config.enabled = Some(false);
+
+        staging_config
+            .children
+            .insert("stg_customers".to_string(), customers_config);
+        project_config
+            .children
+            .insert("staging".to_string(), staging_config);
+        config
+            .children
+            .insert("my_project".to_string(), project_config);
+
+        // FQN: my_project -> staging -> stg_customers
+        // This represents the logical hierarchy similar to path:
+        // warehouse/dbt/models/staging/stg_customers.sql with resource_paths stripped
+        let fqn = vec![
+            "my_project".to_string(),
+            "staging".to_string(),
+            "stg_customers".to_string(),
+        ];
+        let result = config.get_config_for_fqn(&fqn);
+
+        // Should get the most specific config (file-level)
+        assert_eq!(result.enabled, Some(false));
         assert_eq!(
             result.materialized,
             Some(dbt_schemas::schemas::common::DbtMaterialization::Incremental)

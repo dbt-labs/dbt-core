@@ -103,6 +103,29 @@ impl fmt::Display for DbtAsset {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct GenericTestAsset {
+    pub dbt_asset: DbtAsset,
+    pub original_file_path: PathBuf,
+    pub resource_name: String,
+    pub resource_type: String,
+    pub test_name: String,
+}
+
+impl fmt::Display for GenericTestAsset {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "GenericTestAsset {{ dbt_asset: {}, original_file_path: {}, resource_name: {}, resource_type: {}, test_name: {} }}",
+            self.dbt_asset,
+            self.original_file_path.display(),
+            self.resource_name,
+            self.resource_type,
+            self.test_name
+        )
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DbtProfile {
     pub profile: String,

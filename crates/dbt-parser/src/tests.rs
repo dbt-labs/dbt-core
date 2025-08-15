@@ -54,6 +54,7 @@ mod tests {
                 "common",
                 PathBuf::from("test"),
                 vec!["my_model".to_string()],
+                &["models".to_string()],
             ),
             "common",
             "test",

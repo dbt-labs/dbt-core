@@ -38,9 +38,9 @@ use dbt_schemas::schemas::project::DbtProject;
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
-use dbt_schemas::state::DbtAsset;
 use dbt_schemas::state::DbtPackage;
 use dbt_schemas::state::DbtRuntimeConfig;
+use dbt_schemas::state::GenericTestAsset;
 use dbt_schemas::state::ModelStatus;
 use dbt_schemas::state::RefsAndSourcesTracker;
 use minijinja::MacroSpans;
@@ -68,7 +68,7 @@ pub async fn resolve_models(
     env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     runtime_config: Arc<DbtRuntimeConfig>,
-    collected_tests: &mut Vec<DbtAsset>,
+    collected_generic_tests: &mut Vec<GenericTestAsset>,
     refs_and_sources: &mut RefsAndSources,
     token: &CancellationToken,
 ) -> FsResult<(
@@ -209,7 +209,12 @@ pub async fn resolve_models(
         } else {
             vec![model_name.to_owned()]
         };
-        let fqn = get_node_fqn(package_name, dbt_asset.path.to_owned(), fqn_components);
+        let fqn = get_node_fqn(
+            package_name,
+            dbt_asset.path.to_owned(),
+            fqn_components,
+            package.dbt_project.model_paths.as_ref().unwrap_or(&vec![]),
+        );
 
         let properties = if let Some(properties) = maybe_properties {
             properties
@@ -248,7 +253,7 @@ pub async fn resolve_models(
                 path: dbt_asset.path.to_owned(),
                 name_span: dbt_common::Span::default(),
                 original_file_path,
-                patch_path,
+                patch_path: patch_path.clone(),
                 unique_id: unique_id.clone(),
                 fqn,
                 description: properties.description.clone(),
@@ -371,10 +376,11 @@ pub async fn resolve_models(
                 properties.as_testable().persist(
                     package_name,
                     &root_project.name,
-                    collected_tests,
+                    collected_generic_tests,
                     adapter_type,
                     is_replay_mode,
                     &arg.io,
+                    patch_path.as_ref().unwrap_or(&dbt_asset.path),
                 )?;
             }
             ModelStatus::Disabled => {

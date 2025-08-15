@@ -74,10 +74,12 @@ pub async fn resolve_exposures(
             }
 
             let unique_id = format!("exposure.{}.{}", &package_name, exposure_name);
+
             let fqn = get_node_fqn(
                 package_name,
                 mpe.relative_path.clone(),
                 vec![exposure_name.to_owned()],
+                &package.dbt_project.all_source_paths(),
             );
 
             let schema_value =

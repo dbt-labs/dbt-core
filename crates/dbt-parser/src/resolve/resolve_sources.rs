@@ -17,7 +17,7 @@ use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::project::{DefaultTo, SourceConfig};
 use dbt_schemas::schemas::properties::{SourceProperties, Tables};
 use dbt_schemas::schemas::{CommonAttributes, DbtSource, DbtSourceAttr, NodeBaseAttributes};
-use dbt_schemas::state::{DbtAsset, DbtPackage, ModelStatus, RefsAndSourcesTracker};
+use dbt_schemas::state::{DbtPackage, GenericTestAsset, ModelStatus, RefsAndSourcesTracker};
 use minijinja::Value as MinijinjaValue;
 use regex::Regex;
 use std::collections::BTreeMap;
@@ -39,7 +39,7 @@ pub fn resolve_sources(
     adapter_type: &str,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     jinja_env: &JinjaEnv,
-    collected_tests: &mut Vec<DbtAsset>,
+    collected_generic_tests: &mut Vec<GenericTestAsset>,
     refs_and_sources: &mut RefsAndSources,
 ) -> FsResult<(
     HashMap<String, Arc<DbtSource>>,
@@ -96,23 +96,18 @@ pub fn resolve_sources(
             .unwrap_or(database.to_owned());
         let schema = source.schema.clone().unwrap_or(source.name.clone());
 
-        // sources exist within the context of the model paths so we need to pass this into get config for path to get the config relative to the model paths
-        let model_resource_paths = package
-            .dbt_project
-            .model_paths
-            .as_ref()
-            .unwrap_or(&vec![])
-            .clone();
-
-        let global_config = local_project_config.get_config_for_path(
-            &mpe.relative_path,
+        let fqn = get_node_fqn(
             package_name,
-            &model_resource_paths,
+            mpe.relative_path.clone(),
+            vec![source_name.to_owned(), table_name.to_owned()],
+            &package.dbt_project.all_source_paths(),
         );
+
+        let global_config = local_project_config.get_config_for_fqn(&fqn);
 
         let mut project_config = root_project_configs
             .sources
-            .get_config_for_path(&mpe.relative_path, package_name, &model_resource_paths)
+            .get_config_for_fqn(&fqn)
             .clone();
         project_config.default_to(global_config);
 
@@ -134,11 +129,6 @@ pub fn resolve_sources(
         let unique_id = format!(
             "source.{}.{}.{}",
             &package_name, source_name, &normalized_table_name
-        );
-        let fqn = get_node_fqn(
-            package_name,
-            mpe.relative_path.clone(),
-            vec![source_name.to_owned(), table_name.to_owned()],
         );
 
         let merged_loaded_at_field = Some(
@@ -317,10 +307,11 @@ pub fn resolve_sources(
                 .persist(
                     package_name,
                     root_package_name,
-                    collected_tests,
+                    collected_generic_tests,
                     adapter_type,
                     is_replay_mode,
                     io_args,
+                    &mpe.relative_path,
                 )?;
             }
             ModelStatus::Disabled => {

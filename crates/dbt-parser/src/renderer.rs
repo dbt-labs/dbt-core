@@ -187,8 +187,22 @@ pub async fn render_unresolved_sql_files_sequentially<
             continue;
         }
 
-        let project_config =
-            local_project_config.get_config_for_path(&dbt_asset.path, package_name, resource_paths);
+        let model_name = dbt_asset
+            .path
+            .file_stem()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        let fqn = get_node_fqn(
+            package_name,
+            dbt_asset.path.clone(),
+            vec![model_name.clone()],
+            resource_paths,
+        );
+
+        let project_config = local_project_config.get_config_for_fqn(&fqn);
         let properties_config: T = if let Some(model) = &maybe_model {
             if let Some(mut properties_config) = model.get_config().cloned() {
                 properties_config.default_to(project_config);
@@ -205,13 +219,6 @@ pub async fn render_unresolved_sql_files_sequentially<
         } else {
             properties_config
         };
-        let model_name = dbt_asset
-            .path
-            .file_stem()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string();
 
         let absolute_path = dbt_asset.base_path.join(&dbt_asset.path);
         let sql = read_to_string(&absolute_path).await.map_err(|e| *e)?;
@@ -231,11 +238,7 @@ pub async fn render_unresolved_sql_files_sequentially<
             database,
             schema,
             &model_name,
-            get_node_fqn(
-                package_name,
-                dbt_asset.path.clone(),
-                vec![model_name.clone()],
-            ),
+            fqn.clone(),
             package_name,
             root_project_name,
             *package_quoting,
@@ -261,9 +264,7 @@ pub async fn render_unresolved_sql_files_sequentially<
                 let sql_resources_cloned = sql_resources.clone();
 
                 if root_project_name != package_name {
-                    let root_config = root_project_config
-                        .get_config_for_path(&dbt_asset.path, package_name, resource_paths)
-                        .clone();
+                    let root_config = root_project_config.get_config_for_fqn(&fqn).clone();
                     sql_resources_cloned
                         .lock()
                         .unwrap()
@@ -527,11 +528,22 @@ pub async fn render_unresolved_sql_files<
                     continue;
                 }
 
-                let project_config = local_project_config.get_config_for_path(
-                    &dbt_asset.path,
+                let model_name = dbt_asset
+                    .path
+                    .file_stem()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string();
+
+                let fqn = get_node_fqn(
                     package_name,
+                    dbt_asset.path.clone(),
+                    vec![model_name.clone()],
                     resource_paths,
                 );
+
+                let project_config = local_project_config.get_config_for_fqn(&fqn);
                 let properties_config: T = if let Some(model) = &maybe_model {
                     if let Some(mut properties_config) = model.get_config().cloned() {
                         properties_config.default_to(project_config);
@@ -548,13 +560,6 @@ pub async fn render_unresolved_sql_files<
                 } else {
                     properties_config
                 };
-                let model_name = dbt_asset
-                    .path
-                    .file_stem()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .to_string();
 
                 let absolute_path = dbt_asset.base_path.join(&dbt_asset.path);
                 let sql = read_to_string(&absolute_path).await.map_err(|e| *e)?;
@@ -575,11 +580,7 @@ pub async fn render_unresolved_sql_files<
                     database,
                     schema,
                     &model_name,
-                    get_node_fqn(
-                        package_name,
-                        dbt_asset.path.clone(),
-                        vec![model_name.clone()],
-                    ),
+                    fqn.clone(),
                     package_name,
                     root_project_name,
                     *package_quoting,
@@ -605,9 +606,8 @@ pub async fn render_unresolved_sql_files<
                         let sql_resources_cloned = sql_resources.clone();
 
                         if root_project_name != package_name {
-                            let root_config: T = root_project_config
-                                .get_config_for_path(&dbt_asset.path, package_name, resource_paths)
-                                .clone();
+                            let root_config: T =
+                                root_project_config.get_config_for_fqn(&fqn).clone();
                             sql_resources_cloned
                                 .lock()
                                 .unwrap()

@@ -140,6 +140,11 @@ pub async fn resolve_analyses(
             package_name,
             dbt_asset.path.to_owned(),
             vec![analysis_name.to_owned()],
+            package
+                .dbt_project
+                .analysis_paths
+                .as_ref()
+                .unwrap_or(&vec![]),
         );
 
         let properties = if let Some(properties) = maybe_properties {

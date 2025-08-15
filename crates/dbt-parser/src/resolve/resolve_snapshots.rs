@@ -27,7 +27,7 @@ use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
 use crate::renderer::{
     RenderCtx, RenderCtxInner, SqlFileRenderResult, render_unresolved_sql_files,
 };
-use crate::utils::{RelationComponents, update_node_relation_components};
+use crate::utils::{RelationComponents, get_node_fqn, update_node_relation_components};
 
 use super::resolve_properties::MinimalPropertiesEntry;
 
@@ -226,6 +226,17 @@ pub async fn resolve_snapshots(
                 final_config.materialized = Some(DbtMaterialization::Table);
             }
 
+            let fqn = get_node_fqn(
+                &package_name,
+                dbt_asset.path.clone(),
+                vec![snapshot_name.to_string()],
+                package
+                    .dbt_project
+                    .snapshot_paths
+                    .as_ref()
+                    .unwrap_or(&vec![]),
+            );
+
             // Create initial snapshot with default values
             let mut dbt_snapshot = DbtSnapshot {
                 __common_attr__: CommonAttributes {
@@ -237,7 +248,7 @@ pub async fn resolve_snapshots(
                     // The path to the YML file, if it is specified
                     original_file_path: dbt_asset.path.clone(),
                     unique_id: unique_id.clone(),
-                    fqn: vec![package_name.to_owned(), snapshot_name.to_owned()],
+                    fqn,
                     description: properties.description.to_owned(),
                     patch_path,
                     checksum: sql_file_info.checksum,

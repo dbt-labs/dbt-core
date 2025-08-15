@@ -20,7 +20,7 @@ use dbt_schemas::schemas::dbt_column::ColumnProperties;
 use dbt_schemas::schemas::project::DataTestConfig;
 use dbt_schemas::schemas::properties::Tables;
 use dbt_schemas::schemas::properties::{ModelProperties, SeedProperties, SnapshotProperties};
-use dbt_schemas::state::DbtAsset;
+use dbt_schemas::state::{DbtAsset, GenericTestAsset};
 use dbt_serde_yaml::ShouldBe;
 use dbt_serde_yaml::Spanned;
 use dbt_serde_yaml::Verbatim;
@@ -44,14 +44,16 @@ pub struct TestableNode<'a, T: TestableNodeTrait> {
 }
 
 impl<T: TestableNodeTrait> TestableNode<'_, T> {
+    #[allow(clippy::too_many_arguments)]
     pub fn persist(
         &self,
         project_name: &str,
         root_project_name: &str,
-        collected_tests: &mut Vec<DbtAsset>,
+        collected_generic_tests: &mut Vec<GenericTestAsset>,
         adapter_type: &str,
         is_replay_mode: bool,
         io_args: &IoArgs,
+        original_file_path: &PathBuf,
     ) -> FsResult<()> {
         let test_configs: Vec<GenericTestConfig> = self.try_into()?;
         // Process tests for each version (or single resource)
@@ -62,7 +64,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
             if let Some(tests) = &test_config.model_tests {
                 for test in tests {
                     let column_test: DataTests = test.clone();
-                    let dbt_asset = persist_inner(
+                    let test_asset = persist_inner(
                         project_name,
                         root_project_name,
                         &test_config,
@@ -70,8 +72,9 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                         &column_test,
                         false,
                         io_args,
+                        original_file_path,
                     )?;
-                    collected_tests.push(dbt_asset);
+                    collected_generic_tests.push(test_asset);
                 }
             }
 
@@ -92,7 +95,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                         } else {
                             column_name.to_string()
                         };
-                        let dbt_asset = persist_inner(
+                        let test_asset = persist_inner(
                             project_name,
                             root_project_name,
                             &test_config,
@@ -100,8 +103,9 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                             test,
                             is_replay_mode,
                             io_args,
+                            original_file_path,
                         )?;
-                        collected_tests.push(dbt_asset);
+                        collected_generic_tests.push(test_asset);
                     }
                 }
             }
@@ -111,6 +115,8 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
     }
 }
 
+#[allow(clippy::ptr_arg)]
+#[allow(clippy::too_many_arguments)]
 fn persist_inner(
     project_name: &str,
     root_project_name: &str,
@@ -119,7 +125,8 @@ fn persist_inner(
     test: &DataTests,
     is_replay_mode: bool,
     io_args: &IoArgs,
-) -> FsResult<DbtAsset> {
+    original_file_path: &PathBuf,
+) -> FsResult<GenericTestAsset> {
     // If this is not the root project, we need to pass the project name as a dependency package name
     let dependecy_package_name = if project_name != root_project_name {
         Some(project_name)
@@ -134,6 +141,7 @@ fn persist_inner(
         io_args,
         dependecy_package_name,
     )?;
+
     let TestDetails {
         test_macro_name,
         custom_test_name,
@@ -163,10 +171,17 @@ fn persist_inner(
         &jinja_set_vars,
     )?;
     stdfs::write(&test_file, generated_test_sql)?;
-    Ok(DbtAsset {
+    let dbt_asset = DbtAsset {
         path,
         base_path: io_args.out_dir.to_path_buf(),
         package_name: project_name.to_string(),
+    };
+    Ok(GenericTestAsset {
+        dbt_asset,
+        original_file_path: original_file_path.clone(),
+        resource_name: test_config.resource_name.clone(),
+        resource_type: test_config.resource_type.clone(),
+        test_name: full_name,
     })
 }
 
