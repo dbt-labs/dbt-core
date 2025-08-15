@@ -86,14 +86,14 @@ class TestOutputKeys:
 
     def test_output_key_single(self, project):
         result = run_dbt(["-q", "ls", "--output", "json", "--output-keys", "name"])
-        assert len(result) == 1
-        assert result == ['{"name": "model_one"}']
+        assert len(result) == 2
+        assert result == ['{"name": "model_one"}', '{"name": "model_table"}']
 
     def test_output_key_quoted(self, project):
         result = run_dbt(["-q", "ls", "--output", "json", "--output-keys", "name resource_type"])
 
-        assert len(result) == 1
-        assert result == ['{"name": "model_one", "resource_type": "model"}']
+        assert len(result) == 2
+        assert result == ['{"name": "model_one", "resource_type": "model"}', '{"name": "model_table", "resource_type": "model"}']
 
     def test_output_key_args(self, project):
         result = run_dbt(
@@ -109,8 +109,8 @@ class TestOutputKeys:
             ]
         )
 
-        assert len(result) == 1
-        assert result == ['{"name": "model_one", "resource_type": "model"}']
+        assert len(result) == 2
+        assert result == ['{"name": "model_one", "resource_type": "model"}', '{"name": "model_table", "resource_type": "model"}']
 
     def test_output_key_nested(self, project):
         result = run_dbt(
