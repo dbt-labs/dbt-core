@@ -92,6 +92,11 @@ impl Flags {
             "STATE_MODIFIED_COMPARE_VARS".to_string(),
             Value::from(false),
         );
+        // FIXME(@serramatutu): this is just a stub value so that macros that rely on this don't
+        // fail. Once we integrate PRINTER_WIDTH into our logs and clap so that everything actually
+        // respects it, we should use the real value
+        self.flags
+            .insert("PRINTER_WIDTH".to_string(), Value::from(80));
     }
 
     /// Create a new flags object from the invocation args

@@ -92,6 +92,25 @@ impl ResultObject {
 }
 
 impl Object for ResultObject {
+    fn call_method(
+        self: &Arc<Self>,
+        _state: &State<'_, '_>,
+        method: &str,
+        _args: &[Value],
+        _listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<Value, MinijinjaError> {
+        // NOTE: the `keys` method is used by the `stage_external_sources` macro in
+        // `dbt-external-table`. Don't delete this unless the external package is fixed.
+        if method == "keys" {
+            Ok(Value::from_iter(["response", "table", "data"]))
+        } else {
+            Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                format!("Unknown method on ResultObject: '{method}'"),
+            ))
+        }
+    }
+
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
         match key.as_str()? {
             "table" => self

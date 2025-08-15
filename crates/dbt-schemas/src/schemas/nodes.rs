@@ -1726,6 +1726,10 @@ pub struct DbtSource {
     #[serde(rename = "config")]
     pub deprecated_config: SourceConfig,
 
+    // Other untyped (or rather externally typed) keys that can be used by dbt packages.
+    // For example, the `external` key is used by `dbt-external-tables`, but it's not
+    // explicitly typed by dbt itself.
+    // See: https://github.com/dbt-labs/dbt-external-tables
     pub __other__: BTreeMap<String, YmlValue>,
 }
 

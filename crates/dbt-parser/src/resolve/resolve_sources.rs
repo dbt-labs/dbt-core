@@ -227,6 +227,17 @@ pub fn resolve_sources(
             FreshnessRules::validate(freshness.warn_after.as_ref())?;
         }
 
+        // Add any other non-standard dbt keys that might be used by dbt packages under
+        // the "other" key. This needs to be untyped since it's up to the packages to define
+        // what is a valid configuration entry.
+        //
+        // For example, dbt-external-tables have their own definition of what are valid
+        // values for the `external` property of a source: https://github.com/dbt-labs/dbt-external-tables
+        let other = match &table.external {
+            None => BTreeMap::new(),
+            Some(external) => BTreeMap::from([("external".to_owned(), external.clone())]),
+        };
+
         let dbt_source = DbtSource {
             __common_attr__: CommonAttributes {
                 name: table_name.to_owned(),
@@ -279,7 +290,7 @@ pub fn resolve_sources(
                 loaded_at_query: merged_loaded_at_query.clone(),
             },
             deprecated_config: source_properties_config.clone(),
-            __other__: BTreeMap::new(),
+            __other__: other,
         };
         let status = if is_enabled {
             ModelStatus::Enabled
