@@ -1,0 +1,3 @@
+kind: Features
+body: Add legal project name check to `dbt init` command.
+time: 2025-08-14T14:02:09.879781525-07:00

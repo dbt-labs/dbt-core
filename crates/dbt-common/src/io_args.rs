@@ -728,6 +728,17 @@ pub fn check_env_var(vars: &str) -> Result<HashMap<String, String>, String> {
     }
 }
 
+pub fn validate_project_name(name: &str) -> Result<String, String> {
+    // Check if the name contains only letters, digits, and underscores
+    if name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        Ok(name.to_string())
+    } else {
+        Err(format!(
+            "{name} is not a valid project name. Only letters, digits and underscore are valid characters in a project name."
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -782,6 +793,45 @@ mod tests {
 
         for var in invalid_vars {
             assert!(check_var(var).is_err(), "Should have failed: {var}");
+        }
+    }
+
+    #[test]
+    fn test_validate_project_name_valid() {
+        let valid_names = vec![
+            "my_project",
+            "project123",
+            "Project_Name",
+            "test_project_1",
+            "a",
+            "project_with_underscores_and_numbers123",
+        ];
+
+        for name in valid_names {
+            assert_eq!(validate_project_name(name).unwrap(), name);
+        }
+    }
+
+    #[test]
+    fn test_validate_project_name_invalid() {
+        let invalid_names = vec![
+            "my-cool-project",      // Contains hyphen
+            "project with spaces",  // Contains spaces
+            "project.with.dots",    // Contains dots
+            "project/with/slashes", // Contains slashes
+            "project@symbol",       // Contains @ symbol
+            "project#hash",         // Contains # symbol
+        ];
+
+        for name in invalid_names {
+            let result = validate_project_name(name);
+            assert!(result.is_err(), "Should have failed: {name}");
+            assert_eq!(
+                result.unwrap_err(),
+                format!(
+                    "{name} is not a valid project name. Only letters, digits and underscore are valid characters in a project name."
+                )
+            );
         }
     }
 }
