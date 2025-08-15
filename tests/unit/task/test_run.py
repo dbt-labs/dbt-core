@@ -1,3 +1,4 @@
+import unittest
 from argparse import Namespace
 from dataclasses import dataclass
 from importlib import import_module
@@ -20,6 +21,7 @@ from dbt.artifacts.resources.v1.model import ModelConfig
 from dbt.artifacts.schemas.results import RunStatus
 from dbt.artifacts.schemas.run import RunResult
 from dbt.config.runtime import RuntimeConfig
+from dbt.constants import DEFAULT_HOOK_PRIORITY, PROJECT_HOOK_PRIORITY
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import HookNode, ModelNode
 from dbt.events.types import LogModelResult
@@ -385,3 +387,139 @@ class TestRunTask:
             assert not isinstance(expected_result, RunStatus)
             assert issubclass(expected_result, BaseException)
             assert type(e) == expected_result
+
+
+class TestHookPrioritization(unittest.TestCase):
+    def test_hook_keyfunc_ordering(self):
+        """Test that _hook_keyfunc correctly sorts hooks based on priority"""
+        # Create a minimal RunTask instance
+        config = mock.MagicMock()
+        config.project_name = "test_project"
+        task = RunTask(args=mock.MagicMock(), config=config, manifest=mock.MagicMock())
+
+        # Create hook nodes with different priorities
+        # High priority package hook
+        high_priority_hook = mock.MagicMock()
+        high_priority_hook.name = "high_priority_hook"
+        high_priority_hook.package_name = "package_a"
+        high_priority_hook.config.meta = {"hook_priority": 10}
+        high_priority_hook.index = 0
+
+        # Medium priority project hook
+        medium_priority_hook = mock.MagicMock()
+        medium_priority_hook.name = "medium_priority_hook"
+        medium_priority_hook.package_name = "test_project"
+        medium_priority_hook.config.meta = {"hook_priority": 30}
+        medium_priority_hook.index = 0
+
+        # Default priority package hook
+        default_package_hook = mock.MagicMock()
+        default_package_hook.name = "default_package_hook"
+        default_package_hook.package_name = "package_b"
+        default_package_hook.config.meta = {}
+        default_package_hook.index = 0
+
+        # Default priority project hook (should be moved to end)
+        default_project_hook = mock.MagicMock()
+        default_project_hook.name = "default_project_hook"
+        default_project_hook.package_name = "test_project"
+        default_project_hook.config.meta = {}
+        default_project_hook.index = 1
+
+        # Create a list of hooks in a random order
+        hooks = [
+            default_project_hook,
+            high_priority_hook,
+            default_package_hook,
+            medium_priority_hook,
+        ]
+
+        # Sort hooks using _hook_keyfunc
+        sorted_hooks = sorted(hooks, key=task._hook_keyfunc)
+
+        # Verify the sorting order
+        self.assertEqual(sorted_hooks[0].name, "high_priority_hook")  # Priority 10
+        self.assertEqual(sorted_hooks[1].name, "medium_priority_hook")  # Priority 30
+        self.assertEqual(sorted_hooks[2].name, "default_package_hook")  # Priority DEFAULT (50)
+        self.assertEqual(sorted_hooks[3].name, "default_project_hook")  # Priority PROJECT (100)
+
+    def test_hook_keyfunc_same_priority(self):
+        """Test that hooks with same priority are sorted by package name and index"""
+        # Create a minimal RunTask instance
+        config = mock.MagicMock()
+        config.project_name = "test_project"
+        task = RunTask(args=mock.MagicMock(), config=config, manifest=mock.MagicMock())
+
+        # Create hook nodes with the same priority
+        # Same priority (20), package_b, index 0
+        hook1 = mock.MagicMock()
+        hook1.name = "hook_b_0"
+        hook1.package_name = "package_b"
+        hook1.config.meta = {"hook_priority": 20}
+        hook1.index = 0
+
+        # Same priority (20), package_a, index 1
+        hook2 = mock.MagicMock()
+        hook2.name = "hook_a_1"
+        hook2.package_name = "package_a"
+        hook2.config.meta = {"hook_priority": 20}
+        hook2.index = 1
+
+        # Same priority (20), package_a, index 0
+        hook3 = mock.MagicMock()
+        hook3.name = "hook_a_0"
+        hook3.package_name = "package_a"
+        hook3.config.meta = {"hook_priority": 20}
+        hook3.index = 0
+
+        # Create a list of hooks in a random order
+        hooks = [hook1, hook2, hook3]
+
+        # Sort hooks using _hook_keyfunc
+        sorted_hooks = sorted(hooks, key=task._hook_keyfunc)
+
+        # Expected order based on package name (alphabetical) and then index:
+        # 1. hook_a_0 (package_a, index 0)
+        # 2. hook_a_1 (package_a, index 1)
+        # 3. hook_b_0 (package_b, index 0)
+        self.assertEqual(sorted_hooks[0].name, "hook_a_0")
+        self.assertEqual(sorted_hooks[1].name, "hook_a_1")
+        self.assertEqual(sorted_hooks[2].name, "hook_b_0")
+
+    def test_project_hooks_default_priority(self):
+        """Test that project hooks with default priority are moved to the end"""
+        # Create a minimal RunTask instance
+        config = mock.MagicMock()
+        config.project_name = "test_project"
+        task = RunTask(args=mock.MagicMock(), config=config, manifest=mock.MagicMock())
+
+        # Create a package hook with default priority
+        package_hook = mock.MagicMock()
+        package_hook.name = "package_hook"
+        package_hook.package_name = "other_package"
+        package_hook.config.meta = {}  # Default priority
+        package_hook.index = 0
+
+        # Create a project hook with default priority (should be moved to end)
+        project_hook = mock.MagicMock()
+        project_hook.name = "project_hook"
+        project_hook.package_name = "test_project"
+        project_hook.config.meta = {}  # Default priority
+        project_hook.index = 0
+
+        # Sort hooks using _hook_keyfunc
+        sorted_hooks = sorted([project_hook, package_hook], key=task._hook_keyfunc)
+
+        # Project hook should be after package hook
+        self.assertEqual(sorted_hooks[0].name, "package_hook")
+        self.assertEqual(sorted_hooks[1].name, "project_hook")
+
+        # Verify the priority values from the key function
+        package_key = task._hook_keyfunc(package_hook)
+        project_key = task._hook_keyfunc(project_hook)
+
+        # Package hook should have DEFAULT_HOOK_PRIORITY
+        self.assertEqual(package_key[0], DEFAULT_HOOK_PRIORITY)
+
+        # Project hook should have PROJECT_HOOK_PRIORITY
+        self.assertEqual(project_key[0], PROJECT_HOOK_PRIORITY)
