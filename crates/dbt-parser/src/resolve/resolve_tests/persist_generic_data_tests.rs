@@ -12,6 +12,7 @@ use dbt_common::{ErrorCode, err};
 use dbt_common::{fs_err, stdfs};
 use dbt_frontend_common::Dialect;
 use dbt_jinja_utils::serde::check_single_expression_without_whitepsace_control;
+use dbt_jinja_utils::serde::yaml_to_fs_error;
 use dbt_schemas::schemas::common::Versions;
 use dbt_schemas::schemas::common::normalize_quote;
 use dbt_schemas::schemas::data_tests::{CustomTest, DataTests};
@@ -740,9 +741,8 @@ fn generate_test_macro(
     // ── serialize & emit the config block ────────────────
     if let Some(cfg) = config {
         // we write the config out as a JSON in {{ config(...) }}
-        let config_str = serde_json::to_string(&cfg)
-            .map_err(|e| fs_err!(ErrorCode::SchemaError, "Failed to serialize config: {}", e))?;
-
+        let cfg_val = to_value(cfg).map_err(|e| yaml_to_fs_error(e, None))?;
+        let config_str = serde_json::to_string(&cfg_val)?;
         sql.push_str(&format!("{{{{ config({config_str}) }}}}\n"));
     }
 

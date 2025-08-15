@@ -28,7 +28,6 @@ pub struct DbtMacro {
     pub funcsign: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub args: Vec<ArgSpec>,
-    #[serde(flatten)]
     pub __other__: BTreeMap<String, Value>,
 }
 

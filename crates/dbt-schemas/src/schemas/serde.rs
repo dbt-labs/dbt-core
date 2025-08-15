@@ -41,6 +41,31 @@ where
     Ok(res)
 }
 
+pub fn typed_struct_to_pretty_json_file<T>(path: &Path, value: &T) -> FsResult<()>
+where
+    T: Serialize,
+{
+    let yml_val = dbt_serde_yaml::to_value(value).map_err(|e| {
+        FsError::new(
+            ErrorCode::SerializationError,
+            format!("Failed to convert to YAML: {e}"),
+        )
+    })?;
+    let file = std::fs::File::create(path).map_err(|e| {
+        FsError::new(
+            ErrorCode::SerializationError,
+            format!("Failed to create file: {e}"),
+        )
+    })?;
+    serde_json::to_writer_pretty(file, &yml_val).map_err(|e| {
+        FsError::new(
+            ErrorCode::SerializationError,
+            format!("Failed to write to file: {e}"),
+        )
+    })?;
+    Ok(())
+}
+
 /// Deserializes a JSON string into a `T`.
 pub fn typed_struct_from_json_str<T>(json_str: &str) -> FsResult<T>
 where

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use dbt_jinja_utils::serde::yaml_to_fs_error;
 use serde::Serialize;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -84,10 +85,15 @@ where
             .join(&self.rel_artifact_path);
 
         let contents = std::fs::read_to_string(&artifact_file)?;
-        let actual: T = serde_json::from_str(&contents)?;
+        let yml_val: dbt_serde_yaml::Value = serde_json::from_str(&contents)?;
+
+        let actual: T = yml_val
+            .into_typed(|_, _, _| {}, |_| Ok(None))
+            .map_err(|e| yaml_to_fs_error(e, Some(&artifact_file)))?;
 
         // Convert both expected and actual to JSON for comparison
         let mut expected_json = serde_json::to_value(&self.expected)?;
+
         let mut actual_json = serde_json::to_value(&actual)?;
 
         // Remove ignored paths from both objects
