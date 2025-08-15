@@ -58,7 +58,7 @@ setup(
         "click>=8.0.2,<9.0",
         "jsonschema>=4.19.1,<5.0",
         "networkx>=2.3,<4.0",
-        "protobuf>=5.0,<6.0",
+        "protobuf>=6.0,<7.0",
         "requests<3.0.0",  # should match dbt-common
         "snowplow-tracker>=1.0.2,<2.0",
         # ----
