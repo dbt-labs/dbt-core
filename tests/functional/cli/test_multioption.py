@@ -1,4 +1,5 @@
 import json
+
 import pytest
 
 from dbt.tests.util import run_dbt
@@ -92,9 +93,9 @@ class TestOutputKeys:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "model_one.sql": model_one_sql, 
+            "model_one.sql": model_one_sql,
             "model_table.sql": model_with_materialization_sql,
-            "model_meta.sql": model_with_meta_sql
+            "model_meta.sql": model_with_meta_sql,
         }
 
     def test_output_key_single(self, project):
@@ -129,7 +130,7 @@ class TestOutputKeys:
         )
 
         assert len(result) == 3
-        # All should be models with names  
+        # All should be models with names
         for r in result:
             result_json = json.loads(r)
             assert result_json["resource_type"] == "model"
@@ -259,7 +260,7 @@ class TestOutputKeys:
                 "json",
                 "--output-keys",
                 "name",
-                "--output-keys", 
+                "--output-keys",
                 "config.meta.owner",
                 "--select",
                 "model_meta",
