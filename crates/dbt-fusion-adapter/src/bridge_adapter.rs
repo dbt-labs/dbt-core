@@ -61,7 +61,7 @@ use std::sync::{Arc, LazyLock};
 // 3. This approach ensures proper transaction management within a DAG node
 // 4. The ConnectionGuard wrapper ensures connections are returned to the thread-local
 thread_local! {
-    static CONNECTION: RefCell<Option<Box<dyn Connection>>> = RefCell::new(None);
+    static CONNECTION: pri::TlsConnectionContainer = pri::TlsConnectionContainer::new();
 }
 
 // https://github.com/dbt-labs/dbt-adapters/blob/3ed165d452a0045887a5032c621e605fd5c57447/dbt-adapters/src/dbt/adapters/base/impl.py#L117
@@ -107,30 +107,7 @@ impl DerefMut for ConnectionGuard<'_> {
 impl Drop for ConnectionGuard<'_> {
     fn drop(&mut self) {
         let conn = self.conn.take();
-        let prev = CONNECTION.replace(conn);
-        if prev.is_some() {
-            // We should avoid nested borrows because they mean we are creating more
-            // than one connection when one would be sufficient. But if we reached
-            // this branch, we did exactly that (!).
-            //
-            //     {
-            //       let outer_guard = adapter.borrow_tlocal_connection()?;
-            //       f(outer_guard.as_mut());  // Pass the conn as ref. GOOD.
-            //       {
-            //         // We tried to borrow, but a new connection had to
-            //         // be created. BAD.
-            //         let inner_guard = adapter.borrow_tlocal_connection()?;
-            //         ...
-            //       }  // Connection from inner_guard returns to CONNECTION.
-            //     }  // Connection from outer_guard is returning to CONNECTION,
-            //        // but one was already there -- the one from inner_guard.
-            //
-            // The right choice is to simply drop the innermost connection.
-            drop(prev);
-            // An assert could be added here to help finding code that creates
-            // a connection instead of taking one as a parameter so that the
-            // outermost caller can pass the thread-local one by reference.
-        }
+        CONNECTION.with(|c| c.replace(conn));
     }
 }
 
@@ -193,7 +170,7 @@ impl BridgeAdapter {
         node_id: Option<String>,
     ) -> Result<ConnectionGuard<'_>, MinijinjaError> {
         let _span = span!("BridgeAdapter::borrow_thread_local_connection");
-        let mut conn = CONNECTION.take();
+        let mut conn = CONNECTION.with(|c| c.take());
         if conn.is_none() {
             self.new_connection(node_id)
                 .map(|new_conn| conn.replace(new_conn))?;
@@ -1636,4 +1613,59 @@ fn builtin_incremental_strategies(
         result.push(DbtIncrementalStrategy::Microbatch)
     }
     result
+}
+
+mod pri {
+    use super::*;
+
+    /// A wrapper around a [Connection] stored in thread-local storage
+    ///
+    /// The point of this struct is to avoid calling the `Drop` destructor on
+    /// the wrapped [Connection] during process exit, which dead locks on
+    /// Windows.
+    pub(super) struct TlsConnectionContainer(RefCell<Option<Box<dyn Connection>>>);
+
+    impl TlsConnectionContainer {
+        pub(super) fn new() -> Self {
+            TlsConnectionContainer(RefCell::new(None))
+        }
+
+        pub(super) fn replace(&self, conn: Option<Box<dyn Connection>>) {
+            let prev = self.take();
+            *self.0.borrow_mut() = conn;
+            if prev.is_some() {
+                // We should avoid nested borrows because they mean we are creating more
+                // than one connection when one would be sufficient. But if we reached
+                // this branch, we did exactly that (!).
+                //
+                //     {
+                //       let outer_guard = adapter.borrow_tlocal_connection()?;
+                //       f(outer_guard.as_mut());  // Pass the conn as ref. GOOD.
+                //       {
+                //         // We tried to borrow, but a new connection had to
+                //         // be created. BAD.
+                //         let inner_guard = adapter.borrow_tlocal_connection()?;
+                //         ...
+                //       }  // Connection from inner_guard returns to CONNECTION.
+                //     }  // Connection from outer_guard is returning to CONNECTION,
+                //        // but one was already there -- the one from inner_guard.
+                //
+                // The right choice is to simply drop the innermost connection.
+                drop(prev);
+                // An assert could be added here to help finding code that creates
+                // a connection instead of taking one as a parameter so that the
+                // outermost caller can pass the thread-local one by reference.
+            }
+        }
+
+        pub(super) fn take(&self) -> Option<Box<dyn Connection>> {
+            self.0.borrow_mut().take()
+        }
+    }
+
+    impl Drop for TlsConnectionContainer {
+        fn drop(&mut self) {
+            std::mem::forget(self.take());
+        }
+    }
 }
