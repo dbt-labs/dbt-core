@@ -392,8 +392,9 @@ output_keys = _create_option_and_track_env_var(
     "--output-keys",
     envvar=None,
     help=(
-        "Space-delimited listing of node properties to include as custom keys for JSON output "
-        "(e.g. `--output json --output-keys name resource_type description`)"
+        "Space-delimited listing of node properties to include as custom keys for JSON output. "
+        "Supports nested keys using dot notation "
+        "(e.g. `--output json --output-keys name config.materialized resource_type`)"
     ),
     type=tuple,
     cls=MultiOption,

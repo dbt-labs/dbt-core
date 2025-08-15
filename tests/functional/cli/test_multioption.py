@@ -6,6 +6,11 @@ model_one_sql = """
 select 1 as fun
 """
 
+model_with_materialization_sql = """
+{{ config(materialized='table') }}
+select 1 as fun
+"""
+
 schema_sql = """
 sources:
   - name: my_source
@@ -77,7 +82,7 @@ class TestResourceType:
 class TestOutputKeys:
     @pytest.fixture(scope="class")
     def models(self):
-        return {"model_one.sql": model_one_sql}
+        return {"model_one.sql": model_one_sql, "model_table.sql": model_with_materialization_sql}
 
     def test_output_key_single(self, project):
         result = run_dbt(["-q", "ls", "--output", "json", "--output-keys", "name"])
@@ -106,6 +111,48 @@ class TestOutputKeys:
 
         assert len(result) == 1
         assert result == ['{"name": "model_one", "resource_type": "model"}']
+
+    def test_output_key_nested(self, project):
+        result = run_dbt(
+            [
+                "-q",
+                "ls",
+                "--output",
+                "json",
+                "--output-keys",
+                "name",
+                "--output-keys",
+                "config.materialized",
+                "--select",
+                "model_table",
+            ]
+        )
+
+        assert len(result) == 1
+        import json
+        result_json = json.loads(result[0])
+        assert result_json["name"] == "model_table"
+        assert result_json["config.materialized"] == "table"
+
+    def test_output_key_nested_single_arg(self, project):
+        result = run_dbt(
+            [
+                "-q",
+                "ls",
+                "--output",
+                "json",
+                "--output-keys",
+                "config.materialized name",
+                "--select",
+                "model_table",
+            ]
+        )
+
+        assert len(result) == 1
+        import json
+        result_json = json.loads(result[0])
+        assert result_json["name"] == "model_table"
+        assert result_json["config.materialized"] == "table"
 
 
 class TestSelectExclude:
