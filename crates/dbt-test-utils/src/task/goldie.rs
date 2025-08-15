@@ -240,6 +240,7 @@ fn filter_lines_internal(content: String, in_emacs: bool) -> String {
         " has been running for over",
         "last updated",
         "Detected unsafe introspection which may lead to non-deterministic static analysis.",
+        "New version available",
     ];
 
     let mut res = content

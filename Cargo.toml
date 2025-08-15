@@ -368,6 +368,7 @@ goldie = "0.5.0"
 indoc = "2.0.6"
 merge = { version = "0.2.0" }
 mock_instant = "0.5.3"
+mockito = "1.2"
 pretty_assertions = { version = "1.4.1" }
 sqllogictest = "0.26.0"
 

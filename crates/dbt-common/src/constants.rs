@@ -128,3 +128,5 @@ pub const NODES_WR: &str = "   Writing";
 pub const COLUMNS_RD: &str = "   Reading";
 pub const COLUMNS_WR: &str = "   Writing";
 pub const COLUMN_LINEAGE_WR: &str = "   Writing";
+
+pub const DBT_CDN_URL: &str = "https://public.cdn.getdbt.com/fs";
