@@ -169,6 +169,7 @@ pub async fn resolve_analyses(
                 name: analysis_name.to_owned(),
                 package_name: package_name.to_owned(),
                 path: dbt_asset.path.to_owned(),
+                name_span: dbt_common::Span::default(),
                 original_file_path,
                 unique_id: unique_id.clone(),
                 fqn,

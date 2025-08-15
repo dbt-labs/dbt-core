@@ -184,6 +184,7 @@ pub fn resolve_seeds(
                 name: seed_name.to_owned(),
                 package_name: package_name.to_owned(),
                 path: path.to_owned(),
+                name_span: dbt_common::Span::default(),
                 original_file_path: stdfs::diff_paths(
                     seed_file.base_path.join(&path),
                     &io_args.in_dir,

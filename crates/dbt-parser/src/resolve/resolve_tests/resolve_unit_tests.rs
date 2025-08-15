@@ -258,6 +258,7 @@ pub fn resolve_unit_tests(
                 package_name: package_name.to_owned(),
                 original_file_path: mpe.relative_path.clone(),
                 path: mpe.relative_path.clone(),
+                name_span: dbt_common::Span::default(),
                 unique_id: base_unique_id.clone(),
                 fqn,
                 description: unit_test.description.to_owned(),

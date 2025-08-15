@@ -1224,6 +1224,22 @@ impl<'source> CodeGenerator<'source> {
                             );
                         }
                     }
+                } else if name == "source" {
+                    let arg = &c.args.last().unwrap();
+                    if let ast::CallArg::Pos(ast::Expr::Const(c)) = arg {
+                        let span = c.span();
+                        for listener in listeners {
+                            listener.on_model_source_reference(
+                                &c.value.to_string(),
+                                &span.start_line,
+                                &span.start_col,
+                                &span.start_offset,
+                                &span.end_line,
+                                &span.end_col,
+                                &span.end_offset,
+                            );
+                        }
+                    }
                 }
                 self.add(Instruction::CallFunction(name, arg_count, span));
             }

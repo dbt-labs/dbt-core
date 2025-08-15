@@ -1502,6 +1502,7 @@ pub struct CommonAttributes {
     pub original_file_path: PathBuf,
     pub raw_code: Option<String>,
     pub patch_path: Option<PathBuf>,
+    pub name_span: dbt_common::Span,
 
     // Checksum
     pub checksum: DbtChecksum,

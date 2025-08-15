@@ -139,6 +139,10 @@ pub async fn resolve_exposures(
                     name: exposure_name.to_string(),
                     package_name: package_name.to_string(),
                     path: mpe.relative_path.clone(),
+                    name_span: dbt_common::Span::from_serde_span(
+                        mpe.name_span.clone(),
+                        mpe.relative_path.clone(),
+                    ),
                     original_file_path: mpe.relative_path.clone(),
                     unique_id: unique_id.clone(),
                     fqn,

@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use dbt_common::io_args::StaticAnalysisKind;
+use dbt_common::{Span, io_args::StaticAnalysisKind};
 use dbt_serde_yaml::UntaggedEnumDeserialize;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc};
@@ -188,6 +188,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         __common_attr__: CommonAttributes {
                             unique_id: model.__common_attr__.unique_id,
                             name: model.__common_attr__.name,
+                            name_span: Span::default(),
                             package_name: model.__common_attr__.package_name,
                             path: model.__common_attr__.path,
                             original_file_path: model.__common_attr__.original_file_path,
@@ -264,6 +265,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             name: test.__common_attr__.name,
                             package_name: test.__common_attr__.package_name,
                             path: test.__common_attr__.path,
+                            name_span: Span::default(),
                             original_file_path: test.__common_attr__.original_file_path,
                             patch_path: test.__common_attr__.patch_path,
                             fqn: test.__common_attr__.fqn,
@@ -325,6 +327,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             name: snapshot.__common_attr__.name,
                             package_name: snapshot.__common_attr__.package_name,
                             path: snapshot.__common_attr__.path,
+                            name_span: Span::default(),
                             original_file_path: snapshot.__common_attr__.original_file_path,
                             patch_path: snapshot.__common_attr__.patch_path,
                             fqn: snapshot.__common_attr__.fqn,
@@ -393,6 +396,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             name: seed.__common_attr__.name,
                             package_name: seed.__common_attr__.package_name,
                             path: seed.__common_attr__.path,
+                            name_span: Span::default(),
                             original_file_path: seed.__common_attr__.original_file_path,
                             patch_path: seed.__common_attr__.patch_path,
                             fqn: seed.__common_attr__.fqn,
@@ -455,6 +459,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             name: analysis.__common_attr__.name,
                             package_name: analysis.__common_attr__.package_name,
                             path: analysis.__common_attr__.path,
+                            name_span: Span::default(),
                             original_file_path: analysis.__common_attr__.original_file_path,
                             patch_path: analysis.__common_attr__.patch_path,
                             fqn: analysis.__common_attr__.fqn,
@@ -531,6 +536,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     name: source.__common_attr__.name,
                     package_name: source.__common_attr__.package_name,
                     path: source.__common_attr__.path,
+                    name_span: Span::default(),
                     original_file_path: source.__common_attr__.original_file_path,
                     patch_path: source.__common_attr__.patch_path,
                     fqn: source.__common_attr__.fqn,
@@ -593,6 +599,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     name: exposure.__common_attr__.name,
                     package_name: exposure.__common_attr__.package_name,
                     path: exposure.__common_attr__.path,
+                    name_span: Span::default(),
                     original_file_path: exposure.__common_attr__.original_file_path,
                     patch_path: None,
                     unique_id: exposure.__common_attr__.unique_id,
@@ -643,6 +650,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     name: unit_test.__common_attr__.name,
                     package_name: unit_test.__common_attr__.package_name,
                     path: unit_test.__common_attr__.path,
+                    name_span: Span::default(),
                     original_file_path: unit_test.__common_attr__.original_file_path,
                     patch_path: unit_test.__common_attr__.patch_path,
                     fqn: unit_test.__common_attr__.fqn,

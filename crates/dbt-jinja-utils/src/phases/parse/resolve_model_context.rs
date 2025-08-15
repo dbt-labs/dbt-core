@@ -196,6 +196,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
             name: model_name.to_owned(),
             package_name: package_name.to_owned(),
             path: PathBuf::from(""),
+            name_span: dbt_common::Span::default(),
             original_file_path: PathBuf::from(""),
             patch_path: None,
             unique_id: format!("{package_name}.{model_name}"),

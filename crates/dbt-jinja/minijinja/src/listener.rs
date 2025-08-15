@@ -60,6 +60,20 @@ pub trait RenderingEventListener: std::fmt::Debug {
         _end_offset: &u32,
     ) {
     }
+
+    /// Called when a model source reference is encountered.
+    #[allow(clippy::too_many_arguments)]
+    fn on_model_source_reference(
+        &self,
+        _name: &str,
+        _start_line: &u32,
+        _start_col: &u32,
+        _start_offset: &u32,
+        _end_line: &u32,
+        _end_col: &u32,
+        _end_offset: &u32,
+    ) {
+    }
 }
 
 /// A macro start event.

@@ -202,6 +202,7 @@ pub async fn resolve_data_tests(
                 name: model_name.to_owned(),
                 package_name: package_name.to_owned(),
                 path: dbt_asset.path.to_owned(),
+                name_span: dbt_common::Span::default(),
                 original_file_path: get_original_file_path(
                     &dbt_asset.base_path,
                     &arg.io.in_dir,

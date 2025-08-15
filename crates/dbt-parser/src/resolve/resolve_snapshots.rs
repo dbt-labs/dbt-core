@@ -232,6 +232,7 @@ pub async fn resolve_snapshots(
                     name: snapshot_name.to_string(),
                     package_name: package_name.clone(),
                     path: dbt_asset.path.clone(),
+                    name_span: dbt_common::Span::default(),
                     raw_code: Some("--placeholder--".to_string()), // TODO: This is only so that dbt-evaluator returns truthy
                     // The path to the YML file, if it is specified
                     original_file_path: dbt_asset.path.clone(),

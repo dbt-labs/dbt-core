@@ -235,6 +235,10 @@ pub fn resolve_sources(
                 // path: dbt_asset.base_path.join(&dbt_asset.path),
                 original_file_path: mpe.relative_path.clone(),
                 path: mpe.relative_path.clone(),
+                name_span: dbt_common::Span::from_serde_span(
+                    mpe.name_span,
+                    mpe.relative_path.clone(),
+                ),
                 unique_id: unique_id.to_owned(),
                 fqn,
                 description: table.description.to_owned(),

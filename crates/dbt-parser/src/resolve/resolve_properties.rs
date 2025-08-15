@@ -15,7 +15,7 @@ use dbt_schemas::schemas::properties::{
 };
 use dbt_schemas::schemas::serde::FloatOrString;
 use dbt_schemas::state::DbtPackage;
-use dbt_serde_yaml::Verbatim;
+use dbt_serde_yaml::{Span, Verbatim};
 use itertools::Itertools;
 use minijinja::Value as MinijinjaValue;
 use std::collections::BTreeMap;
@@ -24,6 +24,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone)]
 pub struct MinimalPropertiesEntry {
     pub name: String,
+    pub name_span: Span,
     pub relative_path: PathBuf,
     pub schema_value: dbt_serde_yaml::Value,
     pub table_value: Option<dbt_serde_yaml::Value>,
@@ -76,6 +77,7 @@ impl MinimalProperties {
                             key,
                             MinimalPropertiesEntry {
                                 name: validate_resource_name(&model.name)?,
+                                name_span: Span::default(),
                                 relative_path: properties_path.to_path_buf(),
                                 version_info: maybe_version_info,
                                 schema_value: model_value.clone(),
@@ -123,7 +125,10 @@ impl MinimalProperties {
                             &[],
                             dependency_package_name_from_ctx(jinja_env, base_ctx),
                         )?;
-                        let key = (source.name.clone(), minimum_table_value.name.clone());
+                        let key = (
+                            source.name.clone(),
+                            minimum_table_value.name.clone().into_inner(),
+                        );
 
                         if let Some(existing_entry) = self.source_tables.get_mut(&key) {
                             existing_entry
@@ -135,7 +140,7 @@ impl MinimalProperties {
                                 fs_err!(
                                     ErrorCode::SchemaError,
                                     "Duplicate definition for table '{}' in source '{}' found in file '{}'. Using definition from '{}'.",
-                                    minimum_table_value.name,
+                                    minimum_table_value.name.clone().into_inner(),
                                     source.name,
                                     properties_path.display(),
                                     existing_entry.relative_path.display()
@@ -145,7 +150,8 @@ impl MinimalProperties {
                             self.source_tables.insert(
                                 key,
                                 MinimalPropertiesEntry {
-                                    name: minimum_table_value.name,
+                                    name: minimum_table_value.name.clone().into_inner(),
+                                    name_span: minimum_table_value.name.span().clone(),
                                     relative_path: properties_path.to_path_buf(),
                                     schema_value: schema_value.clone(),
                                     table_value: Some(table.clone()), // Store table separately
@@ -188,6 +194,7 @@ impl MinimalProperties {
                         seed.name.clone(),
                         MinimalPropertiesEntry {
                             name: validate_resource_name(&seed.name)?,
+                            name_span: Span::default(),
                             relative_path: properties_path.to_path_buf(),
                             schema_value: seed_value,
                             table_value: None,
@@ -218,6 +225,7 @@ impl MinimalProperties {
                         snapshot.name.clone(),
                         MinimalPropertiesEntry {
                             name: validate_resource_name(&snapshot.name)?,
+                            name_span: Span::default(),
                             relative_path: properties_path.to_path_buf(),
                             schema_value: snapshot_value,
                             table_value: None,
@@ -243,6 +251,7 @@ impl MinimalProperties {
                     exposure.name.clone(),
                     MinimalPropertiesEntry {
                         name: validate_resource_name(&exposure.name)?,
+                        name_span: Span::default(),
                         relative_path: properties_path.to_path_buf(),
                         schema_value: exposure_value,
                         table_value: None,
@@ -272,6 +281,7 @@ impl MinimalProperties {
                         unit_test.name.clone(),
                         MinimalPropertiesEntry {
                             name: validate_resource_name(&unit_test.name)?,
+                            name_span: Span::default(),
                             relative_path: properties_path.to_path_buf(),
                             schema_value: unit_test_value,
                             table_value: None,
@@ -302,6 +312,7 @@ impl MinimalProperties {
                         test.name.clone(),
                         MinimalPropertiesEntry {
                             name: validate_resource_name(&test.name)?,
+                            name_span: Span::default(),
                             relative_path: properties_path.to_path_buf(),
                             schema_value: test_value,
                             table_value: None,
@@ -332,6 +343,7 @@ impl MinimalProperties {
                         test.name.clone(),
                         MinimalPropertiesEntry {
                             name: validate_resource_name(&test.name)?,
+                            name_span: Span::default(),
                             relative_path: properties_path.to_path_buf(),
                             schema_value: test_value,
                             table_value: None,
