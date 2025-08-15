@@ -352,6 +352,15 @@ impl<'env> Context<'env> {
             // perform a fast lookup.  This one will not produce errors if the
             // context is undefined or of the wrong type.
             if let Some(rv) = frame.ctx.get_attr_fast(key) {
+                // We need to handle the "execute" variable with a special consideration.
+                // Nominally, it is a boolean but implemented as ParseExecute object.
+                // (see https://github.com/dbt-labs/fs/blob/b80070091bff8e6a021b1097bd9af9ed0cb736e2/fs/sa/crates/dbt-jinja-utils/src/phases/parse/resolve_model_context.rs#L52)
+                // We recover the proper boolean values from the Object here.
+                if key == "execute" {
+                    if let Some(rv) = rv.as_object() {
+                        return Some(Value::from(rv.is_true()));
+                    }
+                }
                 return Some(rv);
             }
         }
