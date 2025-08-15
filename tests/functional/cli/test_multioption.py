@@ -130,6 +130,7 @@ class TestOutputKeys:
 
         assert len(result) == 1
         import json
+
         result_json = json.loads(result[0])
         assert result_json["name"] == "model_table"
         assert result_json["config.materialized"] == "table"
@@ -150,6 +151,7 @@ class TestOutputKeys:
 
         assert len(result) == 1
         import json
+
         result_json = json.loads(result[0])
         assert result_json["name"] == "model_table"
         assert result_json["config.materialized"] == "table"

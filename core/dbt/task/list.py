@@ -134,7 +134,7 @@ class ListTask(GraphRunnableTask):
 
     def _get_nested_value(self, data, key_path):
         """Get nested value using dot notation (e.g., 'config.materialized')"""
-        keys = key_path.split('.')
+        keys = key_path.split(".")
         current = data
         for key in keys:
             if isinstance(current, dict) and key in current:
@@ -146,12 +146,12 @@ class ListTask(GraphRunnableTask):
     def generate_json(self):
         for node in self._iterate_selected_nodes():
             node_dict = node.to_dict(omit_none=False)
-            
+
             if self.args.output_keys:
                 # Handle both nested and regular keys
                 result = {}
                 for key in self.args.output_keys:
-                    if '.' in key:
+                    if "." in key:
                         # Handle nested key (e.g., 'config.materialized')
                         value = self._get_nested_value(node_dict, key)
                         if value is not None:
@@ -162,12 +162,8 @@ class ListTask(GraphRunnableTask):
                             result[key] = node_dict[key]
             else:
                 # Use default allowed keys
-                result = {
-                    k: v
-                    for k, v in node_dict.items()
-                    if k in self.ALLOWED_KEYS
-                }
-            
+                result = {k: v for k, v in node_dict.items() if k in self.ALLOWED_KEYS}
+
             yield json.dumps(result, cls=JSONEncoder)
 
     def generate_paths(self) -> Iterator[str]:
