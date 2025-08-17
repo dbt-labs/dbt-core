@@ -11,7 +11,7 @@ type RelationCacheKey = String;
 #[derive(Debug, Clone)]
 pub struct RelationCacheEntry {
     /// Timestamp in milliseconds when this cache entry was created
-    _created_at: u128,
+    created_at: u128,
     relation: Arc<dyn BaseRelation>,
     relation_config: Option<Arc<dyn BaseRelationConfig>>,
 }
@@ -27,7 +27,7 @@ impl RelationCacheEntry {
             .map(|d| d.as_millis())
             .unwrap_or(0);
         Self {
-            _created_at: created_at,
+            created_at,
             relation,
             relation_config,
         }
@@ -49,6 +49,8 @@ struct SchemaEntry {
     relations: DashMap<RelationCacheKey, RelationCacheEntry>,
     // Tracks whether or not we have complete knowledge of this schema
     is_complete: bool,
+    // Timestamp when this schema was cached (for complete schemas)
+    cached_at: u128,
 }
 
 /// A dialect agnostic cache of [RelationCacheEntry]
@@ -142,11 +144,17 @@ impl RelationCache {
             })
             .collect();
 
+        let cached_at = std::time::UNIX_EPOCH
+            .elapsed()
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+
         self.schemas_and_relations.insert(
             schema.to_string(),
             SchemaEntry {
                 relations: cached_relations,
                 is_complete: true,
+                cached_at,
             },
         );
     }
@@ -197,6 +205,22 @@ impl RelationCache {
         self.schemas_and_relations.clear();
     }
 
+    /// Number of total relations cached
+    pub fn num_relations(&self) -> usize {
+        self.schemas_and_relations
+            .iter()
+            .map(|entry| entry.value().relations.len())
+            .sum()
+    }
+
+    /// Number of total schemas cached
+    pub fn num_schemas(&self) -> usize {
+        self.schemas_and_relations
+            .iter()
+            .filter(|entry| entry.value().is_complete)
+            .count()
+    }
+
     /// Helper: Generates cache key pairs from a [BaseRelation]
     fn get_relation_cache_keys(relation: &Arc<dyn BaseRelation>) -> (String, String) {
         (
@@ -213,6 +237,107 @@ impl RelationCache {
     /// Helper: Generates a schema cache key from a [BaseRelation]
     fn get_schema_cache_key_from_relation(relation: &Arc<dyn BaseRelation>) -> String {
         CatalogAndSchema::from(relation).to_string()
+    }
+
+    fn log_final_state(&self) {
+        use dbt_common::constants::CACHE_LOG;
+        use std::fmt::Write;
+
+        let total_schemas = self.schemas_and_relations.len();
+        if total_schemas == 0 {
+            return;
+        }
+
+        let mut buf = String::new();
+
+        writeln!(&mut buf).unwrap();
+        writeln!(&mut buf, "=== RelationCache Final State ===").unwrap();
+        writeln!(&mut buf, "Total Schemas: {total_schemas}").unwrap();
+        writeln!(&mut buf).unwrap();
+
+        // Collect and sort schema entries for consistent output
+        let mut schema_entries: Vec<_> = self.schemas_and_relations.iter().collect();
+        schema_entries.sort_by(|a, b| a.key().cmp(b.key()));
+
+        let mut complete_schemas = 0;
+        let mut partial_schemas = 0;
+        let mut total_relations = 0;
+
+        for (idx, schema_entry) in schema_entries.iter().enumerate() {
+            let schema_name = schema_entry.key();
+            let entry = schema_entry.value();
+            let relation_count = entry.relations.len();
+            total_relations += relation_count;
+
+            if entry.is_complete {
+                complete_schemas += 1;
+
+                writeln!(&mut buf, "[COMPLETE] SCHEMA").unwrap();
+                writeln!(&mut buf, "   ╭─ Name: {schema_name}").unwrap();
+                writeln!(&mut buf, "   ├─ Relations: {relation_count}").unwrap();
+
+                if entry.cached_at > 0 {
+                    writeln!(&mut buf, "   ├─ Cached: {}ms", entry.cached_at).unwrap();
+                } else {
+                    writeln!(&mut buf, "   ├─ Cached: unknown").unwrap();
+                }
+                writeln!(&mut buf, "   ╰─ Status: All relations cached as a batch").unwrap();
+            } else {
+                partial_schemas += 1;
+
+                writeln!(&mut buf, "[PARTIAL]  SCHEMA").unwrap();
+                writeln!(&mut buf, "   ╭─ Name: {schema_name}").unwrap();
+                writeln!(
+                    &mut buf,
+                    "   ├─ Relations: {relation_count} (individually cached)"
+                )
+                .unwrap();
+                writeln!(&mut buf, "   ├─ Individual Relations:").unwrap();
+
+                let mut relations: Vec<_> = entry.relations.iter().collect();
+                relations.sort_by(|a, b| a.key().cmp(b.key()));
+
+                for (rel_idx, relation) in relations.iter().enumerate() {
+                    let relation_key = relation.key();
+                    let created_at = relation.value().created_at;
+                    let is_last = rel_idx == relations.len() - 1;
+                    let connector = if is_last { "╰" } else { "├" };
+
+                    if created_at > 0 {
+                        writeln!(
+                            &mut buf,
+                            "   │  {connector} • {relation_key} → {created_at}ms"
+                        )
+                        .unwrap();
+                    } else {
+                        writeln!(
+                            &mut buf,
+                            "   │  {connector} • {relation_key} → no timestamp"
+                        )
+                        .unwrap();
+                    }
+                }
+                writeln!(&mut buf, "   ╰─ Status: Relations cached individually").unwrap();
+            }
+
+            if idx < schema_entries.len() - 1 {
+                writeln!(&mut buf).unwrap();
+            }
+        }
+
+        writeln!(&mut buf).unwrap();
+        writeln!(&mut buf, "=== Summary ===").unwrap();
+        writeln!(&mut buf, "Complete Schemas: {complete_schemas}").unwrap();
+        writeln!(&mut buf, "Partial Schemas: {partial_schemas}").unwrap();
+        writeln!(&mut buf, "Total Relations: {total_relations}").unwrap();
+
+        log::debug!(target: CACHE_LOG, name = "CacheState"; "{buf}");
+    }
+}
+
+impl Drop for RelationCache {
+    fn drop(&mut self) {
+        self.log_final_state();
     }
 }
 

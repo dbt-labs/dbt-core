@@ -1,5 +1,5 @@
 use crate::FsResult;
-use crate::constants::EXECUTING;
+use crate::constants::{CACHE_LOG, EXECUTING};
 use crate::io_args::IoArgs;
 use crate::pretty_string::remove_ansi_codes;
 use clap::ValueEnum;
@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 use tracing_log::LogTracer;
 
 const QUERY_LOG_SQL: &str = "query_log.sql";
+const CACHE_LOG_FILE: &str = "beta_cache.log";
 
 /// Predicate to check if a key in a log [Record] is an internal logging key.
 /// These keys are used internally by the logger for e.g. progress bar control
@@ -603,6 +604,35 @@ pub fn init_logger(log_config: FsLogConfig) -> FsResult<()> {
             .unwrap_or_else(|_| panic!("Failed to open log file {query_log_path:?}")),
     ) as Box<dyn Write + Send>));
     builder = builder.add_logger("queries", file, query_file_config);
+
+    // Add logger for caching (relation cache)
+    let cache_log_config = LoggerConfig {
+        level_filter: LevelFilter::Debug,
+        format: LogFormat::Text,
+        min_level: None,
+        max_level: None,
+        includes: Some(vec![CACHE_LOG.to_string()]),
+        excludes: None,
+    };
+    let cache_log_path = log_config
+        .file_log_path
+        .parent()
+        .unwrap_or_else(|| {
+            panic!(
+                "Failed to obtain parent from {:?}",
+                log_config.file_log_path
+            )
+        })
+        .join(CACHE_LOG_FILE);
+    let file = Arc::new(Mutex::new(Box::new(
+        std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&cache_log_path)
+            .unwrap_or_else(|_| panic!("Failed to open log file {cache_log_path:?}, does you have sufficient disk space or permissions?")),
+    ) as Box<dyn Write + Send>));
+    builder = builder.add_logger("cache_stats", file, cache_log_config);
 
     // Add tracing bridge logger
     builder = builder.add_tracing_bridge_logger(&log_config);
