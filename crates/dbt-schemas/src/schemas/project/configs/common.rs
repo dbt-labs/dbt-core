@@ -12,7 +12,8 @@ use crate::schemas::common::Hooks;
 use crate::schemas::common::merge_meta;
 use crate::schemas::common::merge_tags;
 use crate::schemas::manifest::GrantAccessToTarget;
-use crate::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfigLegacy};
+use crate::schemas::manifest::postgres::PostgresIndex;
+use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
 use crate::schemas::project::dbt_project::DefaultTo;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{bool_or_string_bool, u64_or_string_u64};
@@ -138,163 +139,35 @@ pub fn default_to_grants(
     }
 }
 
-// Implement default_to for the flattened configs
-impl DefaultTo<SnowflakeNodeConfig> for SnowflakeNodeConfig {
-    fn default_to(&mut self, parent: &SnowflakeNodeConfig) {
-        // Exhaustive destructuring ensures all fields are handled
-        let SnowflakeNodeConfig {
-            external_volume,
-            base_location_root,
-            base_location_subpath,
-            target_lag,
-            snowflake_warehouse,
-            refresh_mode,
-            initialize,
-            tmp_relation_type,
-            query_tag,
-            automatic_clustering,
-            copy_grants,
-            secure,
-            transient,
-        } = self;
-
-        default_to!(
-            parent,
-            [
-                external_volume,
-                base_location_root,
-                base_location_subpath,
-                target_lag,
-                snowflake_warehouse,
-                refresh_mode,
-                initialize,
-                tmp_relation_type,
-                query_tag,
-                automatic_clustering,
-                copy_grants,
-                secure,
-                transient
-            ]
-        );
-    }
-}
-
-impl DefaultTo<BigQueryNodeConfig> for BigQueryNodeConfig {
-    fn default_to(&mut self, parent: &BigQueryNodeConfig) {
-        // Exhaustive destructuring ensures all fields are handled
-        let BigQueryNodeConfig {
-            partition_by,
-            cluster_by,
-            hours_to_expiration,
-            labels,
-            labels_from_meta,
-            kms_key_name,
-            require_partition_filter,
-            partition_expiration_days,
-            grant_access_to,
-            partitions,
-            enable_refresh,
-            refresh_interval_minutes,
-            description,
-            max_staleness,
-        } = self;
-
-        default_to!(
-            parent,
-            [
-                partition_by,
-                cluster_by,
-                hours_to_expiration,
-                labels,
-                labels_from_meta,
-                kms_key_name,
-                require_partition_filter,
-                partition_expiration_days,
-                grant_access_to,
-                partitions,
-                enable_refresh,
-                refresh_interval_minutes,
-                description,
-                max_staleness
-            ]
-        );
-    }
-}
-
-impl DefaultTo<DatabricksNodeConfig> for DatabricksNodeConfig {
-    fn default_to(&mut self, parent: &DatabricksNodeConfig) {
-        // Exhaustive destructuring ensures all fields are handled
-        let DatabricksNodeConfig {
-            file_format,
-            location_root,
-            tblproperties,
-            include_full_name_in_path,
-            liquid_clustered_by,
-            auto_liquid_cluster,
-            clustered_by,
-            buckets,
-            catalog,
-            databricks_tags,
-            compression,
-            databricks_compute,
-            target_alias,
-            source_alias,
-            matched_condition,
-            not_matched_condition,
-            not_matched_by_source_condition,
-            not_matched_by_source_action,
-            merge_with_schema_evolution,
-            skip_matched_step,
-            skip_not_matched_step,
-        } = self;
-
-        default_to!(
-            parent,
-            [
-                file_format,
-                location_root,
-                tblproperties,
-                include_full_name_in_path,
-                liquid_clustered_by,
-                auto_liquid_cluster,
-                clustered_by,
-                buckets,
-                catalog,
-                databricks_tags,
-                compression,
-                databricks_compute,
-                target_alias,
-                source_alias,
-                matched_condition,
-                not_matched_condition,
-                not_matched_by_source_condition,
-                not_matched_by_source_action,
-                merge_with_schema_evolution,
-                skip_matched_step,
-                skip_not_matched_step,
-            ]
-        );
-    }
-}
-
-impl DefaultTo<RedshiftNodeConfig> for RedshiftNodeConfig {
-    fn default_to(&mut self, parent: &RedshiftNodeConfig) {
-        let RedshiftNodeConfig {
-            auto_refresh,
-            backup,
-            bind,
-            dist,
-            sort,
-            sort_type,
-        } = self;
-
-        default_to!(parent, [auto_refresh, backup, bind, dist, sort, sort_type]);
-    }
-}
-
+/// This configuration is a superset of all warehouse specific configurations
+/// that users can set
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, JsonSchema)]
-pub struct DatabricksNodeConfig {
+pub struct WarehouseSpecificNodeConfig {
+    // Shared
+    pub partition_by: Option<PartitionConfig>,
+
+    // BigQuery
+    pub cluster_by: Option<BigqueryClusterConfig>,
+    #[serde(default, deserialize_with = "u64_or_string_u64")]
+    pub hours_to_expiration: Option<u64>,
+    pub labels: Option<BTreeMap<String, String>>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub labels_from_meta: Option<bool>,
+    pub kms_key_name: Option<String>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub require_partition_filter: Option<bool>,
+    #[serde(default, deserialize_with = "u64_or_string_u64")]
+    pub partition_expiration_days: Option<u64>,
+    pub grant_access_to: Option<Vec<GrantAccessToTarget>>,
+    pub partitions: Option<Vec<String>>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub enable_refresh: Option<bool>,
+    #[serde(default, deserialize_with = "u64_or_string_u64")]
+    pub refresh_interval_minutes: Option<u64>,
+    pub max_staleness: Option<String>,
+
+    // Databricks
     pub file_format: Option<String>,
     pub location_root: Option<String>,
     pub tblproperties: Option<BTreeMap<String, YmlValue>>,
@@ -322,11 +195,10 @@ pub struct DatabricksNodeConfig {
     pub skip_matched_step: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub skip_not_matched_step: Option<bool>,
-}
 
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, JsonSchema)]
-pub struct SnowflakeNodeConfig {
+    // Snowflake
+    pub table_tag: Option<String>,
+    pub row_access_policy: Option<String>,
     pub external_volume: Option<String>,
     pub base_location_root: Option<String>,
     pub base_location_subpath: Option<String>,
@@ -344,11 +216,8 @@ pub struct SnowflakeNodeConfig {
     pub secure: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub transient: Option<bool>,
-}
 
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, JsonSchema)]
-pub struct RedshiftNodeConfig {
+    // Redshift
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub auto_refresh: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -358,44 +227,171 @@ pub struct RedshiftNodeConfig {
     pub dist: Option<String>,
     pub sort: Option<StringOrArrayOfStrings>,
     pub sort_type: Option<String>,
-}
 
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, JsonSchema)]
-pub struct BigQueryNodeConfig {
-    pub partition_by: Option<BigqueryPartitionConfigLegacy>,
-    pub cluster_by: Option<BigqueryClusterConfig>,
-    #[serde(default, deserialize_with = "u64_or_string_u64")]
-    pub hours_to_expiration: Option<u64>,
-    pub labels: Option<BTreeMap<String, String>>,
-    #[serde(default, deserialize_with = "bool_or_string_bool")]
-    pub labels_from_meta: Option<bool>,
-    pub kms_key_name: Option<String>,
-    #[serde(default, deserialize_with = "bool_or_string_bool")]
-    pub require_partition_filter: Option<bool>,
-    #[serde(default, deserialize_with = "u64_or_string_u64")]
-    pub partition_expiration_days: Option<u64>,
-    pub grant_access_to: Option<Vec<GrantAccessToTarget>>,
-    pub partitions: Option<Vec<String>>,
-    #[serde(default, deserialize_with = "bool_or_string_bool")]
-    pub enable_refresh: Option<bool>,
-    #[serde(default, deserialize_with = "u64_or_string_u64")]
-    pub refresh_interval_minutes: Option<u64>,
-    pub description: Option<String>,
-    pub max_staleness: Option<String>,
-}
-
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, JsonSchema)]
-pub struct MsSqlNodeConfig {
+    // MsSql
+    // XXX: This is an incomplete set of configs
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub as_columnstore: Option<bool>,
+
+    // Athena
+    // XXX: This is an incomplete set of configs
+    pub table_type: Option<String>,
+
+    // Postgres
+    // XXX: This is an incomplete set of configs
+    pub indexes: Option<Vec<PostgresIndex>>,
 }
 
-impl DefaultTo<MsSqlNodeConfig> for MsSqlNodeConfig {
-    fn default_to(&mut self, parent: &MsSqlNodeConfig) {
-        let MsSqlNodeConfig { as_columnstore } = self;
+impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
+    #[allow(clippy::cognitive_complexity)]
+    fn default_to(&mut self, parent: &WarehouseSpecificNodeConfig) {
+        // Exhaustive destructuring ensures all fields are handled
+        let WarehouseSpecificNodeConfig {
+            // Shared
+            partition_by,
 
-        default_to!(parent, [as_columnstore]);
+            // BigQuery
+            cluster_by,
+            hours_to_expiration,
+            labels,
+            labels_from_meta,
+            kms_key_name,
+            require_partition_filter,
+            partition_expiration_days,
+            grant_access_to,
+            partitions,
+            enable_refresh,
+            refresh_interval_minutes,
+            max_staleness,
+
+            // Databricks
+            file_format,
+            location_root,
+            tblproperties,
+            include_full_name_in_path,
+            liquid_clustered_by,
+            auto_liquid_cluster,
+            clustered_by,
+            buckets,
+            catalog,
+            databricks_tags,
+            compression,
+            databricks_compute,
+            target_alias,
+            source_alias,
+            matched_condition,
+            not_matched_condition,
+            not_matched_by_source_condition,
+            not_matched_by_source_action,
+            merge_with_schema_evolution,
+            skip_matched_step,
+            skip_not_matched_step,
+
+            // Snowflake
+            table_tag,
+            row_access_policy,
+            external_volume,
+            base_location_root,
+            base_location_subpath,
+            target_lag,
+            snowflake_warehouse,
+            refresh_mode,
+            initialize,
+            tmp_relation_type,
+            query_tag,
+            automatic_clustering,
+            copy_grants,
+            secure,
+            transient,
+
+            // Redshift
+            auto_refresh,
+            backup,
+            bind,
+            dist,
+            sort,
+            sort_type,
+
+            // MsSql
+            as_columnstore,
+
+            // Athena
+            table_type,
+
+            // Postgres
+            indexes,
+        } = self;
+
+        default_to!(
+            parent,
+            [
+                // Shared
+                partition_by,
+                // BigQuery
+                cluster_by,
+                hours_to_expiration,
+                labels,
+                labels_from_meta,
+                kms_key_name,
+                require_partition_filter,
+                partition_expiration_days,
+                grant_access_to,
+                partitions,
+                enable_refresh,
+                refresh_interval_minutes,
+                max_staleness,
+                // Databricks
+                file_format,
+                location_root,
+                tblproperties,
+                include_full_name_in_path,
+                liquid_clustered_by,
+                auto_liquid_cluster,
+                clustered_by,
+                buckets,
+                catalog,
+                databricks_tags,
+                compression,
+                databricks_compute,
+                target_alias,
+                source_alias,
+                matched_condition,
+                not_matched_condition,
+                not_matched_by_source_condition,
+                not_matched_by_source_action,
+                merge_with_schema_evolution,
+                skip_matched_step,
+                skip_not_matched_step,
+                // Snowflake
+                table_tag,
+                row_access_policy,
+                external_volume,
+                base_location_root,
+                base_location_subpath,
+                target_lag,
+                snowflake_warehouse,
+                refresh_mode,
+                initialize,
+                tmp_relation_type,
+                query_tag,
+                automatic_clustering,
+                copy_grants,
+                secure,
+                transient,
+                // Redshift
+                auto_refresh,
+                backup,
+                bind,
+                dist,
+                sort,
+                sort_type,
+                // MsSql
+                as_columnstore,
+                // Athena
+                table_type,
+                // Postgres
+                indexes,
+            ]
+        );
     }
 }

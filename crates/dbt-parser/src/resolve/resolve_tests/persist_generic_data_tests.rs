@@ -23,9 +23,9 @@ use dbt_schemas::schemas::properties::Tables;
 use dbt_schemas::schemas::properties::{ModelProperties, SeedProperties, SnapshotProperties};
 use dbt_schemas::state::{DbtAsset, GenericTestAsset};
 use dbt_serde_yaml::ShouldBe;
+use dbt_serde_yaml::Span;
 use dbt_serde_yaml::Spanned;
 use dbt_serde_yaml::Verbatim;
-use dbt_serde_yaml::{Span, to_value};
 use itertools::Itertools;
 use md5;
 use regex::Regex;
@@ -741,8 +741,10 @@ fn generate_test_macro(
     // ── serialize & emit the config block ────────────────
     if let Some(cfg) = config {
         // we write the config out as a JSON in {{ config(...) }}
-        let cfg_val = to_value(cfg).map_err(|e| yaml_to_fs_error(e, None))?;
-        let config_str = serde_json::to_string(&cfg_val)?;
+        let cfg_val = dbt_serde_yaml::to_value(cfg).map_err(|e| yaml_to_fs_error(e, None))?;
+        let config_str = serde_json::to_string(&cfg_val)
+            .map_err(|e| fs_err!(ErrorCode::SchemaError, "Failed to serialize config: {}", e))?;
+
         sql.push_str(&format!("{{{{ config({config_str}) }}}}\n"));
     }
 
@@ -1220,7 +1222,7 @@ mod tests {
         let test_args_btree: BTreeMap<String, Value> = test_args.into_iter().collect();
 
         // Convert to dbt_serde_yaml::Value using the to_value function
-        let yaml_value = to_value(&test_args_btree).unwrap();
+        let yaml_value = dbt_serde_yaml::to_value(&test_args_btree).unwrap();
         let verbatim_wrapper = Verbatim::from(Some(yaml_value));
         let empty_deprecated = Verbatim::from(BTreeMap::new());
         let existing_config = None;
@@ -1394,7 +1396,7 @@ mod tests {
             model_tests: Some(vec![DataTests::CustomTest(CustomTest::MultiKey(Box::new(
                 CustomTestMultiKey {
                     arguments: Verbatim::from(Some(
-                        to_value(json!({
+                        dbt_serde_yaml::to_value(json!({
                             "column_names": ["id"]
                         }))
                         .unwrap(),

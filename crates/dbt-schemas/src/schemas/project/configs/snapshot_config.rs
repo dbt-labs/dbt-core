@@ -18,14 +18,11 @@ use crate::schemas::common::HardDeletes;
 use crate::schemas::common::Hooks;
 use crate::schemas::common::PersistDocsConfig;
 use crate::schemas::manifest::GrantAccessToTarget;
-use crate::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfigLegacy};
-use crate::schemas::project::BigQueryNodeConfig;
-use crate::schemas::project::DatabricksNodeConfig;
+use crate::schemas::manifest::postgres::PostgresIndex;
+use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
 use crate::schemas::project::DefaultTo;
 use crate::schemas::project::IterChildren;
-use crate::schemas::project::SnowflakeNodeConfig;
-use crate::schemas::project::configs::common::MsSqlNodeConfig;
-use crate::schemas::project::configs::common::RedshiftNodeConfig;
+use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::common::default_hooks;
 use crate::schemas::project::configs::common::default_meta_and_tags;
 use crate::schemas::project::configs::common::default_quoting;
@@ -124,6 +121,10 @@ pub struct ProjectSnapshotConfig {
     pub initialize: Option<String>,
     #[serde(rename = "+query_tag")]
     pub query_tag: Option<String>,
+    #[serde(rename = "+table_tag")]
+    pub table_tag: Option<String>,
+    #[serde(rename = "+row_access_policy")]
+    pub row_access_policy: Option<String>,
     #[serde(rename = "+refresh_mode")]
     pub refresh_mode: Option<String>,
     #[serde(default, rename = "+secure", deserialize_with = "bool_or_string_bool")]
@@ -172,7 +173,7 @@ pub struct ProjectSnapshotConfig {
     #[serde(rename = "+max_staleness")]
     pub max_staleness: Option<String>,
     #[serde(rename = "+partition_by")]
-    pub partition_by: Option<BigqueryPartitionConfigLegacy>,
+    pub partition_by: Option<PartitionConfig>,
     #[serde(
         default,
         rename = "+partition_expiration_days",
@@ -272,6 +273,13 @@ pub struct ProjectSnapshotConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub as_columnstore: Option<bool>,
+    // Adapter-specific fields (Athena)
+    #[serde(default, rename = "+table_type")]
+    pub table_type: Option<String>,
+
+    // Adapter-specific fields (Postgres)
+    #[serde(default, rename = "+indexes")]
+    pub indexes: Option<Vec<PostgresIndex>>,
     // Flattened field:
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectSnapshotConfig>>,
 }
@@ -314,12 +322,9 @@ pub struct SnapshotConfig {
     pub quote_columns: Option<bool>,
     pub invalidate_hard_deletes: Option<bool>,
     pub docs: Option<DocsConfig>,
+    pub description: Option<String>,
     // Adapter specific configs
-    pub __snowflake_node_config__: SnowflakeNodeConfig,
-    pub __bigquery_node_config__: BigQueryNodeConfig,
-    pub __databricks_node_config__: DatabricksNodeConfig,
-    pub __redshift_node_config__: RedshiftNodeConfig,
-    pub __mssql_node_config__: MsSqlNodeConfig,
+    pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
 }
 
 #[skip_serializing_none]
@@ -397,7 +402,8 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
             quote_columns: config.quote_columns,
             invalidate_hard_deletes: config.invalidate_hard_deletes,
             docs: config.docs,
-            __snowflake_node_config__: SnowflakeNodeConfig {
+            description: config.description,
+            __warehouse_specific_config__: WarehouseSpecificNodeConfig {
                 external_volume: config.external_volume,
                 base_location_root: config.base_location_root,
                 base_location_subpath: config.base_location_subpath,
@@ -407,12 +413,13 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 initialize: config.initialize,
                 tmp_relation_type: config.tmp_relation_type,
                 query_tag: config.query_tag,
+                table_tag: config.table_tag,
+                row_access_policy: config.row_access_policy,
                 automatic_clustering: config.automatic_clustering,
                 copy_grants: config.copy_grants,
                 secure: config.secure,
                 transient: config.transient,
-            },
-            __bigquery_node_config__: BigQueryNodeConfig {
+
                 partition_by: config.partition_by,
                 cluster_by: config.cluster_by,
                 hours_to_expiration: config.hours_to_expiration,
@@ -425,10 +432,8 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 partitions: config.partitions,
                 enable_refresh: config.enable_refresh,
                 refresh_interval_minutes: config.refresh_interval_minutes,
-                description: config.description,
                 max_staleness: config.max_staleness,
-            },
-            __databricks_node_config__: DatabricksNodeConfig {
+
                 file_format: config.file_format,
                 location_root: config.location_root,
                 tblproperties: config.tblproperties,
@@ -450,17 +455,19 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 merge_with_schema_evolution: config.merge_with_schema_evolution,
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
-            },
-            __redshift_node_config__: RedshiftNodeConfig {
+
                 auto_refresh: config.auto_refresh,
                 backup: config.backup,
                 bind: config.bind,
                 dist: config.dist,
                 sort: config.sort,
                 sort_type: config.sort_type,
-            },
-            __mssql_node_config__: MsSqlNodeConfig {
+
                 as_columnstore: config.as_columnstore,
+
+                table_type: config.table_type,
+
+                indexes: config.indexes,
             },
         }
     }
@@ -494,72 +501,86 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             quote_columns: config.quote_columns,
             invalidate_hard_deletes: config.invalidate_hard_deletes,
             docs: config.docs,
+            description: config.description,
             // Snowflake fields
-            external_volume: config.__snowflake_node_config__.external_volume,
-            base_location_root: config.__snowflake_node_config__.base_location_root,
-            base_location_subpath: config.__snowflake_node_config__.base_location_subpath,
-            target_lag: config.__snowflake_node_config__.target_lag,
-            snowflake_warehouse: config.__snowflake_node_config__.snowflake_warehouse,
-            refresh_mode: config.__snowflake_node_config__.refresh_mode,
-            initialize: config.__snowflake_node_config__.initialize,
-            tmp_relation_type: config.__snowflake_node_config__.tmp_relation_type,
-            query_tag: config.__snowflake_node_config__.query_tag,
-            automatic_clustering: config.__snowflake_node_config__.automatic_clustering,
-            copy_grants: config.__snowflake_node_config__.copy_grants,
-            secure: config.__snowflake_node_config__.secure,
+            external_volume: config.__warehouse_specific_config__.external_volume,
+            base_location_root: config.__warehouse_specific_config__.base_location_root,
+            base_location_subpath: config.__warehouse_specific_config__.base_location_subpath,
+            target_lag: config.__warehouse_specific_config__.target_lag,
+            snowflake_warehouse: config.__warehouse_specific_config__.snowflake_warehouse,
+            refresh_mode: config.__warehouse_specific_config__.refresh_mode,
+            initialize: config.__warehouse_specific_config__.initialize,
+            tmp_relation_type: config.__warehouse_specific_config__.tmp_relation_type,
+            query_tag: config.__warehouse_specific_config__.query_tag,
+            table_tag: config.__warehouse_specific_config__.table_tag,
+            row_access_policy: config.__warehouse_specific_config__.row_access_policy,
+            automatic_clustering: config.__warehouse_specific_config__.automatic_clustering,
+            copy_grants: config.__warehouse_specific_config__.copy_grants,
+            secure: config.__warehouse_specific_config__.secure,
             // BigQuery fields
-            partition_by: config.__bigquery_node_config__.partition_by,
-            cluster_by: config.__bigquery_node_config__.cluster_by,
-            hours_to_expiration: config.__bigquery_node_config__.hours_to_expiration,
-            labels: config.__bigquery_node_config__.labels,
-            labels_from_meta: config.__bigquery_node_config__.labels_from_meta,
-            kms_key_name: config.__bigquery_node_config__.kms_key_name,
-            require_partition_filter: config.__bigquery_node_config__.require_partition_filter,
-            partition_expiration_days: config.__bigquery_node_config__.partition_expiration_days,
-            grant_access_to: config.__bigquery_node_config__.grant_access_to,
-            partitions: config.__bigquery_node_config__.partitions,
-            enable_refresh: config.__bigquery_node_config__.enable_refresh,
-            refresh_interval_minutes: config.__bigquery_node_config__.refresh_interval_minutes,
-            description: config.__bigquery_node_config__.description,
-            max_staleness: config.__bigquery_node_config__.max_staleness,
+            partition_by: config.__warehouse_specific_config__.partition_by,
+            cluster_by: config.__warehouse_specific_config__.cluster_by,
+            hours_to_expiration: config.__warehouse_specific_config__.hours_to_expiration,
+            labels: config.__warehouse_specific_config__.labels,
+            labels_from_meta: config.__warehouse_specific_config__.labels_from_meta,
+            kms_key_name: config.__warehouse_specific_config__.kms_key_name,
+            require_partition_filter: config
+                .__warehouse_specific_config__
+                .require_partition_filter,
+            partition_expiration_days: config
+                .__warehouse_specific_config__
+                .partition_expiration_days,
+            grant_access_to: config.__warehouse_specific_config__.grant_access_to,
+            partitions: config.__warehouse_specific_config__.partitions,
+            enable_refresh: config.__warehouse_specific_config__.enable_refresh,
+            refresh_interval_minutes: config
+                .__warehouse_specific_config__
+                .refresh_interval_minutes,
+            max_staleness: config.__warehouse_specific_config__.max_staleness,
             // Databricks fields
-            file_format: config.__databricks_node_config__.file_format,
-            location_root: config.__databricks_node_config__.location_root,
-            tblproperties: config.__databricks_node_config__.tblproperties,
-            include_full_name_in_path: config.__databricks_node_config__.include_full_name_in_path,
-            liquid_clustered_by: config.__databricks_node_config__.liquid_clustered_by,
-            auto_liquid_cluster: config.__databricks_node_config__.auto_liquid_cluster,
-            clustered_by: config.__databricks_node_config__.clustered_by,
-            buckets: config.__databricks_node_config__.buckets,
-            catalog: config.__databricks_node_config__.catalog,
-            databricks_tags: config.__databricks_node_config__.databricks_tags,
-            compression: config.__databricks_node_config__.compression,
-            databricks_compute: config.__databricks_node_config__.databricks_compute,
-            matched_condition: config.__databricks_node_config__.matched_condition,
+            file_format: config.__warehouse_specific_config__.file_format,
+            location_root: config.__warehouse_specific_config__.location_root,
+            tblproperties: config.__warehouse_specific_config__.tblproperties,
+            include_full_name_in_path: config
+                .__warehouse_specific_config__
+                .include_full_name_in_path,
+            liquid_clustered_by: config.__warehouse_specific_config__.liquid_clustered_by,
+            auto_liquid_cluster: config.__warehouse_specific_config__.auto_liquid_cluster,
+            clustered_by: config.__warehouse_specific_config__.clustered_by,
+            buckets: config.__warehouse_specific_config__.buckets,
+            catalog: config.__warehouse_specific_config__.catalog,
+            databricks_tags: config.__warehouse_specific_config__.databricks_tags,
+            compression: config.__warehouse_specific_config__.compression,
+            databricks_compute: config.__warehouse_specific_config__.databricks_compute,
+            matched_condition: config.__warehouse_specific_config__.matched_condition,
             merge_with_schema_evolution: config
-                .__databricks_node_config__
+                .__warehouse_specific_config__
                 .merge_with_schema_evolution,
             not_matched_by_source_action: config
-                .__databricks_node_config__
+                .__warehouse_specific_config__
                 .not_matched_by_source_action,
             not_matched_by_source_condition: config
-                .__databricks_node_config__
+                .__warehouse_specific_config__
                 .not_matched_by_source_condition,
-            not_matched_condition: config.__databricks_node_config__.not_matched_condition,
-            source_alias: config.__databricks_node_config__.source_alias,
-            target_alias: config.__databricks_node_config__.target_alias,
-            skip_matched_step: config.__databricks_node_config__.skip_matched_step,
-            skip_not_matched_step: config.__databricks_node_config__.skip_not_matched_step,
+            not_matched_condition: config.__warehouse_specific_config__.not_matched_condition,
+            source_alias: config.__warehouse_specific_config__.source_alias,
+            target_alias: config.__warehouse_specific_config__.target_alias,
+            skip_matched_step: config.__warehouse_specific_config__.skip_matched_step,
+            skip_not_matched_step: config.__warehouse_specific_config__.skip_not_matched_step,
             // Redshift fields
-            auto_refresh: config.__redshift_node_config__.auto_refresh,
-            backup: config.__redshift_node_config__.backup,
-            bind: config.__redshift_node_config__.bind,
-            dist: config.__redshift_node_config__.dist,
-            sort: config.__redshift_node_config__.sort,
-            sort_type: config.__redshift_node_config__.sort_type,
-            transient: config.__snowflake_node_config__.transient,
+            auto_refresh: config.__warehouse_specific_config__.auto_refresh,
+            backup: config.__warehouse_specific_config__.backup,
+            bind: config.__warehouse_specific_config__.bind,
+            dist: config.__warehouse_specific_config__.dist,
+            sort: config.__warehouse_specific_config__.sort,
+            sort_type: config.__warehouse_specific_config__.sort_type,
+            transient: config.__warehouse_specific_config__.transient,
             // MSSQL fields
-            as_columnstore: config.__mssql_node_config__.as_columnstore,
+            as_columnstore: config.__warehouse_specific_config__.as_columnstore,
+            // Athena Fields
+            table_type: config.__warehouse_specific_config__.table_type,
+            // Postgres Fields
+            indexes: config.__warehouse_specific_config__.indexes,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -605,29 +626,15 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
             invalidate_hard_deletes,
             docs,
             static_analysis,
+            description,
             // Flattened configs
-            __snowflake_node_config__: snowflake_model_config,
-            __bigquery_node_config__: bigquery_model_config,
-            __databricks_node_config__: databricks_model_config,
-            __redshift_node_config__: redshift_model_config,
-            __mssql_node_config__: mssql_model_config,
+            __warehouse_specific_config__: warehouse_specific_config,
         } = self;
 
         // Handle flattened configs
         #[allow(unused, clippy::let_unit_value)]
-        let snowflake_model_config =
-            snowflake_model_config.default_to(&parent.__snowflake_node_config__);
-        #[allow(unused, clippy::let_unit_value)]
-        let bigquery_model_config =
-            bigquery_model_config.default_to(&parent.__bigquery_node_config__);
-        #[allow(unused, clippy::let_unit_value)]
-        let databricks_model_config =
-            databricks_model_config.default_to(&parent.__databricks_node_config__);
-        #[allow(unused, clippy::let_unit_value)]
-        let redshift_model_config =
-            redshift_model_config.default_to(&parent.__redshift_node_config__);
-        #[allow(unused, clippy::let_unit_value)]
-        let mssql_model_config = mssql_model_config.default_to(&parent.__mssql_node_config__);
+        let warehouse_specific_config =
+            warehouse_specific_config.default_to(&parent.__warehouse_specific_config__);
 
         #[allow(unused, clippy::let_unit_value)]
         let pre_hook = default_hooks(pre_hook, &parent.pre_hook);
@@ -665,6 +672,7 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
                 hard_deletes,
                 check_cols,
                 static_analysis,
+                description,
             ]
         );
     }

@@ -22,6 +22,7 @@ use dbt_fusion_adapter::{load_store::ResultStore, relation_object::create_relati
 use dbt_schemas::schemas::{
     DbtModelAttr, InternalDbtNode, IntrospectionKind,
     common::{Access, DbtMaterialization, ResolvedQuoting},
+    nodes::AdapterAttr,
     project::{DefaultTo, ModelConfig},
 };
 use dbt_schemas::{
@@ -244,6 +245,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
             contract: None,
             event_time: None,
         },
+        __adapter_attr__: AdapterAttr::default(),
         __other__: BTreeMap::new(),
         deprecated_config: ModelConfig::default(),
     };

@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 type YmlValue = dbt_serde_yaml::Value;
 use crate::schemas::common::{NodeInfo, NodeInfoWrapper};
+use crate::schemas::manifest::{BigqueryClusterConfig, GrantAccessToTarget, PartitionConfig};
+use crate::schemas::project::WarehouseSpecificNodeConfig;
+use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::{
     common::{
         Access, DbtChecksum, DbtContract, DbtIncrementalStrategy, DbtMaterialization, Expect,
@@ -1778,11 +1781,282 @@ pub struct DbtModel {
 
     pub __model_attr__: DbtModelAttr,
 
+    pub __adapter_attr__: AdapterAttr,
+
     // TO BE DEPRECATED
     #[serde(rename = "config")]
     pub deprecated_config: ModelConfig,
 
     pub __other__: BTreeMap<String, YmlValue>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct AdapterAttr {
+    pub snowflake_attr: Option<Box<SnowflakeAttr>>,
+    pub databricks_attr: Option<Box<DatabricksAttr>>,
+    pub bigquery_attr: Option<Box<BigQueryAttr>>,
+    pub redshift_attr: Option<Box<RedshiftAttr>>,
+}
+
+impl AdapterAttr {
+    pub fn with_snowflake_attr(mut self, snowflake_attr: Option<Box<SnowflakeAttr>>) -> Self {
+        self.snowflake_attr = snowflake_attr;
+        self
+    }
+
+    pub fn with_databricks_attr(mut self, databricks_attr: Option<Box<DatabricksAttr>>) -> Self {
+        self.databricks_attr = databricks_attr;
+        self
+    }
+
+    pub fn with_bigquery_attr(mut self, bigquery_attr: Option<Box<BigQueryAttr>>) -> Self {
+        self.bigquery_attr = bigquery_attr;
+        self
+    }
+
+    pub fn with_redshift_attr(mut self, redshift_attr: Option<Box<RedshiftAttr>>) -> Self {
+        self.redshift_attr = redshift_attr;
+        self
+    }
+
+    /// Creates a new [AdapterAttr] from a given [&WarehouseSpecificNodeConfig] and adapter type string
+    pub fn from_config_and_dialect(
+        config: &WarehouseSpecificNodeConfig,
+        adapter_type: &str,
+    ) -> Self {
+        // TODO: adapter_type should be an enum.
+        // TODO: Make all None inputs result in a None for that attr
+        // TODO: Creation of configs should be delegated to the adapter specific attr struct
+        // Here we naively initialize the resolved adapter attributes.
+        // This allows propagation of configurations and switching on the adapter type
+        // allows us to save memory for unused configurations.
+        //
+        // A further optimization can be done by only setting inner fields of [AdapterAttr] if at least one field of the
+        // input is not None
+        match adapter_type {
+            "snowflake" => {
+                AdapterAttr::default().with_snowflake_attr(Some(Box::new(SnowflakeAttr {
+                    table_tag: config.table_tag.clone(),
+                    row_access_policy: config.row_access_policy.clone(),
+                    external_volume: config.external_volume.clone(),
+                    base_location_root: config.base_location_root.clone(),
+                    base_location_subpath: config.base_location_subpath.clone(),
+                    target_lag: config.target_lag.clone(),
+                    snowflake_warehouse: config.snowflake_warehouse.clone(),
+                    refresh_mode: config.refresh_mode.clone(),
+                    initialize: config.initialize.clone(),
+                    tmp_relation_type: config.tmp_relation_type.clone(),
+                    query_tag: config.query_tag.clone(),
+                    automatic_clustering: config.automatic_clustering,
+                    copy_grants: config.copy_grants,
+                    secure: config.secure,
+                    transient: config.transient,
+                })))
+            }
+            "postgres" => AdapterAttr::default(),
+            "bigquery" => AdapterAttr::default().with_bigquery_attr(Some(Box::new(BigQueryAttr {
+                partition_by: config.partition_by.clone(),
+                cluster_by: config.cluster_by.clone(),
+                hours_to_expiration: config.hours_to_expiration,
+                labels: config.labels.clone(),
+                labels_from_meta: config.labels_from_meta,
+                kms_key_name: config.kms_key_name.clone(),
+                require_partition_filter: config.require_partition_filter,
+                partition_expiration_days: config.partition_expiration_days,
+                grant_access_to: config.grant_access_to.clone(),
+                partitions: config.partitions.clone(),
+                enable_refresh: config.enable_refresh,
+                refresh_interval_minutes: config.refresh_interval_minutes,
+                max_staleness: config.max_staleness.clone(),
+            }))),
+            "redshift" => AdapterAttr::default().with_redshift_attr(Some(Box::new(RedshiftAttr {
+                auto_refresh: config.auto_refresh,
+                backup: config.backup,
+                bind: config.bind,
+                dist: config.dist.clone(),
+                sort: config.sort.clone(),
+                sort_type: config.sort_type.clone(),
+            }))),
+            "databricks" => {
+                AdapterAttr::default().with_databricks_attr(Some(Box::new(DatabricksAttr {
+                    partition_by: config.partition_by.clone(),
+                    file_format: config.file_format.clone(),
+                    location_root: config.location_root.clone(),
+                    tblproperties: config.tblproperties.clone(),
+                    include_full_name_in_path: config.include_full_name_in_path,
+                    liquid_clustered_by: config.liquid_clustered_by.clone(),
+                    auto_liquid_cluster: config.auto_liquid_cluster,
+                    clustered_by: config.clustered_by.clone(),
+                    buckets: config.buckets,
+                    catalog: config.catalog.clone(),
+                    databricks_tags: config.databricks_tags.clone(),
+                    compression: config.compression.clone(),
+                    databricks_compute: config.databricks_compute.clone(),
+                    target_alias: config.target_alias.clone(),
+                    source_alias: config.source_alias.clone(),
+                    matched_condition: config.matched_condition.clone(),
+                    not_matched_condition: config.not_matched_condition.clone(),
+                    not_matched_by_source_condition: config.not_matched_by_source_condition.clone(),
+                    not_matched_by_source_action: config.not_matched_by_source_action.clone(),
+                    merge_with_schema_evolution: config.merge_with_schema_evolution,
+                    skip_matched_step: config.skip_matched_step,
+                    skip_not_matched_step: config.skip_not_matched_step,
+                })))
+            }
+            _ => {
+                // Unknown input, populate ALL adapter attributes to maximize compatibility downstream
+                AdapterAttr::default()
+                    .with_snowflake_attr(Some(Box::new(SnowflakeAttr {
+                        table_tag: config.table_tag.clone(),
+                        row_access_policy: config.row_access_policy.clone(),
+                        external_volume: config.external_volume.clone(),
+                        base_location_root: config.base_location_root.clone(),
+                        base_location_subpath: config.base_location_subpath.clone(),
+                        target_lag: config.target_lag.clone(),
+                        snowflake_warehouse: config.snowflake_warehouse.clone(),
+                        refresh_mode: config.refresh_mode.clone(),
+                        initialize: config.initialize.clone(),
+                        tmp_relation_type: config.tmp_relation_type.clone(),
+                        query_tag: config.query_tag.clone(),
+                        automatic_clustering: config.automatic_clustering,
+                        copy_grants: config.copy_grants,
+                        secure: config.secure,
+                        transient: config.transient,
+                    })))
+                    .with_bigquery_attr(Some(Box::new(BigQueryAttr {
+                        partition_by: config.partition_by.clone(),
+                        cluster_by: config.cluster_by.clone(),
+                        hours_to_expiration: config.hours_to_expiration,
+                        labels: config.labels.clone(),
+                        labels_from_meta: config.labels_from_meta,
+                        kms_key_name: config.kms_key_name.clone(),
+                        require_partition_filter: config.require_partition_filter,
+                        partition_expiration_days: config.partition_expiration_days,
+                        grant_access_to: config.grant_access_to.clone(),
+                        partitions: config.partitions.clone(),
+                        enable_refresh: config.enable_refresh,
+                        refresh_interval_minutes: config.refresh_interval_minutes,
+                        max_staleness: config.max_staleness.clone(),
+                    })))
+                    .with_redshift_attr(Some(Box::new(RedshiftAttr {
+                        auto_refresh: config.auto_refresh,
+                        backup: config.backup,
+                        bind: config.bind,
+                        dist: config.dist.clone(),
+                        sort: config.sort.clone(),
+                        sort_type: config.sort_type.clone(),
+                    })))
+                    .with_databricks_attr(Some(Box::new(DatabricksAttr {
+                        partition_by: config.partition_by.clone(),
+                        file_format: config.file_format.clone(),
+                        location_root: config.location_root.clone(),
+                        tblproperties: config.tblproperties.clone(),
+                        include_full_name_in_path: config.include_full_name_in_path,
+                        liquid_clustered_by: config.liquid_clustered_by.clone(),
+                        auto_liquid_cluster: config.auto_liquid_cluster,
+                        clustered_by: config.clustered_by.clone(),
+                        buckets: config.buckets,
+                        catalog: config.catalog.clone(),
+                        databricks_tags: config.databricks_tags.clone(),
+                        compression: config.compression.clone(),
+                        databricks_compute: config.databricks_compute.clone(),
+                        target_alias: config.target_alias.clone(),
+                        source_alias: config.source_alias.clone(),
+                        matched_condition: config.matched_condition.clone(),
+                        not_matched_condition: config.not_matched_condition.clone(),
+                        not_matched_by_source_condition: config
+                            .not_matched_by_source_condition
+                            .clone(),
+                        not_matched_by_source_action: config.not_matched_by_source_action.clone(),
+                        merge_with_schema_evolution: config.merge_with_schema_evolution,
+                        skip_matched_step: config.skip_matched_step,
+                        skip_not_matched_step: config.skip_not_matched_step,
+                    })))
+            }
+        }
+    }
+}
+
+/// A resolved Snowflake configuration
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SnowflakeAttr {
+    pub table_tag: Option<String>,
+    pub row_access_policy: Option<String>,
+    pub external_volume: Option<String>,
+    pub base_location_root: Option<String>,
+    pub base_location_subpath: Option<String>,
+    pub target_lag: Option<String>,
+    pub snowflake_warehouse: Option<String>,
+    pub refresh_mode: Option<String>,
+    pub initialize: Option<String>,
+    pub tmp_relation_type: Option<String>,
+    pub query_tag: Option<String>,
+    pub automatic_clustering: Option<bool>,
+    pub copy_grants: Option<bool>,
+    pub secure: Option<bool>,
+    pub transient: Option<bool>,
+}
+
+/// A resolved Databricks configuration
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DatabricksAttr {
+    pub partition_by: Option<PartitionConfig>,
+    pub file_format: Option<String>,
+    pub location_root: Option<String>,
+    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
+    pub include_full_name_in_path: Option<bool>,
+    pub liquid_clustered_by: Option<StringOrArrayOfStrings>,
+    pub auto_liquid_cluster: Option<bool>,
+    pub clustered_by: Option<String>,
+    pub buckets: Option<i64>,
+    pub catalog: Option<String>,
+    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub compression: Option<String>,
+    pub databricks_compute: Option<String>,
+    pub target_alias: Option<String>,
+    pub source_alias: Option<String>,
+    pub matched_condition: Option<String>,
+    pub not_matched_condition: Option<String>,
+    pub not_matched_by_source_condition: Option<String>,
+    pub not_matched_by_source_action: Option<String>,
+    pub merge_with_schema_evolution: Option<bool>,
+    pub skip_matched_step: Option<bool>,
+    pub skip_not_matched_step: Option<bool>,
+}
+
+/// A resolved BigQuery configuration
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct BigQueryAttr {
+    pub partition_by: Option<PartitionConfig>,
+    pub cluster_by: Option<BigqueryClusterConfig>,
+    pub hours_to_expiration: Option<u64>,
+    pub labels: Option<BTreeMap<String, String>>,
+    pub labels_from_meta: Option<bool>,
+    pub kms_key_name: Option<String>,
+    pub require_partition_filter: Option<bool>,
+    pub partition_expiration_days: Option<u64>,
+    pub grant_access_to: Option<Vec<GrantAccessToTarget>>,
+    pub partitions: Option<Vec<String>>,
+    pub enable_refresh: Option<bool>,
+    pub refresh_interval_minutes: Option<u64>,
+    pub max_staleness: Option<String>,
+}
+
+/// A resolved Redshift configuration
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RedshiftAttr {
+    pub auto_refresh: Option<bool>,
+    pub backup: Option<bool>,
+    pub bind: Option<bool>,
+    pub dist: Option<String>,
+    pub sort: Option<StringOrArrayOfStrings>,
+    pub sort_type: Option<String>,
 }
 
 fn default_false() -> bool {

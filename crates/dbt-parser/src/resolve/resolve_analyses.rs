@@ -9,6 +9,7 @@ use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_jinja_utils::{jinja_environment::JinjaEnv, refs_and_sources::RefsAndSources};
 use dbt_schemas::schemas::common::{Access, DbtMaterialization, DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_column::process_columns;
+use dbt_schemas::schemas::nodes::AdapterAttr;
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::{DbtModelAttr, IntrospectionKind};
 use dbt_schemas::state::{ModelStatus, RefsAndSourcesTracker};
@@ -223,6 +224,10 @@ pub async fn resolve_analyses(
                     .collect(),
                 metrics,
             },
+            __adapter_attr__: AdapterAttr::from_config_and_dialect(
+                &analysis_config.__warehouse_specific_config__,
+                adapter_type,
+            ),
             deprecated_config: ModelConfig {
                 group: analysis_config.group.clone(),
                 ..Default::default()

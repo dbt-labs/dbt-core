@@ -16,7 +16,7 @@ use crate::{
         manifest::manifest_nodes::{
             ManifestDataTest, ManifestModel, ManifestOperation, ManifestSeed, ManifestSnapshot,
         },
-        nodes::{DbtSeedAttr, DbtSnapshotAttr, DbtSourceAttr, DbtTestAttr},
+        nodes::{AdapterAttr, DbtSeedAttr, DbtSnapshotAttr, DbtSourceAttr, DbtTestAttr},
     },
     state::ResolverState,
 };
@@ -251,6 +251,10 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             time_spine: model.time_spine,
                             event_time: model.config.event_time.clone(),
                         },
+                        __adapter_attr__: AdapterAttr::from_config_and_dialect(
+                            &model.config.__warehouse_specific_config__,
+                            &manifest.metadata.adapter_type,
+                        ),
                         deprecated_config: model.config,
                         __other__: model.__other__,
                     }),
@@ -520,6 +524,10 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             time_spine: analysis.time_spine,
                             event_time: analysis.config.event_time.clone(),
                         },
+                        __adapter_attr__: AdapterAttr::from_config_and_dialect(
+                            &analysis.config.__warehouse_specific_config__,
+                            &manifest.metadata.adapter_type,
+                        ),
                         deprecated_config: analysis.config,
                         __other__: analysis.__other__,
                     }),

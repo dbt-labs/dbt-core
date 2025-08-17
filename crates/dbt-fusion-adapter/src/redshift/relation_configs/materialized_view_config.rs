@@ -107,10 +107,10 @@ impl TryFrom<&DbtModel> for RedshiftDistConfig {
     // https://github.com/dbt-labs/dbt-adapters/blob/f492c919d3bd415bf5065b3cd8cd1af23562feb0/dbt-redshift/src/dbt/adapters/redshift/relation_configs/dist.py#L80
     fn try_from(model: &DbtModel) -> Result<Self, Self::Error> {
         let dist = model
-            .deprecated_config
-            .__redshift_node_config__
-            .dist
-            .as_deref();
+            .__adapter_attr__
+            .redshift_attr
+            .as_ref()
+            .and_then(|attr| attr.dist.as_deref());
 
         match dist {
             Some(dist) => Ok(RedshiftDistConfig {
@@ -203,7 +203,11 @@ impl TryFrom<&DbtModel> for RedshiftSortConfig {
     type Error = String;
 
     fn try_from(model: &DbtModel) -> Result<Self, Self::Error> {
-        let redshift_config = &model.deprecated_config.__redshift_node_config__;
+        let redshift_config = &model
+            .__adapter_attr__
+            .redshift_attr
+            .as_ref()
+            .ok_or_else(|| "Redshift attributes not found".to_string())?;
 
         let sort = redshift_config.sort.as_ref().map(|s| match s {
             StringOrArrayOfStrings::String(single) => vec![single.clone()],
@@ -266,8 +270,20 @@ impl TryFrom<&DbtModel> for RedshiftMaterializedViewConfig {
         let schema_name = model.__base_attr__.schema.clone();
         let mv_name = model.__common_attr__.name.clone();
 
-        let backup = model.deprecated_config.backup.unwrap_or(true);
-        let auto_refresh = model.deprecated_config.auto_refresh.unwrap_or(false);
+        let backup = model
+            .__adapter_attr__
+            .redshift_attr
+            .as_ref()
+            .and_then(|attr| attr.backup)
+            .unwrap_or(true);
+
+        let auto_refresh = model
+            .__adapter_attr__
+            .redshift_attr
+            .as_ref()
+            .and_then(|attr| attr.auto_refresh)
+            .unwrap_or(false);
+
         let dist = RedshiftDistConfig::try_from(model).unwrap_or_default();
         let sort = RedshiftSortConfig::try_from(model)?;
 

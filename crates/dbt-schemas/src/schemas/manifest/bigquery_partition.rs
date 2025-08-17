@@ -22,7 +22,7 @@ use std::{rc::Rc, sync::Arc};
 /// we're conformant to this behavior via here and via the `validate` method
 #[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, JsonSchema)]
 #[serde(untagged)]
-pub enum BigqueryPartitionConfigLegacy {
+pub enum PartitionConfig {
     String(String),
     List(Vec<String>),
     BigqueryPartitionConfig(BigqueryPartitionConfig),
@@ -85,17 +85,17 @@ pub struct Range {
 
 /// dbt-core allows either of the variants for the `cluster_by`
 /// to allow cluster on a single column or on multiple columns
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, JsonSchema)]
 #[serde(untagged)]
 pub enum BigqueryClusterConfig {
     String(String),
     List(Vec<String>),
 }
 
-impl BigqueryPartitionConfigLegacy {
+impl PartitionConfig {
     pub fn validate(self) -> Result<BigqueryPartitionConfig, MinijinjaError> {
         match self {
-            BigqueryPartitionConfigLegacy::BigqueryPartitionConfig(config) => Ok(config),
+            PartitionConfig::BigqueryPartitionConfig(config) => Ok(config),
             _ => Err(MinijinjaError::new(
                 MinijinjaErrorKind::InvalidArgument,
                 "Expect a BigqueryPartitionConfigStruct",
@@ -368,18 +368,14 @@ mod tests {
     fn test_bigquery_partition_config_legacy_deserialize_from_jinja_values() {
         // Test String variant
         let string_value = MinijinjaValue::from("partition_field");
-        let result =
-            minijinja_value_to_typed_struct::<BigqueryPartitionConfigLegacy>(string_value).unwrap();
-        assert!(
-            matches!(result, BigqueryPartitionConfigLegacy::String(s) if s == "partition_field")
-        );
+        let result = minijinja_value_to_typed_struct::<PartitionConfig>(string_value).unwrap();
+        assert!(matches!(result, PartitionConfig::String(s) if s == "partition_field"));
 
         // Test List variant
         let list_value = MinijinjaValue::from(vec!["field1", "field2"]);
-        let result =
-            minijinja_value_to_typed_struct::<BigqueryPartitionConfigLegacy>(list_value).unwrap();
+        let result = minijinja_value_to_typed_struct::<PartitionConfig>(list_value).unwrap();
         assert!(
-            matches!(result, BigqueryPartitionConfigLegacy::List(ref list) if list == &vec!["field1".to_string(), "field2".to_string()])
+            matches!(result, PartitionConfig::List(ref list) if list == &vec!["field1".to_string(), "field2".to_string()])
         );
 
         // Test BigqueryPartitionConfig variant with time partitioning
@@ -393,9 +389,8 @@ mod tests {
         )
         .unwrap();
         let config_value = MinijinjaValue::from_serialize(&config_json);
-        let result =
-            minijinja_value_to_typed_struct::<BigqueryPartitionConfigLegacy>(config_value).unwrap();
-        if let BigqueryPartitionConfigLegacy::BigqueryPartitionConfig(config) = result {
+        let result = minijinja_value_to_typed_struct::<PartitionConfig>(config_value).unwrap();
+        if let PartitionConfig::BigqueryPartitionConfig(config) = result {
             assert_eq!(config.field, "partition_date");
             assert_eq!(config.data_type, "date");
             assert!(config.time_ingestion_partitioning());

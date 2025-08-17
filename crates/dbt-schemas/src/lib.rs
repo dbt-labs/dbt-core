@@ -57,6 +57,7 @@ pub mod schemas {
         mod manifest_nodes;
         mod metric;
         mod operation;
+        pub mod postgres;
         mod saved_query;
         mod selector;
         mod semantic_model;
@@ -69,7 +70,7 @@ pub mod schemas {
         pub mod common;
         pub use bigquery_partition::{
             BigqueryClusterConfig, BigqueryPartitionConfig, BigqueryPartitionConfigInner,
-            BigqueryPartitionConfigLegacy, GrantAccessToTarget, Range, RangeConfig, TimeConfig,
+            GrantAccessToTarget, PartitionConfig, Range, RangeConfig, TimeConfig,
         };
         pub use group::DbtGroup;
         pub use manifest::{
@@ -109,7 +110,7 @@ pub mod schemas {
             pub mod unit_test_config;
         }
 
-        pub use configs::common::{BigQueryNodeConfig, DatabricksNodeConfig, SnowflakeNodeConfig};
+        pub use configs::common::WarehouseSpecificNodeConfig;
         pub use configs::data_test_config::{DataTestConfig, ProjectDataTestConfig};
         pub use configs::exposure_config::{ExposureConfig, ProjectExposureConfig};
         pub use configs::metric_config::{MetricConfig, ProjectMetricConfigs};

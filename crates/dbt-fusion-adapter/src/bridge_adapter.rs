@@ -27,8 +27,7 @@ use dbt_schemas::schemas::columns::base::StdColumn;
 use dbt_schemas::schemas::common::{DbtIncrementalStrategy, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::manifest::{
-    BigqueryClusterConfig, BigqueryPartitionConfig, BigqueryPartitionConfigLegacy,
-    GrantAccessToTarget,
+    BigqueryClusterConfig, BigqueryPartitionConfig, GrantAccessToTarget, PartitionConfig,
 };
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
@@ -1100,7 +1099,7 @@ impl BaseAdapter for BridgeAdapter {
         let columns = parser.get::<Value>("columns")?;
 
         let partition_by =
-            minijinja_value_to_typed_struct::<BigqueryPartitionConfigLegacy>(partition_by.clone()).map_err(|e| {
+            minijinja_value_to_typed_struct::<PartitionConfig>(partition_by.clone()).map_err(|e| {
                 MinijinjaError::new(
                     MinijinjaErrorKind::SerdeDeserializeError,
                     format!("adapter.add_time_ingestion_partition_column failed on partition_by {partition_by:?}: {e}"),

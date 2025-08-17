@@ -34,6 +34,7 @@ use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::common::ModelFreshnessRules;
 use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::dbt_column::process_columns;
+use dbt_schemas::schemas::nodes::AdapterAttr;
 use dbt_schemas::schemas::project::DbtProject;
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelProperties;
@@ -256,7 +257,10 @@ pub async fn resolve_models(
                 patch_path: patch_path.clone(),
                 unique_id: unique_id.clone(),
                 fqn,
-                description: properties.description.clone(),
+                description: model_config
+                    .description
+                    .clone()
+                    .or_else(|| properties.description.clone()),
                 checksum: sql_file_info.checksum.clone(),
                 raw_code: Some("--placeholder--".to_string()),
                 language: Some("sql".to_string()),
@@ -332,6 +336,10 @@ pub async fn resolve_models(
                 freshness: model_config.freshness.clone(),
                 event_time: model_config.event_time.clone(),
             },
+            __adapter_attr__: AdapterAttr::from_config_and_dialect(
+                &model_config.__warehouse_specific_config__,
+                adapter_type,
+            ),
             // Derived from the model config
             deprecated_config: model_config.clone(),
             __other__: BTreeMap::new(),
