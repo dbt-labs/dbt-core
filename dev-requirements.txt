@@ -10,7 +10,7 @@ ipdb
 mypy==1.4.1
 pip-tools
 pre-commit
-protobuf>=4.0.0,<5.0.0
+protobuf>=6.0,<7.0
 pytest~=7.4
 pytest-cov
 pytest-csv~=3.0
@@ -28,7 +28,7 @@ types-freezegun
 types-Jinja2
 types-jsonschema
 types-mock
-types-protobuf>=4.0.0,<5.0.0
+types-protobuf>=6.0.0,<7.0.0
 types-python-dateutil
 types-pytz
 types-requests<2.31.0 # types-requests 2.31.0.8 requires urllib3>=2, but we pin urllib3 ~= 1.0 because of openssl requirement for requests
