@@ -349,8 +349,7 @@ fn test_loop_changed() {
 #[derive(Debug, serde::Serialize)]
 struct Bad {
     a: i32,
-    #[serde(flatten)]
-    more: Value,
+    __more__: Value,
 }
 
 #[cfg(not(debug_assertions))]
@@ -359,7 +358,7 @@ struct Bad {
 fn test_flattening() {
     let ctx = Bad {
         a: 42,
-        more: Value::from(BTreeMap::from([("b", 23)])),
+        __more__: Value::from(BTreeMap::from([("b", 23)])),
     };
 
     let env = Environment::new();
@@ -370,7 +369,7 @@ fn test_flattening() {
 fn test_flattening_sub_item_good() {
     let bad = Bad {
         a: 42,
-        more: Value::from(BTreeMap::from([("b", 23)])),
+        __more__: Value::from(BTreeMap::from([("b", 23)])),
     };
 
     let ctx = context!(bad, good => "good");
@@ -387,7 +386,7 @@ fn test_flattening_sub_item_good() {
 fn test_flattening_sub_item_bad_lookup() {
     let bad = Bad {
         a: 42,
-        more: Value::from(BTreeMap::from([("b", 23)])),
+        __more__: Value::from(BTreeMap::from([("b", 23)])),
     };
 
     let ctx = context!(bad, good => "good");
@@ -402,7 +401,7 @@ fn test_flattening_sub_item_bad_lookup() {
 fn test_flattening_sub_item_bad_attr() {
     let bad = Bad {
         a: 42,
-        more: Value::from(BTreeMap::from([("b", 23)])),
+        __more__: Value::from(BTreeMap::from([("b", 23)])),
     };
 
     let ctx = context!(good => context!(bad));
@@ -424,7 +423,7 @@ fn test_flattening_sub_item_bad_attr() {
 fn test_flattening_sub_item_shielded_print() {
     let bad = Bad {
         a: 42,
-        more: Value::from(BTreeMap::from([("b", 23)])),
+        __more__: Value::from(BTreeMap::from([("b", 23)])),
     };
 
     let ctx = context!(good => context!(bad));

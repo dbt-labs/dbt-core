@@ -9,8 +9,7 @@ pub struct BigQueryAuthConfig {
     pub(crate) schema: String,
     pub(crate) execution_project: Option<String>,
     pub(crate) location: Option<String>,
-    #[serde(flatten)]
-    pub(crate) method_config: BigQueryAuthMethod,
+    pub(crate) __method_config__: BigQueryAuthMethod,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]

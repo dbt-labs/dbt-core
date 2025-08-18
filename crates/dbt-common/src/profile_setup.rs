@@ -16,8 +16,7 @@ use std::path::{Path, PathBuf};
 pub struct ProfileOutput {
     #[serde(rename = "type")]
     pub adapter_type: String,
-    #[serde(flatten)]
-    pub config: ConfigMap,
+    pub __config__: ConfigMap,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,7 +83,7 @@ impl ProfileSetup {
 
         let output = ProfileOutput {
             adapter_type: adapter.to_string(),
-            config,
+            __config__: config,
         };
 
         let mut outputs = HashMap::new();

@@ -54,7 +54,7 @@ impl TryFrom<BigQueryAuthConfig> for database::Builder {
 
         builder.with_named_option(bigquery::DATASET_ID, &value.schema)?;
 
-        match value.method_config {
+        match value.__method_config__ {
             BigQueryAuthMethod::ServiceAccount { keyfile: path } => {
                 let expanded_path = shellexpand::tilde(&path).to_string();
                 if Path::new(&expanded_path).exists() {
@@ -219,7 +219,7 @@ mod tests {
         match result {
             Ok(cfg) => {
                 assert!(matches!(
-                    cfg.method_config,
+                    cfg.__method_config__,
                     BigQueryAuthMethod::ServiceAccount { .. }
                 ));
             }
@@ -237,7 +237,7 @@ mod tests {
         match result {
             Ok(cfg) => {
                 assert!(matches!(
-                    cfg.method_config,
+                    cfg.__method_config__,
                     BigQueryAuthMethod::ServiceAccountJson { .. }
                 ));
             }
@@ -252,7 +252,7 @@ mod tests {
         let bq_auth_config = BigQueryAuthConfig{
                 database: "my_db".to_string(),
                 schema: "my_schema".to_string(),
-                method_config: BigQueryAuthMethod::ServiceAccountJson{ keyfile_json: KeyFileJsonVariants::Object(KeyFileJson {
+                __method_config__: BigQueryAuthMethod::ServiceAccountJson{ keyfile_json: KeyFileJsonVariants::Object(KeyFileJson {
                     file_type: "service_account".to_string(),
                     project_id: "bq-project".to_string(),
                     private_key_id: "xyz123".to_string(),
@@ -276,7 +276,7 @@ mod tests {
                     match option.0 {
                         adbc_core::options::OptionDatabase::Other(o) => match o.as_str() {
                             bigquery::AUTH_CREDENTIALS => {
-                                let mc = bq_auth_config.clone().method_config;
+                                let mc = bq_auth_config.clone().__method_config__;
                                 let actual: &YmlValue =
                                     &dbt_serde_yaml::from_str(value.as_str()).unwrap();
                                 let expected =
@@ -320,7 +320,7 @@ mod tests {
         let bq_auth_config = BigQueryAuthConfig {
             database: "my_db".to_string(),
             schema: "my_schema".to_string(),
-            method_config: BigQueryAuthMethod::ServiceAccount {
+            __method_config__: BigQueryAuthMethod::ServiceAccount {
                 keyfile: short_path.to_string(),
             },
             location: None,
@@ -360,11 +360,11 @@ mod tests {
         let bq_auth_config = BigQueryAuthConfig {
             database: "my_db".to_string(),
             schema: "my_schema".to_string(),
-            method_config: BigQueryAuthMethod::OauthSecrets(OAuthSecretsVariants::TemporaryToken(
-                OAuthSecretsTemporaryToken {
+            __method_config__: BigQueryAuthMethod::OauthSecrets(
+                OAuthSecretsVariants::TemporaryToken(OAuthSecretsTemporaryToken {
                     token: access_token.to_string(),
-                },
-            )),
+                }),
+            ),
             location: None,
             execution_project: None,
         };
@@ -409,7 +409,7 @@ mod tests {
             Ok(cfg) => {
                 // concrete config variant
                 assert!(matches!(
-                    cfg.method_config,
+                    cfg.__method_config__,
                     BigQueryAuthMethod::Oauth { .. }
                 ));
             }
@@ -422,7 +422,7 @@ mod tests {
         let bq_cfg = BigQueryAuthConfig {
             database: "my_db".to_owned(),
             schema: "my_schema".to_owned(),
-            method_config: BigQueryAuthMethod::Oauth {}, // empty struct
+            __method_config__: BigQueryAuthMethod::Oauth {}, // empty struct
             location: None,
             execution_project: None,
         };
