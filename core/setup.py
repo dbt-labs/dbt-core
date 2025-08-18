@@ -80,7 +80,6 @@ setup(
         # Expect compatibility with all new versions of these packages, so lower bounds only.
         "jsonschema>=3.0",
         "packaging>20.9",
-        "protobuf>=4.0.0,<5",
         "pytz>=2015.7",
         "pyyaml>=6.0",
         "typing-extensions>=3.7.4",
