@@ -4,6 +4,12 @@
     html_favicon_url = "https://raw.githubusercontent.com/apache/arrow/refs/heads/main/docs/source/_static/favicon.ico"
 )]
 #![doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/README.md"))]
+#![allow(clippy::cognitive_complexity)]
+#![allow(clippy::if_same_then_else)]
+#![allow(clippy::let_and_return)]
+#![allow(clippy::needless_bool)]
+#![allow(clippy::only_used_in_recursion)]
+#![allow(clippy::should_implement_trait)]
 
 use dbt_cancel::{Cancellable, CancellationToken, CancelledError};
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -37,6 +43,7 @@ pub mod query_ctx;
 pub use query_ctx::QueryCtx;
 
 pub mod semaphore;
+pub mod sql;
 
 #[cfg(feature = "odbc")]
 pub(crate) mod odbc;
