@@ -55,4 +55,16 @@ impl DataTests {
             },
         }
     }
+
+    pub fn test_name(&self) -> Option<&str> {
+        match self {
+            DataTests::String(test) => Some(test),
+            DataTests::CustomTest(test) => match test {
+                CustomTest::MultiKey(test) => test.name.as_deref(),
+                CustomTest::SimpleKeyValue(test) => {
+                    test.values().next().and_then(|v| v.name.as_deref())
+                }
+            },
+        }
+    }
 }

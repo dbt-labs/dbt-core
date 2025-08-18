@@ -31,7 +31,7 @@ use md5;
 use regex::Regex;
 use serde::Serialize;
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::hash::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -60,6 +60,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
         // Process tests for each version (or single resource)
         let dialect = Dialect::from_str(adapter_type)
             .map_err(|e| fs_err!(ErrorCode::Unexpected, "Failed to parse adapter type: {}", e))?;
+        let mut seen_tests: HashSet<String> = HashSet::new();
         for test_config in test_configs {
             // Handle model-level tests
             if let Some(tests) = &test_config.model_tests {
@@ -74,6 +75,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                         false,
                         io_args,
                         original_file_path,
+                        &mut seen_tests,
                     )?;
                     collected_generic_tests.push(test_asset);
                 }
@@ -86,6 +88,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                         // Need dialect to quote properly
                         let (column_name, should_quote) =
                             normalize_quote(*should_quote, adapter_type, column_name);
+
                         let quoted_column_name = if should_quote {
                             format!(
                                 "{}{}{}",
@@ -105,6 +108,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                             is_replay_mode,
                             io_args,
                             original_file_path,
+                            &mut seen_tests,
                         )?;
                         collected_generic_tests.push(test_asset);
                     }
@@ -127,6 +131,7 @@ fn persist_inner(
     is_replay_mode: bool,
     io_args: &IoArgs,
     original_file_path: &PathBuf,
+    seen_tests: &mut HashSet<String>,
 ) -> FsResult<GenericTestAsset> {
     // If this is not the root project, we need to pass the project name as a dependency package name
     let dependecy_package_name = if project_name != root_project_name {
@@ -171,6 +176,29 @@ fn persist_inner(
         &config,
         &jinja_set_vars,
     )?;
+    if !seen_tests.insert(full_name.clone()) {
+        match column_name {
+            Some(column_name) => {
+                return err!(
+                    ErrorCode::SchemaError,
+                    "dbt found two data_tests with the same name \"{}\" on column \"{}\" in \"{}\" in the file \"{}\"",
+                    full_name,
+                    column_name,
+                    test_config.resource_name,
+                    original_file_path.display()
+                );
+            }
+            None => {
+                return err!(
+                    ErrorCode::SchemaError,
+                    "dbt found two data_tests with the same name \"{}\" in \"{}\" in the file \"{}\"",
+                    full_name,
+                    test_config.resource_name,
+                    original_file_path.display()
+                );
+            }
+        }
+    }
     stdfs::write(&test_file, generated_test_sql)?;
     let dbt_asset = DbtAsset {
         path,
