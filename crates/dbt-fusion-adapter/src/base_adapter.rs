@@ -554,4 +554,14 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     ) -> FsResult<()> {
         Ok(())
     }
+
+    /// Used internally to identify if a schema is already cached
+    fn is_already_fully_cached(&self, _schema: &CatalogAndSchema) -> bool {
+        false
+    }
+
+    /// Used internally to identify if a relation is already cached
+    fn is_cached(&self, _relation: &Arc<dyn BaseRelation>) -> bool {
+        false
+    }
 }

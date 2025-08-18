@@ -238,6 +238,14 @@ impl BaseAdapter for BridgeAdapter {
         Ok(())
     }
 
+    fn is_cached(&self, relation: &Arc<dyn BaseRelation>) -> bool {
+        self.relation_cache.contains_relation(relation)
+    }
+
+    fn is_already_fully_cached(&self, schema: &CatalogAndSchema) -> bool {
+        self.relation_cache.contains_full_schema(schema)
+    }
+
     #[tracing::instrument(skip_all, level = "trace")]
     fn cache_added(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let iter = ArgsIter::new(current_function_name!(), &["relation"], args);

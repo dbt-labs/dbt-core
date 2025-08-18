@@ -176,6 +176,14 @@ impl RelationCache {
             .unwrap_or(false)
     }
 
+    /// Checks if the entire schema was cached
+    pub fn contains_full_schema(&self, schema: &CatalogAndSchema) -> bool {
+        self.schemas_and_relations
+            .get(&schema.to_string())
+            .map(|entry| entry.is_complete)
+            .unwrap_or(false)
+    }
+
     /// Checks if a relation exists in the cache
     pub fn contains_relation(&self, relation: &Arc<dyn BaseRelation>) -> bool {
         let (schema_key, relation_key) = Self::get_relation_cache_keys(relation);
