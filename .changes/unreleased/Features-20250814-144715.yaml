@@ -1,3 +1,0 @@
-kind: Features
-body: '[adapters][databricks][incremental] Implemented constraints for relation config changeset'
-time: 2025-08-14T14:47:15.933657+02:00

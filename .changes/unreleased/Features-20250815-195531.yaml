@@ -1,3 +1,0 @@
-kind: Features
-body: Added connection and credentilas lookup in dbt cloud when running dbt init
-time: 2025-08-15T19:55:31.874458+03:00

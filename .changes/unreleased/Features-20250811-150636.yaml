@@ -1,3 +1,0 @@
-kind: Features
-body: Compatibility warnings from dependencies will now be grouped as a single message per package; use --show-all-deprecations to display every individual warnin
-time: 2025-08-11T15:06:36.710079319-07:00

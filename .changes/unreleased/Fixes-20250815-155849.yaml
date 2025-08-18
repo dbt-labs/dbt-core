@@ -1,3 +1,0 @@
-kind: Fixes
-body: Make modules.re.match() return a truthy value on a match
-time: 2025-08-15T15:58:49.024187+02:00
