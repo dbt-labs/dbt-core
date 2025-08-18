@@ -48,7 +48,7 @@ jobs:
       # explicitly checkout the performance runner from main regardless of which
       # version we are modeling.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: main
 
@@ -87,7 +87,7 @@ jobs:
       # explicitly checkout the performance runner from main regardless of which
       # version we are modeling.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: main
 
@@ -160,7 +160,7 @@ jobs:
 
       # explicitly checkout main to get the latest project definitions
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: main
 
@@ -225,7 +225,7 @@ jobs:
           echo "release_branch: ${{ needs.set-variables.outputs.release_branch }}"
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ matrix.base-branch }}
 
