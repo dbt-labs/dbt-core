@@ -7,7 +7,7 @@
 
 use fancy_regex::{Captures, Expander, Regex}; // like python regex, fancy_regex supports lookadheds/lookbehinds
 use minijinja::{value::Object, Error, ErrorKind, Value};
-use std::{collections::BTreeMap, iter};
+use std::{collections::BTreeMap, iter, sync::Arc};
 
 /// Create a namespace with `re`-like functions for pattern matching.
 pub fn create_re_namespace() -> BTreeMap<String, Value> {
@@ -360,6 +360,10 @@ impl Object for Capture {
             ))
         }
     }
+
+    fn is_true(self: &Arc<Self>) -> bool {
+        !self.groups.is_empty()
+    }
 }
 
 #[cfg(test)]
@@ -384,5 +388,29 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(result.to_string(), "_A_BAB $1");
+    }
+
+    #[test]
+    fn test_re_match() {
+        let result = re_match(&[
+            Value::from(".*".to_string()),
+            Value::from("xyz".to_string()),
+        ])
+        .unwrap();
+        assert!(result.is_true());
+
+        let result = re_match(&[
+            Value::from("\\d{10}".to_string()),
+            Value::from("1234567890".to_string()),
+        ])
+        .unwrap();
+        assert!(result.is_true());
+
+        let result = re_match(&[
+            Value::from("\\d{10}".to_string()),
+            Value::from("xyz".to_string()),
+        ])
+        .unwrap();
+        assert!(!result.is_true());
     }
 }
