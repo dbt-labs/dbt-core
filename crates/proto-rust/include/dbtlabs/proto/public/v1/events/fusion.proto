@@ -341,3 +341,52 @@ message RunModel {
   // The resource type of the node (model, test, etc.)
   string resource_type = 20;
 }
+
+message Onboarding {
+  option (v1.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+  option (v1.common.vortex_enabled) = true;
+
+  // This field is a toggle to enable enrichment of the message by the Vortex service.
+  v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+  // Unique identifier for this event (UUID).
+  // Required.
+  string event_id = 2;
+
+  // Globally unique identifier for the fusion invocation.
+  // Required.
+  string invocation_id = 3;
+
+  // Onboarding semantics.
+  OnboardingScreen screen = 4;  // Which screen/step
+  OnboardingAction action = 5;  // What happened on that screen
+  bool success = 6;   // Only for RUN_FINISHED/STEP_COMPLETED; ignored otherwise
+}
+
+enum OnboardingScreen {
+  SCREEN_UNSPECIFIED = 0;
+  WELCOME            = 1;
+  PROFILE_CHECK      = 2;
+  PROFILE_FOUND      = 3;
+  PROFILE_SETUP      = 4;
+  LINK_ACCOUNT       = 5;
+  DBT_PARSE          = 6;
+  PARSE_ERROR_AUTOFIX= 7;
+  DBT_PARSE_RETRY    = 8;
+  PARSE_ERROR_FAIL   = 9;
+  COMPILE_NO_SA      = 10;
+  COMPILE_NO_SA_FAIL = 11;
+  COMPILE            = 12;
+  COMPILE_FAIL       = 13;
+  SUCCESS            = 14;
+}
+
+enum OnboardingAction {
+  ACTION_UNSPECIFIED = 0;
+  INITIATED   = 1;  // flow start (WELCOME)
+  SCREEN_SHOWN= 2;  // screen displayed
+  RUN_STARTED = 3;  // parse/compile began
+  RUN_FINISHED= 4;  // parse/compile ended (use success)
+  STEP_COMPLETED = 5; // checkpoint reached (use success)
+  STEP_FAILED    = 6; // explicit failure
+}

@@ -756,6 +756,384 @@ impl<'de> serde::Deserialize<'de> for InvocationEnv {
         deserializer.deserialize_struct("v1.public.events.fusion.InvocationEnv", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for Onboarding {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.enrichment.is_some() {
+            len += 1;
+        }
+        if !self.event_id.is_empty() {
+            len += 1;
+        }
+        if !self.invocation_id.is_empty() {
+            len += 1;
+        }
+        if self.screen != 0 {
+            len += 1;
+        }
+        if self.action != 0 {
+            len += 1;
+        }
+        if self.success {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("v1.public.events.fusion.Onboarding", len)?;
+        if let Some(v) = self.enrichment.as_ref() {
+            struct_ser.serialize_field("enrichment", v)?;
+        }
+        if !self.event_id.is_empty() {
+            struct_ser.serialize_field("eventId", &self.event_id)?;
+        }
+        if !self.invocation_id.is_empty() {
+            struct_ser.serialize_field("invocationId", &self.invocation_id)?;
+        }
+        if self.screen != 0 {
+            let v = OnboardingScreen::try_from(self.screen)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.screen)))?;
+            struct_ser.serialize_field("screen", &v)?;
+        }
+        if self.action != 0 {
+            let v = OnboardingAction::try_from(self.action)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.action)))?;
+            struct_ser.serialize_field("action", &v)?;
+        }
+        if self.success {
+            struct_ser.serialize_field("success", &self.success)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for Onboarding {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "enrichment",
+            "event_id",
+            "eventId",
+            "invocation_id",
+            "invocationId",
+            "screen",
+            "action",
+            "success",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Enrichment,
+            EventId,
+            InvocationId,
+            Screen,
+            Action,
+            Success,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "enrichment" => Ok(GeneratedField::Enrichment),
+                            "eventId" | "event_id" => Ok(GeneratedField::EventId),
+                            "invocationId" | "invocation_id" => Ok(GeneratedField::InvocationId),
+                            "screen" => Ok(GeneratedField::Screen),
+                            "action" => Ok(GeneratedField::Action),
+                            "success" => Ok(GeneratedField::Success),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = Onboarding;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct v1.public.events.fusion.Onboarding")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<Onboarding, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut enrichment__ = None;
+                let mut event_id__ = None;
+                let mut invocation_id__ = None;
+                let mut screen__ = None;
+                let mut action__ = None;
+                let mut success__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Enrichment => {
+                            if enrichment__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("enrichment"));
+                            }
+                            enrichment__ = map_.next_value()?;
+                        }
+                        GeneratedField::EventId => {
+                            if event_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("eventId"));
+                            }
+                            event_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::InvocationId => {
+                            if invocation_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("invocationId"));
+                            }
+                            invocation_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Screen => {
+                            if screen__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("screen"));
+                            }
+                            screen__ = Some(map_.next_value::<OnboardingScreen>()? as i32);
+                        }
+                        GeneratedField::Action => {
+                            if action__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("action"));
+                            }
+                            action__ = Some(map_.next_value::<OnboardingAction>()? as i32);
+                        }
+                        GeneratedField::Success => {
+                            if success__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("success"));
+                            }
+                            success__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(Onboarding {
+                    enrichment: enrichment__,
+                    event_id: event_id__.unwrap_or_default(),
+                    invocation_id: invocation_id__.unwrap_or_default(),
+                    screen: screen__.unwrap_or_default(),
+                    action: action__.unwrap_or_default(),
+                    success: success__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("v1.public.events.fusion.Onboarding", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for OnboardingAction {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let variant = match self {
+            Self::ActionUnspecified => "ACTION_UNSPECIFIED",
+            Self::Initiated => "INITIATED",
+            Self::ScreenShown => "SCREEN_SHOWN",
+            Self::RunStarted => "RUN_STARTED",
+            Self::RunFinished => "RUN_FINISHED",
+            Self::StepCompleted => "STEP_COMPLETED",
+            Self::StepFailed => "STEP_FAILED",
+        };
+        serializer.serialize_str(variant)
+    }
+}
+impl<'de> serde::Deserialize<'de> for OnboardingAction {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "ACTION_UNSPECIFIED",
+            "INITIATED",
+            "SCREEN_SHOWN",
+            "RUN_STARTED",
+            "RUN_FINISHED",
+            "STEP_COMPLETED",
+            "STEP_FAILED",
+        ];
+
+        struct GeneratedVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = OnboardingAction;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(formatter, "expected one of: {:?}", &FIELDS)
+            }
+
+            fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Signed(v), &self)
+                    })
+            }
+
+            fn visit_u64<E>(self, v: u64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Unsigned(v), &self)
+                    })
+            }
+
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "ACTION_UNSPECIFIED" => Ok(OnboardingAction::ActionUnspecified),
+                    "INITIATED" => Ok(OnboardingAction::Initiated),
+                    "SCREEN_SHOWN" => Ok(OnboardingAction::ScreenShown),
+                    "RUN_STARTED" => Ok(OnboardingAction::RunStarted),
+                    "RUN_FINISHED" => Ok(OnboardingAction::RunFinished),
+                    "STEP_COMPLETED" => Ok(OnboardingAction::StepCompleted),
+                    "STEP_FAILED" => Ok(OnboardingAction::StepFailed),
+                    _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
+                }
+            }
+        }
+        deserializer.deserialize_any(GeneratedVisitor)
+    }
+}
+impl serde::Serialize for OnboardingScreen {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let variant = match self {
+            Self::ScreenUnspecified => "SCREEN_UNSPECIFIED",
+            Self::Welcome => "WELCOME",
+            Self::ProfileCheck => "PROFILE_CHECK",
+            Self::ProfileFound => "PROFILE_FOUND",
+            Self::ProfileSetup => "PROFILE_SETUP",
+            Self::LinkAccount => "LINK_ACCOUNT",
+            Self::DbtParse => "DBT_PARSE",
+            Self::ParseErrorAutofix => "PARSE_ERROR_AUTOFIX",
+            Self::DbtParseRetry => "DBT_PARSE_RETRY",
+            Self::ParseErrorFail => "PARSE_ERROR_FAIL",
+            Self::CompileNoSa => "COMPILE_NO_SA",
+            Self::CompileNoSaFail => "COMPILE_NO_SA_FAIL",
+            Self::Compile => "COMPILE",
+            Self::CompileFail => "COMPILE_FAIL",
+            Self::Success => "SUCCESS",
+        };
+        serializer.serialize_str(variant)
+    }
+}
+impl<'de> serde::Deserialize<'de> for OnboardingScreen {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "SCREEN_UNSPECIFIED",
+            "WELCOME",
+            "PROFILE_CHECK",
+            "PROFILE_FOUND",
+            "PROFILE_SETUP",
+            "LINK_ACCOUNT",
+            "DBT_PARSE",
+            "PARSE_ERROR_AUTOFIX",
+            "DBT_PARSE_RETRY",
+            "PARSE_ERROR_FAIL",
+            "COMPILE_NO_SA",
+            "COMPILE_NO_SA_FAIL",
+            "COMPILE",
+            "COMPILE_FAIL",
+            "SUCCESS",
+        ];
+
+        struct GeneratedVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = OnboardingScreen;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(formatter, "expected one of: {:?}", &FIELDS)
+            }
+
+            fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Signed(v), &self)
+                    })
+            }
+
+            fn visit_u64<E>(self, v: u64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Unsigned(v), &self)
+                    })
+            }
+
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "SCREEN_UNSPECIFIED" => Ok(OnboardingScreen::ScreenUnspecified),
+                    "WELCOME" => Ok(OnboardingScreen::Welcome),
+                    "PROFILE_CHECK" => Ok(OnboardingScreen::ProfileCheck),
+                    "PROFILE_FOUND" => Ok(OnboardingScreen::ProfileFound),
+                    "PROFILE_SETUP" => Ok(OnboardingScreen::ProfileSetup),
+                    "LINK_ACCOUNT" => Ok(OnboardingScreen::LinkAccount),
+                    "DBT_PARSE" => Ok(OnboardingScreen::DbtParse),
+                    "PARSE_ERROR_AUTOFIX" => Ok(OnboardingScreen::ParseErrorAutofix),
+                    "DBT_PARSE_RETRY" => Ok(OnboardingScreen::DbtParseRetry),
+                    "PARSE_ERROR_FAIL" => Ok(OnboardingScreen::ParseErrorFail),
+                    "COMPILE_NO_SA" => Ok(OnboardingScreen::CompileNoSa),
+                    "COMPILE_NO_SA_FAIL" => Ok(OnboardingScreen::CompileNoSaFail),
+                    "COMPILE" => Ok(OnboardingScreen::Compile),
+                    "COMPILE_FAIL" => Ok(OnboardingScreen::CompileFail),
+                    "SUCCESS" => Ok(OnboardingScreen::Success),
+                    _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
+                }
+            }
+        }
+        deserializer.deserialize_any(GeneratedVisitor)
+    }
+}
 impl serde::Serialize for PackageInstall {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>

@@ -404,3 +404,155 @@ impl ::prost::Name for RunModel {
         "/v1.public.events.fusion.RunModel".into()
     }
 }
+#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Onboarding {
+    /// This field is a toggle to enable enrichment of the message by the Vortex service.
+    #[prost(message, optional, tag = "1")]
+    pub enrichment: ::core::option::Option<
+        super::super::super::events::vortex::VortexMessageEnrichment,
+    >,
+    /// Unique identifier for this event (UUID).
+    /// Required.
+    #[prost(string, tag = "2")]
+    pub event_id: ::prost::alloc::string::String,
+    /// Globally unique identifier for the fusion invocation.
+    /// Required.
+    #[prost(string, tag = "3")]
+    pub invocation_id: ::prost::alloc::string::String,
+    /// Onboarding semantics.
+    ///
+    /// Which screen/step
+    #[prost(enumeration = "OnboardingScreen", tag = "4")]
+    pub screen: i32,
+    /// What happened on that screen
+    #[prost(enumeration = "OnboardingAction", tag = "5")]
+    pub action: i32,
+    /// Only for RUN_FINISHED/STEP_COMPLETED; ignored otherwise
+    #[prost(bool, tag = "6")]
+    pub success: bool,
+}
+impl ::prost::Name for Onboarding {
+    const NAME: &'static str = "Onboarding";
+    const PACKAGE: &'static str = "v1.public.events.fusion";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.events.fusion.Onboarding".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.events.fusion.Onboarding".into()
+    }
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum OnboardingScreen {
+    ScreenUnspecified = 0,
+    Welcome = 1,
+    ProfileCheck = 2,
+    ProfileFound = 3,
+    ProfileSetup = 4,
+    LinkAccount = 5,
+    DbtParse = 6,
+    ParseErrorAutofix = 7,
+    DbtParseRetry = 8,
+    ParseErrorFail = 9,
+    CompileNoSa = 10,
+    CompileNoSaFail = 11,
+    Compile = 12,
+    CompileFail = 13,
+    Success = 14,
+}
+impl OnboardingScreen {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::ScreenUnspecified => "SCREEN_UNSPECIFIED",
+            Self::Welcome => "WELCOME",
+            Self::ProfileCheck => "PROFILE_CHECK",
+            Self::ProfileFound => "PROFILE_FOUND",
+            Self::ProfileSetup => "PROFILE_SETUP",
+            Self::LinkAccount => "LINK_ACCOUNT",
+            Self::DbtParse => "DBT_PARSE",
+            Self::ParseErrorAutofix => "PARSE_ERROR_AUTOFIX",
+            Self::DbtParseRetry => "DBT_PARSE_RETRY",
+            Self::ParseErrorFail => "PARSE_ERROR_FAIL",
+            Self::CompileNoSa => "COMPILE_NO_SA",
+            Self::CompileNoSaFail => "COMPILE_NO_SA_FAIL",
+            Self::Compile => "COMPILE",
+            Self::CompileFail => "COMPILE_FAIL",
+            Self::Success => "SUCCESS",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "SCREEN_UNSPECIFIED" => Some(Self::ScreenUnspecified),
+            "WELCOME" => Some(Self::Welcome),
+            "PROFILE_CHECK" => Some(Self::ProfileCheck),
+            "PROFILE_FOUND" => Some(Self::ProfileFound),
+            "PROFILE_SETUP" => Some(Self::ProfileSetup),
+            "LINK_ACCOUNT" => Some(Self::LinkAccount),
+            "DBT_PARSE" => Some(Self::DbtParse),
+            "PARSE_ERROR_AUTOFIX" => Some(Self::ParseErrorAutofix),
+            "DBT_PARSE_RETRY" => Some(Self::DbtParseRetry),
+            "PARSE_ERROR_FAIL" => Some(Self::ParseErrorFail),
+            "COMPILE_NO_SA" => Some(Self::CompileNoSa),
+            "COMPILE_NO_SA_FAIL" => Some(Self::CompileNoSaFail),
+            "COMPILE" => Some(Self::Compile),
+            "COMPILE_FAIL" => Some(Self::CompileFail),
+            "SUCCESS" => Some(Self::Success),
+            _ => None,
+        }
+    }
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum OnboardingAction {
+    ActionUnspecified = 0,
+    /// flow start (WELCOME)
+    Initiated = 1,
+    /// screen displayed
+    ScreenShown = 2,
+    /// parse/compile began
+    RunStarted = 3,
+    /// parse/compile ended (use success)
+    RunFinished = 4,
+    /// checkpoint reached (use success)
+    StepCompleted = 5,
+    /// explicit failure
+    StepFailed = 6,
+}
+impl OnboardingAction {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::ActionUnspecified => "ACTION_UNSPECIFIED",
+            Self::Initiated => "INITIATED",
+            Self::ScreenShown => "SCREEN_SHOWN",
+            Self::RunStarted => "RUN_STARTED",
+            Self::RunFinished => "RUN_FINISHED",
+            Self::StepCompleted => "STEP_COMPLETED",
+            Self::StepFailed => "STEP_FAILED",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "ACTION_UNSPECIFIED" => Some(Self::ActionUnspecified),
+            "INITIATED" => Some(Self::Initiated),
+            "SCREEN_SHOWN" => Some(Self::ScreenShown),
+            "RUN_STARTED" => Some(Self::RunStarted),
+            "RUN_FINISHED" => Some(Self::RunFinished),
+            "STEP_COMPLETED" => Some(Self::StepCompleted),
+            "STEP_FAILED" => Some(Self::StepFailed),
+            _ => None,
+        }
+    }
+}
