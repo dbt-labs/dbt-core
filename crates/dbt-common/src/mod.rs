@@ -6,6 +6,7 @@ pub mod adapter_config;
 pub mod atomic;
 pub mod cancellation;
 pub mod constants;
+pub mod dbt_cloud_client;
 pub mod error_counter;
 pub mod init;
 pub mod io_utils;

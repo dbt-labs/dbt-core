@@ -244,7 +244,7 @@ pub fn check_if_profile_exists(profile_name: &str, profiles_dir: &str) -> FsResu
 }
 
 /// Main init workflow that handles both project creation and profile setup
-pub fn run_init_workflow(
+pub async fn run_init_workflow(
     project_name: Option<String>,
     skip_profile_setup: bool,
     existing_profile: Option<String>,
@@ -280,7 +280,7 @@ pub fn run_init_workflow(
 
         if !skip_profile_setup {
             let profile_name = get_profile_name_from_project()?;
-            profile_setup.setup_profile(&profile_name)?;
+            profile_setup.setup_profile(&profile_name).await?;
         }
 
         return Ok(());
@@ -343,7 +343,7 @@ pub fn run_init_workflow(
 
             // Only run profile setup if we don't have an existing profile specified
             if existing_profile.is_none() {
-                profile_setup.setup_profile(&profile_name)?;
+                profile_setup.setup_profile(&profile_name).await?;
             }
         }
     }

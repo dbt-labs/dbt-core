@@ -13,10 +13,10 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
+dbt-cloud-api = { workspace = true }
 dbt-error = { workspace = true }
 dbt-frontend-common = { workspace = true }
 dbt-telemetry = { workspace = true }
-
 # leaf dependencies (depend on little more than std lib)
 dbt-cancel = { workspace = true }
 dbt-proc-macros = { workspace = true }
@@ -26,9 +26,11 @@ datafusion = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 counter = { workspace = true }
 dialoguer = { workspace = true }
+dirs = { workspace = true }
 int-enum = { workspace = true }
 itertools = { workspace = true }
 regex = { workspace = true }
+reqwest = { workspace = true }
 unicode-segmentation = { version = "1.12" }
 uuid = { workspace = true }
 

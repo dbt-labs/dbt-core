@@ -104,7 +104,9 @@ async fn do_execute_fs(arg: SystemArgs, cli: Cli, token: CancellationToken) -> F
             project_name,
             init_args.skip_profile_setup,
             init_args.common_args.profile.clone(), // Get profile from common args
-        ) {
+        )
+        .await
+        {
             Ok(()) => {
                 // If profile setup was not skipped, run debug to validate credentials
                 if init_args.skip_profile_setup {

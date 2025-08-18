@@ -1,0 +1,19 @@
+[package]
+name = "dbt-cloud-api"
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+
+[dependencies]
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_repr = { workspace = true }
+serde_with = { workspace = true }
+url = { workspace = true }
