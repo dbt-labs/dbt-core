@@ -567,10 +567,12 @@ impl FromStr for RunCacheMode {
 #[clap(rename_all = "lowercase")]
 pub enum ShowOptions {
     Progress,
-    ProgressRun,
+    ProgressHydrate,
     ProgressParse,
     ProgressRender,
     ProgressAnalyze,
+    ProgressRun,
+    Completed,
     InputFiles,
     Manifest,
     Schedule,
@@ -601,6 +603,7 @@ impl ShowOptions {
             ShowOptions::Stats => BLUE.apply_to("Statistics").to_string(),
             // remark: these come with own titles..
             ShowOptions::Progress
+            | ShowOptions::ProgressHydrate
             | ShowOptions::ProgressRun
             | ShowOptions::ProgressParse
             | ShowOptions::ProgressRender
@@ -611,6 +614,7 @@ impl ShowOptions {
             | ShowOptions::All
             | ShowOptions::RawLineage
             | ShowOptions::TaskGraph
+            | ShowOptions::Completed
             | ShowOptions::None => "".to_string(),
         }
     }

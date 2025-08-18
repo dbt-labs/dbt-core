@@ -16,6 +16,14 @@ use crate::{
 /// should own the progress bar manager itself
 pub struct ProgressBarLayer;
 
+fn format_progress_item(unique_id: &str) -> String {
+    // Split the unique_id into parts by '.' and take the first and last as the resource type and name
+    let parts: Vec<&str> = unique_id.split('.').collect();
+    let resource_type = parts.first().unwrap_or(&"unknown");
+    let name = parts.last().unwrap_or(&"unknown");
+    format!("{resource_type}:{name}")
+}
+
 fn get_progress_params(
     attributes: &TelemetryAttributes,
 ) -> Option<(&'static str, u64, Option<&str>)> {
@@ -75,11 +83,14 @@ where
                         _TERM_EVENT_:serde = TermEvent::start_bar(bar_uid.into(), total);
                         "Starting progress bar with uid: {bar_uid}, total: {total}"
                     ),
-                    Some(item) => log::info!(
-                        _TERM_ONLY_ = true,
-                        _TERM_EVENT_:serde = TermEvent::add_bar_context_item(bar_uid.into(), item.into());
-                        "Updating progress for uid: {bar_uid}, item: {item}"
-                    ),
+                    Some(item) => {
+                        let formatted_item = format_progress_item(item);
+                        log::info!(
+                            _TERM_ONLY_ = true,
+                            _TERM_EVENT_:serde = TermEvent::add_bar_context_item(bar_uid.into(), formatted_item.clone());
+                            "Updating progress for uid: {bar_uid}, item: {formatted_item}"
+                        )
+                    }
                     _ => {}
                 };
             }
@@ -114,17 +125,18 @@ where
                         {
                             "failed"
                         } else {
-                            "success"
+                            "succeeded"
                         };
 
+                        let formatted_item = format_progress_item(item);
                         log::info!(
                             _TERM_ONLY_ = true,
                             _STAT_EVENT_:serde = StatEvent::counter(
                                 status,
                                 1
                             ),
-                            _TERM_EVENT_:serde = TermEvent::finish_bar_context_item(bar_uid.into(), item.into());
-                            "Finishing item: {bar_uid} on progress bar: {item}"
+                            _TERM_EVENT_:serde = TermEvent::finish_bar_context_item(bar_uid.into(), formatted_item.clone());
+                            "Finishing item: {bar_uid} on progress bar: {formatted_item}"
                         )
                     }
                     _ => {}

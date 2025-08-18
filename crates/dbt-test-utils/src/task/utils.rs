@@ -11,6 +11,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
+use once_cell::sync::Lazy;
 use regex::Regex;
 
 use dbt_common::{
@@ -19,6 +20,25 @@ use dbt_common::{
     stdfs::{self},
     tokiofs, unexpected_err,
 };
+
+// Pre-compiled regex patterns for optimal performance
+static SCHEMA_PATTERN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?i)fusion_tests_schema__[a-zA-Z0-9_]*").unwrap());
+static ISO_TIMESTAMP_PATTERN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z").unwrap());
+static TIME_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\b\d{2}:\d{2}:\d{2}\b").unwrap());
+static BRACKETED_DURATION_PATTERN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"\[\s*\d+(?:\.\d+)?s\s*\]").unwrap());
+static IN_DURATION_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    // Matches: "in 1s", "in 500ms", "in 1s 298ms", "in 2m 10s", etc.
+    Regex::new(r"\bin\s+\d+(?:\.\d+)?(?:ns|us|μs|µs|ms|s|m|h)(?:\s+\d+(?:\.\d+)?(?:ns|us|μs|µs|ms|s|m|h))*\b")
+        .unwrap()
+});
+static MULTI_UNIT_DURATION_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    // Matches sequences of 2+ duration tokens (e.g., "32ms 101us", "4s 703ms 195us 939ns")
+    Regex::new(r"\b\d+(?:\.\d+)?(?:ns|us|μs|µs|ms|s|m|h)(?:\s+\d+(?:\.\d+)?(?:ns|us|μs|µs|ms|s|m|h)){1,}\b").unwrap()
+});
+static AGE_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\bage:\s*\d+").unwrap());
 
 /// Copies a directory and its contents, excluding .gitignored files.
 pub fn copy_dir_non_ignored(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> FsResult<()> {
@@ -155,41 +175,41 @@ pub fn maybe_normalize_slashes(output: String) -> String {
 }
 
 pub fn maybe_normalize_schema_name(output: String) -> String {
-    let parts: Vec<&str> = output.split('.').collect();
-    let mut result = Vec::new();
-    let mut i = 0;
-    while i < parts.len() {
-        if parts[i].to_lowercase().contains("fusion_tests_schema__") {
-            result.push("fusion_tests_schema__replaced");
-        } else {
-            result.push(parts[i]);
-        }
-        i += 1;
-    }
-    result.join(".")
+    // Use pre-compiled regex to replace schema patterns like "fusion_tests_schema__alex"
+    // with "fusion_tests_schema__replaced" without breaking duration patterns like "44.65s"
+    SCHEMA_PATTERN
+        .replace_all(&output, "fusion_tests_schema__replaced")
+        .to_string()
 }
 
 pub fn maybe_normalize_time(output: String) -> String {
     let mut result = output;
+
     // Replace ISO 8601 timestamps like "2025-05-27T22:38:47.667Z" and "2017-09-01T00:00:00Z"
-    let iso_regex = Regex::new(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z").unwrap();
-    result = iso_regex
+    result = ISO_TIMESTAMP_PATTERN
         .replace_all(&result, "YYYY-MM-DDTHH:MM:SS.sssZ")
         .to_string();
 
     // Replace time formats like "15:39:21"
-    let time_regex = Regex::new(r"\b\d{2}:\d{2}:\d{2}\b").unwrap();
-    result = time_regex.replace_all(&result, "HH:MM:SS").to_string();
+    result = TIME_PATTERN.replace_all(&result, "HH:MM:SS").to_string();
 
-    // Replace duration formats like "1ms", "123s", etc. and multiple durations with spaces
-    let duration_regex = Regex::new(r"(?:\b\d+(?:h|m|s|ms|us|ns)\b\s*)+").unwrap();
-    result = duration_regex
-        .replace_all(&result, "duration\n")
+    // Replace bracketed duration formats like "[ 44.65s]" with "[000.00s]"
+    result = BRACKETED_DURATION_PATTERN
+        .replace_all(&result, "[000.00s]")
+        .to_string();
+
+    // Replace trailing "in ..." duration phrases with a stable token
+    result = IN_DURATION_PATTERN
+        .replace_all(&result, "in duration")
+        .to_string();
+
+    // Replace multi-unit duration sequences like "32ms 101us 694ns" with a stable token
+    result = MULTI_UNIT_DURATION_PATTERN
+        .replace_all(&result, "duration")
         .to_string();
 
     // Replace age patterns like "age: 244165330" with normalized value
-    let age_regex = Regex::new(r"\bage:\s*\d+").unwrap();
-    result = age_regex
+    result = AGE_PATTERN
         .replace_all(&result, "age: NORMALIZED")
         .to_string();
 

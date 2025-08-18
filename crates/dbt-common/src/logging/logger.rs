@@ -40,12 +40,12 @@ struct LoggerConfig {
 pub enum LogFormat {
     Text,
     Json,
-    Fancy,
+    Default,
 }
 
 impl Default for LogFormat {
     fn default() -> Self {
-        Self::Text
+        Self::Default
     }
 }
 impl Display for LogFormat {
@@ -53,7 +53,7 @@ impl Display for LogFormat {
         match self {
             LogFormat::Text => write!(f, "text"),
             LogFormat::Json => write!(f, "json"),
-            LogFormat::Fancy => write!(f, "fancy"),
+            LogFormat::Default => write!(f, "default"),
         }
     }
 }
@@ -310,7 +310,7 @@ impl log::Log for Logger {
                     tracer.log(&record.to_builder().args(format_args!("{text}")).build());
                 }
                 _ => match self.config.format {
-                    LogFormat::Text | LogFormat::Fancy => {
+                    LogFormat::Text | LogFormat::Default => {
                         let mut text = record.args().to_string();
                         if self.remove_ansi_codes {
                             text = remove_ansi_codes(&text);
@@ -422,7 +422,7 @@ impl MultiLoggerBuilder {
         let stdout_logger = self.make_stdout_logger(log_config);
         let stderr_logger = self.make_stderr_logger(log_config);
 
-        if log_config.log_format == LogFormat::Fancy {
+        if log_config.log_format == LogFormat::Default {
             let mut fancy_logger =
                 super::term::FancyLogger::new(vec![stdout_logger, stderr_logger]);
             fancy_logger.start_ticker();

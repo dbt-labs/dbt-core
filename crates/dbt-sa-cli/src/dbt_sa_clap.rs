@@ -250,7 +250,7 @@ pub struct CommonArgs {
     pub otm_file_name: Option<String>,
 
     /// Set logging format; use --log-format-file to override.
-    #[arg(global = true, long, env = "DBT_LOG_FORMAT", default_value_t = LogFormat::Text,)]
+    #[arg(global = true, long, env = "DBT_LOG_FORMAT", default_value_t = LogFormat::Default,)]
     pub log_format: LogFormat,
 
     /// Set log file format, overriding the default and --log-format setting.
@@ -457,13 +457,7 @@ impl CommonArgs {
         } else if self.show.contains(&ShowOptions::None) {
             HashSet::new()
         } else if self.show.is_empty() {
-            HashSet::from_iter(vec![
-                ShowOptions::Progress,
-                ShowOptions::ProgressParse,
-                ShowOptions::ProgressRender,
-                ShowOptions::ProgressAnalyze,
-                ShowOptions::ProgressRun,
-            ])
+            HashSet::from_iter(vec![ShowOptions::Progress, ShowOptions::Completed])
         } else {
             self.show
                 .iter()
@@ -473,9 +467,11 @@ impl CommonArgs {
                         vec![
                             ShowOptions::Progress,
                             ShowOptions::ProgressParse,
+                            ShowOptions::ProgressHydrate,
                             ShowOptions::ProgressRender,
                             ShowOptions::ProgressAnalyze,
                             ShowOptions::ProgressRun,
+                            ShowOptions::Completed,
                         ]
                     } else {
                         vec![opt]

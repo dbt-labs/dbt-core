@@ -62,6 +62,9 @@ impl ExecuteAndCompare {
         use_recording: bool,
     ) -> Self {
         cmd_vec.push("--threads=1".to_string());
+        if !cmd_vec.iter().any(|s| *s == "--log-format") {
+            cmd_vec.push("--log-format=text".to_string());
+        }
 
         Self {
             name,
@@ -80,6 +83,9 @@ impl ExecuteAndCompare {
         threads: usize,
     ) -> Self {
         cmd_vec.push(format!("--threads={threads}"));
+        if !cmd_vec.iter().any(|s| *s == "--log-format") {
+            cmd_vec.push("--log-format=text".to_string());
+        }
 
         Self {
             name,

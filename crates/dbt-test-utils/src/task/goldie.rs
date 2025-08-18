@@ -46,6 +46,7 @@ fn postprocess_golden(content: String, sort_output: bool) -> String {
     let res = [
         maybe_normalize_slashes,
         maybe_normalize_schema_name,
+        maybe_normalize_time,
         normalize_version,
         maybe_normalize_tmp_paths,
     ]
@@ -284,5 +285,42 @@ mod tests {
     fn test_filter_repl_prompt() {
         let lines = filter_lines_internal("abc \n0(snowflake[local])> \n 123".to_string(), true);
         assert_eq!("abc \n\n 123", lines);
+    }
+
+    #[test]
+    fn test_normalize_time() {
+        let line = " Succeeded [ 44.65s] test  fusion_tests_schema__ga_analytics_regression__alex.source_unique_incident_io_severity_id";
+        let postprocess_actual = postprocess_actual(line.to_string(), true);
+        assert_eq!(
+            " Succeeded [000.00s] test  fusion_tests_schema__replaced.source_unique_incident_io_severity_id",
+            postprocess_actual
+        );
+    }
+
+    #[test]
+    fn test_normalize_schema_case_insensitive() {
+        let line = "FUSION_REGRESSION_TESTING_CLONE.FUSION_TESTS_SCHEMA__ALEX.SELF_SERVICE_ACCOUNTING_ACTIVITY_SNAPSHOT";
+        let postprocess_actual = postprocess_actual(line.to_string(), false);
+        assert_eq!(
+            "FUSION_REGRESSION_TESTING_CLONE.fusion_tests_schema__replaced.SELF_SERVICE_ACCOUNTING_ACTIVITY_SNAPSHOT",
+            postprocess_actual
+        );
+    }
+
+    #[test]
+    fn test_normalize_multi_unit_duration_phrase() {
+        let line = "Finished 'run' target 'databricks' with 1 error in 4s 703ms 195us 939ns";
+        let postprocess_actual = postprocess_actual(line.to_string(), false);
+        assert_eq!(
+            "Finished 'run' target 'databricks' with 1 error in duration",
+            postprocess_actual
+        );
+    }
+
+    #[test]
+    fn test_normalize_multi_unit_duration_standalone() {
+        let line = "32ms 101us 694ns";
+        let postprocess_actual = postprocess_actual(line.to_string(), false);
+        assert_eq!("duration", postprocess_actual);
     }
 }

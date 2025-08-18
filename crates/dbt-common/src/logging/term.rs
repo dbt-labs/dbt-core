@@ -19,10 +19,11 @@ use unicode_segmentation::UnicodeSegmentation as _;
 
 use crate::logging::events::StatEvent;
 use crate::logging::events::TermEvent;
+use crate::pretty_string::{DIM, GREEN, RED, YELLOW};
 
-const SLOW_CONTEXT_THRESHOLD: Duration = Duration::from_secs(10);
+const SLOW_CONTEXT_THRESHOLD: Duration = Duration::from_secs(300);
 
-const BORDERLINE_CONTEXT_THRESHOLD: Duration = Duration::from_secs(5);
+const BORDERLINE_CONTEXT_THRESHOLD: Duration = Duration::from_secs(60);
 
 /// Checks if the given log record is a terminal control-only record. Can be
 /// used to short-circuit log delegation to child loggers.
@@ -37,54 +38,25 @@ pub fn is_term_control_only(record: &log::Record) -> bool {
 
 pub enum ProgressStyleType {
     Spinner,
-    ArrowBar,
-    ArrowBarWithCounters,
+    FancyWideBar,
+    FancyThinBarWithCounters,
 }
 
 impl ProgressStyleType {
     pub fn get_style(&self) -> ProgressStyle {
         match self {
             ProgressStyleType::Spinner => ProgressStyle::with_template(
-                "{prefix:.cyan.bold} {spinner:.gray} [{elapsed}] {counters} {context}",
+                "{prefix:.cyan.bold} {spinner:.green.bold} [{elapsed}] {counters} {context}",
             )
+            .expect("Progress style template is valid"),
+        ProgressStyleType::FancyWideBar => ProgressStyle::default_bar()
+            .template("{prefix:.cyan.bold} {spinner:.green} ▐{bar:20.bright_cyan/dim}▌ {pos}/{human_len} [{elapsed}]")
             .expect("Progress style template is valid")
-            // .tick_strings(&["|", "/", "—", "\\"]),
-            .tick_strings(&[
-                "[>         ]",
-                "[=>        ]",
-                "[==>       ]",
-                "[===>      ]",
-                "[====>     ]",
-                "[=====>    ]",
-                "[======>   ]",
-                "[=======>  ]",
-                "[========> ]",
-                "[=========>]",
-                "[ =========]",
-                "[  ========]",
-                "[   =======]",
-                "[    ======]",
-                "[     =====]",
-                "[      ====]",
-                "[       ===]",
-                "[        ==]",
-                "[         =]",
-                "[          ]",
-            ]),
-            ProgressStyleType::ArrowBar => {
-                ProgressStyle::with_template(if console::Term::stdout().size().1 > 80 {
-                    "{prefix:>.cyan.bold} [{bar:20}] {pos}/{len} {wide_msg}"
-                } else {
-                    "{prefix:>.cyan.bold} [{bar:20}] {pos}/{len}"
-                })
-                .expect("template is valid")
-                .progress_chars("=> ")
-            }
-            ProgressStyleType::ArrowBarWithCounters => ProgressStyle::with_template(
-                "{prefix:>.cyan.bold} [{bar:20}] {pos}/{len} {counters}",
-            )
-            .expect("template is valid")
-            .progress_chars("=> "),
+            .progress_chars("█▉▊▋▌▍▎▏ "),
+        ProgressStyleType::FancyThinBarWithCounters => ProgressStyle::default_bar()
+            .template("{prefix:.cyan.bold} [{bar:20.cyan}] {pos}/{len} {counters}")
+            .expect("Progress style template is valid")
+            .progress_chars("━━╾─ "),
         }
     }
 
@@ -93,7 +65,7 @@ impl ProgressStyleType {
     }
 
     pub fn needs_context_line(&self) -> bool {
-        matches!(self, ProgressStyleType::ArrowBarWithCounters)
+        matches!(self, ProgressStyleType::FancyThinBarWithCounters)
     }
 }
 
@@ -151,7 +123,7 @@ impl FancyLogger {
                     return;
                 };
 
-                let shut_down_flag = cvar.wait_timeout(lock, Duration::from_millis(100));
+                let shut_down_flag = cvar.wait_timeout(lock, Duration::from_millis(80));
                 if let Ok((flag, _)) = shut_down_flag {
                     if *flag {
                         // Shutdown requested
@@ -421,7 +393,7 @@ impl Display for ContextItem {
         };
         write!(
             f,
-            "{} ({})",
+            "{} [{}]",
             color.apply_to(self.name.as_str()),
             color.apply_to(format_duration_short(self.start_time.elapsed()))
         )
@@ -446,7 +418,7 @@ struct ContextualProgressBar {
 impl ContextualProgressBar {
     pub fn new_plain_bar(total: u64, prefix: String) -> Self {
         let progress = ProgressBar::hidden().with_prefix(prefix);
-        progress.set_style(ProgressStyleType::ArrowBar.get_style());
+        progress.set_style(ProgressStyleType::FancyWideBar.get_style());
         progress.set_length(total);
 
         Self {
@@ -461,7 +433,7 @@ impl ContextualProgressBar {
         let progress = ProgressBar::hidden().with_prefix(prefix);
         progress.set_length(total);
 
-        Self::init(progress, ProgressStyleType::ArrowBarWithCounters)
+        Self::init(progress, ProgressStyleType::FancyThinBarWithCounters)
     }
 
     pub fn new_spinner(prefix: String) -> Self {
@@ -525,29 +497,45 @@ impl ContextualProgressBar {
             return;
         };
 
-        if let Ok(items) = self.items.read() {
-            if !items.is_empty() {
-                let _ = write!(writer, "in-progress: {}/", items.len());
+        let mut formatted_parts = Vec::new();
+
+        // Process known statuses in preferred order
+        if let Some(&count) = counters.get("succeeded") {
+            let part = GREEN.apply_to(format!("{count} succeeded")).to_string();
+            formatted_parts.push(part);
+        }
+
+        if let Some(&count) = counters.get("failed") {
+            let part = RED.apply_to(format!("{count} failed")).to_string();
+            formatted_parts.push(part);
+        }
+
+        if let Some(&count) = counters.get("skipped") {
+            let part = YELLOW.apply_to(format!("{count} skipped")).to_string();
+            formatted_parts.push(part);
+        }
+
+        // Add any other counters that weren't in our known list
+        let known_statuses = ["succeeded", "failed", "skipped"];
+        for (status, count) in counters.iter() {
+            if !known_statuses.contains(&status.as_str()) {
+                formatted_parts.push(format!("{count} {status}"));
             }
         }
 
-        let mut iter = counters.iter().sorted_by(|a, b| a.0.cmp(b.0));
-        let mut entry = iter.next();
-
-        loop {
-            let Some((item, count)) = entry else {
-                break;
-            };
-
-            if write!(writer, "{item}: {count}").is_err() {
-                // If we can't write to the writer, just stop
-                break;
+        // Add in-progress last
+        if let Ok(items) = self.items.read() {
+            if !items.is_empty() {
+                let part = DIM
+                    .apply_to(format!("{} in-progress", items.len()))
+                    .to_string();
+                formatted_parts.push(part);
             }
+        }
 
-            entry = iter.next();
-            if entry.is_some() && write!(writer, "/").is_err() {
-                break;
-            }
+        // Join all parts with " | "
+        if !formatted_parts.is_empty() {
+            let _ = writer.write_str(&formatted_parts.join(" | "));
         }
     }
 

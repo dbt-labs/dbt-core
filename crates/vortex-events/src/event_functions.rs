@@ -166,21 +166,23 @@ pub fn run_model_event(
     let mut skipped = false;
     let mut skipped_reason = "".to_string();
     match stat.status {
-        NodeStatus::Succeeded => {}
-        NodeStatus::Errored => {}
-        NodeStatus::SkippedUpstreamReused => {
-            skipped = true;
-            skipped_reason = "upstream_reused".to_string();
-        }
+        NodeStatus::Succeeded
+        | NodeStatus::TestWarned
+        | NodeStatus::TestPassed
+        | NodeStatus::Errored => {}
         NodeStatus::SkippedUpstreamFailed => {
             skipped = true;
             skipped_reason = "upstream_failed".to_string();
         }
-        NodeStatus::ReusedNoChanges => {
+        NodeStatus::ReusedNoChanges(_) => {
             skipped = true;
             skipped_reason = "reused_no_changes".to_string();
         }
-        NodeStatus::ReusedStillFresh => {
+        NodeStatus::ReusedStillFresh(_) => {
+            skipped = true;
+            skipped_reason = "reused_still_fresh".to_string();
+        }
+        NodeStatus::ReusedStillFreshNoChanges(_) => {
             skipped = true;
             skipped_reason = "reused_still_fresh".to_string();
         }

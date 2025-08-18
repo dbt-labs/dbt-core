@@ -29,7 +29,7 @@ use dbt_common::error::LiftableResult;
 use project::DbtProject;
 
 use dbt_common::stdfs::last_modified;
-use dbt_common::{ErrorCode, ectx, err, show_progress, with_progress};
+use dbt_common::{ErrorCode, ectx, err, with_progress};
 use dbt_common::{FsResult, fs_err};
 use dbt_schemas::schemas::project::{self, DbtProjectSimplified, ProjectDbtCloudConfig};
 use dbt_schemas::state::{DbtAsset, DbtPackage, DbtState, DbtVars, ResourcePathKind};
@@ -42,7 +42,6 @@ use crate::{
     load_internal_packages, load_packages, load_profiles, load_vars, persist_internal_packages,
 };
 
-use dbt_common::fsinfo;
 use dbt_jinja_utils::phases::load::secret_renderer::secret_context_env_var;
 use dbt_jinja_utils::serde::{into_typed_with_jinja, value_from_file};
 use dbt_jinja_utils::var_fn;
@@ -304,24 +303,6 @@ pub async fn load_inner(
     let mut all_files: HashMap<ResourcePathKind, Vec<(PathBuf, SystemTime)>> = HashMap::new();
 
     let dbt_project_path = package_path.join(DBT_PROJECT_YML);
-
-    let show_base_path = if package_path != arg.io.in_dir {
-        // Show path from the packages `install-dir`
-        package_path
-            .parent()
-            .expect("Failed to get parent directory")
-            .parent()
-            .expect("Failed to get parent directory")
-            .to_path_buf()
-    } else {
-        arg.io.in_dir.clone()
-    };
-
-    let show_project_path = diff_paths(&dbt_project_path, &show_base_path).unwrap();
-    show_progress!(
-        arg.io,
-        fsinfo!(LOADING.into(), show_project_path.display().to_string())
-    );
 
     let dependency_package_name = if is_dependency {
         Some(

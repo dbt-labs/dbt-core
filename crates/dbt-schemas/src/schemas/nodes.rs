@@ -2,6 +2,7 @@ use core::fmt;
 use std::str::FromStr;
 use std::{any::Any, collections::BTreeMap, fmt::Display, path::PathBuf, sync::Arc};
 
+use chrono::{DateTime, Utc};
 use dbt_common::{ErrorCode, FsResult, err, io_args::StaticAnalysisKind};
 use dbt_telemetry::NodeIdentifier;
 use serde::{Deserialize, Serialize};
@@ -180,42 +181,39 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         Ok(())
     }
 
-    fn get_node_start_data(&self) -> YmlValue {
-        let node_info_wrapper = NodeInfoWrapper {
+    fn get_node_start_data(&self, node_started_at: DateTime<Utc>) -> NodeInfoWrapper {
+        NodeInfoWrapper {
             unique_id: None,
             skipped_nodes: None,
             node_info: NodeInfo {
                 node_name: self.common().name.clone(),
                 unique_id: self.common().unique_id.clone(),
-                node_started_at: Some(
-                    chrono::Utc::now()
-                        .format("%Y-%m-%dT%H:%M:%S%.6f")
-                        .to_string(),
-                ),
+                node_started_at: Some(node_started_at.format("%Y-%m-%dT%H:%M:%S%.6f").to_string()),
                 node_finished_at: None,
                 node_status: "executing".to_string(),
             },
-        };
-        dbt_serde_yaml::to_value(node_info_wrapper).expect("Failed to serialize NodeInfoWrapper")
+        }
     }
 
-    fn get_node_end_data(&self, status: &str) -> YmlValue {
-        dbt_serde_yaml::to_value(NodeInfoWrapper {
+    fn get_node_end_data(
+        &self,
+        status: &str,
+        node_started_at: DateTime<Utc>,
+        node_finished_at: DateTime<Utc>,
+    ) -> NodeInfoWrapper {
+        NodeInfoWrapper {
             unique_id: None,
             skipped_nodes: None,
             node_info: NodeInfo {
                 node_name: self.common().name.clone(),
                 unique_id: self.common().unique_id.clone(),
+                node_started_at: Some(node_started_at.format("%Y-%m-%dT%H:%M:%S%.6f").to_string()),
                 node_finished_at: Some(
-                    chrono::Utc::now()
-                        .format("%Y-%m-%dT%H:%M:%S%.6f")
-                        .to_string(),
+                    node_finished_at.format("%Y-%m-%dT%H:%M:%S%.6f").to_string(),
                 ),
-                node_started_at: None,
                 node_status: status.to_string(),
             },
-        })
-        .expect("Failed to serialize NodeInfoWrapper")
+        }
     }
 }
 

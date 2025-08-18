@@ -16,7 +16,7 @@ const MAX_CLIENT_RETRIES: u32 = 3;
 
 /// Downloads manifest from dbt Cloud if available and not recently cached
 #[allow(clippy::cognitive_complexity)]
-pub async fn download_manifest_from_cloud(
+pub async fn hydrate_or_download_manifest_from_cloud(
     dbt_cloud_config: &Option<ProjectDbtCloudConfig>,
     io: &IoArgs,
 ) -> FsResult<Option<PathBuf>> {

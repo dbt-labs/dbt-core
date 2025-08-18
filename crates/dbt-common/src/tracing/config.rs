@@ -111,7 +111,7 @@ impl FsTraceConfig {
                 .map(|file_name| out_dir.join(DBT_METADATA_DIR_NAME).join(file_name)),
             invocation_id: io_args.invocation_id,
             // TODO. For now never print to stdout. Maybe remove with the debug layer?
-            enable_progress: io_args.log_format == LogFormat::Fancy,
+            enable_progress: io_args.log_format == LogFormat::Default,
             export_to_otlp: io_args.export_to_otlp,
         }
     }

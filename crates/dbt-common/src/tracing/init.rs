@@ -255,7 +255,7 @@ where
         None
     };
 
-    // Create progress bar layer if log-format fancy enabled
+    // Create progress bar layer if log-format default enabled
     let progress_bar_layer = if config.enable_progress {
         // Create layer and apply user specified filtering
         Some(ProgressBarLayer.with_filter(config.max_log_verbosity))
