@@ -73,7 +73,7 @@ setup(
         "dbt-semantic-interfaces>=0.9.0,<0.10",
         # Minor versions for these are expected to be backwards-compatible
         "dbt-common>=1.27.0,<2.0",
-        "dbt-adapters>=1.15.2,<2.0",
+        "dbt-adapters>=1.15.5,<2.0",
         "dbt-protos>=1.0.346,<2.0",
         "pydantic<3",
         # ----
