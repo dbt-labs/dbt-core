@@ -18,6 +18,7 @@ pub fn prepare_command_vec(
 ) -> Vec<String> {
     let project_dir = &project_env.absolute_project_dir;
     let target_dir = &test_env.temp_dir.join("target");
+    let logs_dir = &test_env.temp_dir.join("logs");
     let internal_packages_install_path = &test_env.temp_dir.join(DBT_INTERNAL_PACKAGES_DIR_NAME);
 
     // Filter command arguments if requested (for ExecuteAndCompare)
@@ -34,7 +35,12 @@ pub fn prepare_command_vec(
             .collect();
     }
 
-    // Add standard DBT flags
+    // Redirect logs unless it is already specified
+    if !cmd_vec.iter().any(|s| s.starts_with("--log-path")) {
+        cmd_vec.push(format!("--log-path={}", logs_dir.display()));
+    }
+
+    // Add standard DBT flags (allow thetest to fail if caller added them manually)
     cmd_vec.push(format!("--target-path={}", target_dir.display()));
     cmd_vec.push(format!("--project-dir={}", project_dir.display()));
     cmd_vec.push(format!(

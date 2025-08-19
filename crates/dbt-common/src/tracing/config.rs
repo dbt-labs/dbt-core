@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use super::convert::log_level_filter_to_tracing;
 use crate::{
-    constants::{DBT_METADATA_DIR_NAME, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME},
+    constants::{DBT_LOG_DIR_NAME, DBT_METADATA_DIR_NAME, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME},
     io_args::IoArgs,
     io_utils::determine_project_dir,
     logging::LogFormat,
@@ -87,14 +87,7 @@ impl FsTraceConfig {
                 }),
             otm_file_path: io_args.otm_file_name.as_ref().map(|file_name| {
                 io_args.log_path.as_ref().map_or_else(
-                    || {
-                        if out_dir.starts_with(&in_dir) {
-                            in_dir.join("logs").join(file_name)
-                        } else {
-                            // This is because when we do test we do not want to modify in_dir
-                            out_dir.join(file_name)
-                        }
-                    },
+                    || in_dir.join(DBT_LOG_DIR_NAME).join(file_name),
                     |log_path| {
                         if log_path.is_relative() {
                             // If the path is relative, join it with the current working directory

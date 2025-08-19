@@ -1,5 +1,5 @@
 use crate::FsResult;
-use crate::constants::{CACHE_LOG, EXECUTING};
+use crate::constants::{CACHE_LOG, DBT_DEAFULT_LOG_FILE_NAME, DBT_LOG_DIR_NAME, EXECUTING};
 use crate::io_args::IoArgs;
 use crate::pretty_string::remove_ansi_codes;
 use clap::ValueEnum;
@@ -495,14 +495,17 @@ impl From<&IoArgs> for FsLogConfig {
             file_log_path: args
                 .log_path
                 .as_ref()
-                .map(|p| p.join("dbt.log"))
-                .unwrap_or_else(|| {
-                    if args.out_dir.starts_with(&args.in_dir) {
-                        args.in_dir.join("logs/dbt.log")
+                .map(|p| {
+                    if p.is_relative() {
+                        args.in_dir.join(p).join(DBT_DEAFULT_LOG_FILE_NAME)
                     } else {
-                        // This is because when we do test we do not want to modify in_dir
-                        args.out_dir.join("dbt.log")
+                        p.join(DBT_DEAFULT_LOG_FILE_NAME)
                     }
+                })
+                .unwrap_or_else(|| {
+                    args.in_dir
+                        .join(DBT_LOG_DIR_NAME)
+                        .join(DBT_DEAFULT_LOG_FILE_NAME)
                 }),
             file_log_level: args.log_level.unwrap_or(LevelFilter::Info), // default file log level
             file_log_format: args.log_format,
