@@ -349,7 +349,10 @@ struct BatchSenderAgentImpl {
 
 impl BatchSenderAgentImpl {
     pub fn new(endpoint: http::Uri, vortex_client_platform: HeaderValue) -> Self {
-        let agent = ureq::Agent::new_with_defaults();
+        let config = ureq::config::Config::builder()
+            .http_status_as_error(false)
+            .build();
+        let agent = ureq::Agent::new_with_config(config);
         Self {
             agent,
             endpoint,
