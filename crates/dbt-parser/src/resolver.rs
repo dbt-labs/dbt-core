@@ -136,7 +136,6 @@ pub async fn resolve(
 
     // Compute final selectors
     let resolved_selectors = resolve_final_selectors(root_project_name, &jinja_env, arg)?;
-    // dbg!(&resolved_selectors);
 
     // Create a map to store full runtime configs for ALL packages
     let mut all_runtime_configs: BTreeMap<String, Arc<DbtRuntimeConfig>> = BTreeMap::new();
@@ -146,7 +145,6 @@ pub async fn resolve(
     let root_project_configs =
         build_root_project_configs(&arg.io, dbt_state.root_project(), root_project_quoting)?;
     let root_project_configs = Arc::new(root_project_configs);
-
     // Process packages in topological order
     let mut refs_and_sources = RefsAndSources::from_dbt_nodes(
         &nodes,
@@ -208,7 +206,6 @@ pub async fn resolve(
             .rendering_results
             .extend(resolved_collector.rendering_results);
     }
-
     // Ensure that there are no duplicate relations
     check_relation_uniqueness(&nodes)?;
 
@@ -239,7 +236,9 @@ pub async fn resolve(
         .unwrap();
 
     // take refs and sources, resolve them to a unique_id and put in depends_on
-    resolve_dependencies(&arg.io, &mut nodes, &mut disabled_nodes, &refs_and_sources);
+    // This returns a set of node IDs that had resolution errors (unresolved refs/sources)
+    let nodes_with_resolution_errors =
+        resolve_dependencies(&arg.io, &mut nodes, &mut disabled_nodes, &refs_and_sources);
 
     // Check access
     check_access(arg, &nodes, &all_runtime_configs);
@@ -256,6 +255,7 @@ pub async fn resolve(
             dbt_profile: dbt_state.dbt_profile.clone(),
             render_results: collector,
             run_started_at: dbt_state.run_started_at,
+            nodes_with_resolution_errors,
             refs_and_sources: Arc::new(refs_and_sources),
             get_relation_calls: call_get_relation?,
             get_columns_in_relation_calls: call_get_columns_in_relation?,

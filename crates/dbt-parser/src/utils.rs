@@ -137,7 +137,6 @@ pub fn prepare_package_dependency_levels(
         .iter()
         .map(|p| (p.dbt_project.name.clone(), p.dependencies.clone()))
         .collect::<BTreeMap<_, _>>();
-    // dbg!(dependency_map.clone());
 
     // Return packages in topological order
     dbt_dag::deps_mgmt::topological_levels(&dependency_map)
@@ -254,7 +253,21 @@ pub fn generate_relation_components(
         components.alias.clone(),
         Some(node),
     )
-    .unwrap_or_else(|_| default_alias.to_owned()); // todo handle this error
+    .unwrap_or_else(|_| {
+        // If alias generation fails and default_alias is empty, use the node name as fallback
+        if default_alias.is_empty() {
+            node.common().name.clone()
+        } else {
+            default_alias.to_owned()
+        }
+    });
+
+    // Ensure alias is never empty - use node name as ultimate fallback
+    let alias = if alias.is_empty() {
+        node.common().name.clone()
+    } else {
+        alias
+    };
 
     let (database, schema, alias, quoting) =
         normalize_quoting(&node.quoting(), adapter_type, &database, &schema, &alias);

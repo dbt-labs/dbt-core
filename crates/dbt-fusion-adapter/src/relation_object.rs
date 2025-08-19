@@ -254,7 +254,6 @@ pub fn create_relation_from_node(
     node: &dyn InternalDbtNodeAttributes,
     _sample_config: Option<RunFilter>,
 ) -> FsResult<Arc<dyn BaseRelation>> {
-    // dbg!(&_sample_config);
     create_relation_internal(
         adapter_type,
         node.database(),

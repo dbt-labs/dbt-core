@@ -5,7 +5,7 @@ use std::{
 };
 
 use dbt_common::{
-    CodeLocation, ErrorCode, FsResult, err, io_args::IoArgs, show_error, unexpected_err,
+    CodeLocation, ErrorCode, FsResult, err, fs_err, io_args::IoArgs, show_error, unexpected_err,
 };
 use dbt_fusion_adapter::relation_object::{RelationObject, create_relation_from_node};
 use dbt_schemas::{
@@ -407,13 +407,15 @@ impl RefsAndSourcesTracker for RefsAndSources {
 }
 
 /// Resolve the dependencies for a model
+/// Returns a set of node unique_ids that had resolution errors
 pub fn resolve_dependencies(
     io: &IoArgs,
     nodes: &mut Nodes,
     disabled_nodes: &mut Nodes,
     refs_and_sources: &RefsAndSources,
-) {
+) -> HashSet<String> {
     let mut tests_to_disable = Vec::new();
+    let mut nodes_with_errors = HashSet::new();
 
     // First pass: identify tests with disabled dependencies
     for node in nodes.iter_values_mut() {
@@ -448,17 +450,32 @@ pub fn resolve_dependencies(
                 node_package_name_value,
             ) {
                 Ok((dependency_id, _, _)) => {
-                    node_base.depends_on.nodes.push(dependency_id.clone());
-                    node_base
-                        .depends_on
-                        .nodes_with_ref_location
-                        .push((dependency_id, location));
+                    // Check for self-reference
+                    if dependency_id == node_unique_id {
+                        show_error!(
+                            io,
+                            fs_err!(
+                                ErrorCode::CyclicDependency,
+                                "Model '{}' cannot reference itself",
+                                name
+                            )
+                            .with_location(location)
+                        );
+                    } else {
+                        node_base.depends_on.nodes.push(dependency_id.clone());
+                        node_base
+                            .depends_on
+                            .nodes_with_ref_location
+                            .push((dependency_id, location));
+                    }
                 }
                 Err(e) => {
                     // Check if this is a disabled dependency error
                     if is_test && e.code == ErrorCode::DisabledDependency {
                         has_disabled_dependency = true;
                     } else {
+                        // Track this node as having an error (unresolved ref/source)
+                        nodes_with_errors.insert(node_unique_id.clone());
                         show_error!(io, e.with_location(location));
                     }
                 }
@@ -490,6 +507,8 @@ pub fn resolve_dependencies(
                     if is_test && e.code == ErrorCode::DisabledDependency {
                         has_disabled_dependency = true;
                     } else {
+                        // Track this node as having an error (unresolved ref/source)
+                        nodes_with_errors.insert(node_unique_id.clone());
                         show_error!(io, e.with_location(location));
                     }
                 }
@@ -507,4 +526,7 @@ pub fn resolve_dependencies(
             disabled_nodes.tests.insert(test_id.clone(), node);
         }
     }
+
+    // Return the set of nodes that had resolution errors
+    nodes_with_errors
 }

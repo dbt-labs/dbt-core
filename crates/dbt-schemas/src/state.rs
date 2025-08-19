@@ -189,7 +189,7 @@ pub enum DbtVars {
     Value(dbt_serde_yaml::Value),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DbtState {
     pub dbt_profile: DbtProfile,
     pub run_started_at: DateTime<Tz>,
@@ -378,6 +378,8 @@ pub struct ResolverState {
     pub resolved_selectors: ResolvedSelector,
     pub root_project_quoting: ResolvedQuoting,
     pub defer_nodes: Option<Nodes>,
+    /// Nodes that had resolution errors (e.g., unresolved refs/sources)
+    pub nodes_with_resolution_errors: HashSet<String>,
 }
 
 impl ResolverState {
