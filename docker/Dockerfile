@@ -1,6 +1,6 @@
 ARG py_version=3.11.2
 
-FROM python:$py_version-slim-bullseye as base
+FROM python:$py_version-slim-bullseye AS base
 
 RUN apt-get update \
   && apt-get dist-upgrade -y \
@@ -24,7 +24,7 @@ ENV LANG=C.UTF-8
 RUN python -m pip install --upgrade "pip==24.0" "setuptools==69.2.0" "wheel==0.43.0" --no-cache-dir
 
 
-FROM base as dbt-core
+FROM base AS dbt-core
 
 ARG commit_ref=main
 
@@ -36,7 +36,7 @@ ENTRYPOINT ["dbt"]
 RUN python -m pip install --no-cache-dir "dbt-core @ git+https://github.com/dbt-labs/dbt-core@${commit_ref}#subdirectory=core"
 
 
-FROM base as dbt-postgres
+FROM base AS dbt-postgres
 
 ARG commit_ref=main
 
@@ -48,7 +48,7 @@ ENTRYPOINT ["dbt"]
 RUN python -m pip install --no-cache-dir "dbt-postgres @ git+https://github.com/dbt-labs/dbt-core@${commit_ref}#subdirectory=plugins/postgres"
 
 
-FROM dbt-core as dbt-third-party
+FROM dbt-core AS dbt-third-party
 
 ARG dbt_third_party
 
