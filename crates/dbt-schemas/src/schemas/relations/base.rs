@@ -269,7 +269,10 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
 
     /// Helper: check if the relation is a CTE
     fn is_cte(&self) -> bool {
-        matches!(self.relation_type(), Some(RelationType::CTE))
+        matches!(
+            self.relation_type(),
+            Some(RelationType::CTE) | Some(RelationType::Ephemeral)
+        )
     }
 
     /// Helper: check if the relation is a view
