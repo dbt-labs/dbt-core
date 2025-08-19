@@ -908,11 +908,11 @@ macro_rules! show_package_error {
                 Err(_) => true, // default to true (strict mode off for packages)
             };
 
+            increment_autofix_suggestion_counter(&$io.invocation_id.to_string());
+
             if beta_parsing || beta_package_parsing {
                 // Increment once per invocation
                 increment_warning_counter(&$io.invocation_id.to_string());
-                increment_autofix_suggestion_counter(&$io.invocation_id.to_string());
-
                 $crate::_log!(
                     $crate::macros::log_adapter::log::Level::Warn,
                     _INVOCATION_ID_ = $io.invocation_id.as_u128(),
@@ -943,6 +943,7 @@ macro_rules! show_package_error {
 macro_rules! show_strict_error {
     ($io:expr, $err:expr, $pkg:expr) => {{
         use dbt_common::{show_error, show_warning_soon_to_be_error};
+        use $crate::error_counter::increment_autofix_suggestion_counter;
 
         let beta_parsing = match std::env::var("DBT_ENGINE_BETA_PARSING") {
             Ok(val) => val == "1",
@@ -953,6 +954,7 @@ macro_rules! show_strict_error {
             Err(_) => true, // default to true (strict mode off for packages)
         };
 
+        increment_autofix_suggestion_counter(&$io.invocation_id.to_string());
         if beta_parsing || (beta_package_parsing && $pkg.is_some()) {
             show_warning_soon_to_be_error!($io, $err);
         } else {
@@ -1008,24 +1010,16 @@ macro_rules! show_fail {
 
 #[macro_export]
 macro_rules! show_autofix_suggestion {
-    ($io:expr) => {{
+    ($io:expr, $message:expr) => {{
         use dbt_common::show_warning;
         use $crate::pretty_string::BLUE;
         use $crate::macros::_dbt_error::FsError;
 
-        show_warning!(
-            $io,
-            $crate::macros::_dbt_error::FsError::new(
-                $crate::macros::_dbt_error::ErrorCode::Generic,
-                "Warnings marked (will error post beta) will turn into errors before leaving beta. Please fix them."
-            )
-        );
         $crate::_log!(
             $crate::macros::log_adapter::log::Level::Info,
             _INVOCATION_ID_ = $io.invocation_id.as_u128();
-            "{} Try the autofix script: {}",
-            BLUE.apply_to("suggestion:"),
-            BLUE.apply_to("https://github.com/dbt-labs/dbt-autofix")
+            "{}",
+            $message
         );
     }};
 }
@@ -1092,7 +1086,7 @@ macro_rules! show_progress_exit {
         use $crate::error_counter::{get_autofix_suggestion_counter, get_error_counter, get_warning_counter};
         use $crate::macros::format_duration_concise;
         use $crate::pretty_string::color_quotes;
-        use $crate::pretty_string::{GREEN, RED, YELLOW};
+        use $crate::pretty_string::{GREEN, RED, YELLOW, BLUE};
         use $crate::macros::_dbt_error::FsError;
         use serde_json::json;
         let e_ct = get_error_counter(&$arg.io.invocation_id.to_string());
@@ -1103,7 +1097,13 @@ macro_rules! show_progress_exit {
 
         // Show autofix suggestion if there are any autofix suggestions
         if a_ct > 0 {
-            $crate::show_autofix_suggestion!($arg.io);
+            let msg = format!(
+                "{} Run '{}' to see the latest fusion compatible packages. For compatibility errors, try the autofix script: {}",
+                BLUE.apply_to("suggestion:"),
+                YELLOW.apply_to("dbt deps"),
+                BLUE.apply_to("https://github.com/dbt-labs/dbt-autofix")
+            );
+            $crate::show_autofix_suggestion!($arg.io, msg);
         }
 
         let (action, msg) = if e_ct > 0 && w_ct > 0 {

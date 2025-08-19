@@ -1,10 +1,13 @@
 use dbt_common::fsinfo;
 use dbt_common::io_args::IoArgs;
+use dbt_common::pretty_string::{GREEN, RED};
 use dbt_common::stdfs::File;
 use dbt_common::{
     ErrorCode, FsResult,
     constants::{DBT_PACKAGES_LOCK_FILE, INSTALLING},
-    err, fs_err, show_progress, show_warning, stdfs,
+    err, fs_err,
+    pretty_string::BLUE,
+    show_autofix_suggestion, show_progress, show_warning, stdfs,
 };
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::packages::DbtPackagesLock;
@@ -64,6 +67,9 @@ pub async fn install_packages(
         return Ok(());
     }
     let mut package_listing = PackageListing::new(io_args.clone(), vars.clone());
+
+    // Collect fusion-schema-compat upgrade suggestions
+    let mut fusion_compat_suggestions: Vec<(String, String, String)> = Vec::new();
     package_listing.hydrate_dbt_packages_lock(dbt_packages_lock, jinja_env)?;
 
     for package in package_listing.packages.values() {
@@ -86,12 +92,8 @@ pub async fn install_packages(
                         )
                     );
                 }
-                let version = pinned_package.get_version();
-                let tar_name = format!("{}.{}.tar.gz", pinned_package.package, version);
-                let tar_path = tarball_dir.path().join(tar_name);
-                std::fs::create_dir_all(tar_path.parent().unwrap()).map_err(|e| {
-                    fs_err!(ErrorCode::IoError, "Failed to create tarball dir: {}", e,)
-                })?;
+
+                // Check fusion-schema-compat and suggest upgrade if needed
                 let hub_package = hub_registry
                     .get_hub_package(&pinned_package.package)
                     .await?;
@@ -99,6 +101,27 @@ pub async fn install_packages(
                     .versions
                     .get(&pinned_package.version)
                     .expect("Version should exist in package metadata");
+
+                // Collect fusion-schema-compat upgrade suggestions
+                if metadata.fusion_schema_compat != Some(true)
+                    && hub_package.latest_fusion_schema_compat == Some(true)
+                    && (std::env::var("NEXTEST").is_err()
+                        || (std::env::var("NEXTEST").is_ok()
+                            && std::env::var("TEST_DEPS_LATEST_VERSION").is_ok()))
+                {
+                    fusion_compat_suggestions.push((
+                        pinned_package.name.clone(),
+                        pinned_package.version.clone(),
+                        pinned_package.version_latest.clone(),
+                    ));
+                }
+
+                let version = pinned_package.get_version();
+                let tar_name = format!("{}.{}.tar.gz", pinned_package.package, version);
+                let tar_path = tarball_dir.path().join(tar_name);
+                std::fs::create_dir_all(tar_path.parent().unwrap()).map_err(|e| {
+                    fs_err!(ErrorCode::IoError, "Failed to create tarball dir: {}", e,)
+                })?;
                 let tarball_url = metadata.downloads.tarball.clone();
                 let project_name = metadata.name.clone();
 
@@ -295,6 +318,29 @@ pub async fn install_packages(
             }
         }
     }
+
+    // Display fusion-schema-compat upgrade suggestions at the end
+    if !fusion_compat_suggestions.is_empty() {
+        let suggestions: Vec<String> = fusion_compat_suggestions
+            .iter()
+            .map(|(name, current_version, latest_version)| {
+                format!(
+                    "   {} -> {}",
+                    RED.apply_to(format!("{name}@{current_version}")),
+                    GREEN.apply_to(latest_version)
+                )
+            })
+            .collect();
+
+        let msg = format!(
+            "\n{} The following packages have fusion schema compatible versions available.\n{}\n",
+            BLUE.apply_to("suggestion:"),
+            suggestions.join("\n"),
+        );
+
+        show_autofix_suggestion!(io_args, msg);
+    }
+
     Ok(())
 }
 

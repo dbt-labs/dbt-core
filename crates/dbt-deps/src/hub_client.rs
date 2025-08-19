@@ -22,12 +22,16 @@ pub struct HubPackageVersion {
     pub name: String,
     pub packages: Vec<DbtPackageEntry>,
     pub downloads: HubPackageDownloads,
+    #[serde(rename = "fusion-schema-compat")]
+    pub fusion_schema_compat: Option<bool>,
 }
 
 #[derive(Deserialize, Clone)]
 pub struct HubPackageJson {
     pub name: String,
     pub versions: HashMap<String, HubPackageVersion>,
+    #[serde(rename = "latest-fusion-schema-compat")]
+    pub latest_fusion_schema_compat: Option<bool>,
 }
 
 pub struct HubClient {
