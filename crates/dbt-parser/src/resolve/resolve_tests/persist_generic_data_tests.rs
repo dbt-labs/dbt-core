@@ -7,7 +7,7 @@ use dbt_common::io_args;
 use dbt_common::io_args::IoArgs;
 use dbt_common::show_error;
 use dbt_common::show_package_error;
-use dbt_common::show_warning_soon_to_be_error;
+use dbt_common::show_strict_error;
 use dbt_common::{ErrorCode, err};
 use dbt_common::{fs_err, stdfs};
 use dbt_frontend_common::Dialect;
@@ -390,10 +390,8 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
             // If we are parsing a dependency package, we use a special macros
             // that ensures at most one error is shown per package.
             show_package_error!(io_args, package_name);
-        } else if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
-            show_error!(io_args, schema_error);
         } else {
-            show_warning_soon_to_be_error!(io_args, schema_error);
+            show_strict_error!(io_args, schema_error, dependency_package_name);
         }
     }
     for (key, value) in deprecated.clone() {

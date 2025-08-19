@@ -76,7 +76,8 @@ use std::{
 
 use dbt_common::{
     CodeLocation, ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs,
-    io_utils::try_read_yml_to_str, show_error, show_package_error, show_warning_soon_to_be_error,
+    io_utils::try_read_yml_to_str, show_error, show_package_error, show_strict_error,
+    show_warning_soon_to_be_error,
 };
 use dbt_serde_yaml::Value;
 use minijinja::listener::RenderingEventListener;
@@ -135,10 +136,8 @@ where
             // If we are parsing a dependency package, we use a special macros
             // that ensures at most one error is shown per package.
             show_package_error!(io_args, package_name);
-        } else if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
-            show_error!(io_args, error);
         } else {
-            show_warning_soon_to_be_error!(io_args, error);
+            show_strict_error!(io_args, error, dependency_package_name);
         }
     }
 
@@ -179,10 +178,8 @@ where
                 // If we are parsing a dependency package, we use a special macros
                 // that ensures at most one error is shown per package.
                 show_package_error!(io_args, package_name);
-            } else if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
-                show_error!(io_args, error);
             } else {
-                show_warning_soon_to_be_error!(io_args, error);
+                show_strict_error!(io_args, error, dependency_package_name);
             }
         }
     }
@@ -213,10 +210,8 @@ where
                 // If we are parsing a dependency package, we use a special macros
                 // that ensures at most one error is shown per package.
                 show_package_error!(io_args, package_name);
-            } else if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
-                show_error!(io_args, error);
             } else {
-                show_warning_soon_to_be_error!(io_args, error);
+                show_strict_error!(io_args, error, dependency_package_name);
             }
         }
     }
@@ -258,10 +253,8 @@ where
                 // If we are parsing a dependency package, we use a special macros
                 // that ensures at most one error is shown per package.
                 show_package_error!(io_args, package_name);
-            } else if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
-                show_error!(io_args, error);
             } else {
-                show_warning_soon_to_be_error!(io_args, error);
+                show_strict_error!(io_args, error, dependency_package_name);
             }
         }
     }
@@ -358,10 +351,8 @@ fn value_from_str(
                 // If we are parsing a dependency package, we use a special macros
                 // that ensures at most one error is shown per package.
                 show_package_error!(io_args, package_name);
-            } else if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
-                show_error!(io_args, duplicate_key_error);
             } else {
-                show_warning_soon_to_be_error!(io_args, duplicate_key_error);
+                show_strict_error!(io_args, duplicate_key_error, dependency_package_name);
             }
         }
         // last key wins:

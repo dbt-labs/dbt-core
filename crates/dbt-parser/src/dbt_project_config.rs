@@ -8,8 +8,7 @@ use std::{
 };
 
 use dbt_common::{
-    ErrorCode, FsResult, fs_err, io_args::IoArgs, show_error, show_package_error,
-    show_warning_soon_to_be_error,
+    ErrorCode, FsResult, fs_err, io_args::IoArgs, show_error, show_package_error, show_strict_error,
 };
 use dbt_schemas::schemas::project::{
     DataTestConfig, DefaultTo, ExposureConfig, IterChildren, ModelConfig, SeedConfig,
@@ -134,10 +133,8 @@ pub fn recur_build_dbt_project_config<T: DefaultTo<T>, S: Into<T> + IterChildren
                     // If we are parsing a dependency package, we use a special macros
                     // that ensures at most one error is shown per package.
                     show_package_error!(io, package_name);
-                } else if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
-                    show_error!(io, err);
                 } else {
-                    show_warning_soon_to_be_error!(io, err);
+                    show_strict_error!(io, err, dependency_package_name);
                 }
                 continue;
             }

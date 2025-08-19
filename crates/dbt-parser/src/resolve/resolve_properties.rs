@@ -6,7 +6,7 @@ use dbt_common::{
     ErrorCode, FsResult, constants::PARSING, fs_err, fsinfo, show_error, show_progress,
     show_warning,
 };
-use dbt_common::{show_package_error, show_warning_soon_to_be_error};
+use dbt_common::{show_package_error, show_strict_error};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::{from_yaml_raw, into_typed_with_jinja};
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
@@ -427,10 +427,8 @@ pub fn resolve_minimal_properties(
                     // If we are parsing a dependency package, we use a special macros
                     // that ensures at most one error is shown per package.
                     show_package_error!(&arg.io, package_name);
-                } else if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
-                    show_error!(arg.io, e);
                 } else {
-                    show_warning_soon_to_be_error!(arg.io, e);
+                    show_strict_error!(arg.io, e, dependency_package_name);
                 }
                 continue; // processing other files
             }

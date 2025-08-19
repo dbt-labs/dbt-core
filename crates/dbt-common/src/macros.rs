@@ -899,19 +899,16 @@ macro_rules! show_package_error {
                 status_reporter.collect_warning(&err);
             }
 
-            if std::env::var("_DBT_FUSION_STRICT_MODE").is_ok() {
-                // Increment once per invocation
-                increment_error_counter(&$io.invocation_id.to_string());
+            let beta_parsing = match std::env::var("DBT_ENGINE_BETA_PARSING") {
+                Ok(val) => val == "1",
+                Err(_) => false, // default to false (strict mode on)
+            };
+            let beta_package_parsing = match std::env::var("DBT_ENGINE_BETA_PACKAGE_PARSING") {
+                Ok(val) => val == "1",
+                Err(_) => true, // default to true (strict mode off for packages)
+            };
 
-                $crate::_log!(
-                    $crate::macros::log_adapter::log::Level::Error,
-                    _INVOCATION_ID_ = $io.invocation_id.as_u128(),
-                    code = err.code.to_string();
-                    "{} {}",
-                    RED.apply_to(ERROR),
-                    color_quotes(err.pretty().as_str())
-                );
-            } else {
+            if beta_parsing || beta_package_parsing {
                 // Increment once per invocation
                 increment_warning_counter(&$io.invocation_id.to_string());
                 increment_autofix_suggestion_counter(&$io.invocation_id.to_string());
@@ -925,7 +922,41 @@ macro_rules! show_package_error {
                     "(will error post beta)",
                     color_quotes(err.pretty().as_str())
                 );
+            } else {
+                // Increment once per invocation
+                increment_error_counter(&$io.invocation_id.to_string());
+
+                $crate::_log!(
+                    $crate::macros::log_adapter::log::Level::Error,
+                    _INVOCATION_ID_ = $io.invocation_id.as_u128(),
+                    code = err.code.to_string();
+                    "{} {}",
+                    RED.apply_to(ERROR),
+                    color_quotes(err.pretty().as_str())
+                );
             }
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! show_strict_error {
+    ($io:expr, $err:expr, $pkg:expr) => {{
+        use dbt_common::{show_error, show_warning_soon_to_be_error};
+
+        let beta_parsing = match std::env::var("DBT_ENGINE_BETA_PARSING") {
+            Ok(val) => val == "1",
+            Err(_) => false, // default to false (strict mode on)
+        };
+        let beta_package_parsing = match std::env::var("DBT_ENGINE_BETA_PACKAGE_PARSING") {
+            Ok(val) => val == "1",
+            Err(_) => true, // default to true (strict mode off for packages)
+        };
+
+        if beta_parsing || (beta_package_parsing && $pkg.is_some()) {
+            show_warning_soon_to_be_error!($io, $err);
+        } else {
+            show_error!($io, $err);
         }
     }};
 }
