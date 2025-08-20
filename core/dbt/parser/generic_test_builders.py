@@ -110,7 +110,7 @@ class TestBuilder(Generic[Testable]):
         version: Optional[NodeVersion] = None,
     ) -> None:
         test_name, test_args = self.extract_test_args(
-            data_test, target.original_file_path, target.name, column_name
+            data_test, target.original_file_path, target.name, column_name, package_name
         )
         self.args: Dict[str, Any] = test_args
         if "model" in self.args:
@@ -206,7 +206,7 @@ class TestBuilder(Generic[Testable]):
 
     @staticmethod
     def extract_test_args(
-        data_test, file_path, resource_name=None, column_name=None
+        data_test, file_path, resource_name=None, column_name=None, package_name=None
     ) -> Tuple[str, Dict[str, Any]]:
         if not isinstance(data_test, dict):
             raise TestTypeError(data_test)
@@ -240,9 +240,14 @@ class TestBuilder(Generic[Testable]):
             if not arguments and any(
                 k not in ("config", "column_name", "description", "name") for k in test_args.keys()
             ):
+                resource = (
+                    f"'{resource_name}' in package '{package_name}'"
+                    if package_name
+                    else f"'{resource_name}'"
+                )
                 deprecations.warn(
                     "missing-arguments-property-in-generic-test-deprecation",
-                    test_name=f"`{test_name}` defined on '{resource_name}' ({file_path})",
+                    test_name=f"`{test_name}` defined on {resource} ({file_path})",
                 )
             if isinstance(arguments, dict):
                 test_args = {**test_args, **arguments}
