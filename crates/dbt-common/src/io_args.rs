@@ -33,6 +33,7 @@ use crate::{
 pub struct IoArgs {
     pub invocation_id: uuid::Uuid,
     pub show: HashSet<ShowOptions>,
+    pub command: String,
     pub in_dir: PathBuf,
     pub out_dir: PathBuf,
     pub log_path: Option<PathBuf>,
@@ -42,6 +43,7 @@ pub struct IoArgs {
     pub log_format: LogFormat,
     pub log_level: Option<LevelFilter>,
     pub log_level_file: Option<LevelFilter>,
+    pub debug: bool,
 
     // Flags influencing error/warning behavior
     pub show_all_deprecations: bool,
@@ -130,7 +132,12 @@ impl IoArgs {
     }
 
     pub fn should_show(&self, option: ShowOptions) -> bool {
-        self.show.contains(&option) || option == ShowOptions::All
+        (self.show.contains(&option) || option == ShowOptions::All)
+            // TODO: temporary logic to avoid showing skipped nodes for compile.
+            // Should be centralized across all commands, progress message types, and options.
+            && (option != ShowOptions::Completed
+                || self.command.as_str() != "compile"
+                || self.debug)
     }
 
     /// Returns true if the build cache should be used (read or readwrite mode, or --use-build-cache flag).

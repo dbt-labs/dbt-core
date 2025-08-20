@@ -919,7 +919,7 @@ macro_rules! show_package_error {
                     code = err.code.to_string();
                     "{} {} {}",
                     YELLOW.apply_to(WARNING),
-                    "(will error post beta)",
+                    "(will error post preview)",
                     color_quotes(err.pretty().as_str())
                 );
             } else {

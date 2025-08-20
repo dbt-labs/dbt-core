@@ -407,6 +407,8 @@ impl InitArgs {
                 in_dir: in_dir.to_path_buf(),
                 out_dir: out_dir.to_path_buf(),
                 show,
+                command: arg.command.clone(),
+                debug: arg.io.debug,
                 invocation_id: arg.io.invocation_id,
                 send_anonymous_usage_stats: self.common_args.send_anonymous_usage_stats,
                 status_reporter: arg.io.status_reporter.clone(),
@@ -488,6 +490,8 @@ impl CommonArgs {
             command: arg.command.clone(),
             io: IoArgs {
                 show,
+                command: arg.command.clone(),
+                debug: self.debug,
                 invocation_id: arg.io.invocation_id,
                 in_dir: in_dir.to_path_buf(),
                 out_dir: out_dir.to_path_buf(),
@@ -565,11 +569,15 @@ impl CommonArgs {
 }
 
 pub fn from_main(cli: &Cli) -> SystemArgs {
+    let command = cli.get_command_str().to_string();
+
     SystemArgs {
-        command: cli.get_command_str().to_string(),
+        command: command.clone(),
         io: IoArgs {
             invocation_id: uuid::Uuid::new_v4(),
             show: cli.common_args().show.iter().cloned().collect(),
+            command,
+            debug: cli.common_args().debug,
             in_dir: PathBuf::new(),
             out_dir: PathBuf::new(),
             send_anonymous_usage_stats: cli.common_args().get_send_anonymous_usage_stats(),
@@ -603,11 +611,15 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
 }
 
 pub fn from_lib(cli: &Cli) -> SystemArgs {
+    let command = cli.get_command_str().to_string();
+
     SystemArgs {
-        command: cli.get_command_str().to_string(),
+        command: command.clone(),
         io: IoArgs {
             invocation_id: uuid::Uuid::new_v4(),
             show: cli.common_args().show.iter().cloned().collect(),
+            command,
+            debug: cli.common_args().debug,
             in_dir: PathBuf::new(),
             out_dir: PathBuf::new(),
             send_anonymous_usage_stats: cli.common_args().get_send_anonymous_usage_stats(),
