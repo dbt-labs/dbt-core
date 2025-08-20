@@ -21,6 +21,7 @@ dbt-jinja-utils = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-serde_yaml = { workspace = true }
 dirs = { workspace = true }
+ignore = { workspace = true }
 log = { workspace = true }
 minijinja = { workspace = true }
 pathdiff = { workspace = true }
@@ -32,6 +33,9 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 walkdir = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [lib]
 name = "dbt_loader"

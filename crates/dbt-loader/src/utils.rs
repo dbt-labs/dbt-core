@@ -23,6 +23,7 @@ use fs_deps::utils::get_local_package_full_path;
 use serde::{Serialize, de::DeserializeOwned};
 use std::{fs::metadata, io, time::SystemTime};
 
+use ignore::gitignore::Gitignore;
 use walkdir::WalkDir;
 
 // ------------------------------------------------------------------------------------------------
@@ -32,6 +33,7 @@ pub fn collect_file_info<P: AsRef<Path>>(
     base_path: P,
     relative_paths: &[String],
     info_paths: &mut Vec<(PathBuf, SystemTime)>,
+    dbtignore: Option<&Gitignore>,
 ) -> io::Result<()> {
     if !base_path.as_ref().exists() {
         return Ok(());
@@ -41,9 +43,34 @@ pub fn collect_file_info<P: AsRef<Path>>(
         if !full_path.exists() {
             continue;
         }
-        for entry in WalkDir::new(full_path) {
-            let entry = entry?;
+        // Configure WalkDir to respect gitignore patterns at the directory level
+        let walker = WalkDir::new(full_path);
+
+        // Process files as normal, but use a filter function to skip directories that match gitignore
+        for entry_result in walker.into_iter().filter_entry(|e| {
+            // If there's no gitignore or if this is not a directory, always process it
+            if dbtignore.is_none() || !e.file_type().is_dir() {
+                return true;
+            }
+
+            // For directories, check if they should be included
+            let rel_path = e
+                .path()
+                .strip_prefix(base_path.as_ref())
+                .unwrap_or(e.path());
+            !dbtignore.unwrap().matched(rel_path, true).is_ignore()
+        }) {
+            let entry = entry_result?;
             if entry.file_type().is_file() {
+                // Check if this file should be ignored by .dbtignore
+                if let Some(gitignore) = dbtignore {
+                    let path = entry.path();
+                    let relative_to_base = path.strip_prefix(base_path.as_ref()).unwrap_or(path);
+                    let is_dir = entry.file_type().is_dir();
+                    if gitignore.matched(relative_to_base, is_dir).is_ignore() {
+                        continue; // Skip this file as it's ignored
+                    }
+                }
                 let metadata = metadata(entry.path())?;
                 let modified_time = metadata.modified()?;
                 info_paths.push((entry.path().to_path_buf(), modified_time));
