@@ -170,6 +170,7 @@ pub async fn resolve_exposures(
                     static_analysis: Default::default(),
                     enabled: true,
                     extended_model: false,
+                    persist_docs: None,
                     columns: BTreeMap::new(),
                     refs,
                     sources,

@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
 use crate::default_to;
-use crate::schemas::common::{DbtQuoting, Severity, StoreFailuresAs};
+use crate::schemas::common::{DbtQuoting, ScheduleConfig, Severity, StoreFailuresAs};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::postgres::PostgresIndex;
 use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
@@ -256,6 +256,10 @@ pub struct ProjectDataTestConfig {
     #[serde(default, rename = "+indexes")]
     pub indexes: Option<Vec<PostgresIndex>>,
 
+    // Schedule (Databricks streaming tables)
+    #[serde(rename = "+schedule")]
+    pub schedule: Option<ScheduleConfig>,
+
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectDataTestConfig>>,
 }
 
@@ -367,6 +371,7 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
                 merge_with_schema_evolution: config.merge_with_schema_evolution,
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
+                schedule: config.schedule,
 
                 auto_refresh: config.auto_refresh,
                 backup: config.backup,
@@ -485,6 +490,8 @@ impl From<DataTestConfig> for ProjectDataTestConfig {
             table_type: config.__warehouse_specific_config__.table_type,
             // Postgres Fields
             indexes: config.__warehouse_specific_config__.indexes,
+            // Schedule (Databricks streaming tables)
+            schedule: config.__warehouse_specific_config__.schedule,
             __additional_properties__: BTreeMap::new(),
         }
     }

@@ -695,6 +695,13 @@ pub struct PersistDocsConfig {
     pub relation: Option<bool>,
 }
 
+#[skip_serializing_none]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
+pub struct ScheduleConfig {
+    pub cron: Option<String>,
+    pub time_zone_value: Option<String>,
+}
+
 #[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
 #[serde(untagged)]
 pub enum Hooks {

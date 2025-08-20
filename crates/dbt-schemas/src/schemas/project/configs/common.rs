@@ -7,10 +7,10 @@ use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 
 use crate::default_to;
-use crate::schemas::common::DbtQuoting;
 use crate::schemas::common::Hooks;
 use crate::schemas::common::merge_meta;
 use crate::schemas::common::merge_tags;
+use crate::schemas::common::{DbtQuoting, ScheduleConfig};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::postgres::PostgresIndex;
 use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
@@ -195,6 +195,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub skip_matched_step: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub skip_not_matched_step: Option<bool>,
+    pub schedule: Option<ScheduleConfig>,
 
     // Snowflake
     pub table_tag: Option<String>,
@@ -286,6 +287,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
             merge_with_schema_evolution,
             skip_matched_step,
             skip_not_matched_step,
+            schedule,
 
             // Snowflake
             table_tag,
@@ -362,6 +364,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
                 merge_with_schema_evolution,
                 skip_matched_step,
                 skip_not_matched_step,
+                schedule,
                 // Snowflake
                 table_tag,
                 row_access_policy,

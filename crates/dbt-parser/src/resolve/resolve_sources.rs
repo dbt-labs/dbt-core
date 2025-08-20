@@ -260,6 +260,7 @@ pub fn resolve_sources(
                 quoting_ignore_case,
                 enabled: is_enabled,
                 extended_model: false,
+                persist_docs: None,
                 materialized: DbtMaterialization::External,
                 static_analysis: source_properties_config
                     .static_analysis

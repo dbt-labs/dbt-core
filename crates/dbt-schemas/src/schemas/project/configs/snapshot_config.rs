@@ -17,6 +17,7 @@ use crate::schemas::common::DocsConfig;
 use crate::schemas::common::HardDeletes;
 use crate::schemas::common::Hooks;
 use crate::schemas::common::PersistDocsConfig;
+use crate::schemas::common::ScheduleConfig;
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::postgres::PostgresIndex;
 use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
@@ -280,6 +281,10 @@ pub struct ProjectSnapshotConfig {
     // Adapter-specific fields (Postgres)
     #[serde(default, rename = "+indexes")]
     pub indexes: Option<Vec<PostgresIndex>>,
+
+    // Schedule (Databricks streaming tables)
+    #[serde(rename = "+schedule")]
+    pub schedule: Option<ScheduleConfig>,
     // Flattened field:
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectSnapshotConfig>>,
 }
@@ -455,6 +460,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 merge_with_schema_evolution: config.merge_with_schema_evolution,
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
+                schedule: config.schedule,
 
                 auto_refresh: config.auto_refresh,
                 backup: config.backup,
@@ -581,6 +587,8 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             table_type: config.__warehouse_specific_config__.table_type,
             // Postgres Fields
             indexes: config.__warehouse_specific_config__.indexes,
+            // Schedule (Databricks streaming tables)
+            schedule: config.__warehouse_specific_config__.schedule,
             __additional_properties__: BTreeMap::new(),
         }
     }

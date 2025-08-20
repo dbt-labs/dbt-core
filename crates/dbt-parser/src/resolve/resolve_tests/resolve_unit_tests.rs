@@ -283,6 +283,7 @@ pub fn resolve_unit_tests(
                 sources: dependent_sources,
                 enabled,
                 extended_model: false,
+                persist_docs: None,
                 quoting: package_quoting.try_into()?,
                 quoting_ignore_case: package_quoting.snowflake_ignore_case.unwrap_or(false),
                 materialized: DbtMaterialization::Unit,

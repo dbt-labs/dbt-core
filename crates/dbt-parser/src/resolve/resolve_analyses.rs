@@ -194,6 +194,7 @@ pub async fn resolve_analyses(
                 relation_name: None,            // will be updated below
                 enabled: true,
                 extended_model: false,
+                persist_docs: None,
                 materialized: DbtMaterialization::Analysis,
                 quoting: ResolvedQuoting::trues(),
                 quoting_ignore_case: false,

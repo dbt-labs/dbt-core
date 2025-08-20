@@ -269,6 +269,7 @@ pub async fn resolve_snapshots(
                     depends_on: NodeDependsOn::default(),
                     enabled: final_config.enabled.unwrap_or(true),
                     extended_model: false,
+                    persist_docs: final_config.persist_docs.clone(),
                     materialized: final_config
                         .materialized
                         .clone()

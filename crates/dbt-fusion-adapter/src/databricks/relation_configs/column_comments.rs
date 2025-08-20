@@ -7,7 +7,7 @@ use crate::databricks::relation_configs::base::{
     DatabricksRelationResults,
 };
 
-use dbt_schemas::schemas::{InternalDbtNodeAttributes, nodes::DbtModel};
+use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -112,17 +112,12 @@ impl DatabricksComponentProcessor for ColumnCommentsProcessor {
         let columns = &relation_config.base().columns;
 
         // Check if persist_docs.relation is enabled
-        // Downcast is necessary due to not being available yet on InternalDbtNodeAttributes
-        let persist = if let Some(model) = relation_config.as_any().downcast_ref::<DbtModel>() {
-            model
-                .deprecated_config
-                .persist_docs
-                .as_ref()
-                .map(|pd| pd.relation.unwrap_or(false))
-                .unwrap_or(false)
-        } else {
-            false
-        };
+        let persist = relation_config
+            .base()
+            .persist_docs
+            .as_ref()
+            .map(|pd| pd.relation.unwrap_or(false))
+            .unwrap_or(false);
 
         let mut comments = BTreeMap::new();
         let mut quoted = BTreeMap::new();
@@ -155,6 +150,7 @@ mod tests {
     use arrow::csv::ReaderBuilder;
     use arrow_schema::{DataType, Field, Schema};
     use dbt_agate::AgateTable;
+    use dbt_schemas::schemas::DbtModel;
     use dbt_schemas::schemas::relations::relation_configs::{ComponentConfig, RelationChangeSet};
     use regex::Regex;
     use std::collections::BTreeMap;
@@ -213,6 +209,7 @@ email,string,\n\
             static_analysis: dbt_common::io_args::StaticAnalysisKind::On,
             enabled: true,
             extended_model: false,
+            persist_docs,
             columns,
             refs: vec![],
             sources: vec![],
@@ -220,10 +217,7 @@ email,string,\n\
             depends_on: NodeDependsOn::default(),
         };
 
-        let deprecated_config = ModelConfig {
-            persist_docs,
-            ..Default::default()
-        };
+        let deprecated_config = ModelConfig::default();
 
         DbtModel {
             __base_attr__: base_attrs,

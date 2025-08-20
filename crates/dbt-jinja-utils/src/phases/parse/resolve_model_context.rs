@@ -218,6 +218,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
             static_analysis: StaticAnalysisKind::On,
             enabled: true,
             extended_model: false,
+            persist_docs: None,
             quoting: ResolvedQuoting::trues(),
             quoting_ignore_case: false,
             columns: BTreeMap::new(),

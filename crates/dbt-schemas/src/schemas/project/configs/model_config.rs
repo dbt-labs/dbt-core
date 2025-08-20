@@ -18,7 +18,7 @@ use crate::schemas::common::DbtIncrementalStrategy;
 use crate::schemas::common::DbtMaterialization;
 use crate::schemas::common::DbtUniqueKey;
 use crate::schemas::common::PersistDocsConfig;
-use crate::schemas::common::{Access, DbtQuoting};
+use crate::schemas::common::{Access, DbtQuoting, ScheduleConfig};
 use crate::schemas::common::{DocsConfig, OnConfigurationChange};
 use crate::schemas::common::{Hooks, OnSchemaChange};
 use crate::schemas::manifest::GrantAccessToTarget;
@@ -308,6 +308,10 @@ pub struct ProjectModelConfig {
 
     #[serde(default, rename = "+indexes")]
     pub indexes: Option<Vec<PostgresIndex>>,
+
+    // Schedule (Databricks streaming tables)
+    #[serde(rename = "+schedule")]
+    pub schedule: Option<ScheduleConfig>,
     // Flattened field:
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectModelConfig>>,
 }
@@ -462,6 +466,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 merge_with_schema_evolution: config.merge_with_schema_evolution,
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
+                schedule: config.schedule,
 
                 auto_refresh: config.auto_refresh,
                 backup: config.backup,
@@ -592,6 +597,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             as_columnstore: config.__warehouse_specific_config__.as_columnstore,
             table_type: config.__warehouse_specific_config__.table_type,
             indexes: config.__warehouse_specific_config__.indexes,
+            schedule: config.__warehouse_specific_config__.schedule,
             description: config.description,
             __additional_properties__: BTreeMap::new(),
         }

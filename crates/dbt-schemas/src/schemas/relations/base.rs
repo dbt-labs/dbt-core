@@ -285,6 +285,11 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         matches!(self.relation_type(), Some(RelationType::MaterializedView))
     }
 
+    /// Helper: check if the relation is a streaming table
+    fn is_streaming_table(&self) -> bool {
+        matches!(self.relation_type(), Some(RelationType::StreamingTable))
+    }
+
     /// Helper: check if the relation is for a pointer table
     fn is_pointer(&self) -> bool {
         matches!(self.relation_type(), Some(RelationType::PointerTable))

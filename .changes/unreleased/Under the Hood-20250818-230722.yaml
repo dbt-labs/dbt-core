@@ -1,0 +1,3 @@
+kind: Under the Hood
+body: '[adapters][databricks] Using the __attrs__ fields for relation config implementations, avoiding deprecated_config, added schedule to schema and persist_docs'
+time: 2025-08-18T23:07:22.146387+03:00

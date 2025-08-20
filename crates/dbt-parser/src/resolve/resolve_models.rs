@@ -278,6 +278,7 @@ pub async fn resolve_models(
                 relation_name: None,            // will be updated below
                 enabled: model_config.enabled.unwrap_or(true),
                 extended_model: false,
+                persist_docs: model_config.persist_docs.clone(),
                 columns,
                 depends_on: NodeDependsOn {
                     macros: convert_macro_names_to_unique_ids(&macro_calls),

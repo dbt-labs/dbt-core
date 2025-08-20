@@ -14,6 +14,7 @@ use crate::schemas::common::DbtQuoting;
 use crate::schemas::common::DocsConfig;
 use crate::schemas::common::Hooks;
 use crate::schemas::common::PersistDocsConfig;
+use crate::schemas::common::ScheduleConfig;
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::postgres::PostgresIndex;
 use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
@@ -251,6 +252,10 @@ pub struct ProjectSeedConfig {
     #[serde(default, rename = "+indexes")]
     pub indexes: Option<Vec<PostgresIndex>>,
 
+    // Schedule (Databricks streaming tables)
+    #[serde(rename = "+schedule")]
+    pub schedule: Option<ScheduleConfig>,
+
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectSeedConfig>>,
 }
 
@@ -362,6 +367,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 merge_with_schema_evolution: config.merge_with_schema_evolution,
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
+                schedule: config.schedule,
 
                 auto_refresh: config.auto_refresh,
                 backup: config.backup,
@@ -479,6 +485,7 @@ impl From<SeedConfig> for ProjectSeedConfig {
 
             table_type: config.__warehouse_specific_config__.table_type,
             indexes: config.__warehouse_specific_config__.indexes,
+            schedule: config.__warehouse_specific_config__.schedule,
             __additional_properties__: BTreeMap::new(),
         }
     }

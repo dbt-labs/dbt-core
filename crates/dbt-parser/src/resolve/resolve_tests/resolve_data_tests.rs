@@ -268,6 +268,7 @@ pub async fn resolve_data_tests(
                 materialized: DbtMaterialization::Test,
                 enabled: test_config.enabled.unwrap_or(true),
                 extended_model: false,
+                persist_docs: None,
                 columns: BTreeMap::new(),
                 depends_on: NodeDependsOn {
                     macros: convert_macro_names_to_unique_ids(macro_calls),

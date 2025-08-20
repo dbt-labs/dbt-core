@@ -9,6 +9,7 @@ use std::collections::{BTreeMap, btree_map::Iter};
 use crate::{
     default_to,
     schemas::{
+        common::ScheduleConfig,
         manifest::{
             BigqueryClusterConfig, GrantAccessToTarget, PartitionConfig, postgres::PostgresIndex,
         },
@@ -193,6 +194,9 @@ pub struct ProjectUnitTestConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub skip_not_matched_step: Option<bool>,
+    // Schedule (Databricks streaming tables)
+    #[serde(rename = "+schedule")]
+    pub schedule: Option<ScheduleConfig>,
 
     // Redshift specific fields
     #[serde(
@@ -311,6 +315,7 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
                 merge_with_schema_evolution: config.merge_with_schema_evolution,
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
+                schedule: config.schedule,
 
                 auto_refresh: config.auto_refresh,
                 backup: config.backup,
@@ -402,6 +407,7 @@ impl From<UnitTestConfig> for ProjectUnitTestConfig {
                 .merge_with_schema_evolution,
             skip_matched_step: config.__warehouse_specific_config__.skip_matched_step,
             skip_not_matched_step: config.__warehouse_specific_config__.skip_not_matched_step,
+            schedule: config.__warehouse_specific_config__.schedule,
             // Redshift fields
             auto_refresh: config.__warehouse_specific_config__.auto_refresh,
             backup: config.__warehouse_specific_config__.backup,

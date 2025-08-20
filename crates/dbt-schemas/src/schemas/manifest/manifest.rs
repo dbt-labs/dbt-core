@@ -230,6 +230,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 .try_into()
                                 .expect("DbtQuoting should be set"),
                             quoting_ignore_case: false,
+                            persist_docs: model.config.persist_docs.clone(),
                             columns: model.__base_attr__.columns,
                             depends_on: model.__base_attr__.depends_on,
                             refs: model.__base_attr__.refs,
@@ -305,6 +306,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 .try_into()
                                 .expect("DbtQuoting should be set"),
                             quoting_ignore_case: false,
+                            persist_docs: None,
                             columns: test.__base_attr__.columns,
                             depends_on: test.__base_attr__.depends_on,
                             refs: test.__base_attr__.refs,
@@ -371,6 +373,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 .try_into()
                                 .expect("DbtQuoting should be set"),
                             quoting_ignore_case: false,
+                            persist_docs: snapshot.config.persist_docs.clone(),
                             columns: snapshot.__base_attr__.columns,
                             depends_on: snapshot.__base_attr__.depends_on,
                             refs: snapshot.__base_attr__.refs,
@@ -436,6 +439,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 .expect("DbtQuoting should be set"),
                             quoting_ignore_case: false,
                             extended_model: false,
+                            persist_docs: seed.config.persist_docs.clone(),
                             columns: seed.__base_attr__.columns,
                             depends_on: seed.__base_attr__.depends_on,
                             refs: seed.__base_attr__.refs,
@@ -503,6 +507,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 .try_into()
                                 .expect("DbtQuoting should be set"),
                             quoting_ignore_case: false,
+                            persist_docs: analysis.config.persist_docs.clone(),
                             columns: analysis.__base_attr__.columns,
                             depends_on: analysis.__base_attr__.depends_on,
                             refs: analysis.__base_attr__.refs,
@@ -579,6 +584,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         .try_into()
                         .expect("DbtQuoting should be set"),
                     quoting_ignore_case: false,
+                    persist_docs: None,
                     columns: source.columns,
                     depends_on: NodeDependsOn::default(),
                     refs: vec![],
@@ -629,6 +635,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     static_analysis: Default::default(),
                     enabled: true,
                     extended_model: false,
+                    persist_docs: None,
                     columns: BTreeMap::new(),
                     refs: exposure.__base_attr__.refs,
                     sources: exposure.__base_attr__.sources,
@@ -685,6 +692,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     quoting_ignore_case: false,
                     enabled: unit_test.config.enabled.unwrap_or(true),
                     extended_model: false,
+                    persist_docs: None,
                     columns: unit_test.__base_attr__.columns,
                     depends_on: unit_test.__base_attr__.depends_on,
                     refs: unit_test.__base_attr__.refs,

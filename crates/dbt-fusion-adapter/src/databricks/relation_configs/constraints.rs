@@ -510,6 +510,7 @@ fk_composite,parent_type,main,default,parents,type
             static_analysis: dbt_common::io_args::StaticAnalysisKind::On,
             enabled: true,
             extended_model: false,
+            persist_docs: None,
             columns,
             refs: vec![],
             sources: vec![],

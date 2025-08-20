@@ -8,14 +8,14 @@ use dbt_telemetry::NodeIdentifier;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 type YmlValue = dbt_serde_yaml::Value;
-use crate::schemas::common::{NodeInfo, NodeInfoWrapper};
+use crate::schemas::common::{NodeInfo, NodeInfoWrapper, PersistDocsConfig};
 use crate::schemas::manifest::{BigqueryClusterConfig, GrantAccessToTarget, PartitionConfig};
 use crate::schemas::project::WarehouseSpecificNodeConfig;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::{
     common::{
         Access, DbtChecksum, DbtContract, DbtIncrementalStrategy, DbtMaterialization, Expect,
-        FreshnessDefinition, Given, IncludeExclude, NodeDependsOn, ResolvedQuoting,
+        FreshnessDefinition, Given, IncludeExclude, NodeDependsOn, ResolvedQuoting, ScheduleConfig,
     },
     dbt_column::DbtColumn,
     macros::DbtMacro,
@@ -1547,6 +1547,9 @@ pub struct NodeBaseAttributes {
     #[serde(skip_serializing, default = "default_false")]
     pub extended_model: bool,
 
+    // Documentation persistence configuration
+    pub persist_docs: Option<PersistDocsConfig>,
+
     // Derived
     #[serde(default)]
     pub columns: BTreeMap<String, DbtColumn>,
@@ -1901,6 +1904,7 @@ impl AdapterAttr {
                     merge_with_schema_evolution: config.merge_with_schema_evolution,
                     skip_matched_step: config.skip_matched_step,
                     skip_not_matched_step: config.skip_not_matched_step,
+                    schedule: config.schedule.clone(),
                 })))
             }
             _ => {
@@ -1971,6 +1975,7 @@ impl AdapterAttr {
                         merge_with_schema_evolution: config.merge_with_schema_evolution,
                         skip_matched_step: config.skip_matched_step,
                         skip_not_matched_step: config.skip_not_matched_step,
+                        schedule: config.schedule.clone(),
                     })))
             }
         }
@@ -2024,6 +2029,7 @@ pub struct DatabricksAttr {
     pub merge_with_schema_evolution: Option<bool>,
     pub skip_matched_step: Option<bool>,
     pub skip_not_matched_step: Option<bool>,
+    pub schedule: Option<ScheduleConfig>,
 }
 
 /// A resolved BigQuery configuration
