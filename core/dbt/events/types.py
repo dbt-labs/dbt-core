@@ -767,7 +767,7 @@ class MissingArgumentsPropertyInGenericTestDeprecation(WarnLevel):
         return "D039"
 
     def message(self) -> str:
-        description = f"Found top-level arguments to test `{self.test_name}`. Arguments to generic tests should be nested under the `arguments` property.`"
+        description = f"Found top-level arguments to test {self.test_name}. Arguments to generic tests should be nested under the `arguments` property."
         return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 

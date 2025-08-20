@@ -109,7 +109,7 @@ class TestBuilder(Generic[Testable]):
         column_name: Optional[str] = None,
         version: Optional[NodeVersion] = None,
     ) -> None:
-        test_name, test_args = self.extract_test_args(data_test, column_name)
+        test_name, test_args = self.extract_test_args(data_test, target, column_name)
         self.args: Dict[str, Any] = test_args
         if "model" in self.args:
             raise TestArgIncludesModelError()
@@ -203,7 +203,7 @@ class TestBuilder(Generic[Testable]):
         return TypeError('invalid target type "{}"'.format(type(self.target)))
 
     @staticmethod
-    def extract_test_args(data_test, name=None) -> Tuple[str, Dict[str, Any]]:
+    def extract_test_args(data_test, target, name=None) -> Tuple[str, Dict[str, Any]]:
         if not isinstance(data_test, dict):
             raise TestTypeError(data_test)
 
@@ -237,7 +237,8 @@ class TestBuilder(Generic[Testable]):
                 k not in ("config", "column_name", "description", "name") for k in test_args.keys()
             ):
                 deprecations.warn(
-                    "missing-arguments-property-in-generic-test-deprecation", test_name=test_name
+                    "missing-arguments-property-in-generic-test-deprecation",
+                    test_name=f"`{test_name}` defined on '{target.name}' ({target.original_file_path})",
                 )
             if isinstance(arguments, dict):
                 test_args = {**test_args, **arguments}
