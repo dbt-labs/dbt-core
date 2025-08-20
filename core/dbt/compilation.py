@@ -3,6 +3,7 @@ import json
 import os
 import pickle
 from collections import defaultdict, deque
+from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import networkx as nx  # type: ignore
@@ -490,6 +491,34 @@ class Compiler:
         relation_cls = adapter.Relation
         return relation_cls.add_ephemeral_prefix(name)
 
+    def _get_test_table_suffix(self, node: GenericTestNode) -> Optional[str]:
+        """Generate a unique suffix for test failure tables based on configuration."""
+        if not node.config.store_failures_unique:
+            return None
+            
+        suffix_strategy = node.config.store_failures_suffix or 'invocation_id'
+        
+        if suffix_strategy == 'invocation_id':
+            # Use first 8 chars of invocation_id for reasonable table name length
+            invocation_id = get_invocation_id()
+            return invocation_id[:8] if invocation_id else None
+            
+        elif suffix_strategy == 'timestamp':
+            # Full timestamp: YYYYMMDD_HHMMSS
+            return datetime.now().strftime('%Y%m%d_%H%M%S')
+            
+        elif suffix_strategy == 'date':
+            # Date only: YYYYMMDD
+            return datetime.now().strftime('%Y%m%d')
+            
+        elif suffix_strategy == 'hour':
+            # Date and hour: YYYYMMDD_HH - useful for hourly DAGs
+            return datetime.now().strftime('%Y%m%d_%H')
+            
+        else:
+            # Treat as literal string - could be expanded to support templates
+            return suffix_strategy
+
     def _recursively_prepend_ctes(
         self,
         model: ManifestSQLNode,
@@ -626,6 +655,13 @@ class Compiler:
             adapter = get_adapter(self.config)
             relation_cls = adapter.Relation
             relation_name = str(relation_cls.create_from(self.config, node))
+            
+            # Apply unique suffix if configured for tests with store_failures
+            if isinstance(node, GenericTestNode) and node.config.store_failures:
+                suffix = self._get_test_table_suffix(node)
+                if suffix:
+                    relation_name = f"{relation_name}_{suffix}"
+            
             node.relation_name = relation_name
 
         # Compile 'ref' and 'source' expressions in foreign key constraints
