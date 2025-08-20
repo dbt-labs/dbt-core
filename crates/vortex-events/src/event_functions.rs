@@ -1,8 +1,6 @@
 use dashmap::DashMap;
-use dbt_common::{
-    FsResult,
-    stats::{NodeStatus, Stat},
-};
+use dbt_common::FsResult;
+use dbt_common::stats::{NodeStatus, Stat};
 use dbt_env::env::InternalEnv;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_schemas::schemas::{

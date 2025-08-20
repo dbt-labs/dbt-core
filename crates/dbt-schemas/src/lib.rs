@@ -4,6 +4,7 @@ pub mod dbt_utils;
 pub mod filter;
 pub mod man;
 pub mod state;
+pub mod stats;
 
 pub mod schemas {
     pub mod columns;
@@ -22,7 +23,8 @@ pub mod schemas {
     mod sources;
     pub use prev_state::{ModificationType, PreviousState};
     pub use run_results::{
-        RunResult, RunResultsArgs, RunResultsArtifact, RunResultsMetadata, TimingInfo,
+        ContextRunResult, RunResultOutput, RunResultsArgs, RunResultsArtifact, RunResultsMetadata,
+        TimingInfo,
     };
 
     // Add re-exports from relation_configs
