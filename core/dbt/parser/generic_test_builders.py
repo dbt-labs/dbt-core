@@ -109,7 +109,9 @@ class TestBuilder(Generic[Testable]):
         column_name: Optional[str] = None,
         version: Optional[NodeVersion] = None,
     ) -> None:
-        test_name, test_args = self.extract_test_args(data_test, target, column_name)
+        test_name, test_args = self.extract_test_args(
+            data_test, target.original_file_path, target.name, column_name
+        )
         self.args: Dict[str, Any] = test_args
         if "model" in self.args:
             raise TestArgIncludesModelError()
@@ -203,7 +205,9 @@ class TestBuilder(Generic[Testable]):
         return TypeError('invalid target type "{}"'.format(type(self.target)))
 
     @staticmethod
-    def extract_test_args(data_test, target, name=None) -> Tuple[str, Dict[str, Any]]:
+    def extract_test_args(
+        data_test, file_path, resource_name=None, column_name=None
+    ) -> Tuple[str, Dict[str, Any]]:
         if not isinstance(data_test, dict):
             raise TestTypeError(data_test)
 
@@ -227,8 +231,8 @@ class TestBuilder(Generic[Testable]):
         if not isinstance(test_name, str):
             raise TestNameNotStringError(test_name)
         test_args = deepcopy(test_args)
-        if name is not None:
-            test_args["column_name"] = name
+        if column_name is not None:
+            test_args["column_name"] = column_name
 
         # Extract kwargs when they are nested under new 'arguments' property separately from 'config' if require_generic_test_arguments_property is enabled
         if get_flags().require_generic_test_arguments_property:
@@ -238,7 +242,7 @@ class TestBuilder(Generic[Testable]):
             ):
                 deprecations.warn(
                     "missing-arguments-property-in-generic-test-deprecation",
-                    test_name=f"`{test_name}` defined on '{target.name}' ({target.original_file_path})",
+                    test_name=f"`{test_name}` defined on '{resource_name}' ({file_path})",
                 )
             if isinstance(arguments, dict):
                 test_args = {**test_args, **arguments}
