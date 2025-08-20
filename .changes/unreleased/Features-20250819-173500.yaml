@@ -1,0 +1,6 @@
+kind: Features
+body: Add unique suffix support for test failure tables to prevent conflicts in parallel execution
+time: 2025-08-19T17:35:00.00000-00:00
+custom:
+  Author: andtrott
+  Issue: "11938"
