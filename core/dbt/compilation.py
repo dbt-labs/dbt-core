@@ -652,16 +652,17 @@ class Compiler:
             and node.relation_name is None
             and node.is_relational
         ):
-            adapter = get_adapter(self.config)
-            relation_cls = adapter.Relation
-            relation_name = str(relation_cls.create_from(self.config, node))
-            
             # Apply unique suffix if configured for tests with store_failures
+            # This must be done BEFORE creating the relation_name
             if isinstance(node, GenericTestNode) and node.config.store_failures:
                 suffix = self._get_test_table_suffix(node)
                 if suffix:
-                    relation_name = f"{relation_name}_{suffix}"
+                    # Modify the alias which is used by materializations
+                    node.alias = f"{node.alias}_{suffix}"
             
+            adapter = get_adapter(self.config)
+            relation_cls = adapter.Relation
+            relation_name = str(relation_cls.create_from(self.config, node))
             node.relation_name = relation_name
 
         # Compile 'ref' and 'source' expressions in foreign key constraints
