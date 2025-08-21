@@ -8,6 +8,19 @@ configurable_nodes() to all_nodes() in ConfigSelectorMethod.
 import pytest
 
 from dbt.tests.util import run_dbt
+from tests.functional.graph_selection.fixtures import (
+    alternative_users_sql,
+    base_users_sql,
+    emails_alt_sql,
+    emails_sql,
+    nested_users_sql,
+    never_selected_sql,
+    schema_yml,
+    subdir_sql,
+    users_rollup_dependency_sql,
+    users_rollup_sql,
+    users_sql,
+)
 
 
 class TestConfigSelection:
@@ -22,9 +35,20 @@ class TestConfigSelection:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "base_model.sql": "select 1 as id, 'test' as name, current_timestamp as created_at",
-            "model_enabled.sql": "select * from {{ ref('base_model') }}",
-            "model_view.sql": "select * from {{ ref('base_model') }} where id = 1",
+            "schema.yml": schema_yml,
+            "base_users.sql": base_users_sql,
+            "users.sql": users_sql,
+            "users_rollup.sql": users_rollup_sql,
+            "versioned_v3.sql": base_users_sql,
+            "users_rollup_dependency.sql": users_rollup_dependency_sql,
+            "emails.sql": emails_sql,
+            "emails_alt.sql": emails_alt_sql,
+            "alternative.users.sql": alternative_users_sql,
+            "never_selected.sql": never_selected_sql,
+            "test": {
+                "subdir.sql": subdir_sql,
+                "subdir": {"nested_users.sql": nested_users_sql},
+            },
             "metricflow_time_spine.sql": "SELECT to_date('02/20/2023', 'mm/dd/yyyy') as date_day",
             "semantic_models.yml": """
 version: 2
@@ -32,11 +56,7 @@ version: 2
 semantic_models:
   - name: test_semantic_model
     label: "Test Semantic Model"
-    model: ref('base_model')
-    config:
-      enabled: true
-      meta:
-        semantic_layer: true
+    model: ref('users')
     dimensions:
       - name: created_at
         type: time
@@ -70,6 +90,7 @@ saved_queries:
       enabled: true
       meta:
         query_type: basic
+        contains_pii: true
     query_params:
       metrics:
         - test_metric
@@ -83,88 +104,37 @@ saved_queries:
 """,
         }
 
-    def test_basic_semantic_layer_parsing(self, project):
-        """Test basic parsing of semantic layer components."""
-        try:
-            result = run_dbt(["parse"])
-            print(f"Parse result: {result}")
-
-            # List all resources to see what was parsed
-            results = run_dbt(["list"])
-            print(f"All resources: {sorted(results)}")
-
-            # Look for semantic layer components
-            semantic_models = [r for r in results if "semantic_model" in r]
-            metrics = [r for r in results if "metric" in r]
-            saved_queries = [r for r in results if "saved_query" in r]
-
-            print(f"Semantic models: {semantic_models}")
-            print(f"Metrics: {metrics}")
-            print(f"Saved queries: {saved_queries}")
-
-            # At minimum should have models
-            models = [r for r in results if "model" in r and "semantic" not in r]
-            assert len(models) >= 3, f"Should have at least 3 models, found: {models}"
-
-        except Exception as e:
-            print(f"Error during parsing: {e}")
-            # Let's try a simpler approach - just test models without semantic layer
-            pass
-
-    def test_config_enabled_true_selects_all_enabled_nodes(self, project):
-        """Test that config.enabled:true selects all enabled nodes."""
-        run_dbt(["parse"])
-
-        results = run_dbt(["list", "--select", "config.enabled:true"])
-        selected_nodes = set(results)
-
-        # Should include all enabled models
-        assert "test.base_model" in selected_nodes
-        assert "test.model_enabled" in selected_nodes
-        assert "test.model_view" in selected_nodes
-
     def test_config_selector_with_resource_type_filter(self, project):
         """Test config selectors with resource type filters."""
-        run_dbt(["parse"])
 
-        # Test that config selectors work with resource type filters
         results = run_dbt(["list", "--resource-type", "model", "--select", "config.enabled:true"])
         selected_nodes = set(results)
 
-        # Should only include models
-        assert "test.base_model" in selected_nodes
-        assert "test.model_enabled" in selected_nodes
-        assert "test.model_view" in selected_nodes
+        assert "saved_query:test.test_saved_query" not in selected_nodes
+        assert "metric:test.test_metric" not in selected_nodes
+        assert "semantic_model:test.test_semantic_model" not in selected_nodes
 
-    def test_config_selector_demonstrates_expansion_from_configurable_to_all_nodes(self, project):
-        """Test that demonstrates the key change: config selectors now work on all node types.
+    def test_config_enabled_true_selects_extended_nodes(self, project):
+        """Test that dbt ls -s config.enabled:true returns the test_saved_query.
 
-        This test specifically validates that the change from configurable_nodes() to all_nodes()
-        in ConfigSelectorMethod allows selection of node types that were previously not selectable.
-
-        Before the change, ConfigSelectorMethod.configurable_nodes() only returned models and sources.
-        After the change, ConfigSelectorMethod.all_nodes() returns ALL node types in the graph,
-        including metrics, semantic models, saved queries, and any other node type that might
-        have config properties.
+        This specific test validates that the saved query (which has config.enabled:true)
+        is properly selected by the config selector. This demonstrates that the change from
+        configurable_nodes() to all_nodes() allows config selectors to work on saved queries.
         """
-        run_dbt(["parse"])
 
-        # Before the change, this would only find models and sources
-        # After the change, this should also find any additional node types
         results = run_dbt(["list", "--select", "config.enabled:true"])
-
-        # Verify we found all our enabled model nodes
         selected_nodes = set(results)
-        assert "test.base_model" in selected_nodes
-        assert "test.model_enabled" in selected_nodes
-        assert "test.model_view" in selected_nodes
 
-        # The key demonstration: these config selectors now work on all node types
-        # This test validates the core functionality works as expected
-        assert len(results) >= 3, "Should find all enabled nodes"
+        assert "saved_query:test.test_saved_query" in selected_nodes
+        assert "metric:test.test_metric" in selected_nodes
+        assert "semantic_model:test.test_semantic_model" in selected_nodes
 
-        # Additional validation: verify config selectors can work with any node type
-        # that has config properties (this is the expansion from configurable_nodes to all_nodes)
-        print(f"Selected nodes: {sorted(selected_nodes)}")
-        for node in selected_nodes:
-            assert "test." in node, f"All nodes should be from test project: {node}"
+    def test_config_meta_selection(self, project):
+        """ """
+
+        results = run_dbt(["list", "--select", "config.meta.contains_pii:true"])
+        selected_nodes = set(results)
+
+        assert "test.users" in selected_nodes
+        assert "saved_query:test.test_saved_query" in selected_nodes
+        assert "test.unique_users_id" in selected_nodes
