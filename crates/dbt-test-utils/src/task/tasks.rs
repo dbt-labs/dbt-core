@@ -6,7 +6,8 @@ use async_trait::async_trait;
 use dbt_common::{FsResult, constants::DBT_INTERNAL_PACKAGES_DIR_NAME};
 
 use super::{
-    ProjectEnv, Task, TestEnv, TestResult, goldie::execute_and_compare, task_seq::CommandFn,
+    ProjectEnv, Task, TestEnv, TestError, TestResult, goldie::execute_and_compare,
+    task_seq::CommandFn,
 };
 
 /// Common helper function to prepare command vector with standard DBT paths and options
@@ -136,7 +137,7 @@ impl Task for ExecuteAndCompare {
             ));
         }
 
-        execute_and_compare(
+        match execute_and_compare(
             &self.name,
             cmd_vec.as_slice(),
             project_env,
@@ -146,7 +147,11 @@ impl Task for ExecuteAndCompare {
             self.func.clone(),
         )
         .await
-        .map_err(|e| format!("test error: {}", e.pretty()).into())
+        {
+            Ok(patches) if patches.is_empty() => Ok(()),
+            Ok(patches) => Err(TestError::GoldieMismatch(patches)),
+            Err(e) => Err(e.into()),
+        }
     }
 
     fn is_counted(&self) -> bool {
@@ -198,7 +203,8 @@ impl Task for ShExecute {
         let boxed_fn: Arc<CommandFn> = Arc::new(|cmd_vec, dir, stdout, stderr| {
             Box::pin(exec_sh(cmd_vec, dir, stdout, stderr))
         });
-        if let Err(e) = execute_and_compare(
+
+        match execute_and_compare(
             &self.name,
             self.cmd_vec.as_slice(),
             project_env,
@@ -209,9 +215,10 @@ impl Task for ShExecute {
         )
         .await
         {
-            return Err(format!("test error: {}", e.pretty()).into());
+            Ok(patches) if patches.is_empty() => Ok(()),
+            Ok(patches) => Err(TestError::GoldieMismatch(patches)),
+            Err(e) => Err(e.into()),
         }
-        Ok(())
     }
 
     fn is_counted(&self) -> bool {

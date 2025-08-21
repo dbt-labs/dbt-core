@@ -181,19 +181,6 @@ impl File {
         let path = path.as_ref();
         std::fs::File::create(path).lift(ectx!("Failed to create file: {}", path.display()))
     }
-
-    /// Unlike [File::create], this returns a file that allows both read and write
-    /// This truncates the file if it already exists.
-    pub fn create_with_read_write<P: AsRef<Path>>(path: P) -> FsResult<std::fs::File> {
-        let path = path.as_ref();
-        std::fs::File::options()
-            .create(true)
-            .truncate(true)
-            .read(true)
-            .write(true)
-            .open(path)
-            .lift(ectx!("Failed to create file: {}", path.display()))
-    }
 }
 
 #[cfg(test)]

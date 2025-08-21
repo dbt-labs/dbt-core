@@ -1,3 +1,5 @@
+use crate::task::TestError;
+
 use super::io::{RmTask, TouchTask};
 use super::tasks::{NopTask, ShExecute};
 use super::utils::{check_set_user_env_var, redirect_buffer_to_stdin, strip_full_test_name};
@@ -186,11 +188,33 @@ async fn run_test_tasks(
     check_set_user_env_var();
 
     let mut index = 0;
+    let mut patches = vec![];
     for task in tasks {
-        task.run(project_env, test_env, index).await?;
+        match task.run(project_env, test_env, index).await {
+            Ok(()) => {}
+            Err(TestError::GoldieMismatch(p)) => {
+                patches.extend(p.into_iter());
+            }
+            Err(e) => return Err(e),
+        }
         if task.is_counted() {
             index += 1;
         }
+    }
+    if !patches.is_empty() {
+        eprintln!("<<<<<<<< BEGIN PATCH");
+        for patch in patches {
+            eprintln!("{patch}");
+        }
+        eprintln!(">>>>>>>> END PATCH");
+        panic!(
+            "Test case output does not match one or more golden files. See diff above. \
+        To accept this output as golden file, open a terminal in the root of the git repository and run: \
+          `git apply -` \
+        then copy-paste the diff above into the terminal and press Ctrl+D.\
+        (Note: if you're copy-pasting from the Github web UI, run `sed 's/^    //' | git apply -` instead) \
+        ",
+        )
     }
 
     Ok(())

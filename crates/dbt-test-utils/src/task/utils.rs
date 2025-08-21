@@ -7,7 +7,6 @@ use dbt_common::{
 use std::{
     fs::File,
     future::Future,
-    io::Read,
     path::{Component, Path, PathBuf},
 };
 
@@ -291,7 +290,7 @@ where
 /// we don't restore here, then terminal output will be disabled after the first
 /// time `exec_fs` gets called, which would be surprising for the test author.
 struct FdRedirectionGuard {
-    file: File,
+    _file: File,
     #[cfg(not(target_os = "windows"))]
     target_fd: std::os::unix::io::RawFd,
     #[cfg(not(target_os = "windows"))]
@@ -316,29 +315,6 @@ impl Drop for FdRedirectionGuard {
             // Restore the original stdout
             SetStdHandle(self.target_fd as _, self.original_fd as _);
         }
-
-        // In the testing framework, the self.file is created from a temp file,
-        // so we need to read the content and print it to ensure that the errors are not sunken
-        let is_stderr = {
-            #[cfg(not(target_os = "windows"))]
-            {
-                self.target_fd == libc::STDERR_FILENO
-            }
-            #[cfg(target_os = "windows")]
-            {
-                use winapi::um::winbase::STD_ERROR_HANDLE;
-                self.target_fd == STD_ERROR_HANDLE as usize
-            }
-        };
-
-        if is_stderr {
-            let mut content = String::new();
-            use std::io::Seek;
-            let _ = self.file.seek(std::io::SeekFrom::Start(0));
-            let _ = self.file.read_to_string(&mut content);
-            eprintln!("{content}");
-        }
-        // self._file will be closed automatically after this point
     }
 }
 
@@ -360,7 +336,7 @@ fn with_redirected_stdout(file: File) -> FdRedirectionGuard {
     }
 
     FdRedirectionGuard {
-        file,
+        _file: file,
         target_fd: STD_OUTPUT_HANDLE as usize,
         original_fd,
     }
@@ -384,7 +360,7 @@ fn with_redirected_stderr(file: File) -> FdRedirectionGuard {
     }
 
     FdRedirectionGuard {
-        file,
+        _file: file,
         target_fd: STD_ERROR_HANDLE as usize,
         original_fd,
     }
@@ -404,7 +380,7 @@ fn with_redirected_stdout(file: File) -> FdRedirectionGuard {
     }
 
     FdRedirectionGuard {
-        file,
+        _file: file,
         target_fd: libc::STDOUT_FILENO,
         original_fd,
     }
@@ -424,7 +400,7 @@ fn with_redirected_stderr(file: File) -> FdRedirectionGuard {
     }
 
     FdRedirectionGuard {
-        file,
+        _file: file,
         target_fd: libc::STDERR_FILENO,
         original_fd,
     }
