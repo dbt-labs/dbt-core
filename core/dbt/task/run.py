@@ -26,6 +26,7 @@ from dbt.artifacts.schemas.run import RunResult
 from dbt.cli.flags import Flags
 from dbt.clients.jinja import MacroGenerator
 from dbt.config import RuntimeConfig
+from dbt.constants import DEFAULT_HOOK_PRIORITY, PROJECT_HOOK_PRIORITY
 from dbt.context.providers import generate_runtime_model_context
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import BatchContext, HookNode, ModelNode, ResultNode
@@ -929,11 +930,24 @@ class RunTask(CompileTask):
 
         return relation_exists
 
-    def _hook_keyfunc(self, hook: HookNode) -> Tuple[str, Optional[int]]:
+    def _hook_keyfunc(self, hook: HookNode) -> Tuple[int, str, Optional[int]]:
+        """Sort hooks by priority, then package name, then index"""
         package_name = hook.package_name
-        if package_name == self.config.project_name:
+
+        # Default priority
+        priority = DEFAULT_HOOK_PRIORITY
+
+        # Get priority from node meta if available
+        if hook.config and hook.config.meta and "hook_priority" in hook.config.meta:
+            priority = hook.config.meta["hook_priority"]
+
+        # Special case for project hooks - if no explicit priority,
+        # make them run last (preserving backward compatibility)
+        if package_name == self.config.project_name and priority == DEFAULT_HOOK_PRIORITY:
             package_name = BiggestName("")
-        return package_name, hook.index
+            priority = PROJECT_HOOK_PRIORITY
+
+        return priority, package_name, hook.index
 
     def get_hooks_by_type(self, hook_type: RunHookType) -> List[HookNode]:
 
