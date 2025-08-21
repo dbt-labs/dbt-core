@@ -520,6 +520,8 @@ pub struct CacheState {
     pub resolved_nodes: ResolvedNodes,
     // updated nodes which input files are changed
     pub unchanged_node_statuses: HashMap<String, NodeStatus>,
+    /// The unchanged nodes, by unique id, based on file changes.
+    pub unchanged_nodes: HashSet<String>,
 }
 impl CacheState {
     pub fn has_changes(&self) -> bool {
