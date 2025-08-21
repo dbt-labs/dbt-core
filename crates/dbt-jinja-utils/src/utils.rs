@@ -6,6 +6,7 @@ use dbt_fusion_adapter::{AdapterTyping, ParseAdapter};
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::{DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, InternalDbtNode};
+use dbt_serde_yaml::Spanned;
 use minijinja::arg_utils::ArgParser;
 use minijinja::constants::{ROOT_PACKAGE_NAME, TARGET_PACKAGE_NAME};
 use minijinja::{Error, ErrorKind, MacroSpans, State, Value, functions::debug, value::Rest};
@@ -466,9 +467,23 @@ pub fn render_extract_ref_or_source_expr<T: DefaultTo<T>>(
     jinja_env: &JinjaEnv,
     resolve_model_context: &BTreeMap<String, Value>,
     sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
-    ref_str: &str,
+    ref_str: &Spanned<String>,
 ) -> FsResult<SqlResource<T>> {
-    let expr = jinja_env.compile_expression(ref_str)?;
+    let span = ref_str.span();
+    let ref_str = ref_str.clone().into_inner();
+    let expr = jinja_env
+        .compile_expression(ref_str.as_str())
+        .map_err(|e| {
+            e.with_location(dbt_common::CodeLocation::new(
+                span.start.line,
+                span.start.column,
+                span.start.index,
+                span.filename
+                    .as_ref()
+                    .map(|p| p.as_ref().clone())
+                    .unwrap_or_default(),
+            ))
+        })?;
     let _ = expr.eval(resolve_model_context, &[])?;
     // Remove from Mutex and return last item
     let mut sql_resources = sql_resources.lock().unwrap();

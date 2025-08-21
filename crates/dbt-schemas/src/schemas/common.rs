@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 use dbt_common::{CodeLocation, ErrorCode, FsError, FsResult, err, fs_err};
 use dbt_frontend_common::Dialect;
-use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize, Verbatim};
+use dbt_serde_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize, Verbatim};
 use hex;
 use serde::{Deserialize, Deserializer, Serialize};
 // Type alias for clarity
@@ -662,7 +662,7 @@ pub enum Formats {
 
 #[derive(Debug, Serialize, Default, Deserialize, Clone, JsonSchema)]
 pub struct Given {
-    pub input: String,
+    pub input: Spanned<String>,
     pub rows: Option<Rows>,
     #[serde(default)]
     pub format: Formats,

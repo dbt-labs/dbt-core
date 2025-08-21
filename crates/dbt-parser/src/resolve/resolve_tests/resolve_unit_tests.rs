@@ -194,14 +194,22 @@ pub fn resolve_unit_tests(
                             });
                         }
                         _ => {
-                            return err!(ErrorCode::Unexpected, "Invalid given input: {}", input);
+                            return err!(
+                                ErrorCode::Unexpected,
+                                "Invalid given input: {}",
+                                input.as_str()
+                            );
                         }
                     }
-                } else if input.eq("this") {
+                } else if input.as_str().eq("this") {
                     // this is handled at render time.
                     continue;
                 } else {
-                    return err!(ErrorCode::Unexpected, "Invalid given input: {}", input);
+                    return err!(
+                        ErrorCode::Unexpected,
+                        "Invalid given input: {}",
+                        input.as_str()
+                    );
                 }
             }
         }

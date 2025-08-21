@@ -18,6 +18,7 @@ use dbt_schemas::schemas::properties::ExposureProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
 use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
 use dbt_schemas::state::{DbtPackage, DbtRuntimeConfig};
+use dbt_serde_yaml::Spanned;
 use minijinja::value::Value as MinijinjaValue;
 use regex::Regex;
 use std::collections::BTreeMap;
@@ -205,7 +206,7 @@ pub async fn resolve_exposures(
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::type_complexity)]
 pub fn resolve_yaml_depends_on(
-    depends_on: &[String],
+    depends_on: &[Spanned<String>],
     env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     exposure_config: &ExposureConfig,
@@ -274,7 +275,7 @@ pub fn resolve_yaml_depends_on(
                 return err!(
                     ErrorCode::Unexpected,
                     "Invalid dependency input: {}",
-                    dependency
+                    dependency.as_str()
                 );
             }
         }
