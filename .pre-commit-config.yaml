@@ -69,3 +69,12 @@ repos:
     args: [--show-error-codes, --pretty]
     files: ^core/dbt/
     language: system
+- repo: local
+  hooks:
+    - id: no_versioned_artifact_resource_imports
+      name: no_versioned_artifact_resource_imports
+      entry: python custom-hooks/no_versioned_artifact_resource_imports.py
+      language: system
+      files: ^core/dbt/
+      types: [python]
+      pass_filenames: true
