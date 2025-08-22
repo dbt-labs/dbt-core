@@ -66,6 +66,21 @@ impl ProjectStore {
     pub fn get_active_project_id(&self) -> &str {
         &self.config.context.active_project
     }
+
+    pub fn get_base_url(&self, project_id: Option<&str>) -> String {
+        if let Some(project_id) = project_id {
+            if let Some(project) = self
+                .config
+                .projects
+                .iter()
+                .find(|p| p.project_id == project_id)
+            {
+                return format!("https://{}", project.account_host);
+            }
+        }
+
+        format!("https://{}", self.config.context.active_host)
+    }
 }
 
 pub struct ProfileSetup {
@@ -302,12 +317,13 @@ impl ProfileSetup {
     }
 
     async fn fetch_cloud_config_map(
+        project_store: &ProjectStore,
         project_id: &str,
         adapter: &str,
     ) -> FsResult<Option<ConfigMap>> {
-        let base_url = "https://cloud.getdbt.com";
+        let base_url = project_store.get_base_url(Some(project_id));
 
-        match DbtCloudClient::get_credential_config_map(base_url, Some(project_id), Some(adapter))
+        match DbtCloudClient::get_credential_config_map(&base_url, Some(project_id), Some(adapter))
             .await
         {
             Ok(Some(config_map)) => Ok(Some(config_map)),
@@ -360,7 +376,7 @@ impl ProfileSetup {
             log::info!("Found dbt_cloud.yml configuration");
             let project_id = Self::handle_cloud_project_selection(&project_store).await?;
 
-            match Self::fetch_cloud_config_map(&project_id, &adapter).await? {
+            match Self::fetch_cloud_config_map(&project_store, &project_id, &adapter).await? {
                 Some(config) => Some(config),
                 None => {
                     log::info!("No cloud config found for this adapter/project");
