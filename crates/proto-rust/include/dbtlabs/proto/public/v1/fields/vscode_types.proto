@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package v1.public.fields.vscode_types;
+option go_package = "github.com/dbt-labs/proto-golang/v1/public/fields/vscode_types";
+
+// User information
+message User {
+    // source used to get credentials for the user (dbt_cloud.yml, web)
+    string credentials_source = 1;
+
+    // dbt cloud user id, can be null if the user is not registered
+    string dbt_cloud_user_id = 2;
+
+    // dbt cloud hostname, can be null if the user is not registered
+    string dbt_cloud_hostname = 3;
+
+    // registration state as reported by the vscode extension
+    string registration_state = 4;
+}
+
+// Editor and extension information
+message Editor {
+    // session id (reported by the editor)
+    string session_id = 1;
+
+    // machine id (reported by the editor)
+    string machine_id = 2;
+
+    // hashed mac address (reported by the editor)
+    string mac_machine_id = 3;
+
+    // version of the dbt extension
+    string extension_version = 4;
+
+    // editor name (reported by the editor)
+    string editor_name = 5;
+
+    // editor version (reported by the editor)
+    string editor_version = 6;
+
+}
+
+// User state enum
+enum UserState {
+    // User is not registered
+    USER_STATE_UNREGISTERED = 0;
+    
+    // User is registered but not verified
+    USER_STATE_REGISTERED = 1;
+    
+    // User is registered and verified
+    USER_STATE_VERIFIED = 2;
+    
+    // User's registration has expired
+    USER_STATE_EXPIRED = 3;
+    
+    // Error occurred during verification
+    USER_STATE_VERIFICATION_ERROR = 4;
+}
+
+message CompileError {
+    // Error message
+    string message = 1;
+    // Error codes: https://github.com/dbt-labs/fs/blob/main/fs/sa/crates/dbt-common/src/error/codes.rs
+    int32 code = 2;
+}
+
+// Compile type enum
+enum CompileType {
+    // Full compile
+    FULL = 0;
+    
+    // Speculative compile
+    SPECULATIVE = 1;
+}

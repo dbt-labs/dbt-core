@@ -1,0 +1,195 @@
+syntax = "proto3";
+
+package v1.public.events.vsce;
+option go_package = "github.com/dbt-labs/proto-golang/v1/public/events/vsce";
+
+import "dbtlabs/proto/public/v1/common/vortex_options.proto";
+import "dbtlabs/proto/public/v1/events/vortex.proto";
+import "dbtlabs/proto/public/v1/fields/vscode_types.proto";
+
+
+message ExtensionActivated {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // os name
+    string os_name = 4;
+
+    // os version
+    string os_version = 5;
+
+    // whether the extension was able to initialize successfully
+    bool init_success = 6;
+
+    // type of initializion error, if an error occurred at initialization
+    string init_error = 7;
+
+    // detailed error message, if an error occurred at initialization
+    string init_error_detail = 8;
+
+    // duration of the initialization in milliseconds
+    int64 init_duration_ms = 9;
+
+    // does the user have LSP installed
+    bool is_lsp_installed = 10;
+
+    // does the user have fusion installed
+    bool is_fusion_installed = 11;
+
+    // the version of dbt used in the project
+    string dbt_version = 12;
+
+}
+
+message ExtensionLspCompile {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // this is the hash of the project's name, used for anonymized telemetry
+    string project_id = 4;
+
+    // the type of adapter used in the project (snowflake, bigquery, etc)
+    string adapter_type = 5;
+
+    // the unique id of the adapter used in the active profile eg. md5(hostname)
+    string adapter_unique_id = 6;
+
+    // the version of dbt used in the project
+    string dbt_version = 7;
+
+    // Indicates whether the compile was successful
+    bool compile_success = 8;
+
+    repeated v1.public.fields.vscode_types.CompileError errors = 9;
+
+    // duration of the compile in milliseconds
+    int64 duration_ms = 10;
+
+    // the type of compile
+    v1.public.fields.vscode_types.CompileType compile_type = 11;
+
+    // project models count
+    int32 models_count = 12;
+}
+
+message ExtensionUserStateChange {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the state the user changed to
+    v1.public.fields.vscode_types.UserState changed_to_state = 4;
+}
+
+message ExtensionCtePreview {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+}
+
+message ExtensionLineageTabClicked {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+}
+
+message ExtensionColumnLineage {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+}
+
+message ExtensionShowCompiledFile {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+}
+
+message ExtensionModelRename {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+}
+
+message ExtensionColumnRename {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+}
+
+message ExtensionUsedBuildMenu {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the command that the user selected
+    string selected_command = 4;
+}
+
+message ExtensionGetSupportPopupShown {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the type of support being offered
+    string support_type = 4;
+}
+
+message ExtensionGetSupportClicked {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the type of support that was clicked
+    string support_type = 4;
+}

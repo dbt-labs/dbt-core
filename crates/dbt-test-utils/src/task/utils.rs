@@ -1,6 +1,7 @@
 use super::TestResult;
 use clap::Parser;
 use dbt_common::{
+    DiscreteEventEmitter,
     cancellation::{CancellationToken, never_cancels},
     logging::dbt_compat_log::LogEntry,
 };
@@ -8,6 +9,7 @@ use std::{
     fs::File,
     future::Future,
     path::{Component, Path, PathBuf},
+    sync::Arc,
 };
 
 use once_cell::sync::Lazy;
@@ -254,12 +256,13 @@ pub async fn exec_fs<Fut, P: Parser>(
     project_dir: PathBuf,
     stdout_file: File,
     stderr_file: File,
-    execute_fs: impl FnOnce(SystemArgs, P, CancellationToken) -> Fut,
+    execute_fs: impl FnOnce(SystemArgs, P, Arc<dyn DiscreteEventEmitter>, CancellationToken) -> Fut,
     from_lib: impl FnOnce(&P) -> SystemArgs,
 ) -> FsResult<i32>
 where
     Fut: Future<Output = FsResult<i32>>,
 {
+    let event_emitter: Arc<dyn DiscreteEventEmitter> = vortex_events::noop_event_emitter().into();
     let token = never_cancels();
     // Check if project_dir has a .env.conformance file
     // NOTE: this has to be done before we parse Cli
@@ -278,7 +281,7 @@ where
     let cli = P::parse_from(cmd_vec);
     let arg = from_lib(&cli);
 
-    execute_fs(arg, cli, token).await
+    execute_fs(arg, cli, event_emitter, token).await
 }
 
 /// The purpose of this guard is two fold:

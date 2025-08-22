@@ -34,3 +34,6 @@ pub mod row_limit;
 pub mod serde_utils;
 pub mod time;
 pub mod tracing;
+
+mod discrete_event_emitter;
+pub use discrete_event_emitter::DiscreteEventEmitter;

@@ -11,6 +11,7 @@ impl serde::Serialize for VortexIcebergNamespace {
             Self::Telemetry => "VORTEX_ICEBERG_NAMESPACE_TELEMETRY",
             Self::Dlq => "VORTEX_ICEBERG_NAMESPACE_DLQ",
             Self::Mantle => "VORTEX_ICEBERG_NAMESPACE_MANTLE",
+            Self::Codex => "VORTEX_ICEBERG_NAMESPACE_CODEX",
         };
         serializer.serialize_str(variant)
     }
@@ -28,6 +29,7 @@ impl<'de> serde::Deserialize<'de> for VortexIcebergNamespace {
             "VORTEX_ICEBERG_NAMESPACE_TELEMETRY",
             "VORTEX_ICEBERG_NAMESPACE_DLQ",
             "VORTEX_ICEBERG_NAMESPACE_MANTLE",
+            "VORTEX_ICEBERG_NAMESPACE_CODEX",
         ];
 
         struct GeneratedVisitor;
@@ -74,6 +76,7 @@ impl<'de> serde::Deserialize<'de> for VortexIcebergNamespace {
                     "VORTEX_ICEBERG_NAMESPACE_TELEMETRY" => Ok(VortexIcebergNamespace::Telemetry),
                     "VORTEX_ICEBERG_NAMESPACE_DLQ" => Ok(VortexIcebergNamespace::Dlq),
                     "VORTEX_ICEBERG_NAMESPACE_MANTLE" => Ok(VortexIcebergNamespace::Mantle),
+                    "VORTEX_ICEBERG_NAMESPACE_CODEX" => Ok(VortexIcebergNamespace::Codex),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }

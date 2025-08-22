@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package v1.public.events.mcp;
+option go_package = "github.com/dbt-labs/proto-golang/v1/public/events/mcp";
+
+import "dbtlabs/proto/public/v1/common/vortex_options.proto";
+import "dbtlabs/proto/public/v1/events/vortex.proto";
+
+import "google/protobuf/struct.proto";
+
+
+message ToolCalled {
+  option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+  option (v1.public.common.vortex_enabled) = true;
+  v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+  // event_id is the unique identifier for this event. It is a generated UUID.
+  string event_id = 2;
+
+  // The start of the tool call in milliseconds since the Unix epoch
+  int64 start_time_ms = 3;
+
+  // The end of the tool call in milliseconds since the Unix epoch
+  int64 end_time_ms = 4;
+
+  // The name of the tool, e.g. get_dimentions, dbt build, get_mart_models
+  string tool_name = 5;
+
+  // The arguments supplied to the tool, e.g. a list of metrics or a dbt CLI selector
+  map<string, string> arguments = 6;
+
+  // An error message if the call fails
+  string error_message = 7;
+
+  // The user can optionally set their dev environment id to use tools like the execute_sql
+  string dbt_cloud_environment_id_dev = 8;
+
+  // The user can optionally set their prod environment id to use tools like list_metrics
+  string dbt_cloud_environment_id_prod = 9;
+
+  // The user can optionally set their user id to use tools like execute_sql
+  string dbt_cloud_user_id = 10;
+
+  // The user id found at ~/.dbt/.user.yml if present
+  string local_user_id = 11;
+
+  // The dbt Cloud host that the user configured
+  string host = 12;
+
+  // The multicell account prefix that the user configured: https://docs.getdbt.com/docs/cloud/about-cloud/access-regions-ip-addresses
+  string multicell_account_prefix = 13;
+}

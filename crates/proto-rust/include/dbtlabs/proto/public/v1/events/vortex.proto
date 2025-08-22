@@ -56,8 +56,8 @@ message VortexMessageBatch {
 // a message that is sent to the dead letter queue when a message
 // is rejected by vortex.
 message VortexDeadLetterMessage {
-    option (v1.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_DLQ;
-    option (v1.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_DLQ;
+    option (v1.public.common.vortex_enabled) = true;
 
     // type url of failed message
     string type_url = 1;

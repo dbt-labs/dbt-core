@@ -17,6 +17,8 @@ pub enum VortexIcebergNamespace {
     Dlq = 4,
     /// owner: Zeeshan Qureshi
     Mantle = 5,
+    /// owner: Vadim Rybak
+    Codex = 6,
 }
 impl VortexIcebergNamespace {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -31,6 +33,7 @@ impl VortexIcebergNamespace {
             Self::Telemetry => "VORTEX_ICEBERG_NAMESPACE_TELEMETRY",
             Self::Dlq => "VORTEX_ICEBERG_NAMESPACE_DLQ",
             Self::Mantle => "VORTEX_ICEBERG_NAMESPACE_MANTLE",
+            Self::Codex => "VORTEX_ICEBERG_NAMESPACE_CODEX",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -42,6 +45,7 @@ impl VortexIcebergNamespace {
             "VORTEX_ICEBERG_NAMESPACE_TELEMETRY" => Some(Self::Telemetry),
             "VORTEX_ICEBERG_NAMESPACE_DLQ" => Some(Self::Dlq),
             "VORTEX_ICEBERG_NAMESPACE_MANTLE" => Some(Self::Mantle),
+            "VORTEX_ICEBERG_NAMESPACE_CODEX" => Some(Self::Codex),
             _ => None,
         }
     }

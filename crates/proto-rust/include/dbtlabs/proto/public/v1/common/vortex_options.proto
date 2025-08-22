@@ -1,6 +1,6 @@
 syntax = "proto3";
-package v1.common;
-option go_package = "github.com/dbt-labs/proto-golang/v1/common";
+package v1.public.common;
+option go_package = "github.com/dbt-labs/proto-golang/v1/public/common";
 
 import "google/protobuf/descriptor.proto";
 
@@ -24,6 +24,9 @@ enum VortexIcebergNamespace {
 
   // owner: Zeeshan Qureshi
   VORTEX_ICEBERG_NAMESPACE_MANTLE = 5;
+
+    // owner: Vadim Rybak
+  VORTEX_ICEBERG_NAMESPACE_CODEX = 6;
 }
 
 extend google.protobuf.MessageOptions {

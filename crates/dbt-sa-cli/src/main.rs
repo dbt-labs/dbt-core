@@ -59,6 +59,12 @@ fn main() -> ExitCode {
         }
     };
 
+    // XXX: when dbt-sa-cli and dbt-cli are unified, this will be the event emitter
+    // we inject into execute_fs. This instantiation is here as proof that our build
+    // and dependencies are configured such that private .proto files aren't linked
+    // into the SA code.
+    let _event_emitter = vortex_events::fusion_sa_event_emitter(false);
+
     // Setup tokio runtime and set stack-size to 8MB
     // DO NOT USE Rayon, it is not compatible with Tokio
 

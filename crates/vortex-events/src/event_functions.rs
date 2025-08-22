@@ -1,13 +1,14 @@
 use dashmap::DashMap;
-use dbt_common::FsResult;
-use dbt_common::stats::{NodeStatus, Stat};
+use dbt_common::{
+    DiscreteEventEmitter, FsResult,
+    stats::{NodeStatus, Stat},
+};
 use dbt_env::env::InternalEnv;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_schemas::schemas::{
     InternalDbtNodeAttributes,
     manifest::{DbtManifest, DbtNode},
 };
-use proto_rust::v1::events::fusion::CloudInvocation;
 use proto_rust::v1::public::events::fusion::{
     AdapterInfo, AdapterInfoV2, Invocation, InvocationEnv, PackageInstall, ResourceCounts, RunModel,
 };
@@ -18,63 +19,92 @@ use uuid::Uuid;
 
 use vortex_client::client::{log_proto, log_proto_and_shutdown};
 
-pub fn invocation_start_event(
-    invocation_id: &Uuid,
-    root_project_name: &str,
-    profile_path: Option<&Path>,
-    command: String,
-) {
-    let env = InternalEnv::global();
-    // Some commands don't load dbt_project
-    let project_id = if !root_project_name.is_empty() {
-        format!("{:x}", md5::compute(root_project_name))
-    } else {
-        "".to_string()
-    };
-    // Create Invocation start message
-    let message = Invocation {
-        //  REQUIRED invocation_id - globally unique identifier
-        invocation_id: invocation_id.to_string(),
-        // REQUIRED  event_id - unique identifier for this event (uuid)
-        event_id: uuid::Uuid::new_v4().to_string(),
-        //  progress - start/end
-        progress: "start".to_string(),
-        //  version - dbt version
-        version: env.invocation_config().dbt_version.clone(),
-        //  project_id - MD5 hash of the project name
-        project_id,
-        //  user_id - UUID generated to identify a unique user (~/.dbt/.user.yml)
-        user_id: profile_path.map(get_user_id).unwrap_or("".to_string()),
-        //  command - full string of the command that was run
-        command,
-        //  result_type - ok/error.
-        //  only provided on invocation_end
-        result_type: "".to_string(),
-        //  git_commit_sha - SHA of the git commit of the dbt project being run
-        git_commit_sha: "".to_string(),
-        //  enrichment - toggle enrichment of message by vortex
-        enrichment: None,
-    };
+pub fn noop_event_emitter() -> Box<dyn DiscreteEventEmitter> {
+    Box::new(NoopEventEmitter {})
+}
 
-    let _ = log_proto(message);
+struct NoopEventEmitter;
 
-    let dbt_inv_env = env.invocation_config().environment.clone();
-    // dbt-core: core/dbt/tracking.py::get_dbt_env_context
-    let message = InvocationEnv {
-        // REQUIRED invocation_id - globally unique identifier
-        invocation_id: invocation_id.to_string(),
-        // REQUIRED  event_id - unique identifier for this event (uuid)
-        event_id: uuid::Uuid::new_v4().to_string(),
-        // This is a string that indicates the environment in which the invocation is
-        environment: dbt_inv_env.clone(),
-        // This field is a toggle to enable enrichment of the message by the Vortex service.
-        enrichment: None,
-    };
+impl DiscreteEventEmitter for NoopEventEmitter {
+    fn invocation_start_event(
+        &self,
+        _invocation_id: &Uuid,
+        _root_project_name: &str,
+        _profile_path: Option<&Path>,
+        _command: String,
+    ) {
+        // No-op implementation
+    }
+}
 
-    let _ = log_proto(message);
+pub fn fusion_sa_event_emitter(enabled: bool) -> Box<dyn DiscreteEventEmitter> {
+    Box::new(FusionSaEventEmitter { enabled })
+}
 
-    if dbt_inv_env != *"manual" {
-        cloud_invocation_event(invocation_id);
+/// Source-available implementation of the DiscreteEventEmitter.
+struct FusionSaEventEmitter {
+    enabled: bool,
+}
+
+impl DiscreteEventEmitter for FusionSaEventEmitter {
+    fn invocation_start_event(
+        &self,
+        invocation_id: &Uuid,
+        root_project_name: &str,
+        profile_path: Option<&Path>,
+        command: String,
+    ) {
+        if !self.enabled {
+            return;
+        }
+        let env = InternalEnv::global();
+        // Some commands don't load dbt_project
+        let project_id = if !root_project_name.is_empty() {
+            format!("{:x}", md5::compute(root_project_name))
+        } else {
+            "".to_string()
+        };
+        // Create Invocation start message
+        let message = Invocation {
+            //  REQUIRED invocation_id - globally unique identifier
+            invocation_id: invocation_id.to_string(),
+            // REQUIRED  event_id - unique identifier for this event (uuid)
+            event_id: uuid::Uuid::new_v4().to_string(),
+            //  progress - start/end
+            progress: "start".to_string(),
+            //  version - dbt version
+            version: env.invocation_config().dbt_version.clone(),
+            //  project_id - MD5 hash of the project name
+            project_id,
+            //  user_id - UUID generated to identify a unique user (~/.dbt/.user.yml)
+            user_id: profile_path.map(get_user_id).unwrap_or("".to_string()),
+            //  command - full string of the command that was run
+            command,
+            //  result_type - ok/error.
+            //  only provided on invocation_end
+            result_type: "".to_string(),
+            //  git_commit_sha - SHA of the git commit of the dbt project being run
+            git_commit_sha: "".to_string(),
+            //  enrichment - toggle enrichment of message by vortex
+            enrichment: None,
+        };
+
+        let _ = log_proto(message);
+
+        let environment = env.invocation_config().environment.clone();
+        // dbt-core: core/dbt/tracking.py::get_dbt_env_context
+        let message = InvocationEnv {
+            // REQUIRED invocation_id - globally unique identifier
+            invocation_id: invocation_id.to_string(),
+            // REQUIRED  event_id - unique identifier for this event (uuid)
+            event_id: uuid::Uuid::new_v4().to_string(),
+            // This is a string that indicates the environment in which the invocation is
+            environment,
+            // This field is a toggle to enable enrichment of the message by the Vortex service.
+            enrichment: None,
+        };
+
+        let _ = log_proto(message);
     }
 }
 
@@ -326,31 +356,6 @@ pub fn resource_counts_event(args: InvocationArgs, manifest: &DbtManifest) {
         semantic_models: semantic_model_count,
         // total count of saved queries in the project.
         saved_queries: saved_query_count,
-        // This field is a toggle to enable enrichment of the message by the Vortex service.
-        enrichment: None,
-    };
-
-    let _ = log_proto(message);
-}
-
-pub fn cloud_invocation_event(invocation_id: &Uuid) {
-    let env = InternalEnv::global();
-    let message = CloudInvocation {
-        // REQUIRED invocation_id - globally unique identifier
-        invocation_id: invocation_id.to_string(),
-        // REQUIRED Globally unique account identifier in which the invocation is run.
-        // Comes from the DBT_CLOUD_ACCOUNT_IDENTIFIER environment variable.
-        // e.g. act_0g9JY6ZTSUNAQPG6WvLNYYdmYHW
-        dbt_cloud_account_identifier: env.invocation_config().account_identifier.clone(),
-        // REQUIRED Comes from the DBT_CLOUD_PROJECT_ID environment variable. e.g. 672
-        dbt_cloud_project_id: env.invocation_config().project_id.clone(),
-        // REQUIRED Unique identifier of the environment within the tenant.
-        // Comes from the DBT_CLOUD_ENVIRONMENT_ID environment variable. e.g. 2
-        dbt_cloud_environment_id: env.invocation_config().environment_id.clone(),
-        // Unique identifier of the job within the account identifier.
-        // Comes from the DBT_CLOUD_JOB_ID environment variable.
-        // e.g. 0
-        dbt_cloud_job_id: env.invocation_config().job_id.clone(),
         // This field is a toggle to enable enrichment of the message by the Vortex service.
         enrichment: None,
     };

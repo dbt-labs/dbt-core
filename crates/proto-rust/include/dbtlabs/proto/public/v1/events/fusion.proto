@@ -20,8 +20,8 @@ RFC 2119 Expectations for using these events:
 
 // Adapter Info Event is responsible for foundational adapter information.
 message AdapterInfo {
-  option (v1.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
-  option (v1.common.vortex_enabled) = true;
+  option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+  option (v1.public.common.vortex_enabled) = true;
 
   // This field is a toggle to enable enrichment of the message by the Vortex service.
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
@@ -50,8 +50,8 @@ message AdapterInfo {
 // individual model level. This was first created when we started to collect
 // information on which models were Iceberg-powered.
 message AdapterInfoV2 {
-  option (v1.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
-  option (v1.common.vortex_enabled) = true;
+  option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+  option (v1.public.common.vortex_enabled) = true;
 
   // This field is a toggle to enable enrichment of the message by the Vortex service.
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
@@ -87,8 +87,8 @@ message AdapterInfoV2 {
 // the invocation has completed. Upon completion, we get more information about
 // the end state of this action.
 message Invocation {
-  option (v1.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
-  option (v1.common.vortex_enabled) = true;
+  option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+  option (v1.public.common.vortex_enabled) = true;
 
   // This field is a toggle to enable enrichment of the message by the Vortex service.
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
@@ -151,8 +151,8 @@ message Invocation {
 // invocation telemetry data with our dbt Cloud information. Values are supplied
 // here whenever dbt is run in a cloud environment.
 message InvocationEnv {
-  option (v1.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
-  option (v1.common.vortex_enabled) = true;
+  option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+  option (v1.public.common.vortex_enabled) = true;
 
   // This field is a toggle to enable enrichment of the message by the Vortex service.
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
@@ -175,8 +175,8 @@ message InvocationEnv {
 // Package Install Event is emitted when dbt deps (or other commands that
 // trigger packages to be installed) is run.
 message PackageInstall {
-  option (v1.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
-  option (v1.common.vortex_enabled) = true;
+  option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+  option (v1.public.common.vortex_enabled) = true;
 
   // This field is a toggle to enable enrichment of the message by the Vortex service.
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
@@ -208,8 +208,8 @@ message PackageInstall {
 // and (in the case of macros) from the global dbt project. This will show all
 // resources available, regardless of if they are run or not.
 message ResourceCounts {
-  option (v1.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
-  option (v1.common.vortex_enabled) = true;
+  option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+  option (v1.public.common.vortex_enabled) = true;
 
   // This field is a toggle to enable enrichment of the message by the Vortex service.
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
@@ -269,8 +269,8 @@ message ResourceCounts {
 // can be found by joining this message on the Invocation message specified in the invocation_id
 // field.
 message RunModel {
-  option (v1.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
-  option (v1.common.vortex_enabled) = true;
+  option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+  option (v1.public.common.vortex_enabled) = true;
 
   // This field is a toggle to enable enrichment of the message by the Vortex service.
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
@@ -343,8 +343,8 @@ message RunModel {
 }
 
 message Onboarding {
-  option (v1.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
-  option (v1.common.vortex_enabled) = true;
+  option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+  option (v1.public.common.vortex_enabled) = true;
 
   // This field is a toggle to enable enrichment of the message by the Vortex service.
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;

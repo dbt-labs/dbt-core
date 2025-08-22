@@ -190,6 +190,8 @@ serde_json = "1.0.133"
 serde_repr = "0.1.20"
 serde_with = "3.12.0"
 
+toml = { version = "0.7.6" }
+
 # cloud providers
 aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
 aws-sdk-s3 = "1.78.0"
@@ -365,6 +367,7 @@ regex = "1.11.1"
 rsa = "0.9"
 rust-lapper = "1.1.0"
 sha2 = "0.10.8"
+siphasher = { version = "1.0.1" }
 url = "2.5.4"
 ustr = "1.0.0"
 zstd-safe = "7"
