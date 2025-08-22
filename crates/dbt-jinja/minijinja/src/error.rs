@@ -306,10 +306,10 @@ impl Error {
 
     /// Return the significant name of the error.
     pub fn significant_name(&self) -> Option<&str> {
-        if self.repr.stack.is_empty() {
-            None
-        } else {
-            self.repr.stack.iter().find_map(|err| {
+        self.repr
+            .stack
+            .iter()
+            .find_map(|err| {
                 // check if any component of the filename contains dbt_internal_packages
                 let filename = PathBuf::from(err.filename.as_str());
                 if !filename.components().any(|component| {
@@ -323,7 +323,7 @@ impl Error {
                     None
                 }
             })
-        }
+            .or_else(|| self.repr.stack.last().map(|x| x.filename.as_str()))
     }
 
     /// Returns if the stack is empty.
@@ -338,10 +338,10 @@ impl Error {
 
     /// Returns the significant span of the error.
     pub fn significant_span(&self) -> Option<Span> {
-        if self.repr.stack.is_empty() {
-            None
-        } else {
-            self.repr.stack.iter().find_map(|err| {
+        self.repr
+            .stack
+            .iter()
+            .find_map(|err| {
                 let filename = PathBuf::from(err.filename.as_str());
                 if !filename.components().any(|component| {
                     let component = component.as_os_str().to_string_lossy();
@@ -353,7 +353,7 @@ impl Error {
                     None
                 }
             })
-        }
+            .or_else(|| self.repr.stack.last().map(|x| x.span))
     }
 
     /// Returns the byte range of where the error occurred if available.
