@@ -1,5 +1,8 @@
 import os
+import re
 import sys
+
+from dbt_common.ui import red
 
 
 def normalize(path: str) -> str:
@@ -35,14 +38,18 @@ def has_bad_artifact_resource_imports(filepath: str) -> bool:
 
     has_bad_imports = False
     for line_number, line in enumerate(lines):
-        line_without_whitespace = line.strip()
-        if line_without_whitespace.startswith(
-            "from dbt.artifacts.resources.v1"
-        ) or line_without_whitespace.startswith("import dbt.artifacts.resources.v1"):
-            has_bad_imports = True
-            print(
-                f"{filepath}:{line_number}: Imports from versioned artifacts resource. Instead import from dbt.artifacts.resource directly."
-            )
+        line_without_whitespace = line.strip()  # get rid of leading and trailing whitespace
+
+        # we only care about import/from statements
+        if line_without_whitespace.startswith("from ") or line_without_whitespace.startswith(
+            "import "
+        ):
+            import_path = line_without_whitespace.split(" ")[1]
+            if re.match(r"^dbt\.artifacts\.resources\.v\d+", import_path):
+                has_bad_imports = True
+                print(
+                    f"{filepath}:{line_number}: [{red('ERROR')}] `{import_path}` is an import from a versioned resource. Instead import `from dbt.artifacts.resource` directly."
+                )
 
     return has_bad_imports
 
