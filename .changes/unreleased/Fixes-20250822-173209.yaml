@@ -1,3 +1,0 @@
-kind: Fixes
-body: Fixed profile lookup not respecting urls in dbt_cloud.yaml
-time: 2025-08-22T17:32:09.03727+03:00
