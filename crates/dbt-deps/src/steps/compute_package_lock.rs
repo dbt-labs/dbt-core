@@ -154,6 +154,7 @@ async fn resolve_packages(
                 let hub_package = hub_registry
                     .get_hub_package(&pinned_package.package)
                     .await?;
+                hub_registry.check_package_deprecation(&package_listing.io_args, &hub_package);
                 let metadata = hub_package
                     .versions
                     .get(&pinned_package.version)

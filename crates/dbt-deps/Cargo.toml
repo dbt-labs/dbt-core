@@ -30,6 +30,9 @@ tempfile = { workspace = true }
 tracing = { workspace = true }
 vortex-events = { workspace = true }
 
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+
 [lib]
 name = "fs_deps"
 path = "src/mod.rs"
