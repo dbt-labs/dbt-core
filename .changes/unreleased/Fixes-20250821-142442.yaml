@@ -1,0 +1,3 @@
+kind: Fixes
+body: Allow `context.get("key", default)` without panicking
+time: 2025-08-21T14:24:42.686794+02:00

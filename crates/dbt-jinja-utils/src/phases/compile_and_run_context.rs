@@ -1,6 +1,7 @@
 //! This module contains the functions for initializing the Jinja environment for the compile phase.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Debug;
 use std::sync::{Arc, OnceLock};
 
 use crate::functions::build_flat_graph;
@@ -10,7 +11,7 @@ use dbt_fusion_adapter::BaseAdapter;
 use dbt_fusion_adapter::load_store::ResultStore;
 use dbt_schemas::schemas::Nodes;
 use dbt_schemas::state::{DbtRuntimeConfig, RefsAndSourcesTracker};
-use minijinja::arg_utils::ArgParser;
+use minijinja::arg_utils::{ArgParser, ArgsIter};
 use minijinja::constants::MACRO_DISPATCH_ORDER;
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::listener::RenderingEventListener;
@@ -70,7 +71,7 @@ pub fn build_compile_and_run_base_context(
     let ref_function = RefFunction::new_unvalidated(
         refs_and_sources.clone(),
         package_name.to_owned(),
-        runtime_config,
+        runtime_config.clone(),
     );
     let ref_value = MinijinjaValue::from_object(ref_function);
     ctx.insert("ref".to_string(), ref_value.clone());
@@ -93,6 +94,17 @@ pub fn build_compile_and_run_base_context(
     ctx.insert(
         "builtins".to_string(),
         MinijinjaValue::from_object(builtins),
+    );
+
+    let mut packages: BTreeSet<String> = runtime_config.dependencies.keys().cloned().collect();
+    packages.insert(package_name.to_string());
+    ctx.insert(
+        "context".to_owned(),
+        MinijinjaValue::from_object(MacroLookupContext {
+            root_project_name: package_name.to_string(),
+            current_project_name: None,
+            packages,
+        }),
     );
 
     // Register graph as a global
@@ -367,7 +379,18 @@ pub struct MacroLookupContext {
 impl Object for MacroLookupContext {
     fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
         match key.as_str()? {
+            // NOTE(serramatutu): In Core, the following non-macro keys are all members of `MacroLookupContext`.
+            // They can all technically be used, though the usage is undocumented and not encouraged by dbt:
+            // - dbt_version
+            // - project_name
+            // - schema
+            // - run_started_at
+            //
+            // We added `project_name` because some naughty famous macro uses it and was
+            // breaking lots of projects, but I prefer to avoid polluting this scope and sticking
+            // as faithfully as possible to the "intended" behavior (only looking up macros)
             "project_name" => Some(MinijinjaValue::from(self.root_project_name.clone())),
+
             lookup_macro => {
                 if self.packages.contains(lookup_macro) {
                     Some(MinijinjaValue::from_object(MacroLookupContext {
@@ -386,6 +409,46 @@ impl Object for MacroLookupContext {
                         context: None,
                     }))
                 }
+            }
+        }
+    }
+
+    fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+    where
+        Self: Sized + 'static,
+    {
+        self.fmt(f)
+    }
+
+    fn call_method(
+        self: &Arc<Self>,
+        state: &State<'_, '_>,
+        method: &str,
+        args: &[MinijinjaValue],
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<MinijinjaValue, MinijinjaError> {
+        // TODO(serramatutu): should this behave fully like a dict, with values, keys, items,
+        // enumerate etc?
+        match method {
+            "get" => {
+                let iter = ArgsIter::new("MacroLookupContext.get", &["key"], args);
+                let key = iter.next_arg::<&MinijinjaValue>()?;
+                let default = iter.next_kwarg::<Option<&MinijinjaValue>>("default")?;
+                iter.finish()?;
+
+                Ok(self
+                    .get_value(key)
+                    .or_else(|| default.cloned())
+                    .unwrap_or(MinijinjaValue::from(None::<MinijinjaValue>)))
+            }
+            _ => {
+                if let Some(value) = self.get_value(&MinijinjaValue::from(method)) {
+                    return value.call(state, args, listeners);
+                }
+                Err(MinijinjaError::new(
+                    MinijinjaErrorKind::UnknownMethod,
+                    format!("MacroLookupContext has no method named {method}"),
+                ))
             }
         }
     }
