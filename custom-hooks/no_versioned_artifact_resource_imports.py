@@ -52,7 +52,8 @@ def main():
     for filepath in sys.argv[1:]:
         if has_bad_artifact_resource_imports(filepath):
             all_passed = False
-    return all_passed
+
+    return 0 if all_passed else 1
 
 
 if __name__ == "__main__":
