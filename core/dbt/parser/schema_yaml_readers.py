@@ -19,10 +19,10 @@ from dbt.artifacts.resources import (
     NonAdditiveDimension,
     QueryParams,
     SavedQueryConfig,
+    SemanticLayerElementConfig,
     WhereFilter,
     WhereFilterIntersection,
 )
-from dbt.artifacts.resources.v1.semantic_model import SemanticLayerElementConfig
 from dbt.clients.jinja import get_rendered
 from dbt.context.context_config import (
     BaseContextConfigGenerator,

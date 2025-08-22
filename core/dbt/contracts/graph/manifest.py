@@ -32,8 +32,13 @@ from dbt.adapters.exceptions import (
 from dbt.adapters.factory import get_adapter_package_names
 
 # to preserve import paths
-from dbt.artifacts.resources import BaseResource, DeferRelation, NodeVersion, RefArgs
-from dbt.artifacts.resources.v1.config import NodeConfig
+from dbt.artifacts.resources import (
+    BaseResource,
+    DeferRelation,
+    NodeConfig,
+    NodeVersion,
+    RefArgs,
+)
 from dbt.artifacts.schemas.manifest import ManifestMetadata, UniqueID, WritableManifest
 from dbt.clients.jinja_static import statically_parse_ref_or_source
 from dbt.contracts.files import (

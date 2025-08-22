@@ -26,8 +26,9 @@ from dbt.artifacts.resources import (
     UnitTestNodeVersions,
     UnitTestOutputFixture,
     UnitTestOverrides,
+    list_str,
+    metas,
 )
-from dbt.artifacts.resources.v1.config import list_str, metas
 from dbt.exceptions import ParsingError
 from dbt.node_types import NodeType
 from dbt_common.contracts.config.base import CompareBehavior, MergeBehavior

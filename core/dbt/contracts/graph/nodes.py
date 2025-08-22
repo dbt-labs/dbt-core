@@ -45,6 +45,7 @@ from dbt.artifacts.resources import MetricInputMeasure
 from dbt.artifacts.resources import Model as ModelResource
 from dbt.artifacts.resources import (
     ModelConfig,
+    ModelFreshness,
     NodeConfig,
     NodeVersion,
     ParsedResource,
@@ -60,7 +61,6 @@ from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
 from dbt.artifacts.resources import SqlOperation as SqlOperationResource
 from dbt.artifacts.resources import TimeSpine
 from dbt.artifacts.resources import UnitTestDefinition as UnitTestDefinitionResource
-from dbt.artifacts.resources.v1.model import ModelFreshness
 from dbt.artifacts.schemas.batch_results import BatchResults
 from dbt.clients.jinja_static import statically_extract_has_name_this
 from dbt.contracts.graph.model_config import UnitTestNodeConfig

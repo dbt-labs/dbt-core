@@ -17,8 +17,7 @@ from typing import (
     TypeVar,
 )
 
-from dbt.artifacts.resources import RefArgs
-from dbt.artifacts.resources.v1.model import CustomGranularity, TimeSpine
+from dbt.artifacts.resources import CustomGranularity, RefArgs, TimeSpine
 from dbt.clients.checked_load import (
     checked_load,
     issue_deprecation_warnings_for_failures,

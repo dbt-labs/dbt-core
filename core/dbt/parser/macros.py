@@ -2,7 +2,7 @@ from typing import Iterable, List
 
 import jinja2
 
-from dbt.artifacts.resources.v1.macro import MacroArgument
+from dbt.artifacts.resources import MacroArgument
 from dbt.clients.jinja import get_supported_languages
 from dbt.contracts.files import FilePath, SourceFile
 from dbt.contracts.graph.nodes import Macro
