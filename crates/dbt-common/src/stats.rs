@@ -107,8 +107,8 @@ impl Stat {
         datetime.format("%H:%M:%S").to_string()
     }
     pub fn status_string(&self) -> String {
-        if self.status == NodeStatus::Succeeded && self.unique_id.starts_with("test.")
-            || self.unique_id.starts_with("unit_test.")
+        if self.status == NodeStatus::Succeeded
+            && (self.unique_id.starts_with("test.") || self.unique_id.starts_with("unit_test."))
         {
             match self.num_rows {
                 Some(0) => "Passed".to_string(),
