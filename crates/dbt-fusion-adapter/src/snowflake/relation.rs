@@ -253,7 +253,7 @@ impl BaseRelation for SnowflakeRelation {
         // Always supply transient unless explicitly set to false
         let transient = config
             .get_item(&Value::from("transient"))
-            .map(|v| v.is_true())
+            .map(|v| v.is_undefined() || v.is_true())
             .unwrap_or(true); // Default to true if not set
 
         match transient {

@@ -367,6 +367,7 @@ regex = "1.11.1"
 rsa = "0.9"
 rust-lapper = "1.1.0"
 sha2 = "0.10.8"
+similar = "2.6"
 siphasher = { version = "1.0.1" }
 url = "2.5.4"
 ustr = "1.0.0"
