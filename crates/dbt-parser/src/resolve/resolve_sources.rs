@@ -45,7 +45,6 @@ pub fn resolve_sources(
     HashMap<String, Arc<DbtSource>>,
     HashMap<String, Arc<DbtSource>>,
 )> {
-    let is_replay_mode = arg.replay.is_some();
     let io_args = &arg.io;
     let mut sources: HashMap<String, Arc<DbtSource>> = HashMap::new();
     let mut disabled_sources: HashMap<String, Arc<DbtSource>> = HashMap::new();
@@ -310,7 +309,6 @@ pub fn resolve_sources(
                     root_package_name,
                     collected_generic_tests,
                     adapter_type,
-                    is_replay_mode,
                     io_args,
                     &mpe.relative_path,
                 )?;

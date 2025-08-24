@@ -83,8 +83,6 @@ pub async fn resolve_models(
     let mut node_names = HashSet::new();
     let mut rendering_results: HashMap<String, (String, MacroSpans)> = HashMap::new();
 
-    let is_replay_mode = arg.replay.is_some();
-
     let local_project_config = if package.dbt_project.name == root_project.name {
         root_project_configs.models.clone()
     } else {
@@ -387,7 +385,6 @@ pub async fn resolve_models(
                     &root_project.name,
                     collected_generic_tests,
                     adapter_type,
-                    is_replay_mode,
                     &arg.io,
                     patch_path.as_ref().unwrap_or(&dbt_asset.path),
                 )?;

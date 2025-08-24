@@ -20,6 +20,7 @@ dbt-telemetry = { workspace = true }
 # leaf dependencies (depend on little more than std lib)
 dbt-cancel = { workspace = true }
 dbt-proc-macros = { workspace = true }
+md5 = { workspace = true }
 
 datafusion = { workspace = true }
 

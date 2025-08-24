@@ -58,6 +58,21 @@ pub fn split_into_whitespace_and_brackets(input: &str) -> Vec<String> {
     results
 }
 
+/// Truncates a test name to 63 characters if it's too long, following dbt-core's logic.
+/// This is done by including the first 30 identifying chars plus a 32-character hash of the full contents.
+/// See the function `synthesize_generic_test_name` in `dbt-core`:
+/// https://github.com/dbt-labs/dbt-core/blob/9010537499980743503ed3b462eb1952be4d2b38/core/dbt/parser/generic_test_builders.py
+pub fn maybe_truncate_test_name(test_identifier: &str, full_name: &str) -> String {
+    if full_name.len() >= 64 {
+        let test_trunc_identifier: String = test_identifier.chars().take(30).collect();
+        let hash = md5::compute(full_name);
+        let res: String = format!("{test_trunc_identifier}_{hash:x}");
+        res
+    } else {
+        full_name.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

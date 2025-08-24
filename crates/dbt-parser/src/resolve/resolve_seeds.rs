@@ -46,7 +46,6 @@ pub fn resolve_seeds(
 ) -> FsResult<(HashMap<String, Arc<DbtSeed>>, HashMap<String, Arc<DbtSeed>>)> {
     let mut seeds: HashMap<String, Arc<DbtSeed>> = HashMap::new();
     let mut disabled_seeds: HashMap<String, Arc<DbtSeed>> = HashMap::new();
-    let is_replay_mode = arg.replay.is_some();
     let io_args = &arg.io;
     let dependency_package_name = dependency_package_name_from_ctx(jinja_env, base_ctx);
 
@@ -256,7 +255,6 @@ pub fn resolve_seeds(
                     &root_project.name,
                     collected_generic_tests,
                     adapter_type,
-                    is_replay_mode,
                     io_args,
                     patch_path.as_ref().unwrap_or(&path),
                 )?;
