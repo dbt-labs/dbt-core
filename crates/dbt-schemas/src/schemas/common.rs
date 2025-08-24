@@ -204,6 +204,8 @@ pub enum DbtMaterialization {
     Analysis,
     /// only for databricks
     StreamingTable,
+    /// only for snowflake
+    DynamicTable,
     #[serde(untagged)]
     Unknown(String),
 }
@@ -222,6 +224,7 @@ impl FromStr for DbtMaterialization {
             "unit" => Ok(DbtMaterialization::Unit),
             "analysis" => Ok(DbtMaterialization::Analysis),
             "streaming_table" => Ok(DbtMaterialization::StreamingTable),
+            "dynamic_table" => Ok(DbtMaterialization::DynamicTable),
             other => Ok(DbtMaterialization::Unknown(other.to_string())),
         }
     }
@@ -244,6 +247,7 @@ impl std::fmt::Display for DbtMaterialization {
             DbtMaterialization::Ephemeral => "ephemeral",
             DbtMaterialization::Unit => "unit",
             DbtMaterialization::StreamingTable => "streaming_table",
+            DbtMaterialization::DynamicTable => "dynamic_table",
             DbtMaterialization::Analysis => "analysis",
             DbtMaterialization::Unknown(s) => s.as_str(),
         };
@@ -264,6 +268,7 @@ impl From<DbtMaterialization> for RelationType {
             DbtMaterialization::Incremental => RelationType::External, // TODO Validate this
             DbtMaterialization::Unit => RelationType::External, // TODO Validate this
             DbtMaterialization::StreamingTable => RelationType::StreamingTable,
+            DbtMaterialization::DynamicTable => RelationType::DynamicTable,
             DbtMaterialization::Analysis => RelationType::External, // TODO Validate this
             DbtMaterialization::Unknown(_) => RelationType::External, // TODO Validate this
         }

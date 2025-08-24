@@ -119,6 +119,7 @@ impl Object for RelationObject {
             Some("is_view") => Some(Value::from(self.is_view())),
             Some("is_materialized_view") => Some(Value::from(self.is_materialized_view())),
             Some("is_streaming_table") => Some(Value::from(self.is_streaming_table())),
+            Some("is_dynamic_table") => Some(Value::from(self.is_dynamic_table())),
             Some("is_cte") => Some(Value::from(self.is_cte())),
             Some("is_pointer") => Some(Value::from(self.is_pointer())),
             Some("type") => Some(self.relation_type_as_value()),
@@ -128,6 +129,7 @@ impl Object for RelationObject {
                 Some(Value::from(RelationType::MaterializedView.to_string()))
             }
             Some("Table") => Some(Value::from(RelationType::Table.to_string())),
+            Some("DynamicTable") => Some(Value::from(RelationType::DynamicTable.to_string())),
             _ => None,
         }
     }

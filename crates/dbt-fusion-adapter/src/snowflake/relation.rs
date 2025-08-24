@@ -1,16 +1,21 @@
 use crate::information_schema::InformationSchema;
 use crate::relation_object::{RelationObject, StaticBaseRelation};
+use crate::snowflake::relation_configs::dynamic_table::{
+    DescribeDynamicTableResults, SnowflakeDynamicTableConfig, SnowflakeDynamicTableConfigChangeset,
+};
 
 use dbt_common::{ErrorCode, FsResult, current_function_name, fs_err};
 use dbt_schemas::dbt_types::RelationType;
-use dbt_schemas::schemas::common::ResolvedQuoting;
+use dbt_schemas::schemas::common::{DbtMaterialization, ResolvedQuoting};
 use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath, TableFormat,
 };
-use minijinja::arg_utils::check_num_args;
+use dbt_schemas::schemas::{InternalDbtNodeWrapper, RelationChangeSet};
+use minijinja::arg_utils::{ArgsIter, check_num_args};
 use minijinja::{
     Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value, arg_utils::ArgParser,
 };
+use serde::Deserialize;
 
 use std::any::Any;
 use std::sync::Arc;
@@ -164,9 +169,57 @@ impl BaseRelation for SnowflakeRelation {
     fn can_be_replaced(&self) -> bool {
         matches!(
             self.relation_type(),
-            Some(RelationType::Table) | Some(RelationType::View)
+            Some(RelationType::Table) | Some(RelationType::View) | Some(RelationType::DynamicTable)
         )
-        // TODO: also SnowflakeRelationType::DynamicTable
+    }
+
+    // https://github.com/dbt-labs/dbt-adapters/blob/816d190c9e31391a48cee979bd049aeb34c89ad3/dbt-snowflake/src/dbt/adapters/snowflake/relation.py#L81
+    fn from_config(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+        let iter = ArgsIter::new(current_function_name!(), &["config"], args);
+        let config_value = iter.next_arg::<&Value>()?;
+        iter.finish()?;
+
+        Ok(Value::from_object(node_value_to_snowflake_dynamic_table(
+            config_value,
+        )?))
+    }
+
+    // https://github.com/dbt-labs/dbt-adapters/blob/292d17301eff3c8a972fcd57f7deb3aac4c8a3cb/dbt-snowflake/src/dbt/adapters/snowflake/relation.py#L92
+    fn dynamic_table_config_changeset(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+        let iter = ArgsIter::new(
+            current_function_name!(),
+            &["relation_results", "relation_config"],
+            args,
+        );
+
+        let relation_results_value = iter.next_arg::<&Value>()?;
+        let relation_config_value = iter.next_arg::<&Value>()?;
+        iter.finish()?;
+
+        let relation_results = DescribeDynamicTableResults::try_from(relation_results_value)
+            .map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError,
+                    format!("from_config: Failed to serialize DescribeDynamicTableResults: {e}"),
+                )
+            })?;
+
+        let existing_config = SnowflakeDynamicTableConfig::try_from(relation_results)
+            .map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError, format!("dynamic_table_config_changeset: Failed to deserialize SnowflakeDynamicTableConfig: {e}")
+                )
+            })?;
+
+        let new_config = node_value_to_snowflake_dynamic_table(relation_config_value)?;
+
+        let changeset = SnowflakeDynamicTableConfigChangeset::new(existing_config, new_config);
+
+        if changeset.has_changes() {
+            Ok(Value::from_object(changeset))
+        } else {
+            Ok(Value::from(()))
+        }
     }
 
     fn quoted(&self, s: &str) -> String {
@@ -357,6 +410,44 @@ impl BaseRelation for SnowflakeRelation {
         let result = InformationSchema::try_from_relation(database, view_name)?;
         Ok(RelationObject::new(Arc::new(result)).into_value())
     }
+}
+
+fn node_value_to_snowflake_dynamic_table(
+    node_value: &Value,
+) -> Result<SnowflakeDynamicTableConfig, MinijinjaError> {
+    let config_wrapper = InternalDbtNodeWrapper::deserialize(node_value).map_err(|e| {
+        MinijinjaError::new(
+            MinijinjaErrorKind::SerdeDeserializeError,
+            format!("Failed to deserialize InternalDbtNodeWrapper: {e}"),
+        )
+    })?;
+
+    let model = match config_wrapper {
+        InternalDbtNodeWrapper::Model(model) => model,
+        _ => {
+            return Err(MinijinjaError::new(
+                MinijinjaErrorKind::InvalidOperation,
+                "Expected a model node",
+            ));
+        }
+    };
+
+    if model.__base_attr__.materialized != DbtMaterialization::DynamicTable {
+        return Err(MinijinjaError::new(
+            MinijinjaErrorKind::InvalidOperation,
+            format!(
+                "Unsupported operation for materialization type {}",
+                &model.__base_attr__.materialized
+            ),
+        ));
+    }
+
+    SnowflakeDynamicTableConfig::try_from(&*model).map_err(|e| {
+        MinijinjaError::new(
+            MinijinjaErrorKind::SerdeDeserializeError,
+            format!("Failed to deserialize SnowflakeDynamicTableConfig: {e}"),
+        )
+    })
 }
 
 #[cfg(test)]
