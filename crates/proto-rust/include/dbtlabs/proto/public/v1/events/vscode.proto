@@ -80,6 +80,9 @@ message ExtensionLspCompile {
 
     // project models count
     int32 models_count = 12;
+
+    // True if the compile was triggered by a user action (ie. saving a file)
+    bool user_initiated = 13;
 }
 
 message ExtensionUserStateChange {
