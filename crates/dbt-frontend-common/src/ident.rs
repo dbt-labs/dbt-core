@@ -4,7 +4,7 @@ use crate::utils::{get_version_hash, strip_version_hash};
 use crate::{internal_err, make_internal_err};
 use datafusion::sql::{ResolvedTableReference, TableReference};
 use itertools::Itertools;
-use serde::{Deserialize, Deserializer, de};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use std::path::PathBuf;
 
 pub use dbt_ident::{Ident, Identifier};
@@ -402,7 +402,7 @@ impl<'a> From<Qualified<'a>> for TableReference {
     }
 }
 
-#[derive(Clone, Default, Eq)]
+#[derive(Clone, Default, Eq, Serialize)]
 pub struct FullyQualifiedName {
     pub catalog: Identifier,
     pub schema: Identifier,
