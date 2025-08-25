@@ -18,6 +18,7 @@ dbt-jinja-utils = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-serde_yaml = { workspace = true }
 flate2 = { workspace = true }
+percent-encoding = "2.3.1"
 regex = { workspace = true }
 reqwest = { workspace = true, features = ['json'] }
 reqwest-middleware = { workspace = true, features = ['json'] }
@@ -28,6 +29,7 @@ sha1 = { version = "0.10.6" }
 tar = { workspace = true }
 tempfile = { workspace = true }
 tracing = { workspace = true }
+url = { workspace = true }
 vortex-events = { workspace = true }
 
 [dev-dependencies]
