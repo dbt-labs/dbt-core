@@ -21,6 +21,7 @@ from dbt.events.types import (
     DepsFoundDuplicatePackage,
     DepsInstallInfo,
     DepsListSubdirectory,
+    DepsLockfileRegenerating,
     DepsLockUpdating,
     DepsNoPackagesFound,
     DepsNotifyUpdatesAvailable,
@@ -220,6 +221,7 @@ class DepsTask(BaseTask):
             current_hash = _create_sha1_hash(self.project.packages.packages)
             previous_hash = load_yml_dict(lock_file_path).get(PACKAGE_LOCK_HASH_KEY, None)
             if previous_hash != current_hash:
+                fire_event(DepsLockfileRegenerating(lock_filepath=lock_file_path))
                 self.lock()
 
         # Early return when 'dbt deps --lock'
