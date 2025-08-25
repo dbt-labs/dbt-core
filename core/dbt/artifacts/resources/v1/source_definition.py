@@ -25,6 +25,7 @@ class SourceConfig(BaseConfig):
     loaded_at_query: Optional[str] = None
     meta: Dict[str, Any] = field(default_factory=dict, metadata=MergeBehavior.Update.meta())
     tags: List[str] = field(default_factory=list)
+    description: str = ""
 
 
 @dataclass
