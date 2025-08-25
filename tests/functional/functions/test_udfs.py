@@ -11,13 +11,13 @@ pi() * radius * radius
 
 area_of_circle_yml = """
 functions:
-  - name: area of circle
+  - name: area_of_circle
     description: Calculates the area of a circle for a given radius
     arguments:
       - name: radius
         type: float
         description: A floating point number representing the radius of the circle
-    returns:
+    return_type:
       type: float
 """
 

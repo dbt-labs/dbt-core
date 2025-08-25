@@ -675,6 +675,7 @@ class Project:
             self.analysis_paths,
             self.macro_paths,
             self.test_paths,
+            self.function_paths,
         )
 
     @property
