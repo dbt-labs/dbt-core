@@ -42,6 +42,7 @@ from dbt.contracts.graph.unparsed import (
     HasColumnTests,
     SourcePatch,
     UnparsedAnalysisUpdate,
+    UnparsedFunctionUpdate,
     UnparsedMacroUpdate,
     UnparsedModelUpdate,
     UnparsedNodeUpdate,
@@ -277,6 +278,11 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
                 exp_parser = ExposureParser(self, yaml_block)
                 exp_parser.parse()
 
+            # FunctionPatchParser.parse()
+            if "functions" in dct:
+                function_parser = FunctionPatchParser(self, yaml_block, "functions")
+                function_parser.parse()
+
             # MetricParser.parse()
             if "metrics" in dct:
                 from dbt.parser.schema_yaml_readers import MetricParser
@@ -369,13 +375,20 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
 Parsed = TypeVar(
     "Parsed", UnpatchedSourceDefinition, ParsedNodePatch, ParsedMacroPatch, ParsedSingularTestPatch
 )
-NodeTarget = TypeVar("NodeTarget", UnparsedNodeUpdate, UnparsedAnalysisUpdate, UnparsedModelUpdate)
+NodeTarget = TypeVar(
+    "NodeTarget",
+    UnparsedNodeUpdate,
+    UnparsedAnalysisUpdate,
+    UnparsedModelUpdate,
+    UnparsedFunctionUpdate,
+)
 NonSourceTarget = TypeVar(
     "NonSourceTarget",
     UnparsedNodeUpdate,
     UnparsedAnalysisUpdate,
     UnparsedMacroUpdate,
     UnparsedModelUpdate,
+    UnparsedFunctionUpdate,
     UnparsedSingularTestUpdate,
 )
 
@@ -645,7 +658,7 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
             )
             try:
                 # target_type: UnparsedNodeUpdate, UnparsedAnalysisUpdate,
-                # or UnparsedMacroUpdate
+                # or UnparsedMacroUpdate, UnparsedFunctionUpdate
                 self._target_type().validate(data)
                 if self.key != "macros":
                     # macros don't have the 'config' key support yet
@@ -754,8 +767,8 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
         )
 
 
-# Subclasses of NodePatchParser: TestablePatchParser, ModelPatchParser, AnalysisPatchParser,
-# so models, seeds, snapshots, analyses
+# Subclasses of NodePatchParser: TestablePatchParser, ModelPatchParser, AnalysisPatchParser, FunctionPatchParser
+# so models, seeds, snapshots, analyses, functions
 class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarget]):
     def parse_patch(self, block: TargetBlock[NodeTarget], refs: ParserRef) -> None:
         # We're not passing the ParsedNodePatch around anymore, so we
@@ -800,7 +813,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         )
         assert isinstance(self.yaml.file, SchemaSourceFile)
         source_file: SchemaSourceFile = self.yaml.file
-        if patch.yaml_key in ["models", "seeds", "snapshots"]:
+        if patch.yaml_key in ["models", "seeds", "snapshots", "functions"]:
             unique_id = self.manifest.ref_lookup.get_unique_id(
                 patch.name, self.project.project_name, None
             ) or self.manifest.ref_lookup.get_unique_id(patch.name, None, None)
@@ -1249,6 +1262,14 @@ class SingularTestPatchParser(PatchParser[UnparsedSingularTestUpdate, ParsedSing
         node.patch_path = patch.file_id
         node.description = patch.description
         node.created_at = time.time()
+
+
+class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
+    def get_block(self, node: UnparsedFunctionUpdate) -> TargetBlock:
+        return TargetBlock.from_yaml_block(self.yaml, node)
+
+    def _target_type(self) -> Type[UnparsedFunctionUpdate]:
+        return UnparsedFunctionUpdate
 
 
 class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):

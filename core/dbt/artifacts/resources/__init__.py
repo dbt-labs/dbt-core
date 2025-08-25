@@ -35,6 +35,13 @@ from dbt.artifacts.resources.v1.exposure import (
     ExposureType,
     MaturityType,
 )
+from dbt.artifacts.resources.v1.function import (
+    Function,
+    FunctionArgument,
+    FunctionConfig,
+    FunctionMandatory,
+    FunctionReturnType,
+)
 from dbt.artifacts.resources.v1.generic_test import GenericTest, TestMetadata
 from dbt.artifacts.resources.v1.group import Group, GroupConfig
 from dbt.artifacts.resources.v1.hook import HookNode

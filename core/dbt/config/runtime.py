@@ -155,6 +155,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             analysis_paths=project.analysis_paths,
             docs_paths=project.docs_paths,
             asset_paths=project.asset_paths,
+            function_paths=project.function_paths,
             target_path=project.target_path,
             snapshot_paths=project.snapshot_paths,
             clean_targets=project.clean_targets,

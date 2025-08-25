@@ -178,7 +178,7 @@ class SourceLookup(dbtClassMixin):
 
 
 class RefableLookup(dbtClassMixin):
-    # model, seed, snapshot
+    # model, seed, snapshot, function
     _lookup_types: ClassVar[set] = set(REFABLE_NODE_TYPES)
     _versioned_types: ClassVar[set] = set(VERSIONED_NODE_TYPES)
 

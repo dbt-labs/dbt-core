@@ -436,5 +436,10 @@ def get_file_types_for_project(project):
             "extensions": [".csv", ".sql"],
             "parser": "FixtureParser",
         },
+        ParseFileType.Function: {
+            "paths": project.function_paths,
+            "extensions": [".sql"],
+            "parser": "FunctionParser",
+        },
     }
     return file_types

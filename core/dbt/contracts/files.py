@@ -23,6 +23,7 @@ class ParseFileType(StrEnum):
     Schema = "schema"
     Hook = "hook"  # not a real filetype, from dbt_project.yml
     Fixture = "fixture"
+    Function = "function"
 
 
 parse_file_type_to_parser = {
@@ -37,6 +38,7 @@ parse_file_type_to_parser = {
     ParseFileType.Schema: "SchemaParser",
     ParseFileType.Hook: "HookParser",
     ParseFileType.Fixture: "FixtureParser",
+    ParseFileType.Function: "FunctionParser",
 }
 
 

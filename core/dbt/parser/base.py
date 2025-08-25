@@ -252,6 +252,12 @@ class ConfiguredParser(
         }
         dct.update(kwargs)
 
+        # TODO: we're doing this becaus return type is _required_ for the FunctionNode
+        # but we don't get the return type until we patch the node with the yml definition
+        # so we need to set it to a default value here.
+        if self.resource_type == NodeType.Function:
+            dct["return_type"] = {"type": "INVALID_TYPE"}
+
         try:
             return self.parse_from_dict(dct, validate=True)
         except ValidationError as exc:

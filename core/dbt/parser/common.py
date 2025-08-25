@@ -10,6 +10,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedAnalysisUpdate,
     UnparsedColumn,
     UnparsedExposure,
+    UnparsedFunctionUpdate,
     UnparsedMacroUpdate,
     UnparsedModelUpdate,
     UnparsedNodeUpdate,
@@ -33,6 +34,7 @@ schema_file_keys_to_resource_types = {
     "metrics": NodeType.Metric,
     "semantic_models": NodeType.SemanticModel,
     "saved_queries": NodeType.SavedQuery,
+    "functions": NodeType.Function,
 }
 
 resource_types_to_schema_file_keys = {
@@ -59,6 +61,7 @@ Target = TypeVar(
     UnpatchedSourceDefinition,
     UnparsedExposure,
     UnparsedModelUpdate,
+    UnparsedFunctionUpdate,
     UnparsedSingularTestUpdate,
 )
 
