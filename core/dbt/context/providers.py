@@ -247,18 +247,30 @@ class BaseResolver(metaclass=abc.ABCMeta):
         """Get the event time field name with proper quoting based on configuration."""
         # Default to False for quoting
         should_quote = False
+        column_found = False
+        column = None
         
         # Check column-level quote configuration first (overrides source-level)
-        for _, column_info in target.columns.items():
-            if column_info.name == target.config.event_time:
-                # Column-level quote setting takes precedence
-                column = Column.create(column_info.name, column_info.data_type if column_info.data_type else '')                
-                if hasattr(column_info, 'quote') and column_info.quote is not None:
-                    should_quote = column_info.quote
-                # Fallback to source-level quote setting
-                elif hasattr(target, 'quoting') and hasattr(target.quoting, 'column') and target.quoting.column is not None:
-                    should_quote = target.quoting.column
-                break
+        if hasattr(target, 'columns') and target.columns and isinstance(target.columns, dict):
+            for _, column_info in target.columns.items():
+                if column_info.name == target.config.event_time:
+                    column_found = True
+                    # Create the column object
+                    column = Column.create(column_info.name, column_info.data_type if column_info.data_type else '')
+                    # Column-level quote setting takes precedence
+                    if hasattr(column_info, 'quote') and column_info.quote is not None:
+                        should_quote = column_info.quote
+                    # Fallback to source-level quote setting
+                    elif hasattr(target, 'quoting') and hasattr(target.quoting, 'column') and target.quoting.column is not None:
+                        should_quote = target.quoting.column
+                    break
+        
+        # If column not found, fall back to source-level quote setting
+        if not column_found:
+            if hasattr(target, 'quoting') and hasattr(target.quoting, 'column') and target.quoting.column is not None:
+                should_quote = target.quoting.column
+            # Create column object for quoting
+            column = Column.create(target.config.event_time, '')
         
         # Apply quoting logic
         if should_quote:
