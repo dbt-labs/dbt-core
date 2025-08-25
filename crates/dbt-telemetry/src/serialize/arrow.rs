@@ -393,6 +393,7 @@ impl<'a> From<&'a TelemetryAttributes> for ArrowAttributes<'a> {
                     ..Default::default()
                 },
                 BuildPhaseInfo::Analyzing { shared, node_count }
+                | BuildPhaseInfo::Hydrating { shared, node_count }
                 | BuildPhaseInfo::Compiling { shared, node_count }
                 | BuildPhaseInfo::Executing { shared, node_count } => ArrowAttributes {
                     phase: Some(phase_info.into()),
@@ -819,6 +820,10 @@ impl TryFrom<ArrowAttributes<'_>> for TelemetryAttributes {
                         shared,
                         node_count: arrow.node_count.unwrap_or(0),
                     },
+                    BuildPhase::Hydrating => BuildPhaseInfo::Hydrating {
+                        shared,
+                        node_count: arrow.node_count.unwrap_or(0),
+                    },
                     BuildPhase::Compiling => BuildPhaseInfo::Compiling {
                         shared,
                         node_count: arrow.node_count.unwrap_or(0),
@@ -1138,6 +1143,10 @@ mod tests {
                     BuildPhase::FreshnessAnalysis => BuildPhaseInfo::FreshnessAnalysis { shared },
                     BuildPhase::Lineage => BuildPhaseInfo::Lineage { shared },
                     BuildPhase::Analyzing => BuildPhaseInfo::Analyzing {
+                        shared,
+                        node_count: Faker.fake_with_rng(&mut rng),
+                    },
+                    BuildPhase::Hydrating => BuildPhaseInfo::Hydrating {
                         shared,
                         node_count: Faker.fake_with_rng(&mut rng),
                     },

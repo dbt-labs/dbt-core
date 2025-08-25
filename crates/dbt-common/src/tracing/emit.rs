@@ -23,6 +23,13 @@ macro_rules! create_info_span {
         // everything comes from the attributes
         $crate::tracing::emit::_tracing::info_span!("")
     }};
+
+    (parent: $parent:expr, $attrs:expr) => {{
+        $crate::tracing::event_info::store_event_attributes($attrs);
+        // In our structured tracing we do not care about the span name,
+        // everything comes from the attributes
+        $crate::tracing::emit::_tracing::info_span!(parent: $parent, "")
+    }};
 }
 
 #[macro_export]

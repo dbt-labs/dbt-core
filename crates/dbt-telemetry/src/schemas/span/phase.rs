@@ -81,17 +81,25 @@ pub enum BuildPhaseInfo {
         shared: SharedPhaseInfo,
     },
 
-    /// # Analyzing
+    /// # Compiling
     /// Dbt compile (called render) and Sql analysis
-    Analyzing {
+    Compiling {
         #[serde(flatten)]
         shared: SharedPhaseInfo,
         node_count: u64,
     },
 
-    /// # Compiling
+    /// # Hydrating
+    /// Hydration of models, seeds, snapshots and sources
+    Hydrating {
+        #[serde(flatten)]
+        shared: SharedPhaseInfo,
+        node_count: u64,
+    },
+
+    /// # Analyzing
     /// Dbt compile (called render) and Sql analysis
-    Compiling {
+    Analyzing {
         #[serde(flatten)]
         shared: SharedPhaseInfo,
         node_count: u64,
