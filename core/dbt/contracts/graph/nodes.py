@@ -32,6 +32,7 @@ from dbt.artifacts.resources import (
 from dbt.artifacts.resources import Documentation as DocumentationResource
 from dbt.artifacts.resources import Exposure as ExposureResource
 from dbt.artifacts.resources import FileHash
+from dbt.artifacts.resources import Function as FunctionResource
 from dbt.artifacts.resources import GenericTest as GenericTestResource
 from dbt.artifacts.resources import GraphResource
 from dbt.artifacts.resources import Group as GroupResource
@@ -1534,6 +1535,19 @@ class Group(GroupResource, BaseNode):
             "package_name": self.package_name,
             "owner": {k: str(v) for k, v in self.owner.to_dict(omit_none=True).items()},
         }
+
+
+# ====================================
+# Function node
+# ====================================
+
+
+@dataclass
+class FunctionNode(CompiledNode, FunctionResource):
+
+    @classmethod
+    def resource_class(cls) -> Type[FunctionResource]:
+        return FunctionResource
 
 
 # ====================================
