@@ -5,7 +5,9 @@ use crate::constants::DBT_FUSION;
 use crate::{ErrorCode, FsResult};
 
 use datafusion::parquet::data_type::AsBytes;
-use dbt_telemetry::{SeverityNumber, SpanEndInfo, SpanStatus, StatusCode, TelemetryAttributes};
+use dbt_telemetry::{
+    LogEventInfo, SeverityNumber, SpanEndInfo, SpanStatus, StatusCode, TelemetryAttributes,
+};
 
 use opentelemetry::{
     KeyValue, SpanId, TraceFlags, Value as OtelValue,
@@ -344,7 +346,8 @@ where
             otel_log_record.set_observed_timestamp(log_record.time_unix_nano);
 
             // Set source code attributes
-            if let TelemetryAttributes::Log { location, .. } = &log_record.attributes {
+            if let TelemetryAttributes::Log(LogEventInfo { location, .. }) = &log_record.attributes
+            {
                 if let Some(file) = location.file.clone() {
                     otel_log_record.add_attribute(
                         opentelemetry::Key::new(CODE_FILE_PATH),

@@ -6,6 +6,7 @@ pub mod emit;
 pub mod event_info;
 mod file_writer;
 mod init;
+mod invocation;
 mod layers;
 pub mod metrics;
 mod shared;
@@ -14,6 +15,7 @@ pub mod span_info;
 pub use config::FsTraceConfig;
 pub use convert::log_level_to_severity;
 pub use init::{TelemetryShutdown, init_tracing};
+pub use invocation::create_invocation_attributes;
 pub use shared::ToTracingValue;
 
 #[cfg(test)]
@@ -22,8 +24,9 @@ mod tests {
 
     use constants::TRACING_ATTR_FIELD;
     use dbt_telemetry::{
-        DebugValue, LogRecordInfo, RecordCodeLocation, SeverityNumber, SpanEndInfo, SpanStartInfo,
-        TelemetryAttributes, TelemetryRecord,
+        DebugValue, DevInternalInfo, LegacyLogEventInfo, LogEventInfo, LogRecordInfo,
+        RecordCodeLocation, SeverityNumber, SpanEndInfo, SpanStartInfo, TelemetryAttributes,
+        TelemetryRecord, UnknownInfo,
         serialize::arrow::{create_arrow_schema, deserialize_from_arrow},
     };
     use event_info::with_current_thread_event_data;
@@ -111,6 +114,7 @@ mod tests {
         // the fallback logic with the global parent span
         let (subscriber, shutdown_items) = create_tracing_subcriber_with_layer(
             FsTraceConfig {
+                package: "test_package",
                 max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
                 invocation_id,
                 otm_file_path: None,
@@ -126,7 +130,7 @@ mod tests {
 
         let mut telemetry_handle = TelemetryHandle::new(shutdown_items, dummy_root_span);
 
-        let test_attrs = TelemetryAttributes::Log {
+        let test_attrs = TelemetryAttributes::Log(LogEventInfo {
             code: Some(42),
             dbt_core_code: Some("test_code".to_string()),
             original_severity_number: SeverityNumber::Warn,
@@ -134,7 +138,7 @@ mod tests {
             // This is important. Our infra will auto-populate the location from the callsite,
             // and we want to test that it works correctly, capturing real callsite
             location: RecordCodeLocation::none(),
-        };
+        });
 
         // We do not need location here, but this is easier than unwrapping later
         let mut test_location = Location::caller();
@@ -204,6 +208,7 @@ mod tests {
         // the fallback logic with the global parent span
         let (subscriber, shutdown_items) = create_tracing_subcriber_with_layer(
             FsTraceConfig {
+                package: "test_package",
                 max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
                 invocation_id,
                 otm_file_path: Some(temp_file_path.clone()),
@@ -263,7 +268,7 @@ mod tests {
                 trace_id: deserialized_trace_id,
                 span_name: span_type,
                 parent_span_id: None,
-                attributes: TelemetryAttributes::Unknown { name, .. },
+                attributes: TelemetryAttributes::Unknown(UnknownInfo { name, .. }),
                 ..
             }) if span_type == "Unknown" && name == "test_root_span" && *deserialized_trace_id == trace_id
         )));
@@ -273,7 +278,7 @@ mod tests {
                 trace_id: deserialized_trace_id,
                 span_name: span_type,
                 parent_span_id: None,
-                attributes: TelemetryAttributes::Unknown { name, .. },
+                attributes: TelemetryAttributes::Unknown(UnknownInfo { name, .. }),
                 ..
             }) if span_type == "Unknown" && name == "test_root_span" && *deserialized_trace_id == trace_id
         )));
@@ -284,7 +289,7 @@ mod tests {
             .find_map(|r| {
                 if let TelemetryRecord::SpanStart(SpanStartInfo {
                     span_id,
-                    attributes: TelemetryAttributes::Unknown { name, .. },
+                    attributes: TelemetryAttributes::Unknown(UnknownInfo { name, .. }),
                     ..
                 }) = r
                     && name == "test_root_span"
@@ -303,7 +308,7 @@ mod tests {
                 trace_id: deserialized_trace_id,
                 span_name: span_type,
                 parent_span_id: Some(parent_id),
-                attributes: TelemetryAttributes::Unknown { name, .. },
+                attributes: TelemetryAttributes::Unknown(UnknownInfo { name, .. }),
                 ..
             }) if span_type == "Unknown" && name == "test_child_span" && *deserialized_trace_id == trace_id && *parent_id == root_span_id
         )));
@@ -313,7 +318,7 @@ mod tests {
                 trace_id: deserialized_trace_id,
                 span_name: span_type,
                 parent_span_id: Some(parent_id),
-                attributes: TelemetryAttributes::Unknown { name, .. },
+                attributes: TelemetryAttributes::Unknown(UnknownInfo { name, .. }),
                 ..
             }) if span_type == "Unknown" && name == "test_child_span" && *deserialized_trace_id == trace_id && *parent_id == root_span_id
         )));
@@ -354,6 +359,7 @@ mod tests {
         // the fallback logic with the global parent span
         let (subscriber, shutdown_items) = create_tracing_subcriber_with_layer(
             FsTraceConfig {
+                package: "test_package",
                 max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
                 invocation_id,
                 otm_file_path: None,
@@ -413,7 +419,7 @@ mod tests {
                 trace_id: deserialized_trace_id,
                 span_name: span_type,
                 parent_span_id: None,
-                attributes: TelemetryAttributes::Unknown { name, .. },
+                attributes: TelemetryAttributes::Unknown(UnknownInfo { name, .. }),
                 ..
             } if span_type == "Unknown" && name == "test_root_span" && *deserialized_trace_id == trace_id
         )));
@@ -423,7 +429,7 @@ mod tests {
                 trace_id: deserialized_trace_id,
                 span_name: span_type,
                 parent_span_id: None,
-                attributes: TelemetryAttributes::Unknown { name, .. },
+                attributes: TelemetryAttributes::Unknown(UnknownInfo { name, .. }),
                 ..
             } if span_type == "Unknown" && name == "test_root_span" && *deserialized_trace_id == trace_id
         )));
@@ -434,7 +440,7 @@ mod tests {
             .find_map(|r| {
                 if let SpanStartInfo {
                     span_id,
-                    attributes: TelemetryAttributes::Unknown { name, .. },
+                    attributes: TelemetryAttributes::Unknown(UnknownInfo { name, .. }),
                     ..
                 } = r
                     && name == "test_root_span"
@@ -453,7 +459,7 @@ mod tests {
                 trace_id: deserialized_trace_id,
                 span_name: span_type,
                 parent_span_id: Some(parent_id),
-                attributes: TelemetryAttributes::Unknown { name, .. },
+                attributes: TelemetryAttributes::Unknown(UnknownInfo { name, .. }),
                 ..
             } if span_type == "Unknown" && name == "test_child_span" && *deserialized_trace_id == trace_id && *parent_id == root_span_id
         )));
@@ -463,7 +469,7 @@ mod tests {
                 trace_id: deserialized_trace_id,
                 span_name: span_type,
                 parent_span_id: Some(parent_id),
-                attributes: TelemetryAttributes::Unknown { name, .. },
+                attributes: TelemetryAttributes::Unknown(UnknownInfo { name, .. }),
                 ..
             } if span_type == "Unknown" && name == "test_child_span" && *deserialized_trace_id == trace_id && *parent_id == root_span_id
         )));
@@ -536,6 +542,7 @@ mod tests {
         // the fallback logic with the global parent span
         let (subscriber, shutdown_items) = create_tracing_subcriber_with_layer(
             FsTraceConfig {
+                package: "test_package",
                 max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
                 invocation_id,
                 otm_file_path: None,
@@ -591,6 +598,200 @@ mod tests {
     }
 
     #[test]
+    fn test_emit_macros() {
+        // Initialize tracing with a custom layer to capture events
+        let invocation_id = uuid::Uuid::new_v4();
+        let trace_id = invocation_id.as_u128();
+
+        let (test_layer, span_starts, span_ends, log_records) = TestLayer::new();
+
+        // Init telemetry using internal API allowing to set thread local subscriber.
+        // This avoids collisions with other unit tests, but prevents us from testing
+        // the fallback logic with the global parent span
+        let (subscriber, shutdown_items) = create_tracing_subcriber_with_layer(
+            FsTraceConfig {
+                package: "test_package",
+                max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
+                invocation_id,
+                otm_file_path: None,
+                otm_parquet_file_path: None,
+                enable_progress: false,
+                export_to_otlp: false,
+            },
+            test_layer,
+        )
+        .expect("Failed to initialize tracing");
+
+        let dummy_root_span = tracing::info_span!("not used");
+
+        let mut telemetry_handle = TelemetryHandle::new(shutdown_items, dummy_root_span);
+
+        // Create different test attributes for each call
+        let root_attrs = TelemetryAttributes::Log(LogEventInfo {
+            code: Some(100),
+            dbt_core_code: Some("root_code".to_string()),
+            original_severity_number: SeverityNumber::Info,
+            original_severity_text: "INFO".to_string(),
+            location: RecordCodeLocation::none(),
+        });
+
+        let child_attrs = TelemetryAttributes::Log(LogEventInfo {
+            code: Some(200),
+            dbt_core_code: Some("child_code".to_string()),
+            original_severity_number: SeverityNumber::Debug,
+            original_severity_text: "DEBUG".to_string(),
+            location: RecordCodeLocation::none(),
+        });
+
+        let event1_attrs = TelemetryAttributes::Log(LogEventInfo {
+            code: Some(300),
+            dbt_core_code: Some("event1_code".to_string()),
+            original_severity_number: SeverityNumber::Warn,
+            original_severity_text: "WARN".to_string(),
+            location: RecordCodeLocation::none(),
+        });
+
+        let event2_attrs = TelemetryAttributes::Log(LogEventInfo {
+            code: Some(400),
+            dbt_core_code: Some("event2_code".to_string()),
+            original_severity_number: SeverityNumber::Error,
+            original_severity_text: "ERROR".to_string(),
+            location: RecordCodeLocation::none(),
+        });
+
+        // Capture locations for verification
+        let mut root_location = Location::caller();
+        let mut child_location = Location::caller();
+        let mut event1_location = Location::caller();
+        let mut event2_location = Location::caller();
+
+        tracing::subscriber::with_default(subscriber, || {
+            // Test create_root_info_span macro
+            root_location = Location::caller();
+            let root_span = create_root_info_span!(root_attrs.clone());
+            let _root_guard = root_span.enter();
+
+            // Test create_info_span macro (creates child span)
+            child_location = Location::caller();
+            let child_span = create_info_span!(child_attrs.clone());
+            let _child_guard = child_span.enter();
+
+            // Test emit_tracing_event with message
+            event1_location = Location::caller();
+            emit_tracing_event!(event1_attrs.clone(), "Event with message");
+
+            // Test emit_tracing_event without message
+            event2_location = Location::caller();
+            emit_tracing_event!(event2_attrs.clone());
+        });
+
+        // Shutdown telemetry to ensure all data is processed
+        let shutdown_errs = telemetry_handle.shutdown();
+        assert_eq!(shutdown_errs.len(), 0);
+
+        // Get captured data
+        let span_starts = Arc::into_inner(span_starts)
+            .expect("Should have no refs")
+            .into_inner()
+            .expect("Should have no locks");
+        let span_ends = Arc::into_inner(span_ends)
+            .expect("Should have no refs")
+            .into_inner()
+            .expect("Should have no locks");
+        let log_records = Arc::into_inner(log_records)
+            .expect("Should have no refs")
+            .into_inner()
+            .expect("Should have no locks");
+
+        // Verify we captured 2 spans and 2 events
+        assert_eq!(span_starts.len(), 2, "Expected 2 span starts");
+        assert_eq!(span_ends.len(), 2, "Expected 2 span ends");
+        assert_eq!(log_records.len(), 2, "Expected 2 log records");
+
+        // Verify root span has correct attributes (no parent)
+        let root_span_start = span_starts
+            .iter()
+            .find(|s| s.parent_span_id.is_none())
+            .expect("Should find root span");
+
+        assert_eq!(root_span_start.trace_id, trace_id);
+        let expected_root_location = RecordCodeLocation {
+            file: Some(root_location.file().to_string()),
+            line: Some(root_location.line() + 1),
+            module_path: Some(std::module_path!().to_string()),
+            target: Some(std::module_path!().to_string()),
+        };
+        assert_eq!(
+            root_span_start.attributes,
+            root_attrs.with_location(expected_root_location)
+        );
+
+        // Verify child span has correct attributes and parent
+        let child_span_start = span_starts
+            .iter()
+            .find(|s| s.parent_span_id.is_some())
+            .expect("Should find child span");
+
+        assert_eq!(child_span_start.trace_id, trace_id);
+        assert_eq!(
+            child_span_start.parent_span_id,
+            Some(root_span_start.span_id)
+        );
+        let expected_child_location = RecordCodeLocation {
+            file: Some(child_location.file().to_string()),
+            line: Some(child_location.line() + 1),
+            module_path: Some(std::module_path!().to_string()),
+            target: Some(std::module_path!().to_string()),
+        };
+        assert_eq!(
+            child_span_start.attributes,
+            child_attrs.with_location(expected_child_location)
+        );
+
+        // Verify first event (with message)
+        let event1 = log_records
+            .iter()
+            .find(|r| r.body == "Event with message")
+            .expect("Should find event with message");
+
+        assert_eq!(event1.trace_id, trace_id);
+        assert_eq!(event1.span_id, Some(child_span_start.span_id));
+        assert_eq!(event1.severity_number, SeverityNumber::Info);
+        assert_eq!(event1.severity_text, "INFO");
+        let expected_event1_location = RecordCodeLocation {
+            file: Some(event1_location.file().to_string()),
+            line: Some(event1_location.line() + 1),
+            module_path: Some(std::module_path!().to_string()),
+            target: Some(std::module_path!().to_string()),
+        };
+        assert_eq!(
+            event1.attributes,
+            event1_attrs.with_location(expected_event1_location)
+        );
+
+        // Verify second event (without message)
+        let event2 = log_records
+            .iter()
+            .find(|r| r.body.is_empty())
+            .expect("Should find event without message");
+
+        assert_eq!(event2.trace_id, trace_id);
+        assert_eq!(event2.span_id, Some(child_span_start.span_id));
+        assert_eq!(event2.severity_number, SeverityNumber::Info);
+        assert_eq!(event2.severity_text, "INFO");
+        let expected_event2_location = RecordCodeLocation {
+            file: Some(event2_location.file().to_string()),
+            line: Some(event2_location.line() + 1),
+            module_path: Some(std::module_path!().to_string()),
+            target: Some(std::module_path!().to_string()),
+        };
+        assert_eq!(
+            event2.attributes,
+            event2_attrs.with_location(expected_event2_location)
+        );
+    }
+
+    #[test]
     #[allow(clippy::cognitive_complexity)]
     fn test_tracing_parquet_filtering() {
         let invocation_id = uuid::Uuid::new_v4();
@@ -604,6 +805,7 @@ mod tests {
         // the fallback logic with the global parent span
         let (subscriber, shutdown_items) = create_tracing_subcriber_with_layer(
             FsTraceConfig {
+                package: "test_package",
                 max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
                 invocation_id,
                 otm_file_path: None,
@@ -619,37 +821,37 @@ mod tests {
         let mut telemetry_handle = TelemetryHandle::new(shutdown_items, dummy_root_span);
 
         // Pre-create attrs to compare them later
-        let test_legacy_log_attrs = TelemetryAttributes::LegacyLog {
+        let test_legacy_log_attrs = TelemetryAttributes::LegacyLog(LegacyLogEventInfo {
             original_severity_number: SeverityNumber::Warn,
             original_severity_text: "WARN".to_string(),
             location: RecordCodeLocation::none(),
-        };
+        });
 
-        let test_log_attrs = TelemetryAttributes::Log {
+        let test_log_attrs = TelemetryAttributes::Log(LogEventInfo {
             code: Some(42),
             dbt_core_code: Some("test_code".to_string()),
             original_severity_number: SeverityNumber::Warn,
             original_severity_text: "WARN".to_string(),
             location: RecordCodeLocation::none(),
-        };
+        });
 
         let mut extra_map = BTreeMap::new();
         extra_map.insert("key".to_string(), DebugValue::Bool(true));
 
-        let dev_span_attrs = TelemetryAttributes::DevInternal {
+        let dev_span_attrs = TelemetryAttributes::DevInternal(DevInternalInfo {
             name: "dev_test".to_string(),
             location: RecordCodeLocation::none(),
             // Add extra attributes to ensure they are filtered out
             extra: Some(extra_map),
-        };
+        });
 
         let before_start = SystemTime::now();
 
-        let dev_span_attrs_expected = TelemetryAttributes::DevInternal {
+        let dev_span_attrs_expected = TelemetryAttributes::DevInternal(DevInternalInfo {
             name: "dev_test".to_string(),
             location: RecordCodeLocation::none(),
             extra: None,
-        };
+        });
 
         // We do not need location here, but this is easier than unwrapping later
         let mut test_location = Location::caller();

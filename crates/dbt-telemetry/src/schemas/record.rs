@@ -8,12 +8,22 @@ use super::{
         deserialize_trace_id, serialize_optional_span_id, serialize_span_id, serialize_timestamp,
         serialize_trace_id,
     },
+    event::artifact::WriteArtifactInfo,
+    event::log::{LegacyLogEventInfo, LogEventInfo},
     location::RecordCodeLocation,
     otlp::{SeverityNumber, SpanStatus},
+    span::dev::{DevInternalInfo, UnknownInfo},
+    span::invocation::InvocationInfo,
+    span::node::NodeInfo,
+    span::phase::BuildPhaseInfo,
+    span::process::ProcessInfo,
+    span::update::UpdateInfo,
 };
 use dbt_serde_yaml::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
+#[cfg(test)]
+use strum::EnumIter;
 use strum::{AsRefStr, EnumDiscriminants, IntoStaticStr};
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema, PartialEq)]
@@ -184,6 +194,8 @@ pub struct LogRecordInfo {
 /// This is a discriminated union on `record_type` field, which is not part of the OTLP schema.
 #[derive(Serialize, Deserialize, Debug, JsonSchema, EnumDiscriminants, PartialEq)]
 #[serde(tag = "record_type")]
+// The following derives a variant disciriminator enum for the telemetry records,
+// used for type-safe (de)serialization and matching.
 #[strum_discriminants(derive(Serialize, Deserialize), name(TelemetryRecordType))]
 pub enum TelemetryRecord {
     /// # Span Start
@@ -233,144 +245,17 @@ pub enum TelemetryRecordRef<'a> {
     LogRecord(&'a LogRecordInfo),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Default)]
-pub struct SharedPhaseInfo {
-    // Invocation id is added to all phase for consumer convenience.
-    // It will always match the `invocation_id` in the root `Invocation` span.
-    /// Unique identifier for the invocation
-    pub invocation_id: String,
-}
-
-#[derive(
-    Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, EnumDiscriminants, strum::Display,
-)]
-#[strum_discriminants(derive(
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    strum::Display,
-    IntoStaticStr,
-    Hash
-))]
-#[strum_discriminants(name(BuildPhase))]
-#[serde(tag = "phase")]
-pub enum BuildPhaseInfo {
-    /// # File Discovery
-    /// Analyzing dbt_project, profiles.yml and scanning files
-    Loading {
-        #[serde(flatten)]
-        shared: SharedPhaseInfo,
-    },
-
-    /// # Dependency Loading
-    /// Check that dependencies are met
-    DependencyLoading {
-        #[serde(flatten)]
-        shared: SharedPhaseInfo,
-    },
-
-    /// # Parsing
-    /// Parsing and macro name resolution of all dbt files
-    Parsing {
-        #[serde(flatten)]
-        shared: SharedPhaseInfo,
-    },
-
-    /// # Scheduling
-    /// Graph construction and graph slicing
-    Scheduling {
-        #[serde(flatten)]
-        shared: SharedPhaseInfo,
-    },
-
-    /// # Freshness Analysis
-    /// Freshness analysis of sources and models
-    FreshnessAnalysis {
-        #[serde(flatten)]
-        shared: SharedPhaseInfo,
-    },
-
-    /// # Lineage
-    /// Analysis of individual node lineages
-    Lineage {
-        #[serde(flatten)]
-        shared: SharedPhaseInfo,
-    },
-
-    /// # Analyzing
-    /// Dbt compile (called render) and Sql analysis
-    Analyzing {
-        #[serde(flatten)]
-        shared: SharedPhaseInfo,
-        node_count: u64,
-    },
-
-    /// # Compiling
-    /// Dbt compile (called render) and Sql analysis
-    Compiling {
-        #[serde(flatten)]
-        shared: SharedPhaseInfo,
-        node_count: u64,
-    },
-
-    /// # Executing
-    /// Execution against the target database
-    Executing {
-        #[serde(flatten)]
-        shared: SharedPhaseInfo,
-        node_count: u64,
-    },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
-pub struct NodeIdentifier {
-    /// The unique ID of the node.
-    pub unique_id: String,
-    /// The name of the node.
-    pub fqn: String,
-}
-
-impl std::fmt::Display for NodeIdentifier {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.unique_id)
-    }
-}
-
-/// TODO: this is a duplicate from `dbt-schemas` crate due to current circular dependency
-/// remove redundancy when `dbt-schemas` crate is available
-/// Represents the detailed status of a phase in the execution of a node.
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Default, JsonSchema)]
-pub enum NodeExecutionStatus {
-    #[default]
-    Success,
-    Error,
-    Skipped,
-    Aborted, // e.g. interrupted by user.
-    Reused,
-    Passed, // For test nodes.
-    Failed, // For test nodes.
-}
-
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
-pub struct InvocationMetrics {
-    pub total_errors: Option<u64>,
-    pub total_warnings: Option<u64>,
-    pub autofix_suggestions: Option<u64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
-#[serde(untagged)]
-pub enum DebugValue {
-    Float64(f64),
-    Int64(i64),
-    UInt64(u64),
-    Bool(bool),
-    String(String),
-    Bytes(Vec<u8>),
-}
-
-/// Top-level event enum, tagged by `event_type` for downstream routing
+/// Top-level event enum, tagged by `event_type`.
+///
+/// This is the core of the telemetry schema. While Span and LogRecord,
+/// are stable, unchanging, simple "envelops", the actual structured data
+/// is stored in the `TelemetryAttributes` enum. This enum, as well as structs
+/// used in its variants, are supposedto grow as telemetry evolves, covers
+/// more of the dbt Fusion functionality and serves more use cases.
+///
+/// Besides the data itself, it's various derived traits are used to auto
+/// generate human-readable span names, produce discriminated union of
+/// attributes for (de)serialization.
 #[skip_serializing_none]
 #[derive(
     Debug,
@@ -380,12 +265,15 @@ pub enum DebugValue {
     JsonSchema,
     AsRefStr,
     IntoStaticStr,
-    PartialEq,
-    strum::Display,
-    EnumDiscriminants,
+    PartialEq, // Used for equality checks. As of today in tests, but probably helpful later
+    strum::Display, // Used to generate a "nide" span name from the attributes
+    EnumDiscriminants, // Used to handle (de)serialization, matching serialized tags
 )]
 #[serde(tag = "event_type", content = "attributes")]
+// The following derives a variant disciriminator enum for the telemetry attributes,
+// used for type-safe (de)serialization and matching.
 #[strum_discriminants(derive(Serialize, Deserialize), name(TelemetryAttributesType))]
+#[cfg_attr(test, strum_discriminants(derive(EnumIter)))]
 pub enum TelemetryAttributes {
     // ---------------------
     // Span attributes first
@@ -393,186 +281,118 @@ pub enum TelemetryAttributes {
     /// # Process attributes
     /// Fusion produces one process span per execution of the cli or lsp.
     /// There can be multiple Invocations per Process.
-    Process {
-        /// dbt fusion version, e.g. "1.2.3"
-        version: String,
-        /// The host operating system, e.g. "linux", "darwin", "windows"
-        host_os: String,
-        /// The host architecture, e.g. "x86_64", "aarch64"
-        host_arch: String,
-    },
+    Process(ProcessInfo),
 
     /// # Invocation attributes
-    Invocation {
-        /// Unique identifier for the invocation
-        invocation_id: String,
-        /// The dbt command that was executed, e.g. "run", "test", "build"
-        command: String,
-        /// dbt target, e.g. "dev", "prod"
-        target: Option<String>,
+    Invocation(Box<InvocationInfo>),
 
-        // The following process-wide attributes are duplicated for convenience
-        /// dbt fusion version, e.g. "1.2.3"
-        version: String,
-        /// The host operating system, e.g. "linux", "darwin", "windows"
-        host_os: String,
-        /// The host architecture, e.g. "x86_64", "aarch64"
-        host_arch: String,
+    // Command/operation spans
+    /// # Update command attributes
+    Update(UpdateInfo),
 
-        // Metrics
-        #[serde(flatten)]
-        metrics: Option<InvocationMetrics>,
-    },
-
-    // Operation spans
-    /// # Session attributes
-    Update {
-        /// Update dbt to this version (e.g. 1.2.3) [default: latest version]
-        version: Option<String>,
-        /// Package to update (e.g. dbt) [default: dbt]
-        package: Option<String>,
-        /// The discovered path to the dbt executable
-        exe_path: Option<String>,
-    },
-
-    // Phases
+    // Parse, compile, build phases
     /// # Phase attributes
     #[strum(to_string = "Phase({0})")]
     Phase(BuildPhaseInfo),
 
     /// # Node attributes
-    #[strum(to_string = "Node({phase}|{node_id})")]
-    Node {
-        #[serde(flatten)]
-        node_id: NodeIdentifier, // this is flattened into inner attrs, hence `node_id` and not `id`
-        phase: BuildPhase,
-        /// Final status of the node execution.
-        status: Option<NodeExecutionStatus>,
-        /// The number of resulting rows produced by the node, if recorded.
-        num_rows: Option<u64>,
-    },
+    #[strum(to_string = "Node({0})")]
+    Node(NodeInfo),
 
     /// # Trace level span attributes
     ///
     /// This is used for detailed tracing of internal operations and only available
     /// when TRACE level is explicitly enabled.
-    #[strum(to_string = "DevInternal({name} | {location})")]
-    DevInternal {
-        /// Internal developer span name, often the function
-        name: String,
-        #[serde(flatten)]
-        location: RecordCodeLocation,
-        /// Arbitrary extra string for debugging purposes.
-        extra: Option<std::collections::BTreeMap<String, DebugValue>>,
-    },
+    #[strum(to_string = "DevInternal({0})")]
+    DevInternal(DevInternalInfo),
 
     /// # Fallback span attributes
     ///
     /// This is used for spans that weren't properly instrumented. Report a bug if you see this.
-    Unknown {
-        /// Internal developer span name, often the function
-        name: String,
-        #[serde(flatten)]
-        location: RecordCodeLocation,
-    },
+    Unknown(UnknownInfo),
     // ---------------------
     // Log attributes
     // ---------------------
     /// # Regular log record
     ///
     /// Is used for all log levels, messages that do not have specific meaning
-    Log {
-        // TODO: use ErrorCode enum for error codes
-        /// Option error/warning code
-        code: Option<u32>,
-
-        /// An optional legacy codes dbt-core code (e.g. "Z048")
-        dbt_core_code: Option<String>,
-
-        /// Numerical value of the severity, normalized to values described in OTEL Log Data Model.
-        ///
-        /// This is the original severity before user up/down-grade configuration applied
-        original_severity_number: SeverityNumber,
-
-        /// The severity text (also known as log level).
-        ///
-        /// This is the original severity before user up/down-grade configuration applied
-        original_severity_text: String,
-
-        #[serde(flatten)]
-        location: RecordCodeLocation,
-    },
+    Log(LogEventInfo),
 
     /// # Unstructured log record
     ///
     /// Is used for all log emitted by pre-tracing code that hasn't migrated to tracing yet.
-    LegacyLog {
-        /// Numerical value of the severity, normalized to values described in OTEL Log Data Model.
-        ///
-        /// This is the original severity before user up/down-grade configuration applied
-        original_severity_number: SeverityNumber,
-
-        /// The severity text (also known as log level).
-        ///
-        /// This is the original severity before user up/down-grade configuration applied
-        original_severity_text: String,
-
-        #[serde(flatten)]
-        location: RecordCodeLocation,
-    },
+    LegacyLog(LegacyLogEventInfo),
 
     /// # Write Artifact
-    WriteArtifact {
-        /// The path to the artifact.
-        relative_path: Option<String>,
-        /// Time it took to write the artifact in milliseconds.
-        duration_ms: Option<u64>,
-    },
+    WriteArtifact(WriteArtifactInfo),
 }
 
 impl TelemetryAttributes {
+    /// Returns the expected type of the telemetry record based on the attributes.
+    /// I.e. the given attributes, should only be used in the context of the returned
+    /// record type.
+    ///
+    /// Note that this will return `SpanEnd` in lieu of both `SpanStart` and `SpanEnd`.
+    pub fn record_type(&self) -> TelemetryRecordType {
+        match self {
+            TelemetryAttributes::Process(_)
+            | TelemetryAttributes::Invocation(_)
+            | TelemetryAttributes::Update(_)
+            | TelemetryAttributes::Phase(_)
+            | TelemetryAttributes::Node(_)
+            | TelemetryAttributes::DevInternal(_)
+            | TelemetryAttributes::Unknown(_) => TelemetryRecordType::SpanEnd,
+            TelemetryAttributes::Log(_)
+            | TelemetryAttributes::LegacyLog(_)
+            | TelemetryAttributes::WriteArtifact(_) => TelemetryRecordType::LogRecord,
+        }
+    }
     pub fn has_empty_location(&self) -> bool {
         match self {
-            TelemetryAttributes::Log { location, .. } => location.is_none(),
-            TelemetryAttributes::LegacyLog { location, .. } => location.is_none(),
-            TelemetryAttributes::DevInternal { location, .. } => location.is_none(),
-            TelemetryAttributes::Unknown { location, .. } => location.is_none(),
+            TelemetryAttributes::Log(LogEventInfo { location, .. }) => location.is_none(),
+            TelemetryAttributes::LegacyLog(LegacyLogEventInfo { location, .. }) => {
+                location.is_none()
+            }
+            TelemetryAttributes::DevInternal(DevInternalInfo { location, .. }) => {
+                location.is_none()
+            }
+            TelemetryAttributes::Unknown(UnknownInfo { location, .. }) => location.is_none(),
             _ => false,
         }
     }
     pub fn with_location(self, location: RecordCodeLocation) -> Self {
         match self {
-            TelemetryAttributes::Log {
+            TelemetryAttributes::Log(LogEventInfo {
                 code,
                 dbt_core_code,
                 original_severity_number,
                 original_severity_text,
                 ..
-            } => TelemetryAttributes::Log {
+            }) => TelemetryAttributes::Log(LogEventInfo {
                 code,
                 dbt_core_code,
                 original_severity_number,
                 original_severity_text,
                 location,
-            },
-            TelemetryAttributes::LegacyLog {
+            }),
+            TelemetryAttributes::LegacyLog(LegacyLogEventInfo {
                 original_severity_number,
                 original_severity_text,
                 ..
-            } => TelemetryAttributes::LegacyLog {
+            }) => TelemetryAttributes::LegacyLog(LegacyLogEventInfo {
                 original_severity_number,
                 original_severity_text,
                 location,
-            },
-            TelemetryAttributes::DevInternal { name, extra, .. } => {
-                TelemetryAttributes::DevInternal {
+            }),
+            TelemetryAttributes::DevInternal(DevInternalInfo { name, extra, .. }) => {
+                TelemetryAttributes::DevInternal(DevInternalInfo {
                     name,
                     location,
                     extra,
-                }
+                })
             }
-            TelemetryAttributes::Unknown { name, .. } => {
-                TelemetryAttributes::Unknown { name, location }
+            TelemetryAttributes::Unknown(UnknownInfo { name, .. }) => {
+                TelemetryAttributes::Unknown(UnknownInfo { name, location })
             }
             _ => {
                 // For other variants, we don't have a location, so we just return self

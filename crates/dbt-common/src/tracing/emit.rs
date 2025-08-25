@@ -6,6 +6,26 @@
 pub use tracing as _tracing;
 
 #[macro_export]
+macro_rules! create_root_info_span {
+    ($attrs:expr) => {{
+        $crate::tracing::event_info::store_event_attributes($attrs);
+        // In our structured tracing we do not care about the span name,
+        // everything comes from the attributes
+        $crate::tracing::emit::_tracing::info_span!(parent: None, "")
+    }};
+}
+
+#[macro_export]
+macro_rules! create_info_span {
+    ($attrs:expr) => {{
+        $crate::tracing::event_info::store_event_attributes($attrs);
+        // In our structured tracing we do not care about the span name,
+        // everything comes from the attributes
+        $crate::tracing::emit::_tracing::info_span!("")
+    }};
+}
+
+#[macro_export]
 macro_rules! emit_tracing_event {
     // Attrs with message => defaults to INFO level
     ($attrs:expr, $($arg:tt)+) => {

@@ -15,6 +15,8 @@ use crate::{
 /// and trace correlation.
 #[derive(Clone, Debug)]
 pub struct FsTraceConfig {
+    /// Name of the package emitting the telemetry, e.g. `dbt-cli` or `dbt-lsp`
+    pub(super) package: &'static str,
     /// Tracing level filter, which specifies maximum verbosity (inverse
     /// of log level)
     pub(super) max_log_verbosity: tracing::level_filters::LevelFilter,
@@ -34,6 +36,7 @@ pub struct FsTraceConfig {
 impl Default for FsTraceConfig {
     fn default() -> Self {
         Self {
+            package: "unknown",
             max_log_verbosity: tracing::level_filters::LevelFilter::INFO,
             otm_file_path: None,
             otm_parquet_file_path: None,
@@ -71,10 +74,12 @@ impl FsTraceConfig {
         project_dir: Option<PathBuf>,
         target_path: Option<PathBuf>,
         io_args: &IoArgs,
+        package: &'static str,
     ) -> Self {
         let (in_dir, out_dir) = calculate_trace_dirs(project_dir, target_path);
 
         Self {
+            package,
             max_log_verbosity: io_args
                 .log_level
                 .map(|lf| log_level_filter_to_tracing(&lf))

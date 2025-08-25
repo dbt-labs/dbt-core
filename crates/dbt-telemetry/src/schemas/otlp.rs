@@ -7,11 +7,14 @@
 //! 3. We subset some of the enums as we are not using all of the values defined in the OTLP spec
 
 use dbt_serde_yaml::JsonSchema;
+#[cfg(test)]
+use fake::Dummy;
 use schemars::JsonSchema_repr;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use strum::FromRepr;
 
+#[cfg_attr(test, derive(Dummy))]
 #[derive(
     Serialize_repr, Deserialize_repr, Debug, JsonSchema_repr, Clone, Copy, PartialEq, Eq, FromRepr,
 )]
@@ -29,6 +32,7 @@ pub enum StatusCode {
 }
 
 /// The final status of a span
+#[cfg_attr(test, derive(Dummy))]
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone, Default, PartialEq, Eq)]
 pub struct SpanStatus {
     pub message: Option<String>,
@@ -36,6 +40,7 @@ pub struct SpanStatus {
 }
 
 /// Possible values for LogRecord.SeverityNumber.
+#[cfg_attr(test, derive(Dummy))]
 #[derive(
     Serialize_repr,
     Deserialize_repr,

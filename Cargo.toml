@@ -375,6 +375,7 @@ zstd-safe = "7"
 
 # testing
 difference = "2.0.0"
+fake = { version = "4.4.0", features = ["derive", "uuid", "time"] }
 goldie = "0.5.0"
 indoc = "2.0.6"
 merge = { version = "0.2.0" }

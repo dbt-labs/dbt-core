@@ -1,5 +1,5 @@
 use dbt_telemetry::{
-    BuildPhase, BuildPhaseInfo, SpanEndInfo, SpanStartInfo, SpanStatus, StatusCode,
+    BuildPhase, BuildPhaseInfo, NodeInfo, SpanEndInfo, SpanStartInfo, SpanStatus, StatusCode,
     TelemetryAttributes,
 };
 use tracing::{Subscriber, span};
@@ -45,7 +45,7 @@ fn get_progress_params(
                 }
             }
         }
-        TelemetryAttributes::Node { node_id, phase, .. } => {
+        TelemetryAttributes::Node(NodeInfo { node_id, phase, .. }) => {
             match phase {
                 BuildPhase::Compiling => Some((RENDERING, 0, Some(node_id.unique_id.as_str()))),
                 BuildPhase::Analyzing => Some((ANALYZING, 0, Some(node_id.unique_id.as_str()))),

@@ -1,9 +1,12 @@
 use dbt_serde_yaml::JsonSchema;
+#[cfg(test)]
+use fake::Dummy;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use tracing::Metadata;
 
 #[skip_serializing_none]
+#[cfg_attr(test, derive(Dummy))]
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
 #[serde(default)]
 pub struct RecordCodeLocation {

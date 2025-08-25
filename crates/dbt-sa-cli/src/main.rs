@@ -50,6 +50,7 @@ fn main() -> ExitCode {
         cli.project_dir(),
         cli.target_path(),
         &arg.io,
+        "dbt-sa",
     )) {
         Ok(handle) => handle,
         Err(e) => {

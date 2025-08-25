@@ -1,6 +1,9 @@
 use clap::{ArgAction, builder::BoolishValueParser};
 use console::Style;
+use dbt_common::constants::{DBT_PROJECT_YML, DBT_TARGET_DIR_NAME};
+use dbt_common::io_utils::determine_project_dir;
 use dbt_common::logging::LogFormat;
+use dbt_common::{ErrorCode, FsResult, fs_err, stdfs};
 use dbt_serde_yaml::Value;
 use log::LevelFilter;
 use serde::{Deserialize, Serialize};
@@ -287,24 +290,59 @@ pub struct CommonArgs {
 // ------------------------------------------------------------------------------------------------
 // Arg processing
 impl Cli {
-    pub fn to_eval_args(
-        &self,
-        arg: SystemArgs,
-        in_dir: &Path,
-        out_dir: &Path,
-        from_main: bool,
-    ) -> EvalArgs {
+    pub fn to_eval_args(&self, system_arg: SystemArgs) -> FsResult<EvalArgs> {
+        // Determine the input and output directories based on the command.
+        // Some commands operate without project context, while others must be run in a project directory.
+        let (in_dir, out_dir) = {
+            match &self.command {
+                Commands::Man(_) | Commands::Init(_) => {
+                    // These commands do not require a project directory
+                    (PathBuf::from("."), PathBuf::from("."))
+                }
+                _ => {
+                    let in_dir = if let Some(project_dir) = self.project_dir() {
+                        project_dir
+                    } else {
+                        // TODO: the first argument to this function is never used anywhere in the codebase,
+                        // possibly it should be removed or properly wired
+                        let node_targets = &[];
+                        determine_project_dir(node_targets, DBT_PROJECT_YML)
+                            .map_err(|e| fs_err!(ErrorCode::IoError, "{}", e))?
+                    };
+                    let in_dir = stdfs::canonicalize(in_dir)?;
+
+                    let out_dir = self
+                        .target_path()
+                        .map(|p| if p.is_relative() { in_dir.join(p) } else { p })
+                        .unwrap_or(in_dir.join(DBT_TARGET_DIR_NAME));
+                    stdfs::create_dir_all(&out_dir).map_err(|e| {
+                        fs_err!(
+                            ErrorCode::IoError,
+                            "Failed to create output directory: {}",
+                            e
+                        )
+                    })?;
+                    let out_dir = stdfs::canonicalize(out_dir)?;
+
+                    (in_dir, out_dir)
+                }
+            }
+        };
+
+        let from_main = system_arg.from_main;
+
         let mut arg = match &self.command {
-            Commands::Init(args) => args.to_eval_args(arg, in_dir, out_dir),
-            Commands::Deps(args) => args.to_eval_args(arg, in_dir, out_dir),
-            Commands::List(args) => args.to_eval_args(arg, in_dir, out_dir),
-            Commands::Parse(args) => args.to_eval_args(arg, in_dir, out_dir),
-            Commands::Ls(args) => args.to_eval_args(arg, in_dir, out_dir),
-            Commands::Clean(args) => args.to_eval_args(arg, in_dir, out_dir),
-            Commands::Man(args) => args.to_eval_args(arg, in_dir, out_dir),
+            Commands::Init(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
+            Commands::Deps(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
+            Commands::List(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
+            Commands::Parse(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
+            Commands::Ls(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
+            Commands::Clean(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
+            Commands::Man(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
         };
         arg.from_main = from_main;
-        arg
+
+        Ok(arg)
     }
 
     pub fn common_args(&self) -> CommonArgs {

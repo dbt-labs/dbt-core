@@ -2,10 +2,12 @@
 
 use super::to_nanos;
 use crate::{
-    BuildPhase, BuildPhaseInfo, InvocationMetrics, LogRecordInfo, NodeExecutionStatus,
-    NodeIdentifier, RecordCodeLocation, SeverityNumber, SharedPhaseInfo, SpanEndInfo,
-    SpanStartInfo, SpanStatus, StatusCode, TelemetryAttributes, TelemetryAttributesType,
-    TelemetryRecord, TelemetryRecordType,
+    BuildPhase, BuildPhaseInfo, DevInternalInfo, InvocationCloudAttributes, InvocationEvalArgs,
+    InvocationInfo, InvocationMetrics, LegacyLogEventInfo, LogEventInfo, LogRecordInfo,
+    NodeExecutionStatus, NodeIdentifier, NodeInfo, ProcessInfo, RecordCodeLocation, SeverityNumber,
+    SharedPhaseInfo, SpanEndInfo, SpanStartInfo, SpanStatus, StatusCode, TelemetryAttributes,
+    TelemetryAttributesType, TelemetryRecord, TelemetryRecordType, UnknownInfo, UpdateInfo,
+    WriteArtifactInfo,
 };
 use arrow::{
     array::Array,
@@ -16,8 +18,8 @@ use arrow::{
 };
 use serde::{Deserialize, Serialize};
 use serde_arrow::schema::{SchemaLike, TracingOptions};
-use std::sync::Arc;
 use std::time::SystemTime;
+use std::{borrow::Cow, sync::Arc};
 
 // Create sudo impls for defaults on these two enums. This is only necessary
 // to make `ArrowTelemetryRecord` derive `Default` automatically, which in turn
@@ -60,16 +62,85 @@ pub struct ArrowTelemetryRecord<'a> {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ArrowAttributes<'a> {
     // Process fields
+    pub schema_url: Option<&'a str>,
+    pub schema_version: Option<u16>,
+    pub package: Option<&'a str>,
     pub version: Option<&'a str>,
     pub host_os: Option<&'a str>,
     pub host_arch: Option<&'a str>,
     // Invocation fields
     pub invocation_id: Option<&'a str>,
+    pub raw_command: Option<&'a str>,
+    // Invocation eval args
     pub command: Option<&'a str>,
+    pub profiles_dir: Option<&'a str>,
+    pub packages_install_path: Option<&'a str>,
     pub target: Option<&'a str>,
+    pub profile: Option<&'a str>,
+    pub vars: Option<String>, // owned due to JSON serialization
+    pub limit: Option<u64>,
+    pub num_threads: Option<u64>,
+    pub selector: Option<&'a str>,
+    #[serde(borrow)]
+    pub select: Option<Cow<'a, [String]>>,
+    #[serde(borrow)]
+    pub exclude: Option<Cow<'a, [String]>>,
+    pub indirect_selection: Option<&'a str>,
+    #[serde(borrow)]
+    pub output_keys: Option<Cow<'a, [String]>>,
+    #[serde(borrow)]
+    pub resource_types: Option<Cow<'a, [String]>>,
+    #[serde(borrow)]
+    pub exclude_resource_types: Option<Cow<'a, [String]>>,
+    pub debug: Option<bool>,
+    pub log_format: Option<&'a str>,
+    pub log_level: Option<&'a str>,
+    pub log_path: Option<&'a str>,
+    pub target_path: Option<&'a str>,
+    pub project_dir: Option<&'a str>,
+    pub quiet: Option<bool>,
+    pub write_json: Option<bool>,
+    pub write_catalog: Option<bool>,
+    pub update_deps: Option<bool>,
+    pub replay_mode: Option<&'a str>,
+    pub replay_path: Option<&'a str>,
+    pub static_analysis: Option<&'a str>,
+    pub interactive: Option<bool>,
+    pub task_cache_url: Option<&'a str>,
+    pub run_cache_mode: Option<&'a str>,
+    pub show_scans: Option<bool>,
+    pub max_depth: Option<u64>,
+    pub use_fqtn: Option<bool>,
+    pub skip_unreferenced_table_check: Option<bool>,
+    pub state: Option<&'a str>,
+    pub defer_state: Option<&'a str>,
+    pub connection: Option<bool>,
+    pub warn_error: Option<bool>,
+    pub warn_error_options: Option<String>, // owned due to JSON serialization
+    pub version_check: Option<bool>,
+    pub defer: Option<bool>,
+    pub fail_fast: Option<bool>,
+    pub empty: Option<bool>,
+    pub sample: Option<&'a str>,
+    pub full_refresh: Option<bool>,
+    pub favor_state: Option<bool>,
+    pub refresh_sources: Option<bool>,
+    pub send_anonymous_usage_stats: Option<bool>,
+    pub check_all: Option<bool>,
+    // Invocation cloud attributes
+    pub account_id: Option<&'a str>,
+    pub environment_id: Option<&'a str>,
+    pub job_id: Option<&'a str>,
+    pub run_id: Option<&'a str>,
+    pub run_reason: Option<&'a str>,
+    pub run_reason_category: Option<&'a str>,
+    pub run_trigger_category: Option<&'a str>,
+    pub project_id: Option<&'a str>,
+    // Invocation metrics
     pub total_errors: Option<u64>,
     pub total_warnings: Option<u64>,
     pub autofix_suggestions: Option<u64>,
+
     // Update fields
     pub update_version: Option<&'a str>,
     pub update_package: Option<&'a str>,
@@ -110,10 +181,10 @@ fn nanos_to_system_time(nanos: u64) -> SystemTime {
 
 fn arrow_to_location(arrow: &ArrowAttributes) -> RecordCodeLocation {
     RecordCodeLocation {
-        file: arrow.file.map(|s| s.to_string()),
+        file: arrow.file.map(str::to_string),
         line: arrow.line,
-        module_path: arrow.module_path.map(|s| s.to_string()),
-        target: arrow.location_target.map(|s| s.to_string()),
+        module_path: arrow.module_path.map(str::to_string),
+        target: arrow.location_target.map(str::to_string),
     }
 }
 
@@ -187,43 +258,122 @@ impl<'a> From<&'a TelemetryRecord> for ArrowTelemetryRecord<'a> {
 impl<'a> From<&'a TelemetryAttributes> for ArrowAttributes<'a> {
     fn from(attr: &'a TelemetryAttributes) -> Self {
         match attr {
-            TelemetryAttributes::Process {
+            TelemetryAttributes::Process(ProcessInfo {
+                schema_url,
+                schema_version,
+                package,
                 version,
                 host_os,
                 host_arch,
-            } => ArrowAttributes {
+            }) => ArrowAttributes {
+                schema_url: Some(schema_url.as_str()),
+                schema_version: Some(*schema_version),
+                package: Some(package.as_str()),
                 version: Some(version),
                 host_os: Some(host_os),
                 host_arch: Some(host_arch),
                 event_type: TelemetryAttributesType::from(attr),
                 ..Default::default()
             },
-            TelemetryAttributes::Invocation {
-                invocation_id,
-                command,
-                target,
-                version,
-                host_os,
-                host_arch,
-                metrics,
-            } => ArrowAttributes {
-                version: Some(version),
-                host_os: Some(host_os),
-                host_arch: Some(host_arch),
-                invocation_id: Some(invocation_id),
-                command: Some(command),
-                target: target.as_deref(),
-                total_errors: metrics.as_ref().and_then(|m| m.total_errors),
-                total_warnings: metrics.as_ref().and_then(|m| m.total_warnings),
-                autofix_suggestions: metrics.as_ref().and_then(|m| m.autofix_suggestions),
-                event_type: TelemetryAttributesType::from(attr),
-                ..Default::default()
-            },
-            TelemetryAttributes::Update {
+            TelemetryAttributes::Invocation(boxed_info) => {
+                let InvocationInfo {
+                    invocation_id,
+                    raw_command,
+                    eval_args,
+                    process_info,
+                    cloud_args,
+                    metrics,
+                } = boxed_info.as_ref();
+
+                ArrowAttributes {
+                    invocation_id: Some(invocation_id),
+                    raw_command: Some(raw_command),
+                    // Eval args
+                    command: Some(eval_args.command.as_str()),
+                    profiles_dir: eval_args.profiles_dir.as_deref(),
+                    packages_install_path: eval_args.packages_install_path.as_deref(),
+                    target: eval_args.target.as_deref(),
+                    profile: eval_args.profile.as_deref(),
+                    vars: Some(
+                        serde_json::to_string(&eval_args.vars)
+                            .expect("Failed to serialize vars to JSON"),
+                    ),
+                    limit: eval_args.limit,
+                    num_threads: eval_args.num_threads,
+                    selector: eval_args.selector.as_deref(),
+                    select: Some(Cow::from(&eval_args.select)),
+                    exclude: Some(Cow::from(&eval_args.exclude)),
+                    indirect_selection: eval_args.indirect_selection.as_deref(),
+                    output_keys: Some(Cow::from(&eval_args.output_keys)),
+                    resource_types: Some(Cow::from(&eval_args.resource_types)),
+                    exclude_resource_types: Some(Cow::from(&eval_args.exclude_resource_types)),
+                    debug: Some(eval_args.debug),
+                    log_format: Some(eval_args.log_format.as_str()),
+                    log_level: eval_args.log_level.as_deref(),
+                    log_path: eval_args.log_path.as_deref(),
+                    target_path: eval_args.target_path.as_deref(),
+                    project_dir: eval_args.project_dir.as_deref(),
+                    quiet: Some(eval_args.quiet),
+                    write_json: Some(eval_args.write_json),
+                    write_catalog: Some(eval_args.write_catalog),
+                    update_deps: Some(eval_args.update_deps),
+                    replay_mode: eval_args.replay_mode.as_deref(),
+                    replay_path: eval_args.replay_path.as_deref(),
+                    static_analysis: Some(eval_args.static_analysis.as_str()),
+                    interactive: Some(eval_args.interactive),
+                    task_cache_url: Some(eval_args.task_cache_url.as_str()),
+                    run_cache_mode: Some(eval_args.run_cache_mode.as_str()),
+                    show_scans: Some(eval_args.show_scans),
+                    max_depth: Some(eval_args.max_depth),
+                    use_fqtn: Some(eval_args.use_fqtn),
+                    skip_unreferenced_table_check: Some(eval_args.skip_unreferenced_table_check),
+                    state: eval_args.state.as_deref(),
+                    defer_state: eval_args.defer_state.as_deref(),
+                    connection: Some(eval_args.connection),
+                    warn_error: Some(eval_args.warn_error),
+                    warn_error_options: Some(
+                        serde_json::to_string(&eval_args.warn_error_options)
+                            .expect("Failed to serialize warn_error_options to JSON"),
+                    ),
+                    version_check: Some(eval_args.version_check),
+                    defer: eval_args.defer,
+                    fail_fast: Some(eval_args.fail_fast),
+                    empty: Some(eval_args.empty),
+                    sample: eval_args.sample.as_deref(),
+                    full_refresh: Some(eval_args.full_refresh),
+                    favor_state: Some(eval_args.favor_state),
+                    refresh_sources: Some(eval_args.refresh_sources),
+                    send_anonymous_usage_stats: Some(eval_args.send_anonymous_usage_stats),
+                    check_all: Some(eval_args.check_all),
+                    // Process attributes
+                    schema_url: Some(process_info.schema_url.as_str()),
+                    schema_version: Some(process_info.schema_version),
+                    package: Some(process_info.package.as_str()),
+                    version: Some(process_info.version.as_str()),
+                    host_os: Some(process_info.host_os.as_str()),
+                    host_arch: Some(process_info.host_arch.as_str()),
+                    // Cloud attributes
+                    account_id: cloud_args.account_id.as_deref(),
+                    environment_id: cloud_args.environment_id.as_deref(),
+                    job_id: cloud_args.job_id.as_deref(),
+                    run_id: cloud_args.run_id.as_deref(),
+                    run_reason: cloud_args.run_reason.as_deref(),
+                    run_reason_category: cloud_args.run_reason_category.as_deref(),
+                    run_trigger_category: cloud_args.run_trigger_category.as_deref(),
+                    project_id: cloud_args.project_id.as_deref(),
+                    // Metrics
+                    total_errors: metrics.total_errors,
+                    total_warnings: metrics.total_warnings,
+                    autofix_suggestions: metrics.autofix_suggestions,
+                    event_type: TelemetryAttributesType::from(attr),
+                    ..Default::default()
+                }
+            }
+            TelemetryAttributes::Update(UpdateInfo {
                 version,
                 package,
                 exe_path,
-            } => ArrowAttributes {
+            }) => ArrowAttributes {
                 update_version: version.as_deref(),
                 update_package: package.as_deref(),
                 exe_path: exe_path.as_deref(),
@@ -237,6 +387,7 @@ impl<'a> From<&'a TelemetryAttributes> for ArrowAttributes<'a> {
                 | BuildPhaseInfo::Scheduling { shared }
                 | BuildPhaseInfo::FreshnessAnalysis { shared }
                 | BuildPhaseInfo::Lineage { shared } => ArrowAttributes {
+                    phase: Some(phase_info.into()),
                     invocation_id: Some(&shared.invocation_id),
                     event_type: TelemetryAttributesType::from(attr),
                     ..Default::default()
@@ -244,18 +395,19 @@ impl<'a> From<&'a TelemetryAttributes> for ArrowAttributes<'a> {
                 BuildPhaseInfo::Analyzing { shared, node_count }
                 | BuildPhaseInfo::Compiling { shared, node_count }
                 | BuildPhaseInfo::Executing { shared, node_count } => ArrowAttributes {
+                    phase: Some(phase_info.into()),
                     invocation_id: Some(&shared.invocation_id),
                     node_count: Some(*node_count),
                     event_type: TelemetryAttributesType::from(attr),
                     ..Default::default()
                 },
             },
-            TelemetryAttributes::Node {
+            TelemetryAttributes::Node(NodeInfo {
                 node_id,
                 phase,
                 status,
                 num_rows,
-            } => ArrowAttributes {
+            }) => ArrowAttributes {
                 unique_id: Some(&node_id.unique_id),
                 fqn: Some(&node_id.fqn),
                 phase: Some(*phase),
@@ -264,12 +416,12 @@ impl<'a> From<&'a TelemetryAttributes> for ArrowAttributes<'a> {
                 event_type: TelemetryAttributesType::from(attr),
                 ..Default::default()
             },
-            TelemetryAttributes::DevInternal {
+            TelemetryAttributes::DevInternal(DevInternalInfo {
                 name,
                 location,
                 extra: _, // never serialized
-            }
-            | TelemetryAttributes::Unknown { name, location } => ArrowAttributes {
+            })
+            | TelemetryAttributes::Unknown(UnknownInfo { name, location }) => ArrowAttributes {
                 dev_name: Some(name),
                 file: location.file.as_deref(),
                 line: location.line,
@@ -278,13 +430,13 @@ impl<'a> From<&'a TelemetryAttributes> for ArrowAttributes<'a> {
                 event_type: TelemetryAttributesType::from(attr),
                 ..Default::default()
             },
-            TelemetryAttributes::Log {
+            TelemetryAttributes::Log(LogEventInfo {
                 code,
                 dbt_core_code,
                 original_severity_number,
                 original_severity_text,
                 location,
-            } => ArrowAttributes {
+            }) => ArrowAttributes {
                 file: location.file.as_deref(),
                 line: location.line,
                 module_path: location.module_path.as_deref(),
@@ -296,11 +448,11 @@ impl<'a> From<&'a TelemetryAttributes> for ArrowAttributes<'a> {
                 event_type: TelemetryAttributesType::from(attr),
                 ..Default::default()
             },
-            TelemetryAttributes::LegacyLog {
+            TelemetryAttributes::LegacyLog(LegacyLogEventInfo {
                 original_severity_number,
                 original_severity_text,
                 location,
-            } => ArrowAttributes {
+            }) => ArrowAttributes {
                 file: location.file.as_deref(),
                 line: location.line,
                 module_path: location.module_path.as_deref(),
@@ -310,10 +462,10 @@ impl<'a> From<&'a TelemetryAttributes> for ArrowAttributes<'a> {
                 event_type: TelemetryAttributesType::from(attr),
                 ..Default::default()
             },
-            TelemetryAttributes::WriteArtifact {
+            TelemetryAttributes::WriteArtifact(WriteArtifactInfo {
                 relative_path,
                 duration_ms,
-            } => ArrowAttributes {
+            }) => ArrowAttributes {
                 relative_path: relative_path.as_deref(),
                 duration_ms: *duration_ms,
                 event_type: TelemetryAttributesType::from(attr),
@@ -368,7 +520,7 @@ impl TryFrom<ArrowTelemetryRecord<'_>> for TelemetryRecord {
                     Some(SpanStatus {
                         code: StatusCode::from_repr(arrow.status_code.unwrap_or(0) as u8)
                             .unwrap_or(StatusCode::Unset),
-                        message: arrow.status_message.map(|s| s.to_string()),
+                        message: arrow.status_message.map(str::to_string),
                     })
                 } else {
                     None
@@ -400,7 +552,7 @@ impl TryFrom<ArrowTelemetryRecord<'_>> for TelemetryRecord {
                     trace_id: u128::from_str_radix(&arrow.trace_id, 16)
                         .map_err(|e| format!("Invalid trace_id: {e}"))?,
                     span_id: arrow.span_id,
-                    span_name: arrow.span_name.map(|s| s.to_string()),
+                    span_name: arrow.span_name.map(str::to_string),
                     severity_number: SeverityNumber::from_repr(arrow.severity_number)
                         .ok_or("Invalid severity_number")?,
                     severity_text: arrow.severity_text.to_string(),
@@ -412,68 +564,242 @@ impl TryFrom<ArrowTelemetryRecord<'_>> for TelemetryRecord {
     }
 }
 
+impl TryFrom<&ArrowAttributes<'_>> for ProcessInfo {
+    type Error = String;
+
+    fn try_from(arrow: &ArrowAttributes) -> Result<Self, Self::Error> {
+        Ok(ProcessInfo {
+            schema_url: arrow
+                .schema_url
+                .map(str::to_string)
+                .ok_or("Missing schema_url for Process attributes")?,
+            schema_version: arrow
+                .schema_version
+                .ok_or("Missing schema_version for Process attributes")?,
+            package: arrow
+                .package
+                .map(str::to_string)
+                .ok_or("Missing package for Process attributes")?,
+            version: arrow
+                .version
+                .map(str::to_string)
+                .ok_or("Missing version for Process attributes")?,
+            host_os: arrow
+                .host_os
+                .map(str::to_string)
+                .ok_or("Missing host_os for Process attributes")?,
+            host_arch: arrow
+                .host_arch
+                .map(str::to_string)
+                .ok_or("Missing host_arch for Process attributes")?,
+        })
+    }
+}
+
+impl TryFrom<&ArrowAttributes<'_>> for InvocationEvalArgs {
+    type Error = String;
+
+    fn try_from(arrow: &ArrowAttributes) -> Result<Self, Self::Error> {
+        let vars = serde_json::from_str(
+            arrow
+                .vars
+                .as_ref()
+                .ok_or("Missing vars for Invocation attributes")?,
+        )
+        .map_err(|e| format!("Failed to parse vars JSON: {e}"))?;
+
+        let warn_error_options = serde_json::from_str(
+            arrow
+                .warn_error_options
+                .as_ref()
+                .ok_or("Missing warn_error_options for Invocation attributes")?,
+        )
+        .map_err(|e| format!("Failed to parse warn_error_options JSON: {e}"))?;
+
+        Ok(InvocationEvalArgs {
+            command: arrow
+                .command
+                .map(str::to_string)
+                .ok_or("Missing command for Invocation attributes")?,
+            profiles_dir: arrow.profiles_dir.map(str::to_string),
+            packages_install_path: arrow.packages_install_path.map(str::to_string),
+            target: arrow.target.map(str::to_string),
+            profile: arrow.profile.map(str::to_string),
+            vars,
+            limit: arrow.limit,
+            num_threads: arrow.num_threads,
+            selector: arrow.selector.map(str::to_string),
+            select: arrow
+                .select
+                .as_deref()
+                .map(|s| s.into())
+                .ok_or("Missing select for Invocation attributes")?,
+            exclude: arrow
+                .exclude
+                .as_deref()
+                .map(|s| s.into())
+                .ok_or("Missing exclude for Invocation attributes")?,
+            indirect_selection: arrow.indirect_selection.map(str::to_string),
+            output_keys: arrow
+                .output_keys
+                .as_deref()
+                .map(|s| s.into())
+                .ok_or("Missing output_keys for Invocation attributes")?,
+            resource_types: arrow
+                .resource_types
+                .as_deref()
+                .map(|s| s.into())
+                .ok_or("Missing resource_types for Invocation attributes")?,
+            exclude_resource_types: arrow
+                .exclude_resource_types
+                .as_deref()
+                .map(|s| s.into())
+                .ok_or("Missing exclude_resource_types for Invocation attributes")?,
+            debug: arrow
+                .debug
+                .ok_or("Missing debug for Invocation attributes")?,
+            log_format: arrow
+                .log_format
+                .map(str::to_string)
+                .ok_or("Missing log_format for Invocation attributes")?,
+            log_level: arrow.log_level.map(str::to_string),
+            log_path: arrow.log_path.map(str::to_string),
+            target_path: arrow.target_path.map(str::to_string),
+            project_dir: arrow.project_dir.map(str::to_string),
+            quiet: arrow
+                .quiet
+                .ok_or("Missing quiet for Invocation attributes")?,
+            write_json: arrow
+                .write_json
+                .ok_or("Missing write_json for Invocation attributes")?,
+            write_catalog: arrow
+                .write_catalog
+                .ok_or("Missing write_catalog for Invocation attributes")?,
+            update_deps: arrow
+                .update_deps
+                .ok_or("Missing update_deps for Invocation attributes")?,
+            replay_mode: arrow.replay_mode.map(str::to_string),
+            replay_path: arrow.replay_path.map(str::to_string),
+            static_analysis: arrow
+                .static_analysis
+                .map(str::to_string)
+                .ok_or("Missing static_analysis for Invocation attributes")?,
+            interactive: arrow
+                .interactive
+                .ok_or("Missing interactive for Invocation attributes")?,
+            task_cache_url: arrow
+                .task_cache_url
+                .map(str::to_string)
+                .ok_or("Missing task_cache_url for Invocation attributes")?,
+            run_cache_mode: arrow
+                .run_cache_mode
+                .map(str::to_string)
+                .ok_or("Missing run_cache_mode for Invocation attributes")?,
+            show_scans: arrow
+                .show_scans
+                .ok_or("Missing run_cache_mode for Invocation attributes")?,
+            max_depth: arrow
+                .max_depth
+                .ok_or("Missing run_cache_mode for Invocation attributes")?,
+            use_fqtn: arrow
+                .use_fqtn
+                .ok_or("Missing run_cache_mode for Invocation attributes")?,
+            skip_unreferenced_table_check: arrow
+                .skip_unreferenced_table_check
+                .ok_or("Missing skip_unreferenced_table_check for Invocation attributes")?,
+            state: arrow.state.map(str::to_string),
+            defer_state: arrow.defer_state.map(str::to_string),
+            connection: arrow
+                .connection
+                .ok_or("Missing connection for Invocation attributes")?,
+            warn_error: arrow
+                .warn_error
+                .ok_or("Missing warn_error for Invocation attributes")?,
+            warn_error_options,
+            version_check: arrow
+                .version_check
+                .ok_or("Missing version_check for Invocation attributes")?,
+            defer: arrow.defer,
+            fail_fast: arrow
+                .fail_fast
+                .ok_or("Missing fail_fast for Invocation attributes")?,
+            empty: arrow
+                .empty
+                .ok_or("Missing empty for Invocation attributes")?,
+            sample: arrow.sample.map(str::to_string),
+            full_refresh: arrow
+                .full_refresh
+                .ok_or("Missing full_refresh for Invocation attributes")?,
+            favor_state: arrow
+                .favor_state
+                .ok_or("Missing favor_state for Invocation attributes")?,
+            refresh_sources: arrow
+                .refresh_sources
+                .ok_or("Missing refresh_sources for Invocation attributes")?,
+            send_anonymous_usage_stats: arrow
+                .send_anonymous_usage_stats
+                .ok_or("Missing send_anonymous_usage_stats for Invocation attributes")?,
+            check_all: arrow
+                .check_all
+                .ok_or("Missing check_all for Invocation attributes")?,
+        })
+    }
+}
+
+impl From<&ArrowAttributes<'_>> for InvocationCloudAttributes {
+    fn from(arrow: &ArrowAttributes) -> Self {
+        InvocationCloudAttributes {
+            account_id: arrow.account_id.map(str::to_string),
+            environment_id: arrow.environment_id.map(str::to_string),
+            job_id: arrow.job_id.map(str::to_string),
+            run_id: arrow.run_id.map(str::to_string),
+            run_reason: arrow.run_reason.map(str::to_string),
+            run_reason_category: arrow.run_reason_category.map(str::to_string),
+            run_trigger_category: arrow.run_trigger_category.map(str::to_string),
+            project_id: arrow.project_id.map(str::to_string),
+        }
+    }
+}
+
+impl From<&ArrowAttributes<'_>> for InvocationMetrics {
+    fn from(arrow: &ArrowAttributes) -> Self {
+        InvocationMetrics {
+            total_errors: arrow.total_errors,
+            total_warnings: arrow.total_warnings,
+            autofix_suggestions: arrow.autofix_suggestions,
+        }
+    }
+}
+
 impl TryFrom<ArrowAttributes<'_>> for TelemetryAttributes {
     type Error = String;
 
     fn try_from(arrow: ArrowAttributes) -> Result<Self, Self::Error> {
         match arrow.event_type {
-            TelemetryAttributesType::Process => Ok(TelemetryAttributes::Process {
-                version: arrow
-                    .version
-                    .ok_or("Missing version for Process attributes")?
-                    .to_string(),
-                host_os: arrow
-                    .host_os
-                    .ok_or("Missing host_os for Process attributes")?
-                    .to_string(),
-                host_arch: arrow
-                    .host_arch
-                    .ok_or("Missing host_arch for Process attributes")?
-                    .to_string(),
-            }),
+            TelemetryAttributesType::Process => {
+                Ok(TelemetryAttributes::Process(ProcessInfo::try_from(&arrow)?))
+            }
             TelemetryAttributesType::Invocation => {
-                let metrics = if arrow.total_errors.is_some()
-                    || arrow.total_warnings.is_some()
-                    || arrow.autofix_suggestions.is_some()
-                {
-                    Some(InvocationMetrics {
-                        total_errors: arrow.total_errors,
-                        total_warnings: arrow.total_warnings,
-                        autofix_suggestions: arrow.autofix_suggestions,
-                    })
-                } else {
-                    None
-                };
-                Ok(TelemetryAttributes::Invocation {
+                Ok(TelemetryAttributes::Invocation(Box::new(InvocationInfo {
                     invocation_id: arrow
                         .invocation_id
                         .ok_or("Missing invocation_id for Invocation attributes")?
                         .to_string(),
-                    command: arrow
-                        .command
-                        .ok_or("Missing command for Invocation attributes")?
+                    raw_command: arrow
+                        .raw_command
+                        .ok_or("Missing raw_command for Invocation attributes")?
                         .to_string(),
-                    target: arrow.target.map(|s| s.to_string()),
-                    version: arrow
-                        .version
-                        .ok_or("Missing version for Invocation attributes")?
-                        .to_string(),
-                    host_os: arrow
-                        .host_os
-                        .ok_or("Missing host_os for Invocation attributes")?
-                        .to_string(),
-                    host_arch: arrow
-                        .host_arch
-                        .ok_or("Missing host_arch for Invocation attributes")?
-                        .to_string(),
-                    metrics,
-                })
+                    eval_args: InvocationEvalArgs::try_from(&arrow)?,
+                    process_info: ProcessInfo::try_from(&arrow)?,
+                    cloud_args: InvocationCloudAttributes::from(&arrow),
+                    metrics: InvocationMetrics::from(&arrow),
+                })))
             }
-            TelemetryAttributesType::Update => Ok(TelemetryAttributes::Update {
-                version: arrow.update_version.map(|s| s.to_string()),
-                package: arrow.update_package.map(|s| s.to_string()),
-                exe_path: arrow.exe_path.map(|s| s.to_string()),
-            }),
+            TelemetryAttributesType::Update => Ok(TelemetryAttributes::Update(UpdateInfo {
+                version: arrow.update_version.map(str::to_string),
+                package: arrow.update_package.map(str::to_string),
+                exe_path: arrow.exe_path.map(str::to_string),
+            })),
             TelemetryAttributesType::Phase => {
                 let shared = SharedPhaseInfo {
                     invocation_id: arrow
@@ -516,39 +842,39 @@ impl TryFrom<ArrowAttributes<'_>> for TelemetryAttributes {
                         .to_string(),
                 };
                 let phase = arrow.phase.ok_or("Missing phase for Node attributes")?;
-                Ok(TelemetryAttributes::Node {
+                Ok(TelemetryAttributes::Node(NodeInfo {
                     node_id,
                     phase,
                     status: arrow.status,
                     num_rows: arrow.num_rows,
-                })
+                }))
             }
             TelemetryAttributesType::DevInternal => {
                 let location = arrow_to_location(&arrow);
-                Ok(TelemetryAttributes::DevInternal {
+                Ok(TelemetryAttributes::DevInternal(DevInternalInfo {
                     name: arrow
                         .dev_name
                         .ok_or("Missing dev_name for DevInternal attributes")?
                         .to_string(),
                     location,
                     extra: None, // Arrow format doesn't store extra debug info
-                })
+                }))
             }
             TelemetryAttributesType::Unknown => {
                 let location = arrow_to_location(&arrow);
-                Ok(TelemetryAttributes::Unknown {
+                Ok(TelemetryAttributes::Unknown(UnknownInfo {
                     name: arrow
                         .dev_name
                         .ok_or("Missing dev_name for Unknown attributes")?
                         .to_string(),
                     location,
-                })
+                }))
             }
             TelemetryAttributesType::Log => {
                 let location = arrow_to_location(&arrow);
-                Ok(TelemetryAttributes::Log {
+                Ok(TelemetryAttributes::Log(LogEventInfo {
                     code: arrow.code,
-                    dbt_core_code: arrow.dbt_core_code.map(|s| s.to_string()),
+                    dbt_core_code: arrow.dbt_core_code.map(str::to_string),
                     original_severity_number: SeverityNumber::from_repr(
                         arrow.original_severity_number.unwrap_or(1),
                     )
@@ -558,11 +884,11 @@ impl TryFrom<ArrowAttributes<'_>> for TelemetryAttributes {
                         .unwrap_or("INFO")
                         .to_string(),
                     location,
-                })
+                }))
             }
             TelemetryAttributesType::LegacyLog => {
                 let location = arrow_to_location(&arrow);
-                Ok(TelemetryAttributes::LegacyLog {
+                Ok(TelemetryAttributes::LegacyLog(LegacyLogEventInfo {
                     original_severity_number: SeverityNumber::from_repr(
                         arrow.original_severity_number.unwrap_or(1),
                     )
@@ -572,12 +898,14 @@ impl TryFrom<ArrowAttributes<'_>> for TelemetryAttributes {
                         .unwrap_or("INFO")
                         .to_string(),
                     location,
-                })
+                }))
             }
-            TelemetryAttributesType::WriteArtifact => Ok(TelemetryAttributes::WriteArtifact {
-                relative_path: arrow.relative_path.map(|s| s.to_string()),
-                duration_ms: arrow.duration_ms,
-            }),
+            TelemetryAttributesType::WriteArtifact => {
+                Ok(TelemetryAttributes::WriteArtifact(WriteArtifactInfo {
+                    relative_path: arrow.relative_path.map(str::to_string),
+                    duration_ms: arrow.duration_ms,
+                }))
+            }
         }
     }
 }
@@ -763,6 +1091,11 @@ pub fn deserialize_from_arrow(
 
 #[cfg(test)]
 mod tests {
+    use fake::rand::SeedableRng;
+    use fake::rand::rngs::StdRng;
+    use fake::{Fake, Faker};
+    use strum::IntoEnumIterator;
+
     use super::*;
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
@@ -774,145 +1107,181 @@ mod tests {
         hasher.finish()
     }
 
-    fn create_test_span_start(seed: &str) -> TelemetryRecord {
-        let base_hash = hash_seed(seed);
-        let trace_id = ((base_hash as u128) << 64) | (base_hash.wrapping_add(1) as u128);
-        let span_id = base_hash.wrapping_add(2);
-        let parent_span_id = base_hash.wrapping_add(3);
-        let start_time = 1600000000000000000u64.wrapping_add(base_hash % 1000000000);
+    fn create_fake_attributes(
+        seed: &str,
+        event_type: TelemetryAttributesType,
+        phase: Option<BuildPhase>,
+    ) -> TelemetryAttributes {
+        let hashed_seed = hash_seed(seed);
+        let mut rng = StdRng::seed_from_u64(hashed_seed);
+        match event_type {
+            TelemetryAttributesType::Process => {
+                TelemetryAttributes::Process(Faker.fake_with_rng(&mut rng))
+            }
+            TelemetryAttributesType::Invocation => {
+                TelemetryAttributes::Invocation(Box::new(Faker.fake_with_rng(&mut rng)))
+            }
+            TelemetryAttributesType::Update => {
+                TelemetryAttributes::Update(Faker.fake_with_rng(&mut rng))
+            }
+            TelemetryAttributesType::Phase => {
+                let Some(phase) = phase else {
+                    return TelemetryAttributes::Phase(Faker.fake_with_rng(&mut rng));
+                };
+
+                let shared = Faker.fake_with_rng(&mut rng);
+                let phase_info = match phase {
+                    BuildPhase::Loading => BuildPhaseInfo::Loading { shared },
+                    BuildPhase::DependencyLoading => BuildPhaseInfo::DependencyLoading { shared },
+                    BuildPhase::Parsing => BuildPhaseInfo::Parsing { shared },
+                    BuildPhase::Scheduling => BuildPhaseInfo::Scheduling { shared },
+                    BuildPhase::FreshnessAnalysis => BuildPhaseInfo::FreshnessAnalysis { shared },
+                    BuildPhase::Lineage => BuildPhaseInfo::Lineage { shared },
+                    BuildPhase::Analyzing => BuildPhaseInfo::Analyzing {
+                        shared,
+                        node_count: Faker.fake_with_rng(&mut rng),
+                    },
+                    BuildPhase::Compiling => BuildPhaseInfo::Compiling {
+                        shared,
+                        node_count: Faker.fake_with_rng(&mut rng),
+                    },
+                    BuildPhase::Executing => BuildPhaseInfo::Executing {
+                        shared,
+                        node_count: Faker.fake_with_rng(&mut rng),
+                    },
+                };
+                TelemetryAttributes::Phase(phase_info)
+            }
+            TelemetryAttributesType::Node => {
+                TelemetryAttributes::Node(Faker.fake_with_rng(&mut rng))
+            }
+            TelemetryAttributesType::DevInternal => {
+                TelemetryAttributes::DevInternal(Faker.fake_with_rng(&mut rng))
+            }
+            TelemetryAttributesType::Unknown => {
+                TelemetryAttributes::Unknown(Faker.fake_with_rng(&mut rng))
+            }
+            TelemetryAttributesType::Log => TelemetryAttributes::Log(Faker.fake_with_rng(&mut rng)),
+            TelemetryAttributesType::LegacyLog => {
+                TelemetryAttributes::LegacyLog(Faker.fake_with_rng(&mut rng))
+            }
+            TelemetryAttributesType::WriteArtifact => {
+                TelemetryAttributes::WriteArtifact(Faker.fake_with_rng(&mut rng))
+            }
+        }
+    }
+
+    fn create_all_fake_attributes(seed: &str) -> Vec<TelemetryAttributes> {
+        let mut attributes = Vec::new();
+        for event_type in TelemetryAttributesType::iter() {
+            if event_type == TelemetryAttributesType::Phase {
+                for phase in BuildPhase::iter() {
+                    attributes.push(create_fake_attributes(seed, event_type, Some(phase)));
+                }
+            } else {
+                attributes.push(create_fake_attributes(seed, event_type, None));
+            }
+        }
+        attributes
+    }
+
+    fn create_test_span_start(seed: &str, attributes: TelemetryAttributes) -> TelemetryRecord {
+        let hashed_seed = hash_seed(seed);
+        let mut rng = StdRng::seed_from_u64(hashed_seed);
+        let trace_id = Faker.fake_with_rng(&mut rng);
+        let span_id = Faker.fake_with_rng(&mut rng);
+        let parent_span_id = Faker.fake_with_rng(&mut rng);
+        let start_time = Faker.fake_with_rng(&mut rng);
 
         TelemetryRecord::SpanStart(SpanStartInfo {
             trace_id,
             span_id,
             parent_span_id: Some(parent_span_id),
-            span_name: format!("span_{}", base_hash % 1000),
+            span_name: attributes.to_string(),
             start_time_unix_nano: SystemTime::UNIX_EPOCH
                 + std::time::Duration::from_nanos(start_time),
-            attributes: TelemetryAttributes::Process {
-                version: format!(
-                    "v{}.{}.{}",
-                    base_hash % 10,
-                    (base_hash >> 8) % 10,
-                    (base_hash >> 16) % 10
-                ),
-                host_os: ["linux", "darwin", "windows"][(base_hash % 3) as usize].to_string(),
-                host_arch: ["x86_64", "aarch64", "arm64"][(base_hash % 3) as usize].to_string(),
-            },
-            severity_number: [
-                SeverityNumber::Trace,
-                SeverityNumber::Debug,
-                SeverityNumber::Info,
-                SeverityNumber::Warn,
-            ][(base_hash % 4) as usize],
-            severity_text: ["TRACE", "DEBUG", "INFO", "WARN"][(base_hash % 4) as usize].to_string(),
+            attributes,
+            severity_number: Faker.fake_with_rng(&mut rng),
+            severity_text: ["TRACE", "DEBUG", "INFO", "WARN"][(hashed_seed % 4) as usize]
+                .to_string(),
         })
     }
 
-    fn create_test_span_end(seed: &str) -> TelemetryRecord {
-        let base_hash = hash_seed(seed);
-        let trace_id = ((base_hash as u128) << 64) | (base_hash.wrapping_add(1) as u128);
-        let span_id = base_hash.wrapping_add(2);
-        let parent_span_id = base_hash.wrapping_add(3);
-        let start_time = 1600000000000000000u64.wrapping_add(base_hash % 1000000000);
-        let end_time = start_time.wrapping_add(base_hash % 10000000);
+    fn create_test_span_end(seed: &str, span_start: &TelemetryRecord) -> TelemetryRecord {
+        let TelemetryRecord::SpanStart(span_start_info) = span_start else {
+            panic!("Expected SpanStart record");
+        };
+
+        let hashed_seed = hash_seed(seed);
+        let mut rng = StdRng::seed_from_u64(hashed_seed);
+        let elapsed = Faker.fake_with_rng(&mut rng);
 
         TelemetryRecord::SpanEnd(SpanEndInfo {
-            trace_id,
-            span_id,
-            parent_span_id: Some(parent_span_id),
-            span_name: format!("span_{}", base_hash % 1000),
-            start_time_unix_nano: SystemTime::UNIX_EPOCH
-                + std::time::Duration::from_nanos(start_time),
-            end_time_unix_nano: SystemTime::UNIX_EPOCH + std::time::Duration::from_nanos(end_time),
-            attributes: TelemetryAttributes::Invocation {
-                invocation_id: format!("inv_{}", base_hash % 10000),
-                command: ["run", "test", "build", "compile"][(base_hash % 4) as usize].to_string(),
-                target: Some(["dev", "prod", "staging"][(base_hash % 3) as usize].to_string()),
-                version: format!(
-                    "v{}.{}.{}",
-                    base_hash % 10,
-                    (base_hash >> 8) % 10,
-                    (base_hash >> 16) % 10
-                ),
-                host_os: ["linux", "darwin", "windows"][(base_hash % 3) as usize].to_string(),
-                host_arch: ["x86_64", "aarch64", "arm64"][(base_hash % 3) as usize].to_string(),
-                metrics: Some(InvocationMetrics {
-                    total_errors: Some(base_hash % 10),
-                    total_warnings: Some((base_hash >> 8) % 20),
-                    autofix_suggestions: Some((base_hash >> 16) % 5),
-                }),
-            },
+            trace_id: span_start_info.trace_id,
+            span_id: span_start_info.span_id,
+            parent_span_id: span_start_info.parent_span_id,
+            span_name: span_start_info.span_name.clone(),
+            start_time_unix_nano: span_start_info.start_time_unix_nano,
+            end_time_unix_nano: span_start_info.start_time_unix_nano
+                + std::time::Duration::from_nanos(elapsed),
+            attributes: span_start_info.attributes.clone(),
             status: Some(SpanStatus {
                 code: [StatusCode::Unset, StatusCode::Ok, StatusCode::Error]
-                    [(base_hash % 3) as usize],
-                message: Some(format!("status_{}", base_hash % 100)),
+                    [(hashed_seed % 3) as usize],
+                message: Some(format!("status_{}", hashed_seed % 100)),
             }),
-            severity_number: [
-                SeverityNumber::Trace,
-                SeverityNumber::Debug,
-                SeverityNumber::Info,
-                SeverityNumber::Warn,
-            ][(base_hash % 4) as usize],
-            severity_text: ["TRACE", "DEBUG", "INFO", "WARN"][(base_hash % 4) as usize].to_string(),
+            severity_number: Faker.fake_with_rng(&mut rng),
+            severity_text: ["TRACE", "DEBUG", "INFO", "WARN"][(hashed_seed % 4) as usize]
+                .to_string(),
         })
     }
 
-    fn create_test_log_record(seed: &str) -> TelemetryRecord {
-        let base_hash = hash_seed(seed);
-        let trace_id = ((base_hash as u128) << 64) | (base_hash.wrapping_add(1) as u128);
-        let span_id = base_hash.wrapping_add(2);
-        let log_time = 1600000000000000000u64.wrapping_add(base_hash % 1000000000);
+    fn create_test_log_record(seed: &str, attributes: TelemetryAttributes) -> TelemetryRecord {
+        let hashed_seed = hash_seed(seed);
+        let mut rng = StdRng::seed_from_u64(hashed_seed);
+        let trace_id = Faker.fake_with_rng(&mut rng);
+        let span_id = Faker.fake_with_rng(&mut rng);
+        let log_time = Faker.fake_with_rng(&mut rng);
 
         TelemetryRecord::LogRecord(LogRecordInfo {
             time_unix_nano: SystemTime::UNIX_EPOCH + std::time::Duration::from_nanos(log_time),
             trace_id,
             span_id: Some(span_id),
-            span_name: Some(format!("span_{}", base_hash % 1000)),
-            severity_number: [
-                SeverityNumber::Error,
-                SeverityNumber::Warn,
-                SeverityNumber::Info,
-                SeverityNumber::Debug,
-            ][(base_hash % 4) as usize],
-            severity_text: ["ERROR", "WARN", "INFO", "DEBUG"][(base_hash % 4) as usize].to_string(),
-            body: format!("Log message {}", base_hash % 10000),
-            attributes: TelemetryAttributes::Log {
-                code: Some((base_hash % 1000) as u32),
-                dbt_core_code: Some(format!("E{:03}", base_hash % 999 + 1)),
-                original_severity_number: [
-                    SeverityNumber::Warn,
-                    SeverityNumber::Error,
-                    SeverityNumber::Info,
-                ][(base_hash % 3) as usize],
-                original_severity_text: ["WARN", "ERROR", "INFO"][(base_hash % 3) as usize]
-                    .to_string(),
-                location: RecordCodeLocation {
-                    file: Some(format!(
-                        "{}.rs",
-                        ["main", "lib", "test", "utils"][(base_hash % 4) as usize]
-                    )),
-                    line: Some(((base_hash % 1000) + 1) as u32),
-                    module_path: Some(format!(
-                        "{}::module",
-                        ["app", "core", "util", "test"][(base_hash % 4) as usize]
-                    )),
-                    target: Some(format!("target_{}", base_hash % 100)),
-                },
-            },
+            span_name: Some(attributes.to_string()),
+            severity_number: Faker.fake_with_rng(&mut rng),
+            severity_text: ["ERROR", "WARN", "INFO", "DEBUG"][(hashed_seed % 4) as usize]
+                .to_string(),
+            body: format!("Log message {}", hashed_seed % 10000),
+            attributes,
         })
     }
 
     #[test]
     fn test_arrow_roundtrip_all_record_types() {
-        // Create 2 records of each type with different random seeds
-        let original_records = vec![
-            create_test_span_start("span_start_1"),
-            create_test_span_start("span_start_2"),
-            create_test_span_end("span_end_1"),
-            create_test_span_end("span_end_2"),
-            create_test_log_record("log_record_1"),
-            create_test_log_record("log_record_2"),
-        ];
+        // Create records of each record & event (aka attribute) type with a pseudo-random seed
+        let mut original_records = vec![];
+        create_all_fake_attributes("test_seed")
+            .iter()
+            .for_each(|attributes| {
+                match attributes.record_type() {
+                    // Span types
+                    TelemetryRecordType::SpanEnd => {
+                        let span_start = create_test_span_start("test_seed", attributes.clone());
+                        // Create a matching span end for the start
+                        let span_end = create_test_span_end("test_seed", &span_start);
+                        original_records.push(span_start);
+                        original_records.push(span_end);
+                    }
+                    TelemetryRecordType::SpanStart => {
+                        panic!("SpanStart should not be returned here")
+                    }
+                    TelemetryRecordType::LogRecord => {
+                        // Create a log record
+                        let log_record = create_test_log_record("test_seed", attributes.clone());
+                        original_records.push(log_record);
+                    }
+                }
+            });
 
         let (serialisable_schema, schema_with_timestamps) = create_arrow_schema().unwrap();
         let batch = serialize_to_arrow(
@@ -922,8 +1291,6 @@ mod tests {
         )
         .unwrap();
         let deserialized = deserialize_from_arrow(&batch, &serialisable_schema).unwrap();
-
-        assert_eq!(deserialized.len(), 6);
 
         // Use PartialEq to compare entire records
         for (original, deserialized) in original_records.iter().zip(deserialized.iter()) {

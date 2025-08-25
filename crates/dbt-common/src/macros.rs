@@ -780,20 +780,20 @@ macro_rules! show_warning {
         use $crate::tracing::emit::_tracing::Level as TracingLevel;
         use $crate::tracing::metrics::{increment_metric, MetricKey};
         use $crate::tracing::constants::TRACING_ATTR_FIELD;
-        use $crate::macros::_dbt_telemetry::{TelemetryAttributes, RecordCodeLocation};
+        use $crate::macros::_dbt_telemetry::{LogEventInfo, TelemetryAttributes, RecordCodeLocation};
         increment_metric(MetricKey::TotalWarnings, 1);
 
         let (original_severity_number, original_severity_text) = log_level_to_severity(&$crate::macros::log_adapter::log::Level::Warn);
 
         $crate::emit_tracing_event!(
             level: TracingLevel::WARN,
-            TelemetryAttributes::Log {
+            TelemetryAttributes::Log(LogEventInfo {
                 code: Some(err.code as u16 as u32),
                 dbt_core_code: None,
                 original_severity_number,
                 original_severity_text: original_severity_text.to_string(),
                 location: RecordCodeLocation::none(), // Will be auto injected
-            },
+            }),
             "{}",
             err.pretty().as_str()
         );

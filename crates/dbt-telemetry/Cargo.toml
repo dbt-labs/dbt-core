@@ -25,6 +25,8 @@ serde_with = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 tracing = { workspace = true }
 
+[dev-dependencies]
+fake = { workspace = true }
 
 [lib]
 name = "dbt_telemetry"

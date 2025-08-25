@@ -12,7 +12,8 @@ use tracing::{Level, Subscriber, span};
 use tracing_subscriber::{Layer, layer::Context};
 
 use dbt_telemetry::{
-    LogRecordInfo, RecordCodeLocation, SpanEndInfo, SpanStartInfo, SpanStatus, TelemetryAttributes,
+    DevInternalInfo, LegacyLogEventInfo, LogEventInfo, LogRecordInfo, RecordCodeLocation,
+    SpanEndInfo, SpanStartInfo, SpanStatus, TelemetryAttributes, UnknownInfo,
 };
 
 /// A tracing layer that creates structured telemetry data and stores it in span extensions.
@@ -97,22 +98,33 @@ where
         // Extract event attributes if any. To avoid leakage, we extract internal metadata
         // such as location, name etc. only in debug builds
 
-        // TODO: auto-inject location if missing for attr types that have them. See log for example
-        let attributes = get_span_event_attrs(attrs.values().into()).unwrap_or_else(|| {
-            if metadata.level() == &Level::TRACE {
-                // Trace spans without explicit attributes considered dev internal
-                TelemetryAttributes::DevInternal {
-                    name: metadata.name().to_string(),
-                    location: self.get_location(metadata),
-                    extra: get_span_debug_extra_attrs(attrs.values().into()),
-                }
+        // Extract attributes in the following priority:
+        // - Pre-populated attributes (most efficient way, but requires the caller to use our custom emit APIs)
+        // - Attributes from the event itself (if any)
+        // - Fallback to default attributes based on metadata
+        let attributes = if let Some(attrs) = take_event_attributes() {
+            if attrs.has_empty_location() {
+                attrs.with_location(self.get_location(metadata))
             } else {
-                TelemetryAttributes::Unknown {
-                    name: metadata.name().to_string(),
-                    location: self.get_location(metadata),
-                }
+                attrs
             }
-        });
+        } else {
+            get_span_event_attrs(attrs.values().into()).unwrap_or_else(|| {
+                if metadata.level() == &Level::TRACE {
+                    // Trace spans without explicit attributes considered dev internal
+                    TelemetryAttributes::DevInternal(DevInternalInfo {
+                        name: metadata.name().to_string(),
+                        location: self.get_location(metadata),
+                        extra: get_span_debug_extra_attrs(attrs.values().into()),
+                    })
+                } else {
+                    TelemetryAttributes::Unknown(UnknownInfo {
+                        name: metadata.name().to_string(),
+                        location: self.get_location(metadata),
+                    })
+                }
+            })
+        };
 
         let record = SpanStartInfo {
             trace_id: self.trace_id,
@@ -176,10 +188,10 @@ where
                 SystemTime::now(),
                 severity_number,
                 severity_text.to_string(),
-                TelemetryAttributes::Unknown {
+                TelemetryAttributes::Unknown(UnknownInfo {
                     name: metadata.name().to_string(),
                     location: self.get_location(metadata),
-                },
+                }),
             ) // Fallback. Should not happen
         };
 
@@ -245,7 +257,7 @@ where
         let message = get_log_message(event);
 
         // Extract attributes in the following priority:
-        // - Pre-populated attributes (most efficient way, but requires the caller to use our custom logging APIs)
+        // - Pre-populated attributes (most efficient way, but requires the caller to use our custom emit APIs)
         // - Legacy log metadata (if the event is coming from `tracing-log` bridge)
         // - Attributes from the event itself (if any, otherwise use default log attributes)
         let attributes = if let Some(attrs) = take_event_attributes() {
@@ -256,11 +268,11 @@ where
             }
         } else if event.is_log() {
             // This means the event is coming from `tracing-log` bridge
-            TelemetryAttributes::LegacyLog {
+            TelemetryAttributes::LegacyLog(LegacyLogEventInfo {
                 original_severity_number: severity_number,
                 original_severity_text: severity_text.to_string(),
                 location: self.get_location(metadata),
-            }
+            })
         } else {
             get_log_event_attrs(event.into())
                 // Auto-inject location if missing
@@ -271,12 +283,14 @@ where
                         attrs
                     }
                 })
-                .unwrap_or_else(|| TelemetryAttributes::Log {
-                    code: None,
-                    dbt_core_code: None,
-                    original_severity_number: severity_number,
-                    original_severity_text: severity_text.to_string(),
-                    location: self.get_location(metadata),
+                .unwrap_or_else(|| {
+                    TelemetryAttributes::Log(LogEventInfo {
+                        code: None,
+                        dbt_core_code: None,
+                        original_severity_number: severity_number,
+                        original_severity_text: severity_text.to_string(),
+                        location: self.get_location(metadata),
+                    })
                 })
         };
 
