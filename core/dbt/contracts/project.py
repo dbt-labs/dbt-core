@@ -78,12 +78,26 @@ class GitPackage(Package):
     subdirectory: Optional[str] = None
     unrendered: Dict[str, Any] = field(default_factory=dict)
     name: Optional[str] = None
+    exclude_env_vars_from_hash: Optional[bool] = field(
+        default=None, metadata={"alias": "exclude-env-vars-from-hash"}
+    )
 
     def get_revisions(self) -> List[str]:
         if self.revision is None:
             return []
         else:
             return [str(self.revision)]
+
+    def to_dict_for_hash(self) -> Dict[str, Any]:
+        """Create a dict representation for hash calculation that can optionally exclude env vars"""
+        data = self.to_dict()
+        if self.exclude_env_vars_from_hash:
+            # Use unrendered git URL if available to exclude env vars from hash
+            if "git" in self.unrendered:
+                data["git"] = self.unrendered["git"]
+            # Remove the exclude-env-vars-from-hash flag itself from the hash
+            data.pop("exclude-env-vars-from-hash", None)
+        return data
 
 
 @dataclass
