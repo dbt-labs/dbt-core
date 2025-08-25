@@ -242,42 +242,55 @@ class BaseResolver(metaclass=abc.ABCMeta):
     def resolve_limit(self) -> Optional[int]:
         return 0 if getattr(self.config.args, "EMPTY", False) else None
 
-
     def _resolve_event_time_field_name(self, target: ManifestNode) -> str:
         """Get the event time field name with proper quoting based on configuration."""
         # Default to False for quoting
         should_quote = False
         column_found = False
         column = None
-        
+
+        # Check if config has event_time attribute
+        if not hasattr(target.config, "event_time") or target.config.event_time is None:
+            return ""
+
         # Check column-level quote configuration first (overrides source-level)
-        if hasattr(target, 'columns') and target.columns and isinstance(target.columns, dict):
+        if hasattr(target, "columns") and target.columns and isinstance(target.columns, dict):
             for _, column_info in target.columns.items():
                 if column_info.name == target.config.event_time:
                     column_found = True
                     # Create the column object
-                    column = Column.create(column_info.name, column_info.data_type if column_info.data_type else '')
+                    column = Column.create(
+                        column_info.name, column_info.data_type if column_info.data_type else ""
+                    )
                     # Column-level quote setting takes precedence
-                    if hasattr(column_info, 'quote') and column_info.quote is not None:
+                    if hasattr(column_info, "quote") and column_info.quote is not None:
                         should_quote = column_info.quote
                     # Fallback to source-level quote setting
-                    elif hasattr(target, 'quoting') and hasattr(target.quoting, 'column') and target.quoting.column is not None:
+                    elif (
+                        hasattr(target, "quoting")
+                        and hasattr(target.quoting, "column")
+                        and target.quoting.column is not None
+                    ):
                         should_quote = target.quoting.column
                     break
-        
+
         # If column not found, fall back to source-level quote setting
         if not column_found:
-            if hasattr(target, 'quoting') and hasattr(target.quoting, 'column') and target.quoting.column is not None:
+            if (
+                hasattr(target, "quoting")
+                and hasattr(target.quoting, "column")
+                and target.quoting.column is not None
+            ):
                 should_quote = target.quoting.column
             # Create column object for quoting
-            column = Column.create(target.config.event_time, '')
-        
+            column = Column.create(target.config.event_time, "")
+
         # Apply quoting logic
-        if should_quote:
+        if should_quote and column is not None:
             return column.quoted
         else:
             return target.config.event_time
-        
+
     def resolve_event_time_filter(self, target: ManifestNode) -> Optional[EventTimeFilter]:
         event_time_filter = None
         sample_mode = getattr(self.config.args, "sample", None) is not None

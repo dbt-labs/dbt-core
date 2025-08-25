@@ -51,16 +51,18 @@ class TestBaseResolver:
             ("no_quote_column", False, None, "no_quote_column"),
             ("source_no_quote", None, False, "source_no_quote"),
             ("both_no_quote", False, False, "both_no_quote"),
-            
             # Column-level quote configuration (takes precedence)
             ("column_quoted", True, None, '"column_quoted"'),
             ("column_quoted_source_no", True, False, '"column_quoted_source_no"'),
             ("column_quoted_source_yes", True, True, '"column_quoted_source_yes"'),
-            
             # Source-level quote configuration (fallback when column-level is None)
             ("source_quoted", None, True, '"source_quoted"'),
-            ("source_quoted_override", False, True, "source_quoted_override"),  # False overrides True
-            
+            (
+                "source_quoted_override",
+                False,
+                True,
+                "source_quoted_override",
+            ),  # False overrides True
             # Camel case and spaced column names
             ("camelCaseColumn", None, None, "camelCaseColumn"),
             ("camelCaseQuoted", True, None, '"camelCaseQuoted"'),
@@ -69,7 +71,6 @@ class TestBaseResolver:
             ("Spaced Column Name", None, None, "Spaced Column Name"),
             ("Spaced Column Quoted", True, None, '"Spaced Column Quoted"'),
             ("Spaced Column Source Quoted", None, True, '"Spaced Column Source Quoted"'),
-            
             # Edge cases
             ("", None, None, ""),
             ("", True, None, '""'),
@@ -78,33 +79,28 @@ class TestBaseResolver:
         ],
     )
     def test_resolve_event_time_field_name(
-        self, 
-        resolver, 
-        event_time_column, 
-        column_quote, 
-        source_quote, 
-        expected_field_name
+        self, resolver, event_time_column, column_quote, source_quote, expected_field_name
     ):
         """Test the _resolve_event_time_field_name method with various quoting configurations."""
         # Create a mock target with columns
         target = mock.Mock()
         target.config = mock.Mock()
         target.config.event_time = event_time_column
-        
+
         # Mock columns dictionary
         mock_column = mock.Mock()
         mock_column.name = event_time_column
         mock_column.data_type = "timestamp"
-        
+
         # Set column-level quote configuration
         if column_quote is not None:
             mock_column.quote = column_quote
         else:
             # Explicitly set to None to avoid Mock object being returned
             mock_column.quote = None
-        
+
         target.columns = {event_time_column: mock_column}
-        
+
         # Set source-level quote configuration
         if source_quote is not None:
             target.quoting = mock.Mock()
@@ -113,10 +109,10 @@ class TestBaseResolver:
             # Explicitly set to None to avoid Mock object being returned
             target.quoting = mock.Mock()
             target.quoting.column = None
-        
+
         # Call the method
         result = resolver._resolve_event_time_field_name(target)
-        
+
         # Assert the result
         assert result == expected_field_name
 
@@ -127,41 +123,45 @@ class TestBaseResolver:
             ("missing_column", None, None, "missing_column"),
             ("missing_column_source_quoted", None, True, '"missing_column_source_quoted"'),
             ("missing_column_source_no_quote", None, False, "missing_column_source_no_quote"),
-            
             # Column found but no quote attribute - should fall back to source-level quoting
             ("found_no_quote_attr", None, None, "found_no_quote_attr"),
-            ("found_no_quote_attr_source_quoted", None, True, '"found_no_quote_attr_source_quoted"'),
-            ("found_no_quote_attr_source_no_quote", None, False, "found_no_quote_attr_source_no_quote"),
+            (
+                "found_no_quote_attr_source_quoted",
+                None,
+                True,
+                '"found_no_quote_attr_source_quoted"',
+            ),
+            (
+                "found_no_quote_attr_source_no_quote",
+                None,
+                False,
+                "found_no_quote_attr_source_no_quote",
+            ),
         ],
     )
     def test_resolve_event_time_field_name_column_not_found(
-        self, 
-        resolver, 
-        event_time_column, 
-        column_quote, 
-        source_quote, 
-        expected_field_name
+        self, resolver, event_time_column, column_quote, source_quote, expected_field_name
     ):
         """Test _resolve_event_time_field_name when column is not found or has no quote attribute."""
         # Create a mock target with different columns
         target = mock.Mock()
         target.config = mock.Mock()
         target.config.event_time = event_time_column
-        
+
         # Mock columns dictionary with different column
         mock_column = mock.Mock()
         mock_column.name = "different_column_name"
         mock_column.data_type = "timestamp"
-        
+
         # Set column-level quote configuration (but for different column)
         if column_quote is not None:
             mock_column.quote = column_quote
         else:
             # Explicitly set to None to avoid Mock object being returned
             mock_column.quote = None
-        
+
         target.columns = {"different_column_name": mock_column}
-        
+
         # Set source-level quote configuration
         if source_quote is not None:
             target.quoting = mock.Mock()
@@ -170,10 +170,10 @@ class TestBaseResolver:
             # Explicitly set to None to avoid Mock object being returned
             target.quoting = mock.Mock()
             target.quoting.column = None
-        
+
         # Call the method
         result = resolver._resolve_event_time_field_name(target)
-        
+
         # Assert the result
         assert result == expected_field_name
 
@@ -183,17 +183,17 @@ class TestBaseResolver:
         target = mock.Mock()
         target.config = mock.Mock()
         target.config.event_time = "no_columns_column"
-        
+
         # No columns attribute
         target.columns = {}
-        
+
         # Set source-level quote configuration
         target.quoting = mock.Mock()
         target.quoting.column = True
-        
+
         # Call the method
         result = resolver._resolve_event_time_field_name(target)
-        
+
         # Should return quoted column name when source-level quoting is True
         assert result == '"no_columns_column"'
 
@@ -203,23 +203,23 @@ class TestBaseResolver:
         target = mock.Mock()
         target.config = mock.Mock()
         target.config.event_time = "no_quoting_attr_column"
-        
+
         # Mock columns dictionary
         mock_column = mock.Mock()
         mock_column.name = "no_quoting_attr_column"
         mock_column.data_type = "timestamp"
         # No quote attribute - explicitly set to None
         mock_column.quote = None
-        
+
         target.columns = {"no_quoting_attr_column": mock_column}
-        
+
         # No quoting attribute - explicitly set to None
         target.quoting = mock.Mock()
         target.quoting.column = None
-        
+
         # Call the method
         result = resolver._resolve_event_time_field_name(target)
-        
+
         # Should return unquoted column name
         assert result == "no_quoting_attr_column"
 
