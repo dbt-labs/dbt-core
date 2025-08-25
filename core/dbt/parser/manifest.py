@@ -101,6 +101,7 @@ from dbt.parser.analysis import AnalysisParser
 from dbt.parser.base import Parser
 from dbt.parser.docs import DocumentationParser
 from dbt.parser.fixtures import FixtureParser
+from dbt.parser.functions import FunctionParser
 from dbt.parser.generic_test import GenericTestParser
 from dbt.parser.hooks import HookParser
 from dbt.parser.macros import MacroParser
@@ -418,6 +419,7 @@ class ManifestLoader:
                 DocumentationParser,
                 HookParser,
                 FixtureParser,
+                FunctionParser,
             ]
             for project in self.all_projects.values():
                 if project.project_name not in project_parser_files:

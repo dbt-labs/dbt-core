@@ -1740,6 +1740,7 @@ class ParsedSingularTestPatch(ParsedPatch):
 # SQL related attributes
 ManifestSQLNode = Union[
     AnalysisNode,
+    FunctionNode,
     SingularTestNode,
     HookNode,
     ModelNode,
