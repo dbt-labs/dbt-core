@@ -359,15 +359,7 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
         // Check if minijinja value is a vector
         match primary_key.kind() {
             ValueKind::Seq => {
-                scd_args.extend(
-                    primary_key
-                        .as_object()
-                        .unwrap()
-                        .downcast_ref::<Vec<String>>()
-                        .unwrap()
-                        .iter()
-                        .map(|s| s.to_string()),
-                );
+                scd_args.extend(primary_key.try_iter()?.enumerate().map(|s| s.1.to_string()));
             }
             ValueKind::String => {
                 scd_args.push(primary_key.as_str().unwrap().to_string());

@@ -1,9 +1,10 @@
+use dbt_schemas::schemas::serde::StringOrArrayOfStrings;
 use serde::Deserialize;
 
 /// SnapshotStrategy
 #[derive(Clone, Debug, Deserialize)]
 pub struct SnapshotStrategy {
-    pub unique_key: Option<String>,
+    pub unique_key: Option<StringOrArrayOfStrings>,
     pub updated_at: Option<String>,
     pub row_changed: Option<String>,
     pub scd_id: Option<String>,
