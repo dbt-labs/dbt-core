@@ -415,6 +415,7 @@ mod tests {
     use arrow::csv::ReaderBuilder;
     use arrow_schema::{DataType, Field, Schema};
     use dbt_agate::AgateTable;
+    use dbt_schemas::schemas::dbt_column::DbtColumnRef;
     use dbt_schemas::schemas::{
         common::*,
         common::{Constraint, ConstraintType},
@@ -498,7 +499,7 @@ fk_composite,parent_type,main,default,parents,type
         AgateTable::from_record_batch(Arc::new(batch))
     }
 
-    fn create_mock_dbt_model_with_constraints(columns: BTreeMap<String, DbtColumn>) -> DbtModel {
+    fn create_mock_dbt_model_with_constraints(columns: BTreeMap<String, DbtColumnRef>) -> DbtModel {
         let base_attrs = NodeBaseAttributes {
             database: "test_db".to_string(),
             schema: "test_schema".to_string(),
@@ -777,7 +778,7 @@ fk_composite,parent_type,main,default,parents,type
         let mut columns = BTreeMap::new();
         columns.insert(
             "id".to_string(),
-            DbtColumn {
+            Arc::new(DbtColumn {
                 name: "id".to_string(),
                 constraints: vec![Constraint {
                     type_: ConstraintType::NotNull,
@@ -789,11 +790,11 @@ fk_composite,parent_type,main,default,parents,type
                     warn_unenforced: None,
                 }],
                 ..Default::default()
-            },
+            }),
         );
         columns.insert(
             "name".to_string(),
-            DbtColumn {
+            Arc::new(DbtColumn {
                 name: "name".to_string(),
                 constraints: vec![Constraint {
                     type_: ConstraintType::NotNull,
@@ -805,7 +806,7 @@ fk_composite,parent_type,main,default,parents,type
                     warn_unenforced: None,
                 }],
                 ..Default::default()
-            },
+            }),
         );
 
         let mock_node = create_mock_dbt_model_with_constraints(columns);
@@ -854,7 +855,7 @@ fk_composite,parent_type,main,default,parents,type
         let mut columns = BTreeMap::new();
         columns.insert(
             "id".to_string(),
-            DbtColumn {
+            Arc::new(DbtColumn {
                 name: "id".to_string(),
                 constraints: vec![Constraint {
                     type_: ConstraintType::NotNull,
@@ -866,7 +867,7 @@ fk_composite,parent_type,main,default,parents,type
                     warn_unenforced: None,
                 }],
                 ..Default::default()
-            },
+            }),
         );
 
         let model_constraints = vec![

@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 type YmlValue = dbt_serde_yaml::Value;
 use crate::schemas::common::{NodeInfo, NodeInfoWrapper, PersistDocsConfig};
+use crate::schemas::dbt_column::DbtColumnRef;
 use crate::schemas::manifest::{BigqueryClusterConfig, GrantAccessToTarget, PartitionConfig};
 use crate::schemas::project::WarehouseSpecificNodeConfig;
 use crate::schemas::serde::StringOrArrayOfStrings;
@@ -17,7 +18,6 @@ use crate::schemas::{
         Access, DbtChecksum, DbtContract, DbtIncrementalStrategy, DbtMaterialization, Expect,
         FreshnessDefinition, Given, IncludeExclude, NodeDependsOn, ResolvedQuoting, ScheduleConfig,
     },
-    dbt_column::DbtColumn,
     macros::DbtMacro,
     manifest::common::DbtOwner,
     manifest::{DbtMetric, DbtSavedQuery, DbtSemanticModel},
@@ -1552,7 +1552,7 @@ pub struct NodeBaseAttributes {
 
     // Derived
     #[serde(default)]
-    pub columns: BTreeMap<String, DbtColumn>,
+    pub columns: BTreeMap<String, DbtColumnRef>,
 
     // Raw Refs, Source, and Metric Dependencies from SQL
     #[serde(default)]

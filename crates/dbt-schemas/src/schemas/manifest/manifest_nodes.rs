@@ -12,7 +12,7 @@ use crate::schemas::{
         DbtChecksum, DbtContract, DbtQuoting, Expect, FreshnessDefinition, Given, IncludeExclude,
         NodeDependsOn,
     },
-    dbt_column::DbtColumn,
+    dbt_column::DbtColumnRef,
     manifest::{DbtOperation, common::DbtOwner},
     nodes::TestMetadata,
     project::{
@@ -61,7 +61,7 @@ pub struct ManifestNodeBaseAttributes {
 
     // Derived
     #[serde(default)]
-    pub columns: BTreeMap<String, DbtColumn>,
+    pub columns: BTreeMap<String, DbtColumnRef>,
     pub depends_on: NodeDependsOn,
     #[serde(default)]
     pub refs: Vec<DbtRef>,
@@ -342,7 +342,7 @@ pub struct ManifestSource {
     pub relation_name: Option<String>,
     pub identifier: String,
     pub source_name: String,
-    pub columns: BTreeMap<String, DbtColumn>,
+    pub columns: BTreeMap<String, DbtColumnRef>,
     pub config: SourceConfig,
     pub quoting: Option<DbtQuoting>,
     pub source_description: String,

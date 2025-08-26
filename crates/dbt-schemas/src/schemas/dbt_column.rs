@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use dbt_common::FsResult;
 use dbt_serde_yaml::JsonSchema;
@@ -13,7 +13,7 @@ use crate::schemas::serde::StringOrArrayOfStrings;
 use super::{common::Constraint, data_tests::DataTests};
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtColumn {
     pub name: String,
@@ -27,6 +27,8 @@ pub struct DbtColumn {
     #[serde(default, rename = "config")]
     pub deprecated_config: ColumnConfig,
 }
+
+pub type DbtColumnRef = Arc<DbtColumn>;
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
@@ -74,7 +76,7 @@ pub fn process_columns(
     columns: Option<&Vec<ColumnProperties>>,
     meta: Option<BTreeMap<String, YmlValue>>,
     tags: Option<Vec<String>>,
-) -> FsResult<BTreeMap<String, DbtColumn>> {
+) -> FsResult<BTreeMap<String, DbtColumnRef>> {
     Ok(columns
         .map(|cols| {
             cols.iter()
@@ -85,7 +87,7 @@ pub fn process_columns(
                         .map(|c| (c.meta, c.tags))
                         .unwrap_or_default();
 
-                    Ok(DbtColumn {
+                    Ok(Arc::new(DbtColumn {
                         name: cp.name.clone(),
                         data_type: cp.data_type.clone(),
                         description: cp.description.clone(),
@@ -97,9 +99,9 @@ pub fn process_columns(
                         policy_tags: cp.policy_tags.clone(),
                         quote: cp.quote,
                         deprecated_config: cp.config.clone().unwrap_or_default(),
-                    })
+                    }))
                 })
-                .collect::<Result<Vec<DbtColumn>, Box<dyn std::error::Error>>>()
+                .collect::<Result<Vec<DbtColumnRef>, Box<dyn std::error::Error>>>()
         })
         .transpose()?
         .map(|cols| {

@@ -25,7 +25,7 @@ use dbt_common::{FsError, FsResult, current_function_name};
 use dbt_schemas::schemas::InternalDbtNodeWrapper;
 use dbt_schemas::schemas::columns::base::StdColumn;
 use dbt_schemas::schemas::common::{DbtIncrementalStrategy, ResolvedQuoting};
-use dbt_schemas::schemas::dbt_column::DbtColumn;
+use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::{
     BigqueryClusterConfig, BigqueryPartitionConfig, GrantAccessToTarget, PartitionConfig,
 };
@@ -1470,9 +1470,10 @@ impl BaseAdapter for BridgeAdapter {
                 MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
             })?;
         let model_columns =
-            minijinja_value_to_typed_struct::<BTreeMap<String, DbtColumn>>(model_columns).map_err(
-                |e| MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string()),
-            )?;
+            minijinja_value_to_typed_struct::<BTreeMap<String, DbtColumnRef>>(model_columns)
+                .map_err(|e| {
+                    MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+                })?;
 
         Ok(Value::from_serialize(
             self.typed_adapter

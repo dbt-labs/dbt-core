@@ -186,7 +186,7 @@ email,string,\n\
     }
 
     fn create_mock_dbt_model(
-        columns: BTreeMap<String, dbt_schemas::schemas::dbt_column::DbtColumn>,
+        columns: BTreeMap<String, dbt_schemas::schemas::dbt_column::DbtColumnRef>,
         meta: BTreeMap<String, serde_json::Value>,
     ) -> DbtModel {
         use dbt_schemas::schemas::project::*;
@@ -465,21 +465,21 @@ name,string,User name\n\
         let mut columns = BTreeMap::new();
         columns.insert(
             "id".to_string(),
-            DbtColumn {
+            Arc::new(DbtColumn {
                 name: "id".to_string(),
                 description: Some("Primary key".to_string()),
                 quote: Some(false),
                 ..Default::default()
-            },
+            }),
         );
         columns.insert(
             "name".to_string(),
-            DbtColumn {
+            Arc::new(DbtColumn {
                 name: "name".to_string(),
                 description: Some("User name".to_string()),
                 quote: Some(true),
                 ..Default::default()
-            },
+            }),
         );
 
         let mut meta = BTreeMap::new();
@@ -518,12 +518,12 @@ name,string,User name\n\
         let mut columns = BTreeMap::new();
         columns.insert(
             "id".to_string(),
-            DbtColumn {
+            Arc::new(DbtColumn {
                 name: "id".to_string(),
                 description: Some("Primary key".to_string()),
                 quote: Some(false),
                 ..Default::default()
-            },
+            }),
         );
 
         let meta = BTreeMap::new(); // No persist_docs
@@ -554,12 +554,12 @@ name,string,User name\n\
         let mut columns = BTreeMap::new();
         columns.insert(
             "id".to_string(),
-            DbtColumn {
+            Arc::new(DbtColumn {
                 name: "id".to_string(),
                 description: Some("Primary key".to_string()),
                 quote: Some(false),
                 ..Default::default()
-            },
+            }),
         );
 
         let mut meta = BTreeMap::new();

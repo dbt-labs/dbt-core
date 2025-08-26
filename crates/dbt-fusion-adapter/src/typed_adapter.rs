@@ -21,7 +21,7 @@ use dbt_schemas::schemas::common::ConstraintSupport;
 use dbt_schemas::schemas::common::ConstraintType;
 use dbt_schemas::schemas::common::DbtIncrementalStrategy;
 use dbt_schemas::schemas::common::ResolvedQuoting;
-use dbt_schemas::schemas::dbt_column::DbtColumn;
+use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfig};
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
@@ -511,8 +511,8 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn get_persist_doc_columns(
         &self,
         _existing_columns: Vec<StdColumn>,
-        _model_columns: BTreeMap<String, DbtColumn>,
-    ) -> AdapterResult<BTreeMap<String, DbtColumn>> {
+        _model_columns: BTreeMap<String, DbtColumnRef>,
+    ) -> AdapterResult<BTreeMap<String, DbtColumnRef>> {
         unimplemented!("Only available for Databricks Adapter")
     }
 
