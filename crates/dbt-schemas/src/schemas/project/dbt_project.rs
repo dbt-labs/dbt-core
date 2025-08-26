@@ -39,6 +39,8 @@ pub struct ProjectDbtCloudConfig {
     #[serde(rename = "project-id")]
     pub project_id: Option<StringOrInteger>,
     pub account_id: Option<StringOrInteger>,
+    #[serde(rename = "account-host")]
+    pub account_host: Option<String>,
     #[serde(rename = "job-id")]
     pub job_id: Option<StringOrInteger>,
     #[serde(rename = "run-id")]
