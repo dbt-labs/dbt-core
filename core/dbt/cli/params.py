@@ -549,7 +549,6 @@ sample = _create_option_and_track_env_var(
     help="Run in sample mode with given SAMPLE_WINDOW spec, such that ref/source calls are sampled by the sample window.",
     default=None,
     type=SampleType(),
-    hidden=True,  # TODO: Unhide
 )
 
 # `--select` and `--models` are analogous for most commands except `dbt list` for legacy reasons.

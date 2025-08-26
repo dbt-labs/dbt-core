@@ -1,0 +1,6 @@
+kind: Fixes
+body: Unhide sample mode CLI flag
+time: 2025-08-26T14:48:59.685423-05:00
+custom:
+  Author: QMalcolm
+  Issue: "11959"
