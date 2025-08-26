@@ -274,8 +274,9 @@ fn filter_lines_internal(content: String, in_emacs: bool) -> String {
                 // In Emacs we need to filter our REPL prompt.
                 Some("")
             } else {
-                // Keep other lines unchanged
-                Some(line)
+                // For other lines, trim ending whitespaces to reduce false
+                // negatives:
+                Some(line.trim_end())
             }
         })
         .collect::<Vec<_>>()
@@ -302,13 +303,13 @@ mod tests {
     #[test]
     fn test_filter_lines() {
         let lines = filter_lines("abc \n has been running for over \n 123".to_string());
-        assert_eq!("abc \n 123", lines);
+        assert_eq!("abc\n 123", lines);
     }
 
     #[test]
     fn test_filter_repl_prompt() {
         let lines = filter_lines_internal("abc \n0(snowflake[local])> \n 123".to_string(), true);
-        assert_eq!("abc \n\n 123", lines);
+        assert_eq!("abc\n\n 123", lines);
     }
 
     #[test]
