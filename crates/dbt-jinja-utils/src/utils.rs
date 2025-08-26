@@ -294,6 +294,94 @@ pub fn get_method(args: &[Value], map: &BTreeMap<String, Value>) -> Result<Value
     })
 }
 
+/// Get catalog by relations for project
+pub fn get_catalog_by_relations(
+    env: &JinjaEnv,
+    root_project_name: &str,
+    current_project_name: &str,
+    base_ctx: &BTreeMap<String, Value>,
+    args: &[Value],
+) -> FsResult<Value> {
+    // let macro_name = format!("get_catalog_relations");
+    let macro_name = "get_catalog_relations";
+    let template_name =
+        find_macro_template(env, macro_name, root_project_name, current_project_name)?;
+
+    // Create a state object for rendering
+    let template = env.get_template(&template_name)?;
+
+    // Create a new state
+    let new_state = template.eval_to_state(base_ctx, &[])?;
+
+    // Call the macro
+    let result = new_state
+        .call_macro_raw(macro_name, args, &[])
+        .map_err(|err| {
+            Box::new(FsError::from_jinja_err(
+                err,
+                "Failed to run macro get_catalog_relations".to_string(),
+            ))
+        })?;
+    // Return the result
+    Ok(result)
+}
+
+/// Find the template for a given macro
+pub fn find_macro_template(
+    env: &JinjaEnv,
+    macro_name: &str,
+    root_project_name: &str,
+    current_project_name: &str,
+) -> FsResult<String> {
+    let cache_key = (current_project_name.to_string(), macro_name.to_string());
+
+    // Check cache first - return early if found
+    if let Ok(cache) = TEMPLATE_CACHE.lock() {
+        if let Some(template) = cache.get(&cache_key) {
+            return Ok(template.clone());
+        }
+    }
+    // First try - check the current project
+    let template_name = format!("{current_project_name}.{macro_name}");
+    if env.has_template(&template_name) {
+        // Cache and return
+        if let Ok(mut cache) = TEMPLATE_CACHE.lock() {
+            cache.insert(cache_key, template_name.clone());
+        }
+        return Ok(template_name);
+    }
+
+    // Second try - check the root project
+    let template_name = format!("{root_project_name}.{macro_name}");
+    if env.has_template(&template_name) {
+        // Cache and return
+        if let Ok(mut cache) = TEMPLATE_CACHE.lock() {
+            cache.insert(cache_key, template_name.clone());
+        }
+        return Ok(template_name);
+    }
+
+    // Last attempt - check dbt internal package
+    let dbt_and_adapters = env.get_dbt_and_adapters_namespace();
+    if let Some(package) = dbt_and_adapters.get(&Value::from(macro_name)) {
+        let template_name = format!("{package}.{macro_name}");
+        if env.has_template(&template_name) {
+            // Cache and return
+            if let Ok(mut cache) = TEMPLATE_CACHE.lock() {
+                cache.insert(cache_key, template_name.clone());
+            }
+            return Ok(template_name);
+        }
+    }
+
+    // Template not found in any location
+    Err(fs_err!(
+        ErrorCode::JinjaError,
+        "Could not find template for {}",
+        macro_name
+    ))
+}
+
 /// Generate a component name using the specified macro
 pub fn generate_component_name(
     env: &JinjaEnv,
@@ -307,7 +395,7 @@ pub fn generate_component_name(
     let macro_name = format!("generate_{component}_name");
     // find the macro template - this is now cached for performance
     let template_name =
-        find_generate_macro_template(env, component, root_project_name, current_project_name)?;
+        find_macro_template(env, &macro_name, root_project_name, current_project_name)?;
 
     // Create a state object for rendering
     let template = env.get_template(&template_name)?;
@@ -342,63 +430,6 @@ pub fn clear_template_cache() {
     if let Ok(mut cache) = TEMPLATE_CACHE.lock() {
         cache.clear();
     }
-}
-
-/// Find a generate macro by name (database, schema, or alias)
-pub fn find_generate_macro_template(
-    env: &JinjaEnv,
-    component: &str,
-    root_project_name: &str,
-    current_project_name: &str,
-) -> FsResult<String> {
-    let macro_name = format!("generate_{component}_name");
-    let cache_key = (current_project_name.to_string(), component.to_string());
-
-    // Check cache first - return early if found
-    if let Ok(cache) = TEMPLATE_CACHE.lock() {
-        if let Some(template) = cache.get(&cache_key) {
-            return Ok(template.clone());
-        }
-    }
-    // First try - check the current project
-    let template_name = format!("{current_project_name}.{macro_name}");
-    if env.has_template(&template_name) {
-        // Cache and return
-        if let Ok(mut cache) = TEMPLATE_CACHE.lock() {
-            cache.insert(cache_key, template_name.clone());
-        }
-        return Ok(template_name);
-    }
-
-    // Second try - check the root project
-    let template_name = format!("{root_project_name}.{macro_name}");
-    if env.has_template(&template_name) {
-        // Cache and return
-        if let Ok(mut cache) = TEMPLATE_CACHE.lock() {
-            cache.insert(cache_key, template_name.clone());
-        }
-        return Ok(template_name);
-    }
-
-    // Last attempt - check dbt internal package
-    let dbt_and_adapters = env.get_dbt_and_adapters_namespace();
-    if let Some(package) = dbt_and_adapters.get(&Value::from(macro_name.as_str())) {
-        let template_name = format!("{package}.{macro_name}");
-        if env.has_template(&template_name) {
-            // Cache and return
-            if let Ok(mut cache) = TEMPLATE_CACHE.lock() {
-                cache.insert(cache_key, template_name.clone());
-            }
-            return Ok(template_name);
-        }
-    }
-
-    // Template not found in any location
-    Err(fs_err!(
-        ErrorCode::JinjaError,
-        "Could not find template for {}",
-        macro_name
-    ))
 }
 
 /// Generate a relation name from database, schema, alias

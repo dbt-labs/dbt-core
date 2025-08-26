@@ -1,17 +1,20 @@
 use crate::AdapterType;
 use crate::errors::AdapterResult;
 use crate::errors::{AdapterError, AsyncAdapterResult};
+use crate::relation_object::create_relation_internal;
 use crate::typed_adapter::TypedBaseAdapter;
 
 use arrow::array::RecordBatch;
 use arrow_schema::Schema;
 use dbt_common::cancellation::{Cancellable, CancellationToken};
 use dbt_common::io_args::IoArgs;
+use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::{
     legacy_catalog::{CatalogTable, ColumnMetadata},
     relations::base::{BaseRelation, ComponentName, RelationPattern},
 };
 use dbt_schemas::state::ResolverState;
+use dbt_schemas::stats::Stats;
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -129,19 +132,17 @@ pub enum UDFKind {
 
 /// Adapter that supports metadata query
 pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
-    // TODO: (Snowflake only) make this work for all adapters
-    fn get_stats_from_nodes(
+    fn build_schemas_from_stats_sql(
         &self,
-        _: &ResolverState,
-    ) -> AsyncAdapterResult<BTreeMap<String, CatalogTable>> {
+        _: Arc<RecordBatch>,
+    ) -> AdapterResult<BTreeMap<String, CatalogTable>> {
         unimplemented!()
     }
 
-    // TODO: (Snowflake only) make this work for all adapters
-    fn get_columns_from_nodes(
+    fn build_columns_from_get_columns(
         &self,
-        _: &ResolverState,
-    ) -> AsyncAdapterResult<BTreeMap<String, BTreeMap<String, ColumnMetadata>>> {
+        _: Arc<RecordBatch>,
+    ) -> AdapterResult<BTreeMap<String, BTreeMap<String, ColumnMetadata>>> {
         unimplemented!()
     }
 
@@ -192,6 +193,84 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
         _io: &IoArgs,
         _db_schemas: &[CatalogAndSchema],
     ) -> AsyncAdapterResult<BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>>;
+
+    fn create_relations_from_executed_nodes(
+        &self,
+        resolved_state: &ResolverState,
+        run_stats: &Stats,
+    ) -> Vec<Arc<dyn BaseRelation>> {
+        let mut relations: Vec<Arc<dyn BaseRelation>> = Vec::new();
+        let executed_unique_ids = run_stats
+            .stats
+            .iter()
+            .map(|stat| stat.unique_id.clone())
+            .collect::<Vec<String>>();
+        let nodes = match run_stats.nodes.as_ref() {
+            Some(nodes) => nodes,
+            None => return relations,
+        };
+        for (unique_id, node) in nodes.models.iter() {
+            if executed_unique_ids.contains(unique_id) {
+                let relation = create_relation_internal(
+                    resolved_state.adapter_type.to_string(),
+                    node.database(),
+                    node.schema(),
+                    Some(node.alias()),
+                    None,
+                    node.quoting(),
+                )
+                .expect("Failed to create relations from nodes");
+                relations.push(relation);
+            }
+        }
+
+        for (unique_id, node) in nodes.snapshots.iter() {
+            if executed_unique_ids.contains(unique_id) {
+                let relation = create_relation_internal(
+                    resolved_state.adapter_type.to_string(),
+                    node.database(),
+                    node.schema(),
+                    Some(node.alias()),
+                    None,
+                    node.quoting(),
+                )
+                .expect("Failed to create relations from nodes");
+                relations.push(relation);
+            }
+        }
+
+        for (unique_id, node) in nodes.seeds.iter() {
+            if executed_unique_ids.contains(unique_id) {
+                let relation = create_relation_internal(
+                    resolved_state.adapter_type.to_string(),
+                    node.database(),
+                    node.schema(),
+                    Some(node.alias()),
+                    None,
+                    node.quoting(),
+                )
+                .expect("Failed to create relations from nodes");
+                relations.push(relation);
+            }
+        }
+
+        for (unique_id, node) in nodes.sources.iter() {
+            if executed_unique_ids.contains(unique_id) {
+                let relation = create_relation_internal(
+                    resolved_state.adapter_type.to_string(),
+                    node.database(),
+                    node.schema(),
+                    Some(node.alias()),
+                    None,
+                    node.quoting(),
+                )
+                .expect("Failed to create relations from nodes");
+                relations.push(relation);
+            }
+        }
+
+        relations
+    }
 }
 
 /// Create schemas if they don't exist

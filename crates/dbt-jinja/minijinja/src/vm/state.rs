@@ -13,12 +13,11 @@ use crate::vm::context::Context;
 
 use serde::Deserialize;
 
+#[cfg(feature = "fuel")]
+use crate::vm::fuel::FuelTracker;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::rc::Rc;
-
-#[cfg(feature = "fuel")]
-use crate::vm::fuel::FuelTracker;
 
 /// When macros are used, the state carries an `id` counter.  Whenever a state is
 /// created, the counter is incremented.  This exists because macros can keep a reference
@@ -258,7 +257,7 @@ impl<'template, 'env> State<'template, 'env> {
         self.ctx.load(self.env, name)
     }
 
-    /// Looks up a global macro and calls it.
+    /// Looks up a global macro and calls it, converting the result into a string.
     ///
     /// This looks up a value as [`lookup`](Self::lookup) does and calls it
     /// with the passed args.
@@ -270,11 +269,26 @@ impl<'template, 'env> State<'template, 'env> {
         args: &[Value],
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<String, Error> {
+        self.call_macro_raw(name, args, listeners).map(Into::into)
+    }
+
+    /// Looks up a global macro and calls it without converting the result into a string.
+    ///
+    /// This looks up a value as [`lookup`](Self::lookup) does and calls it
+    /// with the passed args.
+    #[cfg(feature = "macros")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "macros")))]
+    pub fn call_macro_raw(
+        &self,
+        name: &str,
+        args: &[Value],
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<Value, Error> {
         let f = ok!(self.lookup(name).ok_or_else(|| Error::new(
             crate::error::ErrorKind::UnknownFunction,
             "macro not found"
         )));
-        f.call(self, args, listeners).map(Into::into)
+        f.call(self, args, listeners)
     }
 
     /// Renders a block with the given name into a string.
