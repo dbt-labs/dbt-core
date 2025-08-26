@@ -1,8 +1,8 @@
 // Allow disallowed methods for this module because RustEmbed generates calls to Path::canonicalize
 #![allow(clippy::disallowed_methods)]
 
-use crate::pretty_string::{GREEN, YELLOW};
 use crate::{ErrorCode, FsResult, fs_err, profile_setup::ProfileSetup};
+use dbt_common::pretty_string::{GREEN, YELLOW};
 use rust_embed::RustEmbed;
 use std::env;
 use std::fs;

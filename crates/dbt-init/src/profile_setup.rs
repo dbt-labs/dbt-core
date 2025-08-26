@@ -4,9 +4,9 @@ use crate::adapter_config::{
     setup_snowflake_profile,
 };
 use crate::dbt_cloud_client::{CloudProject, DbtCloudClient, DbtCloudYml};
-use crate::pretty_string::GREEN;
 use crate::yaml_utils::{has_top_level_key_parsed_file, remove_top_level_key_from_str};
 use crate::{ErrorCode, FsResult, fs_err};
+use dbt_common::pretty_string::GREEN;
 use dialoguer::{Confirm, Select};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

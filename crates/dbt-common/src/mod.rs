@@ -2,23 +2,18 @@
 pub mod macros;
 
 pub mod adapter;
-pub mod adapter_config;
 pub mod atomic;
 pub mod cancellation;
 pub mod constants;
-pub mod dbt_cloud_client;
 pub mod error_counter;
-pub mod init;
 pub mod io_utils;
 pub mod node_selector;
 pub mod pretty_string;
 pub mod pretty_table;
-pub mod profile_setup;
 pub mod stats;
 pub mod stdfs;
 pub mod string_utils;
 pub mod tokiofs;
-pub mod yaml_utils;
 #[macro_use]
 pub extern crate dbt_error as error;
 pub use dbt_error::{

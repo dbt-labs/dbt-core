@@ -9,6 +9,7 @@ members = [
   "crates/dbt-cancel",
   "crates/dbt-common",
   "crates/dbt-cloud-api",
+  "crates/dbt-init",
   "crates/dbt-error",
   "crates/dbt-frontend-common",
   "crates/dbt-jinja/minijinja",
@@ -145,6 +146,7 @@ dbt-error = { path = "crates/dbt-error" }
 dbt-frontend-common = { path = "crates/dbt-frontend-common" }
 dbt-fusion-adapter = { path = "crates/dbt-fusion-adapter" }
 dbt-ident = { path = "crates/dbt-ident" }
+dbt-init = { path = "crates/dbt-init" }
 dbt-jinja-utils = { path = "crates/dbt-jinja-utils" }
 dbt-loader = { path = "crates/dbt-loader" }
 dbt-parser = { path = "crates/dbt-parser" }

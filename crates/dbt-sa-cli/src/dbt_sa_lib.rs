@@ -79,7 +79,7 @@ async fn do_execute_fs(eval_arg: &EvalArgs, cli: Cli, token: CancellationToken) 
         };
     } else if let Commands::Init(init_args) = &cli.command {
         // Handle init command
-        use dbt_common::init::run_init_workflow;
+        use dbt_init::init::run_init_workflow;
 
         show_progress!(
             &eval_arg.io,
