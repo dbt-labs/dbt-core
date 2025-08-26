@@ -10,7 +10,7 @@ use core::result::Result;
 use dbt_common::cancellation::{Cancellable, CancellationToken};
 use dbt_common::constants::EXECUTING;
 use dbt_xdbc::semaphore::Semaphore;
-use dbt_xdbc::{Connection, Database, QueryCtx, connection, database, driver};
+use dbt_xdbc::{Backend, Connection, Database, QueryCtx, connection, database, driver};
 use log;
 use serde_json::json;
 use tracy_client::span;
@@ -178,11 +178,12 @@ impl SqlEngine {
 
     /// Create a new [`SqlEngine::Replay`] based on the given path and adapter type.
     pub fn new_for_replaying(
+        backend: Backend,
         path: PathBuf,
         config: AdapterConfig,
         token: CancellationToken,
     ) -> Arc<Self> {
-        let engine = ReplayEngine::new(path, config, token);
+        let engine = ReplayEngine::new(backend, path, config, token);
         Arc::new(SqlEngine::Replay(engine))
     }
 
@@ -204,6 +205,14 @@ impl SqlEngine {
             Self::Replay(replay_engine) => replay_engine.new_connection(None),
         }?;
         Ok(conn)
+    }
+
+    pub fn backend(&self) -> Backend {
+        match self {
+            SqlEngine::Warehouse(actual_engine) => actual_engine.auth.backend(),
+            SqlEngine::Record(record_engine) => record_engine.backend(),
+            SqlEngine::Replay(replay_engine) => replay_engine.backend(),
+        }
     }
 
     /// Create a new connection to the warehouse.

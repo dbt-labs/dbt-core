@@ -9,7 +9,7 @@ use arrow_json::writer::LineDelimitedWriter;
 use arrow_schema::{ArrowError, Field, Schema, SchemaBuilder};
 use dashmap::DashMap;
 use dbt_common::cancellation::CancellationToken;
-use dbt_xdbc::{Connection, QueryCtx, Statement};
+use dbt_xdbc::{Backend, Connection, QueryCtx, Statement};
 use once_cell::sync::Lazy;
 use parquet::arrow::ArrowWriter;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
@@ -100,6 +100,10 @@ impl RecordEngine {
     pub fn new(path: PathBuf, engine: Arc<SqlEngine>) -> Self {
         let inner = RecordEngineInner { path, engine };
         RecordEngine(Arc::new(inner))
+    }
+
+    pub fn backend(&self) -> Backend {
+        self.0.engine.backend()
     }
 
     pub fn new_connection(&self, node_id: Option<String>) -> AdapterResult<Box<dyn Connection>> {
@@ -351,6 +355,8 @@ impl Statement for RecordEngineStatement {
 }
 
 struct ReplayEngineInner {
+    /// The XDBC backend responsible for the recordings we are replaying
+    backend: Backend,
     /// Path to recordings
     path: PathBuf,
     /// Adapter config
@@ -369,8 +375,14 @@ impl ReplayEngineInner {
 pub struct ReplayEngine(Arc<ReplayEngineInner>);
 
 impl ReplayEngine {
-    pub fn new(path: PathBuf, config: AdapterConfig, token: CancellationToken) -> Self {
+    pub fn new(
+        backend: Backend,
+        path: PathBuf,
+        config: AdapterConfig,
+        token: CancellationToken,
+    ) -> Self {
         let inner = ReplayEngineInner {
+            backend,
             path,
             config,
             cancellation_token: token,
@@ -381,6 +393,10 @@ impl ReplayEngine {
     pub fn new_connection(&self, node_id: Option<String>) -> AdapterResult<Box<dyn Connection>> {
         let conn = ReplayEngineConnection(self.0.clone(), node_id);
         Ok(Box::new(conn))
+    }
+
+    pub fn backend(&self) -> Backend {
+        self.0.backend
     }
 
     pub fn config(&self, key: &str) -> AdapterResult<Option<String>> {
