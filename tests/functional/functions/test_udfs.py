@@ -2,6 +2,7 @@ from typing import Dict
 
 import pytest
 
+from dbt.artifacts.resources import FunctionReturnType
 from dbt.contracts.graph.nodes import FunctionNode
 from dbt.tests.util import run_dbt
 
@@ -44,4 +45,4 @@ class TestBasicSQLUDF:
         assert (
             argument.description == "A floating point number representing the radius of the circle"
         )
-        assert function_node.return_type == "float"
+        assert function_node.return_type == FunctionReturnType(type="float")
