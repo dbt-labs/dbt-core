@@ -32,8 +32,7 @@ pub trait StatusReporter: Any + Send + Sync {
     /// Called to show progress in the UI
     fn show_progress(&self, action: &str, target: &str, description: Option<&str>);
     /// Combined async operation to clear diagnostics and optionally mark phase completion.
-    /// This is non-blocking and should be the preferred method for task implementations.
-    fn process_node_async(
+    fn record_node(
         &self,
         file_path: &Path,
         unique_id: Option<&str>,
