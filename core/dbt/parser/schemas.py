@@ -772,7 +772,7 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
 # Subclasses of NodePatchParser: TestablePatchParser, ModelPatchParser, AnalysisPatchParser, FunctionPatchParser
 # so models, seeds, snapshots, analyses, functions
 class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarget]):
-    def parse_patch(self, block: TargetBlock[NodeTarget], refs: ParserRef) -> None:
+    def _get_node_patch(self, block: TargetBlock[NodeTarget], refs: ParserRef) -> ParsedNodePatch:
         # We're not passing the ParsedNodePatch around anymore, so we
         # could possibly skip creating one. Leaving here for now for
         # code consistency.
@@ -796,7 +796,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                 else None
             )
 
-        patch = ParsedNodePatch(
+        return ParsedNodePatch(
             name=block.target.name,
             original_file_path=block.target.original_file_path,
             yaml_key=block.target.yaml_key,
@@ -813,8 +813,14 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             deprecation_date=deprecation_date,
             time_spine=time_spine,
         )
+
+    def parse_patch(self, block: TargetBlock[NodeTarget], refs: ParserRef) -> None:
+        patch = self._get_node_patch(block, refs)
+
         assert isinstance(self.yaml.file, SchemaSourceFile)
         source_file: SchemaSourceFile = self.yaml.file
+
+        # TODO: I'd like to refactor this out but the early return makes doing so a bit messy
         if patch.yaml_key in ["models", "seeds", "snapshots", "functions"]:
             unique_id = self.manifest.ref_lookup.get_unique_id(
                 patch.name, self.project.project_name, None
@@ -880,7 +886,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                         file_path=source_file.path.original_file_path,
                     )
                 )
-                return
+                return  # we only return early if no disabled early nodes are found. Why don't we return after patching the disabled nodes?
 
         # patches can't be overwritten
         node = self.manifest.nodes.get(unique_id)
@@ -1282,14 +1288,11 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
         node.arguments = patch.arguments
         node.return_type = patch.return_type
 
-    # TODO: This started as a Copy-Paste of NodePatchParser.parse_patch. It has been slimmed down
-    # slightly, and modified to be FunctionNode specific. However, we should refactor this and the
-    # original to reduce code duplication.
-    def parse_patch(self, block: TargetBlock[NodeTarget], refs: ParserRef) -> None:
+    def _get_node_patch(self, block: TargetBlock[NodeTarget], refs: ParserRef) -> ParsedNodePatch:
         target = block.target
         assert isinstance(target, UnparsedFunctionUpdate)
 
-        patch = ParsedFunctionPatch(
+        return ParsedFunctionPatch(
             name=target.name,
             original_file_path=target.original_file_path,
             yaml_key=target.yaml_key,
@@ -1308,94 +1311,6 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
             arguments=target.arguments,
             return_type=target.return_type,
         )
-        assert isinstance(self.yaml.file, SchemaSourceFile)
-        source_file: SchemaSourceFile = self.yaml.file
-
-        # TODO: Refactor this out into a separate helper function to avoid duplication
-        if patch.yaml_key in ["models", "seeds", "snapshots", "functions"]:
-            unique_id = self.manifest.ref_lookup.get_unique_id(
-                patch.name, self.project.project_name, None
-            ) or self.manifest.ref_lookup.get_unique_id(patch.name, None, None)
-
-            if unique_id:
-                resource_type = NodeType(unique_id.split(".")[0])
-                if resource_type.pluralize() != patch.yaml_key:
-                    warn_or_error(
-                        WrongResourceSchemaFile(
-                            patch_name=patch.name,
-                            resource_type=resource_type,
-                            plural_resource_type=resource_type.pluralize(),
-                            yaml_key=patch.yaml_key,
-                            file_path=patch.original_file_path,
-                        )
-                    )
-                    return
-
-        elif patch.yaml_key == "analyses":
-            unique_id = self.manifest.analysis_lookup.get_unique_id(patch.name, None, None)
-        else:
-            raise DbtInternalError(
-                f"Unexpected yaml_key {patch.yaml_key} for patch in "
-                f"file {source_file.path.original_file_path}"
-            )
-
-        # TODO: Refactor this out into a separate helper function to avoid duplication
-        # handle disabled nodes
-        if unique_id is None:
-            # Node might be disabled. Following call returns list of matching disabled nodes
-            resource_type = schema_file_keys_to_resource_types[patch.yaml_key]
-            found_nodes = self.manifest.disabled_lookup.find(
-                patch.name, patch.package_name, resource_types=[resource_type]
-            )
-            if found_nodes:
-                if len(found_nodes) > 1 and patch.config.get("enabled"):
-                    # There are multiple disabled nodes for this model and the schema file wants to enable one.
-                    # We have no way to know which one to enable.
-                    resource_type = found_nodes[0].unique_id.split(".")[0]
-                    msg = (
-                        f"Found {len(found_nodes)} matching disabled nodes for "
-                        f"{resource_type} '{patch.name}'. Multiple nodes for the same "
-                        "unique id cannot be enabled in the schema file. They must be enabled "
-                        "in `dbt_project.yml` or in the sql files."
-                    )
-                    raise ParsingError(msg)
-
-                # all nodes in the disabled dict have the same unique_id so just grab the first one
-                # to append with the unique id
-                source_file.append_patch(patch.yaml_key, found_nodes[0].unique_id)
-                for node in found_nodes:
-                    node.patch_path = source_file.file_id
-                    # re-calculate the node config with the patch config.  Always do this
-                    # for the case when no config is set to ensure the default of true gets captured
-                    if patch.config:
-                        self.patch_node_config(node, patch)
-
-                    self.patch_node_properties(node, patch)
-            else:
-                warn_or_error(
-                    NoNodeForYamlKey(
-                        patch_name=patch.name,
-                        yaml_key=patch.yaml_key,
-                        file_path=source_file.path.original_file_path,
-                    )
-                )
-                return
-
-        # TODO: Refactor this out into a separate helper function to avoid duplication
-        # patches can't be overwritten
-        node = self.manifest.nodes.get(unique_id)
-        if node:
-            if node.patch_path:
-                package_name, existing_file_path = node.patch_path.split("://")
-                raise DuplicatePatchPathError(patch, existing_file_path)
-
-            source_file.append_patch(patch.yaml_key, node.unique_id)
-            # re-calculate the node config with the patch config.  Always do this
-            # for the case when no config is set to ensure the default of true gets captured
-            if patch.config:
-                self.patch_node_config(node, patch)
-
-            self.patch_node_properties(node, patch)
 
 
 class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
