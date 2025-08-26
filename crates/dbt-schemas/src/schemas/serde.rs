@@ -34,11 +34,7 @@ where
         )
     })?;
 
-    let res: T = yml_val
-        .into_typed(|_, _, _| {}, |_| Ok(None))
-        .map_err(|e| yaml_to_fs_error(e, Some(path)))?;
-
-    Ok(res)
+    T::deserialize(yml_val).map_err(|e| yaml_to_fs_error(e, Some(path)))
 }
 
 pub fn typed_struct_to_pretty_json_file<T>(path: &Path, value: &T) -> FsResult<()>
@@ -78,10 +74,7 @@ where
         )
     })?;
 
-    let res: T = yml_val
-        .into_typed(|_, _, _| {}, |_| Ok(None))
-        .map_err(|e| yaml_to_fs_error(e, None))?;
-    Ok(res)
+    T::deserialize(yml_val).map_err(|e| yaml_to_fs_error(e, None))
 }
 
 /// Converts a `dbt_serde_yaml::Error` into a `FsError`, attaching the error location
@@ -220,10 +213,8 @@ pub fn minijinja_value_to_typed_struct<T: DeserializeOwned>(value: MinijinjaValu
             format!("Failed to convert MinijinjaValue to YmlValue: {e}"),
         )
     })?;
-    let res: T = yml_val
-        .into_typed(|_, _, _| {}, |_| Ok(None))
-        .map_err(|e| yaml_to_fs_error(e, None))?;
-    Ok(res)
+
+    T::deserialize(yml_val).map_err(|e| yaml_to_fs_error(e, None))
 }
 
 /// Convert YmlValue to String

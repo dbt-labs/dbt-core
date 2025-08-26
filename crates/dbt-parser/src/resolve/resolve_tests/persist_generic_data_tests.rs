@@ -434,7 +434,7 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
             serde_json::from_value(merged_config_json).unwrap();
 
         // Deserialize the final merged config
-        if let Ok(merged_config) = merged_config_yaml.into_typed(|_, _, _| {}, |_| Ok(None)) {
+        if let Ok(merged_config) = serde::Deserialize::deserialize(merged_config_yaml) {
             final_config = Some(merged_config);
         }
     }
