@@ -74,19 +74,22 @@ pub async fn hydrate_or_download_manifest_from_cloud(
     // Load dbt cloud configuration
     let dbt_cloud_config: dbt_schemas::schemas::DbtCloudConfig =
         load_raw_yml(io, &dbt_cloud_config_path, None)?;
-    // Check if defer_env_id is specified and show warning
-    if let Some(defer_env_id) = &dbt_cloud_config.context.defer_env_id {
-        show_progress!(
-            io,
-            fsinfo!(
-                "WARNING".into(),
-                format!(
-                    "defer_env_id '{}' is specified but not yet supported - using prod/staging environment",
-                    defer_env_id
+    // Determine which manifest path to use based on defer_env_id
+    // If defer_env_id is specified, use the manifest/{env_id}/ path
+    // Otherwise, use the manifest/latest/ path which will use the default staging > prod precedence
+    let manifest_path_suffix = match &dbt_cloud_config.context.defer_env_id {
+        Some(env_id) => {
+            show_progress!(
+                io,
+                fsinfo!(
+                    "INFO".into(),
+                    format!("Using defer_env_id '{}' for manifest download", env_id)
                 )
-            )
-        );
-    }
+            );
+            format!("manifest/{env_id}/")
+        }
+        None => "manifest/latest/".to_string(),
+    };
 
     let project = match dbt_cloud_config.get_project_by_id(project_id.to_string().as_str()) {
         Some(p) => p,
@@ -101,7 +104,7 @@ pub async fn hydrate_or_download_manifest_from_cloud(
 
     // Construct API URL to get presigned link
     let url = format!(
-        "https://{account_host}/api/private/accounts/{account_id}/projects/{project_id}/manifest/latest/"
+        "https://{account_host}/api/private/accounts/{account_id}/projects/{project_id}/{manifest_path_suffix}"
     );
 
     // Log download attempt
