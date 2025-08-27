@@ -153,7 +153,7 @@ class TestProjectInitialization(BaseConfigTest):
                 "asset-paths": ["other-assets"],
                 "clean-targets": ["another-target"],
                 "packages-install-path": "other-dbt_packages",
-                "quoting": {"identifier": False},
+                "quoting": {"identifier": False, "snowflake_ignore_case": True},
                 "models": {
                     "pre-hook": ["{{ logging.log_model_start_event() }}"],
                     "post-hook": ["{{ logging.log_model_end_event() }}"],
@@ -214,7 +214,7 @@ class TestProjectInitialization(BaseConfigTest):
         self.assertEqual(project.asset_paths, ["other-assets"])
         self.assertEqual(project.clean_targets, ["another-target"])
         self.assertEqual(project.packages_install_path, "other-dbt_packages")
-        self.assertEqual(project.quoting, {"identifier": False})
+        self.assertEqual(project.quoting, {"identifier": False, "snowflake_ignore_case": True})
         self.assertEqual(
             project.models,
             {

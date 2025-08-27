@@ -38,6 +38,7 @@ class Quoting(dbtClassMixin, Mergeable):
     database: Optional[bool] = None
     project: Optional[bool] = None
     identifier: Optional[bool] = None
+    snowflake_ignore_case: Optional[bool] = None
 
 
 @dataclass
@@ -396,6 +397,7 @@ class ConfiguredQuoting(Quoting):
     schema: bool = True
     database: Optional[bool] = None
     project: Optional[bool] = None
+    snowflake_ignore_case: Optional[bool] = None
 
 
 @dataclass

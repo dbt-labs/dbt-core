@@ -1,0 +1,6 @@
+kind: Features
+body: No-op when project-level `quoting.snowflake_ignore_case` is set.
+time: 2025-08-21T09:25:32.049328307+02:00
+custom:
+    Author: aksestok
+    Issue: "11882"
