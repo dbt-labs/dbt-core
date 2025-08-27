@@ -108,7 +108,7 @@ class TestProjectInitialization(BaseConfigTest):
         self.assertEqual(project.analysis_paths, ["analyses"])
         self.assertEqual(
             set(project.docs_paths),
-            {"models", "seeds", "snapshots", "analyses", "macros", "tests"},
+            {"models", "seeds", "snapshots", "analyses", "macros", "tests", "functions"},
         )
         self.assertEqual(project.asset_paths, [])
         self.assertEqual(project.target_path, "target")
@@ -137,7 +137,7 @@ class TestProjectInitialization(BaseConfigTest):
         )
         self.assertEqual(
             set(project.docs_paths),
-            {"other-models", "seeds", "snapshots", "analyses", "macros", "tests"},
+            {"other-models", "seeds", "snapshots", "analyses", "macros", "tests", "functions"},
         )
 
     def test_all_overrides(self):

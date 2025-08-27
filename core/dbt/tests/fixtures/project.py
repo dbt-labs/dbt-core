@@ -3,7 +3,7 @@ import random
 from argparse import Namespace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Mapping
+from typing import Dict, Mapping
 
 import pytest  # type: ignore
 import yaml
@@ -387,6 +387,11 @@ def analyses():
     return {}
 
 
+@pytest.fixture(scope="class")
+def functions() -> Dict[str, str]:
+    return {}
+
+
 # Write out the files provided by models, macros, properties, snapshots, seeds, tests, analyses
 @pytest.fixture(scope="class")
 def project_files(
@@ -398,6 +403,7 @@ def project_files(
     seeds,
     tests,
     analyses,
+    functions,
     selectors_yml,
     dependencies_yml,
     packages_yml,
@@ -409,6 +415,7 @@ def project_files(
     write_project_files(project_root, "seeds", seeds)
     write_project_files(project_root, "tests", tests)
     write_project_files(project_root, "analyses", analyses)
+    write_project_files(project_root, "functions", functions)
 
 
 # We have a separate logs dir for every test
