@@ -16,7 +16,7 @@ use crate::schemas::{
 
 use super::{DbtGroup, DbtMetric, DbtSavedQuery, DbtSelector, DbtSemanticModel};
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, Clone)]
 pub struct DbtManifestV12 {
     pub metadata: ManifestMetadata,
     pub nodes: BTreeMap<String, DbtNode>,

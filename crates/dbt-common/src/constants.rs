@@ -31,6 +31,7 @@ pub const DBT_TARGET_DIR_NAME: &str = "target";
 pub const DBT_PACKAGES_DIR_NAME: &str = "dbt_packages";
 pub const DBT_INTERNAL_PACKAGES_DIR_NAME: &str = "dbt_internal_packages";
 pub const DBT_MANIFEST_JSON: &str = "manifest.json";
+pub const DBT_SEMANTIC_MANIFEST_JSON: &str = "semantic_manifest.json";
 pub const DBT_CATALOG_JSON: &str = "catalog.json";
 pub const DBT_COMPILED_DIR_NAME: &str = "compiled";
 pub const DBT_METADATA_DIR_NAME: &str = "metadata";

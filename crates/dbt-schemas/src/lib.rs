@@ -94,6 +94,10 @@ pub mod schemas {
     }
     mod dbt_cloud;
     pub use dbt_cloud::{DbtCloudConfig, DbtCloudContext, DbtCloudProject};
+
+    pub mod semantic_layer {
+        pub mod semantic_manifest;
+    }
     pub mod project {
         mod dbt_project;
         mod configs {
