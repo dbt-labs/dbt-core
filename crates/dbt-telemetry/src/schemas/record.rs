@@ -15,6 +15,7 @@ use super::{
     span::dev::{DevInternalInfo, UnknownInfo},
     span::invocation::InvocationInfo,
     span::node::NodeInfo,
+    span::onboarding::OnboardingInfo,
     span::phase::BuildPhaseInfo,
     span::process::ProcessInfo,
     span::update::UpdateInfo,
@@ -289,6 +290,8 @@ pub enum TelemetryAttributes {
     // Command/operation spans
     /// # Update command attributes
     Update(UpdateInfo),
+    /// # Onboarding attributes
+    Onboarding(OnboardingInfo),
 
     // Parse, compile, build phases
     /// # Phase attributes
@@ -338,6 +341,7 @@ impl TelemetryAttributes {
             TelemetryAttributes::Process(_)
             | TelemetryAttributes::Invocation(_)
             | TelemetryAttributes::Update(_)
+            | TelemetryAttributes::Onboarding(_)
             | TelemetryAttributes::Phase(_)
             | TelemetryAttributes::Node(_)
             | TelemetryAttributes::DevInternal(_)

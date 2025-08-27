@@ -145,6 +145,9 @@ pub struct ArrowAttributes<'a> {
     pub update_version: Option<&'a str>,
     pub update_package: Option<&'a str>,
     pub exe_path: Option<&'a str>,
+    // Onboarding fields
+    pub onboarding_step: Option<&'a str>,
+    pub onboarding_invocation_id: Option<&'a str>,
     // Phase fields - BuildPhaseInfo union fields
     pub phase: Option<BuildPhase>,
     pub node_count: Option<u64>,
@@ -469,6 +472,12 @@ impl<'a> From<&'a TelemetryAttributes> for ArrowAttributes<'a> {
             }) => ArrowAttributes {
                 relative_path: relative_path.as_deref(),
                 duration_ms: *duration_ms,
+                event_type: TelemetryAttributesType::from(attr),
+                ..Default::default()
+            },
+            TelemetryAttributes::Onboarding(info) => ArrowAttributes {
+                onboarding_step: Some(&info.step),
+                onboarding_invocation_id: Some(&info.invocation_id),
                 event_type: TelemetryAttributesType::from(attr),
                 ..Default::default()
             },
@@ -875,6 +884,18 @@ impl TryFrom<ArrowAttributes<'_>> for TelemetryAttributes {
                     location,
                 }))
             }
+            TelemetryAttributesType::Onboarding => {
+                Ok(TelemetryAttributes::Onboarding(crate::OnboardingInfo {
+                    step: arrow
+                        .onboarding_step
+                        .ok_or("Missing onboarding_step for Onboarding attributes")?
+                        .to_string(),
+                    invocation_id: arrow
+                        .onboarding_invocation_id
+                        .ok_or("Missing onboarding_invocation_id for Onboarding attributes")?
+                        .to_string(),
+                }))
+            }
             TelemetryAttributesType::Log => {
                 let location = arrow_to_location(&arrow);
                 Ok(TelemetryAttributes::Log(LogEventInfo {
@@ -1128,6 +1149,9 @@ mod tests {
             }
             TelemetryAttributesType::Update => {
                 TelemetryAttributes::Update(Faker.fake_with_rng(&mut rng))
+            }
+            TelemetryAttributesType::Onboarding => {
+                TelemetryAttributes::Onboarding(Faker.fake_with_rng(&mut rng))
             }
             TelemetryAttributesType::Phase => {
                 let Some(phase) = phase else {
