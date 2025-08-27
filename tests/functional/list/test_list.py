@@ -1040,7 +1040,20 @@ class TestList:
         self.expect_given_output(["--resource-type", "test"], expectations)
 
     def expect_function_output(self):
+        # using `--resource-type`
         results = self.run_dbt_ls(["--resource-type", "function"])
+        assert set(results) == {"test.area_of_circle"}
+
+        # using `--select` with `resource_type`
+        results = self.run_dbt_ls(["--select", "resource_type:function"])
+        assert set(results) == {"test.area_of_circle"}
+
+        # using `--select` with path spec
+        results = self.run_dbt_ls(["--select", "functions/area_of_circle.sql"])
+        assert set(results) == {"test.area_of_circle"}
+
+        # using `--select` with path function name
+        results = self.run_dbt_ls(["--select", "area_of_circle"])
         assert set(results) == {"test.area_of_circle"}
 
     def expect_all_output(self):
