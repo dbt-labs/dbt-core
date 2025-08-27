@@ -35,6 +35,7 @@ def project(selector_config: SelectorConfig) -> Project:
         model_paths=["models"],
         macro_paths=["macros"],
         seed_paths=["seeds"],
+        function_paths=["functions"],
         test_paths=["tests"],
         analysis_paths=["analyses"],
         docs_paths=["docs"],

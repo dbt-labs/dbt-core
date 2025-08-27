@@ -32,6 +32,8 @@ from dbt.artifacts.resources import (
 from dbt.artifacts.resources import Documentation as DocumentationResource
 from dbt.artifacts.resources import Exposure as ExposureResource
 from dbt.artifacts.resources import FileHash
+from dbt.artifacts.resources import Function as FunctionResource
+from dbt.artifacts.resources import FunctionArgument, FunctionReturnType
 from dbt.artifacts.resources import GenericTest as GenericTestResource
 from dbt.artifacts.resources import GraphResource
 from dbt.artifacts.resources import Group as GroupResource
@@ -1537,6 +1539,19 @@ class Group(GroupResource, BaseNode):
 
 
 # ====================================
+# Function node
+# ====================================
+
+
+@dataclass
+class FunctionNode(CompiledNode, FunctionResource):
+
+    @classmethod
+    def resource_class(cls) -> Type[FunctionResource]:
+        return FunctionResource
+
+
+# ====================================
 # SemanticModel node
 # ====================================
 
@@ -1707,6 +1722,20 @@ class ParsedNodePatch(ParsedPatch):
     freshness: Optional[ModelFreshness] = None
 
 
+# TODO: Maybe this shouldn't be a subclass of ParsedNodePatch, but ParsedPatch instead
+# Currently, `functions` have the fields like `columns`, `access`, `version`, and etc,
+# but they don't actually do anything. If we remove those properties from FunctionNode,
+# we can remove this class and use ParsedPatch instead.
+@dataclass
+class ParsedFunctionPatchRequired:
+    return_type: FunctionReturnType
+
+
+@dataclass
+class ParsedFunctionPatch(ParsedNodePatch, ParsedFunctionPatchRequired):
+    arguments: List[FunctionArgument] = field(default_factory=list)
+
+
 @dataclass
 class ParsedMacroPatch(ParsedPatch):
     arguments: List[MacroArgument] = field(default_factory=list)
@@ -1726,6 +1755,7 @@ class ParsedSingularTestPatch(ParsedPatch):
 # SQL related attributes
 ManifestSQLNode = Union[
     AnalysisNode,
+    FunctionNode,
     SingularTestNode,
     HookNode,
     ModelNode,

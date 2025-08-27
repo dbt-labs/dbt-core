@@ -129,7 +129,8 @@ class TestRuntimeConfigFiles(BaseConfigTest):
         self.assertEqual(config.test_paths, ["tests"])
         self.assertEqual(config.analysis_paths, ["analyses"])
         self.assertEqual(
-            set(config.docs_paths), {"models", "seeds", "snapshots", "analyses", "macros", "tests"}
+            set(config.docs_paths),
+            {"models", "seeds", "snapshots", "analyses", "macros", "tests", "functions"},
         )
         self.assertEqual(config.asset_paths, [])
         self.assertEqual(config.target_path, "target")

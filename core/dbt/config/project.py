@@ -420,9 +420,16 @@ class PartialProject(RenderComponents):
         test_paths: List[str] = value_or(cfg.test_paths, ["tests"])
         analysis_paths: List[str] = value_or(cfg.analysis_paths, ["analyses"])
         snapshot_paths: List[str] = value_or(cfg.snapshot_paths, ["snapshots"])
+        function_paths: List[str] = value_or(cfg.function_paths, ["functions"])
 
         all_source_paths: List[str] = _all_source_paths(
-            model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths, test_paths
+            model_paths,
+            seed_paths,
+            snapshot_paths,
+            analysis_paths,
+            macro_paths,
+            test_paths,
+            function_paths,
         )
 
         docs_paths: List[str] = value_or(cfg.docs_paths, all_source_paths)
@@ -509,6 +516,7 @@ class PartialProject(RenderComponents):
             asset_paths=asset_paths,
             target_path=target_path,
             snapshot_paths=snapshot_paths,
+            function_paths=function_paths,
             clean_targets=clean_targets,
             log_path=log_path,
             packages_install_path=packages_install_path,
@@ -626,6 +634,7 @@ class Project:
     asset_paths: List[str]
     target_path: str
     snapshot_paths: List[str]
+    function_paths: List[str]
     clean_targets: List[str]
     log_path: str
     packages_install_path: str
@@ -666,6 +675,7 @@ class Project:
             self.analysis_paths,
             self.macro_paths,
             self.test_paths,
+            self.function_paths,
         )
 
     @property
