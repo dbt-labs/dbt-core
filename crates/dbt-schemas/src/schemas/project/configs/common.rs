@@ -57,7 +57,7 @@ pub fn default_meta_and_tags(
     parent_tags: &Option<StringOrArrayOfStrings>,
 ) {
     // Handle meta using existing merge function
-    *child_meta = merge_meta(child_meta.take(), parent_meta.clone());
+    *child_meta = merge_meta(parent_meta.clone(), child_meta.take());
 
     // Handle tags using existing merge function
     let child_tags_vec = child_tags.take().map(|tags| tags.into());
