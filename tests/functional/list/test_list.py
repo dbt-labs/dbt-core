@@ -1065,6 +1065,7 @@ class TestList:
             "test.t",
             "test.my_favorite_test",
             "test.my_second_favorite_test",
+            "test.area_of_circle",
             "semantic_model:test.my_sm",
             "metric:test.total_outer",
             "metric:test.conversion_metric",
@@ -1246,6 +1247,7 @@ class TestList:
         results = self.run_dbt_ls()
         assert set(results) == {
             "exposure:test.weekly_jaffle_metrics",
+            "test.area_of_circle",
             "test.ephemeral",
             "test.incremental",
             "test.outer",
