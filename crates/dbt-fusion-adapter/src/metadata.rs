@@ -271,6 +271,15 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
 
         relations
     }
+
+    /// Check if the returned error is due to insufficient permissions.
+    fn is_permission_error(&self, e: &AdapterError) -> bool {
+        #[cfg(debug_assertions)]
+        {
+            println!("is_permission_error: {:?}: {}", e, e.sqlstate());
+        }
+        false
+    }
 }
 
 /// Create schemas if they don't exist
@@ -281,7 +290,6 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
 pub fn create_schemas_if_not_exists(
     adapter: Arc<dyn MetadataAdapter>,
     catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
-    adapter_type: AdapterType,
     token: CancellationToken,
 ) -> AsyncAdapterResult<'static, Vec<(String, String, AdapterResult<()>)>> {
     type Acc = Vec<(String, String, AdapterResult<()>)>;
@@ -292,6 +300,7 @@ pub fn create_schemas_if_not_exists(
             .new_connection(None)
             .map_err(Cancellable::Error)
     };
+
     let map_f = move |conn: &'_ mut dyn Connection,
                       (catalog, schema): &(String, String)|
           -> AdapterResult<AdapterResult<()>> {
@@ -306,7 +315,7 @@ pub fn create_schemas_if_not_exists(
         match adapter_clone.exec_stmt(conn, &query_ctx, false) {
             Ok(_) => Ok(Ok(())),
             Err(e) => {
-                if is_tolerable(&e, adapter_type) {
+                if adapter.is_permission_error(&e) {
                     Ok(Ok(()))
                 } else {
                     Err(e)
@@ -331,7 +340,6 @@ pub fn create_schemas_if_not_exists(
     );
     map_reduce.run(Arc::new(catalog_schemas), token)
 }
-
 pub fn flatten_catalog_schemas(
     catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
 ) -> Vec<(String, String)> {
@@ -361,28 +369,5 @@ fn create_schema_sql(adapter: &Arc<dyn MetadataAdapter>, catalog: &str, schema: 
         // Redshift connetions are always to a specific database
         AdapterType::Redshift => format!("CREATE SCHEMA IF NOT EXISTS {schema}"),
         _ => unimplemented!("create_schema_sql for adapter type: {}", adapter_type),
-    }
-}
-
-fn is_tolerable(e: &AdapterError, adapter_type: AdapterType) -> bool {
-    // this is supposed to be using/extended from ANSI SQL standard but I didn't find any Snowflake documentation
-    // the magic strings here are from inspecting the results from fs run on a project with a new database,
-    // and a weak role that lack permissions to create a database
-    match adapter_type {
-        // 42501: insufficient privileges
-        // 02000: does not exist or not authorizedntax error
-        AdapterType::Snowflake => e.sqlstate() == "42501" || e.sqlstate() == "02000",
-        // Databricks doesn't provide an explicit enough SQLSTATE, noticed most of their errors' SQLSTATE is HY000
-        // so we have to match on the error message below.
-        // By the time of writing down this note, it is a problem from their backend thus not something we can fix on the SDK or driver layer
-        // check out data/repros/databricks_create_schema_no_catalog_access on how to repro this error
-        AdapterType::Databricks => e.message().contains("PERMISSION_DENIED"),
-        _ => {
-            #[cfg(debug_assertions)]
-            {
-                println!("is_error_tolerable: {:?}: {}", e, e.sqlstate());
-            }
-            false
-        }
     }
 }
