@@ -78,7 +78,6 @@ skipped_resource_types = {
     "group",
     "unit_test",
     "fixture",
-    "function",  # TODO: #11958 implement `function` resource type selection
 }
 resource_types = [
     node_type.value for node_type in NodeType if node_type.value not in skipped_resource_types

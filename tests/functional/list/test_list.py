@@ -1039,6 +1039,10 @@ class TestList:
         }
         self.expect_given_output(["--resource-type", "test"], expectations)
 
+    def expect_function_output(self):
+        results = self.run_dbt_ls(["--resource-type", "function"])
+        assert set(results) == {"test.area_of_circle"}
+
     def expect_all_output(self):
         # generic test FQNS include the resource + column they're defined on
         # models are just package, subdirectory path, name
@@ -1367,6 +1371,7 @@ class TestList:
         self.expect_source_output()
         self.expect_seed_output()
         self.expect_test_output()
+        self.expect_function_output()
         self.expect_select()
         self.expect_resource_type_multiple()
         self.expect_resource_type_env_var()
