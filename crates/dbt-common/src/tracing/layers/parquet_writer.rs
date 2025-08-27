@@ -206,10 +206,14 @@ impl TelemetryParquetWriterLayer {
             //     )
             // }
             TelemetryRecord::LogRecord(log_record) => {
-                // Skip LegacyLog records
+                // Skip LegacyLog records - they are temporary and should not be used
+                // by any downstream consumers
+                // Skip InlineCompiledCode - this is the first case of a potentially
+                // PII sensitive log that should not be stored, hence we skip it here.
                 !matches!(
                     log_record.attributes,
-                    dbt_telemetry::TelemetryAttributes::LegacyLog { .. }
+                    dbt_telemetry::TelemetryAttributes::LegacyLog(_)
+                        | dbt_telemetry::TelemetryAttributes::InlineCompiledCode(_)
                 )
             }
         }

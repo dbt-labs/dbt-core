@@ -116,9 +116,8 @@ fn main() -> ExitCode {
 
     // Run within the process span
     let future = Box::pin(execute_fs(arg, cli, token));
-    let result = telemetry_handle
-        .process_span()
-        .in_scope(|| tokio_rt.block_on(async { tokio_rt.spawn(future).await.unwrap() }));
+
+    let result = tokio_rt.block_on(async { tokio_rt.spawn(future).await.unwrap() });
 
     // Shut down telemetry
     for err in telemetry_handle.shutdown() {

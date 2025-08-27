@@ -24,7 +24,7 @@ use dbt_schemas::state::Macros;
 use git_version::git_version;
 
 use dbt_schemas::schemas::manifest::build_manifest;
-use tracing::{Instrument, instrument};
+use tracing::Instrument;
 
 use std::{sync::Arc, time::SystemTime};
 
@@ -35,7 +35,6 @@ use serde_json::to_string_pretty;
 
 // ------------------------------------------------------------------------------------------------
 
-#[instrument(skip_all, level = "trace")]
 pub async fn execute_fs(
     system_arg: SystemArgs,
     cli: Cli,
@@ -65,7 +64,6 @@ pub async fn execute_fs(
 }
 
 #[allow(clippy::cognitive_complexity)]
-#[instrument(skip_all, level = "trace")]
 async fn do_execute_fs(eval_arg: &EvalArgs, cli: Cli, token: CancellationToken) -> FsResult<i32> {
     let start = SystemTime::now();
 
@@ -132,7 +130,6 @@ async fn do_execute_fs(eval_arg: &EvalArgs, cli: Cli, token: CancellationToken) 
 }
 
 #[allow(clippy::cognitive_complexity)]
-#[instrument(skip_all, level = "trace")]
 async fn execute_setup_and_all_phases(
     eval_arg: &EvalArgs,
     cli: Cli,
@@ -191,7 +188,6 @@ async fn execute_setup_and_all_phases(
 }
 
 #[allow(clippy::cognitive_complexity)]
-#[instrument(skip_all, level = "trace")]
 async fn execute_all_phases(
     arg: &EvalArgs,
     _cli: &Cli,

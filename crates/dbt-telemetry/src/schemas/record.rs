@@ -8,7 +8,7 @@ use super::{
         deserialize_trace_id, serialize_optional_span_id, serialize_span_id, serialize_timestamp,
         serialize_trace_id,
     },
-    event::artifact::WriteArtifactInfo,
+    event::artifact::{InlineCompiledCodeInfo, WriteArtifactInfo},
     event::log::{LegacyLogEventInfo, LogEventInfo},
     location::RecordCodeLocation,
     otlp::{SeverityNumber, SpanStatus},
@@ -328,6 +328,9 @@ pub enum TelemetryAttributes {
 
     /// # Write Artifact
     WriteArtifact(WriteArtifactInfo),
+
+    /// # Inline Compiled Code
+    InlineCompiledCode(InlineCompiledCodeInfo),
 }
 
 impl TelemetryAttributes {
@@ -348,7 +351,8 @@ impl TelemetryAttributes {
             | TelemetryAttributes::Unknown(_) => TelemetryRecordType::SpanEnd,
             TelemetryAttributes::Log(_)
             | TelemetryAttributes::LegacyLog(_)
-            | TelemetryAttributes::WriteArtifact(_) => TelemetryRecordType::LogRecord,
+            | TelemetryAttributes::WriteArtifact(_)
+            | TelemetryAttributes::InlineCompiledCode(_) => TelemetryRecordType::LogRecord,
         }
     }
     pub fn has_empty_location(&self) -> bool {

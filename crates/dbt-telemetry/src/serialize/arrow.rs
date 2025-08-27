@@ -261,6 +261,10 @@ impl<'a> From<&'a TelemetryRecord> for ArrowTelemetryRecord<'a> {
 impl<'a> From<&'a TelemetryAttributes> for ArrowAttributes<'a> {
     fn from(attr: &'a TelemetryAttributes) -> Self {
         match attr {
+            // Some attribute types should never end up as arrow, so we just
+            // nominally match them here, but return default.
+            TelemetryAttributes::InlineCompiledCode(_) => Default::default(),
+            // Now, real mappings
             TelemetryAttributes::Process(ProcessInfo {
                 schema_url,
                 schema_version,
@@ -786,6 +790,11 @@ impl TryFrom<ArrowAttributes<'_>> for TelemetryAttributes {
 
     fn try_from(arrow: ArrowAttributes) -> Result<Self, Self::Error> {
         match arrow.event_type {
+            // Some attribute types should never end up as arrow, so we error here.
+            TelemetryAttributesType::InlineCompiledCode => {
+                Err("InlineCompiledCode attributes should not be serialized".to_string())
+            }
+            // Now, real mappings
             TelemetryAttributesType::Process => {
                 Ok(TelemetryAttributes::Process(ProcessInfo::try_from(&arrow)?))
             }
@@ -1201,12 +1210,20 @@ mod tests {
             TelemetryAttributesType::WriteArtifact => {
                 TelemetryAttributes::WriteArtifact(Faker.fake_with_rng(&mut rng))
             }
+            TelemetryAttributesType::InlineCompiledCode => {
+                panic!("InlineCompiledCode should not be created for testing")
+            }
         }
     }
 
     fn create_all_fake_attributes(seed: &str) -> Vec<TelemetryAttributes> {
         let mut attributes = Vec::new();
         for event_type in TelemetryAttributesType::iter() {
+            // Skip variants that are known to not be serialized
+            if event_type == TelemetryAttributesType::InlineCompiledCode {
+                continue;
+            }
+
             if event_type == TelemetryAttributesType::Phase {
                 for phase in BuildPhase::iter() {
                     attributes.push(create_fake_attributes(seed, event_type, Some(phase)));

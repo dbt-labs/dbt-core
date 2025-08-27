@@ -288,13 +288,20 @@ macro_rules! show_progress {
     ( $io:expr, $info:expr) => {{
         use $crate::io_args::ShowOptions;
         use $crate::pretty_string::pretty_green;
-        use $crate::logging::{FsInfo, LogEvent};
+        use $crate::logging::{FsInfo, LogEvent, LogFormat};
 
         if !$info.is_phase_completed() {
 
             if let Some(reporter) = &$io.status_reporter {
                 reporter.show_progress($info.event.action().as_str(), &$info.target, $info.desc.as_deref());
             }
+
+            // This whole macro became entirely unweldy, the following condition is a VERY
+            // temporary bandaid fix for a regression where JSON output was not being emitted
+            // for certain progress events. The entire macro is expected to be removed
+            // after migration to new tracing-based logging is complete.
+            let should_emit_json_event = $io.log_format == LogFormat::Json && ($info.is_phase_render()
+                || $info.is_phase_run());
 
             // TODO: these filtering conditions should be moved to the logger side
             if (
@@ -304,6 +311,7 @@ macro_rules! show_progress {
                 || ($io.should_show(ShowOptions::ProgressRender) && $info.is_phase_render())
                 || ($io.should_show(ShowOptions::ProgressAnalyze) && $info.is_phase_analyze())
                 || ($io.should_show(ShowOptions::ProgressRun) && $info.is_phase_run())
+                || should_emit_json_event
             )
                 // Do not show parse/compile generic tests
                 && !($info.target.contains(dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME)

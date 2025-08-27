@@ -75,14 +75,6 @@ impl TelemetryHandle {
         }
     }
 
-    /// Return handle to the process level span created during
-    /// initialization
-    pub fn process_span(&self) -> &span::Span {
-        self.process_span_handle
-            .as_ref()
-            .expect("Do not call this function after shutdown")
-    }
-
     /// Gracefully shuts down telemetry
     pub fn shutdown(&mut self) -> Vec<FsError> {
         // First, drop the process span handle to ensure that

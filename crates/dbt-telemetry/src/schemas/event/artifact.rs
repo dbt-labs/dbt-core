@@ -11,3 +11,10 @@ pub struct WriteArtifactInfo {
     /// Time it took to write the artifact in milliseconds.
     pub duration_ms: Option<u64>,
 }
+
+#[cfg_attr(test, derive(Dummy))]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+pub struct InlineCompiledCodeInfo {
+    /// The compiled SQL code.
+    pub sql: String,
+}
