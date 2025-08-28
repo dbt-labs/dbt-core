@@ -1,0 +1,6 @@
+kind: Fixes
+body: Comply with strict `str` type when `block.contents` is `None`
+time: 2025-08-04T07:42:54.612616-06:00
+custom:
+    Author: wircho
+    Issue: "11492"
