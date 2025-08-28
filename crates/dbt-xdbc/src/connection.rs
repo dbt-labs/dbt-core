@@ -9,10 +9,10 @@ use std::sync::Arc;
 use adbc_core::options;
 use adbc_core::{
     Connection as _, Optionable,
-    driver_manager::ManagedConnection as ManagedAdbcConnection,
     error::Result,
     options::{OptionConnection, OptionValue},
 };
+use adbc_driver_manager::ManagedConnection as ManagedAdbcConnection;
 use arrow_array::RecordBatchReader;
 use arrow_schema::Schema;
 #[cfg(feature = "odbc")]

@@ -23,6 +23,7 @@ repl = ["dialoguer", "clap", "dbt-common"]
 
 [dependencies]
 adbc-core = { workspace = true }
+adbc-driver-manager = { workspace = true }
 arrow-array = { workspace = true }
 arrow-schema = { workspace = true }
 atomic-wait = { version = "1.1.0" }

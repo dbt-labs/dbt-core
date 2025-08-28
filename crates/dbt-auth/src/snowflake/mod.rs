@@ -307,6 +307,9 @@ impl SnowflakeAuth {
                     // "schema" => builder.with_named_option(snowflake::SCHEMA, value),
                     "role" => builder.with_named_option(snowflake::ROLE, value),
                     "warehouse" => builder.with_named_option(snowflake::WAREHOUSE, value),
+                    "host" => builder.with_named_option(snowflake::HOST, value),
+                    "port" => builder.with_named_option(snowflake::PORT, value),
+                    "protocol" => builder.with_named_option(snowflake::PROTOCOL, value),
                     _ => panic!("unexpected key: {key}"),
                 }?;
             }
@@ -356,6 +359,9 @@ impl SnowflakeAuth {
             "oauth_client_secret",
             "client_session_keep_alive",
             snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY,
+            "host",
+            "port",
+            "protocol",
         ]
         .iter()
         {
@@ -401,6 +407,9 @@ impl SnowflakeAuth {
                     }
                     snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY => builder
                         .with_named_option(snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY, value),
+                    "host" => builder.with_named_option(snowflake::HOST, value),
+                    "port" => builder.with_named_option(snowflake::PORT, value),
+                    "protocol" => builder.with_named_option(snowflake::PROTOCOL, value),
                     "authenticator" => {
                         if value == "externalbrowser" {
                             builder

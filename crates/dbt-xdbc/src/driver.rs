@@ -9,11 +9,11 @@ use crate::database::OdbcDatabase;
 use crate::install;
 use crate::semaphore::Semaphore;
 use adbc_core::{
-    Driver as _,
-    driver_manager::ManagedDriver as ManagedAdbcDriver,
+    Driver as _, LOAD_FLAG_DEFAULT,
     error::{Error, Result, Status},
     options::{AdbcVersion, OptionDatabase, OptionValue},
 };
+use adbc_driver_manager::ManagedDriver as ManagedAdbcDriver;
 use libloading;
 use parking_lot::RwLockUpgradableReadGuard;
 use std::sync::Arc;
@@ -332,6 +332,22 @@ impl AdbcDriver {
                         );
                     }
                 }
+                // Override for Snowflake dbt Projects integration
+                //
+                // This flag changes driver loading behavior to adhere to:
+                // https://arrow.apache.org/adbc/main/format/driver_manifests.html
+                let use_local_snowflake = env::var("DBT_LOAD_STANDARD_SNOWFLAKE_DRIVER").is_ok();
+
+                if use_local_snowflake {
+                    return ManagedAdbcDriver::load_from_name(
+                        backend.adbc_library_name().unwrap(),
+                        backend.adbc_driver_entrypoint(),
+                        adbc_version,
+                        LOAD_FLAG_DEFAULT,
+                        None,
+                    );
+                }
+
                 Self::try_load_driver_through_cdn_cache(backend, adbc_version)
             }
             // Drivers that are not published to the dbt Labs CDN.

@@ -7,10 +7,10 @@ use std::sync::Arc;
 
 use adbc_core::{
     Optionable, PartitionedResult, Statement as _,
-    driver_manager::ManagedStatement as ManagedAdbcStatement,
     error::Result,
     options::{OptionStatement, OptionValue},
 };
+use adbc_driver_manager::ManagedStatement as ManagedAdbcStatement;
 use arrow_array::{RecordBatch, RecordBatchReader};
 use arrow_schema::Schema;
 

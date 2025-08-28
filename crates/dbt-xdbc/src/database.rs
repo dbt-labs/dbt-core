@@ -4,10 +4,10 @@
 
 use adbc_core::{
     Database as _, Optionable,
-    driver_manager::ManagedDatabase as ManagedAdbcDatabase,
     error::{Error, Result, Status},
     options::{AdbcVersion, InfoCode, OptionConnection, OptionDatabase, OptionValue},
 };
+use adbc_driver_manager::ManagedDatabase as ManagedAdbcDatabase;
 use arrow_array::{
     Array,
     cast::AsArray,

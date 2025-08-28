@@ -192,7 +192,7 @@ serde_json = "1.0.133"
 serde_repr = "0.1.20"
 serde_with = "3.12.0"
 
-toml = { version = "0.7.6" }
+toml = { version = "0.9.5" }
 
 # cloud providers
 aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
@@ -210,9 +210,11 @@ parquet = { version = "=54.2.1" }
 serde_arrow = { version = "0.13.4", features = ["arrow-54"] }
 
 # xdbc
-adbc-core = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_core", version = "0.18.0", features = [
-  "driver_manager",
-], rev = "3fdf3790bd0e0d0c2ed9f5a65266ce3d2c429811" } # @ apache-arrow-adbc-18-rust
+adbc-core = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_core", version = "0.20.0", rev = "34c0a6f7cd039334683bc0b05b9bc3430e0b7e86" } # @ apache-arrow-adbc-20-rust
+adbc-driver-manager = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_driver_manager", version = "0.20.0", rev = "34c0a6f7cd039334683bc0b05b9bc3430e0b7e86", features = [
+  "windows-sys",
+  "windows-registry",
+] } # @ apache-arrow-adbc-20-rust
 dbt-xdbc = { path = "crates/dbt-xdbc" }
 
 # antlr for frontend

@@ -485,6 +485,12 @@ pub struct SnowflakeDbConfig {
     pub token: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub s3_stage_vpce_dns_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub port: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub protocol: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, Merge)]
