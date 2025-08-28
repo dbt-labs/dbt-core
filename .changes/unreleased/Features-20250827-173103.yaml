@@ -1,0 +1,6 @@
+kind: Features
+body: 'Support selecting funciton nodes via: name, file path, and resource type'
+time: 2025-08-27T17:31:03.518839-05:00
+custom:
+  Author: QMalcolm
+  Issue: 11962 11958 11961

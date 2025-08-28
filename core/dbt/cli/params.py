@@ -527,6 +527,7 @@ resource_type = _create_option_and_track_env_var(
             "saved_query",
             "source",
             "analysis",
+            "function",
             "model",
             "test",
             "unit_test",

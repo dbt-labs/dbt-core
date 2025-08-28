@@ -1,0 +1,6 @@
+kind: Features
+body: Support listing functions via `list` command
+time: 2025-08-27T16:34:00.216146-05:00
+custom:
+  Author: QMalcolm
+  Issue: "11967"
