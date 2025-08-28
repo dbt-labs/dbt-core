@@ -1,30 +1,71 @@
 use crate::adapter_config::{
-    ConfigMap, DefaultProfileParser, ProfileDefaults, ProfileParser, setup_bigquery_profile,
-    setup_databricks_profile, setup_postgres_profile, setup_redshift_profile,
-    setup_snowflake_profile,
+    setup_bigquery_profile, setup_databricks_profile, setup_postgres_profile,
+    setup_redshift_profile, setup_snowflake_profile,
 };
 use crate::dbt_cloud_client::{CloudProject, DbtCloudClient, DbtCloudYml};
 use crate::yaml_utils::{has_top_level_key_parsed_file, remove_top_level_key_from_str};
-use crate::{ErrorCode, FsResult, fs_err};
 use dbt_common::pretty_string::GREEN;
+use dbt_common::{ErrorCode, FsResult, fs_err, io_args::IoArgs};
+use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
+use dbt_jinja_utils::serde::{into_typed_with_jinja, value_from_file};
+use dbt_loader::{args::LoadArgs, load_profiles};
+use dbt_schemas::schemas::profiles::DbConfig;
+use dbt_schemas::schemas::project::DbtProjectSimplified;
+
 use dialoguer::{Confirm, Select};
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProfileOutput {
-    #[serde(rename = "type")]
-    pub adapter_type: String,
-    #[serde(flatten)]
-    pub config: ConfigMap,
+pub struct ProfileTarget {
+    pub target: String,
+    pub outputs: HashMap<String, DbConfig>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Profile {
-    pub target: String,
-    pub outputs: HashMap<String, ProfileOutput>,
+pub type Profiles = HashMap<String, ProfileTarget>;
+
+/// Load profile using the standard dbt-loader infrastructure
+fn load_profile_with_loader(
+    profiles_dir: Option<&str>,
+    profile_name: &str,
+    target: Option<&str>,
+) -> FsResult<DbConfig> {
+    let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    let io_args = IoArgs {
+        in_dir: current_dir,
+        command: "init".to_string(),
+        ..Default::default()
+    };
+
+    let load_args = LoadArgs {
+        command: "init".to_string(),
+        io: io_args,
+        profiles_dir: profiles_dir.map(PathBuf::from),
+        profile: Some(profile_name.to_string()),
+        target: target.map(String::from),
+        ..Default::default()
+    };
+
+    let dbt_project = DbtProjectSimplified {
+        packages_install_path: Some("dbt_packages".to_string()),
+        profile: Some(profile_name.to_string()),
+        dbt_cloud: None,
+        data_paths: Default::default(),
+        source_paths: Default::default(),
+        log_path: Default::default(),
+        target_path: Default::default(),
+        __ignored__: Default::default(),
+    };
+
+    let jinja_env = initialize_load_profile_jinja_environment();
+    let empty_context = HashMap::<String, String>::new();
+
+    let dbt_profile = load_profiles(&load_args, &dbt_project, &jinja_env, &empty_context)?;
+    Ok(dbt_profile.db_config)
 }
 
 #[derive(Debug, Clone)]
@@ -44,9 +85,14 @@ impl ProjectStore {
             return Ok(None);
         }
 
-        let content = fs::read_to_string(&dbt_cloud_config_path)?;
-        let config: DbtCloudYml = dbt_serde_yaml::from_str(&content)
-            .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to parse dbt_cloud.yml: {}", e))?;
+        let io_args = IoArgs::default();
+        let yaml_value = value_from_file(&io_args, &dbt_cloud_config_path, true, None)?;
+
+        let env = initialize_load_profile_jinja_environment();
+        let empty_context = HashMap::<String, String>::new();
+
+        let config: DbtCloudYml =
+            into_typed_with_jinja(&io_args, yaml_value, false, &env, &empty_context, &[], None)?;
 
         Ok(Some(Self { config }))
     }
@@ -81,34 +127,24 @@ impl ProjectStore {
 
         format!("https://{}", self.config.context.active_host)
     }
+
+    pub fn try_load_profile(&self, profiles_dir: &str, profile_name: &str) -> Option<DbConfig> {
+        load_profile_with_loader(Some(profiles_dir), profile_name, None).ok()
+    }
 }
 
 pub struct ProfileSetup {
     pub profiles_dir: String,
-}
-
-/// Merge cloud config with existing config, with existing config taking priority
-fn merge_configs(
-    cloud_config: Option<ConfigMap>,
-    existing_config: Option<&ConfigMap>,
-) -> Option<ConfigMap> {
-    match (cloud_config, existing_config) {
-        (Some(mut cloud), Some(existing)) => {
-            // Start with cloud config as base, then override with existing values
-            for (key, value) in existing {
-                cloud.insert(key.clone(), value.clone());
-            }
-            Some(cloud)
-        }
-        (Some(cloud), None) => Some(cloud),
-        (None, Some(existing)) => Some(existing.clone()),
-        (None, None) => None,
-    }
+    pub project_store: Option<ProjectStore>,
 }
 
 impl ProfileSetup {
     pub fn new(profiles_dir: String) -> Self {
-        Self { profiles_dir }
+        let project_store = ProjectStore::from_dbt_cloud_yml().unwrap_or(None);
+        Self {
+            profiles_dir,
+            project_store,
+        }
     }
 
     pub fn get_available_adapters() -> Vec<&'static str> {
@@ -116,8 +152,8 @@ impl ProfileSetup {
             "snowflake",
             "databricks",
             "bigquery",
+            "postgres",
             "redshift",
-            // "postgres", // TODO (Elias): Add back once we have Postgres support
         ]
     }
 
@@ -141,14 +177,44 @@ impl ProfileSetup {
         &self,
         adapter: &str,
         _profile_name: &str,
-        existing_config: Option<&ConfigMap>,
-    ) -> FsResult<Profile> {
-        let config = match adapter {
-            "snowflake" => setup_snowflake_profile(existing_config)?,
-            "postgres" => setup_postgres_profile(existing_config)?,
-            "redshift" => setup_redshift_profile(existing_config)?,
-            "bigquery" => setup_bigquery_profile(existing_config)?,
-            "databricks" => setup_databricks_profile(existing_config)?,
+        existing_config: Option<&DbConfig>,
+    ) -> FsResult<ProfileTarget> {
+        let db_config = match adapter {
+            "snowflake" => {
+                let snowflake_config = match existing_config {
+                    Some(DbConfig::Snowflake(config)) => Some(config),
+                    _ => None,
+                };
+                DbConfig::Snowflake(setup_snowflake_profile(snowflake_config)?)
+            }
+            "bigquery" => {
+                let bigquery_config = match existing_config {
+                    Some(DbConfig::Bigquery(config)) => Some(config),
+                    _ => None,
+                };
+                DbConfig::Bigquery(setup_bigquery_profile(bigquery_config)?)
+            }
+            "databricks" => {
+                let databricks_config = match existing_config {
+                    Some(DbConfig::Databricks(config)) => Some(config),
+                    _ => None,
+                };
+                DbConfig::Databricks(setup_databricks_profile(databricks_config)?)
+            }
+            "postgres" => {
+                let postgres_config = match existing_config {
+                    Some(DbConfig::Postgres(config)) => Some(config),
+                    _ => None,
+                };
+                DbConfig::Postgres(setup_postgres_profile(postgres_config)?)
+            }
+            "redshift" => {
+                let redshift_config = match existing_config {
+                    Some(DbConfig::Redshift(config)) => Some(config),
+                    _ => None,
+                };
+                DbConfig::Redshift(setup_redshift_profile(redshift_config)?)
+            }
             _ => {
                 return Err(fs_err!(
                     ErrorCode::InvalidArgument,
@@ -158,15 +224,10 @@ impl ProfileSetup {
             }
         };
 
-        let output = ProfileOutput {
-            adapter_type: adapter.to_string(),
-            config,
-        };
-
         let mut outputs = HashMap::new();
-        outputs.insert("dev".to_string(), output);
+        outputs.insert("dev".to_string(), db_config);
 
-        Ok(Profile {
+        Ok(ProfileTarget {
             target: "dev".to_string(),
             outputs,
         })
@@ -174,7 +235,7 @@ impl ProfileSetup {
 
     /// Write or update a single profile block in the appropriate profiles.yml,
     /// preserving existing content, order, and comments.
-    pub fn write_profile(&self, profile_name: &str, profile: &Profile) -> FsResult<()> {
+    pub fn write_profile(&self, profile_name: &str, profile: &ProfileTarget) -> FsResult<()> {
         // Determine target profiles.yml path:
         // 1) If ./profiles.yml exists, prefer writing there
         // 2) Else write to self.profiles_dir/profiles.yml (creating directory if needed)
@@ -237,7 +298,7 @@ impl ProfileSetup {
             existing.push('\n');
         }
 
-        let mut top: HashMap<String, Profile> = HashMap::new();
+        let mut top: HashMap<String, ProfileTarget> = HashMap::new();
         top.insert(profile_name.to_string(), profile.clone());
         let new_block = dbt_serde_yaml::to_string(&top).map_err(|e| {
             fs_err!(
@@ -249,7 +310,6 @@ impl ProfileSetup {
 
         existing.push_str(&new_block);
 
-        // Ensure trailing newline for cleanliness
         if !existing.ends_with('\n') {
             existing.push('\n');
         }
@@ -262,10 +322,6 @@ impl ProfileSetup {
             target_file.display()
         );
         Ok(())
-    }
-
-    fn profile_exists_in_str(content: &str, profile_name: &str) -> bool {
-        content.contains(&format!("{profile_name}:"))
     }
 
     async fn handle_cloud_project_selection(project_store: &ProjectStore) -> FsResult<String> {
@@ -308,7 +364,7 @@ impl ProfileSetup {
             .collect();
 
         let selection = Select::new()
-            .with_prompt("Select a project from dbt Cloud:")
+            .with_prompt("Select a project from dbt platform:")
             .items(&project_names)
             .interact()
             .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to get project selection: {}", e))?;
@@ -316,23 +372,19 @@ impl ProfileSetup {
         Ok(all_projects[selection].project_id.clone())
     }
 
-    async fn fetch_cloud_config_map(
+    async fn fetch_cloud_config(
         project_store: &ProjectStore,
         project_id: &str,
         adapter: &str,
-    ) -> FsResult<Option<ConfigMap>> {
+    ) -> FsResult<Option<DbConfig>> {
         let base_url = project_store.get_base_url(Some(project_id));
 
-        match DbtCloudClient::get_credential_config_map(&base_url, Some(project_id), Some(adapter))
+        match DbtCloudClient::get_credential_db_config(&base_url, Some(project_id), Some(adapter))
             .await
         {
-            Ok(Some(config_map)) => Ok(Some(config_map)),
-            Ok(None) => {
-                log::warn!("No {adapter} credentials found for project {project_id}");
-                Ok(None)
-            }
+            Ok(db_config) => Ok(db_config),
             Err(e) => {
-                log::warn!("Failed to fetch config: {e}");
+                log::warn!("Failed to fetch cloud config: {e}");
                 Ok(None)
             }
         }
@@ -341,73 +393,92 @@ impl ProfileSetup {
     pub async fn setup_profile(&self, profile_name: &str) -> FsResult<()> {
         log::info!("{} Setting up your profile...", GREEN.apply_to("Info"));
 
-        let profile_exists = Self::profile_exists_in_file(Path::new("profiles.yml"), profile_name)
-            || Self::profile_exists_in_file(
-                &Path::new(&self.profiles_dir).join("profiles.yml"),
-                profile_name,
-            );
+        // Load the profile once at the beginning and cache the result
+        let existing_config = if let Some(store) = &self.project_store {
+            store.try_load_profile(&self.profiles_dir, profile_name)
+        } else {
+            load_profile_with_loader(Some(&self.profiles_dir), profile_name, None).ok()
+        };
 
-        if profile_exists {
-            log::info!(
-                "Profile '{profile_name}' already exists. You can choose to overwrite it in the next step."
-            );
+        let profile_exists = existing_config.is_some();
 
-            use dialoguer::Confirm;
-            let should_overwrite = Confirm::new()
-                .with_prompt(format!(
-                    "Do you want to overwrite the existing profile '{profile_name}'?"
-                ))
-                .default(false)
+        let profile_action = if profile_exists {
+            log::info!("Profile '{profile_name}' already exists. You can choose how to proceed.");
+
+            use dialoguer::Select;
+            let options = vec![
+                "Edit existing profile (update fields interactively)",
+                "Overwrite completely (start fresh)",
+                "Cancel (keep existing profile as-is)",
+            ];
+
+            Select::new()
+                .with_prompt("What would you like to do?")
+                .items(&options)
+                .default(0)
                 .interact()
-                .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to get confirmation: {}", e))?;
+                .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to get selection: {}", e))?
+        } else {
+            1 // New profile, equivalent to "overwrite"
+        };
 
-            if !should_overwrite {
+        match profile_action {
+            0 => {
+                log::info!("{} Editing existing profile...", GREEN.apply_to("Info"));
+            }
+            1 => {
+                log::info!("{} Creating new profile...", GREEN.apply_to("Info"));
+            }
+            2 => {
                 log::info!("{} Profile setup cancelled.", GREEN.apply_to("Info"));
                 return Ok(());
             }
+            _ => unreachable!(),
         }
 
-        let existing_defaults = self.load_existing_defaults_typed(profile_name)?;
-        let adapter =
-            Self::ask_for_adapter_choice(existing_defaults.as_ref().map(|d| d.adapter_type()))?;
+        let adapter_type = existing_config.as_ref().map(|d| d.adapter_type());
+        let adapter = Self::ask_for_adapter_choice(adapter_type.as_deref())?;
 
-        // Try to get cloud config for pre-population (regardless of existing profile)
-        let cloud_config = if let Some(project_store) = ProjectStore::from_dbt_cloud_yml()? {
-            log::info!("Found dbt_cloud.yml configuration");
-            let project_id = Self::handle_cloud_project_selection(&project_store).await?;
+        let cloud_config = if profile_action == 1 {
+            if let Some(project_store) = &self.project_store {
+                log::info!("Found dbt_cloud.yml configuration");
+                let project_id = Self::handle_cloud_project_selection(project_store).await?;
 
-            match Self::fetch_cloud_config_map(&project_store, &project_id, &adapter).await? {
-                Some(config) => Some(config),
-                None => {
-                    log::info!("No cloud config found for this adapter/project");
-                    None
+                match Self::fetch_cloud_config(project_store, &project_id, &adapter).await? {
+                    Some(config) => Some(config),
+                    None => {
+                        log::info!("No cloud config found for this adapter/project");
+                        None
+                    }
                 }
+            } else {
+                log::info!("No dbt_cloud.yml found - proceeding without cloud pre-population");
+                None
             }
         } else {
-            log::info!("No dbt_cloud.yml found - proceeding without cloud pre-population");
+            log::info!("Editing existing profile - skipping cloud config fetch");
             None
         };
 
-        let should_use_existing_config = existing_defaults
+        let should_use_existing_config = existing_config
             .as_ref()
             .map(|d| d.adapter_type().eq_ignore_ascii_case(&adapter))
             .unwrap_or(false);
 
-        let existing_config = if should_use_existing_config {
-            existing_defaults.as_ref().map(|d| d.config())
+        let final_existing_config = if should_use_existing_config {
+            existing_config.as_ref()
         } else {
-            if existing_defaults.is_some() {
+            if let Some(existing_config) = existing_config.as_ref() {
                 log::info!(
                     "Adapter type changed from '{}' to '{}' - starting with fresh configuration",
-                    existing_defaults.as_ref().unwrap().adapter_type(),
+                    existing_config.adapter_type(),
                     adapter
                 );
             }
             None
         };
 
-        // Merge cloud config with existing config (existing takes priority)
-        let merged_config = merge_configs(cloud_config, existing_config);
+        let merged_config = cloud_config.or_else(|| final_existing_config.cloned());
 
         let profile =
             self.create_profile_for_adapter(&adapter, profile_name, merged_config.as_ref())?;
@@ -416,161 +487,7 @@ impl ProfileSetup {
         Ok(())
     }
 
-    fn load_existing_defaults_typed(
-        &self,
-        profile_name: &str,
-    ) -> FsResult<Option<ProfileDefaults>> {
-        let local_profiles = PathBuf::from("profiles.yml");
-        let target_file: PathBuf = if local_profiles.exists() {
-            local_profiles
-        } else {
-            Path::new(&self.profiles_dir).join("profiles.yml")
-        };
-
-        if !target_file.exists() {
-            return Ok(None);
-        }
-
-        let content = fs::read_to_string(&target_file)?;
-        let root: dbt_serde_yaml::Value = dbt_serde_yaml::from_str(&content)
-            .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to parse profiles.yml: {}", e))?;
-
-        let Some(profiles_map) = root.as_mapping() else {
-            return Ok(None);
-        };
-
-        let Some((_, profile_val)) = profiles_map
-            .iter()
-            .find(|(k, _)| k.as_str() == Some(profile_name))
-        else {
-            log::info!("Profile '{profile_name}' not found in profiles.yml");
-            return Ok(None);
-        };
-
-        let profile_map = profile_val.as_mapping();
-        let target_name = profile_map.and_then(|map| {
-            map.iter()
-                .find(|(k, _)| k.as_str() == Some("target"))
-                .and_then(|(_, v)| v.as_str())
-        });
-
-        DefaultProfileParser::parse_profile_yaml(profile_val, target_name)
-    }
-
-    fn profile_exists_in_file(path: &Path, profile_name: &str) -> bool {
-        if !path.exists() {
-            return false;
-        }
-        let Ok(content) = fs::read_to_string(path) else {
-            return false;
-        };
-        Self::profile_exists_in_str(&content, profile_name)
-    }
-
-    /// Get access to the dbt Cloud client for fetching environments and other cloud operations
     pub fn cloud_client() -> &'static DbtCloudClient {
         &DbtCloudClient
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::adapter_config::common::FieldValue;
-
-    #[test]
-    fn test_merge_configs() {
-        let mut cloud_config = ConfigMap::new();
-        cloud_config.insert(
-            "user".to_string(),
-            FieldValue::String("cloud_user".to_string()),
-        );
-        cloud_config.insert("threads".to_string(), FieldValue::Number(8));
-        cloud_config.insert(
-            "schema".to_string(),
-            FieldValue::String("cloud_schema".to_string()),
-        );
-
-        let mut existing_config = ConfigMap::new();
-        existing_config.insert(
-            "user".to_string(),
-            FieldValue::String("existing_user".to_string()),
-        );
-        existing_config.insert(
-            "password".to_string(),
-            FieldValue::String("existing_password".to_string()),
-        );
-
-        // Test merging with existing taking priority
-        let merged = merge_configs(Some(cloud_config.clone()), Some(&existing_config));
-
-        assert!(merged.is_some());
-        let merged = merged.unwrap();
-
-        // Existing should override cloud
-        assert_eq!(
-            merged.get("user"),
-            Some(&FieldValue::String("existing_user".to_string()))
-        );
-        // Cloud should provide values not in existing
-        assert_eq!(merged.get("threads"), Some(&FieldValue::Number(8)));
-        assert_eq!(
-            merged.get("schema"),
-            Some(&FieldValue::String("cloud_schema".to_string()))
-        );
-        // Existing-only fields should be preserved
-        assert_eq!(
-            merged.get("password"),
-            Some(&FieldValue::String("existing_password".to_string()))
-        );
-
-        // Test cloud-only
-        let cloud_only = merge_configs(Some(cloud_config.clone()), None);
-        assert_eq!(cloud_only, Some(cloud_config));
-
-        // Test existing-only
-        let existing_only = merge_configs(None, Some(&existing_config));
-        assert_eq!(existing_only, Some(existing_config));
-
-        // Test both None
-        let neither = merge_configs(None, None);
-        assert_eq!(neither, None);
-    }
-
-    #[test]
-    fn test_profile_output_serialization() {
-        let mut config = ConfigMap::new();
-        config.insert(
-            "account".to_string(),
-            FieldValue::String("ska67070".to_string()),
-        );
-        config.insert(
-            "database".to_string(),
-            FieldValue::String("test_db".to_string()),
-        );
-        config.insert(
-            "warehouse".to_string(),
-            FieldValue::String("test_warehouse".to_string()),
-        );
-        config.insert("threads".to_string(), FieldValue::Number(16));
-
-        let output = ProfileOutput {
-            adapter_type: "snowflake".to_string(),
-            config,
-        };
-
-        let serialized = dbt_serde_yaml::to_string(&output).unwrap();
-
-        // Verify that the fields are at the top level (not under __config__)
-        assert!(serialized.contains("type: snowflake"));
-        assert!(serialized.contains("account: ska67070"));
-        assert!(serialized.contains("database: test_db"));
-        assert!(serialized.contains("warehouse: test_warehouse"));
-        assert!(serialized.contains("threads: 16"));
-
-        // Verify that __config__ is NOT present
-        assert!(!serialized.contains("__config__"));
-
-        println!("Serialized ProfileOutput:\n{serialized}");
     }
 }

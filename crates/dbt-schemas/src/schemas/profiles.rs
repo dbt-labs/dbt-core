@@ -404,23 +404,37 @@ pub struct RedshiftDbConfig {
     #[serde(alias = "dbname")] // Same as Postgres, it allows either dbname or database
     pub database: Option<String>, // Setting as Option but required as of dbt 1.7.1
     pub schema: Option<String>,        // Setting as Option but required as of dbt 1.7.1
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub connect_timeout: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sslmode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub autocreate: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub db_groups: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ra3_node: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub autocommit: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub retries: Option<i64>,
     // Authentication Parameters (Password)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub method: Option<String>,
     pub host: Option<String>, // Setting as Option but required as of dbt 1.7.1
     pub user: Option<String>, // Setting as Option but required as of dbt 1.7.1
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
     // Authentication Parameters (IAM)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub iam_profile: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cluster_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub region: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub threads: Option<StringOrInteger>,
 }
 
@@ -498,12 +512,10 @@ pub struct SnowflakeDbConfig {
 #[serde(rename_all = "snake_case")]
 pub struct PostgresDbConfig {
     // Configuration Parameters
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub port: Option<StringOrInteger>, // Setting as Option but required as of dbt 1.7.1
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(alias = "dbname")] // Postgres allows either dbname or database
     pub database: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>, // Setting as Option but required as of dbt 1.7.1
     #[serde(skip_serializing_if = "Option::is_none")]
     pub threads: Option<StringOrInteger>,
@@ -526,9 +538,7 @@ pub struct PostgresDbConfig {
     // Authentication Parameters (Password)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub method: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub host: Option<String>, // Setting as Option but required as of dbt 1.7.1
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub user: Option<String>, // Setting as Option but required as of dbt 1.7.1
     #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
@@ -538,40 +548,67 @@ pub struct PostgresDbConfig {
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct BigqueryDbConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub threads: Option<StringOrInteger>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub profile_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(alias = "project")]
     pub database: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(alias = "dataset")]
     pub schema: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout_seconds: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub priority: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub method: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub maximum_bytes_billed: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub impersonate_service_account: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub refresh_token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub client_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub client_secret: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub token_uri: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub keyfile: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub retries: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub location: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub scopes: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub keyfile_json: Option<StringOrMap>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub execution_project: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub compute_region: Option<String>,
     // TODO: support this https://docs.getdbt.com/docs/core/connect-data-platform/bigquery-setup
     pub dataproc_batch: Option<YmlValue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub dataproc_cluster_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub dataproc_region: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub gcs_bucket: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub job_creation_timeout_seconds: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub job_execution_timeout_seconds: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub job_retries: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub job_retry_deadline_seconds: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub target_name: Option<String>,
 }
 
@@ -582,11 +619,16 @@ pub struct TrinoDbConfig {
     // Configuration Parameters
     pub port: Option<StringOrInteger>, // Setting as Option but required as of dbt 1.7.1
     pub user: Option<String>,          // Setting as Option but required as of dbt 1.7.1
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub database: Option<String>,
-    pub host: Option<String>, // Setting as Option but required as of dbt 1.7.1/ Setting as Option but required as of dbt 1.7.1
+    pub host: Option<String>, // Setting as Option but required as of dbt 1.7.1
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub threads: Option<StringOrInteger>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
 }
 
@@ -594,7 +636,9 @@ pub struct TrinoDbConfig {
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct DatafusionDbConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub database: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub execute: Execute,
@@ -604,27 +648,45 @@ pub struct DatafusionDbConfig {
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct DatabricksDbConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(alias = "catalog", default = "default_databricks_database")]
     pub database: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub host: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub http_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub client_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub client_secret: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub oauth_redirect_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub oauth_scopes: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub session_properties: Option<HashMap<String, YmlValue>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub connection_parameters: Option<HashMap<String, YmlValue>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub auth_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub compute: Option<HashMap<String, YmlValue>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub connect_retries: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub connect_timeout: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub retry_all: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub connect_max_idle: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub threads: Option<StringOrInteger>,
 }
 

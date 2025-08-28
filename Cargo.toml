@@ -23,6 +23,8 @@ members = [
   "crates/dbt-telemetry",
   "crates/dbt-selector-parser",
   "crates/dbt-proc-macros",
+
+  "crates/dbt-init",
   "crates/dbt-adapter-proc-macros",
   "crates/dbt-fusion-adapter",
   "crates/dbt-ident",
@@ -151,6 +153,7 @@ dbt-jinja-utils = { path = "crates/dbt-jinja-utils" }
 dbt-loader = { path = "crates/dbt-loader" }
 dbt-parser = { path = "crates/dbt-parser" }
 dbt-proc-macros = { path = "crates/dbt-proc-macros" }
+
 dbt-schemas = { path = "crates/dbt-schemas" }
 dbt-selector-parser = { path = "crates/dbt-selector-parser" }
 dbt-telemetry = { path = "crates/dbt-telemetry" }

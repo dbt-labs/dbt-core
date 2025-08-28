@@ -1,161 +1,146 @@
-use super::common::*;
-use crate::{ErrorCode, FsResult, fs_err};
+use super::common::{ConfigField, ConfigProcessor, FieldValue, InteractiveSetup};
+use dbt_common::FsResult;
+use dbt_schemas::schemas::profiles::BigqueryDbConfig;
+use dbt_schemas::schemas::serde::StringOrInteger;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum BigQueryFieldId {
-    Method,
-    Keyfile,
-    Project,
-    Dataset,
-}
+impl InteractiveSetup for BigqueryDbConfig {
+    fn get_fields() -> Vec<ConfigField> {
+        vec![
+            // Core connection settings
+            ConfigField::input("project", "Project ID"),
+            ConfigField::input("dataset", "Dataset"),
+            ConfigField::optional_input(
+                "location",
+                "Location (e.g., us-east1, europe-west1)",
+                None,
+            ),
+            // Authentication
+            ConfigField::select(
+                "auth_method",
+                "Which authentication method would you like to use?",
+                vec!["Service Account (JSON file)", "gcloud oauth"],
+                0,
+            ),
+            ConfigField::input("keyfile", "Path to service account JSON file")
+                .when_field_equals("auth_method", FieldValue::Integer(0)),
+        ]
+    }
 
-impl FieldId for BigQueryFieldId {
-    fn config_key(&self) -> &'static str {
-        match self {
-            BigQueryFieldId::Method => "method",
-            BigQueryFieldId::Keyfile => "keyfile",
-            BigQueryFieldId::Project => "project",
-            BigQueryFieldId::Dataset => "dataset",
+    fn set_field(&mut self, field_name: &str, value: FieldValue) -> FsResult<()> {
+        match field_name {
+            "project" => {
+                if let FieldValue::String(s) = value {
+                    self.database = Some(s);
+                }
+            }
+            "dataset" => {
+                if let FieldValue::String(s) = value {
+                    self.schema = Some(s);
+                }
+            }
+            "location" => {
+                if let FieldValue::String(s) = value {
+                    if !s.is_empty() {
+                        self.location = Some(s);
+                    }
+                }
+            }
+            "keyfile" => {
+                if let FieldValue::String(s) = value {
+                    self.keyfile = Some(s);
+                    self.method = Some("service-account".to_string());
+                }
+            }
+            "auth_method" => {
+                if let FieldValue::Integer(auth_method) = value {
+                    match auth_method {
+                        0 => {} // Service account - method will be set when keyfile is provided
+                        1 => self.method = Some("oauth".to_string()), // gcloud oauth
+                        _ => {}
+                    }
+                }
+            }
+            _ => {} // Ignore temporary fields
         }
+        Ok(())
     }
 
-    fn is_temporary(&self) -> bool {
-        false // No temporary fields for BigQuery
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BigQueryAuthMethod {
-    OAuth = 0,
-    ServiceAccount = 1,
-}
-
-impl BigQueryAuthMethod {
-    pub fn from_index(index: usize) -> Option<Self> {
-        match index {
-            0 => Some(BigQueryAuthMethod::OAuth),
-            1 => Some(BigQueryAuthMethod::ServiceAccount),
+    fn get_field(&self, field_name: &str) -> Option<FieldValue> {
+        match field_name {
+            "project" => self
+                .database
+                .as_ref()
+                .map(|s| FieldValue::String(s.clone())),
+            "dataset" => self.schema.as_ref().map(|s| FieldValue::String(s.clone())),
+            "location" => self
+                .location
+                .as_ref()
+                .map(|s| FieldValue::String(s.clone())),
+            "keyfile" => self.keyfile.as_ref().map(|s| FieldValue::String(s.clone())),
+            "auth_method" => {
+                if self.keyfile.is_some() {
+                    Some(FieldValue::Integer(0))
+                } else if self.method.as_ref().is_some_and(|m| m == "oauth") {
+                    Some(FieldValue::Integer(1))
+                } else {
+                    None
+                }
+            }
             _ => None,
         }
     }
 
-    pub fn options() -> Vec<&'static str> {
-        vec!["oauth", "service-account"]
-    }
-
-    pub fn config_value(&self) -> &'static str {
-        match self {
-            BigQueryAuthMethod::OAuth => "oauth",
-            BigQueryAuthMethod::ServiceAccount => "service-account",
+    fn is_field_set(&self, field_name: &str) -> bool {
+        match field_name {
+            "project" => self.database.is_some(),
+            "dataset" => self.schema.is_some(),
+            "location" => self.location.is_some(),
+            "keyfile" => self.keyfile.is_some(),
+            _ => false,
         }
     }
 }
 
-trait BigQueryFieldStorage {
-    fn get_auth_method(&self) -> Option<BigQueryAuthMethod>;
-}
+pub fn setup_bigquery_profile(
+    existing_config: Option<&BigqueryDbConfig>,
+) -> FsResult<BigqueryDbConfig> {
+    let default_config = BigqueryDbConfig {
+        threads: None,
+        profile_type: None,
+        database: None,
+        schema: None,
+        timeout_seconds: None,
+        priority: None,
+        method: None,
+        maximum_bytes_billed: None,
+        impersonate_service_account: None,
+        refresh_token: None,
+        client_id: None,
+        client_secret: None,
+        token_uri: None,
+        token: None,
+        keyfile: None,
+        retries: None,
+        location: None,
+        scopes: None,
+        keyfile_json: None,
+        execution_project: None,
+        compute_region: None,
+        dataproc_batch: None,
+        dataproc_cluster_name: None,
+        dataproc_region: None,
+        gcs_bucket: None,
+        job_creation_timeout_seconds: None,
+        job_execution_timeout_seconds: None,
+        job_retries: None,
+        job_retry_deadline_seconds: None,
+        target_name: None,
+    };
+    let mut config = ConfigProcessor::process_config(existing_config.or(Some(&default_config)))?;
 
-impl BigQueryFieldStorage for FieldStorage<BigQueryFieldId> {
-    fn get_auth_method(&self) -> Option<BigQueryAuthMethod> {
-        let auth_index = self.get_number(BigQueryFieldId::Method)?;
-        BigQueryAuthMethod::from_index(auth_index)
+    if config.threads.is_none() {
+        config.threads = Some(StringOrInteger::Integer(16));
     }
-}
 
-#[derive(Debug)]
-pub struct BigQueryAuthMethodField {
-    pub prompt: String,
-}
-
-impl FieldType<BigQueryFieldId> for BigQueryAuthMethodField {
-    fn collect_input(
-        &self,
-        existing_config: &ConfigMap,
-        _field_id: BigQueryFieldId,
-        _storage: &FieldStorage<BigQueryFieldId>,
-    ) -> FsResult<FieldValue> {
-        let options = BigQueryAuthMethod::options();
-
-        // Determine default based on existing config
-        let default_index = if existing_config.get("keyfile").is_some() {
-            1 // service-account
-        } else {
-            0 // oauth
-        };
-
-        let result = dialoguer::Select::new()
-            .with_prompt(&self.prompt)
-            .items(&options)
-            .default(default_index)
-            .interact()
-            .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to get auth method: {}", e))?;
-
-        Ok(FieldValue::Number(result))
-    }
-}
-
-pub fn bigquery_auth_method_field(prompt: &str) -> TypedField<BigQueryFieldId> {
-    TypedField {
-        id: BigQueryFieldId::Method,
-        field_type: Box::new(BigQueryAuthMethodField {
-            prompt: prompt.to_string(),
-        }),
-        condition: FieldCondition::Always,
-    }
-}
-
-trait BigQueryConditions {
-    fn if_auth_method(self, auth: BigQueryAuthMethod) -> Self;
-}
-
-impl BigQueryConditions for TypedField<BigQueryFieldId> {
-    fn if_auth_method(self, auth: BigQueryAuthMethod) -> Self {
-        self.if_number(BigQueryFieldId::Method, auth as usize)
-    }
-}
-
-pub fn bigquery_config_fields() -> Vec<TypedField<BigQueryFieldId>> {
-    vec![
-        bigquery_auth_method_field("Choose authentication method"),
-        input_field(
-            BigQueryFieldId::Keyfile,
-            "keyfile (path to service account json)",
-            None,
-        )
-        .if_auth_method(BigQueryAuthMethod::ServiceAccount),
-        input_field(BigQueryFieldId::Project, "project (GCP project id)", None),
-        input_field(
-            BigQueryFieldId::Dataset,
-            "dataset (BigQuery dataset, e.g. analytics)",
-            None,
-        ),
-    ]
-}
-
-pub struct BigQueryPostProcessor;
-
-impl AdapterPostProcessor<BigQueryFieldId> for BigQueryPostProcessor {
-    fn post_process_config(
-        &self,
-        config: &mut ConfigMap,
-        storage: &FieldStorage<BigQueryFieldId>,
-    ) -> FsResult<()> {
-        if let Some(auth_method) = storage.get_auth_method() {
-            config.insert(
-                "method".to_string(),
-                FieldValue::String(auth_method.config_value().to_string()),
-            );
-        }
-
-        if !config.contains_key("threads") {
-            config.insert("threads".to_string(), FieldValue::Number(16));
-        }
-
-        Ok(())
-    }
-}
-
-pub fn setup_bigquery_profile(existing_config: Option<&ConfigMap>) -> FsResult<ConfigMap> {
-    let processor = ExtendedConfigProcessor::new(bigquery_config_fields(), BigQueryPostProcessor);
-    processor.process_config(existing_config)
+    Ok(config)
 }

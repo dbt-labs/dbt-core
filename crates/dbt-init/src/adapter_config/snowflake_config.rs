@@ -1,299 +1,203 @@
-use super::common::*;
-use crate::{ErrorCode, FsResult, fs_err};
-use dialoguer::Select;
+use super::common::{ConfigField, ConfigProcessor, FieldValue, InteractiveSetup};
+use dbt_common::FsResult;
+use dbt_schemas::schemas::profiles::SnowflakeDbConfig;
+use dbt_schemas::schemas::serde::StringOrInteger;
+use std::path::PathBuf;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SnowflakeFieldId {
-    Account,
-    User,
-    AuthMethod,
-    Password,
-    NeedsMfa,
-    UseKeyPath,
-    PrivateKeyPath,
-    PrivateKey,
-    PassphraseNeeded,
-    PrivateKeyPassphrase,
-    OauthClientId,
-    OauthClientSecret,
-    Token,
-    Role,
-    Database,
-    Warehouse,
-    Schema,
-}
+impl InteractiveSetup for SnowflakeDbConfig {
+    fn get_fields() -> Vec<ConfigField> {
+        vec![
+            // Connection settings
+            ConfigField::input("account", "Account"),
+            ConfigField::input("user", "User"),
+            ConfigField::input("database", "Database"),
+            ConfigField::input("warehouse", "Warehouse"),
+            ConfigField::input("schema", "Schema"),
+            ConfigField::optional_input("role", "Role (optional)", None),
+            // Authentication
+            ConfigField::select(
+                "auth_method",
+                "Which authentication method would you like to use?",
+                vec!["Password", "Key pair", "SSO", "Password with MFA"],
+                0,
+            ),
+            ConfigField::password("password", "Password")
+                .when_field_equals("auth_method", FieldValue::Integer(0)),
+            ConfigField::confirm(
+                "use_key_path",
+                "Do you want to use a private key file path (vs. inline key)?",
+                true,
+            )
+            .when_field_equals("auth_method", FieldValue::Integer(1)),
+            ConfigField::input("private_key_path", "Private key path")
+                .when_field_equals("use_key_path", FieldValue::Boolean(true)),
+            ConfigField::password("private_key", "Private key (PEM format)")
+                .when_field_equals("use_key_path", FieldValue::Boolean(false)),
+            ConfigField::confirm(
+                "needs_passphrase",
+                "Does your private key require a passphrase?",
+                false,
+            )
+            .when_field_equals("auth_method", FieldValue::Integer(1)),
+            ConfigField::password("private_key_passphrase", "Private key passphrase")
+                .when_field_equals("needs_passphrase", FieldValue::Boolean(true)),
+        ]
+    }
 
-impl FieldId for SnowflakeFieldId {
-    fn config_key(&self) -> &'static str {
-        match self {
-            SnowflakeFieldId::Account => "account",
-            SnowflakeFieldId::User => "user",
-            SnowflakeFieldId::AuthMethod => "auth_method", // temporary field
-            SnowflakeFieldId::Password => "password",
-            SnowflakeFieldId::NeedsMfa => "needs_mfa", // temporary field
-            SnowflakeFieldId::UseKeyPath => "use_key_path", // temporary field
-            SnowflakeFieldId::PrivateKeyPath => "private_key_path",
-            SnowflakeFieldId::PrivateKey => "private_key",
-            SnowflakeFieldId::PassphraseNeeded => "passphrase_needed", // temporary field
-            SnowflakeFieldId::PrivateKeyPassphrase => "private_key_passphrase",
-            SnowflakeFieldId::OauthClientId => "oauth_client_id",
-            SnowflakeFieldId::OauthClientSecret => "oauth_client_secret",
-            SnowflakeFieldId::Token => "token",
-            SnowflakeFieldId::Role => "role",
-            SnowflakeFieldId::Database => "database",
-            SnowflakeFieldId::Warehouse => "warehouse",
-            SnowflakeFieldId::Schema => "schema",
+    fn set_field(&mut self, field_name: &str, value: FieldValue) -> FsResult<()> {
+        match field_name {
+            "account" => {
+                if let FieldValue::String(s) = value {
+                    self.account = Some(s);
+                }
+            }
+            "user" => {
+                if let FieldValue::String(s) = value {
+                    self.user = Some(s);
+                }
+            }
+            "database" => {
+                if let FieldValue::String(s) = value {
+                    self.database = Some(s);
+                }
+            }
+            "warehouse" => {
+                if let FieldValue::String(s) = value {
+                    self.warehouse = Some(s);
+                }
+            }
+            "schema" => {
+                if let FieldValue::String(s) = value {
+                    self.schema = Some(s);
+                }
+            }
+            "role" => {
+                if let FieldValue::String(s) = value {
+                    if !s.is_empty() {
+                        self.role = Some(s);
+                    }
+                }
+            }
+            "password" => {
+                if let FieldValue::String(s) = value {
+                    self.password = Some(s);
+                }
+            }
+            "private_key_path" => {
+                if let FieldValue::String(s) = value {
+                    self.private_key_path = Some(PathBuf::from(s));
+                }
+            }
+            "private_key" => {
+                if let FieldValue::String(s) = value {
+                    self.private_key = Some(s);
+                }
+            }
+            "private_key_passphrase" => {
+                if let FieldValue::String(s) = value {
+                    self.private_key_passphrase = Some(s);
+                }
+            }
+            "auth_method" => {
+                if let FieldValue::Integer(auth_method) = value {
+                    match auth_method {
+                        2 => self.authenticator = Some("externalbrowser".to_string()),
+                        3 => self.authenticator = Some("username_password_mfa".to_string()),
+                        _ => {}
+                    }
+                }
+            }
+            _ => {} // Ignore temporary fields
         }
+        Ok(())
     }
 
-    fn is_temporary(&self) -> bool {
-        matches!(
-            self,
-            SnowflakeFieldId::AuthMethod
-                | SnowflakeFieldId::NeedsMfa
-                | SnowflakeFieldId::UseKeyPath
-                | SnowflakeFieldId::PassphraseNeeded
-        )
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AuthMethod {
-    Password = 0,
-    ExternalBrowser = 1,
-    Keypair = 2,
-    OAuth = 3,
-}
-
-impl AuthMethod {
-    pub fn from_index(index: usize) -> Option<Self> {
-        match index {
-            0 => Some(AuthMethod::Password),
-            1 => Some(AuthMethod::ExternalBrowser),
-            2 => Some(AuthMethod::Keypair),
-            3 => Some(AuthMethod::OAuth),
+    fn get_field(&self, field_name: &str) -> Option<FieldValue> {
+        match field_name {
+            "account" => self.account.as_ref().map(|s| FieldValue::String(s.clone())),
+            "user" => self.user.as_ref().map(|s| FieldValue::String(s.clone())),
+            "database" => self
+                .database
+                .as_ref()
+                .map(|s| FieldValue::String(s.clone())),
+            "warehouse" => self
+                .warehouse
+                .as_ref()
+                .map(|s| FieldValue::String(s.clone())),
+            "schema" => self.schema.as_ref().map(|s| FieldValue::String(s.clone())),
+            "role" => self.role.as_ref().map(|s| FieldValue::String(s.clone())),
+            "authenticator" => self
+                .authenticator
+                .as_ref()
+                .map(|s| FieldValue::String(s.clone())),
+            "auth_method" => {
+                if self.password.is_some()
+                    && self.private_key_path.is_none()
+                    && self.private_key.is_none()
+                    && self
+                        .authenticator
+                        .as_ref()
+                        .is_none_or(|a| a != "externalbrowser" && a != "username_password_mfa")
+                {
+                    Some(FieldValue::Integer(0))
+                } else if self.private_key_path.is_some() || self.private_key.is_some() {
+                    Some(FieldValue::Integer(1))
+                } else if self
+                    .authenticator
+                    .as_ref()
+                    .is_some_and(|a| a == "externalbrowser")
+                {
+                    Some(FieldValue::Integer(2))
+                } else if self
+                    .authenticator
+                    .as_ref()
+                    .is_some_and(|a| a == "username_password_mfa")
+                {
+                    Some(FieldValue::Integer(3))
+                } else {
+                    None
+                }
+            }
+            "use_key_path" => {
+                if self.private_key_path.is_some() {
+                    Some(FieldValue::Boolean(true))
+                } else if self.private_key.is_some() {
+                    Some(FieldValue::Boolean(false))
+                } else {
+                    None
+                }
+            }
+            "needs_passphrase" => self
+                .private_key_passphrase
+                .as_ref()
+                .map(|_| FieldValue::Boolean(true)),
             _ => None,
         }
     }
 
-    pub fn options() -> Vec<&'static str> {
-        vec![
-            "password",
-            "externalbrowser (open browser SSO)",
-            "keypair",
-            "oauth",
-        ]
-    }
-}
-
-trait SnowflakeFieldStorage {
-    fn get_auth_method(&self) -> Option<AuthMethod>;
-}
-
-impl SnowflakeFieldStorage for FieldStorage<SnowflakeFieldId> {
-    fn get_auth_method(&self) -> Option<AuthMethod> {
-        let auth_index = self.get_number(SnowflakeFieldId::AuthMethod)?;
-        AuthMethod::from_index(auth_index)
-    }
-}
-
-#[derive(Debug)]
-pub struct AuthMethodField {
-    pub prompt: String,
-}
-
-impl FieldType<SnowflakeFieldId> for AuthMethodField {
-    fn collect_input(
-        &self,
-        existing_config: &ConfigMap,
-        _field_id: SnowflakeFieldId,
-        _storage: &FieldStorage<SnowflakeFieldId>,
-    ) -> FsResult<FieldValue> {
-        let options = AuthMethod::options();
-
-        // Determine default based on existing config
-        let default_index = {
-            if existing_config
-                .get("authenticator")
-                .and_then(|v| v.as_string())
-                .is_some_and(|s| s.eq_ignore_ascii_case("externalbrowser"))
-            {
-                1
-            } else if existing_config
-                .get("private_key_path")
-                .or_else(|| existing_config.get("private_key"))
-                .is_some()
-            {
-                2
-            } else if existing_config
-                .get("authenticator")
-                .and_then(|v| v.as_string())
-                .is_some_and(|s| s.eq_ignore_ascii_case("oauth"))
-            {
-                3
-            } else {
-                0
-            }
-        };
-
-        let result = Select::new()
-            .with_prompt(&self.prompt)
-            .items(&options)
-            .default(default_index)
-            .interact()
-            .map_err(|e| {
-                fs_err!(
-                    ErrorCode::IoError,
-                    "Failed to get authentication method: {}",
-                    e
-                )
-            })?;
-
-        Ok(FieldValue::Number(result))
-    }
-}
-
-pub fn auth_method_field(prompt: &str) -> TypedField<SnowflakeFieldId> {
-    TypedField {
-        id: SnowflakeFieldId::AuthMethod,
-        field_type: Box::new(AuthMethodField {
-            prompt: prompt.to_string(),
-        }),
-        condition: FieldCondition::Always,
-    }
-}
-
-trait SnowflakeConditions {
-    fn if_auth_method(self, auth: AuthMethod) -> Self;
-}
-
-impl SnowflakeConditions for TypedField<SnowflakeFieldId> {
-    fn if_auth_method(self, auth: AuthMethod) -> Self {
-        self.if_number(SnowflakeFieldId::AuthMethod, auth as usize)
-    }
-}
-
-pub fn snowflake_config_fields() -> Vec<TypedField<SnowflakeFieldId>> {
-    vec![
-        input_field(
-            SnowflakeFieldId::Account,
-            "Snowflake account (e.g. xy12345 or org-account)",
-            None,
-        ),
-        input_field(SnowflakeFieldId::User, "Username (e.g. jane.doe)", None),
-        auth_method_field("Choose authentication method"),
-        // Password authentication fields
-        password_field(SnowflakeFieldId::Password, "password").if_auth_method(AuthMethod::Password),
-        confirm_field(
-            SnowflakeFieldId::NeedsMfa,
-            "Do you use MFA for username/password?",
-            false,
-        )
-        .if_auth_method(AuthMethod::Password),
-        // Keypair authentication fields
-        confirm_field(
-            SnowflakeFieldId::UseKeyPath,
-            "Provide private_key by file path? (No = paste key inline)",
-            true,
-        )
-        .if_auth_method(AuthMethod::Keypair),
-        input_field(
-            SnowflakeFieldId::PrivateKeyPath,
-            "private_key_path (e.g. ~/.ssh/snowflake.p8)",
-            None,
-        )
-        .if_auth_method(AuthMethod::Keypair)
-        .if_bool(SnowflakeFieldId::UseKeyPath, true),
-        password_field(
-            SnowflakeFieldId::PrivateKey,
-            "private_key (paste PEM contents)",
-        )
-        .if_auth_method(AuthMethod::Keypair)
-        .if_bool(SnowflakeFieldId::UseKeyPath, false),
-        confirm_field(
-            SnowflakeFieldId::PassphraseNeeded,
-            "Is the private key encrypted with a passphrase?",
-            false,
-        )
-        .if_auth_method(AuthMethod::Keypair),
-        password_field(
-            SnowflakeFieldId::PrivateKeyPassphrase,
-            "private_key_passphrase",
-        )
-        .if_auth_method(AuthMethod::Keypair)
-        .if_bool(SnowflakeFieldId::PassphraseNeeded, true),
-        // OAuth authentication fields
-        input_field(SnowflakeFieldId::OauthClientId, "oauth_client_id", None)
-            .if_auth_method(AuthMethod::OAuth),
-        password_field(SnowflakeFieldId::OauthClientSecret, "oauth_client_secret")
-            .if_auth_method(AuthMethod::OAuth),
-        password_field(SnowflakeFieldId::Token, "token (OAuth refresh token)")
-            .if_auth_method(AuthMethod::OAuth),
-        // Common fields
-        input_field(SnowflakeFieldId::Role, "Role (e.g. TRANSFORMER)", None),
-        input_field(
-            SnowflakeFieldId::Database,
-            "Database (e.g. ANALYTICS)",
-            None,
-        ),
-        input_field(
-            SnowflakeFieldId::Warehouse,
-            "Warehouse (e.g. TRANSFORMING)",
-            None,
-        ),
-        input_field(
-            SnowflakeFieldId::Schema,
-            "Schema (dbt schema, e.g. analytics)",
-            None,
-        ),
-    ]
-}
-
-pub struct SnowflakePostProcessor;
-
-impl AdapterPostProcessor<SnowflakeFieldId> for SnowflakePostProcessor {
-    fn post_process_config(
-        &self,
-        config: &mut ConfigMap,
-        storage: &FieldStorage<SnowflakeFieldId>,
-    ) -> FsResult<()> {
-        // Set authenticator based on auth method and additional flags
-        match storage.get_auth_method() {
-            Some(AuthMethod::Password) => {
-                if storage.get_bool(SnowflakeFieldId::NeedsMfa) == Some(true) {
-                    config.insert(
-                        "authenticator".to_string(),
-                        FieldValue::String("username_password_mfa".to_string()),
-                    );
-                }
-            }
-            Some(AuthMethod::ExternalBrowser) => {
-                config.insert(
-                    "authenticator".to_string(),
-                    FieldValue::String("externalbrowser".to_string()),
-                );
-            }
-            Some(AuthMethod::OAuth) => {
-                config.insert(
-                    "authenticator".to_string(),
-                    FieldValue::String("oauth".to_string()),
-                );
-            }
-            Some(AuthMethod::Keypair) | None => {
-                // Keypair doesn't need explicit authenticator, None is default password
-            }
+    fn is_field_set(&self, field_name: &str) -> bool {
+        match field_name {
+            "account" => self.account.is_some(),
+            "user" => self.user.is_some(),
+            "database" => self.database.is_some(),
+            "warehouse" => self.warehouse.is_some(),
+            "schema" => self.schema.is_some(),
+            "role" => self.role.is_some(),
+            "authenticator" => self.authenticator.is_some(),
+            _ => false,
         }
-
-        // Set default threads if not present
-        if !config.contains_key("threads") {
-            config.insert("threads".to_string(), FieldValue::Number(16));
-        }
-
-        Ok(())
     }
 }
 
-pub fn setup_snowflake_profile(existing_config: Option<&ConfigMap>) -> FsResult<ConfigMap> {
-    let processor = ExtendedConfigProcessor::new(snowflake_config_fields(), SnowflakePostProcessor);
-    processor.process_config(existing_config)
+pub fn setup_snowflake_profile(
+    existing_config: Option<&SnowflakeDbConfig>,
+) -> FsResult<SnowflakeDbConfig> {
+    let default_config = SnowflakeDbConfig::default();
+    let mut config = ConfigProcessor::process_config(existing_config.or(Some(&default_config)))?;
+
+    if config.threads.is_none() {
+        config.threads = Some(StringOrInteger::Integer(16));
+    }
+
+    Ok(config)
 }

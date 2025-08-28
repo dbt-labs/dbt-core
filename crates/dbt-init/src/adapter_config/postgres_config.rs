@@ -1,111 +1,148 @@
 use super::common::*;
 use crate::{ErrorCode, FsResult, fs_err};
+use dbt_schemas::schemas::profiles::PostgresDbConfig;
+use dbt_schemas::schemas::serde::StringOrInteger;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum PostgresFieldId {
-    Host,
-    User,
-    Password,
-    Port,
-    DbName,
-    Schema,
-}
+impl InteractiveSetup for PostgresDbConfig {
+    fn get_fields() -> Vec<ConfigField> {
+        vec![
+            ConfigField {
+                name: "host".to_string(),
+                field_type: FieldType::Input { default: None },
+                condition: FieldCondition::Always,
+                prompt: "Host (hostname)".to_string(),
+                required: true,
+            },
+            ConfigField {
+                name: "user".to_string(),
+                field_type: FieldType::Input { default: None },
+                condition: FieldCondition::Always,
+                prompt: "Username".to_string(),
+                required: true,
+            },
+            ConfigField {
+                name: "password".to_string(),
+                field_type: FieldType::Password,
+                condition: FieldCondition::Always,
+                prompt: "Password".to_string(),
+                required: true,
+            },
+            ConfigField {
+                name: "port".to_string(),
+                field_type: FieldType::Input {
+                    default: Some("5432".to_string()),
+                },
+                condition: FieldCondition::Always,
+                prompt: "Port".to_string(),
+                required: true,
+            },
+            ConfigField {
+                name: "database".to_string(),
+                field_type: FieldType::Input { default: None },
+                condition: FieldCondition::Always,
+                prompt: "Database name".to_string(),
+                required: true,
+            },
+            ConfigField {
+                name: "schema".to_string(),
+                field_type: FieldType::Input { default: None },
+                condition: FieldCondition::Always,
+                prompt: "Schema (dbt schema)".to_string(),
+                required: true,
+            },
+        ]
+    }
 
-impl FieldId for PostgresFieldId {
-    fn config_key(&self) -> &'static str {
-        match self {
-            PostgresFieldId::Host => "host",
-            PostgresFieldId::User => "user",
-            PostgresFieldId::Password => "password",
-            PostgresFieldId::Port => "port",
-            PostgresFieldId::DbName => "dbname",
-            PostgresFieldId::Schema => "schema",
+    fn set_field(&mut self, field_name: &str, value: FieldValue) -> FsResult<()> {
+        match field_name {
+            "host" => {
+                if let FieldValue::String(val) = value {
+                    self.host = Some(val);
+                }
+            }
+            "user" => {
+                if let FieldValue::String(val) = value {
+                    self.user = Some(val);
+                }
+            }
+            "password" => {
+                if let FieldValue::String(val) = value {
+                    self.password = Some(val);
+                }
+            }
+            "port" => {
+                if let FieldValue::String(val) = value {
+                    if let Ok(port) = val.parse::<i64>() {
+                        self.port = Some(StringOrInteger::Integer(port));
+                    }
+                } else if let FieldValue::Integer(val) = value {
+                    self.port = Some(StringOrInteger::Integer(val));
+                }
+            }
+            "database" => {
+                if let FieldValue::String(val) = value {
+                    self.database = Some(val);
+                }
+            }
+            "schema" => {
+                if let FieldValue::String(val) = value {
+                    self.schema = Some(val);
+                }
+            }
+            _ => {
+                return Err(fs_err!(
+                    ErrorCode::InvalidArgument,
+                    "Unknown field: {}",
+                    field_name
+                ));
+            }
         }
-    }
-
-    fn is_temporary(&self) -> bool {
-        false // No temporary fields for Postgres
-    }
-}
-
-#[derive(Debug)]
-pub struct PortField {
-    pub prompt: String,
-    pub default_port: u32,
-}
-
-impl FieldType<PostgresFieldId> for PortField {
-    fn collect_input(
-        &self,
-        existing_config: &ConfigMap,
-        field_id: PostgresFieldId,
-        _storage: &FieldStorage<PostgresFieldId>,
-    ) -> FsResult<FieldValue> {
-        let default_port: u32 = existing_config
-            .get(field_id.config_key())
-            .and_then(|v| v.as_number())
-            .unwrap_or(self.default_port as usize) as u32;
-
-        let port: u32 = dialoguer::Input::new()
-            .with_prompt(&self.prompt)
-            .default(default_port)
-            .interact()
-            .map_err(|e| {
-                fs_err!(
-                    ErrorCode::IoError,
-                    "Failed to get {}: {}",
-                    field_id.config_key(),
-                    e
-                )
-            })?;
-
-        Ok(FieldValue::Number(port as usize))
-    }
-}
-
-pub fn port_field(
-    id: PostgresFieldId,
-    prompt: &str,
-    default_port: u32,
-) -> TypedField<PostgresFieldId> {
-    TypedField {
-        id,
-        field_type: Box::new(PortField {
-            prompt: prompt.to_string(),
-            default_port,
-        }),
-        condition: FieldCondition::Always,
-    }
-}
-
-pub fn postgres_config_fields() -> Vec<TypedField<PostgresFieldId>> {
-    vec![
-        input_field(PostgresFieldId::Host, "Host (hostname)", None),
-        input_field(PostgresFieldId::User, "Username", None),
-        password_field(PostgresFieldId::Password, "password"),
-        port_field(PostgresFieldId::Port, "Port", 5432),
-        input_field(PostgresFieldId::DbName, "Database name", None),
-        input_field(PostgresFieldId::Schema, "Schema (dbt schema)", None),
-    ]
-}
-
-pub struct PostgresPostProcessor;
-
-impl AdapterPostProcessor<PostgresFieldId> for PostgresPostProcessor {
-    fn post_process_config(
-        &self,
-        config: &mut ConfigMap,
-        _storage: &FieldStorage<PostgresFieldId>,
-    ) -> FsResult<()> {
-        if !config.contains_key("threads") {
-            config.insert("threads".to_string(), FieldValue::Number(16));
-        }
-
         Ok(())
     }
+
+    fn get_field(&self, field_name: &str) -> Option<FieldValue> {
+        match field_name {
+            "host" => self.host.as_ref().map(|v| FieldValue::String(v.clone())),
+            "user" => self.user.as_ref().map(|v| FieldValue::String(v.clone())),
+            "password" => self
+                .password
+                .as_ref()
+                .map(|v| FieldValue::String(v.clone())),
+            "port" => self.port.as_ref().map(|v| match v {
+                StringOrInteger::String(s) => FieldValue::String(s.clone()),
+                StringOrInteger::Integer(i) => FieldValue::Integer(*i),
+            }),
+            "database" => self
+                .database
+                .as_ref()
+                .map(|v| FieldValue::String(v.clone())),
+            "schema" => self.schema.as_ref().map(|v| FieldValue::String(v.clone())),
+            _ => None,
+        }
+    }
+
+    fn is_field_set(&self, field_name: &str) -> bool {
+        match field_name {
+            "host" => self.host.is_some(),
+            "user" => self.user.is_some(),
+            "password" => self.password.is_some(),
+            "port" => self.port.is_some(),
+            "database" => self.database.is_some(),
+            "schema" => self.schema.is_some(),
+            _ => false,
+        }
+    }
 }
 
-pub fn setup_postgres_profile(existing_config: Option<&ConfigMap>) -> FsResult<ConfigMap> {
-    let processor = ExtendedConfigProcessor::new(postgres_config_fields(), PostgresPostProcessor);
-    processor.process_config(existing_config)
+pub fn setup_postgres_profile(
+    existing_config: Option<&PostgresDbConfig>,
+) -> FsResult<PostgresDbConfig> {
+    let default_config = PostgresDbConfig::default();
+    let mut config = ConfigProcessor::process_config(existing_config.or(Some(&default_config)))?;
+
+    if config.threads.is_none() {
+        config.threads = Some(StringOrInteger::Integer(16));
+    }
+
+    Ok(config)
 }

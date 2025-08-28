@@ -1,9 +1,13 @@
-use crate::adapter_config::{ConfigMap, common::FieldValue};
-use crate::{ErrorCode, FsResult, fs_err};
 use dbt_cloud_api::{
     apis::{configuration::Configuration, connections_api, users_api, whoami_api},
     models,
 };
+use dbt_common::{ErrorCode, FsResult, fs_err};
+use dbt_schemas::schemas::profiles::{
+    BigqueryDbConfig, DatabricksDbConfig, DbConfig, PostgresDbConfig, RedshiftDbConfig,
+    SnowflakeDbConfig,
+};
+use dbt_schemas::schemas::serde::StringOrInteger;
 
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -107,10 +111,14 @@ impl From<&models::UserCredentialsResponse> for CredentialInfo {
     }
 }
 
-fn user_credential_to_config_map(user_cred: &models::UserCredentialsResponse) -> ConfigMap {
-    let mut config = ConfigMap::new();
+/// Create a complete DbConfig by merging user credential and connection data
+fn create_merged_db_config(
+    user_cred: &models::UserCredentialsResponse,
+    connection_config: Option<&models::Config>,
+) -> Option<DbConfig> {
+    use merge::Merge;
 
-    // Add threads for all adapters
+    // Get threads for all adapters
     let threads = match &*user_cred.credentials {
         models::UserCredentialsResponseCredentials::PostgresCredentials(postgres) => {
             postgres.threads
@@ -128,169 +136,266 @@ fn user_credential_to_config_map(user_cred: &models::UserCredentialsResponse) ->
             adapter.threads
         }
     };
-    config.insert("threads".to_string(), FieldValue::Number(threads as usize));
 
-    match &*user_cred.credentials {
+    // Create base config from user credential data
+    let mut base_config = match &*user_cred.credentials {
         models::UserCredentialsResponseCredentials::PostgresCredentials(postgres) => {
-            // Map to PostgresFieldId fields: Host, User, Password, Port, DbName, Schema
-            config.insert(
-                "user".to_string(),
-                FieldValue::String(postgres.username.clone()),
-            );
-            config.insert(
-                "schema".to_string(),
-                FieldValue::String(postgres.default_schema.clone()),
-            );
-            // Note: Host, Password, Port, DbName are not available in the credential response
+            DbConfig::Postgres(PostgresDbConfig {
+                user: Some(postgres.username.clone()),
+                schema: Some(postgres.default_schema.clone()),
+                threads: Some(StringOrInteger::Integer(threads as i64)),
+                // Note: Host, Password, Port, Database are not available in the credential response
+                ..Default::default()
+            })
         }
         models::UserCredentialsResponseCredentials::SnowflakeCredentials(snowflake) => {
-            // Map to SnowflakeFieldId fields: Account, User, Role, Database, Warehouse, Schema
-            if let Some(user) = &snowflake.user {
-                config.insert("user".to_string(), FieldValue::String(user.clone()));
-            }
-            if let Some(role) = &snowflake.role {
-                config.insert("role".to_string(), FieldValue::String(role.clone()));
-            }
-            if let Some(database) = &snowflake.database {
-                config.insert("database".to_string(), FieldValue::String(database.clone()));
-            }
-            if let Some(warehouse) = &snowflake.warehouse {
-                config.insert(
-                    "warehouse".to_string(),
-                    FieldValue::String(warehouse.clone()),
-                );
-            }
-            config.insert(
-                "schema".to_string(),
-                FieldValue::String(snowflake.schema.clone()),
-            );
-            // Note: Account field is intentionally NOT set here because:
-            // 1. The API only provides account_id (integer), not the account name (string)
-            // 2. The account name is required for Snowflake connections (e.g. "myaccount.snowflakecomputing.com")
-            // 3. By leaving this field unset, the user will be prompted to enter it during profile setup
-            log::debug!(
-                "Snowflake account field not set - user will be prompted during profile setup"
-            );
+            DbConfig::Snowflake(SnowflakeDbConfig {
+                user: snowflake.user.clone(),
+                role: snowflake.role.clone(),
+                database: snowflake.database.clone(),
+                warehouse: snowflake.warehouse.clone(),
+                schema: Some(snowflake.schema.clone()),
+                threads: Some(StringOrInteger::Integer(threads as i64)),
+                // Note: Account field is intentionally NOT set here because:
+                // 1. The API only provides account_id (integer), not the account name (string)
+                // 2. The account name is required for Snowflake connections (e.g. "myaccount.snowflakecomputing.com")
+                // 3. By leaving this field unset, the user will be prompted to enter it during profile setup
+                ..Default::default()
+            })
         }
         models::UserCredentialsResponseCredentials::BigqueryCredentials(bigquery) => {
-            // Map to BigQueryFieldId fields: Method, Keyfile, Project, Dataset
-            config.insert(
-                "dataset".to_string(),
-                FieldValue::String(bigquery.schema.clone()),
-            );
-            // Note: Method, Keyfile, Project are not available in the credential response
+            DbConfig::Bigquery(BigqueryDbConfig {
+                schema: Some(bigquery.schema.clone()),
+                threads: Some(StringOrInteger::Integer(threads as i64)),
+                // Note: Method, Keyfile, Project are not available in the credential response
+                database: None,
+                profile_type: None,
+                timeout_seconds: None,
+                priority: None,
+                method: None,
+                maximum_bytes_billed: None,
+                impersonate_service_account: None,
+                refresh_token: None,
+                client_id: None,
+                client_secret: None,
+                token_uri: None,
+                token: None,
+                keyfile: None,
+                retries: None,
+                location: None,
+                scopes: None,
+                keyfile_json: None,
+                execution_project: None,
+                compute_region: None,
+                dataproc_batch: None,
+                dataproc_cluster_name: None,
+                dataproc_region: None,
+                gcs_bucket: None,
+                job_creation_timeout_seconds: None,
+                job_execution_timeout_seconds: None,
+                job_retries: None,
+                job_retry_deadline_seconds: None,
+                target_name: None,
+            })
         }
         models::UserCredentialsResponseCredentials::RedshiftCredentials(redshift) => {
-            // Map to RedshiftFieldId fields: Host, User, Password, DbName, Schema
-            if let Some(username) = &redshift.username {
-                config.insert("user".to_string(), FieldValue::String(username.clone()));
-            }
-            config.insert(
-                "schema".to_string(),
-                FieldValue::String(redshift.default_schema.clone()),
-            );
-            // Note: Host, Password, DbName are not available in the credential response
+            DbConfig::Redshift(RedshiftDbConfig {
+                user: redshift.username.clone(),
+                schema: Some(redshift.default_schema.clone()),
+                threads: Some(StringOrInteger::Integer(threads as i64)),
+                // Note: Host, Password, Database are not available in the credential response
+                ..Default::default()
+            })
         }
-        models::UserCredentialsResponseCredentials::DbtAdapterCredentials(_adapter) => {
-            // For databricks: Schema, Host, HttpPath, Catalog, Token, ClientId, ClientSecret
-            // Note: Most fields are not available in the credential response
-            // This would need additional API calls or different credential structure
+        models::UserCredentialsResponseCredentials::DbtAdapterCredentials(adapter) => {
+            // Check if this is a databricks adapter
+            match adapter.adapter_version {
+                Some(models::AdapterVersionEnum::DatabricksV0)
+                | Some(models::AdapterVersionEnum::DatabricksSparkV0) => {
+                    DbConfig::Databricks(DatabricksDbConfig {
+                        threads: Some(StringOrInteger::Integer(threads as i64)),
+                        // Note: Most fields are not available in the credential response
+                        // This would need additional API calls or different credential structure
+                        ..Default::default()
+                    })
+                }
+                _ => return None, // Unsupported adapter type
+            }
+        }
+    };
+
+    // Merge connection data if available and matches the adapter type
+    if let Some(connection) = connection_config {
+        match (&mut base_config, connection) {
+            (
+                DbConfig::Snowflake(snowflake_config),
+                models::Config::SnowflakeConnection(snowflake),
+            ) => {
+                // Create connection details to merge - this provides the missing account/infrastructure info
+                let connection_details = SnowflakeDbConfig {
+                    account: if !snowflake.account.is_empty() {
+                        Some(snowflake.account.clone())
+                    } else {
+                        None
+                    },
+                    database: if !snowflake.database.is_empty() {
+                        Some(snowflake.database.clone())
+                    } else {
+                        None
+                    },
+                    warehouse: if !snowflake.warehouse.is_empty() {
+                        Some(snowflake.warehouse.clone())
+                    } else {
+                        None
+                    },
+                    role: snowflake.role.clone(),
+                    ..Default::default()
+                };
+                snowflake_config.merge(connection_details);
+            }
+            (DbConfig::Postgres(postgres_config), models::Config::PostgresConnection(postgres)) => {
+                // Extract all available connection details for Postgres
+                let connection_details = PostgresDbConfig {
+                    host: if !postgres.hostname.is_empty() {
+                        Some(postgres.hostname.clone())
+                    } else {
+                        None
+                    },
+                    database: if !postgres.dbname.is_empty() {
+                        Some(postgres.dbname.clone())
+                    } else {
+                        None
+                    },
+                    port: postgres.port.map(|p| StringOrInteger::Integer(p as i64)),
+                    retries: postgres.retries.map(|r| StringOrInteger::Integer(r as i64)),
+                    ..Default::default()
+                };
+                postgres_config.merge(connection_details);
+            }
+            (DbConfig::Bigquery(bigquery_config), models::Config::BigqueryConnection(bigquery)) => {
+                // Extract all available authentication and configuration details from connection
+                let connection_details = BigqueryDbConfig {
+                    database: if !bigquery.project_id.is_empty() {
+                        Some(bigquery.project_id.clone())
+                    } else {
+                        None
+                    },
+                    timeout_seconds: Some(bigquery.timeout_seconds as i64),
+                    priority: bigquery.priority.as_ref().map(|p| format!("{p:?}")),
+                    location: bigquery.location.clone(),
+                    maximum_bytes_billed: bigquery.maximum_bytes_billed.map(|mb| mb as i64),
+                    execution_project: bigquery.execution_project.clone(),
+                    impersonate_service_account: bigquery.impersonate_service_account.clone(),
+                    retries: bigquery.retries.map(|r| r as i64),
+                    scopes: bigquery.scopes.clone(),
+                    // Authentication details - these could be used to construct keyfile_json
+                    client_id: Some(bigquery.client_id.clone()),
+                    token_uri: Some(bigquery.token_uri.clone()),
+                    // Keep other fields as None since they come from credentials or aren't in connection
+                    threads: None,
+                    profile_type: None,
+                    schema: None,
+                    method: None,
+                    refresh_token: None,
+                    client_secret: None,
+                    token: None,
+                    keyfile: None,
+                    keyfile_json: None,
+                    compute_region: None,
+                    dataproc_batch: None,
+                    dataproc_cluster_name: None,
+                    dataproc_region: None,
+                    gcs_bucket: None,
+                    job_creation_timeout_seconds: None,
+                    job_execution_timeout_seconds: None,
+                    job_retries: None,
+                    job_retry_deadline_seconds: None,
+                    target_name: None,
+                };
+                bigquery_config.merge(connection_details);
+            }
+            (
+                DbConfig::Bigquery(bigquery_config),
+                models::Config::BigqueryConnectionV1(bigquery_v1),
+            ) => {
+                // Similar extraction for BigQuery V1 connections
+                let connection_details = BigqueryDbConfig {
+                    database: if !bigquery_v1.project_id.is_empty() {
+                        Some(bigquery_v1.project_id.clone())
+                    } else {
+                        None
+                    },
+                    // V1 doesn't have timeout_seconds, but has job_execution_timeout_seconds
+                    job_execution_timeout_seconds: bigquery_v1
+                        .job_execution_timeout_seconds
+                        .map(|t| t as i64),
+                    priority: bigquery_v1.priority.as_ref().map(|p| format!("{p:?}")),
+                    location: bigquery_v1.location.clone(),
+                    maximum_bytes_billed: bigquery_v1.maximum_bytes_billed.map(|mb| mb as i64),
+                    execution_project: bigquery_v1.execution_project.clone(),
+                    impersonate_service_account: bigquery_v1.impersonate_service_account.clone(),
+                    retries: bigquery_v1.retries.map(|r| r as i64),
+                    scopes: bigquery_v1.scopes.clone(),
+                    gcs_bucket: bigquery_v1.gcs_bucket.clone(),
+                    dataproc_region: bigquery_v1.dataproc_region.clone(),
+                    dataproc_cluster_name: bigquery_v1.dataproc_cluster_name.clone(),
+                    job_retry_deadline_seconds: bigquery_v1
+                        .job_retry_deadline_seconds
+                        .map(|jrd| jrd as i64),
+                    job_creation_timeout_seconds: bigquery_v1
+                        .job_creation_timeout_seconds
+                        .map(|jct| jct as i64),
+                    // Authentication details - these are Option<String> so we directly assign them
+                    client_id: bigquery_v1.client_id.clone(),
+                    token_uri: bigquery_v1.token_uri.clone(),
+                    // Keep other fields as None
+                    threads: None,
+                    profile_type: None,
+                    schema: None,
+                    method: None,
+                    refresh_token: None,
+                    client_secret: None,
+                    token: None,
+                    keyfile: None,
+                    keyfile_json: None,
+                    compute_region: None,
+                    dataproc_batch: None,
+                    timeout_seconds: None,
+                    job_retries: None,
+                    target_name: None,
+                };
+                bigquery_config.merge(connection_details);
+            }
+            (DbConfig::Redshift(redshift_config), models::Config::RedshiftConnection(redshift)) => {
+                // Extract all available connection details for Redshift
+                let connection_details = RedshiftDbConfig {
+                    host: if !redshift.hostname.is_empty() {
+                        Some(redshift.hostname.clone())
+                    } else {
+                        None
+                    },
+                    database: if !redshift.dbname.is_empty() {
+                        Some(redshift.dbname.clone())
+                    } else {
+                        None
+                    },
+                    port: redshift.port.map(|p| StringOrInteger::Integer(p as i64)),
+                    retries: redshift.retries.map(|r| r as i64),
+                    ..Default::default()
+                };
+                redshift_config.merge(connection_details);
+            }
+            (DbConfig::Databricks(_), models::Config::DatabricksConnection(_)) => {
+                // TODO: Implement Databricks merging when needed
+                log::debug!("Databricks connection merging not yet implemented");
+            }
+            _ => {
+                log::warn!("Adapter type mismatch between credential and connection");
+            }
         }
     }
 
-    config
-}
-
-/// Fetch connection details from the connections API
-async fn fetch_connection_details(
-    configuration: &Configuration,
-    account_id: i32,
-    connection_id: i32,
-) -> FsResult<ConfigMap> {
-    let response =
-        connections_api::retrieve_account_connection(configuration, account_id, connection_id)
-            .await
-            .map_err(|e| {
-                fs_err!(
-                    ErrorCode::IoError,
-                    "Failed to fetch connection details: {}",
-                    e
-                )
-            })?;
-
-    let mut config = ConfigMap::new();
-    // Match on the Config enum to extract connection-specific fields
-    match &*response.data.config {
-        models::Config::SnowflakeConnection(snowflake) => {
-            // Extract Snowflake connection details
-            if !snowflake.account.is_empty() {
-                config.insert(
-                    "account".to_string(),
-                    FieldValue::String(snowflake.account.clone()),
-                );
-            }
-            if !snowflake.database.is_empty() {
-                config.insert(
-                    "database".to_string(),
-                    FieldValue::String(snowflake.database.clone()),
-                );
-            }
-            if !snowflake.warehouse.is_empty() {
-                config.insert(
-                    "warehouse".to_string(),
-                    FieldValue::String(snowflake.warehouse.clone()),
-                );
-            }
-            if let Some(role) = &snowflake.role {
-                config.insert("role".to_string(), FieldValue::String(role.clone()));
-            }
-        }
-        models::Config::PostgresConnection(postgres) => {
-            // Extract Postgres connection details
-            if !postgres.hostname.is_empty() {
-                config.insert(
-                    "host".to_string(),
-                    FieldValue::String(postgres.hostname.clone()),
-                );
-            }
-            if !postgres.dbname.is_empty() {
-                config.insert(
-                    "dbname".to_string(),
-                    FieldValue::String(postgres.dbname.clone()),
-                );
-            }
-            if let Some(port) = postgres.port {
-                config.insert("port".to_string(), FieldValue::Number(port as usize));
-            }
-        }
-        models::Config::RedshiftConnection(_redshift) => {
-            // Extract Redshift connection details (similar to Postgres)
-            log::debug!("Redshift connection details found");
-        }
-        models::Config::BigqueryConnection(bigquery) => {
-            // Extract BigQuery connection details
-            if !bigquery.project_id.is_empty() {
-                config.insert(
-                    "project".to_string(),
-                    FieldValue::String(bigquery.project_id.clone()),
-                );
-            }
-        }
-        models::Config::BigqueryConnectionV1(bigquery_v1) => {
-            // Extract BigQuery V1 connection details
-            if !bigquery_v1.project_id.is_empty() {
-                config.insert(
-                    "project".to_string(),
-                    FieldValue::String(bigquery_v1.project_id.clone()),
-                );
-            }
-        }
-        models::Config::DatabricksConnection(_databricks) => {
-            // Extract Databricks connection details
-            log::debug!("Databricks connection details found");
-        }
-    }
-    Ok(config)
+    Some(base_config)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -441,12 +546,12 @@ impl DbtCloudClient {
         Ok(whoami_response.data.user.id)
     }
 
-    /// Get the ConfigMap for a specific credential
-    pub async fn get_credential_config_map(
+    /// Get the DbConfig for a specific credential
+    pub async fn get_credential_db_config(
         base_url: &str,
         project_id: Option<&str>,
         adapter_type: Option<&str>,
-    ) -> FsResult<Option<ConfigMap>> {
+    ) -> FsResult<Option<DbConfig>> {
         let cloud_project = match Self::parse_active_cloud_project()? {
             Some(project) => project,
             None => {
@@ -542,32 +647,40 @@ impl DbtCloudClient {
         });
 
         if let Some(credential) = matching_credential {
-            // Start with user credential config
-            let mut merged_config = user_credential_to_config_map(credential);
-
             // Fetch connection details if available
-            if let Some(connection_id) = credential.project.connection_id {
-                match fetch_connection_details(
+            let connection_response = if let Some(connection_id) = credential.project.connection_id
+            {
+                match connections_api::retrieve_account_connection(
                     &configuration,
                     credential.project.account_id,
                     connection_id,
                 )
                 .await
                 {
-                    Ok(connection_config) => {
-                        for (key, value) in connection_config {
-                            merged_config.insert(key, value);
-                        }
-                    }
+                    Ok(response) => Some(response),
                     Err(e) => {
                         log::warn!(
                             "Failed to fetch connection details for connection_id {connection_id}: {e}"
                         );
+                        None
                     }
                 }
-            }
+            } else {
+                None
+            };
 
-            Ok(Some(merged_config))
+            let connection_config = connection_response.as_ref().map(|r| &*r.data.config);
+
+            // Create merged DbConfig from both credential and connection data
+            match create_merged_db_config(credential, connection_config) {
+                Some(merged_config) => Ok(Some(merged_config)),
+                None => {
+                    log::warn!(
+                        "Unable to create DbConfig from user credential and connection data"
+                    );
+                    Ok(None)
+                }
+            }
         } else {
             Ok(None)
         }

@@ -17,14 +17,18 @@ dbt-cloud-api = { workspace = true }
 dbt-common = { workspace = true }
 dbt-error = { workspace = true }
 dbt-frontend-common = { workspace = true }
+dbt-loader = { workspace = true }
 dbt-telemetry = { workspace = true }
 # leaf dependencies (depend on little more than std lib)
 dbt-cancel = { workspace = true }
+dbt-jinja-utils = { workspace = true }
 dbt-proc-macros = { workspace = true }
+dbt-schemas = { workspace = true }
 
 clap = { workspace = true, features = ["derive", "env"] }
 dialoguer = { workspace = true }
 dirs = { workspace = true }
+merge = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
 uuid = { workspace = true }

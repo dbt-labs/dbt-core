@@ -114,6 +114,7 @@ pub fn get_db_config(
         "Could not find target {} in profiles.yml",
         target_name,
     ))?;
+
     let db_config: DbConfig = dbt_serde_yaml::from_value(db_config.clone()).map_err(|e| {
         fs_err!(
             ErrorCode::InvalidConfig,
