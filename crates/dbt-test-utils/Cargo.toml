@@ -25,6 +25,7 @@ dbt-test-primitives = { workspace = true }
 diffy = { version = "0.4.2" }
 dirs = { workspace = true }
 dotenv = { version = "0.15.0" }
+futures = { workspace = true }
 ignore = { version = "0.4" }
 itertools = { workspace = true }
 libc = "0.2.170"

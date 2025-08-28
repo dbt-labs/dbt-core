@@ -8,19 +8,23 @@ use super::{
         normalize_version,
     },
 };
+use futures::FutureExt as _;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::{
     env,
+    fs::File,
+    io::{Read as _, Write as _},
+    panic::AssertUnwindSafe,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
-use dbt_test_primitives::{is_continuous_integration_environment, is_update_golden_files_mode};
+use dbt_test_primitives::is_update_golden_files_mode;
 
 use dbt_common::{
-    ErrorCode, FsResult, err,
+    FsResult,
     stdfs::{self},
 };
 
@@ -177,22 +181,47 @@ pub async fn execute_and_compare(
     let stdout_file = stdfs::File::create(&compare_env.stdout_path)?;
     let stderr_file = stdfs::File::create(&compare_env.stderr_path)?;
 
-    let _res = exe(
+    let res = AssertUnwindSafe(exe(
         cmd_vec.to_vec(),
         compare_env.project_dir,
         stdout_file,
         stderr_file,
-    )
+    ))
+    .catch_unwind()
     .await;
-    let is_update = is_update_golden_files_mode();
-    compare_or_update(
-        is_update,
-        sort_output,
-        compare_env.stderr_path,
-        compare_env.goldie_stderr_path,
-        compare_env.stdout_path,
-        compare_env.goldie_stdout_path,
-    )
+
+    match res {
+        Ok(Ok(_exit_code)) => compare_or_update(
+            is_update_golden_files_mode(),
+            sort_output,
+            compare_env.stderr_path,
+            compare_env.goldie_stderr_path,
+            compare_env.stdout_path,
+            compare_env.goldie_stdout_path,
+        ),
+        Ok(Err(e)) => {
+            eprintln!("error executing command {cmd_vec:?}: {e}");
+            // TODO: this is kept to preserve existing behavior, where this
+            // error was silently ignored. We should probably
+            // dump_file_to_stderr then propagate the error instead:
+            compare_or_update(
+                is_update_golden_files_mode(),
+                sort_output,
+                compare_env.stderr_path,
+                compare_env.goldie_stderr_path,
+                compare_env.stdout_path,
+                compare_env.goldie_stdout_path,
+            )
+        }
+        Err(payload) => {
+            eprintln!("command {cmd_vec:?} panicked during execution");
+
+            // Best effort attempt to dump the captured stderr:
+            let _ = dump_file_to_stderr(&compare_env.stderr_path);
+
+            std::panic::resume_unwind(payload);
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -204,30 +233,9 @@ pub fn compare_or_update(
     stdout_path: PathBuf,
     goldie_stdout_path: PathBuf,
 ) -> FsResult<Vec<TextualPatch>> {
-    // Check that stdout and stderr exist
-    if !stdout_path.exists() {
-        return err!(
-            ErrorCode::IoError,
-            "stdout file does not exist: {}",
-            stdout_path.display()
-        );
-    }
-    if !stderr_path.exists() {
-        return err!(
-            ErrorCode::IoError,
-            "stderr file does not exist: {}",
-            stderr_path.display()
-        );
-    }
-
     let stdout_content = stdfs::read_to_string(&stdout_path)?;
     let stdout_content = postprocess_actual(stdout_content, sort_output);
     let stderr_content = stdfs::read_to_string(&stderr_path)?;
-    // Print out the stderr content for debugging purposes (but don't do it if
-    // we're in CI to avoid spamming the logs)
-    if !is_continuous_integration_environment() {
-        eprintln!("{stderr_content}");
-    }
     let stderr_content = postprocess_actual(stderr_content, sort_output);
 
     if is_update {
@@ -294,6 +302,16 @@ fn filter_lines(content: String) -> String {
 
 fn is_all_whitespace(s: &str) -> bool {
     s.chars().all(|c| c.is_whitespace())
+}
+
+fn dump_file_to_stderr(path: &Path) -> std::io::Result<()> {
+    let mut file = File::open(path)?;
+    let size = file.metadata().map(|m| m.len() as usize).ok();
+    let mut buffer = Vec::new();
+    buffer.try_reserve_exact(size.unwrap_or(0))?;
+    file.read_to_end(&mut buffer)?;
+
+    std::io::stderr().write_all(&buffer)
 }
 
 #[cfg(test)]
