@@ -1,0 +1,9 @@
+functions:
+  - name: area_of_circle
+    description: Calculates the area of a circle for a given radius
+    arguments:
+      - name: radius
+        type: float
+        description: A floating point number representing the radius of the circle
+    return_type:
+      type: float

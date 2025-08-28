@@ -1039,6 +1039,23 @@ class TestList:
         }
         self.expect_given_output(["--resource-type", "test"], expectations)
 
+    def expect_function_output(self):
+        # using `--resource-type`
+        results = self.run_dbt_ls(["--resource-type", "function"])
+        assert set(results) == {"test.area_of_circle"}
+
+        # using `--select` with `resource_type`
+        results = self.run_dbt_ls(["--select", "resource_type:function"])
+        assert set(results) == {"test.area_of_circle"}
+
+        # using `--select` with path spec
+        results = self.run_dbt_ls(["--select", "functions/area_of_circle.sql"])
+        assert set(results) == {"test.area_of_circle"}
+
+        # using `--select` with path function name
+        results = self.run_dbt_ls(["--select", "area_of_circle"])
+        assert set(results) == {"test.area_of_circle"}
+
     def expect_all_output(self):
         # generic test FQNS include the resource + column they're defined on
         # models are just package, subdirectory path, name
@@ -1065,6 +1082,7 @@ class TestList:
             "test.t",
             "test.my_favorite_test",
             "test.my_second_favorite_test",
+            "test.area_of_circle",
             "semantic_model:test.my_sm",
             "metric:test.total_outer",
             "metric:test.conversion_metric",
@@ -1246,6 +1264,7 @@ class TestList:
         results = self.run_dbt_ls()
         assert set(results) == {
             "exposure:test.weekly_jaffle_metrics",
+            "test.area_of_circle",
             "test.ephemeral",
             "test.incremental",
             "test.outer",
@@ -1365,6 +1384,7 @@ class TestList:
         self.expect_source_output()
         self.expect_seed_output()
         self.expect_test_output()
+        self.expect_function_output()
         self.expect_select()
         self.expect_resource_type_multiple()
         self.expect_resource_type_env_var()

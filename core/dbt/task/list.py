@@ -37,6 +37,7 @@ class ListTask(GraphRunnableTask):
             NodeType.SavedQuery,
             NodeType.SemanticModel,
             NodeType.Unit,
+            NodeType.Function,
         )
     )
     ALL_RESOURCE_VALUES = DEFAULT_RESOURCE_VALUES | frozenset((NodeType.Analysis,))
