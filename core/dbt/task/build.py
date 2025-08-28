@@ -43,6 +43,7 @@ class BuildTask(RunTask):
         NodeType.Unit: test_runner,
         NodeType.SavedQuery: saved_query_runner,
         NodeType.Exposure: exposure_runner,
+        NodeType.Function: run_model_runner,  # TODO: create a function runner
     }
     ALL_RESOURCE_VALUES = frozenset({x for x in RUNNER_MAP.keys()})
 
