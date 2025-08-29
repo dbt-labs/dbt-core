@@ -33,4 +33,4 @@ def set_dbt_recorder_mode():
 class TestRecord:
     def test_record_when_env_var_set(self, project, set_dbt_recorder_mode):
         run_dbt(["run"])
-        assert os.path.isfile(os.path.join(os.getcwd(), "recording.json"))
+        assert os.path.isfile(os.path.join(project.project_root, "recording.json"))
