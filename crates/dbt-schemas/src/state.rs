@@ -516,11 +516,13 @@ pub struct NodeStatus {
 #[derive(Debug, Clone, Default)]
 pub struct CacheState {
     pub file_changes: FileChanges,
-    // only the resolved nodes which input files are unchanged
-    pub resolved_nodes: ResolvedNodes,
-    // updated nodes which input files are changed
-    pub unchanged_node_statuses: HashMap<String, NodeStatus>,
+    /// Only the unimpacted resolved nodes from file changes.
+    pub unimpacted_resolved_nodes: ResolvedNodes,
+    /// Only the unimpacted node statuses from file changes.
+    pub unimpacted_node_statuses: HashMap<String, NodeStatus>,
     /// The unchanged nodes, by unique id, based on file changes.
+    /// This does not mean that these nodes are "unimpacted",
+    /// it just means their correpsonding file was not changed.
     pub unchanged_nodes: Arc<HashSet<String>>,
 }
 impl CacheState {
