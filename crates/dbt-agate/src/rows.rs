@@ -10,7 +10,7 @@ use minijinja::{Error as MinijinjaError, State, Value};
 
 #[derive(Debug)]
 struct RowsAsTuple {
-    of_table: TableRepr,
+    of_table: Arc<TableRepr>,
 }
 
 impl TupleRepr for RowsAsTuple {
@@ -32,7 +32,7 @@ impl TupleRepr for RowsAsTuple {
 
     fn clone_repr(&self) -> Box<dyn TupleRepr> {
         Box::new(RowsAsTuple {
-            of_table: self.of_table.clone(),
+            of_table: Arc::clone(&self.of_table),
         })
     }
 }
@@ -40,7 +40,8 @@ impl TupleRepr for RowsAsTuple {
 /// Iterator for Rows that maintains its own cursor state.
 #[derive(Debug)]
 pub struct RowsIterator {
-    of_table: TableRepr,
+    of_table: Arc<TableRepr>,
+    num_rows: usize,
     cursor: usize,
 }
 
@@ -49,12 +50,9 @@ impl IntoIterator for Rows {
     type IntoIter = RowsIterator;
 
     fn into_iter(self) -> Self::IntoIter {
-        // Since we know the caller is about to iterate over the rows, we can
-        // force the table to be represented as a RowTable and avoid the overhead
-        // of casting on every row access.
-        let row_table = self.of_table.force_row_table().ok();
         RowsIterator {
-            of_table: row_table.unwrap_or_else(|| self.of_table.clone()),
+            of_table: Arc::clone(&self.of_table),
+            num_rows: self.of_table.num_rows(),
             cursor: 0,
         }
     }
@@ -64,7 +62,7 @@ impl Iterator for RowsIterator {
     type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.cursor < self.of_table.num_rows() {
+        if self.cursor < self.num_rows {
             let row = self.of_table.row_by_index(self.cursor as isize);
             self.cursor += 1;
             row
@@ -80,19 +78,19 @@ impl Iterator for RowsIterator {
 #[derive(Debug)]
 pub struct Rows {
     /// Internal representation of the list of rows is the table representation itself.
-    of_table: TableRepr,
+    of_table: Arc<TableRepr>,
 }
 
 impl Rows {
-    pub(crate) fn new(table: TableRepr) -> Self {
-        Self { of_table: table }
+    pub(crate) fn new(of_table: Arc<TableRepr>) -> Self {
+        Self { of_table }
     }
 }
 
 impl MappedSequence for Rows {
     fn values(&self) -> Tuple {
         let rows = RowsAsTuple {
-            of_table: self.of_table.clone(),
+            of_table: Arc::clone(&self.of_table),
         };
         let repr = Box::new(rows);
         Tuple(repr)

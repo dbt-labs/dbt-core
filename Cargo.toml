@@ -205,6 +205,7 @@ aws-sdk-s3 = "1.78.0"
 arrow = { version = "=54.2.1", features = ["prettyprint"] }
 arrow-array = { version = "=54.2.1" }
 arrow-buffer = { version = "=54.2.1" }
+arrow-csv = { version = "=54.2.1" }
 arrow-data = { version = "=54.2.1" }
 arrow-ipc = { version = "=54.2.1" }
 arrow-json = { version = "=54.2.1" }

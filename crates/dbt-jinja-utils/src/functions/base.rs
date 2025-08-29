@@ -1051,7 +1051,7 @@ impl Object for Exceptions {
                 let column_diff_table: &Arc<AgateTable> =
                     get_contract_mismatches(yaml_columns, sql_columns)?;
                 //  print_table(table, max_rows, max_columns, max_column_width)
-                let column_diff_string = print_table(column_diff_table, 50, 50, 50)?;
+                let column_diff_string = print_table(column_diff_table.as_ref(), 50, 50, 50)?;
                 let message = format!(
                     "This model has an enforced contract that failed.\n Please ensure the name, data_type, and number of columns in your contract match the columns in your model's definition.\n\n {column_diff_string}"
                 );

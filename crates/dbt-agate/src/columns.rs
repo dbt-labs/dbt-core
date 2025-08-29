@@ -18,6 +18,17 @@ impl ColumnNamesAsTuple {
     pub fn new(names: Vec<String>) -> Self {
         Self { names }
     }
+
+    pub fn of_table(table: &Arc<TableRepr>) -> Box<dyn TupleRepr> {
+        let column_names = table
+            .column_names()
+            .map(|name| name.to_owned())
+            .collect::<Vec<_>>();
+        // NOTE: a dedicated TupleRepr could be used here to avoid the intermediate Vec<String>
+        // of column names, but it would require more work to implement and it's not worth it (yet).
+        let repr = ColumnNamesAsTuple::new(column_names);
+        Box::new(repr)
+    }
 }
 
 impl TupleRepr for ColumnNamesAsTuple {
@@ -63,7 +74,7 @@ impl TupleRepr for ColumnNamesAsTuple {
 
 #[derive(Debug)]
 struct ColumnsAsTuple {
-    of_table: TableRepr,
+    of_table: Arc<TableRepr>,
 }
 
 impl TupleRepr for ColumnsAsTuple {
@@ -86,7 +97,7 @@ impl TupleRepr for ColumnsAsTuple {
 
     fn clone_repr(&self) -> Box<dyn TupleRepr> {
         Box::new(ColumnsAsTuple {
-            of_table: self.of_table.clone(),
+            of_table: Arc::clone(&self.of_table),
         })
     }
 }
@@ -97,11 +108,11 @@ impl TupleRepr for ColumnsAsTuple {
 #[derive(Debug)]
 pub struct Columns {
     /// Internal representation of the columns sequence is the table representation itself.
-    of_table: TableRepr,
+    of_table: Arc<TableRepr>,
 }
 
 impl Columns {
-    pub(crate) fn new(of_table: TableRepr) -> Self {
+    pub(crate) fn new(of_table: Arc<TableRepr>) -> Self {
         Self { of_table }
     }
 }
@@ -109,24 +120,23 @@ impl Columns {
 impl MappedSequence for Columns {
     fn values(&self) -> Tuple {
         let columns = ColumnsAsTuple {
-            of_table: self.of_table.clone(),
+            of_table: Arc::clone(&self.of_table),
         };
         let repr = Box::new(columns);
         Tuple(repr)
     }
 
     fn keys(&self) -> Option<Tuple> {
-        let column_names = self.of_table.column_names();
-        let repr = ColumnNamesAsTuple::new(column_names);
-        Some(Tuple(Box::new(repr)))
+        let column_names = ColumnNamesAsTuple::of_table(&self.of_table);
+        Some(Tuple(column_names))
     }
 
     fn items(&self) -> Option<Tuple> {
-        let column_names = ColumnNamesAsTuple::new(self.of_table.column_names());
+        let column_names = ColumnNamesAsTuple::of_table(&self.of_table);
         let columns = ColumnsAsTuple {
-            of_table: self.of_table.clone(),
+            of_table: Arc::clone(&self.of_table),
         };
-        let zipped = ZippedTupleRepr::new(Box::new(column_names), Box::new(columns));
+        let zipped = ZippedTupleRepr::new(column_names, Box::new(columns));
         let items = Tuple(Box::new(zipped));
         Some(items)
     }

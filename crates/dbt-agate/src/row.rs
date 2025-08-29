@@ -13,7 +13,7 @@ use std::sync::Arc;
 pub struct RowAsTuple {
     /// Always-valid index into the table's rows.
     index: usize,
-    of_table: TableRepr,
+    of_table: Arc<TableRepr>,
 }
 
 impl TupleRepr for RowAsTuple {
@@ -38,7 +38,7 @@ impl TupleRepr for RowAsTuple {
     fn clone_repr(&self) -> Box<dyn TupleRepr> {
         Box::new(RowAsTuple {
             index: self.index,
-            of_table: self.of_table.clone(),
+            of_table: Arc::clone(&self.of_table),
         })
     }
 }
@@ -51,12 +51,12 @@ pub struct Row {
     /// Always-valid index into the table's rows.
     index: usize,
     /// Internal representation of the table that contains this row.
-    of_table: TableRepr,
+    of_table: Arc<TableRepr>,
 }
 
 impl Row {
     /// Create a new row from an index and a table.
-    pub(crate) fn new(index: usize, of_table: TableRepr) -> Self {
+    pub(crate) fn new(index: usize, of_table: Arc<TableRepr>) -> Self {
         Self { index, of_table }
     }
 }
@@ -69,16 +69,15 @@ impl MappedSequence for Row {
     fn values(&self) -> Tuple {
         let row = RowAsTuple {
             index: self.index,
-            of_table: self.of_table.clone(),
+            of_table: Arc::clone(&self.of_table),
         };
         let repr = Box::new(row);
         Tuple(repr)
     }
 
     fn keys(&self) -> Option<Tuple> {
-        let column_names = self.of_table.column_names();
-        let repr = ColumnNamesAsTuple::new(column_names);
-        Some(Tuple(Box::new(repr)))
+        let column_names = ColumnNamesAsTuple::of_table(&self.of_table);
+        Some(Tuple(column_names))
     }
 }
 

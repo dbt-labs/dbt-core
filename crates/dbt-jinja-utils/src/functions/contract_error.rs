@@ -1,3 +1,6 @@
+use arrow::array::{ArrayRef, StringBuilder};
+use arrow::datatypes::{DataType, Field, Schema};
+use arrow::record_batch::RecordBatch;
 use dbt_agate::AgateTable;
 use minijinja::{Error, ErrorKind, Value};
 use serde::{Deserialize, Serialize};
@@ -35,21 +38,20 @@ pub fn get_contract_mismatches(
     let yaml_columns = convert_value_to_column_definitions(yaml_columns)?;
     let sql_columns = convert_value_to_column_definitions(sql_columns)?;
 
-    let column_names = vec![
-        "column_name".to_string(),
-        "definition_type".to_string(),
-        "contract_type".to_string(),
-        "mismatch_reason".to_string(),
+    let column_names = [
+        "column_name",
+        "definition_type",
+        "contract_type",
+        "mismatch_reason",
     ];
+    struct Row {
+        column_name: String,
+        definition_type: String,
+        contract_type: String,
+        mismatch_reason: String,
+    }
 
-    let column_types = vec![
-        "Text".to_string(),
-        "Text".to_string(),
-        "Text".to_string(),
-        "Text".to_string(),
-    ];
-
-    let mut mismatches: Vec<HashMap<String, String>> = Vec::new();
+    let mut mismatches: Vec<Row> = Vec::new();
     let mut sql_col_set = std::collections::HashSet::new();
 
     // Check each SQL column against YAML columns
@@ -67,14 +69,12 @@ pub fn get_contract_mismatches(
                     break;
                 } else {
                     // Same name, different type
-                    let mut row = HashMap::new();
-                    row.insert("column_name".to_string(), sql_col.name.clone());
-                    row.insert("definition_type".to_string(), sql_col.data_type.clone());
-                    row.insert("contract_type".to_string(), yaml_col.data_type.clone());
-                    row.insert(
-                        "mismatch_reason".to_string(),
-                        "data type mismatch".to_string(),
-                    );
+                    let row = Row {
+                        column_name: sql_col.name.clone(),
+                        definition_type: sql_col.data_type.clone(),
+                        contract_type: yaml_col.data_type.clone(),
+                        mismatch_reason: "data type mismatch".to_string(),
+                    };
                     mismatches.push(row);
                     break;
                 }
@@ -83,14 +83,12 @@ pub fn get_contract_mismatches(
 
         // If no name match found, this column is missing in contract
         if !found_match {
-            let mut row = HashMap::new();
-            row.insert("column_name".to_string(), sql_col.name.clone());
-            row.insert("definition_type".to_string(), sql_col.data_type.clone());
-            row.insert("contract_type".to_string(), String::new());
-            row.insert(
-                "mismatch_reason".to_string(),
-                "missing in contract".to_string(),
-            );
+            let row = Row {
+                column_name: sql_col.name.clone(),
+                definition_type: sql_col.data_type.clone(),
+                contract_type: String::new(),
+                mismatch_reason: "missing in contract".to_string(),
+            };
             mismatches.push(row);
         }
     }
@@ -98,34 +96,49 @@ pub fn get_contract_mismatches(
     // Check for YAML columns that don't have a match in SQL
     for yaml_col in &yaml_columns {
         if !sql_col_set.contains(&yaml_col.name) {
-            let mut row = HashMap::new();
-            row.insert("column_name".to_string(), yaml_col.name.clone());
-            row.insert("definition_type".to_string(), String::new());
-            row.insert("contract_type".to_string(), yaml_col.data_type.clone());
-            row.insert(
-                "mismatch_reason".to_string(),
-                "missing in definition".to_string(),
-            );
+            let row = Row {
+                column_name: yaml_col.name.clone(),
+                definition_type: String::new(),
+                contract_type: yaml_col.data_type.clone(),
+                mismatch_reason: "missing in definition".to_string(),
+            };
             mismatches.push(row);
         }
     }
 
     // Sort mismatches by column name
-    mismatches.sort_by(|a, b| a["column_name"].cmp(&b["column_name"]));
+    mismatches.sort_by(|a, b| a.column_name.cmp(&b.column_name));
 
-    // Convert to AgateTable format
-    let rows: Vec<Value> = mismatches
-        .into_iter()
-        .map(|row| {
-            let row_values: Vec<Value> = column_names
-                .iter()
-                .map(|col_name| Value::from(row.get(col_name).unwrap_or(&String::new()).clone()))
-                .collect();
-            Value::from(row_values)
-        })
-        .collect();
+    // Convert to an Arrow RecordBatch
+    let create_string_builder = |for_key: &dyn Fn(&Row) -> usize| -> StringBuilder {
+        let data_capacity = mismatches.iter().map(for_key).sum();
+        StringBuilder::with_capacity(mismatches.len(), data_capacity)
+    };
+    let mut column_name_builder = create_string_builder(&|row: &Row| row.column_name.len());
+    let mut definition_type_builder = create_string_builder(&|row: &Row| row.definition_type.len());
+    let mut contract_type_builder = create_string_builder(&|row: &Row| row.contract_type.len());
+    let mut mismatch_reason_builder = create_string_builder(&|row: &Row| row.mismatch_reason.len());
+    mismatches.iter().for_each(|row| {
+        column_name_builder.append_value(&row.column_name);
+        definition_type_builder.append_value(&row.definition_type);
+        contract_type_builder.append_value(&row.contract_type);
+        mismatch_reason_builder.append_value(&row.mismatch_reason);
+    });
+    let schema = Schema::new(
+        column_names
+            .iter()
+            .map(|name| Field::new(name.to_string(), DataType::Utf8, false))
+            .collect::<Vec<_>>(),
+    );
+    let columns = vec![
+        Arc::new(column_name_builder.finish()) as ArrayRef,
+        Arc::new(definition_type_builder.finish()) as ArrayRef,
+        Arc::new(contract_type_builder.finish()) as ArrayRef,
+        Arc::new(mismatch_reason_builder.finish()) as ArrayRef,
+    ];
+    let record_batch = RecordBatch::try_new(Arc::new(schema), columns).unwrap();
 
-    let table = Arc::new(AgateTable::from_rows(column_names, column_types, rows));
+    let table = Arc::new(AgateTable::from_record_batch(Arc::new(record_batch)));
     Ok(Box::leak(Box::new(table)))
 }
 

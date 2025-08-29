@@ -23,7 +23,7 @@ use std::sync::Arc;
 use crate::decimal::DecimalValue;
 
 /// Converts the i-th element of an Arrow array to a minijinja Value.
-pub trait ArrayConverter {
+pub trait ArrayConverter: Send + Sync {
     fn to_value(&self, idx: usize) -> Value;
 }
 

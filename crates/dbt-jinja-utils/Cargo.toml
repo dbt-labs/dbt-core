@@ -19,6 +19,8 @@ dbt-frontend-common = { workspace = true }
 dbt-fusion-adapter = { workspace = true }
 dbt-schemas = { workspace = true }
 
+arrow = { workspace = true }
+arrow-csv = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 dashmap = { workspace = true }

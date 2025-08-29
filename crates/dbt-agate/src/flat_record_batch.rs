@@ -7,12 +7,16 @@ use arrow::array::{
     Array, DictionaryArray, GenericListArray, OffsetSizeTrait, RecordBatch, RecordBatchOptions,
     StructArray,
 };
+use arrow::compute::CastOptions;
 use arrow::datatypes::Int64Type;
+use arrow_data::ArrayData;
 use arrow_schema::{ArrowError, DataType, Field, Schema};
 use core::fmt;
 use std::collections::HashSet;
 use std::ops::Deref;
 use std::sync::Arc;
+
+use crate::converters::{ArrayConverter, make_array_converter};
 
 /// Metadata key used to store the Agate data type associated with an Arrow array.
 ///
@@ -63,6 +67,18 @@ impl FlattenRecordBatchState {
             let array = batch.column(i).clone();
             state.stack.push((field, array));
         }
+        state
+    }
+
+    pub fn from_single_column(field: Field, column: Arc<dyn Array>) -> Self {
+        let mut state = Self {
+            new_fields: Vec::with_capacity(1),
+            new_columns: Vec::with_capacity(1),
+            stack: Vec::with_capacity(1),
+        };
+
+        // initial push of column to be processed onto the stack
+        state.stack.push((field, column));
         state
     }
 
@@ -196,17 +212,123 @@ impl FlattenRecordBatchState {
             }
             // Flattening union columns is impossible, forward them as flat columns
             DataType::Union(_, _) => self.emit_flat_col(field, None, column.clone()),
-            DataType::Dictionary(_, dict_value_type) => {
-                match **dict_value_type {
-                    DataType::Utf8 => self.emit_flat_col(field, Some("Text"), column.clone()),
-                    // TODO: learn to flatten dictionary-encoded columns
-                    _ => self.emit_flat_col(field, None, column.clone()),
-                }
+            DataType::Dictionary(indices_type, value_type) => {
+                self.flatten_dict_encoded_column(field, indices_type, value_type, &column)
             }
             // No way to flatten map columns, forward them as flat columns
             DataType::Map(_, _) => self.emit_flat_col(field, None, column.clone()),
             // REE arrays are not very common yet, so we just forward them as flat columns
             DataType::RunEndEncoded(_, _) => self.emit_flat_col(field, None, column.clone()),
+        }
+    }
+
+    fn flatten_dict_encoded_column(
+        &mut self,
+        field: Field,
+        _indices_type: &DataType,
+        value_type: &DataType,
+        column: &Arc<dyn Array>,
+    ) {
+        match value_type {
+            // XXX: agate doesn't have the type Null, so we default to "Text" (i.e. an all-NULL text column)
+            DataType::Null => self.emit_flat_col(field, Some("Text"), column.clone()),
+            DataType::Boolean => self.emit_flat_col(field, Some("Boolean"), column.clone()),
+            DataType::Int8
+            | DataType::Int16
+            | DataType::Int32
+            | DataType::Int64
+            | DataType::UInt8
+            | DataType::UInt16
+            | DataType::UInt32
+            | DataType::UInt64
+            | DataType::Float16
+            | DataType::Float32
+            | DataType::Float64
+            | DataType::Decimal128(_, _)
+            | DataType::Decimal256(_, _) => {
+                self.emit_flat_col(field, Some("Number"), column.clone())
+            }
+            DataType::Timestamp(_, _) => {
+                self.emit_flat_col(field, Some("DateTime"), column.clone())
+            }
+            DataType::Date32 | DataType::Date64 => {
+                self.emit_flat_col(field, Some("Date"), column.clone())
+            }
+            DataType::Time32(_)
+            | DataType::Time64(_)
+            | DataType::Duration(_)
+            | DataType::Interval(_) => self.emit_flat_col(field, Some("TimeDelta"), column.clone()),
+            // XXX: "Text" is used for binary and string types because agate doesn't have "Binary"
+            DataType::Binary
+            | DataType::FixedSizeBinary(_)
+            | DataType::LargeBinary
+            | DataType::BinaryView
+            | DataType::Utf8
+            | DataType::LargeUtf8
+            | DataType::Utf8View => self.emit_flat_col(field, Some("Text"), column.clone()),
+            // Dictionary-encoded nested types are flattened and then re-encoded as
+            // dictionary-encoded columns with the same indices as the original column.
+            DataType::List(_)
+            | DataType::LargeList(_)
+            | DataType::ListView(_)
+            | DataType::LargeListView(_)
+            | DataType::FixedSizeList(_, _)
+            | DataType::Struct(_)
+            | DataType::Union(_, _)
+            | DataType::Map(_, _)
+            | DataType::RunEndEncoded(_, _) => {
+                // Get the array of the dictionary values
+                let dictionary_values =
+                    arrow::array::make_array(column.to_data().child_data()[0].clone());
+
+                // Flatten the batch made of a single column -- the dictionary values.
+                // The column name is the same name as the original dictionary-encoded
+                // column.
+                let inner_batch = {
+                    let state = FlattenRecordBatchState::from_single_column(
+                        field.with_data_type(dictionary_values.data_type().clone()),
+                        dictionary_values.clone(),
+                    );
+                    state.try_finalize().unwrap()
+                };
+
+                // Now for every column in the flattened inner batch, we need to
+                // rebuild a dictionary-encoded column using the same indices as
+                // the original column.
+                let inner_schema = inner_batch.schema();
+                let original_data = column.to_data();
+                for i in (0..inner_batch.num_columns()).rev() {
+                    // Get a new dictionary-encoded column with the same indices
+                    let inner_column =
+                        dict_encoded_with_same_indices(&original_data, inner_batch.column(i))
+                            .unwrap();
+                    // Use the dictionary-encoded column data type for the new field
+                    let inner_field = inner_schema
+                        .field(i)
+                        .clone()
+                        .with_data_type(inner_column.data_type().clone());
+                    // Keep recursively flattening. This will eliminate possible
+                    // nested dictionary-encoded columns.
+                    self.stack.push((inner_field, inner_column));
+                }
+            }
+            // When we see a dictionary-encoded dictionary, we must expand the inner
+            // dictionary and avoid nested dictionary-encoded columns.
+            DataType::Dictionary(_, inner_value_type) => {
+                // Decode the dictionary-encoded column to get the dictionary values...
+                let decoded = {
+                    let cast_options = CastOptions::default();
+                    arrow::compute::cast_with_options(
+                        column.as_ref(),
+                        inner_value_type.as_ref(),
+                        &cast_options,
+                    )
+                    .unwrap()
+                };
+                // ...and recursively flatten the decoded column.
+                let field = field.with_data_type(decoded.data_type().clone());
+                self.stack.push((field, decoded));
+            }
         }
     }
 
@@ -334,39 +456,89 @@ impl FlattenRecordBatchState {
     }
 }
 
+/// Create a new dictionary-encoded array with the same indices as the original
+/// dictionary-encoded array but with new dictionary values.
+///
+/// PRE-CONDITION: The new values must have the same length as the original
+/// dictionary values so that all the indices in the original array remain valid.
+fn dict_encoded_with_same_indices(
+    original_dict_encoded: &ArrayData,
+    new_values: &Arc<dyn Array + 'static>,
+) -> Result<Arc<dyn Array + 'static>, ArrowError> {
+    debug_assert!(
+        original_dict_encoded.child_data()[0].len() == new_values.len(),
+        "new_values must have the same length as the original dictionary values"
+    );
+    let indices_type = match original_dict_encoded.data_type() {
+        DataType::Dictionary(indices_type, _) => indices_type.clone(),
+        _ => unreachable!(),
+    };
+    let values_type = Box::new(new_values.data_type().clone());
+    let new_type = DataType::Dictionary(indices_type, values_type);
+    let new_data = ArrayData::try_new(
+        new_type,
+        original_dict_encoded.len(),
+        original_dict_encoded
+            .nulls()
+            .cloned()
+            .map(|n| n.into_inner().into_inner()),
+        original_dict_encoded.offset(),
+        original_dict_encoded.buffers().to_vec(),
+        vec![new_values.to_data()], // replace the child data (the dictionary values) with the new values
+    )?;
+
+    let new_dict_array = arrow::array::make_array(new_data);
+    Ok(new_dict_array)
+}
+
 /// Wrapper on an Arrow RecordBatch of flat (non-nested) columns.
 ///
 /// The original batch is kept around for troubleshooting and
 /// future needs of data provenance. Buffers are shared between
 /// the two instances so this doesn't require much more memory
 /// than if we were storing a single batch.
-#[derive(Clone)]
 pub(crate) struct FlatRecordBatch {
     /// Flat record batch.
     flat: Arc<RecordBatch>,
     /// The original record batch before the flattening of nested columns.
     _original: Option<Arc<RecordBatch>>,
+    /// Array converters for each column in the flat record batch.
+    ///
+    /// These are pre-built converters allow converting any value
+    /// in the flat record batch to a minijinja value.
+    converters: Vec<Box<dyn ArrayConverter>>,
 }
 
 impl FlatRecordBatch {
-    pub fn new(batch: Arc<RecordBatch>) -> Self {
-        let flat = flatten_record_batch_columns(batch.as_ref());
-        Self {
-            flat: Arc::new(flat),
-            _original: Some(batch),
-        }
+    pub fn try_new(batch: Arc<RecordBatch>) -> Result<Self, ArrowError> {
+        let flat = Arc::new(flatten_record_batch_columns(batch.as_ref()));
+        Self::_from_flattened_record_batch(flat, Some(batch))
     }
 
-    pub fn flat(&self) -> &Arc<RecordBatch> {
+    fn _from_flattened_record_batch(
+        flat: Arc<RecordBatch>,
+        original: Option<Arc<RecordBatch>>,
+    ) -> Result<Self, ArrowError> {
+        let converters = flat
+            .columns()
+            .iter()
+            .map(|array| make_array_converter(&**array))
+            .collect::<Result<Vec<_>, ArrowError>>()?;
+        Ok(Self {
+            flat,
+            _original: original,
+            converters,
+        })
+    }
+
+    /// The inner [RecordBatch] with only flat columns.
+    pub fn inner(&self) -> &Arc<RecordBatch> {
         &self.flat
     }
 
     pub fn with_single_column(&self, idx: usize) -> Self {
         let column_batch = single_column_batch(&self.flat, idx);
-        Self {
-            flat: Arc::new(column_batch),
-            _original: None,
-        }
+        Self::_from_flattened_record_batch(Arc::new(column_batch), None).unwrap()
     }
 
     pub(crate) fn with_renamed_columns(&self, renamed_columns: &[String]) -> FlatRecordBatch {
@@ -383,10 +555,15 @@ impl FlatRecordBatch {
         };
         // only column names changed, so .unwrap() is safe
         let new_flat = RecordBatch::try_new(new_schema, self.flat.columns().to_vec()).unwrap();
-        FlatRecordBatch {
-            flat: Arc::new(new_flat),
-            _original: None,
-        }
+        Self::_from_flattened_record_batch(Arc::new(new_flat), None).unwrap()
+    }
+
+    pub(crate) fn converters(&self) -> &[Box<dyn ArrayConverter>] {
+        &self.converters
+    }
+
+    pub(crate) fn column_converter(&self, idx: usize) -> &dyn ArrayConverter {
+        self.converters[idx].as_ref()
     }
 }
 

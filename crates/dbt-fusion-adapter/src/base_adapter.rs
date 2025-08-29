@@ -8,7 +8,7 @@ use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
-use dbt_xdbc::Connection;
+use dbt_xdbc::{Backend, Connection};
 use minijinja::arg_utils::ArgParser;
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
@@ -21,6 +21,17 @@ use std::sync::Arc;
 ///
 /// Used to identify the specific database adapter being used.
 pub type AdapterType = dbt_common::adapter::AdapterType;
+
+pub fn backend_of(adapter_type: AdapterType) -> Backend {
+    match adapter_type {
+        AdapterType::Postgres => Backend::Postgres,
+        AdapterType::Snowflake => Backend::Snowflake,
+        AdapterType::Bigquery => Backend::BigQuery,
+        AdapterType::Databricks => Backend::Databricks,
+        AdapterType::Redshift => Backend::Redshift,
+        AdapterType::Parse => Backend::Postgres, // Parse is not a real adapter
+    }
+}
 
 /// Type queries to be implemented for every [BaseAdapter]
 pub trait AdapterTyping {

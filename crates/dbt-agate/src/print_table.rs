@@ -1,11 +1,9 @@
-use std::sync::Arc;
-
 use minijinja::{Error as MinijinjaError, Value};
 
 use crate::AgateTable;
 
 pub fn print_table(
-    table: &Arc<AgateTable>,
+    table: &AgateTable,
     max_rows: usize,
     max_columns: usize,
     max_column_width: usize,

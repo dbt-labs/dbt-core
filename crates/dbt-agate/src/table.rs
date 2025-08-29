@@ -2,7 +2,6 @@ use crate::Tuple;
 use crate::column::Column;
 use crate::columns::ColumnNamesAsTuple;
 use crate::columns::Columns;
-use crate::converters::make_array_converter;
 use crate::flat_record_batch::FlatRecordBatch;
 use crate::print_table::print_table;
 use crate::row::Row;
@@ -10,7 +9,6 @@ use crate::rows::Rows;
 use crate::vec_of_rows::VecOfRows;
 
 use arrow::record_batch::RecordBatch;
-use arrow_schema::DataType;
 use arrow_schema::{ArrowError, Schema};
 use minijinja::Value;
 use minijinja::arg_utils::ArgsIter;
@@ -19,58 +17,73 @@ use minijinja::value::Kwargs;
 use minijinja::value::ValueMap;
 use minijinja::value::mutable_map::MutableMap;
 use minijinja::value::{Enumerator, Object};
-use minijinja::{Error as MinijinjaError, ErrorKind, State};
+use minijinja::{Error as MinijinjaError, State};
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 /// Internal table representation.
 ///
-/// An AgateTable can be internally represented as either an Arrow RecordBatch or
-/// a vector of Jinja objects -- one per row.
+/// An AgateTable can be internally represented as an Arrow RecordBatch and,
+/// optionally, a vector of Jinja objects -- one iterable per row.
 ///
-/// Both representations are immutable, so they can be reference-counted and shared
-/// without copying.
+/// Both representations are immutable.
 #[derive(Debug)]
-pub(crate) enum TableRepr {
+pub(crate) struct TableRepr {
     /// Arrow representation of the table.
-    Arrow(FlatRecordBatch),
-    /// RowTable representation of the table.
-    RowTable(Arc<VecOfRows>),
-}
-
-impl Clone for TableRepr {
-    /// Clone the TableRepr by cloning one Arc pointer.
-    fn clone(&self) -> Self {
-        match self {
-            TableRepr::Arrow(batch) => TableRepr::Arrow(batch.clone()),
-            TableRepr::RowTable(table) => TableRepr::RowTable(table.clone()),
-        }
-    }
+    flat: FlatRecordBatch,
+    /// Lazy-computed representation of the table as a vector of rows.
+    row_table: OnceLock<Result<Arc<VecOfRows>, Arc<ArrowError>>>,
 }
 
 impl TableRepr {
-    /// Force the table to be represented as a RowTable.
+    fn new(flat: FlatRecordBatch, row_table: Option<Arc<VecOfRows>>) -> Self {
+        let row_table = match row_table {
+            Some(vec_of_rows) => OnceLock::from(Ok(vec_of_rows)),
+            None => OnceLock::new(),
+        };
+        Self { flat, row_table }
+    }
+
+    /// Force the lazy initialization of table as a [VecOfRows].
     ///
-    /// This is useful because we don't want to, at first, implement all the functions
-    /// against the Arrow-based table representation. Instead, we can implement them
-    /// against the RowTable representation and incrementally migrate the implementations
-    /// to also support Arrow later.
-    pub fn force_row_table(&self) -> Result<TableRepr, ArrowError> {
-        match &self {
-            TableRepr::Arrow(batch) => {
-                let vec_of_rows = Arc::new(VecOfRows::from_flat_record_batch(batch.clone())?);
-                let row_table = TableRepr::RowTable(vec_of_rows);
-                Ok(row_table)
+    /// We try to delay the conversion from the Arrow-based [FlatRecordBatch] representation
+    /// to [VecOfRows] until we actually need it. This means we can work with the Arrow-based
+    /// representation for as long as possible, which is more efficient and structured.
+    ///
+    /// Reasons to call this function:
+    /// - We don't want or don't have the time to implement the functionality against the
+    ///   Arrow-based representation.
+    /// - We must have the values as Jinja objects (e.g., for passing values to a Jinja
+    ///   template)
+    ///
+    /// It's OK to call this function multiple times, it will only convert the table once.
+    ///
+    /// We *always* have the Arrow-based representation, so if you can implement Agate
+    /// operations delegating to arrow-compute or some custom Arrow-based logic, you should
+    /// do so.
+    #[allow(dead_code)]
+    pub fn force_row_table(&self) -> Result<&Arc<VecOfRows>, MinijinjaError> {
+        let res = self.row_table.get_or_init(|| {
+            let vec_of_rows = VecOfRows::from_flat_record_batch(&self.flat)?;
+            Ok(Arc::new(vec_of_rows))
+        });
+        match res {
+            Ok(table) => Ok(table),
+            Err(e) => {
+                let e = MinijinjaError::new(minijinja::ErrorKind::InvalidOperation, e.to_string());
+                Err(e)
             }
-            TableRepr::RowTable(_) => Ok(self.clone()),
         }
     }
 
+    /// Peek at the row table without forcing its initialization.
+    pub fn peek_row_table(&self) -> Option<&Arc<VecOfRows>> {
+        self.row_table.get().and_then(|res| res.as_ref().ok())
+    }
+
     pub fn to_record_batch(&self) -> Arc<RecordBatch> {
-        match self {
-            TableRepr::Arrow(batch) => batch.flat().clone(),
-            TableRepr::RowTable(vec_of_rows) => vec_of_rows.to_record_batch(),
-        }
+        Arc::clone(self.flat.inner())
     }
 
     pub fn adjusted_index(idx: isize, len: usize) -> Option<usize> {
@@ -99,82 +112,57 @@ impl TableRepr {
     // Columns ----------------------------------------------------------------
 
     pub fn num_columns(&self) -> usize {
-        match self {
-            TableRepr::Arrow(batch) => batch.num_columns(),
-            TableRepr::RowTable(table) => table.num_columns(),
-        }
+        self.flat.num_columns()
     }
 
-    pub fn get_column(&self, idx: isize) -> Option<Column> {
+    pub fn get_column(self: &Arc<Self>, idx: isize) -> Option<Column> {
         let idx = self.adjusted_column_index(idx)?;
-        let col = Column::new(idx, self.clone());
+        let col = Column::new(idx, Arc::clone(self));
         Some(col)
     }
 
-    pub fn column_name(&self, idx: isize) -> Option<String> {
+    pub fn column_name(&self, idx: isize) -> Option<&String> {
         let idx = self.adjusted_column_index(idx)?;
-        match self {
-            TableRepr::Arrow(batch) => {
-                let name = batch.schema().field(idx).name().clone();
-                Some(name)
-            }
-            TableRepr::RowTable(table) => table.schema().get(idx).cloned(),
-        }
+        let name = self.flat.schema_ref().field(idx).name();
+        Some(name)
     }
 
-    pub fn columns(&self) -> Columns {
-        Columns::new(self.clone())
+    pub fn columns(self: &Arc<Self>) -> Columns {
+        Columns::new(Arc::clone(self))
     }
 
-    pub fn column_names(&self) -> Vec<String> {
-        match &self {
-            TableRepr::Arrow(batch) => batch
-                .schema()
-                .fields()
-                .iter()
-                .map(|field| field.name().clone())
-                .collect(),
-            TableRepr::RowTable(row_table) => row_table.schema().to_vec(),
-        }
+    pub fn column_names(&self) -> impl Iterator<Item = &String> + '_ {
+        self.flat
+            .schema_ref()
+            .fields()
+            .iter()
+            .map(|field| field.name())
     }
 
-    pub fn single_column_table(&self, idx: isize) -> Option<TableRepr> {
+    pub fn single_column_table(&self, idx: isize) -> Option<Arc<TableRepr>> {
         let idx = self.adjusted_column_index(idx)?;
-        match self {
-            TableRepr::Arrow(batch) => {
-                let repr = TableRepr::Arrow(batch.with_single_column(idx));
-                Some(repr)
-            }
-            TableRepr::RowTable(vec_of_rows) => {
-                let result = vec_of_rows.with_single_column(idx);
-                debug_assert!(
-                    result.is_ok(),
-                    "Unexpected error: {}",
-                    result.err().unwrap()
-                );
-                let repr = TableRepr::RowTable(Arc::new(result.unwrap()));
-                Some(repr)
-            }
-        }
+        let flat_with_single_column = self.flat.with_single_column(idx);
+        let repr = TableRepr::new(flat_with_single_column, None);
+        Some(Arc::new(repr))
     }
 
     /// Return a single-column table with the distinct values in this column.
-    pub fn column_distinct(&self, col_idx: isize) -> Self {
+    pub fn column_distinct(&self, col_idx: isize) -> Arc<Self> {
         let _col = self.single_column_table(col_idx).unwrap();
         todo!("column_distinct")
     }
 
-    pub fn column_without_nulls(&self, col_idx: isize) -> Self {
+    pub fn column_without_nulls(&self, col_idx: isize) -> Arc<Self> {
         let _col = self.single_column_table(col_idx).unwrap();
         todo!("column_without_nulls")
     }
 
-    pub fn column_sorted(&self, col_idx: isize) -> Self {
+    pub fn column_sorted(&self, col_idx: isize) -> Arc<Self> {
         let _col = self.single_column_table(col_idx).unwrap();
         todo!("column_sorted")
     }
 
-    pub fn column_without_nulls_sorted(&self, col_idx: isize) -> Self {
+    pub fn column_without_nulls_sorted(&self, col_idx: isize) -> Arc<Self> {
         let _col = self.single_column_table(col_idx).unwrap();
         todo!("column_without_nulls_sorted")
     }
@@ -189,47 +177,29 @@ impl TableRepr {
         todo!("index_of_value_in_column")
     }
 
-    fn with_renamed_columns(&self, renamed_columns: Vec<String>) -> Self {
+    fn with_renamed_columns(&self, renamed_columns: Vec<String>) -> Arc<Self> {
         debug_assert!(renamed_columns.len() == self.num_columns());
-        match self {
-            TableRepr::Arrow(batch) => {
-                let new_batch = batch.with_renamed_columns(&renamed_columns);
-                TableRepr::Arrow(new_batch)
-            }
-            TableRepr::RowTable(vec_of_rows) => {
-                let new_vec_of_rows = vec_of_rows.with_renamed_columns(renamed_columns);
-                TableRepr::RowTable(Arc::new(new_vec_of_rows))
-            }
-        }
+        let new_batch = self.flat.with_renamed_columns(&renamed_columns);
+        let new_vec_of_rows = self.peek_row_table().map(Arc::clone);
+        let repr = TableRepr::new(new_batch, new_vec_of_rows);
+        Arc::new(repr)
     }
 
     // Rows -------------------------------------------------------------------
 
     pub fn num_rows(&self) -> usize {
-        match &self {
-            TableRepr::Arrow(batch) => batch.num_rows(),
-            TableRepr::RowTable(vec_of_rows) => vec_of_rows.rows().len(),
-        }
+        self.flat.num_rows()
     }
 
-    pub fn row_by_index(&self, idx: isize) -> Option<Value> {
+    pub fn row_by_index(self: &Arc<Self>, idx: isize) -> Option<Value> {
         self.adjusted_row_index(idx).map(|i| {
-            let row = Row::new(i, self.clone());
+            let row = Row::new(i, Arc::clone(self));
             Value::from_object(row)
         })
     }
 
-    pub fn rows(&self) -> Rows {
-        match self {
-            TableRepr::Arrow(batch) => {
-                let repr = TableRepr::Arrow((*batch).clone());
-                Rows::new(repr)
-            }
-            TableRepr::RowTable(vec_of_rows) => {
-                let repr = TableRepr::RowTable(vec_of_rows.clone());
-                Rows::new(repr)
-            }
-        }
+    pub fn rows(self: &Arc<Self>) -> Rows {
+        Rows::new(Arc::clone(self))
     }
 
     pub fn count_occurrences_of_row(&self, _needle: &Value) -> usize {
@@ -240,12 +210,20 @@ impl TableRepr {
         todo!("index_of_row")
     }
 
-    pub fn count_occurrences_of_value_in_row(&self, _needle: &Value, row_idx: isize) -> usize {
+    pub fn count_occurrences_of_value_in_row(
+        self: &Arc<Self>,
+        _needle: &Value,
+        row_idx: isize,
+    ) -> usize {
         let _row = self.row_by_index(row_idx).unwrap();
         todo!("count_occurrences_of_value_in_row")
     }
 
-    pub fn index_of_value_in_row(&self, _needle: &Value, row_idx: isize) -> Option<usize> {
+    pub fn index_of_value_in_row(
+        self: &Arc<Self>,
+        _needle: &Value,
+        row_idx: isize,
+    ) -> Option<usize> {
         let _row = self.row_by_index(row_idx).unwrap();
         todo!("index_of_value_in_row")
     }
@@ -255,19 +233,13 @@ impl TableRepr {
     pub fn cell(&self, row_idx: isize, col_idx: isize) -> Option<Value> {
         let row_idx = self.adjusted_row_index(row_idx)?;
         let col_idx = self.adjusted_column_index(col_idx)?;
-        match self {
-            TableRepr::Arrow(batch) => {
-                let column = batch.column(col_idx);
-                make_array_converter(column)
-                    .map(|converter| converter.to_value(row_idx))
-                    .map_err(|e| {
-                        debug_assert!(false, "Unexpected Arrow error: {e}");
-                        e
-                    })
-                    .ok()
-            }
-            TableRepr::RowTable(vec_of_rows) => {
-                let row: &Value = vec_of_rows.rows().get(row_idx)?;
+        self.peek_row_table().map_or_else(
+            || {
+                let value = self.flat.column_converter(col_idx).to_value(row_idx);
+                Some(value)
+            },
+            |vec_of_rows| {
+                let row: &Value = vec_of_rows.rows_ref().get(row_idx)?;
                 match row.get_item_by_index(col_idx) {
                     Ok(value) => Some(value),
                     Err(e) => {
@@ -275,8 +247,8 @@ impl TableRepr {
                         None
                     }
                 }
-            }
-        }
+            },
+        )
     }
 }
 
@@ -292,54 +264,24 @@ impl TableRepr {
 #[derive(Debug, Clone)]
 pub struct AgateTable {
     /// The internal representation of the table.
-    repr: TableRepr,
+    repr: Arc<TableRepr>,
 }
 
 impl AgateTable {
-    pub(crate) fn new(repr: TableRepr) -> Self {
-        Self { repr }
+    /// Create an AgateTable from an Arrow RecordBatch.
+    pub fn new(batch: Arc<RecordBatch>) -> Self {
+        Self::from_record_batch(batch)
     }
 
     /// Create an AgateTable from an Arrow RecordBatch.
     pub fn from_record_batch(batch: Arc<RecordBatch>) -> Self {
-        let flat = FlatRecordBatch::new(batch);
-        let repr = TableRepr::Arrow(flat);
-        Self::new(repr)
+        let flat = FlatRecordBatch::try_new(batch).unwrap();
+        let repr = TableRepr::new(flat, None);
+        Self::from_repr(Arc::new(repr))
     }
 
-    /// Create an AgateTable from column names and rows.
-    ///
-    /// Each row is a single minijiinja::Value that contains the row data.
-    pub fn from_rows(
-        column_names: Vec<String>,
-        column_types: Vec<String>,
-        rows: Vec<Value>,
-    ) -> Self {
-        let vec_of_rows = VecOfRows::new(column_names, column_types, rows);
-        let repr = TableRepr::RowTable(Arc::new(vec_of_rows));
-        Self::new(repr)
-    }
-
-    /// Create an AgateTable from column names and rows using a type parser function.
-    ///
-    /// Each row is a single minijiinja::Value that contains the row data.
-    pub fn from_rows_with_type_parser(
-        column_names: Vec<String>,
-        column_types: Vec<String>,
-        rows: Vec<Value>,
-        type_parser: impl Fn(&str) -> DataType,
-    ) -> Self {
-        let vec_of_rows = VecOfRows::new(column_names, column_types, rows);
-        let repr = if vec_of_rows.rows().is_empty() {
-            // can't use Arrow if there are no rows
-            TableRepr::RowTable(Arc::new(vec_of_rows))
-        } else {
-            // Convert to Arrow representation to ensure proper column types
-            let record_batch = vec_of_rows.to_record_batch_with_type_parser(type_parser);
-            let flat = FlatRecordBatch::new(record_batch);
-            TableRepr::Arrow(flat)
-        };
-        Self::new(repr)
+    pub(crate) fn from_repr(repr: Arc<TableRepr>) -> Self {
+        Self { repr }
     }
 
     /// Converts this AgateTable into an Arrow RecordBatch.
@@ -365,13 +307,13 @@ impl AgateTable {
     }
 
     /// Get a single column name.
-    pub fn column_name(&self, idx: isize) -> Option<String> {
+    pub fn column_name(&self, idx: isize) -> Option<&String> {
         self.repr.column_name(idx)
     }
 
     /// Get the column names.
     pub fn column_names(&self) -> Vec<String> {
-        self.repr.column_names()
+        self.repr.column_names().map(|s| s.to_owned()).collect()
     }
 
     // Rows -------------------------------------------------------------------
@@ -437,20 +379,20 @@ impl AgateTable {
         });
         if row_names.is_some() {
             return Err(MinijinjaError::new(
-                ErrorKind::InvalidOperation,
+                minijinja::ErrorKind::InvalidOperation,
                 "Agate.rename: renaming row names is not implemented yet",
             ));
         }
         if slug_columns || slug_rows {
             return Err(MinijinjaError::new(
-                ErrorKind::InvalidOperation,
+                minijinja::ErrorKind::InvalidOperation,
                 "Agate.rename: slugging columns or rows is not implemented yet",
             ));
         }
 
         if let Some(renamed_columns) = renamed_columns {
             let repr = self.repr.with_renamed_columns(renamed_columns);
-            Ok(AgateTable::new(repr))
+            Ok(AgateTable::from_repr(repr))
         } else {
             Ok(self.clone())
         }
@@ -571,17 +513,19 @@ mod tests {
     use crate::flat_record_batch::FlatRecordBatch;
     use crate::*;
     use arrow::array::{
-        ArrayRef, BooleanBuilder, Float64Builder, Int32Array, Int32Builder, ListBuilder,
-        StringBuilder, StructBuilder,
+        ArrayRef, BooleanBuilder, DictionaryArray, Float64Builder, Int32Array, Int32Builder,
+        ListBuilder, StringBuilder, StructBuilder,
     };
     use arrow::array::{GenericListArray, StringArray};
-    use arrow::datatypes::{DataType, Field, Schema};
+    use arrow::csv::reader::ReaderBuilder;
+    use arrow::datatypes::{DataType, Field, Int32Type, Schema};
     use arrow::record_batch::RecordBatch;
-    use arrow_array::{ListArray, RecordBatchOptions};
+    use arrow_array::{Array, ListArray, RecordBatchOptions};
     use arrow_schema::Fields;
     use minijinja::Environment;
     use minijinja::value::ValueMap;
     use minijinja::value::mutable_map::MutableMap;
+    use std::io;
     use std::sync::Arc;
 
     fn simple_record_batch() -> RecordBatch {
@@ -628,17 +572,24 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "https://github.com/dbt-labs/fs/issues/1887"]
     fn test_agate_table_from_value() {
-        let table = AgateTable::from_rows(
-            vec!["grantee".to_string(), "privilege_type".to_string()],
-            vec!["Text".to_string(), "Text".to_string()],
-            vec![
-                Value::from(vec!["dbt_test_user_1".to_string(), "SELECT".to_string()]),
-                Value::from(vec!["dbt_test_user_2".to_string(), "SELECT".to_string()]),
-                Value::from(vec!["dbt_test_user_3".to_string(), "SELECT".to_string()]),
-            ],
+        let file = io::Cursor::new(
+            "grantee,privilege_type\n\
+ dbt_test_user_1,SELECT\n\
+ dbt_test_user_2,SELECT\n\
+ dbt_test_user_3,SELECT\n",
         );
+        let csv_schema = Schema::new(vec![
+            Field::new("grantee", DataType::Utf8, true),
+            Field::new("privilege_type", DataType::Utf8, true),
+        ]);
+        let mut reader = ReaderBuilder::new(Arc::new(csv_schema))
+            .with_header(true)
+            .build(file)
+            .unwrap();
+        let batch = reader.next().unwrap().unwrap();
+        let table = AgateTable::from_record_batch(Arc::new(batch));
+
         let table_value = Value::from_object(table);
         let downcasted = table_value.downcast_object::<AgateTable>().unwrap();
         assert_eq!(downcasted.num_columns(), 2);
@@ -844,7 +795,98 @@ mod tests {
     #[test]
     fn test_record_batch_flattening() {
         let batch = nested_record_batch();
-        let _batch = FlatRecordBatch::new(Arc::new(batch));
+        let _batch = FlatRecordBatch::try_new(Arc::new(batch)).unwrap();
+        // TODO(felipcrv); implement CSV serialization to assert here
+    }
+
+    /// Take a 5-element column and make a dictionary-encoded version of it
+    /// using the first two elements as dictionary values.
+    fn dict_encoded_example(col: &ArrayRef) -> ArrayRef {
+        let dictionary_values = col.slice(0, 2);
+        let indices_array = Int32Array::from(vec![Some(0), Some(1), Some(0), Some(1), Some(0)]);
+        let dict_array =
+            DictionaryArray::<Int32Type>::try_new(indices_array, dictionary_values).unwrap();
+        Arc::new(dict_array) as ArrayRef
+    }
+
+    fn batch_with_replaced_column(
+        batch: &RecordBatch,
+        col_idx: usize,
+        new_col: ArrayRef,
+    ) -> RecordBatch {
+        let new_columns = batch
+            .columns()
+            .iter()
+            .enumerate()
+            .map(|(i, col)| {
+                if i == col_idx {
+                    new_col.clone()
+                } else {
+                    col.clone()
+                }
+            })
+            .collect::<Vec<_>>();
+        let new_schema = {
+            let old_schema = batch.schema();
+            let fields = new_columns
+                .iter()
+                .enumerate()
+                .map(|(i, col)| {
+                    old_schema
+                        .field(i)
+                        .clone()
+                        .with_data_type(col.data_type().clone())
+                })
+                .collect::<Vec<_>>();
+            Arc::new(Schema::new(fields))
+        };
+        RecordBatch::try_new(new_schema, new_columns).unwrap()
+    }
+
+    #[test]
+    fn test_record_batch_flattening_with_dict_encoded_struct() {
+        let batch = nested_record_batch();
+
+        let event_meta = batch.column(3);
+        assert!(matches!(event_meta.data_type(), DataType::Struct(_)));
+
+        // Build a dictionary-encoded version of the "events" column
+        let dict_event_meta = dict_encoded_example(event_meta);
+
+        let new_batch = batch_with_replaced_column(&batch, 3, dict_event_meta);
+        let _flat_batch = FlatRecordBatch::try_new(Arc::new(new_batch)).unwrap();
+        // TODO(felipcrv); implement CSV serialization to assert here
+    }
+
+    #[test]
+    fn test_record_batch_flattening_with_dict_encoded_list() {
+        let batch = nested_record_batch();
+
+        let event_tags = batch.column(2);
+        assert!(matches!(event_tags.data_type(), DataType::List(_)));
+
+        // Build a dictionary-encoded version of the "event_tags" column
+        let dict_event_tags = dict_encoded_example(event_tags);
+
+        let new_batch = batch_with_replaced_column(&batch, 2, dict_event_tags);
+        let _flat_batch = FlatRecordBatch::try_new(Arc::new(new_batch)).unwrap();
+        // TODO(felipcrv); implement CSV serialization to assert here
+    }
+
+    #[test]
+    fn test_record_batch_flattening_with_nested_dict_encoded() {
+        let batch = nested_record_batch();
+
+        let event_meta = batch.column(3);
+        assert!(matches!(event_meta.data_type(), DataType::Struct(_)));
+
+        // Build a dictionary-encoded version of the "events" column...
+        let dict_event_meta = dict_encoded_example(event_meta);
+        // ...and dictionary-encode it again.
+        let dict_dict_event_meta = dict_encoded_example(&dict_event_meta);
+
+        let new_batch = batch_with_replaced_column(&batch, 3, dict_dict_event_meta);
+        let _flat_batch = FlatRecordBatch::try_new(Arc::new(new_batch)).unwrap();
         // TODO(felipcrv); implement CSV serialization to assert here
     }
 
@@ -901,10 +943,10 @@ mod tests {
 
         // Renaming with a map
         let map = ValueMap::from_iter([
-            ("groups.0".into(), "first_group".into()),
-            ("groups.1".into(), "second_group".into()),
-            ("groups.2".into(), "third_group".into()),
-            ("groups.3".into(), "fourth_group".into()),
+            ("groups.0.0".into(), "first_group_cell".into()),
+            ("groups.1.0".into(), "second_group_cell".into()),
+            ("groups.2.0".into(), "third_group_cell".into()),
+            ("groups.3.0".into(), "fourth_group_cell".into()),
             ("nonexistent".into(), "should_not_exist".into()),
         ]);
         let new_names = rename(&table, &[Value::from_object(map.clone())])
@@ -913,12 +955,26 @@ mod tests {
             .unwrap()
             .column_names();
         assert_eq!(
-            new_names[0..new_names.len() - 4],
-            col_names[0..col_names.len() - 4]
+            new_names[0..new_names.len() - 12],
+            col_names[0..col_names.len() - 12]
         );
+        static EXPECTED_12_LAST_COL_NAMES: [&str; 12] = [
+            "first_group_cell",
+            "groups.0.1",
+            "groups.0.2",
+            "second_group_cell",
+            "groups.1.1",
+            "groups.1.2",
+            "third_group_cell",
+            "groups.2.1",
+            "groups.2.2",
+            "fourth_group_cell",
+            "groups.3.1",
+            "groups.3.2",
+        ];
         assert_eq!(
-            new_names[new_names.len() - 4..],
-            ["first_group", "second_group", "third_group", "fourth_group",]
+            new_names[new_names.len() - 12..],
+            EXPECTED_12_LAST_COL_NAMES
         );
 
         // Renaming with a mutable map
@@ -929,23 +985,18 @@ mod tests {
             .unwrap()
             .column_names();
         assert_eq!(
-            new_names[0..new_names.len() - 4],
-            col_names[0..col_names.len() - 4]
+            new_names[0..new_names.len() - 12],
+            col_names[0..col_names.len() - 12]
         );
         assert_eq!(
-            new_names[new_names.len() - 4..],
-            ["first_group", "second_group", "third_group", "fourth_group",]
+            new_names[new_names.len() - 12..],
+            EXPECTED_12_LAST_COL_NAMES
         );
 
         // Renaming with an array
         let array = {
-            let mut array = col_names[0..col_names.len() - 4].to_vec();
-            array.extend_from_slice(&[
-                "first_group".to_string(),
-                "second_group".to_string(),
-                "third_group".to_string(),
-                "fourth_group".to_string(),
-            ]);
+            let mut array = col_names[0..col_names.len() - 12].to_vec();
+            array.extend_from_slice(EXPECTED_12_LAST_COL_NAMES.map(|s| s.to_string()).as_slice());
             Value::from_object(array)
         };
         let new_names = rename(&table, &[array])
@@ -954,12 +1005,12 @@ mod tests {
             .unwrap()
             .column_names();
         assert_eq!(
-            new_names[0..new_names.len() - 4],
-            col_names[0..col_names.len() - 4]
+            new_names[0..new_names.len() - 12],
+            col_names[0..col_names.len() - 12]
         );
         assert_eq!(
-            new_names[new_names.len() - 4..],
-            ["first_group", "second_group", "third_group", "fourth_group",]
+            new_names[new_names.len() - 12..],
+            EXPECTED_12_LAST_COL_NAMES
         );
     }
 }
