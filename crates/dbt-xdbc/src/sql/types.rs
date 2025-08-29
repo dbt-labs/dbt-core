@@ -662,7 +662,7 @@ const GENERIC_KEYS: [&str; 2] = ["SQL:type", "type"];
 
 fn metadata_type_candidate_keys(backend: Backend) -> &'static [&'static str] {
     match backend {
-        Backend::Postgres => &POSTGRES_KEYS,
+        Backend::Postgres | Backend::Salesforce => &POSTGRES_KEYS,
         Backend::Snowflake => &SNOWFLAKE_KEYS,
         Backend::BigQuery => &BIGQUERY_KEYS,
         Backend::Databricks => &DATABRICKS_KEYS,
@@ -2000,7 +2000,10 @@ mod tests {
                 let s = match backend {
                     Backend::BigQuery => bq,
                     Backend::Snowflake => snow,
-                    Backend::Postgres | Backend::Redshift | Backend::RedshiftODBC => pq,
+                    Backend::Postgres
+                    | Backend::Redshift
+                    | Backend::RedshiftODBC
+                    | Backend::Salesforce => pq,
                     Backend::Databricks | Backend::DatabricksODBC => dbx,
                     Backend::Generic { .. } => generic,
                 };

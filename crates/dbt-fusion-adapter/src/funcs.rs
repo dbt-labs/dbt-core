@@ -88,7 +88,6 @@ pub fn dispatch_adapter_calls(
                     Err(e)
                 }
             })?;
-
             let schema = iter.next_arg::<&str>()?;
             let identifier = iter.next_arg::<&str>()?;
             iter.finish()?;

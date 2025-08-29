@@ -47,6 +47,7 @@ pub enum DbConfig {
     // SingleStore,
     // Spark,
     Databricks(DatabricksDbConfig),
+    Salesforce(SalesforceDbConfig),
     // Hive,
     // Exasol,
     // Oracle,
@@ -112,6 +113,7 @@ impl DbConfig {
             DbConfig::Datafusion(config) => dbt_serde_yaml::to_value(config).unwrap(),
             DbConfig::Redshift(config) => dbt_serde_yaml::to_value(config).unwrap(),
             DbConfig::Databricks(config) => dbt_serde_yaml::to_value(config).unwrap(),
+            DbConfig::Salesforce(config) => dbt_serde_yaml::to_value(config).unwrap(),
         }
     }
 
@@ -124,6 +126,7 @@ impl DbConfig {
             DbConfig::Trino(..) => "trino".to_string(),
             DbConfig::Datafusion(..) => "datafusion".to_string(),
             DbConfig::Databricks(..) => "databricks".to_string(),
+            DbConfig::Salesforce(..) => "salesforce".to_string(),
         }
     }
 
@@ -136,6 +139,7 @@ impl DbConfig {
             DbConfig::Trino(config) => config.database.clone(),
             DbConfig::Datafusion(config) => config.database.clone(),
             DbConfig::Databricks(config) => config.database.clone(),
+            DbConfig::Salesforce(config) => config.database.clone(),
         }
     }
 
@@ -148,6 +152,7 @@ impl DbConfig {
             DbConfig::Bigquery(config) => config.schema.clone(),
             DbConfig::Datafusion(config) => config.schema.clone(),
             DbConfig::Databricks(config) => config.schema.clone(),
+            DbConfig::Salesforce(_) => None,
         }
     }
 
@@ -304,6 +309,10 @@ impl DbConfig {
                 let yml = dbt_serde_yaml::to_value(config).unwrap();
                 dbt_serde_yaml::from_value(yml).expect("Failed to deserialize Databricks config")
             }
+            DbConfig::Salesforce(config) => {
+                let json = serde_json::to_value(config).unwrap();
+                serde_json::from_value(json).expect("Failed to deserialize Salesforce config")
+            }
             _ => panic!("Unsupported database type: {self:?}"),
         }
     }
@@ -322,6 +331,7 @@ impl DbConfig {
             DbConfig::Datafusion(config) => config.database.clone(),
             DbConfig::Redshift(config) => config.host.clone(),
             DbConfig::Databricks(config) => config.host.clone(),
+            DbConfig::Salesforce(config) => config.client_id.clone(),
         }
     }
 
@@ -331,6 +341,7 @@ impl DbConfig {
         Used for telemetry to anonymously identify a data warehouse.
         */
         let unique_field = self.get_unique_field();
+        // TODO: do we really need cryptographic hashing here?
         unique_field.map(|unique_field| format!("{:x}", md5::compute(unique_field.as_bytes())))
     }
 }
@@ -694,6 +705,27 @@ fn default_databricks_database() -> Option<String> {
     Some(DEFAULT_DATABRICKS_DATABASE.to_string())
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Merge)]
+#[merge(strategy = merge_strategies_extend::overwrite_option)]
+#[serde(rename_all = "snake_case")]
+pub struct SalesforceDbConfig {
+    /// The method to use to authenticate with Salesforce.
+    /// `jwt_bearer`, `username_password`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub method: Option<String>,
+    // schema is not applicable here
+    #[serde(alias = "data_space", default = "default_salesforce_database")]
+    pub database: Option<String>,
+    pub client_id: Option<String>,
+    pub private_key_path: Option<PathBuf>,
+    pub login_url: Option<String>,
+    pub username: Option<String>,
+}
+
+fn default_salesforce_database() -> Option<String> {
+    Some("default".to_string())
+}
+
 #[derive(Serialize, JsonSchema)]
 #[serde(untagged)]
 #[serde(rename_all = "snake_case")]
@@ -706,6 +738,7 @@ pub enum TargetContext {
     Bigquery(BigqueryTargetEnv),
     Databricks(DatabricksTargetEnv),
     Redshift(RedshiftTargetEnv),
+    Salesforce(SalesforceTargetEnv),
     // Add other variants as needed
 }
 
@@ -789,6 +822,11 @@ pub struct RedshiftTargetEnv {
     pub host: String,
     pub user: String,
     pub port: StringOrInteger,
+    pub __common__: CommonTargetContext,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct SalesforceTargetEnv {
     pub __common__: CommonTargetContext,
 }
 
@@ -951,6 +989,16 @@ impl TryFrom<DbConfig> for TargetContext {
                     },
                 }))
             }
+
+            DbConfig::Salesforce(config) => Ok(TargetContext::Salesforce(SalesforceTargetEnv {
+                __common__: CommonTargetContext {
+                    database: config.database.ok_or_else(|| missing("database"))?,
+                    // `SalesforceDbConfig` doesn't have `schema`
+                    schema: "".to_string(),
+                    type_: adapter_type,
+                    threads: None,
+                },
+            })),
         }
     }
 }

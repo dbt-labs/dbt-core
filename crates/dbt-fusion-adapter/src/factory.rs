@@ -6,6 +6,7 @@ use crate::databricks::relation::DatabricksRelationType;
 use crate::postgres::relation::PostgresRelationType;
 use crate::redshift::relation::RedshiftRelationType;
 use crate::relation_object::StaticBaseRelationObject;
+use crate::salesforce::relation::SalesforceRelationType;
 use crate::snowflake::relation::SnowflakeRelationType;
 
 use dbt_schemas::schemas::common::ResolvedQuoting;
@@ -37,6 +38,10 @@ pub fn create_static_relation(
         AdapterType::Redshift => {
             let redshift_relation_type = RedshiftRelationType(quoting);
             StaticBaseRelationObject::new(Arc::new(redshift_relation_type))
+        }
+        AdapterType::Salesforce => {
+            let salesforce_relation_type = SalesforceRelationType(quoting);
+            StaticBaseRelationObject::new(Arc::new(salesforce_relation_type))
         }
         _ => unimplemented!("{} doesn't support relation types", adapter_type),
     };

@@ -45,12 +45,15 @@ pub mod metadata;
 pub mod parse;
 /// Postgres adapter
 pub mod postgres;
-/// Record batch utils
-pub mod record_batch_utils;
 /// Redshift adapter
 pub mod redshift;
+/// Salesforce adapter
+pub mod salesforce;
 /// Snowflake adapter
 pub mod snowflake;
+
+/// Record batch utils
+pub mod record_batch_utils;
 
 pub mod cast_util;
 /// Utils

@@ -8,7 +8,7 @@ pub const fn quote_char(backend: Backend) -> char {
     match backend {
         BigQuery | Databricks | DatabricksODBC => '`',
         Snowflake => '"',
-        Redshift | RedshiftODBC | Postgres => '"',
+        Redshift | RedshiftODBC | Postgres | Salesforce => '"',
         Generic { .. } => '"',
     }
 }
@@ -26,9 +26,13 @@ pub fn is_valid_identifier_char(backend: Backend, c: char) -> bool {
             c != '.' && c != quote_char(backend) && !c.is_whitespace() && c != '/' && c != ';'
         }
         // XXX: check these fallbacks against documentation of these dialects
-        Postgres | Databricks | DatabricksODBC | Redshift | RedshiftODBC | Generic { .. } => {
-            c.is_alphanumeric() || c == '_'
-        }
+        Postgres
+        | Databricks
+        | DatabricksODBC
+        | Redshift
+        | RedshiftODBC
+        | Salesforce
+        | Generic { .. } => c.is_alphanumeric() || c == '_',
     }
 }
 

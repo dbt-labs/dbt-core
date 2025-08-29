@@ -21,7 +21,7 @@ mod tests {
     use dbt_xdbc::{
         Backend, Connection, Database, Driver, QueryCtx, Statement, bigquery, connection,
         database::{self, LogLevel},
-        databricks, driver, redshift, snowflake,
+        databricks, driver, redshift, salesforce, snowflake,
     };
 
     const ADBC_VERSION: AdbcVersion = AdbcVersion::V110;
@@ -147,6 +147,17 @@ mod tests {
                     .with_named_option(AUTH_MECHANISM, auth_mechanism_options::TOKEN)?
                     .with_username(DEFAULT_TOKEN_UID)
                     .with_password(token);
+                Ok(builder)
+            }
+            Backend::Salesforce => {
+                let mut builder = database::Builder::new(backend);
+                builder.with_named_option(salesforce::AUTH_TYPE, salesforce::auth_type::JWT)?;
+
+                builder.with_named_option(salesforce::LOGIN_URL, "https://login.salesforce.com")?;
+                builder.with_named_option(salesforce::USERNAME, "test@example.com")?;
+                builder.with_named_option(salesforce::CLIENT_ID, "1")?;
+                builder.with_named_option(salesforce::JWT_PRIVATE_KEY, "test")?;
+
                 Ok(builder)
             }
             Backend::Generic { .. } => unimplemented!("generic backend database builder in tests"),

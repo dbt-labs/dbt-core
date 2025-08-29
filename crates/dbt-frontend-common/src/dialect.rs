@@ -69,7 +69,7 @@ impl FromStr for Dialect {
             "presto" => Ok(Dialect::Trino),
             "trino" => Ok(Dialect::Trino),
             "snowflake" => Ok(Dialect::Snowflake),
-            "postgresql" | "postgres" => Ok(Dialect::Postgresql),
+            "postgresql" | "postgres" | "salesforce" => Ok(Dialect::Postgresql),
             "bigquery" => Ok(Dialect::Bigquery),
             "datafusion" => Ok(Dialect::DataFusion),
             "sparksql" => Ok(Dialect::SparkSql),

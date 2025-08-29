@@ -9,6 +9,7 @@ mod bigquery;
 mod databricks;
 mod postgres;
 mod redshift;
+mod salesforce;
 mod snowflake;
 
 pub use config::AdapterConfig;
@@ -30,6 +31,7 @@ pub fn auth_for_backend(backend: Backend) -> Box<dyn Auth> {
         Backend::BigQuery => Box::new(bigquery::BigqueryAuth {}),
         Backend::Databricks | Backend::DatabricksODBC => Box::new(databricks::DatabricksAuth {}),
         Backend::Redshift | Backend::RedshiftODBC => Box::new(redshift::RedshiftAuth {}),
+        Backend::Salesforce => Box::new(salesforce::SalesforceAuth {}),
         Backend::Generic { .. } => unimplemented!("generic backend authentication"),
     }
 }

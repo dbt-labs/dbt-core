@@ -40,28 +40,30 @@ pub struct CatalogAndSchema {
 
 impl fmt::Display for CatalogAndSchema {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.{}", self.rendered_catalog, self.rendered_schema)
+        if self.rendered_catalog.is_empty() {
+            write!(f, "{}", self.rendered_schema)
+        } else if self.rendered_schema.is_empty() {
+            write!(f, "{}", self.rendered_catalog)
+        } else {
+            write!(f, "{}.{}", self.rendered_catalog, self.rendered_schema)
+        }
     }
 }
 
 impl From<&Arc<dyn BaseRelation>> for CatalogAndSchema {
     fn from(relation: &Arc<dyn BaseRelation>) -> Self {
-        let rendered_catalog = relation.quoted(
-            &relation
-                .database_as_resolved_str()
-                .expect("Database is required for relation"),
+        let rendered_catalog =
+            relation.quoted(&relation.database_as_resolved_str().unwrap_or_default());
+        let rendered_schema =
+            relation.quoted(&relation.schema_as_resolved_str().unwrap_or_default());
+
+        let resolved_catalog = relation.database_as_resolved_str().unwrap_or_default();
+        let resolved_schema = relation.schema_as_resolved_str().unwrap_or_default();
+
+        assert!(
+            !(rendered_catalog.is_empty() && rendered_schema.is_empty()),
+            "Either rendered_catalog or rendered_schema must be present"
         );
-        let rendered_schema = relation.quoted(
-            &relation
-                .schema_as_resolved_str()
-                .expect("schema is required for relation"),
-        );
-        let resolved_catalog = relation
-            .database_as_resolved_str()
-            .expect("Database is required for relation");
-        let resolved_schema = relation
-            .schema_as_resolved_str()
-            .expect("Schema is required for relation");
 
         Self {
             rendered_catalog,

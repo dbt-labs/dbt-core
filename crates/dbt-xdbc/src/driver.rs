@@ -43,6 +43,8 @@ pub enum Backend {
     Databricks,
     /// Redshift driver implementation (ADBC).
     Redshift,
+    /// Salesforce driver implementation (ADBC).
+    Salesforce,
     /// Databricks driver implementation (ODBC).
     DatabricksODBC,
     /// Redshift driver implementation (ODBC).
@@ -73,6 +75,7 @@ impl Display for Backend {
             Backend::Redshift => write!(f, "Redshift"),
             Backend::DatabricksODBC => write!(f, "Databricks"),
             Backend::RedshiftODBC => write!(f, "Redshift"),
+            Backend::Salesforce => write!(f, "Salesforce"),
             Backend::Generic { library_name, .. } => write!(f, "Generic({library_name})"),
         }
     }
@@ -85,6 +88,7 @@ impl Backend {
             Backend::BigQuery => Some("adbc_driver_bigquery"),
             Backend::Postgres => Some("adbc_driver_postgresql"),
             Backend::Databricks => Some("adbc_driver_databricks"),
+            Backend::Salesforce => Some("adbc_driver_salesforce"),
             // todo: swap over to Redshift specific driver once available
             Backend::Redshift => Some("adbc_driver_postgresql"),
             Backend::DatabricksODBC | Backend::RedshiftODBC => None, // these use ODBC
@@ -105,14 +109,14 @@ impl Backend {
 
     pub(crate) fn ffi_protocol(&self) -> FFIProtocol {
         match self {
-            Backend::Snowflake => FFIProtocol::Adbc,
-            Backend::BigQuery => FFIProtocol::Adbc,
-            Backend::Postgres => FFIProtocol::Adbc,
-            Backend::Databricks => FFIProtocol::Adbc,
-            Backend::Redshift => FFIProtocol::Adbc,
-            Backend::DatabricksODBC => FFIProtocol::Odbc,
-            Backend::RedshiftODBC => FFIProtocol::Odbc,
-            Backend::Generic { .. } => FFIProtocol::Adbc,
+            Backend::Snowflake
+            | Backend::BigQuery
+            | Backend::Postgres
+            | Backend::Databricks
+            | Backend::Redshift
+            | Backend::Salesforce
+            | Backend::Generic { .. } => FFIProtocol::Adbc,
+            Backend::DatabricksODBC | Backend::RedshiftODBC => FFIProtocol::Odbc,
         }
     }
 }
@@ -308,7 +312,8 @@ impl AdbcDriver {
             | Backend::BigQuery
             | Backend::Postgres
             | Backend::Databricks
-            | Backend::Redshift => {
+            | Backend::Redshift
+            | Backend::Salesforce => {
                 debug_assert!(backend.ffi_protocol() == FFIProtocol::Adbc);
                 debug_assert!(install::is_installable_driver(backend));
                 #[cfg(debug_assertions)]

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::{collections::BTreeMap, path::PathBuf};
 
-use dbt_common::io_args::IoArgs;
+pub use dbt_common::io_args::IoArgs;
 use dbt_common::io_args::{EvalArgs, Phases};
 use dbt_schemas::state::DbtState;
 

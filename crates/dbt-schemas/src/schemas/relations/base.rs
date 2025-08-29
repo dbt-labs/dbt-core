@@ -52,6 +52,14 @@ pub enum TableFormat {
 pub type Policy = ResolvedQuoting;
 
 impl Policy {
+    pub fn new(database: bool, schema: bool, identifier: bool) -> Self {
+        Self {
+            database,
+            schema,
+            identifier,
+        }
+    }
+
     pub fn disabled() -> Self {
         Self {
             database: false,

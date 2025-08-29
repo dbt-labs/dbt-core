@@ -12,7 +12,7 @@ use dbt_schemas::state::DbtProfile;
 
 use dirs::home_dir;
 
-use crate::args::LoadArgs;
+use crate::args::{IoArgs, LoadArgs};
 use crate::utils::{coalesce, read_profiles_and_extract_db_config};
 use serde::Serialize;
 
@@ -22,11 +22,11 @@ pub fn load_profiles<S: Serialize>(
     jinja_env: &JinjaEnv,
     ctx: &S,
 ) -> FsResult<DbtProfile> {
-    // The profile name comes either from dbt_project.yml or the --profile arg.
-    // If the profile is not specified in dbt_project, it's a warning, if --profile
-    // is specified, if it's not specified, it's an error.
-    let profile_str =
-        get_profile_string(arg, arg.profile.as_ref(), raw_dbt_project.profile.as_ref())?;
+    let profile_str = get_profile_string(
+        &arg.io,
+        arg.profile.as_ref(),
+        raw_dbt_project.profile.as_ref(),
+    )?;
 
     // TODO: Add Secret Renderer logic to profile renderer
 
@@ -36,7 +36,7 @@ pub fn load_profiles<S: Serialize>(
     } else {
         false
     };
-    let profile_path = get_profile_path(arg, &arg.profiles_dir, has_dbt_cloud_config_defined)?;
+    let profile_path = get_profile_path(&arg.io, &arg.profiles_dir, has_dbt_cloud_config_defined)?;
 
     let abs_profile_path = canonicalize(&profile_path)?;
     let abs_in_dir = canonicalize(&arg.io.in_dir)?;
@@ -64,10 +64,9 @@ pub fn load_profiles<S: Serialize>(
     );
 
     // Load just the keys -> values from the profiles.yml file
-    let dbt_target_override = &arg.target;
     let (target, db_config) = read_profiles_and_extract_db_config(
         &arg.io,
-        dbt_target_override,
+        &arg.target,
         jinja_env,
         ctx,
         &profile_str,
@@ -75,8 +74,8 @@ pub fn load_profiles<S: Serialize>(
     )?;
 
     // TODO: Certain databases enforce that database and schema are specified
-    let database = coalesce(&[&db_config.get_database(), &Some("dbt".to_string())]).unwrap();
-    let schema = coalesce(&[&db_config.get_schema(), &Some("pub".to_string())]).unwrap();
+    let database = coalesce(&[db_config.get_database(), Some("dbt".to_string())]).unwrap();
+    let schema = coalesce(&[db_config.get_schema(), Some("public".to_string())]).unwrap();
 
     Ok(DbtProfile {
         database,
@@ -89,12 +88,22 @@ pub fn load_profiles<S: Serialize>(
     })
 }
 
+/// Resolve the profile name to use.
+/// # Parameters
+/// - `arg_profile`: the profile name provided via the `--profile` command-line argument. If present, this value takes precedence over the project file.
+/// - `proj_profile`: the profile name provided via the `dbt_project.yml` file. Used as a fallback if `--profile` is not provided.
+///
+/// # Returns
+/// - The profile name to use.
+///
+/// # Warnings
+/// - If the profile is not specified in `dbt_project.yml` but `--profile` is provided.
 fn get_profile_string(
-    arg: &LoadArgs,
-    arg_profile_str: Option<&String>,
-    proj_profile_str: Option<&String>,
+    io_args: &IoArgs,
+    arg_profile: Option<&String>,
+    proj_profile: Option<&String>,
 ) -> FsResult<String> {
-    match (proj_profile_str, arg_profile_str) {
+    match (proj_profile, arg_profile) {
         (None, None) => {
             err!(
                 ErrorCode::InvalidConfig,
@@ -103,7 +112,7 @@ fn get_profile_string(
         }
         (None, Some(prof)) => {
             show_warning!(
-                &arg.io,
+                &io_args,
                 fs_err!(
                     ErrorCode::InvalidConfig,
                     "No profile specified in dbt_project.yml"
@@ -116,8 +125,14 @@ fn get_profile_string(
     }
 }
 
+/// Resolve the path to the profiles.yml file to use.
+///
+/// Search the following paths in order
+/// - The path provided via the `--profiles_dir` (`dbt_profile_dir_override`)
+/// - At the project root
+/// - At the $HOME/.dbt/
 fn get_profile_path(
-    arg: &LoadArgs,
+    io_args: &IoArgs,
     dbt_profile_dir_override: &Option<PathBuf>,
     has_dbt_cloud_config_defined: bool,
 ) -> FsResult<PathBuf> {
@@ -142,7 +157,7 @@ fn get_profile_path(
             }
         }
         None => {
-            let maybe_profile_path = arg.io.in_dir.join(DBT_PROFILES_YML);
+            let maybe_profile_path = io_args.in_dir.join(DBT_PROFILES_YML);
             if maybe_profile_path.exists() {
                 Ok(maybe_profile_path)
             } else if let Some(home_path) = home_dir() {

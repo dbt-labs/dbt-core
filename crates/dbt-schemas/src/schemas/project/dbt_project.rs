@@ -172,8 +172,9 @@ pub struct DbtProject {
 impl DbtProject {
     pub fn get_project_id(&self) -> String {
         /*
-        Returns the md5 hash of the project name. Can be used for telemetry.
+        Returns the hash of the project name. Can be used for telemetry.
         */
+        // TODO: do we really need cryptographic hashing here?
         format!("{:x}", md5::compute(self.name.as_bytes()))
     }
 

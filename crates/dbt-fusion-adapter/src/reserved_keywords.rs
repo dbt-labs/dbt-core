@@ -12,7 +12,7 @@ pub fn sorted_keywords_for(backend: Backend) -> &'static [&'static str] {
         BigQuery => BIGQUERY_RESERVED_KEYWORDS,
         Redshift | RedshiftODBC => REDSHIFT_RESERVED_KEYWORDS,
         // TODO: fill in other dialects' keywords and define a default fallback
-        Databricks | DatabricksODBC | Postgres | Generic { .. } => &[],
+        Databricks | DatabricksODBC | Postgres | Salesforce | Generic { .. } => &[],
     }
 }
 

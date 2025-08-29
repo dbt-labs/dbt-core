@@ -243,6 +243,7 @@ pub fn is_installable_driver(backend: Backend) -> bool {
             | Backend::Postgres
             | Backend::Databricks
             | Backend::Redshift
+            | Backend::Salesforce
     )
 }
 

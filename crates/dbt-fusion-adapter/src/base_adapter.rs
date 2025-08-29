@@ -29,6 +29,7 @@ pub fn backend_of(adapter_type: AdapterType) -> Backend {
         AdapterType::Bigquery => Backend::BigQuery,
         AdapterType::Databricks => Backend::Databricks,
         AdapterType::Redshift => Backend::Redshift,
+        AdapterType::Salesforce => Backend::Salesforce,
         AdapterType::Parse => Backend::Postgres, // Parse is not a real adapter
     }
 }

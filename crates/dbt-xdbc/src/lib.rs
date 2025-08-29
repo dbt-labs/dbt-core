@@ -60,6 +60,7 @@ pub(crate) mod install;
 pub mod bigquery;
 pub mod databricks;
 pub mod redshift;
+pub mod salesforce;
 pub mod snowflake;
 
 // REPL for ADBC drivers

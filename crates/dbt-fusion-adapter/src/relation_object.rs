@@ -16,6 +16,7 @@ use crate::bigquery::relation::BigqueryRelation;
 use crate::databricks::relation::DatabricksRelation;
 use crate::postgres::relation::PostgresRelation;
 use crate::redshift::relation::RedshiftRelation;
+use crate::salesforce::relation::SalesforceRelation;
 use crate::snowflake::relation::SnowflakeRelation;
 
 use std::sync::Arc;
@@ -223,6 +224,12 @@ pub fn create_relation(
             custom_quoting,
             None,
             false,
+        )) as Arc<dyn BaseRelation>,
+        "salesforce" => Arc::new(SalesforceRelation::new(
+            Some(database),
+            Some(schema),
+            identifier,
+            relation_type,
         )) as Arc<dyn BaseRelation>,
         _ => panic!("not supported"),
     };

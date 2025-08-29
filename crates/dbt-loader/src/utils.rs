@@ -93,10 +93,10 @@ pub fn indent(data: &str, spaces: usize) -> String {
 // ------------------------------------------------------------------------------------------------
 // stupid other helpers:
 
-pub fn coalesce<T: Clone>(values: &[&Option<T>]) -> Option<T> {
+pub fn coalesce<T: Clone>(values: &[Option<T>]) -> Option<T> {
     for value in values {
         if value.is_some() {
-            return value.to_owned().to_owned();
+            return value.to_owned();
         }
     }
     None
@@ -144,7 +144,7 @@ pub fn get_db_config(
 
 pub fn read_profiles_and_extract_db_config<S: Serialize>(
     io_args: &IoArgs,
-    dbt_target_override: &Option<String>,
+    target_override: &Option<String>,
     jinja_env: &JinjaEnv,
     ctx: &S,
     profile_str: &str,
@@ -169,7 +169,7 @@ pub fn read_profiles_and_extract_db_config<S: Serialize>(
         ))?;
 
     // if dbt_target_override is None, render the target name in case the user uses an an env_var jinja expression here
-    let rendered_target = if let Some(dbt_target_override) = dbt_target_override {
+    let rendered_target = if let Some(dbt_target_override) = target_override {
         dbt_target_override.clone()
     } else {
         profile_val
