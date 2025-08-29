@@ -607,10 +607,25 @@ class TestTypeSelectorMethod(SelectorMethod):
                 yield unique_id
 
 
+class StateSelectorManifestUpgrade:
+    def __call__(self, manifest: Manifest) -> None:
+        pass
+
+
+class SourceConfigDescriptionUpgrade(StateSelectorManifestUpgrade):
+    def __call__(self, manifest: Manifest) -> None:
+        for source in manifest.sources.values():
+            source.config.description = source.description
+            source.unrendered_config["description"] = source.description
+
+
 class StateSelectorMethod(SelectorMethod):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.modified_macros: Optional[List[str]] = None
+        self.upgrades: List[StateSelectorManifestUpgrade] = [
+            SourceConfigDescriptionUpgrade(),
+        ]
 
     def _macros_modified(self) -> List[str]:
         # we checked in the caller!
@@ -768,6 +783,8 @@ class StateSelectorMethod(SelectorMethod):
             )
 
         manifest: Manifest = self.previous_state.manifest
+        if manifest.metadata.dbt_version != self.manifest.metadata.dbt_version:
+            self.apply_manifest_upgrades(manifest)
 
         keyword_args = {}  # initialize here to handle disabled node check below
         for unique_id, node in self.all_nodes(included_nodes):
@@ -817,6 +834,10 @@ class StateSelectorMethod(SelectorMethod):
                     # do not yield -- removed nodes should never be selected for downstream execution
                     # as they are not part of the current project's manifest.nodes
                     checker(removed_node, None, **keyword_args)  # type: ignore
+
+    def apply_manifest_upgrades(self, manifest: Manifest) -> None:
+        for upgrade in self.upgrades:
+            upgrade(manifest)
 
 
 class ResultSelectorMethod(SelectorMethod):
