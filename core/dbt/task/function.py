@@ -1,5 +1,6 @@
 from dbt.artifacts.schemas.results import NodeStatus
 from dbt.artifacts.schemas.run import RunResult
+from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import FunctionNode
 from dbt.events.types import LogNodeResult, LogStartLine
 from dbt.task import group_lookup
@@ -29,6 +30,14 @@ class FunctionRunner(CompileRunner):
                 node_info=self.node.node_info,
             )
         )
+
+    def execute(self, compiled_node: FunctionNode, manifest: Manifest):
+        raise NotImplementedError(
+            "FunctionRunner.execute is not implemented"
+        )  # TODO: add execute logic
+
+    def after_execute(self, result: RunResult) -> None:
+        pass  # TODO: add after_execute logic to print the result
 
     # def compile() defined on CompileRunner
 
