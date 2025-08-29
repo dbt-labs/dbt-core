@@ -2,7 +2,7 @@ use crate::dialect::Dialect;
 use crate::error::InternalError;
 use crate::utils::{get_version_hash, strip_version_hash};
 use crate::{internal_err, make_internal_err};
-use datafusion::sql::{ResolvedTableReference, TableReference};
+use datafusion_common::{ResolvedTableReference, TableReference};
 use itertools::Itertools;
 use serde::{Deserialize, Deserializer, Serialize, de};
 use std::path::PathBuf;
@@ -831,10 +831,10 @@ impl ColumnRef {
     }
 }
 
-impl TryFrom<datafusion::common::Column> for ColumnRef {
+impl TryFrom<datafusion_common::Column> for ColumnRef {
     type Error = Box<InternalError>;
 
-    fn try_from(value: datafusion::common::Column) -> Result<Self, Self::Error> {
+    fn try_from(value: datafusion_common::Column) -> Result<Self, Self::Error> {
         Ok(Self {
             table_name: value
                 .relation

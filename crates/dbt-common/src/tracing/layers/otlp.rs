@@ -4,10 +4,10 @@ use super::super::{TelemetryShutdown, event_info::with_current_thread_event_data
 use crate::constants::DBT_FUSION;
 use crate::{ErrorCode, FsResult};
 
-use datafusion::parquet::data_type::AsBytes;
 use dbt_telemetry::{
     LogEventInfo, SeverityNumber, SpanEndInfo, SpanStatus, StatusCode, TelemetryAttributes,
 };
+use parquet::data_type::AsBytes;
 
 use opentelemetry::{
     KeyValue, SpanId, TraceFlags, Value as OtelValue,

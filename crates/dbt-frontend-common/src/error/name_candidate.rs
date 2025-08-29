@@ -26,13 +26,13 @@ impl NameCandidate {
 
 impl
     From<(
-        Option<&datafusion::sql::TableReference>,
+        Option<&datafusion_common::TableReference>,
         &Arc<arrow_schema::Field>,
     )> for NameCandidate
 {
     fn from(
         (qualifier, field): (
-            Option<&datafusion::sql::TableReference>,
+            Option<&datafusion_common::TableReference>,
             &Arc<arrow_schema::Field>,
         ),
     ) -> Self {

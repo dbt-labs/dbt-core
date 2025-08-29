@@ -57,6 +57,15 @@ version = "2.0.0-preview.7"
 # See https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html#the-patch-section
 [patch.crates-io]
 datafusion = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
+datafusion-common = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
+datafusion-catalog = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
+datafusion-expr = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
+datafusion-functions = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
+datafusion-functions-aggregate = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
+datafusion-functions-nested = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
+datafusion-functions-window = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
+datafusion-physical-expr = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
+datafusion-physical-plan = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
 # OR, when working locally
 #datafusion = { path = "../datafusion/datafusion/core" }
 
@@ -225,21 +234,39 @@ dbt-xdbc = { path = "crates/dbt-xdbc" }
 antlr-rust = { git = "https://github.com/sdf-labs/antlr4", rev = "b8179d265532a5f2c901d702adcb4975e32b949c" }
 
 # datafusion
-datafusion = { version = "45.0.0", default-features = false, features = [
-  "crypto_expressions",
-  "datetime_expressions",
-  "encoding_expressions",
-  "math_expressions",
-  "nested_expressions",
-  "parquet",
-  "regex_expressions",
-  "string_expressions",
-  "unicode_expressions",
-] }
+
+# Note: the following line has been removed to discourage dependency on the
+# `datafusion` (aka `datafusion-core`) crate: the `datafusion` crate is an
+# aggregation crate that pulls in and re-exports symbols from the other, finer
+# grained datafusion-xxx crates, while adding some APIs for the datafusion
+# execution runtime. However, it builds much slower than the individual crates.
+# Therefore, only a select few crates (specifically, those that have to interact
+# with the datafusion runtime) should depend on the `datafusion` crate, for all
+# other crates, you should prefer using the individual datafusion-xxx crates
+# directly whenever possible.
+
+# datafusion = { version = "45.0.0", default-features = false }
+datafusion-catalog = { version = "45.0.0" }
 datafusion-common = { version = "45.0.0", default-features = false, features = [
   "object_store",
   "parquet",
 ] }
+datafusion-expr = { version = "45.0.0" }
+datafusion-functions = { version = "45.0.0", default-features = false, features = [
+  "core_expressions",
+  "crypto_expressions",
+  "datetime_expressions",
+  "encoding_expressions",
+  "math_expressions",
+  "regex_expressions",
+  "string_expressions",
+  "unicode_expressions",
+] }
+datafusion-functions-aggregate = { version = "45.0.0" }
+datafusion-functions-nested = { version = "45.0.0" }
+datafusion-functions-window = { version = "45.0.0" }
+datafusion-physical-expr = { version = "45.0.0" }
+datafusion-physical-plan = { version = "45.0.0" }
 
 # uuid
 uuid = { version = "1.16.0", features = ["v4"] }

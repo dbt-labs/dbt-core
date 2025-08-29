@@ -1,4 +1,5 @@
-use datafusion::{arrow, error::DataFusionError, logical_expr::Expr, parquet};
+use datafusion_common::error::DataFusionError;
+use datafusion_expr::Expr;
 use dbt_cancel::CancelledError;
 use dbt_frontend_common::error::{FrontendError, FrontendResult, NameCandidate, format_candidates};
 use itertools::Itertools as _;
@@ -487,7 +488,7 @@ pub enum NameError {
     /// Generic error when looking up a name from a set of names
     Generic(GenericNameError),
     /// Generic schema error originating from Datafusion
-    Datafusion(datafusion::common::SchemaError),
+    Datafusion(datafusion_common::SchemaError),
 }
 
 impl Display for NameError {

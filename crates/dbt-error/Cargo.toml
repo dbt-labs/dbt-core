@@ -21,8 +21,11 @@ dbt-proc-macros = { workspace = true }
 dbt-cancel = { workspace = true }
 
 # Core dependencies needed by error types
-datafusion = { workspace = true }
+arrow = { workspace = true }
+datafusion-common = { workspace = true }
+datafusion-expr = { workspace = true }
 minijinja = { workspace = true }
+parquet = { workspace = true }
 
 # Basic utilities
 int-enum = { workspace = true }

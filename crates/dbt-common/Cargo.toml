@@ -21,8 +21,6 @@ dbt-cancel = { workspace = true }
 dbt-proc-macros = { workspace = true }
 md5 = { workspace = true }
 
-datafusion = { workspace = true }
-
 clap = { workspace = true, features = ["derive", "env"] }
 counter = { workspace = true }
 dialoguer = { workspace = true }
