@@ -1,16 +1,16 @@
 
-{% macro postgres__get_catalog_relations(information_schema, relations) -%}
+{% macro postgres__get_catalog_relations(dbschema, relations) -%}
   {%- call statement('catalog', fetch_result=True) -%}
 
     {#
       If the user has multiple databases set and the first one is wrong, this will fail.
       But we won't fail in the case where there are multiple quoting-difference-only dbs, which is better.
     #}
-    {% set database = information_schema.database %}
+
     {{ adapter.verify_database(database) }}
 
     select
-        '{{ database }}' as table_database,
+        '{{ dbschema.database }}' as table_database,
         sch.nspname as table_schema,
         tbl.relname as table_name,
         case tbl.relkind
@@ -58,10 +58,10 @@
 {%- endmacro %}
 
 
-{% macro postgres__get_catalog(information_schema, schemas) -%}
+{% macro postgres__get_catalog(dbschema, schemas) -%}
   {%- set relations = [] -%}
   {%- for schema in schemas -%}
     {%- set dummy = relations.append({'schema': schema}) -%}
   {%- endfor -%}
-  {{ return(postgres__get_catalog_relations(information_schema, relations)) }}
+  {{ return(postgres__get_catalog_relations(dbschema, relations)) }}
 {%- endmacro %}
