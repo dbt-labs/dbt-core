@@ -253,6 +253,11 @@ impl BaseRelation for DatabricksRelation {
         Value::from(result)
     }
 
+    fn is_materialized_view(&self) -> bool {
+        let result = matches!(self.relation_type, Some(RelationType::MaterializedView));
+        result
+    }
+
     fn normalize_component(&self, component: &str) -> String {
         component.to_lowercase()
     }

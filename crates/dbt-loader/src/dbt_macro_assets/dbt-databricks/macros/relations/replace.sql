@@ -7,7 +7,7 @@
     {# /* use a create or replace statement if possible */ #}
 
     {% set is_replaceable = existing_relation.type == target_relation_type and existing_relation.can_be_replaced %}
-
+    
     {% if is_replaceable and existing_relation.is_view %}
         {{ get_replace_view_sql(target_relation, sql) }}
 

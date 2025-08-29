@@ -87,10 +87,17 @@ impl DatabricksRelationConfigBase for MaterializedViewConfig {
 impl BaseRelationConfig for MaterializedViewConfig {
     fn get_changeset(
         &self,
-        _existing: Option<&dyn BaseRelationConfig>,
+        existing: Option<&dyn BaseRelationConfig>,
     ) -> Option<Arc<dyn RelationChangeSet>> {
-        // For now, return None - this will be implemented when we have proper change detection
-        None
+        if let Some(existing) = existing {
+            let existing_value = existing.to_value();
+            <MaterializedViewConfig as DatabricksRelationConfigBase>::get_changeset(
+                self,
+                existing_value,
+            )
+        } else {
+            None
+        }
     }
 
     fn as_any(&self) -> &dyn Any {

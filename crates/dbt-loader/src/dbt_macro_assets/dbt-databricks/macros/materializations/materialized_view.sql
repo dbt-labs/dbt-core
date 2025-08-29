@@ -5,7 +5,6 @@
     {{ run_hooks(pre_hooks, inside_transaction=False) }}
 
     {% set build_sql = materialized_view_get_build_sql(existing_relation, target_relation) %}
-
     {% if build_sql == '' %}
         {{ materialized_view_execute_no_op(target_relation) }}
     {% else %}
@@ -36,7 +35,6 @@
 
         {% if configuration_changes is none %}
             {% set build_sql = refresh_materialized_view(target_relation) %}
-
         {% elif on_configuration_change == 'apply' %}
             {% set build_sql = get_alter_materialized_view_as_sql(target_relation, configuration_changes, sql, existing_relation, None, None) %}
         {% elif on_configuration_change == 'continue' %}
@@ -74,7 +72,6 @@
     {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
     {% set grant_config = config.get('grants') %}
-
     {%- if build_sql is string %}
         {% call statement(name="main") %}
             {{ build_sql }}

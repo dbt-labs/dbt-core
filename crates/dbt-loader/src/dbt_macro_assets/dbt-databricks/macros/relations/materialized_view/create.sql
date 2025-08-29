@@ -1,9 +1,10 @@
 {% macro databricks__get_create_materialized_view_as_sql(relation, sql) -%}
   {%- set materialized_view = adapter.get_config_from_model(config.model) -%}
-  {%- set partition_by = materialized_view.config["partition_by"].partition_by -%}
-  {%- set tblproperties = materialized_view.config["tblproperties"].tblproperties -%}
-  {%- set comment = materialized_view.config["comment"].comment -%}
-  {%- set refresh = materialized_view.config["refresh"] -%}
+  {# Deviation from core: partitioned_by is used here instead of partition_by when retrieving partitioning config #}
+  {%- set partition_by = materialized_view["partitioned_by"].partition_by -%}
+  {%- set tblproperties = materialized_view["tblproperties"].tblproperties -%}
+  {%- set comment = materialized_view["comment"].comment -%}
+  {%- set refresh = materialized_view["refresh"] -%}
   create materialized view {{ relation }}
     {{ get_create_sql_partition_by(partition_by) }}
     {{ get_create_sql_comment(comment) }}
