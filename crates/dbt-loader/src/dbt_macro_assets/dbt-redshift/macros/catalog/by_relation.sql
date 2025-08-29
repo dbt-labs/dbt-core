@@ -1,20 +1,20 @@
-{% macro redshift__get_catalog_relations(information_schema, relations) -%}
+{% macro redshift__get_catalog_relations(dbschema, relations) -%}
 
-    {% set database = information_schema.database %}
-    {{ adapter.verify_database(database) }}
+
+    {{ adapter.verify_database(dbschema.database) }}
 
     {#-- Compute a left-outer join in memory. Some Redshift queries are
-      -- leader-only, and cannot be joined to other compute-based queries #}
+      -- leader-only, and cannot be joined to other compute-based queries (uncomment when join is supported) #}
 
-    {% set catalog = _redshift__get_base_catalog_by_relation(database, relations) %}
+    {% set catalog = _redshift__get_base_catalog_by_relation(dbschema.database, relations) %}
 
-    {% set select_extended = redshift__can_select_from('svv_table_info') %}
-    {% if select_extended %}
-        {% set extended_catalog = _redshift__get_extended_catalog_by_relation(relations) %}
-        {% set catalog = catalog.join(extended_catalog, ['table_schema', 'table_name']) %}
-    {% else %}
-        {{ redshift__no_svv_table_info_warning() }}
-    {% endif %}
+    {#% set select_extended = redshift__can_select_from('svv_table_info') %#}
+    {#% if select_extended %#}
+        {#% set extended_catalog = _redshift__get_extended_catalog_by_relation(relations) %#}
+        {#% set catalog = catalog.join(extended_catalog, ['table_schema', 'table_name']) %#}
+    {#% else %#}
+        {#{ redshift__no_svv_table_info_warning() }#}
+    {#% endif %#}
 
     {{ return(catalog) }}
 

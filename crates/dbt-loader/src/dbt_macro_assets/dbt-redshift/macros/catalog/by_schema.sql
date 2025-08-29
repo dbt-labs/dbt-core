@@ -1,12 +1,11 @@
-{% macro redshift__get_catalog(information_schema, schemas) %}
+{% macro redshift__get_catalog(dbschema, schemas) %}
 
-    {% set database = information_schema.database %}
-    {{ adapter.verify_database(database) }}
+    {{ adapter.verify_database(dbschema.database) }}
 
     {#-- Compute a left-outer join in memory. Some Redshift queries are
       -- leader-only, and cannot be joined to other compute-based queries #}
 
-    {% set catalog = _redshift__get_base_catalog_by_schema(database, schemas) %}
+    {% set catalog = _redshift__get_base_catalog_by_schema(dbschema.database, schemas) %}
 
     {% set select_extended = redshift__can_select_from('svv_table_info') %}
     {% if select_extended %}
