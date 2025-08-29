@@ -1,31 +1,31 @@
-{% macro _bigquery__get_table_shards_sql(information_schema) %}
+{% macro _bigquery__get_table_shards_sql(db_schema) %}
+    {% set region = "region-%s"|format(db_schema.identifier)%}
     select
-        tables.project_id as table_catalog,
-        tables.dataset_id as table_schema,
-        coalesce(REGEXP_EXTRACT(tables.table_id, '^(.+)[0-9]{8}$'), tables.table_id) as table_name,
-        tables.table_id as shard_name,
-        REGEXP_EXTRACT(tables.table_id, '^.+([0-9]{8})$') as shard_index,
-        REGEXP_CONTAINS(tables.table_id, '^.+[0-9]{8}$') and tables.type = 1 as is_date_shard,
-        case
-            when materialized_views.table_name is not null then 'materialized view'
-            when tables.type = 1 then 'table'
-            when tables.type = 2 then 'view'
-            else 'external'
-        end as table_type,
-        tables.type = 1 as is_table,
+        info_tables.table_catalog as table_catalog,
+        info_tables.table_schema as table_schema,
+        coalesce(REGEXP_EXTRACT(info_tables.table_name, '^(.+)[0-9]{8}$'), info_tables.table_name) as table_name,
+        info_tables.table_name as shard_name,
+        REGEXP_EXTRACT(info_tables.table_name, '^.+([0-9]{8})$') as shard_index,
+        REGEXP_CONTAINS(info_tables.table_name, '^.+[0-9]{8}$') and  info_tables.table_type = 'BASE TABLE' as is_date_shard,
+        info_tables.table_type as table_type,
+        info_tables.table_type = 'BASE TABLE' as is_table,
         JSON_VALUE(table_description.option_value) as table_comment,
-        tables.size_bytes,
-        tables.row_count
-    from {{ information_schema.replace(information_schema_view='__TABLES__') }} tables
-    left join {{ information_schema.replace(information_schema_view='MATERIALIZED_VIEWS') }} materialized_views
-        on materialized_views.table_catalog = tables.project_id
-        and materialized_views.table_schema = tables.dataset_id
-        and materialized_views.table_name = tables.table_id
-    left join {{ information_schema.replace(information_schema_view='TABLE_OPTIONS') }} table_description
-        on table_description.table_catalog = tables.project_id
-        and table_description.table_schema = tables.dataset_id
-        and table_description.table_name = tables.table_id
+        table_storage.total_logical_bytes as size_bytes,
+        table_storage.total_rows as row_count
+    from `{{ db_schema.database }}`.`{{ db_schema.schema }}`.INFORMATION_SCHEMA.TABLES info_tables
+    left join `{{ db_schema.database }}`.`{{ db_schema.schema }}`.INFORMATION_SCHEMA.MATERIALIZED_VIEWS materialized_views
+        on materialized_views.table_catalog = info_tables.table_catalog
+        and materialized_views.table_schema = info_tables.table_schema
+        and materialized_views.table_name = info_tables.table_name
+    left join `{{ db_schema.database }}`.`{{ db_schema.schema }}`.INFORMATION_SCHEMA.TABLE_OPTIONS table_description
+        on table_description.table_catalog = info_tables.table_catalog
+        and table_description.table_schema = info_tables.table_schema
+        and table_description.table_name = info_tables.table_name
         and table_description.option_name = 'description'
+    left join `{{ db_schema.database }}`.`{{ region }}`.INFORMATION_SCHEMA.TABLE_STORAGE table_storage
+        on table_storage.table_catalog = info_tables.table_catalog
+        and table_storage.table_schema = info_tables.table_schema
+        and table_storage.table_name = info_tables.table_name
 {% endmacro %}
 
 
@@ -58,7 +58,7 @@
 {% endmacro %}
 
 
-{% macro _bigquery__get_columns_sql(information_schema) %}
+{% macro _bigquery__get_columns_sql(db_schema) %}
     select
         columns.table_catalog,
         columns.table_schema,
@@ -82,8 +82,8 @@
         case when columns.clustering_ordinal_position is not null then 1 else 0 end as is_clustering_column,
         case when columns.clustering_ordinal_position is not null then paths.field_path end as cluster_column,
         columns.clustering_ordinal_position
-    from {{ information_schema.replace(information_schema_view='COLUMNS') }} columns
-    join {{ information_schema.replace(information_schema_view='COLUMN_FIELD_PATHS') }} paths
+    from `{{ db_schema.database }}`.`{{ db_schema.schema }}`.INFORMATION_SCHEMA.COLUMNS columns
+    join `{{ db_schema.database }}`.`{{ db_schema.schema }}`.INFORMATION_SCHEMA.COLUMN_FIELD_PATHS paths
         on paths.table_catalog = columns.table_catalog
         and paths.table_schema = columns.table_schema
         and paths.table_name = columns.table_name

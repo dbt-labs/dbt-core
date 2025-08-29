@@ -54,7 +54,7 @@ pub struct CatalogNodeStats {
 pub struct ColumnMetadata {
     #[serde(rename = "type")]
     pub data_type: String,
-    pub index: i128, // TODO: this is only i128 because Snowflake is giving that back
+    pub index: i128,
     pub name: String,
     pub comment: Option<String>,
 }

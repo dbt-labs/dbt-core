@@ -1,4 +1,4 @@
-{% macro bigquery__get_catalog_relations(information_schema, relations) -%}
+{% macro bigquery__get_catalog_relations(db_schema, relations) -%}
 
     {%- if (relations | length) == 0 -%}
         {# Hopefully nothing cares about the columns we return when there are no rows #}
@@ -7,7 +7,7 @@
     {%- else -%}
         {%- set query -%}
             with
-                table_shards_stage as ({{ _bigquery__get_table_shards_sql(information_schema) }}),
+                table_shards_stage as ({{ _bigquery__get_table_shards_sql(db_schema) }}),
                 table_shards as (
                     select * from table_shards_stage
                     where (
@@ -23,7 +23,7 @@
                 tables as ({{ _bigquery__get_tables_sql() }}),
                 table_stats as ({{ _bigquery__get_table_stats_sql() }}),
 
-                columns as ({{ _bigquery__get_columns_sql(information_schema) }}),
+                columns as ({{ _bigquery__get_columns_sql(db_schema) }}),
                 column_stats as ({{ _bigquery__get_column_stats_sql() }})
 
             {{ _bigquery__get_extended_catalog_sql() }}

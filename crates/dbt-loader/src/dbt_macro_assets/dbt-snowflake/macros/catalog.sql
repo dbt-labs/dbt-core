@@ -1,13 +1,13 @@
 -- funcsign: (information_schema, list[relation]) -> agate_table
-{% macro snowflake__get_catalog(database, schemas) -%}
+{% macro snowflake__get_catalog(dbschema, schemas) -%}
 
     {% set query %}
         with tables as (
-            {{ snowflake__get_catalog_tables_sql(database) }}
+            {{ snowflake__get_catalog_tables_sql(dbschema) }}
             {{ snowflake__get_catalog_schemas_where_clause_sql(schemas) }}
         ),
         columns as (
-            {{ snowflake__get_catalog_columns_sql(database) }}
+            {{ snowflake__get_catalog_columns_sql(dbschema) }}
             {{ snowflake__get_catalog_schemas_where_clause_sql(schemas) }}
         )
         {{ snowflake__get_catalog_results_sql() }}
@@ -18,15 +18,15 @@
 {%- endmacro %}
 
 -- funcsign: (information_schema, list[relation]) -> agate_table
-{% macro snowflake__get_catalog_relations(database, relations) -%}
+{% macro snowflake__get_catalog_relations(dbschema, relations) -%}
 
     {% set query %}
         with tables as (
-            {{ snowflake__get_catalog_tables_sql(database) }}
+            {{ snowflake__get_catalog_tables_sql(dbschema) }}
             {{ snowflake__get_catalog_relations_where_clause_sql(relations) }}
         ),
         columns as (
-            {{ snowflake__get_catalog_columns_sql(database) }}
+            {{ snowflake__get_catalog_columns_sql(dbschema) }}
             {{ snowflake__get_catalog_relations_where_clause_sql(relations) }}
         )
         {{ snowflake__get_catalog_results_sql() }}
@@ -37,7 +37,7 @@
 {%- endmacro %}
 
 -- funcsign: (information_schema) -> string
-{% macro snowflake__get_catalog_tables_sql(database) -%}
+{% macro snowflake__get_catalog_tables_sql(dbschema) -%}
     select
         table_catalog as "table_database",
         table_schema as "table_schema",
@@ -70,10 +70,10 @@
         to_varchar(convert_timezone('UTC', last_altered), 'yyyy-mm-dd HH24:MI'||'UTC') as "stats:last_modified:value",
         'The timestamp for last update/change' as "stats:last_modified:description",
         (last_altered is not null and table_type='BASE TABLE') as "stats:last_modified:include"
-    from {{ database }}.INFORMATION_SCHEMA.tables
+    from {{ dbschema.database }}.INFORMATION_SCHEMA.tables
 {%- endmacro %}
 
-{% macro snowflake__get_catalog_columns_sql(database) -%}
+{% macro snowflake__get_catalog_columns_sql(dbschema) -%}
     select
         table_catalog as "table_database",
         table_schema as "table_schema",
@@ -83,7 +83,7 @@
         ordinal_position as "column_index",
         data_type as "column_type",
         comment as "column_comment"
-    from {{ database }}.INFORMATION_SCHEMA.columns
+    from {{ dbschema.database }}.INFORMATION_SCHEMA.columns
 {%- endmacro %}
 
 -- funcsign: () -> string
