@@ -1002,17 +1002,23 @@ impl InternalDbtNode for DbtSavedQuery {
 
 impl InternalDbtNode for DbtMetric {
     fn common(&self) -> &CommonAttributes {
-        unimplemented!("metric common attributes access")
-    }
-    fn base(&self) -> &NodeBaseAttributes {
-        unimplemented!("metric base attributes access")
-    }
-    fn base_mut(&mut self) -> &mut NodeBaseAttributes {
-        unimplemented!("metric base attributes mutation")
+        &self.__common_attr__
     }
     fn common_mut(&mut self) -> &mut CommonAttributes {
-        unimplemented!("metric common attributes mutation")
+        &mut self.__common_attr__
     }
+
+    // TODO: do we have to use NodeBaseAttributes if we're missing so much of it?
+    // DbtExposure has similar characteristics, but resolve_exposures sets many default values for NodeBaseAttributes...
+    fn base(&self) -> &NodeBaseAttributes {
+        // Metrics don't have base attributes - they don't have database/schema/alias
+        panic!("DbtMetric does not have base attributes - use common() instead")
+    }
+    fn base_mut(&mut self) -> &mut NodeBaseAttributes {
+        // Metrics don't have base attributes - they don't have database/schema/alias
+        panic!("DbtMetric does not have base attributes - use common_mut() instead")
+    }
+
     fn resource_type(&self) -> &str {
         "metric"
     }
@@ -1022,11 +1028,19 @@ impl InternalDbtNode for DbtMetric {
     fn serialize_inner(&self) -> YmlValue {
         dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
     }
-    fn has_same_config(&self, _other: &dyn InternalDbtNode) -> bool {
-        unimplemented!("metric config comparison")
+    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
+        if let Some(other_metric) = other.as_any().downcast_ref::<DbtMetric>() {
+            self.deprecated_config == other_metric.deprecated_config
+        } else {
+            false
+        }
     }
-    fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
-        unimplemented!("metric content comparison")
+    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+        if let Some(other_metric) = other.as_any().downcast_ref::<DbtMetric>() {
+            self.__common_attr__.checksum == other_metric.__common_attr__.checksum
+        } else {
+            false
+        }
     }
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
         panic!("DbtMetric does not support setting detected_unsafe");
@@ -1076,6 +1090,7 @@ pub struct Nodes {
     pub snapshots: BTreeMap<String, Arc<DbtSnapshot>>,
     pub analyses: BTreeMap<String, Arc<DbtModel>>,
     pub exposures: BTreeMap<String, Arc<DbtExposure>>,
+    pub metrics: BTreeMap<String, Arc<DbtMetric>>,
 }
 
 impl Nodes {
@@ -1120,6 +1135,11 @@ impl Nodes {
             .iter()
             .map(|(id, node)| (id.clone(), Arc::new((**node).clone())))
             .collect();
+        let metrics = self
+            .metrics
+            .iter()
+            .map(|(id, node)| (id.clone(), Arc::new((**node).clone())))
+            .collect();
         Nodes {
             models,
             seeds,
@@ -1129,10 +1149,12 @@ impl Nodes {
             snapshots,
             analyses,
             exposures,
+            metrics,
         }
     }
 
-    pub fn keys(&self) -> impl Iterator<Item = &String> {
+    /// Return only the keys of materializable nodes (this excludes exposures and semantic resources)
+    pub fn materializable_keys(&self) -> impl Iterator<Item = &String> {
         self.models
             .keys()
             .chain(self.seeds.keys())
@@ -1215,6 +1237,9 @@ impl Nodes {
             })
     }
 
+    /// Check if a node exists in the graph.
+    /// Used with [`Nodes::materializable_keys`], so intent could be to only check for materializable nodes.
+    /// TODO: Determine if this function should be updated to only check for materializable nodes.
     pub fn contains(&self, unique_id: &str) -> bool {
         self.models.contains_key(unique_id)
             || self.seeds.contains_key(unique_id)
@@ -1223,6 +1248,8 @@ impl Nodes {
             || self.sources.contains_key(unique_id)
             || self.snapshots.contains_key(unique_id)
             || self.analyses.contains_key(unique_id)
+            || self.exposures.contains_key(unique_id)
+            || self.metrics.contains_key(unique_id)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&String, &dyn InternalDbtNodeAttributes)> + '_ {
@@ -1450,6 +1477,7 @@ impl Nodes {
         self.snapshots.extend(other.snapshots);
         self.analyses.extend(other.analyses);
         self.exposures.extend(other.exposures);
+        self.metrics.extend(other.metrics);
     }
 
     pub fn warn_on_custom_materializations(&self) -> FsResult<()> {
@@ -1488,7 +1516,6 @@ fn upcast<T: InternalDbtNodeAttributes + 'static>(
     arc
 }
 
-#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct CommonAttributes {

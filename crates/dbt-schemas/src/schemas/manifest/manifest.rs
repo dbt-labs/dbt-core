@@ -164,6 +164,10 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
             .iter()
             .map(|(id, exposure)| (id.clone(), (**exposure).clone().into()))
             .collect(),
+        // TODO: map from resolver_state.nodes after they are implemented
+        semantic_models: BTreeMap::new(),
+        metrics: BTreeMap::new(),
+        saved_queries: BTreeMap::new(),
         unit_tests: resolver_state
             .nodes
             .unit_tests
@@ -710,6 +714,9 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 deprecated_config: unit_test.config,
             }),
         );
+    }
+    for (_unique_id, _metric) in manifest.metrics {
+        // TODO: insert DbtMetric into node.metrics
     }
 
     nodes

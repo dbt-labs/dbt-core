@@ -10,11 +10,11 @@ use crate::schemas::{
     manifest::{
         DbtNode, ManifestMetadata,
         manifest::serialize_with_resource_type,
-        manifest_nodes::{ManifestExposure, ManifestSource, ManifestUnitTest},
+        manifest_nodes::{ManifestExposure, ManifestMetric, ManifestSource, ManifestUnitTest},
     },
 };
 
-use super::{DbtGroup, DbtMetric, DbtSavedQuery, DbtSelector, DbtSemanticModel};
+use super::{DbtGroup, DbtSavedQuery, DbtSelector, DbtSemanticModel};
 
 #[derive(Debug, Default, Deserialize, Clone)]
 pub struct DbtManifestV12 {
@@ -27,7 +27,7 @@ pub struct DbtManifestV12 {
     pub semantic_models: BTreeMap<String, DbtSemanticModel>,
     pub saved_queries: BTreeMap<String, DbtSavedQuery>,
     pub exposures: BTreeMap<String, ManifestExposure>,
-    pub metrics: BTreeMap<String, DbtMetric>,
+    pub metrics: BTreeMap<String, ManifestMetric>,
     pub child_map: BTreeMap<String, Vec<String>>,
     pub parent_map: BTreeMap<String, Vec<String>>,
     pub group_map: BTreeMap<String, Vec<String>>,
@@ -164,12 +164,20 @@ impl Serialize for DbtManifestV12 {
             dbt_serde_yaml::to_value(exposures_serialized).map_err(serde::ser::Error::custom)?,
         );
 
-        // Serialize metrics using InternalDbtNode trait
+        // Serialize metrics
         let metrics_serialized: BTreeMap<String, YmlValue> = self
             .metrics
             .iter()
-            .map(|(k, v)| (k.clone(), InternalDbtNode::serialize(v)))
-            .collect();
+            .map(|(k, v)| {
+                Ok((
+                    k.clone(),
+                    serialize_with_resource_type(
+                        dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?,
+                        "metric",
+                    ),
+                ))
+            })
+            .collect::<Result<_, _>>()?;
         map.insert(
             "metrics".to_string(),
             dbt_serde_yaml::to_value(metrics_serialized).map_err(serde::ser::Error::custom)?,

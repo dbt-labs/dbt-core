@@ -35,14 +35,24 @@ impl IterChildren<ProjectMetricConfigs> for ProjectMetricConfigs {
     }
 }
 
-#[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, Default, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq)]
 pub struct MetricConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub meta: Option<BTreeMap<String, YmlValue>>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub group: Option<String>,
+}
+
+impl Default for MetricConfig {
+    fn default() -> Self {
+        Self {
+            enabled: Some(true),
+            meta: Some(BTreeMap::new()),
+            tags: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![])),
+            group: None,
+        }
+    }
 }
 
 impl From<ProjectMetricConfigs> for MetricConfig {

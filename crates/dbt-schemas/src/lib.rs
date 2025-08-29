@@ -57,7 +57,7 @@ pub mod schemas {
         #[allow(clippy::module_inception)]
         mod manifest;
         mod manifest_nodes;
-        mod metric;
+        pub(crate) mod metric;
         mod operation;
         pub mod postgres;
         mod saved_query;
@@ -80,8 +80,8 @@ pub mod schemas {
             nodes_from_dbt_manifest,
         };
         pub use manifest_nodes::{
-            ManifestDataTest, ManifestExposure, ManifestModel, ManifestSeed, ManifestSnapshot,
-            ManifestSource, ManifestUnitTest,
+            ManifestDataTest, ManifestExposure, ManifestMetric, ManifestModel, ManifestSeed,
+            ManifestSnapshot, ManifestSource, ManifestUnitTest,
         };
         pub use metric::DbtMetric;
         pub use operation::DbtOperation;
@@ -96,6 +96,7 @@ pub mod schemas {
     pub use dbt_cloud::{DbtCloudConfig, DbtCloudContext, DbtCloudProject};
 
     pub mod semantic_layer {
+        pub mod metric;
         pub mod semantic_manifest;
     }
     pub mod project {
@@ -140,7 +141,7 @@ pub mod schemas {
     pub mod properties {
         mod data_test_properties;
         mod exposure_properties;
-        mod metrics_properties;
+        pub(crate) mod metrics_properties;
         mod model_properties;
         #[allow(clippy::module_inception)]
         mod properties;

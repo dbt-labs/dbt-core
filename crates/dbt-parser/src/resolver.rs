@@ -37,6 +37,7 @@ use crate::resolve::resolve_analyses::resolve_analyses;
 use crate::resolve::resolve_exposures::resolve_exposures;
 use crate::resolve::resolve_macros::resolve_docs_macros;
 use crate::resolve::resolve_macros::resolve_macros;
+use crate::resolve::resolve_metrics::resolve_metrics;
 use crate::resolve::resolve_models::resolve_models;
 use crate::resolve::resolve_properties::resolve_minimal_properties;
 use crate::resolve::resolve_seeds::resolve_seeds;
@@ -523,6 +524,10 @@ pub async fn resolve_inner(
     .await?;
     nodes.exposures.extend(exposures);
     disabled_nodes.exposures.extend(disabled_exposures);
+
+    let (metrics, disabled_metrics) = resolve_metrics().await?;
+    nodes.metrics.extend(metrics);
+    disabled_nodes.metrics.extend(disabled_metrics);
 
     let (data_tests, disabled_tests) = resolve_data_tests(
         arg,

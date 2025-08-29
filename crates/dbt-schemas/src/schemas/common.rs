@@ -950,14 +950,19 @@ pub fn merge_tags(
     base_tags: Option<Vec<String>>,
     update_tags: Option<Vec<String>>,
 ) -> Option<Vec<String>> {
-    let mut all_tags = base_tags.unwrap_or_default();
-    all_tags.extend(update_tags.unwrap_or_default());
-    if !all_tags.is_empty() {
-        all_tags.sort();
-        all_tags.dedup();
-        Some(all_tags)
-    } else {
-        None
+    match (base_tags, update_tags) {
+        // If both are None, result is None
+        (None, None) => None,
+        // If either has a value (even empty), we preserve that semantic meaning
+        (Some(mut base), Some(update)) => {
+            base.extend(update);
+            base.sort();
+            base.dedup();
+            Some(base)
+        }
+        // If only one side has a value, use it
+        (Some(base), None) => Some(base),
+        (None, Some(update)) => Some(update),
     }
 }
 

@@ -97,11 +97,11 @@ pub struct ConversionTypeParams {
     pub constant_properties: Option<Vec<ConstantPropertyInput>>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Clone, Default, Deserialize, Serialize, Debug, JsonSchema)]
 pub struct CumulativeTypeParams {
     pub window: Option<String>,
     pub grain_to_date: Option<String>,
-    pub period_agg: PeriodAggregationType,
+    pub period_agg: Option<PeriodAggregationType>,
 }
 
 #[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema)]

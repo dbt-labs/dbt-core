@@ -13,21 +13,49 @@ use crate::schemas::{
         NodeDependsOn,
     },
     dbt_column::DbtColumnRef,
-    manifest::{DbtOperation, common::DbtOwner},
+    manifest::{
+        DbtOperation, common::DbtOwner, common::SourceFileMetadata, common::WhereFilterIntersection,
+    },
     nodes::TestMetadata,
     project::{
-        DataTestConfig, ExposureConfig, ModelConfig, SeedConfig, SnapshotConfig, SourceConfig,
-        UnitTestConfig,
+        DataTestConfig, ExposureConfig, MetricConfig, ModelConfig, SeedConfig, SnapshotConfig,
+        SourceConfig, UnitTestConfig,
     },
     properties::{ModelConstraint, UnitTestOverrides},
     ref_and_source::{DbtRef, DbtSourceWrapper},
-    serde::StringOrInteger,
+    serde::{StringOrArrayOfStrings, StringOrInteger},
 };
 
+/// Common attributes for all manifest nodes, materializable or not.
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestCommonAttributes {
+    // Identifiers
+    pub unique_id: String,
+    pub name: String,
+    pub package_name: String,
+    pub fqn: Vec<String>,
+
+    // Paths
+    pub path: PathBuf,
+    pub original_file_path: PathBuf,
+
+    // Meta
+    pub description: Option<String>,
+
+    #[serde(default)]
+    pub tags: Vec<String>,
+
+    #[serde(default)]
+    pub meta: BTreeMap<String, YmlValue>,
+}
+
+/// Common attributes for materializable nodes, i.e. models, sources, snapshots, tests, etc.
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct ManifestMaterializableCommonAttributes {
     // Identifiers
     pub unique_id: String,
     #[serde(default)]
@@ -92,7 +120,7 @@ pub struct ManifestNodeBaseAttributes {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestSeed {
-    pub __common_attr__: ManifestCommonAttributes,
+    pub __common_attr__: ManifestMaterializableCommonAttributes,
 
     pub __base_attr__: ManifestNodeBaseAttributes,
 
@@ -106,7 +134,7 @@ pub struct ManifestSeed {
 impl From<DbtSeed> for ManifestSeed {
     fn from(seed: DbtSeed) -> Self {
         Self {
-            __common_attr__: ManifestCommonAttributes {
+            __common_attr__: ManifestMaterializableCommonAttributes {
                 unique_id: seed.__common_attr__.unique_id,
                 database: seed.__base_attr__.database,
                 schema: seed.__base_attr__.schema,
@@ -151,7 +179,7 @@ impl From<DbtSeed> for ManifestSeed {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestUnitTest {
-    pub __common_attr__: ManifestCommonAttributes,
+    pub __common_attr__: ManifestMaterializableCommonAttributes,
 
     pub __base_attr__: ManifestNodeBaseAttributes,
     /// Unit Test Specific Attributes
@@ -167,7 +195,7 @@ pub struct ManifestUnitTest {
 impl From<DbtUnitTest> for ManifestUnitTest {
     fn from(unit_test: DbtUnitTest) -> Self {
         Self {
-            __common_attr__: ManifestCommonAttributes {
+            __common_attr__: ManifestMaterializableCommonAttributes {
                 unique_id: unit_test.__common_attr__.unique_id,
                 database: unit_test.__base_attr__.database,
                 schema: unit_test.__base_attr__.schema,
@@ -216,7 +244,7 @@ impl From<DbtUnitTest> for ManifestUnitTest {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestDataTest {
-    pub __common_attr__: ManifestCommonAttributes,
+    pub __common_attr__: ManifestMaterializableCommonAttributes,
     pub __base_attr__: ManifestNodeBaseAttributes,
 
     /// Test Specific Attributes
@@ -232,7 +260,7 @@ pub struct ManifestDataTest {
 impl From<DbtTest> for ManifestDataTest {
     fn from(test: DbtTest) -> Self {
         Self {
-            __common_attr__: ManifestCommonAttributes {
+            __common_attr__: ManifestMaterializableCommonAttributes {
                 unique_id: test.__common_attr__.unique_id,
                 database: test.__base_attr__.database,
                 schema: test.__base_attr__.schema,
@@ -280,7 +308,7 @@ impl From<DbtTest> for ManifestDataTest {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestSnapshot {
-    pub __common_attr__: ManifestCommonAttributes,
+    pub __common_attr__: ManifestMaterializableCommonAttributes,
     pub __base_attr__: ManifestNodeBaseAttributes,
 
     /// Snapshot Specific Attributes
@@ -292,7 +320,7 @@ pub struct ManifestSnapshot {
 impl From<DbtSnapshot> for ManifestSnapshot {
     fn from(snapshot: DbtSnapshot) -> Self {
         Self {
-            __common_attr__: ManifestCommonAttributes {
+            __common_attr__: ManifestMaterializableCommonAttributes {
                 unique_id: snapshot.__common_attr__.unique_id,
                 database: snapshot.__base_attr__.database,
                 schema: snapshot.__base_attr__.schema,
@@ -336,7 +364,7 @@ impl From<DbtSnapshot> for ManifestSnapshot {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestSource {
-    pub __common_attr__: ManifestCommonAttributes,
+    pub __common_attr__: ManifestMaterializableCommonAttributes,
 
     // Source Specific Attributes
     pub relation_name: Option<String>,
@@ -361,7 +389,7 @@ pub struct ManifestSource {
 impl From<DbtSource> for ManifestSource {
     fn from(source: DbtSource) -> Self {
         Self {
-            __common_attr__: ManifestCommonAttributes {
+            __common_attr__: ManifestMaterializableCommonAttributes {
                 unique_id: source.__common_attr__.unique_id,
                 database: source.__base_attr__.database,
                 schema: source.__base_attr__.schema,
@@ -401,7 +429,7 @@ impl From<DbtSource> for ManifestSource {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestModel {
-    pub __common_attr__: ManifestCommonAttributes,
+    pub __common_attr__: ManifestMaterializableCommonAttributes,
 
     pub __base_attr__: ManifestNodeBaseAttributes,
 
@@ -420,7 +448,7 @@ pub struct ManifestModel {
 impl From<DbtModel> for ManifestModel {
     fn from(model: DbtModel) -> Self {
         Self {
-            __common_attr__: ManifestCommonAttributes {
+            __common_attr__: ManifestMaterializableCommonAttributes {
                 unique_id: model.__common_attr__.unique_id,
                 database: model.__base_attr__.database,
                 schema: model.__base_attr__.schema,
@@ -470,7 +498,7 @@ impl From<DbtModel> for ManifestModel {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestOperation {
-    pub __common_attr__: ManifestCommonAttributes,
+    pub __common_attr__: ManifestMaterializableCommonAttributes,
 
     pub __base_attr__: ManifestNodeBaseAttributes,
 
@@ -480,7 +508,7 @@ pub struct ManifestOperation {
 impl From<DbtOperation> for ManifestOperation {
     fn from(operation: DbtOperation) -> Self {
         Self {
-            __common_attr__: ManifestCommonAttributes {
+            __common_attr__: ManifestMaterializableCommonAttributes {
                 unique_id: operation.__common_attr__.unique_id,
                 name: operation.__common_attr__.name,
                 package_name: operation.__common_attr__.package_name,
@@ -495,27 +523,6 @@ impl From<DbtOperation> for ManifestOperation {
             __other__: operation.__other__,
         }
     }
-}
-
-// Exposures don't have "schema" fields, which are not
-// optional in the base ManifestCommonAttributes class
-// and causes an error reading exposures without a schema field.
-#[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub struct ManifestExposureCommonAttributes {
-    // Identifiers
-    pub unique_id: String,
-    pub name: String,
-    pub package_name: String,
-    pub fqn: Vec<String>,
-
-    // Paths
-    pub path: PathBuf,
-    pub original_file_path: PathBuf,
-
-    // Meta
-    pub description: Option<String>,
 }
 
 #[skip_serializing_none]
@@ -543,7 +550,7 @@ pub struct ManifestExposureNodeBaseAttributes {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestExposure {
-    pub __common_attr__: ManifestExposureCommonAttributes,
+    pub __common_attr__: ManifestCommonAttributes,
 
     pub __base_attr__: ManifestExposureNodeBaseAttributes,
 
@@ -562,7 +569,7 @@ pub struct ManifestExposure {
 impl From<DbtExposure> for ManifestExposure {
     fn from(exposure: DbtExposure) -> Self {
         Self {
-            __common_attr__: ManifestExposureCommonAttributes {
+            __common_attr__: ManifestCommonAttributes {
                 unique_id: exposure.__common_attr__.unique_id,
                 name: exposure.__common_attr__.name,
                 package_name: exposure.__common_attr__.package_name,
@@ -570,6 +577,8 @@ impl From<DbtExposure> for ManifestExposure {
                 path: exposure.__common_attr__.path,
                 original_file_path: exposure.__common_attr__.original_file_path,
                 description: exposure.__common_attr__.description,
+                tags: exposure.__common_attr__.tags,
+                meta: exposure.__common_attr__.meta,
             },
             __base_attr__: ManifestExposureNodeBaseAttributes {
                 depends_on: exposure.__base_attr__.depends_on,
@@ -586,6 +595,77 @@ impl From<DbtExposure> for ManifestExposure {
             url: exposure.__exposure_attr__.url,
             config: exposure.deprecated_config,
             __other__: Default::default(),
+        }
+    }
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct ManifestMetricNodeBaseAttributes {
+    // Derived
+    pub depends_on: NodeDependsOn,
+
+    #[serde(default)]
+    pub refs: Vec<DbtRef>,
+
+    #[serde(default)]
+    pub sources: Vec<Vec<String>>,
+
+    #[serde(default)]
+    pub unrendered_config: BTreeMap<String, YmlValue>,
+
+    #[serde(default)]
+    pub created_at: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ManifestMetric {
+    pub __common_attr__: ManifestCommonAttributes,
+    pub __base_attr__: ManifestMetricNodeBaseAttributes,
+
+    // Metric Specific Attributes
+    pub label: String,
+    #[serde(rename = "type")]
+    pub metric_type: crate::schemas::manifest::metric::MetricType,
+    pub type_params: crate::schemas::manifest::metric::MetricTypeParams,
+    pub filter: Option<WhereFilterIntersection>,
+    pub metadata: Option<SourceFileMetadata>,
+    pub time_granularity: Option<String>,
+    pub group: Option<String>,
+
+    pub config: ManifestMetricConfig,
+
+    #[serde(default)]
+    pub metrics: Vec<Vec<String>>,
+
+    pub __other__: BTreeMap<String, YmlValue>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct ManifestMetricConfig {
+    pub enabled: bool,
+
+    pub meta: Option<BTreeMap<String, YmlValue>>,
+
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub tags: Vec<String>,
+
+    pub group: Option<String>,
+}
+
+impl From<MetricConfig> for ManifestMetricConfig {
+    fn from(config: MetricConfig) -> Self {
+        Self {
+            enabled: config.enabled.unwrap_or(true),
+            meta: config.meta,
+            tags: match config.tags {
+                Some(StringOrArrayOfStrings::ArrayOfStrings(ref tags)) => tags.clone(),
+                Some(StringOrArrayOfStrings::String(ref tag)) => vec![tag.clone()],
+                None => vec![],
+            },
+            group: config.group,
         }
     }
 }
