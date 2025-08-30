@@ -347,10 +347,15 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         }
     }
 
-    fn convert_type_inner(&self, data_type: &DataType) -> AdapterResult<String>;
+    fn convert_type_inner(&self, _state: &State, data_type: &DataType) -> AdapterResult<String>;
 
     /// Convert type.
-    fn convert_type(&self, table: Arc<AgateTable>, col_idx: i64) -> AdapterResult<String> {
+    fn convert_type(
+        &self,
+        state: &State,
+        table: Arc<AgateTable>,
+        col_idx: i64,
+    ) -> AdapterResult<String> {
         let schema = table.to_record_batch().schema();
         let data_type = schema.field(col_idx as usize).data_type();
 
@@ -365,7 +370,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             data_type
         };
 
-        self.convert_type_inner(data_type)
+        self.convert_type_inner(state, data_type)
     }
 
     /// Expand the to_relation table's column types to match the schema of from_relation

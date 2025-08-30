@@ -360,7 +360,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn convert_type(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn convert_type(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 2, 2)?;
 
@@ -370,7 +370,7 @@ impl BaseAdapter for BridgeAdapter {
         let col_idx = args.last().expect("col_idx");
         let col_idx = col_idx.as_i64().unwrap();
 
-        let result = self.typed_adapter.convert_type(table, col_idx)?;
+        let result = self.typed_adapter.convert_type(state, table, col_idx)?;
 
         Ok(Value::from(result))
     }
