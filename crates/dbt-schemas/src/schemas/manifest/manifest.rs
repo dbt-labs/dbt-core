@@ -832,6 +832,7 @@ mod tests {
             sources: BTreeMap::new(),
             unit_tests: BTreeMap::new(),
             metrics: BTreeMap::new(),
+            semantic_models: BTreeMap::new(),
         }
     }
 
