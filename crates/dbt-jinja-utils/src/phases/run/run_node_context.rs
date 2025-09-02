@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use dbt_agate::AgateTable;
 use dbt_common::ErrorCode;
+use dbt_common::adapter::AdapterType;
 use dbt_common::constants::DBT_COMPILED_DIR_NAME;
 use dbt_common::constants::DBT_RUN_DIR_NAME;
 use dbt_common::fs_err;
@@ -43,14 +44,14 @@ async fn extend_with_model_context<S: Serialize>(
     common_attr: &CommonAttributes,
     base_attr: &NodeBaseAttributes,
     deprecated_config: &S,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     io_args: &IoArgs,
     resource_type: &str,
     sql_header: Option<MinijinjaValue>,
 ) {
     // Create a relation for 'this' using config values
     let this_relation = create_relation(
-        adapter_type.to_string(),
+        adapter_type,
         base_attr.database.clone(),
         base_attr.schema.clone(),
         Some(base_attr.alias.clone()),
@@ -207,7 +208,7 @@ pub async fn build_run_node_context<S: Serialize>(
     common_attr: &CommonAttributes,
     base_attr: &NodeBaseAttributes,
     deprecated_config: &S,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     agate_table: Option<AgateTable>,
     base_context: &BTreeMap<String, MinijinjaValue>,
     io_args: &IoArgs,

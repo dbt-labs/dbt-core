@@ -1,6 +1,7 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
 use crate::utils::get_node_fqn;
+use dbt_common::adapter::AdapterType;
 use dbt_common::error::AbstractLocation;
 use dbt_common::io_args::IoArgs;
 use dbt_common::{ErrorCode, FsResult, err, fs_err, show_error};
@@ -38,7 +39,7 @@ pub async fn resolve_exposures(
     root_project_configs: &RootProjectConfigs,
     database: &str,
     schema: &str,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     package_name: &str,
     env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
@@ -212,7 +213,7 @@ pub fn resolve_yaml_depends_on(
     exposure_config: &ExposureConfig,
     database: &str,
     schema: &str,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     package_name: &str,
     root_project_name: &str,
     fqn: Vec<String>,

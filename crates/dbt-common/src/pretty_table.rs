@@ -427,7 +427,7 @@ pub fn pretty_schema_table(
     subtitle: &str,
     display_format: &DisplayFormat,
     table_schema: &Schema,
-    _dialect: &Dialect,
+    _dialect: Dialect,
     limit: Option<usize>,
     show_footer: bool,
 ) -> FsResult<String> {

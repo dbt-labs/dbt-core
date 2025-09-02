@@ -3,6 +3,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 
+use dbt_common::adapter::AdapterType;
 use dbt_common::{CodeLocation, ErrorCode, FsError, FsResult, err, fs_err};
 use dbt_frontend_common::Dialect;
 use dbt_serde_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize, Verbatim};
@@ -885,12 +886,12 @@ pub struct NodeInfo {
 /// according to the dialect and quoting rules.
 pub fn normalize_quoting(
     quoting: &ResolvedQuoting,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     database: &str,
     schema: &str,
     identifier: &str,
 ) -> (String, String, String, ResolvedQuoting) {
-    let dialect = Dialect::from_str(adapter_type).unwrap_or_default();
+    let dialect: Dialect = Dialect::from(adapter_type);
     let (database, database_quoting) = _normalize_quote(quoting.database, &dialect, database);
     let (schema, schema_quoting) = _normalize_quote(quoting.schema, &dialect, schema);
     let (identifier, identifier_quoting) =
@@ -907,8 +908,8 @@ pub fn normalize_quoting(
     )
 }
 
-pub fn normalize_quote(quoting: bool, adapter_type: &str, name: &str) -> (String, bool) {
-    let dialect: Dialect = Dialect::from_str(adapter_type).unwrap_or_default();
+pub fn normalize_quote(quoting: bool, adapter_type: AdapterType, name: &str) -> (String, bool) {
+    let dialect: Dialect = Dialect::from(adapter_type);
     _normalize_quote(quoting, &dialect, name)
 }
 
@@ -969,87 +970,99 @@ mod tests {
 
     #[test]
     fn test_get_semantic_name_snowflake_simple() {
-        helper("snowflake", false, "xyz", false, "xyz");
+        helper(AdapterType::Snowflake, false, "xyz", false, "xyz");
     }
 
     #[test]
     fn test_get_semantic_name_snowflake_quoted_identifier() {
-        helper("snowflake", false, r#""xyz""#, true, "xyz");
+        helper(AdapterType::Snowflake, false, r#""xyz""#, true, "xyz");
     }
 
     #[test]
     fn test_get_semantic_name_snowflake_quoting() {
-        helper("snowflake", true, "xyz", true, "xyz");
+        helper(AdapterType::Snowflake, true, "xyz", true, "xyz");
     }
     #[test]
     fn test_get_semantic_name_snowflake_quoted_identifier_with_quoting() {
-        helper("snowflake", true, r#""xyz""#, true, r#""xyz""#);
+        helper(AdapterType::Snowflake, true, r#""xyz""#, true, r#""xyz""#);
     }
 
     #[test]
     fn test_get_semantic_name_snowflake_non_identifier() {
         // This will fail because `z.3` should be quoted, but this is a user error
-        helper("snowflake", false, "z.3", false, "z.3");
+        helper(AdapterType::Snowflake, false, "z.3", false, "z.3");
     }
 
     #[test]
     fn test_get_semantic_name_snowflake_reserved() {
         // This will fail because `group` is a reserved keyword, but this is a user error
-        helper("snowflake", false, "group", false, "group");
+        helper(AdapterType::Snowflake, false, "group", false, "group");
     }
 
     #[test]
     fn test_get_semantic_name_snowflake_quoted_reserved() {
-        helper("snowflake", false, r#""GROUP""#, true, "GROUP");
+        helper(AdapterType::Snowflake, false, r#""GROUP""#, true, "GROUP");
     }
 
     #[test]
     fn test_get_semantic_name_snowflake_quoted_reserved_with_quoting() {
-        helper("snowflake", true, r#""GROUP""#, true, r#""GROUP""#);
+        helper(
+            AdapterType::Snowflake,
+            true,
+            r#""GROUP""#,
+            true,
+            r#""GROUP""#,
+        );
     }
 
     #[test]
     fn test_get_semantic_name_postgres_simple() {
-        helper("postgres", false, "xyz", false, "xyz");
+        helper(AdapterType::Postgres, false, "xyz", false, "xyz");
     }
 
     #[test]
     fn test_get_semantic_name_postgres_quoted_identifier() {
-        helper("postgres", false, r#""xyz""#, true, "xyz");
+        helper(AdapterType::Postgres, false, r#""xyz""#, true, "xyz");
     }
 
     #[test]
     fn test_get_semantic_name_postgres_quoting() {
-        helper("postgres", true, "xyz", true, "xyz");
+        helper(AdapterType::Postgres, true, "xyz", true, "xyz");
     }
     #[test]
     fn test_get_semantic_name_postgres_quoted_identifier_with_quoting() {
-        helper("postgres", true, r#""xyz""#, true, r#""xyz""#);
+        helper(AdapterType::Postgres, true, r#""xyz""#, true, r#""xyz""#);
     }
 
     #[test]
     fn test_get_semantic_name_postgres_non_identifier() {
         // This will fail because `z.3` should be quoted, but this is a user error
-        helper("postgres", false, "z.3", false, "z.3");
+        helper(AdapterType::Postgres, false, "z.3", false, "z.3");
     }
 
     #[test]
     fn test_get_semantic_name_postgres_reserved() {
         // This will fail because `group` is a reserved keyword, but this is a user error
-        helper("postgres", false, "group", false, "group");
+        helper(AdapterType::Postgres, false, "group", false, "group");
     }
 
     #[test]
     fn test_get_semantic_name_postgres_quoted_reserved() {
-        helper("postgres", false, r#""GROUP""#, true, "GROUP");
+        helper(AdapterType::Postgres, false, r#""GROUP""#, true, "GROUP");
     }
 
     #[test]
     fn test_get_semantic_name_postgres_quoted_reserved_with_quoting() {
-        helper("postgres", true, r#""GROUP""#, true, r#""GROUP""#);
+        helper(
+            AdapterType::Postgres,
+            true,
+            r#""GROUP""#,
+            true,
+            r#""GROUP""#,
+        );
     }
     fn helper(
-        adapter_type: &str,
+        adapter_type: AdapterType,
         quoting: bool,
         identifier: &str,
         expected_quoting: bool,

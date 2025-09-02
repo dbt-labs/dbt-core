@@ -1,6 +1,7 @@
 //! Utility functions for the resolver
 use crate::dbt_project_config::strip_resource_paths_from_ref_path;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
+use dbt_common::adapter::AdapterType;
 use dbt_common::io_args::IoArgs;
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err, show_error, stdfs};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -203,7 +204,7 @@ pub fn generate_relation_components(
     base_ctx: &BTreeMap<String, minijinja::Value>,
     components: &RelationComponents,
     node: &dyn InternalDbtNodeAttributes,
-    adapter_type: &str,
+    adapter_type: AdapterType,
 ) -> FsResult<(String, String, String, String, ResolvedQuoting)> {
     // TODO handle jinja rendering errors on each component name rendering
     // Get default values from the node
@@ -323,7 +324,7 @@ pub fn update_node_relation_components(
     package_name: &str,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     components: &RelationComponents,
-    adapter_type: &str,
+    adapter_type: AdapterType,
 ) -> FsResult<()> {
     // Source and unit test nodes do not have relation components
     if ["source", "unit_test"].contains(&node.resource_type()) {

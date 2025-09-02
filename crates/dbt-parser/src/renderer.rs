@@ -5,6 +5,7 @@ use crate::dbt_project_config::DbtProjectConfig;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::sql_file_info::SqlFileInfo;
 use crate::utils::{get_node_fqn, register_duplicate_resource, trigger_duplicate_errors};
+use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::PARSING;
 use dbt_common::io_args::IoArgs;
@@ -234,7 +235,7 @@ pub async fn render_unresolved_sql_files_sequentially<
         };
         resolve_model_context.extend(build_resolve_model_context(
             &properties_config,
-            adapter_type,
+            *adapter_type,
             database,
             schema,
             &model_name,
@@ -387,7 +388,7 @@ pub struct RenderCtxInner<T: DefaultTo<T>> {
     /// The name of the package
     pub package_name: String,
     /// The type of the adapter
-    pub adapter_type: String,
+    pub adapter_type: AdapterType,
     /// The database name
     pub database: String,
     /// The schema name
@@ -576,7 +577,7 @@ pub async fn render_unresolved_sql_files<
                 };
                 resolve_model_context.extend(build_resolve_model_context(
                     &properties_config,
-                    adapter_type,
+                    *adapter_type,
                     database,
                     schema,
                     &model_name,
@@ -759,7 +760,7 @@ pub async fn collect_adapter_identifiers_detect_unsafe(
     models: &mut HashMap<String, Arc<DbtModel>>,
     refs_and_sources: &RefsAndSources,
     jinja_env: Arc<JinjaEnv>,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     package_name: &str,
     root_project_name: &str,
     runtime_config: Arc<DbtRuntimeConfig>,
@@ -835,7 +836,7 @@ async fn process_model_chunk_for_unsafe_detection(
     arg: ResolveArgs,
     refs_and_sources: RefsAndSources,
     jinja_env: &JinjaEnv,
-    adapter_type: String,
+    adapter_type: AdapterType,
     package_name: String,
     root_project_name: String,
     runtime_config: Arc<DbtRuntimeConfig>,
@@ -872,7 +873,7 @@ async fn process_model_chunk_for_unsafe_detection(
             model.common(),
             model.base(),
             &model.serialized_config(),
-            &adapter_type,
+            adapter_type,
             &render_base_context,
             &root_project_name,
             runtime_config.dependencies.keys().cloned().collect(),
@@ -923,7 +924,7 @@ async fn collect_adapter_identifiers_sequential(
     model_vec: Vec<(String, Arc<DbtModel>)>,
     refs_and_sources: &RefsAndSources,
     jinja_env: &JinjaEnv,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     package_name: &str,
     root_project_name: &str,
     runtime_config: Arc<DbtRuntimeConfig>,
@@ -940,7 +941,7 @@ async fn collect_adapter_identifiers_sequential(
             arg.clone(),
             refs_and_sources.clone(),
             jinja_env,
-            adapter_type.to_string(),
+            adapter_type,
             package_name.to_string(),
             root_project_name.to_string(),
             runtime_config.clone(),
@@ -961,7 +962,7 @@ async fn collect_adapter_identifiers_parallel(
     model_vec: Vec<(String, Arc<DbtModel>)>,
     refs_and_sources: &RefsAndSources,
     jinja_env: Arc<JinjaEnv>,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     package_name: &str,
     root_project_name: &str,
     runtime_config: Arc<DbtRuntimeConfig>,
@@ -976,7 +977,6 @@ async fn collect_adapter_identifiers_parallel(
         let arg = arg.clone();
         let refs_and_sources = refs_and_sources.clone();
         let jinja_env = jinja_env.clone();
-        let adapter_type = adapter_type.to_string();
         let package_name = package_name.to_string();
         let root_project_name = root_project_name.to_string();
         let runtime_config = runtime_config.clone();

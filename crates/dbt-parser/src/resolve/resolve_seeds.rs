@@ -4,6 +4,7 @@ use crate::utils::{
     RelationComponents, get_node_fqn, register_duplicate_resource, trigger_duplicate_errors,
     update_node_relation_components,
 };
+use dbt_common::adapter::AdapterType;
 use dbt_common::{ErrorCode, FsResult, fs_err, show_error, stdfs};
 use dbt_frontend_common::Dialect;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -37,7 +38,7 @@ pub fn resolve_seeds(
     root_project_configs: &RootProjectConfigs,
     database: &str,
     schema: &str,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     package_name: &str,
     jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
@@ -119,8 +120,8 @@ pub fn resolve_seeds(
             project_config.clone()
         };
 
-        // normalize column_types to uppercase if it is snowflake
-        if adapter_type == "snowflake" || adapter_type == "replay" {
+        // XXX: normalize column_types to uppercase if it is snowflake
+        if matches!(adapter_type, AdapterType::Snowflake) {
             if let Some(column_types) = &properties_config.column_types {
                 let column_types = column_types
                     .iter()

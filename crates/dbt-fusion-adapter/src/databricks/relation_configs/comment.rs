@@ -92,6 +92,7 @@ impl DatabricksComponentProcessor for CommentProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::AdapterType;
     use crate::databricks::relation_configs::base::DatabricksRelationResultsBuilder;
     use dbt_agate::AgateTable;
     use dbt_schemas::schemas::{common::*, nodes::*, project::*};
@@ -135,7 +136,8 @@ mod tests {
         let warehouse_config = WarehouseSpecificNodeConfig::default();
 
         // Use the factory method to create adapter attributes
-        let adapter_attr = AdapterAttr::from_config_and_dialect(&warehouse_config, "databricks");
+        let adapter_attr =
+            AdapterAttr::from_config_and_dialect(&warehouse_config, AdapterType::Databricks);
 
         DbtModel {
             __common_attr__: CommonAttributes {

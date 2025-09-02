@@ -6,6 +6,7 @@ use crate::utils::get_unique_id;
 use dbt_common::CodeLocation;
 use dbt_common::ErrorCode;
 use dbt_common::FsResult;
+use dbt_common::adapter::AdapterType;
 use dbt_common::err;
 use dbt_common::error::AbstractLocation;
 use dbt_common::fs_err;
@@ -53,7 +54,7 @@ pub fn resolve_unit_tests(
     package_quoting: DbtQuoting,
     root_project: &DbtProject,
     root_project_configs: &RootProjectConfigs,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     package_name: &str,
     jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, minijinja::Value>,

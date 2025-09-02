@@ -3,6 +3,7 @@ use std::str::FromStr;
 use std::{any::Any, collections::BTreeMap, fmt::Display, path::PathBuf, sync::Arc};
 
 use chrono::{DateTime, Utc};
+use dbt_common::adapter::AdapterType;
 use dbt_common::{ErrorCode, FsResult, err, io_args::StaticAnalysisKind};
 use dbt_telemetry::NodeIdentifier;
 use serde::{Deserialize, Serialize};
@@ -1921,9 +1922,8 @@ impl AdapterAttr {
     /// Creates a new [AdapterAttr] from a given [&WarehouseSpecificNodeConfig] and adapter type string
     pub fn from_config_and_dialect(
         config: &WarehouseSpecificNodeConfig,
-        adapter_type: &str,
+        adapter_type: AdapterType,
     ) -> Self {
-        // TODO: adapter_type should be an enum.
         // TODO: Make all None inputs result in a None for that attr
         // TODO: Creation of configs should be delegated to the adapter specific attr struct
         // Here we naively initialize the resolved adapter attributes.
@@ -1933,7 +1933,7 @@ impl AdapterAttr {
         // A further optimization can be done by only setting inner fields of [AdapterAttr] if at least one field of the
         // input is not None
         match adapter_type {
-            "snowflake" => {
+            AdapterType::Snowflake => {
                 AdapterAttr::default().with_snowflake_attr(Some(Box::new(SnowflakeAttr {
                     table_tag: config.table_tag.clone(),
                     row_access_policy: config.row_access_policy.clone(),
@@ -1952,31 +1952,35 @@ impl AdapterAttr {
                     transient: config.transient,
                 })))
             }
-            "postgres" => AdapterAttr::default(),
-            "bigquery" => AdapterAttr::default().with_bigquery_attr(Some(Box::new(BigQueryAttr {
-                partition_by: config.partition_by.clone(),
-                cluster_by: config.cluster_by.clone(),
-                hours_to_expiration: config.hours_to_expiration,
-                labels: config.labels.clone(),
-                labels_from_meta: config.labels_from_meta,
-                kms_key_name: config.kms_key_name.clone(),
-                require_partition_filter: config.require_partition_filter,
-                partition_expiration_days: config.partition_expiration_days,
-                grant_access_to: config.grant_access_to.clone(),
-                partitions: config.partitions.clone(),
-                enable_refresh: config.enable_refresh,
-                refresh_interval_minutes: config.refresh_interval_minutes,
-                max_staleness: config.max_staleness.clone(),
-            }))),
-            "redshift" => AdapterAttr::default().with_redshift_attr(Some(Box::new(RedshiftAttr {
-                auto_refresh: config.auto_refresh,
-                backup: config.backup,
-                bind: config.bind,
-                dist: config.dist.clone(),
-                sort: config.sort.clone(),
-                sort_type: config.sort_type.clone(),
-            }))),
-            "databricks" => {
+            AdapterType::Postgres => AdapterAttr::default(),
+            AdapterType::Bigquery => {
+                AdapterAttr::default().with_bigquery_attr(Some(Box::new(BigQueryAttr {
+                    partition_by: config.partition_by.clone(),
+                    cluster_by: config.cluster_by.clone(),
+                    hours_to_expiration: config.hours_to_expiration,
+                    labels: config.labels.clone(),
+                    labels_from_meta: config.labels_from_meta,
+                    kms_key_name: config.kms_key_name.clone(),
+                    require_partition_filter: config.require_partition_filter,
+                    partition_expiration_days: config.partition_expiration_days,
+                    grant_access_to: config.grant_access_to.clone(),
+                    partitions: config.partitions.clone(),
+                    enable_refresh: config.enable_refresh,
+                    refresh_interval_minutes: config.refresh_interval_minutes,
+                    max_staleness: config.max_staleness.clone(),
+                })))
+            }
+            AdapterType::Redshift => {
+                AdapterAttr::default().with_redshift_attr(Some(Box::new(RedshiftAttr {
+                    auto_refresh: config.auto_refresh,
+                    backup: config.backup,
+                    bind: config.bind,
+                    dist: config.dist.clone(),
+                    sort: config.sort.clone(),
+                    sort_type: config.sort_type.clone(),
+                })))
+            }
+            AdapterType::Databricks => {
                 AdapterAttr::default().with_databricks_attr(Some(Box::new(DatabricksAttr {
                     partition_by: config.partition_by.clone(),
                     file_format: config.file_format.clone(),

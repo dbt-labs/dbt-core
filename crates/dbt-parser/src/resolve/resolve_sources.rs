@@ -3,6 +3,7 @@ use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
 use crate::utils::get_node_fqn;
 
+use dbt_common::adapter::AdapterType;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::{ErrorCode, FsResult, err, show_error};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -36,7 +37,7 @@ pub fn resolve_sources(
     root_project_configs: &RootProjectConfigs,
     source_properties: BTreeMap<(String, String), MinimalPropertiesEntry>,
     database: &str,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     jinja_env: &JinjaEnv,
     collected_generic_tests: &mut Vec<GenericTestAsset>,

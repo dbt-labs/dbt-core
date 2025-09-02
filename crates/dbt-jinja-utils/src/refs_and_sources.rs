@@ -5,7 +5,8 @@ use std::{
 };
 
 use dbt_common::{
-    CodeLocation, ErrorCode, FsResult, err, fs_err, io_args::IoArgs, show_error, unexpected_err,
+    CodeLocation, ErrorCode, FsResult, adapter::AdapterType, err, fs_err, io_args::IoArgs,
+    show_error, unexpected_err,
 };
 use dbt_fusion_adapter::relation_object::{RelationObject, create_relation_from_node};
 use dbt_schemas::{
@@ -39,7 +40,7 @@ impl RefsAndSources {
     /// Create a new RefsAndSources from a DbtManifest
     pub fn from_dbt_nodes(
         nodes: &Nodes,
-        adapter_type: &str,
+        adapter_type: AdapterType,
         root_package_name: String,
         mantle_quoting: Option<DbtQuoting>,
         run_filter: RunFilter,
@@ -104,7 +105,7 @@ impl RefsAndSourcesTracker for RefsAndSources {
     fn insert_ref(
         &mut self,
         node: &dyn InternalDbtNodeAttributes,
-        adapter_type: &str,
+        adapter_type: AdapterType,
         status: ModelStatus,
         override_existing: bool,
     ) -> FsResult<()> {
@@ -119,11 +120,7 @@ impl RefsAndSourcesTracker for RefsAndSources {
         };
 
         let relation = RelationObject::new_with_filter(
-            create_relation_from_node(
-                adapter_type.to_string(),
-                node,
-                Some(self.run_filter.clone()),
-            )?,
+            create_relation_from_node(adapter_type, node, Some(self.run_filter.clone()))?,
             self.run_filter.clone(),
             node.event_time(),
         )
@@ -211,15 +208,11 @@ impl RefsAndSourcesTracker for RefsAndSources {
         &mut self,
         package_name: &str,
         source: &DbtSource,
-        adapter_type: &str,
+        adapter_type: AdapterType,
         status: ModelStatus,
     ) -> FsResult<()> {
         let relation = RelationObject::new_with_filter(
-            create_relation_from_node(
-                adapter_type.to_string(),
-                source,
-                Some(self.run_filter.clone()),
-            )?,
+            create_relation_from_node(adapter_type, source, Some(self.run_filter.clone()))?,
             self.run_filter.clone(),
             source.deprecated_config.event_time.clone(),
         )

@@ -1,6 +1,7 @@
 //! Module containing the entrypoint for the resolve phase.
 #[allow(unused_imports)]
 use dbt_common::FsError;
+use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{DBT_GENERIC_TESTS_DIR_NAME, RESOLVING};
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
@@ -79,7 +80,6 @@ pub async fn resolve(
 
     // Get the root project name
     let root_project_name = dbt_state.root_project_name();
-    let adapter_type = dbt_state.dbt_profile.db_config.adapter_type().to_string();
 
     // let mut macros = Macros::default();
     let mut macros = macros;
@@ -107,15 +107,27 @@ pub async fn resolve(
         operations.on_run_end.extend(on_run_end);
     }
 
+    let adapter_type = dbt_state
+        .dbt_profile
+        .db_config
+        .adapter_type_if_supported()
+        .ok_or_else(|| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "Invalid or unsupported adapter type in profile: {}",
+                dbt_state.dbt_profile.db_config.adapter_type()
+            )
+        })?;
+
     // Build the root project config
     let root_project_quoting =
-        resolve_package_quoting(*dbt_state.root_project().quoting, &adapter_type);
+        resolve_package_quoting(*dbt_state.root_project().quoting, adapter_type);
 
     let jinja_env = Arc::new(initialize_parse_jinja_environment(
         root_project_name,
         &dbt_state.dbt_profile.profile,
         &dbt_state.dbt_profile.target,
-        &adapter_type,
+        adapter_type.as_ref(),
         dbt_state.dbt_profile.db_config.clone(),
         root_project_quoting,
         build_macro_units(&macros.macros),
@@ -148,7 +160,7 @@ pub async fn resolve(
     // Process packages in topological order
     let mut refs_and_sources = RefsAndSources::from_dbt_nodes(
         &nodes,
-        &adapter_type,
+        adapter_type,
         root_project_name.to_string(),
         None,
         arg.sample_config.clone(),
@@ -168,7 +180,7 @@ pub async fn resolve(
                 dbt_state.clone(),
                 root_project_name,
                 root_project_configs.clone(),
-                &adapter_type,
+                adapter_type,
                 &macros,
                 jinja_env.clone(),
                 &mut refs_and_sources,
@@ -191,7 +203,7 @@ pub async fn resolve(
                 dbt_state.clone(),
                 root_project_name,
                 root_project_configs.clone(),
-                &adapter_type,
+                adapter_type,
                 &macros,
                 jinja_env.clone(),
                 &mut refs_and_sources,
@@ -365,7 +377,7 @@ pub async fn resolve_inner(
     dbt_state: Arc<DbtState>,
     root_package_name: &str,
     root_project_configs: &RootProjectConfigs,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     macros: &Macros,
     jinja_env: Arc<JinjaEnv>,
     refs_and_sources: &mut RefsAndSources,
@@ -624,7 +636,7 @@ async fn resolve_package(
     dbt_state: Arc<DbtState>,
     root_project_name: String,
     root_project_configs: Arc<RootProjectConfigs>,
-    adapter_type: String,
+    adapter_type: AdapterType,
     macros: Macros,
     jinja_env: Arc<JinjaEnv>,
     refs_and_sources: RefsAndSources,
@@ -670,7 +682,7 @@ async fn resolve_package(
             dbt_state.clone(),
             &root_project_name,
             &root_project_configs,
-            &adapter_type,
+            adapter_type,
             &macros,
             jinja_env.clone(),
             &mut refs_and_sources.clone(),
@@ -698,7 +710,7 @@ async fn resolve_packages_sequentially(
     dbt_state: Arc<DbtState>,
     root_project_name: &str,
     root_project_configs: Arc<RootProjectConfigs>,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     macros: &Macros,
     jinja_env: Arc<JinjaEnv>,
     refs_and_sources: &mut RefsAndSources,
@@ -721,7 +733,7 @@ async fn resolve_packages_sequentially(
                 dbt_state.clone(),
                 root_project_name.to_string(),
                 root_project_configs.clone(),
-                adapter_type.to_string(),
+                adapter_type,
                 macros.clone(),
                 jinja_env.clone(),
                 refs_and_sources.clone(),
@@ -763,7 +775,7 @@ async fn resolve_packages_parallel(
     dbt_state: Arc<DbtState>,
     root_project_name: &str,
     root_project_configs: Arc<RootProjectConfigs>,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     macros: &Macros,
     jinja_env: Arc<JinjaEnv>,
     refs_and_sources: &mut RefsAndSources,
@@ -785,7 +797,6 @@ async fn resolve_packages_parallel(
             let dbt_state = dbt_state.clone();
             let root_project_name = root_project_name.to_string();
             let root_project_configs = root_project_configs.clone();
-            let adapter_type = adapter_type.to_string();
             let macros = macros.clone();
             let jinja_env = jinja_env.clone();
             let refs_and_sources = refs_and_sources.clone();

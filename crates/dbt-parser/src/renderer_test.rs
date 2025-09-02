@@ -3,6 +3,7 @@ mod tests {
     use crate::args::ResolveArgs;
     use crate::dbt_project_config::DbtProjectConfig;
     use crate::renderer::{RenderCtx, RenderCtxInner, render_unresolved_sql_files};
+    use dbt_common::adapter::AdapterType;
     use dbt_common::io_args::IoArgs;
     use dbt_common::serde_utils::Omissible;
     use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -94,7 +95,7 @@ mod tests {
                 base_ctx,
                 root_project_name: "root_project".to_string(),
                 package_name: "test_package".to_string(), // Different from root - this triggers the override logic
-                adapter_type: "postgres".to_string(),
+                adapter_type: AdapterType::Postgres,
                 database: "test_db".to_string(),
                 schema: "default_schema".to_string(),
                 local_project_config: package_config,

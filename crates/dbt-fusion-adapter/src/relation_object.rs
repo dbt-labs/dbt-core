@@ -1,3 +1,4 @@
+use dbt_common::adapter::AdapterType;
 use dbt_common::{FsError, FsResult};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::filter::RunFilter;
@@ -176,22 +177,22 @@ impl Object for RelationObject {
 /// Unlike [internal_create_relation]
 /// This is supposed to be used in places that are invoked by the Jinja rendering process
 pub fn create_relation(
-    adapter_type: String,
+    adapter_type: AdapterType,
     database: String,
     schema: String,
     identifier: Option<String>,
     relation_type: Option<RelationType>,
     custom_quoting: ResolvedQuoting,
 ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
-    let relation = match adapter_type.to_lowercase().as_str() {
-        "postgres" => Arc::new(PostgresRelation::try_new(
+    let relation = match adapter_type {
+        AdapterType::Postgres => Arc::new(PostgresRelation::try_new(
             Some(database),
             Some(schema),
             identifier,
             relation_type,
             custom_quoting,
         )?) as Arc<dyn BaseRelation>,
-        "snowflake" => Arc::new(SnowflakeRelation::new(
+        AdapterType::Snowflake => Arc::new(SnowflakeRelation::new(
             Some(database),
             Some(schema),
             identifier,
@@ -199,7 +200,7 @@ pub fn create_relation(
             TableFormat::Default,
             custom_quoting,
         )) as Arc<dyn BaseRelation>,
-        "bigquery" => Arc::new(BigqueryRelation::new(
+        AdapterType::Bigquery => Arc::new(BigqueryRelation::new(
             Some(database),
             Some(schema),
             identifier,
@@ -207,7 +208,7 @@ pub fn create_relation(
             None,
             custom_quoting,
         )) as Arc<dyn BaseRelation>,
-        "redshift" => Arc::new(RedshiftRelation::new(
+        AdapterType::Redshift => Arc::new(RedshiftRelation::new(
             Some(database),
             Some(schema),
             identifier,
@@ -215,7 +216,7 @@ pub fn create_relation(
             None,
             custom_quoting,
         )) as Arc<dyn BaseRelation>,
-        "databricks" => Arc::new(DatabricksRelation::new(
+        AdapterType::Databricks => Arc::new(DatabricksRelation::new(
             Some(database),
             Some(schema),
             identifier,
@@ -225,13 +226,13 @@ pub fn create_relation(
             None,
             false,
         )) as Arc<dyn BaseRelation>,
-        "salesforce" => Arc::new(SalesforceRelation::new(
+        AdapterType::Salesforce => Arc::new(SalesforceRelation::new(
             Some(database),
             Some(schema),
             identifier,
             relation_type,
         )) as Arc<dyn BaseRelation>,
-        _ => panic!("not supported"),
+        AdapterType::Parse => panic!("Adapter type not supported: {adapter_type}"),
     };
     Ok(relation)
 }
@@ -241,7 +242,7 @@ pub fn create_relation(
 /// This is a wrapper around the [create_relation] function
 /// that is supposed to be used outside the context of Jinja
 pub fn create_relation_internal(
-    adapter_type: String,
+    adapter_type: AdapterType,
     database: String,
     schema: String,
     identifier: Option<String>,
@@ -261,7 +262,7 @@ pub fn create_relation_internal(
 }
 
 pub fn create_relation_from_node(
-    adapter_type: String,
+    adapter_type: AdapterType,
     node: &dyn InternalDbtNodeAttributes,
     _sample_config: Option<RunFilter>,
 ) -> FsResult<Arc<dyn BaseRelation>> {

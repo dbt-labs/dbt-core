@@ -1,3 +1,4 @@
+use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 
@@ -86,7 +87,7 @@ pub async fn load_internal_packages(
 /// Load internal packages
 pub fn persist_internal_packages(
     internal_packages_install_path: &Path,
-    adapter_type: &str,
+    adapter_type: AdapterType,
 ) -> FsResult<()> {
     // Remove existing folders in the internal_packages_install_path
     // to prevent user from modifying them
@@ -94,11 +95,11 @@ pub fn persist_internal_packages(
     // Copy the dbt-adapters and dbt-{adapter_type} to the packages_install_path
     let adapter_package = format!("dbt-{adapter_type}");
     let mut internal_packages = vec!["dbt-adapters", &adapter_package];
-    if adapter_type == "redshift" {
-        internal_packages.push("dbt-postgres");
-    }
-    if adapter_type == "databricks" {
-        internal_packages.push("dbt-spark");
+    // Some adapters have extra dependencies
+    match adapter_type {
+        AdapterType::Redshift => internal_packages.push("dbt-postgres"),
+        AdapterType::Databricks => internal_packages.push("dbt-spark"),
+        _ => {}
     }
     // Copy each macro asset to the packages install path, skipping excluded paths
     for package in internal_packages {

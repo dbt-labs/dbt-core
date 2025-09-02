@@ -31,7 +31,6 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::rc::Rc;
-use std::str::FromStr;
 use std::sync::Arc;
 
 /// Parse adapter for Jinja templates.
@@ -39,8 +38,8 @@ use std::sync::Arc;
 /// Returns stub values to enable the parsing phase.
 #[derive(Debug, Clone)]
 pub struct ParseAdapter {
-    /// The type of database adapter (e.g. "snowflake", "postgres", etc.)
-    adapter_type: String,
+    /// Adapter type
+    adapter_type: AdapterType,
     /// The call_get_relation method calls found during parse
     call_get_relation: DashMap<String, Vec<Value>>,
     /// The call_get_columns_in_relation method calls found during parse
@@ -66,12 +65,10 @@ type RelationsToFetch = (
 impl ParseAdapter {
     /// Make a new adapter
     pub fn new(
-        adapter_type: impl Into<String>,
+        adapter_type: AdapterType,
         package_quoting: DbtQuoting,
         token: CancellationToken,
     ) -> Self {
-        let adapter_type = adapter_type.into();
-        AdapterType::from_str(&adapter_type).expect("adapter_type is valid");
         Self {
             adapter_type,
             call_get_relation: DashMap::new(),
@@ -95,7 +92,7 @@ impl ParseAdapter {
         identifier: &str,
     ) -> Result<(), MinijinjaError> {
         let relation = create_relation(
-            self.adapter_type.clone(),
+            self.adapter_type,
             database.to_string(),
             schema.to_string(),
             Some(identifier.to_string()),
@@ -202,16 +199,7 @@ impl ParseAdapter {
 
 impl AdapterTyping for ParseAdapter {
     fn adapter_type(&self) -> AdapterType {
-        // TODO: check if we need adapterType::Parse
-        // since even ParseAdapter should be a specific <dialect> type
-        debug_assert!(
-            self.adapter_type
-                .parse::<AdapterType>()
-                .expect("adapter_type is valid")
-                != AdapterType::Parse,
-            "ParseAdapter should be a specific <dialect> type"
-        );
-        self.adapter_type.parse().unwrap_or(AdapterType::Parse)
+        self.adapter_type
     }
 
     fn as_metadata_adapter(&self) -> Option<&dyn MetadataAdapter> {
@@ -762,11 +750,10 @@ impl Object for ParseAdapter {
 
 /// Make parse factory
 pub fn create_parse_adapter(
-    adapter_type: impl Into<String>,
+    adapter_type: AdapterType,
     package_quoting: DbtQuoting,
     token: CancellationToken,
 ) -> FsResult<Arc<dyn BaseAdapter>> {
-    let adapter_type: String = adapter_type.into();
     Ok(Arc::new(ParseAdapter::new(
         adapter_type,
         package_quoting,

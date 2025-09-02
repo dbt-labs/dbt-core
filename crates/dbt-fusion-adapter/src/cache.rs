@@ -351,6 +351,8 @@ impl Drop for RelationCache {
 
 #[cfg(test)]
 mod tests {
+    use crate::AdapterType;
+
     use super::*;
     use dbt_schemas::schemas::{common::ResolvedQuoting, relations::DEFAULT_RESOLVED_QUOTING};
 
@@ -362,7 +364,7 @@ mod tests {
 
         // Create relations with different combinations of database, schema, identifier
         let relation1 = create_relation(
-            "postgres".to_string(),
+            AdapterType::Postgres,
             "db1".to_string(),
             "schema1".to_string(),
             Some("table1".to_string()),
@@ -372,7 +374,7 @@ mod tests {
         .unwrap();
 
         let relation2 = create_relation(
-            "postgres".to_string(),
+            AdapterType::Postgres,
             "db2".to_string(),
             "schema1".to_string(),
             Some("table1".to_string()),
@@ -382,7 +384,7 @@ mod tests {
         .unwrap();
 
         let relation3 = create_relation(
-            "postgres".to_string(),
+            AdapterType::Postgres,
             "db1".to_string(),
             "schema2".to_string(),
             Some("table1".to_string()),
@@ -392,7 +394,7 @@ mod tests {
         .unwrap();
 
         let relation4 = create_relation(
-            "postgres".to_string(),
+            AdapterType::Postgres,
             "db1".to_string(),
             "schema1".to_string(),
             Some("table2".to_string()),
@@ -402,7 +404,7 @@ mod tests {
         .unwrap();
 
         let relation1_dup = create_relation(
-            "postgres".to_string(),
+            AdapterType::Postgres,
             "db1".to_string(),
             "schema1".to_string(),
             Some("table1".to_string()),
@@ -451,7 +453,7 @@ mod tests {
 
         // With DEFAULT_RESOLVED_QUOTING
         let relation_quoted = create_relation(
-            "postgres".to_string(),
+            AdapterType::Postgres,
             "MyDB".to_string(),
             "MySchema".to_string(),
             Some("MyTable".to_string()),
@@ -462,7 +464,7 @@ mod tests {
 
         // With no quoting
         let relation_unquoted = create_relation(
-            "postgres".to_string(),
+            AdapterType::Postgres,
             "MyDB".to_string(),
             "MySchema".to_string(),
             Some("MyTable".to_string()),
@@ -492,7 +494,7 @@ mod tests {
 
         // Test that we find the unquoted relation when searching with unquoted policy
         let search_relation_unquoted = create_relation(
-            "postgres".to_string(),
+            AdapterType::Postgres,
             "MyDB".to_string(),
             "MySchema".to_string(),
             Some("MyTable".to_string()),
@@ -525,7 +527,7 @@ mod tests {
                 // Create relations in 3 different schemas
                 (0..3).map(move |schema_id| {
                     create_relation(
-                        "postgres".to_string(),
+                        AdapterType::Postgres,
                         "test_db".to_string(),
                         format!("schema_{schema_id}"),
                         Some(format!("table_{schema_id}_{i}")),
@@ -585,7 +587,7 @@ mod tests {
                             6 => {
                                 // Rename operations (less common but important)
                                 let new_relation = create_relation(
-                                    "postgres".to_string(),
+                                    AdapterType::Postgres,
                                     "test_db".to_string(),
                                     format!("schema_{}", thread_id % 3),
                                     Some(format!("renamed_table_{thread_id}_{i}")),

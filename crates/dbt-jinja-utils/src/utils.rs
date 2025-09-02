@@ -440,10 +440,9 @@ pub fn generate_relation_name(
     identifier: &str,
     quote_config: ResolvedQuoting,
 ) -> FsResult<String> {
-    let adapter_type = parse_adapter.adapter_type().to_string();
     // Create relation using the adapter
     match create_relation_internal(
-        adapter_type,
+        parse_adapter.adapter_type(),
         database.to_owned(),
         schema.to_owned(),
         Some(identifier.to_owned()),

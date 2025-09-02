@@ -2,12 +2,16 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    str::FromStr as _,
     sync::{Arc, Mutex},
 };
 
 use chrono::DateTime;
 use chrono_tz::Tz;
-use dbt_common::{ErrorCode, FsResult, cancellation::CancellationToken, fs_err, io_args::IoArgs};
+use dbt_common::{
+    ErrorCode, FsResult, adapter::AdapterType, cancellation::CancellationToken, fs_err,
+    io_args::IoArgs,
+};
 use dbt_fusion_adapter::parse::adapter::create_parse_adapter;
 use dbt_schemas::{
     schemas::{
@@ -105,6 +109,13 @@ pub fn initialize_parse_jinja_environment(
         ("database".to_string(), MinijinjaValue::from(database)),
         ("schema".to_string(), MinijinjaValue::from(schema)),
     ]);
+
+    let adapter_type = AdapterType::from_str(adapter_type).map_err(|_| {
+        fs_err!(
+            ErrorCode::InvalidConfig,
+            "Unknown or unsupported adapter type '{adapter_type}'",
+        )
+    })?;
 
     let env = JinjaEnvBuilder::new()
         .with_undefined_behavior(minijinja::UndefinedBehavior::AllowAll)

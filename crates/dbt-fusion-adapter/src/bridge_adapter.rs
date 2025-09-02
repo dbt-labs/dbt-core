@@ -695,7 +695,7 @@ impl BaseAdapter for BridgeAdapter {
         identifier: &str,
     ) -> Result<Value, MinijinjaError> {
         let temp_relation = relation_object::create_relation(
-            self.typed_adapter.adapter_type().to_string(),
+            self.typed_adapter.adapter_type(),
             database.to_string(),
             schema.to_string(),
             Some(identifier.to_string()),

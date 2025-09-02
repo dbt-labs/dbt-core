@@ -2,6 +2,8 @@
 
 use crate::schemas::relations::DEFAULT_DATABRICKS_DATABASE;
 use crate::schemas::serde::{StringOrInteger, StringOrMap};
+
+use dbt_common::adapter::AdapterType;
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::UntaggedEnumDeserialize;
 use merge::Merge;
@@ -261,6 +263,19 @@ impl DbConfig {
             DbConfig::Datafusion(..) => "datafusion",
             DbConfig::Databricks(..) => "databricks",
             DbConfig::Salesforce(..) => "salesforce",
+        }
+    }
+
+    pub fn adapter_type_if_supported(&self) -> Option<AdapterType> {
+        match self {
+            DbConfig::Redshift(..) => Some(AdapterType::Redshift),
+            DbConfig::Snowflake(..) => Some(AdapterType::Snowflake),
+            DbConfig::Postgres(..) => Some(AdapterType::Postgres),
+            DbConfig::Bigquery(..) => Some(AdapterType::Bigquery),
+            DbConfig::Trino(..) => None,
+            DbConfig::Datafusion(..) => None,
+            DbConfig::Databricks(..) => Some(AdapterType::Databricks),
+            DbConfig::Salesforce(..) => Some(AdapterType::Salesforce),
         }
     }
 

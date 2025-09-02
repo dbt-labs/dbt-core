@@ -1,3 +1,4 @@
+use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_SNAPSHOTS_DIR_NAME;
 use dbt_common::error::AbstractLocation;
@@ -42,7 +43,7 @@ pub async fn resolve_snapshots(
     macros: &BTreeMap<String, DbtMacro>,
     database: &str,
     schema: &str,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     jinja_env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     runtime_config: Arc<DbtRuntimeConfig>,
@@ -156,7 +157,7 @@ pub async fn resolve_snapshots(
             package_quoting,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
-            adapter_type: adapter_type.to_string(),
+            adapter_type,
             database: database.to_string(),
             schema: schema.to_string(),
             local_project_config,

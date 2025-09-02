@@ -15,6 +15,7 @@ use crate::utils::update_node_relation_components;
 
 use dbt_common::ErrorCode;
 use dbt_common::FsResult;
+use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::error::AbstractLocation;
 use dbt_common::fs_err;
@@ -64,7 +65,7 @@ pub async fn resolve_models(
     model_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     database: &str,
     schema: &str,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     package_name: &str,
     env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
@@ -106,7 +107,7 @@ pub async fn resolve_models(
             package_quoting,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
-            adapter_type: adapter_type.to_string(),
+            adapter_type,
             database: database.to_string(),
             schema: schema.to_string(),
             local_project_config: local_project_config.clone(),

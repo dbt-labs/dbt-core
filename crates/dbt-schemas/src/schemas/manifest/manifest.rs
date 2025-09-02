@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
-use dbt_common::{Span, io_args::StaticAnalysisKind};
+use dbt_common::{Span, adapter::AdapterType, io_args::StaticAnalysisKind};
 use dbt_serde_yaml::UntaggedEnumDeserialize;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, str::FromStr as _, sync::Arc};
 
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
@@ -350,7 +350,8 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         },
                         __adapter_attr__: AdapterAttr::from_config_and_dialect(
                             &model.config.__warehouse_specific_config__,
-                            &manifest.metadata.adapter_type,
+                            AdapterType::from_str(&manifest.metadata.adapter_type)
+                                .expect("Unknown or unsupported adapter type"),
                         ),
                         deprecated_config: model.config,
                         __other__: model.__other__,
@@ -627,7 +628,8 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         },
                         __adapter_attr__: AdapterAttr::from_config_and_dialect(
                             &analysis.config.__warehouse_specific_config__,
-                            &manifest.metadata.adapter_type,
+                            AdapterType::from_str(&manifest.metadata.adapter_type)
+                                .expect("Unknown or unsupported adapter type"),
                         ),
                         deprecated_config: analysis.config,
                         __other__: analysis.__other__,

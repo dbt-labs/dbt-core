@@ -2,6 +2,7 @@ use super::utils::{base_tests_inner, column_tests_inner};
 use crate::args::ResolveArgs;
 use dbt_common::FsError;
 use dbt_common::FsResult;
+use dbt_common::adapter::AdapterType;
 use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use dbt_common::io_args;
 use dbt_common::io_args::IoArgs;
@@ -53,14 +54,13 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
         project_name: &str,
         root_project_name: &str,
         collected_generic_tests: &mut Vec<GenericTestAsset>,
-        adapter_type: &str,
+        adapter_type: AdapterType,
         io_args: &IoArgs,
         original_file_path: &PathBuf,
     ) -> FsResult<()> {
         let test_configs: Vec<GenericTestConfig> = self.try_into()?;
         // Process tests for each version (or single resource)
-        let dialect = Dialect::from_str(adapter_type)
-            .map_err(|e| fs_err!(ErrorCode::Unexpected, "Failed to parse adapter type: {}", e))?;
+        let dialect = Dialect::from(adapter_type);
         let mut seen_tests: HashSet<String> = HashSet::new();
         for test_config in test_configs {
             // Handle model-level tests

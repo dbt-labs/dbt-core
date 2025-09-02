@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use dbt_common::adapter::AdapterType;
 use dbt_common::{ErrorCode, FsResult, err};
 use dbt_serde_yaml::Spanned;
 
@@ -31,8 +32,11 @@ pub fn get_dbt_schema_version(name: &str, version: i16) -> String {
 }
 
 /// Resolve package quoting config
-pub fn resolve_package_quoting(quoting: Option<DbtQuoting>, adapter_type: &str) -> DbtQuoting {
-    let default_quoting_bool = adapter_type != "snowflake";
+pub fn resolve_package_quoting(
+    quoting: Option<DbtQuoting>,
+    adapter_type: AdapterType,
+) -> DbtQuoting {
+    let default_quoting_bool = !matches!(adapter_type, AdapterType::Snowflake);
     let default_snowflake_ignore_case = false;
     if let Some(quoting) = quoting {
         DbtQuoting {

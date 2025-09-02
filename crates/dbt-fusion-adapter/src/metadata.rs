@@ -201,6 +201,7 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
         resolved_state: &ResolverState,
         run_stats: &Stats,
     ) -> Vec<Arc<dyn BaseRelation>> {
+        let adapter_type = resolved_state.adapter_type;
         let mut relations: Vec<Arc<dyn BaseRelation>> = Vec::new();
         let executed_unique_ids = run_stats
             .stats
@@ -214,7 +215,7 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
         for (unique_id, node) in nodes.models.iter() {
             if executed_unique_ids.contains(unique_id) {
                 let relation = create_relation_internal(
-                    resolved_state.adapter_type.to_string(),
+                    adapter_type,
                     node.database(),
                     node.schema(),
                     Some(node.alias()),
@@ -229,7 +230,7 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
         for (unique_id, node) in nodes.snapshots.iter() {
             if executed_unique_ids.contains(unique_id) {
                 let relation = create_relation_internal(
-                    resolved_state.adapter_type.to_string(),
+                    adapter_type,
                     node.database(),
                     node.schema(),
                     Some(node.alias()),
@@ -244,7 +245,7 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
         for (unique_id, node) in nodes.seeds.iter() {
             if executed_unique_ids.contains(unique_id) {
                 let relation = create_relation_internal(
-                    resolved_state.adapter_type.to_string(),
+                    adapter_type,
                     node.database(),
                     node.schema(),
                     Some(node.alias()),
@@ -259,7 +260,7 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
         for (unique_id, node) in nodes.sources.iter() {
             if executed_unique_ids.contains(unique_id) {
                 let relation = create_relation_internal(
-                    resolved_state.adapter_type.to_string(),
+                    adapter_type,
                     node.database(),
                     node.schema(),
                     Some(node.alias()),

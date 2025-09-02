@@ -4,6 +4,7 @@ use crate::adapter_config::{
 };
 use crate::dbt_cloud_client::{CloudProject, DbtCloudClient, DbtCloudYml};
 use crate::yaml_utils::{has_top_level_key_parsed_file, remove_top_level_key_from_str};
+use dbt_common::adapter::AdapterType;
 use dbt_common::pretty_string::GREEN;
 use dbt_common::{ErrorCode, FsResult, fs_err, io_args::IoArgs};
 use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
@@ -147,54 +148,54 @@ impl ProfileSetup {
         }
     }
 
-    pub fn get_available_adapters() -> Vec<&'static str> {
-        vec![
-            "snowflake",
-            "databricks",
-            "bigquery",
-            "postgres",
-            "redshift",
+    pub fn get_available_adapters() -> &'static [AdapterType] {
+        &[
+            AdapterType::Snowflake,
+            AdapterType::Databricks,
+            AdapterType::Bigquery,
+            AdapterType::Postgres,
+            AdapterType::Redshift,
         ]
     }
 
-    pub fn ask_for_adapter_choice(default_adapter: Option<&str>) -> FsResult<String> {
+    pub fn ask_for_adapter_choice(default_adapter: Option<AdapterType>) -> FsResult<AdapterType> {
         let adapters = Self::get_available_adapters();
         let default_index = default_adapter
-            .and_then(|d| adapters.iter().position(|a| a.eq_ignore_ascii_case(d)))
+            .and_then(|d| adapters.iter().position(|a| *a == d))
             .unwrap_or(0);
 
         let selection = Select::new()
             .with_prompt("Which adapter would you like to use?")
-            .items(&adapters)
+            .items(adapters)
             .default(default_index)
             .interact()
             .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to get adapter selection: {}", e))?;
 
-        Ok(adapters[selection].to_string())
+        Ok(adapters[selection])
     }
 
     pub fn create_profile_for_adapter(
         &self,
-        adapter: &str,
+        adapter: AdapterType,
         _profile_name: &str,
         existing_config: Option<&DbConfig>,
     ) -> FsResult<ProfileTarget> {
         let db_config = match adapter {
-            "snowflake" => {
+            AdapterType::Snowflake => {
                 let snowflake_config = match existing_config {
                     Some(DbConfig::Snowflake(config)) => Some(config),
                     _ => None,
                 };
                 DbConfig::Snowflake(setup_snowflake_profile(snowflake_config.map(Box::as_ref))?)
             }
-            "bigquery" => {
+            AdapterType::Bigquery => {
                 let bigquery_config = match existing_config {
                     Some(DbConfig::Bigquery(config)) => Some(config),
                     _ => None,
                 };
                 DbConfig::Bigquery(setup_bigquery_profile(bigquery_config.map(Box::as_ref))?)
             }
-            "databricks" => {
+            AdapterType::Databricks => {
                 let databricks_config = match existing_config {
                     Some(DbConfig::Databricks(config)) => Some(config),
                     _ => None,
@@ -203,21 +204,28 @@ impl ProfileSetup {
                     databricks_config.map(Box::as_ref),
                 )?)
             }
-            "postgres" => {
+            AdapterType::Postgres => {
                 let postgres_config = match existing_config {
                     Some(DbConfig::Postgres(config)) => Some(config),
                     _ => None,
                 };
                 DbConfig::Postgres(setup_postgres_profile(postgres_config.map(Box::as_ref))?)
             }
-            "redshift" => {
+            AdapterType::Redshift => {
                 let redshift_config = match existing_config {
                     Some(DbConfig::Redshift(config)) => Some(config),
                     _ => None,
                 };
                 DbConfig::Redshift(setup_redshift_profile(redshift_config.map(Box::as_ref))?)
             }
-            _ => {
+            AdapterType::Salesforce => {
+                let _salesforce_config = match existing_config {
+                    Some(DbConfig::Salesforce(config)) => Some(config),
+                    _ => None,
+                };
+                todo!("setup_salesforce_profile")
+            }
+            AdapterType::Parse => {
                 return Err(fs_err!(
                     ErrorCode::InvalidArgument,
                     "Unsupported adapter: {}",
@@ -377,7 +385,7 @@ impl ProfileSetup {
     async fn fetch_cloud_config(
         project_store: &ProjectStore,
         project_id: &str,
-        adapter: &str,
+        adapter: AdapterType,
     ) -> FsResult<Option<DbConfig>> {
         let base_url = project_store.get_base_url(Some(project_id));
 
@@ -438,7 +446,9 @@ impl ProfileSetup {
             _ => unreachable!(),
         }
 
-        let adapter_type = existing_config.as_ref().map(|d| d.adapter_type());
+        let adapter_type = existing_config
+            .as_ref()
+            .and_then(|d| d.adapter_type_if_supported());
         let adapter = Self::ask_for_adapter_choice(adapter_type)?;
 
         let cloud_config = if profile_action == 1 {
@@ -446,7 +456,7 @@ impl ProfileSetup {
                 log::info!("Found dbt_cloud.yml configuration");
                 let project_id = Self::handle_cloud_project_selection(project_store).await?;
 
-                match Self::fetch_cloud_config(project_store, &project_id, &adapter).await? {
+                match Self::fetch_cloud_config(project_store, &project_id, adapter).await? {
                     Some(config) => Some(config),
                     None => {
                         log::info!("No cloud config found for this adapter/project");
@@ -464,7 +474,10 @@ impl ProfileSetup {
 
         let should_use_existing_config = existing_config
             .as_ref()
-            .map(|d| d.adapter_type().eq_ignore_ascii_case(&adapter))
+            .map(|d| {
+                d.adapter_type()
+                    .eq_ignore_ascii_case(adapter.to_string().as_str())
+            })
             .unwrap_or(false);
 
         let final_existing_config = if should_use_existing_config {
@@ -483,7 +496,7 @@ impl ProfileSetup {
         let merged_config = cloud_config.or_else(|| final_existing_config.cloned());
 
         let profile =
-            self.create_profile_for_adapter(&adapter, profile_name, merged_config.as_ref())?;
+            self.create_profile_for_adapter(adapter, profile_name, merged_config.as_ref())?;
         self.write_profile(profile_name, &profile)?;
 
         Ok(())

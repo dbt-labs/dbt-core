@@ -6,7 +6,7 @@ use std::{
 };
 
 use dashmap::DashMap;
-use dbt_common::serde_utils::convert_yml_to_dash_map;
+use dbt_common::{adapter::AdapterType, serde_utils::convert_yml_to_dash_map};
 use dbt_fusion_adapter::{load_store::ResultStore, relation_object::create_relation};
 use dbt_schemas::schemas::{CommonAttributes, NodeBaseAttributes, relations::base::BaseRelation};
 use dbt_schemas::state::{DbtRuntimeConfig, RefsAndSourcesTracker};
@@ -31,7 +31,7 @@ pub fn build_compile_node_context(
     common_attr: &CommonAttributes,
     base_attr: &NodeBaseAttributes,
     config: &YmlValue,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     base_context: &BTreeMap<String, MinijinjaValue>,
     root_project_name: &str,
     packages: BTreeSet<String>,
@@ -57,7 +57,7 @@ pub fn build_compile_node_context(
 
     // Create a relation for 'this' using config values
     let this_relation = create_relation(
-        adapter_type.to_string(),
+        adapter_type,
         base_attr.database.clone(),
         base_attr.schema.clone(),
         Some(base_attr.alias.clone()),

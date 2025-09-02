@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::{collections::BTreeMap, sync::Arc};
 
+use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::show_error;
@@ -49,7 +50,7 @@ pub async fn resolve_analyses(
     model_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     database: &str,
     schema: &str,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     package_name: &str,
     env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
@@ -86,7 +87,7 @@ pub async fn resolve_analyses(
             package_quoting,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
-            adapter_type: adapter_type.to_string(),
+            adapter_type,
             database: database.to_string(),
             schema: schema.to_string(),
             local_project_config: local_project_config.clone(),

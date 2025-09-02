@@ -12,10 +12,13 @@ use crate::utils::generate_relation_components;
 use crate::utils::get_node_fqn;
 use crate::utils::get_original_file_path;
 use crate::utils::update_node_relation_components;
+use dbt_common::ErrorCode;
 use dbt_common::FsResult;
+use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use dbt_common::error::AbstractLocation;
+use dbt_common::fs_err;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_utils::try_read_yml_to_str;
 use dbt_common::stdfs;
@@ -49,6 +52,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::str::FromStr as _;
 use std::sync::Arc;
 
 #[allow(clippy::too_many_arguments)]
@@ -61,7 +65,7 @@ pub async fn resolve_data_tests(
     test_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     database: &str,
     schema: &str,
-    adapter_type: &str,
+    adapter_type: AdapterType,
     env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     runtime_config: Arc<DbtRuntimeConfig>,
@@ -116,7 +120,7 @@ pub async fn resolve_data_tests(
             package_quoting,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
-            adapter_type: adapter_type.to_string(),
+            adapter_type,
             database: database.to_string(),
             schema: schema.to_string(),
             local_project_config,

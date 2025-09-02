@@ -24,7 +24,9 @@ use crate::schemas::{
 };
 use blake3::Hasher;
 use chrono::{DateTime, Local, Utc};
-use dbt_common::{ErrorCode, FsResult, fs_err, serde_utils::convert_yml_to_map};
+use dbt_common::{
+    ErrorCode, FsResult, adapter::AdapterType, fs_err, serde_utils::convert_yml_to_map,
+};
 use minijinja::compiler::parser::materialization_macro_name;
 use minijinja::{MacroSpans, Value as MinijinjaValue, value::Object};
 use serde::Deserialize;
@@ -256,7 +258,7 @@ pub trait RefsAndSourcesTracker: fmt::Debug + Send + Sync {
     fn insert_ref(
         &mut self,
         node: &dyn InternalDbtNodeAttributes,
-        adapter_type: &str,
+        adapter_type: AdapterType,
         model_status: ModelStatus,
         overwrite: bool,
     ) -> FsResult<()>;
@@ -264,7 +266,7 @@ pub trait RefsAndSourcesTracker: fmt::Debug + Send + Sync {
         &mut self,
         package_name: &str,
         source: &DbtSource,
-        adapter_type: &str,
+        adapter_type: AdapterType,
         model_status: ModelStatus,
     ) -> FsResult<()>;
     fn lookup_ref(
@@ -294,7 +296,7 @@ impl RefsAndSourcesTracker for DummyRefsAndSourcesTracker {
     fn insert_ref(
         &mut self,
         _node: &dyn InternalDbtNodeAttributes,
-        _adapter_type: &str,
+        _adapter_type: AdapterType,
         _model_status: ModelStatus,
         _overwrite: bool,
     ) -> FsResult<()> {
@@ -306,7 +308,7 @@ impl RefsAndSourcesTracker for DummyRefsAndSourcesTracker {
         &mut self,
         _package_name: &str,
         _source: &DbtSource,
-        _adapter_type: &str,
+        _adapter_type: AdapterType,
         _model_status: ModelStatus,
     ) -> FsResult<()> {
         // No-op for dummy
@@ -362,7 +364,7 @@ pub struct Operations {
 #[derive(Debug, Clone)]
 pub struct ResolverState {
     pub root_project_name: String,
-    pub adapter_type: String,
+    pub adapter_type: AdapterType,
     pub nodes: Nodes,
     pub disabled_nodes: Nodes,
     pub macros: Macros,
@@ -388,11 +390,11 @@ impl ResolverState {
     pub fn find_materialization_macro_name(
         &self,
         materialization: impl fmt::Display,
-        adapter: &str,
+        adapter: AdapterType,
     ) -> FsResult<String> {
         let adapter_package = format!("dbt_{adapter}");
         for package in [&adapter_package, "dbt"] {
-            for adapter in [adapter, "default"] {
+            for adapter in [adapter.as_ref(), "default"] {
                 if let Some(macro_) = self.macros.macros.values().find(|m| {
                     m.name == materialization_macro_name(&materialization, adapter)
                         && m.package_name == package

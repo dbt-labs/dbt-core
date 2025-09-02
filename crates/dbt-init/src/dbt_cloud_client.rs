@@ -2,7 +2,7 @@ use dbt_cloud_api::{
     apis::{configuration::Configuration, connections_api, users_api, whoami_api},
     models,
 };
-use dbt_common::{ErrorCode, FsResult, fs_err};
+use dbt_common::{ErrorCode, FsResult, adapter::AdapterType, fs_err};
 use dbt_schemas::schemas::profiles::{
     BigqueryDbConfig, DatabricksDbConfig, DbConfig, PostgresDbConfig, RedshiftDbConfig,
     SnowflakeDbConfig,
@@ -550,7 +550,7 @@ impl DbtCloudClient {
     pub async fn get_credential_db_config(
         base_url: &str,
         project_id: Option<&str>,
-        adapter_type: Option<&str>,
+        adapter_type: Option<AdapterType>,
     ) -> FsResult<Option<DbConfig>> {
         let cloud_project = match Self::parse_active_cloud_project()? {
             Some(project) => project,
@@ -640,7 +640,10 @@ impl DbtCloudClient {
             // If adapter_type is specified, also filter by that
             if let Some(adapter) = adapter_type {
                 let cred_info = CredentialInfo::from(*user_cred);
-                basic_filter = basic_filter && cred_info.adapter_type.eq_ignore_ascii_case(adapter);
+                basic_filter = basic_filter
+                    && cred_info
+                        .adapter_type
+                        .eq_ignore_ascii_case(adapter.to_string().as_str());
             }
 
             basic_filter
