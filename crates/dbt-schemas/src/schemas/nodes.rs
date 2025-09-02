@@ -99,6 +99,7 @@ pub enum InternalDbtNodeWrapper {
     UnitTest(Box<DbtUnitTest>),
     Source(Box<DbtSource>),
     Snapshot(Box<DbtSnapshot>),
+    Exposure(Box<DbtExposure>),
 }
 
 impl InternalDbtNodeWrapper {
@@ -126,6 +127,7 @@ impl InternalDbtNodeWrapper {
             InternalDbtNodeWrapper::UnitTest(unit_test) => unit_test.as_ref(),
             InternalDbtNodeWrapper::Source(source) => source.as_ref(),
             InternalDbtNodeWrapper::Snapshot(snapshot) => snapshot.as_ref(),
+            InternalDbtNodeWrapper::Exposure(exposure) => exposure.as_ref(),
         }
     }
 }
@@ -1163,6 +1165,7 @@ impl Nodes {
             .chain(self.sources.keys())
             .chain(self.snapshots.keys())
             .chain(self.analyses.keys())
+            .chain(self.exposures.keys())
     }
 
     pub fn get_node(&self, unique_id: &str) -> Option<&dyn InternalDbtNodeAttributes> {
@@ -1199,6 +1202,11 @@ impl Nodes {
                     .get(unique_id)
                     .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
             })
+            .or_else(|| {
+                self.exposures
+                    .get(unique_id)
+                    .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
+            })
     }
 
     pub fn get_node_owned(&self, unique_id: &str) -> Option<Arc<dyn InternalDbtNodeAttributes>> {
@@ -1232,6 +1240,11 @@ impl Nodes {
             })
             .or_else(|| {
                 self.analyses
+                    .get(unique_id)
+                    .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
+            })
+            .or_else(|| {
+                self.exposures
                     .get(unique_id)
                     .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
             })
@@ -1286,6 +1299,11 @@ impl Nodes {
                     .iter()
                     .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNodeAttributes)),
             )
+            .chain(
+                self.exposures
+                    .iter()
+                    .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNodeAttributes)),
+            )
     }
 
     pub fn into_iter(
@@ -1319,6 +1337,10 @@ impl Nodes {
             .analyses
             .iter()
             .map(|(id, node)| (id.clone(), upcast(node.clone())));
+        let exposures = self
+            .exposures
+            .iter()
+            .map(|(id, node)| (id.clone(), upcast(node.clone())));
 
         models
             .chain(seeds)
@@ -1327,6 +1349,7 @@ impl Nodes {
             .chain(sources)
             .chain(snapshots)
             .chain(analyses)
+            .chain(exposures)
     }
 
     pub fn iter_values_mut(
@@ -1463,6 +1486,14 @@ impl Nodes {
                     .values()
                     .find(|analysis| {
                         analysis.base().relation_name == Some(relation_name.to_string())
+                    })
+                    .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNodeAttributes)
+            })
+            .or_else(|| {
+                self.exposures
+                    .values()
+                    .find(|exposure| {
+                        exposure.base().relation_name == Some(relation_name.to_string())
                     })
                     .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNodeAttributes)
             })
