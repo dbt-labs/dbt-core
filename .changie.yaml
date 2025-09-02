@@ -1,0 +1,30 @@
+changesDir: .changes
+unreleasedDir: unreleased
+headerPath: header.tpl.md
+versionHeaderPath: ""
+changelogPath: CHANGELOG.md
+versionExt: md
+envPrefix: "CHANGIE_"
+versionFormat: '## {{.Version}} - {{.Time.Format "January 02, 2006"}}'
+kindFormat: "### {{.Kind}}"
+
+custom:
+  - key: issue
+    label: dbt-fusion issue number (leave empty if not applicable)
+    type: string
+  - key: author
+    label: Your GitHub handle (without the @ symbol)
+    type: string
+
+kinds:
+  - label: Breaking Changes
+  - label: Features
+  - label: Fixes
+  - label: Under the Hood
+  - label: Dependencies
+  - label: Security
+
+# these changelogs are always for dbt-fusion
+post:
+  - key: project
+    value: dbt-fusion

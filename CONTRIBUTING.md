@@ -49,4 +49,4 @@ changie new
 
 Commit the file that's created and your changelog entry is complete!
 
-You don't need to worry about which `dbt-fusion` version your change will go into. Just create the changelog entry with `changie`, and open your PR against the `main` branch. All merged changes will be included in the next release of `dbt-fusion`.  If a changelog is not required, a maintainer can add the label `Skip Changelog - dbt-fusion` to bypass this requirement.
+You don't need to worry about which `dbt-fusion` version your change will go into. Just create the changelog entry with `changie`, and open your PR against the `main` branch. All merged changes will be included in the next release of `dbt-fusion`.  If a changelog is not required, a maintainer can add the label `Skip Changelog` to bypass this requirement.
