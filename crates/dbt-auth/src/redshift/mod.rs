@@ -1,7 +1,7 @@
 use crate::{AdapterConfig, Auth, AuthError};
 
 use dbt_xdbc::{Backend, database, redshift};
-use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
+use percent_encoding::utf8_percent_encode;
 
 #[derive(Debug, Default)]
 pub struct RedshiftAuth;
@@ -19,6 +19,13 @@ impl Auth for RedshiftAuth {
     }
 
     fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError> {
+        // Reference: https://docs.aws.amazon.com/redshift/latest/dg/r_names.html
+        const SET: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUMERIC
+            .remove(b'.')
+            .remove(b'-')
+            .remove(b'_')
+            .add(b' ');
+
         let mut builder = database::Builder::new(self.backend());
 
         if self.backend() == Backend::RedshiftODBC {
@@ -60,11 +67,11 @@ impl Auth for RedshiftAuth {
                     let port = config.require_string("port")?;
                     let dbname = config.require_string("database")?;
 
-                    let user = utf8_percent_encode(&user, NON_ALPHANUMERIC);
-                    let password = utf8_percent_encode(&password, NON_ALPHANUMERIC);
-                    let host = utf8_percent_encode(&host, NON_ALPHANUMERIC);
-                    let port = utf8_percent_encode(&port, NON_ALPHANUMERIC);
-                    let dbname = utf8_percent_encode(&dbname, NON_ALPHANUMERIC);
+                    let user = utf8_percent_encode(&user, SET).to_string();
+                    let password = utf8_percent_encode(&password, SET).to_string();
+                    let host = utf8_percent_encode(&host, SET).to_string();
+                    let port = utf8_percent_encode(&port, SET).to_string();
+                    let dbname = utf8_percent_encode(&dbname, SET).to_string();
 
                     format!("postgresql://{user}:{password}@{host}:{port}/{dbname}")
                 }

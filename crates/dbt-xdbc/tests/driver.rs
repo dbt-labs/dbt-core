@@ -255,6 +255,7 @@ mod tests {
                     );
                 }
                 Backend::Postgres
+                | Backend::Redshift
                 | Backend::Databricks
                 | Backend::DatabricksODBC
                 | Backend::RedshiftODBC => {
@@ -280,6 +281,12 @@ mod tests {
     #[test]
     fn statement_execute_bigquery() -> Result<()> {
         execute_statement(Backend::BigQuery)
+    }
+
+    #[test_with::env(ADBC_POSTGRES_URI)]
+    #[test]
+    fn statement_execute_redshift() -> Result<()> {
+        execute_statement(Backend::Redshift)
     }
 
     #[test_with::env(ADBC_POSTGRES_URI)]
