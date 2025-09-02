@@ -1,3 +1,5 @@
+#![allow(clippy::let_and_return)]
+
 use std::io;
 
 use dbt_xdbc::{Backend, database};
@@ -47,6 +49,8 @@ pub enum AuthError {
     Config(String),
     /// An error from the [serde_json] crate
     JSON(serde_json::Error),
+    /// An error from the [dbt_serde_yaml] crate
+    YAML(dbt_serde_yaml::Error),
     /// I/O error
     Io(io::Error),
 }
@@ -66,6 +70,7 @@ impl AuthError {
             AuthError::Adbc(_) => "ADBC Error",
             AuthError::Config(msg) => msg,
             AuthError::JSON(_) => "JSON Error",
+            AuthError::YAML(_) => "YAML Error",
             AuthError::Io(_) => "I/O Error",
         }
     }
@@ -86,5 +91,11 @@ impl From<io::Error> for AuthError {
 impl From<serde_json::Error> for AuthError {
     fn from(err: serde_json::Error) -> Self {
         AuthError::JSON(err)
+    }
+}
+
+impl From<dbt_serde_yaml::Error> for AuthError {
+    fn from(err: dbt_serde_yaml::Error) -> Self {
+        AuthError::YAML(err)
     }
 }

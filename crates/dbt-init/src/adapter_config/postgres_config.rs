@@ -136,7 +136,7 @@ impl InteractiveSetup for PostgresDbConfig {
 
 pub fn setup_postgres_profile(
     existing_config: Option<&PostgresDbConfig>,
-) -> FsResult<PostgresDbConfig> {
+) -> FsResult<Box<PostgresDbConfig>> {
     let default_config = PostgresDbConfig::default();
     let mut config = ConfigProcessor::process_config(existing_config.or(Some(&default_config)))?;
 
@@ -144,5 +144,5 @@ pub fn setup_postgres_profile(
         config.threads = Some(StringOrInteger::Integer(16));
     }
 
-    Ok(config)
+    Ok(Box::new(config))
 }

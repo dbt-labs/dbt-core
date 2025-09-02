@@ -137,8 +137,8 @@ pub async fn load(
         if let Some(threads) = dbt_profile.db_config.get_threads() {
             // Convert StringOrInteger to Option<usize>
             match threads {
-                StringOrInteger::Integer(n) => Some(n as usize),
-                StringOrInteger::String(ref s) => Some(s.parse::<usize>().map_err(|_| {
+                StringOrInteger::Integer(n) => Some(*n as usize),
+                StringOrInteger::String(s) => Some(s.parse::<usize>().map_err(|_| {
                     fs_err!(
                         ErrorCode::Generic,
                         "Invalid number of threads in profiles.yml: {}",
@@ -186,8 +186,8 @@ pub async fn load(
     let env = initialize_load_jinja_environment(
         &dbt_state.dbt_profile.profile,
         &dbt_state.dbt_profile.target,
-        &dbt_state.dbt_profile.db_config.adapter_type(),
-        &dbt_state.dbt_profile.db_config,
+        dbt_state.dbt_profile.db_config.adapter_type(),
+        dbt_state.dbt_profile.db_config.clone(),
         dbt_state.run_started_at,
         &flags,
         arg.io.clone(),
@@ -234,7 +234,7 @@ pub async fn load(
 
     persist_internal_packages(
         &internal_packages_install_path,
-        &dbt_state.dbt_profile.db_config.adapter_type(),
+        dbt_state.dbt_profile.db_config.adapter_type(),
     )?;
 
     let (packages_lock, upstream_projects) = get_or_install_packages(

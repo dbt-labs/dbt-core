@@ -13,7 +13,7 @@ use dbt_schemas::state::DbtProfile;
 use dirs::home_dir;
 
 use crate::args::{IoArgs, LoadArgs};
-use crate::utils::{coalesce, read_profiles_and_extract_db_config};
+use crate::utils::read_profiles_and_extract_db_config;
 use serde::Serialize;
 
 pub fn load_profiles<S: Serialize>(
@@ -74,8 +74,16 @@ pub fn load_profiles<S: Serialize>(
     )?;
 
     // TODO: Certain databases enforce that database and schema are specified
-    let database = coalesce(&[db_config.get_database(), Some("dbt".to_string())]).unwrap();
-    let schema = coalesce(&[db_config.get_schema(), Some("public".to_string())]).unwrap();
+    let database = db_config
+        .get_database()
+        .map(String::as_str)
+        .unwrap_or("dbt")
+        .to_string();
+    let schema = db_config
+        .get_schema()
+        .map(String::as_str)
+        .unwrap_or("public")
+        .to_string();
 
     Ok(DbtProfile {
         database,

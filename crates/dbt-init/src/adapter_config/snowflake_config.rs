@@ -191,7 +191,7 @@ impl InteractiveSetup for SnowflakeDbConfig {
 
 pub fn setup_snowflake_profile(
     existing_config: Option<&SnowflakeDbConfig>,
-) -> FsResult<SnowflakeDbConfig> {
+) -> FsResult<Box<SnowflakeDbConfig>> {
     let default_config = SnowflakeDbConfig::default();
     let mut config = ConfigProcessor::process_config(existing_config.or(Some(&default_config)))?;
 
@@ -199,5 +199,5 @@ pub fn setup_snowflake_profile(
         config.threads = Some(StringOrInteger::Integer(16));
     }
 
-    Ok(config)
+    Ok(Box::new(config))
 }

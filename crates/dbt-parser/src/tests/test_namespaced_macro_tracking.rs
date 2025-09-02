@@ -12,7 +12,7 @@ mod tests {
     };
     use dbt_jinja_utils::phases::parse::init::initialize_parse_jinja_environment;
     use dbt_jinja_utils::utils::render_sql;
-    use dbt_schemas::schemas::profiles::{DbConfig, PostgresDbConfig};
+    use dbt_schemas::schemas::profiles::PostgresDbConfig;
     use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
     use dbt_schemas::schemas::serde::StringOrInteger;
     use std::collections::{BTreeMap, BTreeSet};
@@ -35,7 +35,7 @@ mod tests {
             "profile",
             "target",
             "postgres",
-            &DbConfig::Postgres(PostgresDbConfig {
+            PostgresDbConfig {
                 port: Some(StringOrInteger::Integer(5432)),
                 database: Some("test_db".to_string()),
                 host: Some("localhost".to_string()),
@@ -43,7 +43,8 @@ mod tests {
                 password: Some("test_pass".to_string()),
                 schema: Some("test_schema".to_string()),
                 ..Default::default()
-            }),
+            }
+            .into(),
             DEFAULT_DBT_QUOTING,
             BTreeMap::new(),
             BTreeMap::new(),

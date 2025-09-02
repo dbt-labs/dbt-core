@@ -105,7 +105,11 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
                 ..Default::default()
             },
             project_name: resolver_state.root_project_name.clone(),
-            adapter_type: resolver_state.dbt_profile.db_config.adapter_type(),
+            adapter_type: resolver_state
+                .dbt_profile
+                .db_config
+                .adapter_type()
+                .to_string(),
             ..Default::default()
         },
         nodes: resolver_state

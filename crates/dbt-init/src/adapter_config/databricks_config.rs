@@ -107,7 +107,7 @@ impl InteractiveSetup for DatabricksDbConfig {
 
 pub fn setup_databricks_profile(
     existing_config: Option<&DatabricksDbConfig>,
-) -> FsResult<DatabricksDbConfig> {
+) -> FsResult<Box<DatabricksDbConfig>> {
     let default_config = DatabricksDbConfig {
         database: None,
         schema: None,
@@ -134,5 +134,5 @@ pub fn setup_databricks_profile(
         config.threads = Some(StringOrInteger::Integer(16));
     }
 
-    Ok(config)
+    Ok(Box::new(config))
 }

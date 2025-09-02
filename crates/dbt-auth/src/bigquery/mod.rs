@@ -15,22 +15,20 @@ pub struct BigqueryAuth;
 impl TryFrom<&AdapterConfig> for BigQueryAuthConfig {
     type Error = AuthError;
 
-    fn try_from(value: &AdapterConfig) -> Result<Self, Self::Error> {
-        let yml = dbt_serde_yaml::to_value(value.raw_config())
-            .map_err(|e| AuthError::config(format!("Error parsing BigQuery auth config: {e}")))?;
-
-        let config: BigQueryAuthConfig = dbt_serde_yaml::from_value(yml).map_err(|e| {
-            AuthError::config(format!(
-                "Error parsing BigQuery auth config: {}, seeing top level config keys:\n{}",
-                e,
-                value
-                    .keys()
-                    .iter()
-                    .map(|k| format!("- {k}"))
-                    .collect::<Vec<String>>()
-                    .join("\n")
-            ))
-        })?;
+    fn try_from(config: &AdapterConfig) -> Result<Self, Self::Error> {
+        let config: BigQueryAuthConfig =
+            dbt_serde_yaml::from_value(dbt_serde_yaml::Value::mapping(config.repr().clone()))
+                .map_err(|e| {
+                    use std::fmt::Write as _;
+                    let mut message = format!(
+                        "Error parsing BigQuery auth config: {e}, seeing top level config keys:\n",
+                    );
+                    for key in config.repr().keys() {
+                        let _ = write!(&mut message, "- {key:?}");
+                    }
+                    let _ = writeln!(&mut message);
+                    AuthError::config(message)
+                })?;
 
         Ok(config)
     }
@@ -150,18 +148,16 @@ mod tests {
     use super::types::*;
     use super::*;
     use adbc_core::options::OptionValue;
-    use std::{
-        collections::HashMap,
-        fs::{File, remove_file},
-    };
+    use dbt_serde_yaml::Mapping;
+    use std::fs::{File, remove_file};
 
     type YmlValue = dbt_serde_yaml::Value;
 
-    fn base_config_oauth() -> HashMap<String, YmlValue> {
-        HashMap::from([
-            ("method".to_string(), YmlValue::from("oauth")),
-            ("database".to_string(), YmlValue::from("my_db")),
-            ("schema".to_string(), YmlValue::from("my_schema")),
+    fn base_config_oauth() -> Mapping {
+        Mapping::from_iter([
+            ("method".into(), "oauth".into()),
+            ("database".into(), "my_db".into()),
+            ("schema".into(), "my_schema".into()),
         ])
     }
 
@@ -172,25 +168,25 @@ mod tests {
         }
     }
 
-    fn base_config_keyfile() -> HashMap<String, YmlValue> {
-        HashMap::from([
-            ("method".to_string(), YmlValue::from("service-account")),
-            ("database".to_string(), YmlValue::from("my_db")),
-            ("schema".to_string(), YmlValue::from("my_schema")),
-            ("keyfile".to_string(), YmlValue::from("keyfile.json")),
+    fn base_config_keyfile() -> Mapping {
+        Mapping::from_iter([
+            ("method".into(), "service-account".into()),
+            ("database".into(), "my_db".into()),
+            ("schema".into(), "my_schema".into()),
+            ("keyfile".into(), "keyfile.json".into()),
         ])
     }
 
-    fn base_config_keyfile_json_base64() -> HashMap<String, YmlValue> {
-        HashMap::from([
-            ("method".to_string(), YmlValue::from("service-account-json")),
-            ("database".to_string(), YmlValue::from("my_db")),
-            ("schema".to_string(), YmlValue::from("my_schema")),
+    fn base_config_keyfile_json_base64() -> Mapping {
+        Mapping::from_iter([
+            ("method".into(), "service-account-json".into()),
+            ("database".into(), "my_db".into()),
+            ("schema".into(), "my_schema".into()),
             (
-                "keyfile_json".to_string(),
-                YmlValue::from(
-                    "ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsCiAgInByb2plY3RfaWQiOiAiYnEtcHJvamVjdCIsCiAgInByaXZhdGVfa2V5X2lkIjogInh5ejEyMyIsCiAgInByaXZhdGVfa2V5IjogIi0tLS0tQkVHSU4gUFJJVkFURSBLRVktLS0tLVxuWFlaXG4tLS0tLUVORCBQUklWQVRFIEtFWS0tLS0tIiwKICAiY2xpZW50X2VtYWlsIjogInh5ekAxMjMuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iLAogICJjbGllbnRfaWQiOiAiMTExMjIyMzMzIiwKICAiYXV0aF91cmkiOiAiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tL28vb2F1dGgyL2F1dGgiLAogICJ0b2tlbl91cmkiOiAiaHR0cHM6Ly9vYXV0aDIuZ29vZ2xlYXBpcy5jb20vdG9rZW4iLAogICJhdXRoX3Byb3ZpZGVyX3g1MDlfY2VydF91cmwiOiAiaHR0cHM6Ly93d3cuZ29vZ2xlYXBpcy5jb20vb2F1dGgyL3YxL2NlcnRzIiwKICAiY2xpZW50X3g1MDlfY2VydF91cmwiOiAiaHR0cHM6Ly93d3cuZ29vZ2xlYXBpcy5jb20vcm9ib3QvdjEvbWV0YWRhdGEveDUwOS9mZGUtYmlncXVlcnklNDBmZGUtdGVzdGluZy00NTA4MTYuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iCn0=",
-                ),
+                "keyfile_json".into(),
+                (
+                    "ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsCiAgInByb2plY3RfaWQiOiAiYnEtcHJvamVjdCIsCiAgInByaXZhdGVfa2V5X2lkIjogInh5ejEyMyIsCiAgInByaXZhdGVfa2V5IjogIi0tLS0tQkVHSU4gUFJJVkFURSBLRVktLS0tLVxuWFlaXG4tLS0tLUVORCBQUklWQVRFIEtFWS0tLS0tIiwKICAiY2xpZW50X2VtYWlsIjogInh5ekAxMjMuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iLAogICJjbGllbnRfaWQiOiAiMTExMjIyMzMzIiwKICAiYXV0aF91cmkiOiAiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tL28vb2F1dGgyL2F1dGgiLAogICJ0b2tlbl91cmkiOiAiaHR0cHM6Ly9vYXV0aDIuZ29vZ2xlYXBpcy5jb20vdG9rZW4iLAogICJhdXRoX3Byb3ZpZGVyX3g1MDlfY2VydF91cmwiOiAiaHR0cHM6Ly93d3cuZ29vZ2xlYXBpcy5jb20vb2F1dGgyL3YxL2NlcnRzIiwKICAiY2xpZW50X3g1MDlfY2VydF91cmwiOiAiaHR0cHM6Ly93d3cuZ29vZ2xlYXBpcy5jb20vcm9ib3QvdjEvbWV0YWRhdGEveDUwOS9mZGUtYmlncXVlcnklNDBmZGUtdGVzdGluZy00NTA4MTYuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iCn0="
+                ).into(),
             ),
         ])
     }
@@ -205,7 +201,7 @@ mod tests {
     #[test]
     fn test_auth_config_from_adapter_config_mismatch() {
         let mut config = base_config_keyfile();
-        config.insert("method".to_string(), YmlValue::from("service-account-json"));
+        config.insert("method".into(), "service-account-json".into());
         let adapter_config: &AdapterConfig = &AdapterConfig::new(config);
         let result: Result<BigQueryAuthConfig, AuthError> = adapter_config.try_into();
         assert!(result.is_err(), "Expected error with mismatch");

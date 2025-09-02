@@ -140,16 +140,16 @@ fn create_merged_db_config(
     // Create base config from user credential data
     let mut base_config = match &*user_cred.credentials {
         models::UserCredentialsResponseCredentials::PostgresCredentials(postgres) => {
-            DbConfig::Postgres(PostgresDbConfig {
+            DbConfig::Postgres(Box::new(PostgresDbConfig {
                 user: Some(postgres.username.clone()),
                 schema: Some(postgres.default_schema.clone()),
                 threads: Some(StringOrInteger::Integer(threads as i64)),
                 // Note: Host, Password, Port, Database are not available in the credential response
                 ..Default::default()
-            })
+            }))
         }
         models::UserCredentialsResponseCredentials::SnowflakeCredentials(snowflake) => {
-            DbConfig::Snowflake(SnowflakeDbConfig {
+            DbConfig::Snowflake(Box::new(SnowflakeDbConfig {
                 user: snowflake.user.clone(),
                 role: snowflake.role.clone(),
                 database: snowflake.database.clone(),
@@ -161,10 +161,10 @@ fn create_merged_db_config(
                 // 2. The account name is required for Snowflake connections (e.g. "myaccount.snowflakecomputing.com")
                 // 3. By leaving this field unset, the user will be prompted to enter it during profile setup
                 ..Default::default()
-            })
+            }))
         }
         models::UserCredentialsResponseCredentials::BigqueryCredentials(bigquery) => {
-            DbConfig::Bigquery(BigqueryDbConfig {
+            DbConfig::Bigquery(Box::new(BigqueryDbConfig {
                 schema: Some(bigquery.schema.clone()),
                 threads: Some(StringOrInteger::Integer(threads as i64)),
                 // Note: Method, Keyfile, Project are not available in the credential response
@@ -196,28 +196,28 @@ fn create_merged_db_config(
                 job_retries: None,
                 job_retry_deadline_seconds: None,
                 target_name: None,
-            })
+            }))
         }
         models::UserCredentialsResponseCredentials::RedshiftCredentials(redshift) => {
-            DbConfig::Redshift(RedshiftDbConfig {
+            DbConfig::Redshift(Box::new(RedshiftDbConfig {
                 user: redshift.username.clone(),
                 schema: Some(redshift.default_schema.clone()),
                 threads: Some(StringOrInteger::Integer(threads as i64)),
                 // Note: Host, Password, Database are not available in the credential response
                 ..Default::default()
-            })
+            }))
         }
         models::UserCredentialsResponseCredentials::DbtAdapterCredentials(adapter) => {
             // Check if this is a databricks adapter
             match adapter.adapter_version {
                 Some(models::AdapterVersionEnum::DatabricksV0)
                 | Some(models::AdapterVersionEnum::DatabricksSparkV0) => {
-                    DbConfig::Databricks(DatabricksDbConfig {
+                    DbConfig::Databricks(Box::new(DatabricksDbConfig {
                         threads: Some(StringOrInteger::Integer(threads as i64)),
                         // Note: Most fields are not available in the credential response
                         // This would need additional API calls or different credential structure
                         ..Default::default()
-                    })
+                    }))
                 }
                 _ => return None, // Unsupported adapter type
             }

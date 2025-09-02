@@ -24,7 +24,7 @@ impl Auth for RedshiftAuth {
         if self.backend() == Backend::RedshiftODBC {
             use redshift::odbc::*;
             for key in ["host", "port", "database", "user", "password"].iter() {
-                if let Some(value) = config.maybe_get_str(key)? {
+                if let Some(value) = config.get_string(key) {
                     match *key {
                         "host" => builder.with_named_option(SERVER, value),
                         "port" => builder.with_named_option(PORT_NUMBER, value),
@@ -39,29 +39,32 @@ impl Auth for RedshiftAuth {
             builder.with_named_option(DRIVER, odbc_driver_path())?;
         } else {
             // todo: update with Redshift specific configs once available
-            let method = config.get_str("method").unwrap_or("database".to_string());
+            let method = config
+                .get("method")
+                .and_then(|v| v.as_str())
+                .unwrap_or("database");
 
-            let connection_str = match method.as_ref() {
+            let connection_str = match method {
                 "database" => {
                     for key in ["iam_profile", "cluster_id"].iter() {
-                        if config.get_str(key).is_ok() {
+                        if config.contains_key(key) {
                             return Err(AuthError::config(format!(
                                 "Cannot set '{key}' when 'method' is set to 'database'"
                             )));
                         };
                     }
 
-                    let user = config.get_str("user")?;
-                    let password = config.get_str("password")?;
-                    let host = config.get_str("host")?;
-                    let port = config.get_str("port")?;
-                    let dbname = config.get_str("database")?;
+                    let user = config.require_string("user")?;
+                    let password = config.require_string("password")?;
+                    let host = config.require_string("host")?;
+                    let port = config.require_string("port")?;
+                    let dbname = config.require_string("database")?;
 
-                    let user = utf8_percent_encode(&user, NON_ALPHANUMERIC).to_string();
-                    let password = utf8_percent_encode(&password, NON_ALPHANUMERIC).to_string();
-                    let host = utf8_percent_encode(&host, NON_ALPHANUMERIC).to_string();
-                    let port = utf8_percent_encode(&port, NON_ALPHANUMERIC).to_string();
-                    let dbname = utf8_percent_encode(&dbname, NON_ALPHANUMERIC).to_string();
+                    let user = utf8_percent_encode(&user, NON_ALPHANUMERIC);
+                    let password = utf8_percent_encode(&password, NON_ALPHANUMERIC);
+                    let host = utf8_percent_encode(&host, NON_ALPHANUMERIC);
+                    let port = utf8_percent_encode(&port, NON_ALPHANUMERIC);
+                    let dbname = utf8_percent_encode(&dbname, NON_ALPHANUMERIC);
 
                     format!("postgresql://{user}:{password}@{host}:{port}/{dbname}")
                 }
@@ -90,8 +93,7 @@ impl Auth for RedshiftAuth {
 mod tests {
     use super::*;
     use adbc_core::options::{OptionDatabase, OptionValue};
-    use std::collections::HashMap;
-    type YmlValue = dbt_serde_yaml::Value;
+    use dbt_serde_yaml::Mapping;
 
     fn str_value(value: &OptionValue) -> &str {
         match value {
@@ -105,15 +107,13 @@ mod tests {
         use redshift::odbc::*;
         let auth = RedshiftAuth {};
 
-        let mut config = HashMap::new();
-        config.insert(
-            "server".to_string(),
-            YmlValue::from("redshift-cluster.aws.com"),
-        );
-        config.insert("port".to_string(), YmlValue::from("5439"));
-        config.insert("database".to_string(), YmlValue::from("dev"));
-        config.insert("user".to_string(), YmlValue::from("admin"));
-        config.insert("password".to_string(), YmlValue::from("secretpass"));
+        let config = Mapping::from_iter([
+            ("server".into(), "redshift-cluster.aws.com".into()),
+            ("port".into(), "5439".into()),
+            ("database".into(), "dev".into()),
+            ("user".into(), "admin".into()),
+            ("password".into(), "secretpass".into()),
+        ]);
 
         let builder = auth
             .configure(&AdapterConfig::new(config))

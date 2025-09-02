@@ -25,9 +25,9 @@ impl Auth for DatabricksAuth {
             use databricks::odbc;
             // Config values for DSN-less connection to Databricks:
             // https://learn.microsoft.com/en-us/azure/databricks/integrations/odbc/authentication
-            for key in ["token", "http_path", "host", "schema", "database"].iter() {
-                if let Some(value) = config.maybe_get_str(key)? {
-                    match *key {
+            for key in ["token", "http_path", "host", "schema", "database"].into_iter() {
+                if let Some(value) = config.get_string(key) {
+                    match key {
                         "token" => builder.with_named_option(odbc::TOKEN_FIELD, value),
                         "http_path" => builder.with_named_option(odbc::HTTP_PATH, value),
                         "host" => builder.with_named_option(odbc::HOST, value),
@@ -49,16 +49,16 @@ impl Auth for DatabricksAuth {
         } else {
             validate_config(config)?;
             // all of the following options are required for any Databricks connection
-            builder.with_named_option(databricks::HOST, config.get_str("host")?)?;
-            builder.with_named_option(databricks::SCHEMA, config.get_str("schema")?)?;
-            builder.with_named_option(databricks::CATALOG, config.get_str("database")?)?;
+            builder.with_named_option(databricks::HOST, config.require_string("host")?)?;
+            builder.with_named_option(databricks::SCHEMA, config.require_string("schema")?)?;
+            builder.with_named_option(databricks::CATALOG, config.require_string("database")?)?;
 
             // http_path is of the form:
             //  /sql/1.0/warehouses/<warehouse-id
             //  /sql/protocolv1/o/<instance>/<cluster-id>
             // we need to extract the warehouse-id or cluster-id from the http_path
             // warehouses and clusters are separate concepts and endpoints in Databricks
-            let http_path = config.get_str("http_path")?;
+            let http_path = config.require_string("http_path")?;
             if http_path.contains("warehouses") {
                 let warehouse_id = http_path.split("/warehouses/").nth(1).unwrap();
                 builder.with_named_option(databricks::WAREHOUSE, warehouse_id)?;
@@ -69,16 +69,16 @@ impl Auth for DatabricksAuth {
                 return Err(AuthError::config(format!("Invalid http_path: {http_path}")));
             }
             // Personal Access Token
-            if let Some(token) = config.maybe_get_str("token")? {
+            if let Some(token) = config.get_string("token") {
                 builder.with_named_option(databricks::TOKEN, token)?;
                 builder.with_named_option(databricks::AUTH_TYPE, databricks::auth_type::PAT)?;
             }
             // Azure Client Secret Oauth
-            else if let Some(azure_client_id) = config.maybe_get_str("azure_client_id")? {
+            else if let Some(azure_client_id) = config.get_string("azure_client_id") {
                 builder.with_named_option(databricks::AZURE_CLIENT_ID, azure_client_id)?;
                 builder.with_named_option(
                     databricks::AZURE_CLIENT_SECRET,
-                    config.get_str("azure_client_secret")?,
+                    config.require_string("azure_client_secret")?,
                 )?;
                 builder.with_named_option(
                     databricks::AUTH_TYPE,
@@ -86,8 +86,8 @@ impl Auth for DatabricksAuth {
                 )?;
             }
             // External Browser Oauth - U2M Oauth
-            else if config.get_str("client_secret").is_err() {
-                if let Some(client_id) = config.maybe_get_str("client_id")? {
+            else if !config.contains_key("client_secret") {
+                if let Some(client_id) = config.get_string("client_id") {
                     builder.with_named_option(databricks::CLIENT_ID, client_id)?;
                 }
                 builder.with_named_option(
@@ -96,11 +96,11 @@ impl Auth for DatabricksAuth {
                 )?;
             }
             // M2M Oauth
-            else if let Some(client_id) = config.maybe_get_str("client_id")? {
+            else if let Some(client_id) = config.get_string("client_id") {
                 builder.with_named_option(databricks::CLIENT_ID, client_id)?;
                 builder.with_named_option(
                     databricks::CLIENT_SECRET,
-                    config.get_str("client_secret")?,
+                    config.require_string("client_secret")?,
                 )?;
                 builder
                     .with_named_option(databricks::AUTH_TYPE, databricks::auth_type::OAUTH_M2M)?;
@@ -113,27 +113,30 @@ impl Auth for DatabricksAuth {
 }
 
 fn validate_config(config: &AdapterConfig) -> Result<(), AuthError> {
-    if config.get_str("http_path").is_err() {
+    if !config.contains_key("http_path") {
         return Err(AuthError::config("http_path is required"));
     }
-    if config.get_str("host").is_err() {
+    if !config.contains_key("host") {
         return Err(AuthError::config("host is required".to_string()));
     }
-    let is_oauth = config.get_str("auth_type").is_ok_and(|s| s == "oauth");
-    if config.get_str("token").is_err() && !is_oauth {
+    let is_oauth = config
+        .get("auth_type")
+        .map(|v| v == "oauth")
+        .unwrap_or(false);
+    if !config.contains_key("token") && !is_oauth {
         return Err(AuthError::config(
             "The config `auth_type: oauth` is required when not using access token",
         ));
     }
-    if config.get_str("client_id").is_err() && config.get_str("client_secret").is_ok() {
+    if !config.contains_key("client_id") && config.contains_key("client_secret") {
         return Err(AuthError::config(
             "The config 'client_id' is required to connect to Databricks when 'client_secret' is present",
         ));
     }
     let azure_client_no_secret =
-        config.get_str("azure_client_id").is_err() && config.get_str("azure_client_secret").is_ok();
+        !config.contains_key("azure_client_id") && config.contains_key("azure_client_secret");
     let azure_secret_no_client =
-        config.get_str("azure_client_id").is_ok() && config.get_str("azure_client_secret").is_err();
+        config.contains_key("azure_client_id") && !config.contains_key("azure_client_secret");
     if azure_client_no_secret || azure_secret_no_client {
         return Err(AuthError::config(
             "The config 'azure_client_id' and 'azure_client_secret' must be both present or both absent",
@@ -146,9 +149,7 @@ fn validate_config(config: &AdapterConfig) -> Result<(), AuthError> {
 mod tests {
     use super::*;
     use adbc_core::options::{OptionDatabase, OptionValue};
-    use std::collections::HashMap;
-
-    type YmlValue = dbt_serde_yaml::Value;
+    use dbt_serde_yaml::Mapping;
 
     fn str_value(value: &OptionValue) -> &str {
         match value {
@@ -157,17 +158,12 @@ mod tests {
         }
     }
 
-    fn run_config_test(
-        config: HashMap<String, YmlValue>,
-        expected: &[(&str, &str)],
-    ) -> Result<(), AuthError> {
+    fn run_config_test(config: Mapping, expected: &[(&str, &str)]) -> Result<(), AuthError> {
         let auth = DatabricksAuth {};
         let builder = auth.configure(&AdapterConfig::new(config))?;
-
-        let mut results = HashMap::new();
-
         assert_eq!(builder.clone().into_iter().count(), expected.len());
 
+        let mut results = Mapping::default();
         for (k, v) in builder.into_iter() {
             let key = match k {
                 OptionDatabase::Username => "user".to_owned(),
@@ -175,7 +171,7 @@ mod tests {
                 OptionDatabase::Other(name) => name.to_owned(),
                 _ => continue,
             };
-            results.insert(key, str_value(&v).to_owned());
+            results.insert(key.into(), str_value(&v).into());
         }
 
         for &(key, expected_val) in expected {
@@ -192,15 +188,16 @@ mod tests {
 
     #[test]
     fn test_token_warehouse() {
-        let mut config = HashMap::new();
-        config.insert("host".to_string(), YmlValue::from("H".to_string()));
-        config.insert("schema".to_string(), YmlValue::from("S".to_string()));
-        config.insert(
-            "http_path".to_string(),
-            YmlValue::from("/sql/1.0/warehouses/warehouse-id".to_string()),
-        );
-        config.insert("token".to_string(), YmlValue::from("T".to_string()));
-        config.insert("database".to_string(), YmlValue::from("C".to_string()));
+        let config = Mapping::from_iter([
+            ("host".into(), "H".into()),
+            ("schema".into(), "S".into()),
+            (
+                "http_path".into(),
+                "/sql/1.0/warehouses/warehouse-id".into(),
+            ),
+            ("token".into(), "T".into()),
+            ("database".into(), "C".into()),
+        ]);
 
         let expected = vec![
             (databricks::TOKEN, "T"),
@@ -215,15 +212,16 @@ mod tests {
 
     #[test]
     fn test_token_cluster_with_optional_fields() {
-        let mut config = HashMap::new();
-        config.insert("host".to_string(), YmlValue::from("H".to_string()));
-        config.insert("schema".to_string(), YmlValue::from("S".to_string()));
-        config.insert(
-            "http_path".to_string(),
-            YmlValue::from("sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".to_string()),
-        );
-        config.insert("token".to_string(), YmlValue::from("T".to_string()));
-        config.insert("database".to_string(), YmlValue::from("C".to_string()));
+        let config = Mapping::from_iter([
+            ("host".into(), "H".into()),
+            ("schema".into(), "S".into()),
+            (
+                "http_path".into(),
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".into(),
+            ),
+            ("token".into(), "T".into()),
+            ("database".into(), "C".into()),
+        ]);
 
         let expected = vec![
             (databricks::TOKEN, "T"),
@@ -238,23 +236,18 @@ mod tests {
 
     #[test]
     fn test_azure_client_secret() {
-        let mut config = HashMap::new();
-        config.insert("host".to_string(), YmlValue::from("H".to_string()));
-        config.insert("schema".to_string(), YmlValue::from("S".to_string()));
-        config.insert(
-            "http_path".to_string(),
-            YmlValue::from("sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".to_string()),
-        );
-        config.insert(
-            "azure_client_id".to_string(),
-            YmlValue::from("A".to_string()),
-        );
-        config.insert(
-            "azure_client_secret".to_string(),
-            YmlValue::from("A".to_string()),
-        );
-        config.insert("database".to_string(), YmlValue::from("C".to_string()));
-        config.insert("auth_type".to_string(), YmlValue::from("oauth".to_string()));
+        let config = Mapping::from_iter([
+            ("host".into(), "H".into()),
+            ("schema".into(), "S".into()),
+            (
+                "http_path".into(),
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".into(),
+            ),
+            ("azure_client_id".into(), "A".into()),
+            ("azure_client_secret".into(), "A".into()),
+            ("database".into(), "C".into()),
+            ("auth_type".into(), "oauth".into()),
+        ]);
         let expected = vec![
             (databricks::AZURE_CLIENT_ID, "A"),
             (databricks::AZURE_CLIENT_SECRET, "A"),
@@ -272,17 +265,18 @@ mod tests {
 
     #[test]
     fn test_m2m_oauth() {
-        let mut config = HashMap::new();
-        config.insert("host".to_string(), YmlValue::from("H".to_string()));
-        config.insert("schema".to_string(), YmlValue::from("S".to_string()));
-        config.insert(
-            "http_path".to_string(),
-            YmlValue::from("sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".to_string()),
-        );
-        config.insert("client_id".to_string(), YmlValue::from("O".to_string()));
-        config.insert("client_secret".to_string(), YmlValue::from("O".to_string()));
-        config.insert("database".to_string(), YmlValue::from("C".to_string()));
-        config.insert("auth_type".to_string(), YmlValue::from("oauth".to_string()));
+        let config = Mapping::from_iter([
+            ("host".into(), "H".into()),
+            ("schema".into(), "S".into()),
+            (
+                "http_path".into(),
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".into(),
+            ),
+            ("client_id".into(), "O".into()),
+            ("client_secret".into(), "O".into()),
+            ("database".into(), "C".into()),
+            ("auth_type".into(), "oauth".into()),
+        ]);
 
         let expected = vec![
             (databricks::CLIENT_ID, "O"),
@@ -298,16 +292,17 @@ mod tests {
 
     #[test]
     fn test_external_browser_oauth() {
-        let mut config = HashMap::new();
-        config.insert("host".to_string(), YmlValue::from("H".to_string()));
-        config.insert("schema".to_string(), YmlValue::from("S".to_string()));
-        config.insert(
-            "http_path".to_string(),
-            YmlValue::from("sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".to_string()),
-        );
-        config.insert("client_id".to_string(), YmlValue::from("O".to_string()));
-        config.insert("database".to_string(), YmlValue::from("C".to_string()));
-        config.insert("auth_type".to_string(), YmlValue::from("oauth".to_string()));
+        let config = Mapping::from_iter([
+            ("host".into(), "H".into()),
+            ("schema".into(), "S".into()),
+            (
+                "http_path".into(),
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".into(),
+            ),
+            ("client_id".into(), "O".into()),
+            ("database".into(), "C".into()),
+            ("auth_type".into(), "oauth".into()),
+        ]);
         let expected = vec![
             (databricks::SCHEMA, "S"),
             (databricks::HOST, "H"),
@@ -324,15 +319,16 @@ mod tests {
 
     #[test]
     fn test_external_browser_oauth_without_client_id() {
-        let mut config = HashMap::new();
-        config.insert("host".to_string(), YmlValue::from("H".to_string()));
-        config.insert("schema".to_string(), YmlValue::from("S".to_string()));
-        config.insert(
-            "http_path".to_string(),
-            YmlValue::from("sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".to_string()),
-        );
-        config.insert("database".to_string(), YmlValue::from("C".to_string()));
-        config.insert("auth_type".to_string(), YmlValue::from("oauth".to_string()));
+        let config = Mapping::from_iter([
+            ("host".into(), "H".into()),
+            ("schema".into(), "S".into()),
+            (
+                "http_path".into(),
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".into(),
+            ),
+            ("database".into(), "C".into()),
+            ("auth_type".into(), "oauth".into()),
+        ]);
         let expected = vec![
             (databricks::SCHEMA, "S"),
             (databricks::HOST, "H"),
@@ -348,18 +344,16 @@ mod tests {
 
     #[test]
     fn test_validate_config_errors_with_missing_token_and_not_oauth() {
-        let mut config = HashMap::new();
-        config.insert("host".to_string(), YmlValue::from("H".to_string()));
-        config.insert(
-            "http_path".to_string(),
-            YmlValue::from("sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".to_string()),
-        );
-        config.insert("schema".to_string(), YmlValue::from("S".to_string()));
-        config.insert("database".to_string(), YmlValue::from("C".to_string()));
-        config.insert(
-            "auth_type".to_string(),
-            YmlValue::from("external_browser".to_string()),
-        );
+        let config = Mapping::from_iter([
+            ("host".into(), "H".into()),
+            (
+                "http_path".into(),
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".into(),
+            ),
+            ("schema".into(), "S".into()),
+            ("database".into(), "C".into()),
+            ("auth_type".into(), "external_browser".into()),
+        ]);
         let result = validate_config(&AdapterConfig::new(config));
         assert!(result.is_err());
         assert_eq!(
@@ -370,19 +364,17 @@ mod tests {
 
     #[test]
     fn test_validate_config_errors_with_missing_client_id_and_present_client_secret() {
-        let mut config = HashMap::new();
-        config.insert("host".to_string(), YmlValue::from("H".to_string()));
-        config.insert(
-            "http_path".to_string(),
-            YmlValue::from("sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".to_string()),
-        );
-        config.insert("schema".to_string(), YmlValue::from("S".to_string()));
-        config.insert("database".to_string(), YmlValue::from("C".to_string()));
-        config.insert(
-            "client_secret".to_string(),
-            YmlValue::from("some_secret".to_string()),
-        );
-        config.insert("auth_type".to_string(), YmlValue::from("oauth".to_string()));
+        let config = Mapping::from_iter([
+            ("host".into(), "H".into()),
+            (
+                "http_path".into(),
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".into(),
+            ),
+            ("schema".into(), "S".into()),
+            ("database".into(), "C".into()),
+            ("client_secret".into(), "some_secret".into()),
+            ("auth_type".into(), "oauth".into()),
+        ]);
         let result = validate_config(&AdapterConfig::new(config));
         assert!(result.is_err());
         assert_eq!(
@@ -393,19 +385,17 @@ mod tests {
 
     #[test]
     fn test_validate_config_errors_with_missing_azure_client_id_and_present_azure_client_secret() {
-        let mut config = HashMap::new();
-        config.insert("host".to_string(), YmlValue::from("H".to_string()));
-        config.insert(
-            "http_path".to_string(),
-            YmlValue::from("sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".to_string()),
-        );
-        config.insert("schema".to_string(), YmlValue::from("S".to_string()));
-        config.insert("database".to_string(), YmlValue::from("C".to_string()));
-        config.insert(
-            "azure_client_secret".to_string(),
-            YmlValue::from("some_secret".to_string()),
-        );
-        config.insert("auth_type".to_string(), YmlValue::from("oauth".to_string()));
+        let config = Mapping::from_iter([
+            ("host".into(), "H".into()),
+            (
+                "http_path".into(),
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".into(),
+            ),
+            ("schema".into(), "S".into()),
+            ("database".into(), "C".into()),
+            ("azure_client_secret".into(), "some_secret".into()),
+            ("auth_type".into(), "oauth".into()),
+        ]);
         let result = validate_config(&AdapterConfig::new(config));
         assert!(result.is_err());
         assert_eq!(
@@ -416,19 +406,17 @@ mod tests {
 
     #[test]
     fn test_validate_config_errors_with_present_azure_client_id_and_missing_azure_client_secret() {
-        let mut config = HashMap::new();
-        config.insert("host".to_string(), YmlValue::from("H".to_string()));
-        config.insert(
-            "http_path".to_string(),
-            YmlValue::from("sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".to_string()),
-        );
-        config.insert("schema".to_string(), YmlValue::from("S".to_string()));
-        config.insert("database".to_string(), YmlValue::from("C".to_string()));
-        config.insert(
-            "azure_client_id".to_string(),
-            YmlValue::from("some_id".to_string()),
-        );
-        config.insert("auth_type".to_string(), YmlValue::from("oauth".to_string()));
+        let config = Mapping::from_iter([
+            ("host".into(), "H".into()),
+            (
+                "http_path".into(),
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".into(),
+            ),
+            ("schema".into(), "S".into()),
+            ("database".into(), "C".into()),
+            ("azure_client_id".into(), "some_id".into()),
+            ("auth_type".into(), "oauth".into()),
+        ]);
         let result = validate_config(&AdapterConfig::new(config));
         assert!(result.is_err());
         assert_eq!(

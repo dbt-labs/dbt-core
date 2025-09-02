@@ -38,7 +38,7 @@ impl Task for HydrateProfilesTask {
             if override_profiles_path.exists() {
                 let override_db_config =
                     load_db_config(&self.target, &self.schema, &override_profiles_path)?;
-                override_with(&mut db_config, &override_db_config);
+                override_with(&mut db_config, override_db_config);
             }
 
             write_db_config_to_test_profile(db_config, &project_env.absolute_project_dir)?;
@@ -47,10 +47,10 @@ impl Task for HydrateProfilesTask {
     }
 }
 
-fn override_with(original: &mut DbConfig, override_: &DbConfig) {
+fn override_with(original: &mut DbConfig, override_: DbConfig) {
     match (original, override_) {
         (DbConfig::Bigquery(self_bigquery), DbConfig::Bigquery(other_bigquery)) => {
-            self_bigquery.merge(other_bigquery.clone());
+            self_bigquery.merge(*other_bigquery);
         }
         _ => unimplemented!("database config override for non-BigQuery adapters"),
     }

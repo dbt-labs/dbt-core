@@ -16,6 +16,7 @@ use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::file::properties::WriterProperties;
 use regex::Regex;
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::fmt;
@@ -112,11 +113,11 @@ impl RecordEngine {
         Ok(Box::new(conn))
     }
 
-    pub fn get_configured_database_name(&self) -> AdapterResult<Option<String>> {
+    pub fn get_configured_database_name(&self) -> Option<Cow<'_, str>> {
         self.0.engine.get_configured_database_name()
     }
 
-    pub fn config(&self, key: &str) -> AdapterResult<Option<String>> {
+    pub fn config(&self, key: &str) -> Option<Cow<'_, str>> {
         self.0.engine.config(key)
     }
 
@@ -399,9 +400,8 @@ impl ReplayEngine {
         self.0.backend
     }
 
-    pub fn config(&self, key: &str) -> AdapterResult<Option<String>> {
-        let opt = self.0.config.maybe_get_str(key)?;
-        Ok(opt)
+    pub fn config(&self, key: &str) -> Option<Cow<'_, str>> {
+        self.0.config.get_string(key)
     }
 
     pub fn cancellation_token(&self) -> CancellationToken {

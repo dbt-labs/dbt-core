@@ -2,20 +2,17 @@
 
 use crate::schemas::relations::DEFAULT_DATABRICKS_DATABASE;
 use crate::schemas::serde::{StringOrInteger, StringOrMap};
-use dbt_serde_yaml::UntaggedEnumDeserialize;
-
 use dbt_serde_yaml::JsonSchema;
+use dbt_serde_yaml::UntaggedEnumDeserialize;
 use merge::Merge;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
-
 use std::collections::HashMap;
-
-// Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
 use std::convert::TryFrom;
 use std::fmt::{self, Debug, Display};
 use std::path::PathBuf;
+
+type YmlValue = dbt_serde_yaml::Value;
 
 pub type ProfileName = String;
 pub type TargetName = String;
@@ -37,17 +34,17 @@ pub struct DbtProfiles {
 #[serde(rename_all = "lowercase")]
 #[allow(clippy::large_enum_variant)]
 pub enum DbConfig {
-    Redshift(RedshiftDbConfig),
-    Snowflake(SnowflakeDbConfig),
-    Postgres(PostgresDbConfig),
-    Bigquery(BigqueryDbConfig),
-    Trino(TrinoDbConfig),
-    Datafusion(DatafusionDbConfig),
+    Redshift(Box<RedshiftDbConfig>),
+    Snowflake(Box<SnowflakeDbConfig>),
+    Postgres(Box<PostgresDbConfig>),
+    Bigquery(Box<BigqueryDbConfig>),
+    Trino(Box<TrinoDbConfig>),
+    Datafusion(Box<DatafusionDbConfig>),
     // SqlServer,
     // SingleStore,
     // Spark,
-    Databricks(DatabricksDbConfig),
-    Salesforce(SalesforceDbConfig),
+    Databricks(Box<DatabricksDbConfig>),
+    Salesforce(Box<SalesforceDbConfig>),
     // Hive,
     // Exasol,
     // Oracle,
@@ -84,7 +81,143 @@ pub enum DbConfig {
     // Starrocks,
 }
 
+macro_rules! impl_from_db_config {
+    ($variant:ident, $config_type:ty) => {
+        impl From<$config_type> for DbConfig {
+            fn from(config: $config_type) -> Self {
+                DbConfig::$variant(Box::new(config))
+            }
+        }
+    };
+}
+
+impl_from_db_config!(Redshift, RedshiftDbConfig);
+impl_from_db_config!(Snowflake, SnowflakeDbConfig);
+impl_from_db_config!(Postgres, PostgresDbConfig);
+impl_from_db_config!(Bigquery, BigqueryDbConfig);
+impl_from_db_config!(Trino, TrinoDbConfig);
+impl_from_db_config!(Datafusion, DatafusionDbConfig);
+impl_from_db_config!(Databricks, DatabricksDbConfig);
+
 impl DbConfig {
+    pub fn get_unique_field(&self) -> Option<&String> {
+        match self {
+            DbConfig::Snowflake(config) => config.account.as_ref(),
+            DbConfig::Postgres(config) => config.host.as_ref(),
+            DbConfig::Bigquery(config) => config.database.as_ref(),
+            DbConfig::Trino(config) => config.host.as_ref(),
+            DbConfig::Datafusion(config) => config.database.as_ref(),
+            DbConfig::Redshift(config) => config.host.as_ref(),
+            DbConfig::Databricks(config) => config.host.as_ref(),
+            DbConfig::Salesforce(config) => config.client_id.as_ref(),
+        }
+    }
+
+    pub fn get_adapter_unique_id(&self) -> Option<String> {
+        // Generates a hash of a database-specific unique field (eg. hostname on redshift,
+        // account on snowflake). Used for telemetry to anonymously identify a data warehouse.
+        self.get_unique_field()
+            .map(|unique_field| format!("{:x}", md5::compute(unique_field.as_bytes())))
+    }
+
+    // XXX: this outdated and it affects the `dbt debug` command. A review is pending.
+    pub fn get_connection_keys(&self) -> &'static [&'static str] {
+        match self {
+            DbConfig::Snowflake(_) => &[
+                "account",
+                "user",
+                "database",
+                "warehouse",
+                "role",
+                "schema",
+                "authenticator",
+                "oauth_client_id",
+                "query_tag",
+                "client_session_keep_alive",
+                "host",
+                "port",
+                "proxy_host",
+                "proxy_port",
+                "protocol",
+                "connect_retries",
+                "connect_timeout",
+                "retry_on_database_errors",
+                "retry_all",
+                "insecure_mode",
+                "reuse_connections",
+            ],
+            DbConfig::Postgres(_) => &[
+                "host",
+                "port",
+                "user",
+                "database",
+                "schema",
+                "connect_timeout",
+                "role",
+                "search_path",
+                "keepalives_idle",
+                "sslmode",
+                "sslcert",
+                "sslkey",
+                "sslrootcert",
+                "application_name",
+                "retries",
+            ],
+            DbConfig::Bigquery(_) => &[
+                "method",
+                "database",
+                "execution_project",
+                "schema",
+                "location",
+                "priority",
+                "maximum_bytes_billed",
+                "impersonate_service_account",
+                "job_retry_deadline_seconds",
+                "job_retries",
+                "job_creation_timeout_seconds",
+                "job_execution_timeout_seconds",
+                "timeout_seconds",
+                "client_id",
+                "token_uri",
+                "compute_region",
+                "dataproc_cluster_name",
+                "gcs_bucket",
+                "dataproc_batch",
+            ],
+            DbConfig::Redshift(_) => &[
+                "host",
+                "user",
+                "port",
+                "database",
+                "method",
+                "cluster_id",
+                "iam_profile",
+                "schema",
+                "sslmode",
+                "region",
+                "sslmode",
+                "autocreate",
+                "db_groups",
+                "ra3_node",
+                "connect_timeout",
+                "role",
+                "retries",
+                "retry_all",
+                "autocommit",
+                "access_key_id",
+                "is_serverless",
+                "serverless_work_group",
+                "serverless_acct_id",
+            ],
+            DbConfig::Databricks(_) => &["host", "http_path", "schema"],
+            // TODO: Salesforce connection keys
+            DbConfig::Salesforce(_) => &[],
+            // TODO: Trino and Datafusion connection keys
+            DbConfig::Trino(_) => &[],
+            DbConfig::Datafusion(_) => &[],
+        }
+    }
+
     pub fn get_execute_mode(&self) -> Execute {
         match self {
             DbConfig::Snowflake(config) => config.execute,
@@ -104,67 +237,69 @@ impl DbConfig {
         }
     }
 
-    pub fn get_credential_value(&self) -> YmlValue {
+    pub fn to_yaml_value(&self) -> Result<YmlValue, dbt_serde_yaml::Error> {
         match self {
-            DbConfig::Snowflake(config) => dbt_serde_yaml::to_value(config).unwrap(),
-            DbConfig::Postgres(config) => dbt_serde_yaml::to_value(config).unwrap(),
-            DbConfig::Bigquery(config) => dbt_serde_yaml::to_value(config).unwrap(),
-            DbConfig::Trino(config) => dbt_serde_yaml::to_value(config).unwrap(),
-            DbConfig::Datafusion(config) => dbt_serde_yaml::to_value(config).unwrap(),
-            DbConfig::Redshift(config) => dbt_serde_yaml::to_value(config).unwrap(),
-            DbConfig::Databricks(config) => dbt_serde_yaml::to_value(config).unwrap(),
-            DbConfig::Salesforce(config) => dbt_serde_yaml::to_value(config).unwrap(),
+            DbConfig::Snowflake(config) => dbt_serde_yaml::to_value(config),
+            DbConfig::Postgres(config) => dbt_serde_yaml::to_value(config),
+            DbConfig::Bigquery(config) => dbt_serde_yaml::to_value(config),
+            DbConfig::Trino(config) => dbt_serde_yaml::to_value(config),
+            DbConfig::Datafusion(config) => dbt_serde_yaml::to_value(config),
+            DbConfig::Redshift(config) => dbt_serde_yaml::to_value(config),
+            DbConfig::Databricks(config) => dbt_serde_yaml::to_value(config),
+            DbConfig::Salesforce(config) => dbt_serde_yaml::to_value(config),
         }
     }
 
-    pub fn adapter_type(&self) -> String {
+    // TODO: change to enum AdapterType
+    pub fn adapter_type(&self) -> &str {
         match self {
-            DbConfig::Redshift(..) => "redshift".to_string(),
-            DbConfig::Snowflake(..) => "snowflake".to_string(),
-            DbConfig::Postgres(..) => "postgres".to_string(),
-            DbConfig::Bigquery(..) => "bigquery".to_string(),
-            DbConfig::Trino(..) => "trino".to_string(),
-            DbConfig::Datafusion(..) => "datafusion".to_string(),
-            DbConfig::Databricks(..) => "databricks".to_string(),
-            DbConfig::Salesforce(..) => "salesforce".to_string(),
+            DbConfig::Redshift(..) => "redshift",
+            DbConfig::Snowflake(..) => "snowflake",
+            DbConfig::Postgres(..) => "postgres",
+            DbConfig::Bigquery(..) => "bigquery",
+            DbConfig::Trino(..) => "trino",
+            DbConfig::Datafusion(..) => "datafusion",
+            DbConfig::Databricks(..) => "databricks",
+            DbConfig::Salesforce(..) => "salesforce",
         }
     }
 
-    pub fn get_database(&self) -> Option<String> {
+    pub fn get_database(&self) -> Option<&String> {
         match self {
-            DbConfig::Redshift(config) => config.database.clone(),
-            DbConfig::Snowflake(config) => config.database.clone(),
-            DbConfig::Postgres(config) => config.database.clone().or(config.database.clone()),
-            DbConfig::Bigquery(config) => config.database.clone(),
-            DbConfig::Trino(config) => config.database.clone(),
-            DbConfig::Datafusion(config) => config.database.clone(),
-            DbConfig::Databricks(config) => config.database.clone(),
-            DbConfig::Salesforce(config) => config.database.clone(),
+            DbConfig::Redshift(config) => config.database.as_ref(),
+            DbConfig::Snowflake(config) => config.database.as_ref(),
+            DbConfig::Postgres(config) => config.database.as_ref().or(config.database.as_ref()),
+            DbConfig::Bigquery(config) => config.database.as_ref(),
+            DbConfig::Trino(config) => config.database.as_ref(),
+            DbConfig::Datafusion(config) => config.database.as_ref(),
+            DbConfig::Databricks(config) => config.database.as_ref(),
+            DbConfig::Salesforce(config) => config.database.as_ref(),
         }
     }
 
-    pub fn get_schema(&self) -> Option<String> {
+    pub fn get_schema(&self) -> Option<&String> {
         match self {
-            DbConfig::Redshift(config) => config.schema.clone(),
-            DbConfig::Snowflake(config) => config.schema.clone(),
-            DbConfig::Postgres(config) => config.schema.clone(),
-            DbConfig::Trino(config) => config.schema.clone(),
-            DbConfig::Bigquery(config) => config.schema.clone(),
-            DbConfig::Datafusion(config) => config.schema.clone(),
-            DbConfig::Databricks(config) => config.schema.clone(),
+            DbConfig::Redshift(config) => config.schema.as_ref(),
+            DbConfig::Snowflake(config) => config.schema.as_ref(),
+            DbConfig::Postgres(config) => config.schema.as_ref(),
+            DbConfig::Trino(config) => config.schema.as_ref(),
+            DbConfig::Bigquery(config) => config.schema.as_ref(),
+            DbConfig::Datafusion(config) => config.schema.as_ref(),
+            DbConfig::Databricks(config) => config.schema.as_ref(),
             DbConfig::Salesforce(_) => None,
         }
     }
 
-    pub fn get_threads(&self) -> Option<StringOrInteger> {
+    pub fn get_threads(&self) -> Option<&StringOrInteger> {
         match self {
-            DbConfig::Snowflake(config) => config.threads.clone(),
-            DbConfig::Databricks(config) => config.threads.clone(),
-            DbConfig::Bigquery(config) => config.threads.clone(),
-            DbConfig::Redshift(config) => config.threads.clone(),
-            DbConfig::Postgres(config) => config.threads.clone(),
-            DbConfig::Trino(config) => config.threads.clone(),
-            _ => None,
+            DbConfig::Snowflake(config) => config.threads.as_ref(),
+            DbConfig::Databricks(config) => config.threads.as_ref(),
+            DbConfig::Bigquery(config) => config.threads.as_ref(),
+            DbConfig::Redshift(config) => config.threads.as_ref(),
+            DbConfig::Postgres(config) => config.threads.as_ref(),
+            DbConfig::Trino(config) => config.threads.as_ref(),
+            DbConfig::Datafusion(_) => None,
+            DbConfig::Salesforce(_) => None,
         }
     }
 
@@ -176,173 +311,39 @@ impl DbConfig {
             DbConfig::Bigquery(config) => config.threads = threads,
             DbConfig::Trino(config) => config.threads = threads,
             DbConfig::Redshift(config) => config.threads = threads,
-            _ => (),
+            DbConfig::Datafusion(_) => (),
+            DbConfig::Salesforce(_) => (),
         }
     }
 
-    pub fn get_connection_keys(&self) -> Vec<String> {
-        match self {
-            DbConfig::Snowflake(_) => vec![
-                "account".to_string(),
-                "user".to_string(),
-                "database".to_string(),
-                "warehouse".to_string(),
-                "role".to_string(),
-                "schema".to_string(),
-                "authenticator".to_string(),
-                "oauth_client_id".to_string(),
-                "query_tag".to_string(),
-                "client_session_keep_alive".to_string(),
-                "host".to_string(),
-                "port".to_string(),
-                "proxy_host".to_string(),
-                "proxy_port".to_string(),
-                "protocol".to_string(),
-                "connect_retries".to_string(),
-                "connect_timeout".to_string(),
-                "retry_on_database_errors".to_string(),
-                "retry_all".to_string(),
-                "insecure_mode".to_string(),
-                "reuse_connections".to_string(),
-            ],
-            DbConfig::Postgres(_) => vec![
-                "host".to_string(),
-                "port".to_string(),
-                "user".to_string(),
-                "database".to_string(),
-                "schema".to_string(),
-                "connect_timeout".to_string(),
-                "role".to_string(),
-                "search_path".to_string(),
-                "keepalives_idle".to_string(),
-                "sslmode".to_string(),
-                "sslcert".to_string(),
-                "sslkey".to_string(),
-                "sslrootcert".to_string(),
-                "application_name".to_string(),
-                "retries".to_string(),
-            ],
-            DbConfig::Bigquery(_) => vec![
-                "method".to_string(),
-                "database".to_string(),
-                "execution_project".to_string(),
-                "schema".to_string(),
-                "location".to_string(),
-                "priority".to_string(),
-                "maximum_bytes_billed".to_string(),
-                "impersonate_service_account".to_string(),
-                "job_retry_deadline_seconds".to_string(),
-                "job_retries".to_string(),
-                "job_creation_timeout_seconds".to_string(),
-                "job_execution_timeout_seconds".to_string(),
-                "timeout_seconds".to_string(),
-                "client_id".to_string(),
-                "token_uri".to_string(),
-                "compute_region".to_string(),
-                "dataproc_cluster_name".to_string(),
-                "gcs_bucket".to_string(),
-                "dataproc_batch".to_string(),
-            ],
-            DbConfig::Redshift(_) => vec![
-                "host".to_string(),
-                "user".to_string(),
-                "port".to_string(),
-                "database".to_string(),
-                "method".to_string(),
-                "cluster_id".to_string(),
-                "iam_profile".to_string(),
-                "schema".to_string(),
-                "sslmode".to_string(),
-                "region".to_string(),
-                "sslmode".to_string(),
-                "autocreate".to_string(),
-                "db_groups".to_string(),
-                "ra3_node".to_string(),
-                "connect_timeout".to_string(),
-                "role".to_string(),
-                "retries".to_string(),
-                "retry_all".to_string(),
-                "autocommit".to_string(),
-                "access_key_id".to_string(),
-                "is_serverless".to_string(),
-                "serverless_work_group".to_string(),
-                "serverless_acct_id".to_string(),
-            ],
-            DbConfig::Databricks(_) => vec![
-                "host".to_string(),
-                "http_path".to_string(),
-                "schema".to_string(),
-            ],
-            _ => vec![],
-        }
-    }
-
-    pub fn to_connection_dict(&self) -> HashMap<String, YmlValue> {
-        let all_dict = self.to_dict();
+    pub fn to_connection_mapping(&self) -> Result<dbt_serde_yaml::Mapping, dbt_serde_yaml::Error> {
         let connection_keys = self.get_connection_keys();
-        all_dict
+        let mapping = self.to_mapping()?;
+        let filtered = mapping
             .into_iter()
-            .filter(|(key, _)| connection_keys.contains(key))
-            .collect()
+            .filter(|(key, _)| {
+                key.as_str()
+                    .map(|s| connection_keys.contains(&s))
+                    .unwrap_or(false)
+            })
+            .collect();
+        Ok(filtered)
     }
 
-    pub fn to_dict(&self) -> HashMap<String, YmlValue> {
-        match self {
-            DbConfig::Snowflake(config) => {
-                // Serialize into json, then deserialize into a dictionary
-                let yml = dbt_serde_yaml::to_value(config).unwrap();
-                dbt_serde_yaml::from_value(yml).expect("Failed to deserialize Snowflake config")
-            }
-            DbConfig::Postgres(config) => {
-                let yml = dbt_serde_yaml::to_value(config).unwrap();
-                dbt_serde_yaml::from_value(yml).expect("Failed to deserialize Postgres config")
-            }
-            DbConfig::Bigquery(config) => {
-                let yml = dbt_serde_yaml::to_value(config).unwrap();
-                dbt_serde_yaml::from_value(yml).expect("Failed to deserialize Bigquery config")
-            }
-            DbConfig::Redshift(config) => {
-                let yml = dbt_serde_yaml::to_value(config).unwrap();
-                dbt_serde_yaml::from_value(yml).expect("Failed to deserialize Redshift config")
-            }
-            DbConfig::Databricks(config) => {
-                let yml = dbt_serde_yaml::to_value(config).unwrap();
-                dbt_serde_yaml::from_value(yml).expect("Failed to deserialize Databricks config")
-            }
-            DbConfig::Salesforce(config) => {
-                let json = serde_json::to_value(config).unwrap();
-                serde_json::from_value(json).expect("Failed to deserialize Salesforce config")
-            }
-            _ => panic!("Unsupported database type: {self:?}"),
-        }
+    pub fn to_mapping(&self) -> Result<dbt_serde_yaml::Mapping, dbt_serde_yaml::Error> {
+        let mut mapping = dbt_serde_yaml::Mapping::default();
+
+        // Convert self to YmlValue and return it as a YAML Mapping value
+        let mut yml_value = self.to_yaml_value()?;
+        let tmp = yml_value.as_mapping_mut().unwrap();
+        std::mem::swap(tmp, &mut mapping);
+
+        Ok(mapping)
     }
 
     pub fn get_aliases(&self) -> Vec<String> {
         // TODO: Implement Aliases for databases that need them. Snowflake does not need aliases.
         vec![]
-    }
-
-    pub fn get_unique_field(&self) -> Option<String> {
-        match self {
-            DbConfig::Snowflake(config) => config.account.clone(),
-            DbConfig::Postgres(config) => config.host.clone(),
-            DbConfig::Bigquery(config) => config.database.clone(),
-            DbConfig::Trino(config) => config.host.clone(),
-            DbConfig::Datafusion(config) => config.database.clone(),
-            DbConfig::Redshift(config) => config.host.clone(),
-            DbConfig::Databricks(config) => config.host.clone(),
-            DbConfig::Salesforce(config) => config.client_id.clone(),
-        }
-    }
-
-    pub fn get_adapter_unique_id(&self) -> Option<String> {
-        /*
-        Generates a hash of a database-specific unique field (eg. hostname on redshift, account on snowflake, etc.)
-        Used for telemetry to anonymously identify a data warehouse.
-        */
-        let unique_field = self.get_unique_field();
-        // TODO: do we really need cryptographic hashing here?
-        unique_field.map(|unique_field| format!("{:x}", md5::compute(unique_field.as_bytes())))
     }
 }
 
@@ -840,7 +841,7 @@ impl TryFrom<DbConfig> for TargetContext {
     type Error = String;
 
     fn try_from(db_config: DbConfig) -> Result<Self, Self::Error> {
-        let adapter_type = db_config.adapter_type();
+        let adapter_type = db_config.adapter_type().to_string();
         match db_config {
             // Snowflake case
             DbConfig::Snowflake(config) => {
@@ -1009,12 +1010,16 @@ mod tests {
 
     #[test]
     fn test_snowflake_adapter_unique_id() {
-        let config = DbConfig::Snowflake(SnowflakeDbConfig {
+        let config: DbConfig = SnowflakeDbConfig {
             account: Some("kw27752".to_string()),
             ..Default::default()
-        });
+        }
+        .into();
 
-        assert_eq!(config.get_unique_field(), Some("kw27752".to_string()));
+        assert_eq!(
+            config.get_unique_field().map(String::as_str),
+            Some("kw27752")
+        );
         assert_eq!(
             config.get_adapter_unique_id(),
             Some("c27a9a57d35df4a8f81aec929cbdc7cd".to_string())
@@ -1023,10 +1028,11 @@ mod tests {
 
     #[test]
     fn test_snowflake_adapter_unique_id_with_missing_account() {
-        let config = DbConfig::Snowflake(SnowflakeDbConfig {
+        let config: DbConfig = SnowflakeDbConfig {
             account: None,
             ..Default::default()
-        });
+        }
+        .into();
 
         assert_eq!(config.get_unique_field(), None);
         assert_eq!(config.get_adapter_unique_id(), None);

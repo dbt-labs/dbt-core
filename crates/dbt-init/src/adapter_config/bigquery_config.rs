@@ -103,7 +103,7 @@ impl InteractiveSetup for BigqueryDbConfig {
 
 pub fn setup_bigquery_profile(
     existing_config: Option<&BigqueryDbConfig>,
-) -> FsResult<BigqueryDbConfig> {
+) -> FsResult<Box<BigqueryDbConfig>> {
     let default_config = BigqueryDbConfig {
         threads: None,
         profile_type: None,
@@ -142,5 +142,5 @@ pub fn setup_bigquery_profile(
         config.threads = Some(StringOrInteger::Integer(16));
     }
 
-    Ok(config)
+    Ok(Box::new(config))
 }

@@ -105,7 +105,7 @@ pub fn write_db_config_to_test_profile(
     let profile_path = profile_dir.join("profiles.yml");
     let mut file = File::create(&profile_path)?;
 
-    let adapter_type = db_config.adapter_type();
+    let adapter_type = db_config.adapter_type().to_string();
 
     let profile = HashMap::from([(
         TEST_PROFILE,

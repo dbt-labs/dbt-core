@@ -41,6 +41,8 @@ pub enum AdapterErrorKind {
     Io,
     /// JSON ser/deserialization error
     SerdeJSON,
+    /// YAML ser/deserialization error
+    SerdeYAML,
     /// Replay of an error
     Replay,
     /// Not supported
@@ -62,6 +64,7 @@ impl AdapterErrorKind {
             Self::UnsupportedType => "Unsupported type",
             Self::Io => "Input/output",
             Self::SerdeJSON => "JSON",
+            Self::SerdeYAML => "YAML",
             Self::Replay => "Replay error",
             Self::NotSupported => "Not supported",
         }
@@ -242,6 +245,12 @@ impl From<serde_json::Error> for AdapterError {
     }
 }
 
+impl From<dbt_serde_yaml::Error> for AdapterError {
+    fn from(err: dbt_serde_yaml::Error) -> Self {
+        AdapterError::new(AdapterErrorKind::SerdeYAML, err.to_string())
+    }
+}
+
 impl From<JoinError> for AdapterError {
     fn from(err: JoinError) -> Self {
         if err.is_cancelled() {
@@ -261,6 +270,7 @@ impl From<AuthError> for AdapterError {
             AuthError::Adbc(adbc_err) => adbc_err.into(),
             AuthError::Config(msg) => AdapterError::new(AdapterErrorKind::Configuration, msg),
             AuthError::JSON(json_err) => json_err.into(),
+            AuthError::YAML(yaml_err) => yaml_err.into(),
             AuthError::Io(io_err) => io_err.into(),
         }
     }

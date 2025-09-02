@@ -34,18 +34,20 @@ impl SalesforceAuth {
                 RequiredConfigOptions::Username => {
                     builder.with_named_option(
                         salesforce::USERNAME,
-                        config.get_str(option.as_ref())?,
+                        config.require_string(option.as_ref())?,
                     )?;
                 }
                 RequiredConfigOptions::ClientId => {
                     builder.with_named_option(
                         salesforce::CLIENT_ID,
-                        config.get_str(option.as_ref())?,
+                        config.require_string(option.as_ref())?,
                     )?;
                 }
                 RequiredConfigOptions::LoginUrl => {
-                    builder
-                        .with_named_option(salesforce::LOGIN_URL, config.get_str("login_url")?)?;
+                    builder.with_named_option(
+                        salesforce::LOGIN_URL,
+                        config.require_string("login_url")?,
+                    )?;
                 }
             }
         }
@@ -63,8 +65,8 @@ struct JwtBearerAuth {
 
 impl JwtBearerAuth {
     fn new(config: &AdapterConfig) -> Result<Self, AuthError> {
-        let private_key = config.maybe_get_str("private_key")?;
-        let private_key_path = config.maybe_get_str("private_key_path")?;
+        let private_key = config.get_string("private_key");
+        let private_key_path = config.get_string("private_key_path");
 
         // Validate that exactly one private key source is provided
         let private_key = match (private_key, private_key_path) {
@@ -74,9 +76,9 @@ impl JwtBearerAuth {
             (None, None) => Err(AuthError::config(
                 "JWT authentication requires either 'private_key' or 'private_key_path'.",
             )),
-            (Some(private_key), None) => Ok(private_key),
+            (Some(private_key), None) => Ok(private_key.to_string()),
             (None, Some(private_key_path)) => {
-                let private_key = fs::read_to_string(private_key_path)?;
+                let private_key = fs::read_to_string(private_key_path.as_ref())?;
                 Ok(private_key)
             }
         }?;
@@ -94,8 +96,8 @@ struct UsernamePasswordAuth {
 
 impl UsernamePasswordAuth {
     fn new(config: &AdapterConfig) -> Result<Self, AuthError> {
-        let client_secret = config.get_str("client_secret")?;
-        let password = config.get_str("password")?;
+        let client_secret = config.require_string("client_secret")?.to_string();
+        let password = config.require_string("password")?.to_string();
 
         Ok(UsernamePasswordAuth {
             client_secret,
@@ -151,10 +153,7 @@ impl Auth for SalesforceAuth {
 
     fn configure(&self, config: &AdapterConfig) -> Result<DatabaseBuilder, AuthError> {
         // Check if an explicit method is specified
-        let method = config.maybe_get_str("method")?;
-        self.configure_builder_with_method(
-            config,
-            method.expect("method is required in SalesforceDbConfig"),
-        )
+        let method = config.require_string("method")?.to_string();
+        self.configure_builder_with_method(config, method)
     }
 }

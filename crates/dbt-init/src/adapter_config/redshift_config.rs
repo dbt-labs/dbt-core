@@ -164,7 +164,7 @@ impl InteractiveSetup for RedshiftDbConfig {
 
 pub fn setup_redshift_profile(
     existing_config: Option<&RedshiftDbConfig>,
-) -> FsResult<RedshiftDbConfig> {
+) -> FsResult<Box<RedshiftDbConfig>> {
     let default_config = RedshiftDbConfig {
         port: None,
         database: None,
@@ -192,5 +192,5 @@ pub fn setup_redshift_profile(
         config.threads = Some(StringOrInteger::Integer(16));
     }
 
-    Ok(config)
+    Ok(Box::new(config))
 }

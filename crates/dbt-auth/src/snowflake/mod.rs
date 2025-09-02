@@ -5,6 +5,7 @@ use database::Builder as DatabaseBuilder;
 use dbt_xdbc::database::LogLevel;
 use dbt_xdbc::{Backend, database, snowflake};
 
+use std::borrow::Cow;
 use std::fs;
 
 const APP_NAME: &str = "dbt";
@@ -23,7 +24,7 @@ fn postfix_seconds_unit(value: &str) -> String {
 trait ConfigureBuilder {
     fn configure(self, builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError>;
     fn check_authenticator_field(config: &AdapterConfig) -> Result<(), AuthError> {
-        if config.maybe_get_str("authenticator")?.is_some() {
+        if config.get_string("authenticator").is_some() {
             Err(AuthError::config(
                 "Profile does not need an authenticator. Use method field instead.",
             ))
@@ -50,9 +51,11 @@ impl Keypair {
     fn new(config: &AdapterConfig) -> Result<Self, AuthError> {
         Self::check_authenticator_field(config)?;
         Ok(Keypair {
-            private_key_path: config.maybe_get_str("private_key_path")?,
-            private_key: config.maybe_get_str("private_key")?,
-            private_key_passphrase: config.maybe_get_str("private_key_passphrase")?,
+            private_key_path: config.get_string("private_key_path").map(Cow::into_owned),
+            private_key: config.get_string("private_key").map(Cow::into_owned),
+            private_key_passphrase: config
+                .get_string("private_key_passphrase")
+                .map(Cow::into_owned),
         })
     }
 
@@ -123,21 +126,21 @@ impl NativeOauth {
     fn new(config: &AdapterConfig) -> Result<Self, AuthError> {
         Self::check_authenticator_field(config)?;
 
-        if config.maybe_get_str("token")?.is_some() {
+        if config.contains_key("token") {
             return Err(AuthError::config(
                 "Rename 'token' to 'refresh_token' in profile for 'method: snowflake_oauth'.",
             ));
         };
 
         match (
-            config.maybe_get_str("oauth_client_id")?,
-            config.maybe_get_str("oauth_client_secret")?,
-            config.maybe_get_str("refresh_token")?,
+            config.get_string("oauth_client_id"),
+            config.get_string("oauth_client_secret"),
+            config.get_string("refresh_token"),
         ) {
             (Some(client_id), Some(client_secret), Some(refresh_token)) => Ok(NativeOauth {
-                client_id,
-                client_secret,
-                refresh_token,
+                client_id: client_id.to_string(),
+                client_secret: client_secret.to_string(),
+                refresh_token: refresh_token.to_string(),
             }),
             _ => Err(AuthError::config(
                 "Profile requires 'oauth_client_id', 'oauth_client_secret', and 'refresh_token' for method: snowflake_oauth.",
@@ -167,7 +170,7 @@ impl NativeOauthJWT {
     fn new(config: &AdapterConfig) -> Result<Self, AuthError> {
         Self::check_authenticator_field(config)?;
 
-        if let Some(jwt_token) = config.maybe_get_str("jwt_token")? {
+        if let Some(jwt_token) = config.get_string("jwt_token").map(Cow::into_owned) {
             Ok(NativeOauthJWT { jwt_token })
         } else {
             Err(AuthError::config(
@@ -296,7 +299,7 @@ impl SnowflakeAuth {
         let mut builder = DatabaseBuilder::new(self.backend());
 
         for key in REQUIRED_PARAMS {
-            if let Some(value) = config.maybe_get_str(key)? {
+            if let Some(value) = config.get_string(key) {
                 match key {
                     "user" => Ok(builder.with_username(value)),
                     "password" => Ok(builder.with_password(value)),
@@ -318,7 +321,7 @@ impl SnowflakeAuth {
         builder.with_named_option(snowflake::APPLICATION_NAME, APP_NAME)?;
 
         if let Some(s3_stage_vpce_dns_name) =
-            config.maybe_get_str(snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY)?
+            config.get_string(snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY)
         {
             builder.with_named_option(
                 snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY,
@@ -327,7 +330,7 @@ impl SnowflakeAuth {
         }
 
         let connect_timeout_duration = config
-            .maybe_get_str("connect_timeout")?
+            .get_string("connect_timeout")
             .as_deref()
             .map(postfix_seconds_unit)
             .unwrap_or_else(|| DEFAULT_CONNECT_TIMEOUT.to_string());
@@ -365,7 +368,7 @@ impl SnowflakeAuth {
         ]
         .iter()
         {
-            if let Some(value) = config.maybe_get_str(key)? {
+            if let Some(value) = config.get_string(key) {
                 match *key {
                     "user" => Ok(builder.with_username(value)),
                     "password" => Ok(builder.with_password(value)),
@@ -381,7 +384,7 @@ impl SnowflakeAuth {
                             .with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::JWT)?;
                         // TODO: maybe it's safe to assume from a file we always get header and footer formatted private key
                         // the same for the same logics in `fn build_keypair_parameter_key_value_pairs`
-                        let key_contents = fs::read_to_string(value)?;
+                        let key_contents = fs::read_to_string(value.to_string())?;
                         builder.with_named_option(
                             snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
                             &key_contents,
@@ -419,7 +422,7 @@ impl SnowflakeAuth {
                                 snowflake::auth_type::EXTERNAL_BROWSER,
                             )
                         } else if value == "oauth" {
-                            if let Some(token) = config.maybe_get_str("token")? {
+                            if let Some(token) = config.get_string("token") {
                                 builder.with_named_option(snowflake::REFRESH_TOKEN, token)?;
                             } else {
                                 Err(AuthError::config(
@@ -433,7 +436,7 @@ impl SnowflakeAuth {
                                 snowflake::auth_type::OAUTH,
                             )
                         } else if value == "jwt" {
-                            if let Some(token) = config.maybe_get_str("token")? {
+                            if let Some(token) = config.get_string("token") {
                                 builder.with_named_option(snowflake::AUTH_TOKEN, token)?;
                             } else {
                                 Err(AuthError::config(
@@ -465,16 +468,14 @@ impl SnowflakeAuth {
 
         // TODO: unified serde-based try_into for all auth methods, for now adhoc post-facto checks to
         //  reach dbt compliance
-        if config.maybe_get_str("private_key_path")?.is_some()
-            && config.maybe_get_str("private_key")?.is_some()
-        {
+        if config.contains_key("private_key_path") && config.contains_key("private_key") {
             return Err(AuthError::config(
                 "Cannot specify both `private_key` and `private_key_path`.".to_owned(),
             ));
         }
 
         let connect_timeout_duration = config
-            .maybe_get_str("connect_timeout")?
+            .get_string("connect_timeout")
             .as_deref()
             .map(postfix_seconds_unit)
             .unwrap_or_else(|| DEFAULT_CONNECT_TIMEOUT.to_string());
@@ -493,9 +494,9 @@ impl Auth for SnowflakeAuth {
     fn configure(&self, config: &AdapterConfig) -> Result<DatabaseBuilder, AuthError> {
         // TODO: can we unify configure_builder_without_auth_option and configure_builder_using_auth_option?
         // otherwise, we have to update certain logics more than 1 places
-        let mut builder = match config.maybe_get_str("method")? {
+        let mut builder = match config.get_string("method") {
             Some(method) => {
-                SnowflakeAuth::configure_builder_using_auth_option(self, config, method)
+                SnowflakeAuth::configure_builder_using_auth_option(self, config, method.to_string())
             } // V2
             None => {
                 SnowflakeAuth::configure_builder_without_auth_option(self, config)
@@ -513,15 +514,13 @@ mod tests {
     use super::*;
     use adbc_core::options::{OptionDatabase, OptionValue};
     use base64::{Engine, engine::general_purpose::STANDARD};
+    use dbt_serde_yaml::Mapping;
     use key_format::{
         PEM_ENCRYPTED_END, PEM_ENCRYPTED_START, PEM_UNENCRYPTED_END, PEM_UNENCRYPTED_START,
     };
     use pkcs8::EncodePrivateKey;
     use rsa::RsaPrivateKey;
     use rsa::rand_core::OsRng;
-    use std::collections::HashMap;
-
-    type YmlValue = dbt_serde_yaml::Value;
 
     fn str_value(value: &OptionValue) -> &str {
         match value {
@@ -531,23 +530,24 @@ mod tests {
     }
 
     // Build a base configuration common to all tests.
-    fn base_config() -> HashMap<String, YmlValue> {
-        let mut config = HashMap::new();
-        config.insert("user".to_string(), YmlValue::from("U"));
-        config.insert("password".to_string(), YmlValue::from("P"));
-        config.insert("account".to_string(), YmlValue::from("A"));
-        config.insert("role".to_string(), YmlValue::from("role"));
-        config.insert("warehouse".to_string(), YmlValue::from("warehouse"));
+    fn base_config() -> Mapping {
+        let config = Mapping::from_iter([
+            ("user".into(), "U".into()),
+            ("password".into(), "P".into()),
+            ("account".into(), "A".into()),
+            ("role".into(), "role".into()),
+            ("warehouse".into(), "warehouse".into()),
+        ]);
         config
     }
 
-    fn run_config_test(config: HashMap<String, YmlValue>, expected: &[(&str, &str)]) {
+    fn run_config_test(config: Mapping, expected: &[(&str, &str)]) {
         let auth = SnowflakeAuth {};
         let builder = auth
             .configure(&AdapterConfig::new(config))
             .expect("configure");
 
-        let mut results = HashMap::new();
+        let mut results = Mapping::default();
 
         for (k, v) in builder.into_iter() {
             let key = match k {
@@ -556,7 +556,7 @@ mod tests {
                 OptionDatabase::Other(name) => name.to_owned(),
                 _ => continue,
             };
-            results.insert(key, str_value(&v).to_owned());
+            results.insert(key.into(), str_value(&v).into());
         }
 
         for &(key, expected_val) in expected {
@@ -614,7 +614,7 @@ mod tests {
     #[test]
     fn test_simple_pass_with_custom_connect_timeout_a() {
         let mut config = base_config();
-        config.insert("connect_timeout".to_string(), YmlValue::from("100"));
+        config.insert("connect_timeout".into(), "100".into());
         let expected = [
             ("user", "U"),
             ("password", "P"),
@@ -631,7 +631,7 @@ mod tests {
     #[test]
     fn test_simple_pass_with_custom_connect_timeout_b() {
         let mut config = base_config();
-        config.insert("connect_timeout".to_string(), YmlValue::from("0"));
+        config.insert("connect_timeout".into(), "0".into());
         let expected = [
             ("user", "U"),
             ("password", "P"),
@@ -648,7 +648,7 @@ mod tests {
     #[test]
     fn test_pass_with_method() {
         let mut config = base_config();
-        config.insert("method".to_string(), YmlValue::from("warehouse"));
+        config.insert("method".into(), "warehouse".into());
         let expected = [
             ("user", "U"),
             ("password", "P"),
@@ -665,7 +665,7 @@ mod tests {
     #[test]
     fn test_keypair_value_with_method_param() {
         let mut config = base_config();
-        config.insert("method".to_string(), YmlValue::from("keypair"));
+        config.insert("method".into(), "keypair".into());
         let b64_der = {
             let rsa = RsaPrivateKey::new(&mut OsRng, 2048).expect("generate RSA key");
             let der = rsa.to_pkcs8_der().expect("encode PKCS#8 DER");
@@ -673,7 +673,7 @@ mod tests {
         };
 
         let expected_pem = wrap_pem_64(PEM_UNENCRYPTED_START, &b64_der, PEM_UNENCRYPTED_END);
-        config.insert("private_key".to_string(), YmlValue::from(b64_der));
+        config.insert("private_key".into(), b64_der.into());
         let expected = [
             ("user", "U"),
             ("password", "P"),
@@ -695,11 +695,8 @@ mod tests {
     #[test]
     fn test_keypair_path_with_method_param() {
         let mut config = base_config();
-        config.insert("method".to_string(), YmlValue::from("keypair"));
-        config.insert(
-            "private_key_path".to_string(),
-            YmlValue::from("private_key_path"),
-        );
+        config.insert("method".into(), "keypair".into());
+        config.insert("private_key_path".into(), "private_key_path".into());
         let expected = [
             ("user", "U"),
             ("password", "P"),
@@ -730,14 +727,8 @@ mod tests {
             PEM_ENCRYPTED_END,
         );
         let passphrase = "private_key_passphrase";
-        config.insert(
-            "private_key".to_string(),
-            YmlValue::from(ENCRYPTED_PKCS8_DER_B64),
-        );
-        config.insert(
-            "private_key_passphrase".to_string(),
-            YmlValue::from(passphrase),
-        );
+        config.insert("private_key".into(), ENCRYPTED_PKCS8_DER_B64.into());
+        config.insert("private_key_passphrase".into(), passphrase.into());
         let expected = [
             ("user", "U"),
             ("password", "P"),
@@ -760,7 +751,7 @@ mod tests {
     #[test]
     fn test_encrypted_keypair_with_method_param() {
         let mut config = base_config();
-        config.insert("method".to_string(), YmlValue::from("keypair"));
+        config.insert("method".into(), "keypair".into());
 
         let passphrase = "private_key_passphrase";
         let expected_pem = format!(
@@ -768,14 +759,8 @@ mod tests {
             PEM_ENCRYPTED_START, "private_key", PEM_ENCRYPTED_END
         );
 
-        config.insert(
-            "private_key".to_string(),
-            YmlValue::from(expected_pem.clone()),
-        );
-        config.insert(
-            "private_key_passphrase".to_string(),
-            YmlValue::from(passphrase),
-        );
+        config.insert("private_key".into(), expected_pem.clone().into());
+        config.insert("private_key_passphrase".into(), passphrase.into());
 
         let expected = [
             ("user", "U"),
@@ -799,10 +784,7 @@ mod tests {
     #[test]
     fn test_external_browser_authentication() {
         let mut config = base_config();
-        config.insert(
-            "authenticator".to_string(),
-            YmlValue::from("externalbrowser"),
-        );
+        config.insert("authenticator".into(), "externalbrowser".into());
         let expected = [
             ("user", "U"),
             ("password", "P"),
@@ -821,7 +803,7 @@ mod tests {
     #[test]
     fn test_external_browser_authentication_with_method_param() {
         let mut config = base_config();
-        config.insert("method".to_string(), YmlValue::from("sso"));
+        config.insert("method".into(), "sso".into());
         let expected = [
             ("user", "U"),
             ("password", "P"),
@@ -840,10 +822,10 @@ mod tests {
     #[test]
     fn test_native_oauth() {
         let mut config = base_config();
-        config.insert("authenticator".to_string(), YmlValue::from("oauth"));
-        config.insert("oauth_client_id".to_string(), YmlValue::from("C"));
-        config.insert("oauth_client_secret".to_string(), YmlValue::from("S"));
-        config.insert("token".to_string(), YmlValue::from("R"));
+        config.insert("authenticator".into(), "oauth".into());
+        config.insert("oauth_client_id".into(), "C".into());
+        config.insert("oauth_client_secret".into(), "S".into());
+        config.insert("token".into(), "R".into());
         let expected = [
             ("user", "U"),
             ("password", "P"),
@@ -865,10 +847,10 @@ mod tests {
     #[test]
     fn test_native_oauth_with_method_param() {
         let mut config = base_config();
-        config.insert("method".to_string(), YmlValue::from("snowflake_oauth"));
-        config.insert("oauth_client_id".to_string(), YmlValue::from("C"));
-        config.insert("oauth_client_secret".to_string(), YmlValue::from("S"));
-        config.insert("refresh_token".to_string(), YmlValue::from("R"));
+        config.insert("method".into(), "snowflake_oauth".into());
+        config.insert("oauth_client_id".into(), "C".into());
+        config.insert("oauth_client_secret".into(), "S".into());
+        config.insert("refresh_token".into(), "R".into());
         let expected = [
             ("user", "U"),
             ("password", "P"),
@@ -890,13 +872,10 @@ mod tests {
     #[test]
     fn test_oauth_fails_with_token_instead_of_refresh_token() {
         let mut config = base_config();
-        config.insert("method".to_string(), YmlValue::from("snowflake_oauth"));
-        config.insert("oauth_client_id".to_string(), YmlValue::from("client_id"));
-        config.insert("oauth_client_secret".to_string(), YmlValue::from("secret"));
-        config.insert(
-            "token".to_string(),
-            YmlValue::from("should_be_refresh_token"),
-        );
+        config.insert("method".into(), "snowflake_oauth".into());
+        config.insert("oauth_client_id".into(), "client_id".into());
+        config.insert("oauth_client_secret".into(), "secret".into());
+        config.insert("token".into(), "should_be_refresh_token".into());
 
         let cfg = AdapterConfig::new(config);
         let result = AuthMethod::new(&cfg, "snowflake_oauth");
@@ -918,10 +897,10 @@ mod tests {
     #[test]
     fn test_oauth_fails_with_missing_required_fields() {
         let mut config = base_config();
-        config.insert("method".to_string(), YmlValue::from("snowflake_oauth"));
-        config.insert("oauth_client_id".to_string(), YmlValue::from("client_id"));
+        config.insert("method".into(), "snowflake_oauth".into());
+        config.insert("oauth_client_id".into(), "client_id".into());
         // oauth_client_secret OMITTED ON PURPOSE
-        config.insert("refresh_token".to_string(), YmlValue::from("refresh_token"));
+        config.insert("refresh_token".into(), "refresh_token".into());
 
         let cfg = AdapterConfig::new(config);
         let result = AuthMethod::new(&cfg, "snowflake_oauth");
@@ -945,10 +924,7 @@ mod tests {
     #[test]
     fn test_userpass_mfa() {
         let mut config = base_config();
-        config.insert(
-            "authenticator".to_string(),
-            YmlValue::from("username_password_mfa"),
-        );
+        config.insert("authenticator".into(), "username_password_mfa".into());
         let expected = [
             ("user", "U"),
             ("password", "P"),
@@ -970,7 +946,7 @@ mod tests {
     #[test]
     fn test_userpass_mfa_with_method_param() {
         let mut config = base_config();
-        config.insert("method".to_string(), YmlValue::from("warehouse_mfa"));
+        config.insert("method".into(), "warehouse_mfa".into());
         let expected = [
             ("user", "U"),
             ("password", "P"),
@@ -992,7 +968,7 @@ mod tests {
     #[test]
     fn test_catch_unneeded_authenticator() {
         let mut config = base_config();
-        config.insert("authenticator".to_string(), YmlValue::from("wrong"));
+        config.insert("authenticator".into(), "wrong".into());
 
         let cfg = AdapterConfig::new(config);
         let result = AuthMethod::new(&cfg, "warehouse_mfa");
@@ -1014,10 +990,10 @@ mod tests {
     #[test]
     fn test_jwt_oauth() {
         let mut config = base_config();
-        config.insert("authenticator".to_string(), YmlValue::from("jwt"));
+        config.insert("authenticator".into(), "jwt".into());
         config.insert(
-            "token".to_string(),
-            YmlValue::from("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"),
+            "token".into(),
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9".into(),
         );
 
         let expected = [
@@ -1043,8 +1019,8 @@ mod tests {
     #[test]
     fn test_jwt_oauth_fails_with_token_instead_of_jwt() {
         let mut config = base_config();
-        config.insert("method".to_string(), YmlValue::from("snowflake_oauth_jwt"));
-        config.insert("token".to_string(), YmlValue::from("wrong_field"));
+        config.insert("method".into(), "snowflake_oauth_jwt".into());
+        config.insert("token".into(), "wrong_field".into());
 
         let cfg = AdapterConfig::new(config);
         let result = AuthMethod::new(&cfg, "snowflake_oauth_jwt");
@@ -1066,7 +1042,7 @@ mod tests {
     #[test]
     fn test_jwt_oauth_fails_with_missing_jwt() {
         let mut config = base_config();
-        config.insert("method".to_string(), YmlValue::from("snowflake_oauth_jwt"));
+        config.insert("method".into(), "snowflake_oauth_jwt".into());
         // jwt intentionally missing
 
         let cfg = AdapterConfig::new(config);
@@ -1090,7 +1066,7 @@ mod tests {
     fn test_s3_stage_vpce_dns_name() {
         let mut config = base_config();
         config.insert(
-            snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY.to_string(),
+            snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY.into(),
             "my-vpce-endpoint.s3.region.vpce.amazonaws.com".into(),
         );
         let expected = [
@@ -1113,9 +1089,9 @@ mod tests {
     #[test]
     fn test_s3_stage_vpce_dns_name_with_method() {
         let mut config = base_config();
-        config.insert("method".to_string(), YmlValue::from("warehouse"));
+        config.insert("method".into(), "warehouse".into());
         config.insert(
-            snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY.to_string(),
+            snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY.into(),
             "my-vpce-endpoint.s3.region.vpce.amazonaws.com".into(),
         );
         let expected = [

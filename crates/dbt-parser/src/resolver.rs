@@ -78,7 +78,7 @@ pub async fn resolve(
 
     // Get the root project name
     let root_project_name = dbt_state.root_project_name();
-    let adapter_type = dbt_state.dbt_profile.db_config.adapter_type();
+    let adapter_type = dbt_state.dbt_profile.db_config.adapter_type().to_string();
 
     // let mut macros = Macros::default();
     let mut macros = macros;
@@ -107,17 +107,15 @@ pub async fn resolve(
     }
 
     // Build the root project config
-    let root_project_quoting = resolve_package_quoting(
-        *dbt_state.root_project().quoting,
-        &dbt_state.dbt_profile.db_config.adapter_type(),
-    );
+    let root_project_quoting =
+        resolve_package_quoting(*dbt_state.root_project().quoting, &adapter_type);
 
     let jinja_env = Arc::new(initialize_parse_jinja_environment(
         root_project_name,
         &dbt_state.dbt_profile.profile,
         &dbt_state.dbt_profile.target,
-        &dbt_state.dbt_profile.db_config.adapter_type(),
-        &dbt_state.dbt_profile.db_config,
+        &adapter_type,
+        dbt_state.dbt_profile.db_config.clone(),
         root_project_quoting,
         build_macro_units(&macros.macros),
         dbt_state.vars.clone(),

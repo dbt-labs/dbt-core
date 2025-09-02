@@ -93,15 +93,6 @@ pub fn indent(data: &str, spaces: usize) -> String {
 // ------------------------------------------------------------------------------------------------
 // stupid other helpers:
 
-pub fn coalesce<T: Clone>(values: &[Option<T>]) -> Option<T> {
-    for value in values {
-        if value.is_some() {
-            return value.to_owned();
-        }
-    }
-    None
-}
-
 pub fn get_db_config(
     _io_args: &IoArgs,
     db_targets: DbTargets,
@@ -109,13 +100,12 @@ pub fn get_db_config(
 ) -> FsResult<DbConfig> {
     let target_name = maybe_target.unwrap_or(db_targets.default_target.clone());
     // 6. Find the desired target
-    let db_config = db_targets.outputs.get(&target_name).ok_or(fs_err!(
+    let db_config_yml = db_targets.outputs.get(&target_name).ok_or(fs_err!(
         ErrorCode::InvalidConfig,
         "Could not find target {} in profiles.yml",
         target_name,
     ))?;
-
-    let db_config: DbConfig = dbt_serde_yaml::from_value(db_config.clone()).map_err(|e| {
+    let db_config: DbConfig = dbt_serde_yaml::from_value(db_config_yml.clone()).map_err(|e| {
         fs_err!(
             ErrorCode::InvalidConfig,
             "Failed to parse profiles.yml: {}",

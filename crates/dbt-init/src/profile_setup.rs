@@ -185,35 +185,37 @@ impl ProfileSetup {
                     Some(DbConfig::Snowflake(config)) => Some(config),
                     _ => None,
                 };
-                DbConfig::Snowflake(setup_snowflake_profile(snowflake_config)?)
+                DbConfig::Snowflake(setup_snowflake_profile(snowflake_config.map(Box::as_ref))?)
             }
             "bigquery" => {
                 let bigquery_config = match existing_config {
                     Some(DbConfig::Bigquery(config)) => Some(config),
                     _ => None,
                 };
-                DbConfig::Bigquery(setup_bigquery_profile(bigquery_config)?)
+                DbConfig::Bigquery(setup_bigquery_profile(bigquery_config.map(Box::as_ref))?)
             }
             "databricks" => {
                 let databricks_config = match existing_config {
                     Some(DbConfig::Databricks(config)) => Some(config),
                     _ => None,
                 };
-                DbConfig::Databricks(setup_databricks_profile(databricks_config)?)
+                DbConfig::Databricks(setup_databricks_profile(
+                    databricks_config.map(Box::as_ref),
+                )?)
             }
             "postgres" => {
                 let postgres_config = match existing_config {
                     Some(DbConfig::Postgres(config)) => Some(config),
                     _ => None,
                 };
-                DbConfig::Postgres(setup_postgres_profile(postgres_config)?)
+                DbConfig::Postgres(setup_postgres_profile(postgres_config.map(Box::as_ref))?)
             }
             "redshift" => {
                 let redshift_config = match existing_config {
                     Some(DbConfig::Redshift(config)) => Some(config),
                     _ => None,
                 };
-                DbConfig::Redshift(setup_redshift_profile(redshift_config)?)
+                DbConfig::Redshift(setup_redshift_profile(redshift_config.map(Box::as_ref))?)
             }
             _ => {
                 return Err(fs_err!(
@@ -437,7 +439,7 @@ impl ProfileSetup {
         }
 
         let adapter_type = existing_config.as_ref().map(|d| d.adapter_type());
-        let adapter = Self::ask_for_adapter_choice(adapter_type.as_deref())?;
+        let adapter = Self::ask_for_adapter_choice(adapter_type)?;
 
         let cloud_config = if profile_action == 1 {
             if let Some(project_store) = &self.project_store {

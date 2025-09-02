@@ -29,13 +29,13 @@ pub fn initialize_load_jinja_environment(
     profile: &str,
     target: &str,
     adapter_type: &str,
-    db_config: &DbConfig,
+    db_config: DbConfig,
     run_started_at: DateTime<Tz>,
     flags: &BTreeMap<String, minijinja::Value>,
     io_args: IoArgs,
     token: CancellationToken,
 ) -> FsResult<JinjaEnv> {
-    let target_context = TargetContext::try_from(db_config.clone())
+    let target_context = TargetContext::try_from(db_config)
         .map_err(|e| fs_err!(ErrorCode::InvalidConfig, "{}", &e))?;
     let target_context = Arc::new(build_target_context_map(profile, target, target_context));
     let globals = BTreeMap::from([

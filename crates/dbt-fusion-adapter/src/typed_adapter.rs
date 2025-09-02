@@ -30,6 +30,7 @@ use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes};
 use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::{State, Value, args};
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
@@ -54,7 +55,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     }
 
     /// Get DB config by key
-    fn get_db_config(&self, _key: &str) -> Option<String> {
+    fn get_db_config(&self, _key: &str) -> Option<Cow<'_, str>> {
         unimplemented!("typed adapter method implementation")
     }
 
