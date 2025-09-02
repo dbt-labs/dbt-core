@@ -47,12 +47,9 @@ impl PreviousState {
             dbt_quoting
         };
 
-        let nodes = nodes_from_dbt_manifest(manifest, quoting);
-
-        let run_results = RunResultsArtifact::from_file(&state_path.join("run_results.json")).ok();
         Ok(Self {
-            nodes,
-            run_results,
+            nodes: nodes_from_dbt_manifest(manifest, quoting),
+            run_results: RunResultsArtifact::from_file(&state_path.join("run_results.json")).ok(),
             state_path: state_path.to_path_buf(),
         })
     }
