@@ -11,7 +11,7 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         &str, // version
     ),
     &str, // checksum
-); 69] = [
+); 74] = [
     (
         ("bigquery", "apple-darwin", "aarch64", "0.18.0+dbt0.0.10"),
         "2fd7deeb5e71f322a6d71e0b28070493c0efb6766436b49d65669d59e96c42cb",
@@ -207,6 +207,26 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("postgresql", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.3"),
         "6f38377190af7320b0020c11f726e018cae0932272adba88359bf395c0f8ad94",
+    ),
+    (
+        ("salesforce", "apple-darwin", "aarch64", "0.18.0+dbt0.0.1"),
+        "5df3c896502d16a734054560b654ffeb924ea51601de18320bfacfdbc97cac92",
+    ),
+    (
+        ("salesforce", "apple-darwin", "x86_64", "0.18.0+dbt0.0.1"),
+        "db941ee4ee0211a99e29555b55df2eca79beecfcb22a95923cd359726f942c06",
+    ),
+    (
+        ("salesforce", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.1"),
+        "54ed9eeac931bd4e8cab1f5398d6a66b219b805f180e06d6f1e69270b9140ede",
+    ),
+    (
+        ("salesforce", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.1"),
+        "ba1ec1559c34da9134570de94a43417f85bc79801480a3043208ec492f2cb7b9",
+    ),
+    (
+        ("salesforce", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.1"),
+        "9a780ce6bc8a134fafe037588a2c99f23cdd67690b0d05ec30e95b8c2de2c3d3",
     ),
     (
         ("snowflake", "apple-darwin", "aarch64", "0.18.0+dbt0.0.10"),

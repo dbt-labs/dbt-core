@@ -86,6 +86,7 @@ pub const SNOWFLAKE_DRIVER_VERSION: &str = "0.18.0+dbt0.0.11";
 pub const BIGQUERY_DRIVER_VERSION: &str = "0.18.0+dbt0.0.11";
 pub const POSTGRES_DRIVER_VERSION: &str = "0.18.0+dbt0.0.3";
 pub const DATABRICKS_DRIVER_VERSION: &str = "0.18.0+dbt0.0.6";
+pub const SALESFORCE_DRIVER_VERSION: &str = "0.18.0+dbt0.0.1";
 
 pub use install::pre_install_driver;
 

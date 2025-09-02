@@ -13,7 +13,7 @@ use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
 use crate::checksums::SORTED_CDN_DRIVER_CHECKSUMS;
 use crate::{
     BIGQUERY_DRIVER_VERSION, Backend, DATABRICKS_DRIVER_VERSION, POSTGRES_DRIVER_VERSION,
-    SNOWFLAKE_DRIVER_VERSION,
+    SALESFORCE_DRIVER_VERSION, SNOWFLAKE_DRIVER_VERSION,
 };
 
 #[derive(Debug)]
@@ -275,6 +275,7 @@ pub fn driver_parameters(
         Backend::Postgres => ("postgresql", POSTGRES_DRIVER_VERSION),
         Backend::Databricks => ("databricks", DATABRICKS_DRIVER_VERSION),
         Backend::Redshift => ("postgresql", POSTGRES_DRIVER_VERSION),
+        Backend::Salesforce => ("salesforce", SALESFORCE_DRIVER_VERSION),
         _ => unreachable!("driver_parameters() called with backend={:?}", backend),
     };
     (backend_name, version, OS)
@@ -618,6 +619,7 @@ mod tests {
             ("bigquery", BIGQUERY_DRIVER_VERSION),
             ("postgresql", POSTGRES_DRIVER_VERSION),
             ("databricks", DATABRICKS_DRIVER_VERSION),
+            ("salesforce", SALESFORCE_DRIVER_VERSION),
         ];
         let target_os_and_archs = [
             (LINUX_TARGET_OS, vec!["x86_64", "aarch64"]),
