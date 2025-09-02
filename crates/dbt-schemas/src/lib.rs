@@ -60,16 +60,16 @@ pub mod schemas {
         pub(crate) mod metric;
         mod operation;
         pub mod postgres;
-        mod saved_query;
+        pub mod saved_query;
         mod selector;
-        mod semantic_model;
+        pub(crate) mod semantic_model;
 
         // Versioned manifest modules
         pub mod v10;
         pub mod v11;
         pub mod v12;
 
-        pub mod common;
+        pub(crate) mod common;
         pub use bigquery_partition::{
             BigqueryClusterConfig, BigqueryPartitionConfig, BigqueryPartitionConfigInner,
             GrantAccessToTarget, PartitionConfig, Range, RangeConfig, TimeConfig,
@@ -81,7 +81,7 @@ pub mod schemas {
         };
         pub use manifest_nodes::{
             ManifestDataTest, ManifestExposure, ManifestMetric, ManifestModel, ManifestSeed,
-            ManifestSnapshot, ManifestSource, ManifestUnitTest,
+            ManifestSemanticModel, ManifestSnapshot, ManifestSource, ManifestUnitTest,
         };
         pub use metric::DbtMetric;
         pub use operation::DbtOperation;
@@ -98,6 +98,7 @@ pub mod schemas {
     pub mod semantic_layer {
         pub mod metric;
         pub mod semantic_manifest;
+        pub mod semantic_model;
     }
     pub mod project {
         mod dbt_project;

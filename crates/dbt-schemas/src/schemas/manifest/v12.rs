@@ -10,11 +10,14 @@ use crate::schemas::{
     manifest::{
         DbtNode, ManifestMetadata,
         manifest::serialize_with_resource_type,
-        manifest_nodes::{ManifestExposure, ManifestMetric, ManifestSource, ManifestUnitTest},
+        manifest_nodes::{
+            ManifestExposure, ManifestMetric, ManifestSemanticModel, ManifestSource,
+            ManifestUnitTest,
+        },
     },
 };
 
-use super::{DbtGroup, DbtSavedQuery, DbtSelector, DbtSemanticModel};
+use super::{DbtGroup, DbtSavedQuery, DbtSelector};
 
 #[derive(Debug, Default, Deserialize, Clone)]
 pub struct DbtManifestV12 {
@@ -24,7 +27,7 @@ pub struct DbtManifestV12 {
     pub macros: BTreeMap<String, DbtMacro>,
     pub unit_tests: BTreeMap<String, ManifestUnitTest>,
     pub docs: BTreeMap<String, DbtDocsMacro>,
-    pub semantic_models: BTreeMap<String, DbtSemanticModel>,
+    pub semantic_models: BTreeMap<String, ManifestSemanticModel>,
     pub saved_queries: BTreeMap<String, DbtSavedQuery>,
     pub exposures: BTreeMap<String, ManifestExposure>,
     pub metrics: BTreeMap<String, ManifestMetric>,
@@ -121,12 +124,20 @@ impl Serialize for DbtManifestV12 {
             dbt_serde_yaml::to_value(&self.docs).map_err(serde::ser::Error::custom)?,
         );
 
-        // Serialize semantic_models using InternalDbtNode trait
+        // Serialize semantic_models
         let semantic_models_serialized: BTreeMap<String, YmlValue> = self
             .semantic_models
             .iter()
-            .map(|(k, v)| (k.clone(), InternalDbtNode::serialize(v)))
-            .collect();
+            .map(|(k, v)| {
+                Ok((
+                    k.clone(),
+                    serialize_with_resource_type(
+                        dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?,
+                        "semantic_model",
+                    ),
+                ))
+            })
+            .collect::<Result<_, _>>()?;
         map.insert(
             "semantic_models".to_string(),
             dbt_serde_yaml::to_value(semantic_models_serialized)

@@ -12,7 +12,7 @@ use dbt_common::{
 };
 use dbt_schemas::schemas::project::{
     DataTestConfig, DefaultTo, ExposureConfig, IterChildren, MetricConfig, ModelConfig, SeedConfig,
-    SnapshotConfig, SourceConfig, UnitTestConfig,
+    SemanticModelConfig, SnapshotConfig, SourceConfig, UnitTestConfig,
 };
 use dbt_schemas::schemas::{common::DbtQuoting, project::DbtProject};
 use dbt_serde_yaml::ShouldBe;
@@ -175,6 +175,8 @@ pub struct RootProjectConfigs {
     pub unit_tests: DbtProjectConfig<UnitTestConfig>,
     /// Exposure configs
     pub exposures: DbtProjectConfig<ExposureConfig>,
+    /// Semantic model configs
+    pub semantic_models: DbtProjectConfig<SemanticModelConfig>,
     /// Metric configs
     pub metrics: DbtProjectConfig<MetricConfig>,
 }
@@ -258,6 +260,15 @@ pub fn build_root_project_configs(
             io_args,
             &root_project.exposures,
             ExposureConfig {
+                enabled: Some(true),
+                ..Default::default()
+            },
+            None,
+        )?,
+        semantic_models: init_project_config(
+            io_args,
+            &root_project.semantic_models,
+            SemanticModelConfig {
                 enabled: Some(true),
                 ..Default::default()
             },

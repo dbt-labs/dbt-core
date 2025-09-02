@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::schemas::Nodes;
 use crate::schemas::manifest::DbtManifest;
 use crate::schemas::semantic_layer::metric::SemanticManifestMetric;
+use crate::schemas::semantic_layer::semantic_model::SemanticManifestSemanticModel;
 
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
@@ -19,9 +20,6 @@ pub struct SemanticManifest {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
-pub struct SemanticManifestSemanticModel {}
-
-#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct SemanticManifestProjectConfiguration {}
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -30,7 +28,11 @@ pub struct SemanticManifestSavedQuery {}
 impl From<Nodes> for SemanticManifest {
     fn from(nodes: Nodes) -> Self {
         SemanticManifest {
-            semantic_models: vec![],
+            semantic_models: nodes
+                .semantic_models
+                .into_values()
+                .map(|m| (*m).clone().into())
+                .collect(),
             metrics: nodes
                 .metrics
                 .into_values()

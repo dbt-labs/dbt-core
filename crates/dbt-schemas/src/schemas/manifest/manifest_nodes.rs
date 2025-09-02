@@ -14,12 +14,14 @@ use crate::schemas::{
     },
     dbt_column::DbtColumnRef,
     manifest::{
-        DbtOperation, common::DbtOwner, common::SourceFileMetadata, common::WhereFilterIntersection,
+        DbtOperation,
+        common::{DbtOwner, SourceFileMetadata, WhereFilterIntersection},
+        semantic_model::{NodeRelation, SemanticEntity, SemanticMeasure, SemanticModelDefaults},
     },
     nodes::TestMetadata,
     project::{
-        DataTestConfig, ExposureConfig, MetricConfig, ModelConfig, SeedConfig, SnapshotConfig,
-        SourceConfig, UnitTestConfig,
+        DataTestConfig, ExposureConfig, MetricConfig, ModelConfig, SeedConfig, SemanticModelConfig,
+        SnapshotConfig, SourceConfig, UnitTestConfig,
     },
     properties::{ModelConstraint, UnitTestOverrides},
     ref_and_source::{DbtRef, DbtSourceWrapper},
@@ -668,4 +670,63 @@ impl From<MetricConfig> for ManifestMetricConfig {
             group: config.group,
         }
     }
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct ManifestSemanticModelNodeBaseAttributes {
+    // Derived
+    pub depends_on: NodeDependsOn,
+
+    #[serde(default)]
+    pub refs: Vec<DbtRef>,
+
+    #[serde(default)]
+    pub unrendered_config: BTreeMap<String, YmlValue>,
+
+    #[serde(default)]
+    pub created_at: f64,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct ManifestSemanticModelConfig {
+    pub enabled: bool,
+
+    pub meta: Option<BTreeMap<String, YmlValue>>,
+
+    pub group: Option<String>,
+}
+
+impl From<SemanticModelConfig> for ManifestSemanticModelConfig {
+    fn from(config: SemanticModelConfig) -> Self {
+        Self {
+            enabled: config.enabled.unwrap_or(true),
+            meta: config.meta,
+            group: config.group,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ManifestSemanticModel {
+    pub __common_attr__: ManifestCommonAttributes,
+    pub __base_attr__: ManifestSemanticModelNodeBaseAttributes,
+
+    // Semantic Model Specific Attributes
+    pub model: String,
+    pub node_relation: Option<NodeRelation>,
+    pub label: Option<String>,
+    pub defaults: Option<SemanticModelDefaults>,
+    pub entities: Vec<SemanticEntity>,
+    pub measures: Vec<SemanticMeasure>,
+    pub dimensions: Vec<crate::schemas::common::Dimension>,
+    pub metadata: Option<SourceFileMetadata>,
+    pub primary_entity: Option<String>,
+    pub group: Option<String>,
+
+    pub config: ManifestSemanticModelConfig,
+
+    pub __other__: BTreeMap<String, YmlValue>,
 }

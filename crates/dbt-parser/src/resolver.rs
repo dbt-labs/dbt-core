@@ -41,6 +41,7 @@ use crate::resolve::resolve_metrics::resolve_metrics;
 use crate::resolve::resolve_models::resolve_models;
 use crate::resolve::resolve_properties::resolve_minimal_properties;
 use crate::resolve::resolve_seeds::resolve_seeds;
+use crate::resolve::resolve_semantic_models::resolve_semantic_models;
 use crate::resolve::resolve_snapshots::resolve_snapshots;
 use crate::resolve::resolve_sources::resolve_sources;
 use crate::resolve::resolve_tests::resolve_data_tests::resolve_data_tests;
@@ -522,6 +523,12 @@ pub async fn resolve_inner(
     .await?;
     nodes.exposures.extend(exposures);
     disabled_nodes.exposures.extend(disabled_exposures);
+
+    let (semantic_models, disabled_semantic_models) = resolve_semantic_models().await?;
+    nodes.semantic_models.extend(semantic_models);
+    disabled_nodes
+        .semantic_models
+        .extend(disabled_semantic_models);
 
     let (metrics, disabled_metrics) = resolve_metrics().await?;
     nodes.metrics.extend(metrics);

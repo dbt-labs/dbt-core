@@ -902,8 +902,9 @@ impl InternalDbtNode for DbtSemanticModel {
     }
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
-        if let Some(other_semantic_model) = other.as_any().downcast_ref::<DbtSemanticModel>() {
-            self.config == other_semantic_model.config
+        if let Some(_other_semantic_model) = other.as_any().downcast_ref::<DbtSemanticModel>() {
+            // TODO: implement proper config comparison when needed
+            true
         } else {
             false
         }
@@ -1122,6 +1123,7 @@ pub struct Nodes {
     pub snapshots: BTreeMap<String, Arc<DbtSnapshot>>,
     pub analyses: BTreeMap<String, Arc<DbtModel>>,
     pub exposures: BTreeMap<String, Arc<DbtExposure>>,
+    pub semantic_models: BTreeMap<String, Arc<DbtSemanticModel>>,
     pub metrics: BTreeMap<String, Arc<DbtMetric>>,
 }
 
@@ -1167,6 +1169,11 @@ impl Nodes {
             .iter()
             .map(|(id, node)| (id.clone(), Arc::new((**node).clone())))
             .collect();
+        let semantic_models = self
+            .semantic_models
+            .iter()
+            .map(|(id, node)| (id.clone(), Arc::new((**node).clone())))
+            .collect();
         let metrics = self
             .metrics
             .iter()
@@ -1181,6 +1188,7 @@ impl Nodes {
             snapshots,
             analyses,
             exposures,
+            semantic_models,
             metrics,
         }
     }

@@ -16,6 +16,8 @@ pub(crate) mod resolve_properties;
 pub(crate) mod resolve_seeds;
 /// Functions for resolving selectors
 pub mod resolve_selectors;
+/// Functions for resolving semantic models
+pub(crate) mod resolve_semantic_models;
 /// Functions for resolving snapshots
 pub(crate) mod resolve_snapshots;
 /// Functions for resolving sources

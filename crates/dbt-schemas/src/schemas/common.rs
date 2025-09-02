@@ -15,6 +15,8 @@ use sha2::{Digest, Sha256};
 use strum::{Display, EnumIter, EnumString};
 
 use crate::dbt_types::RelationType;
+use crate::schemas::manifest::common::SourceFileMetadata;
+use crate::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfig;
 
 use super::serde::StringOrArrayOfStrings;
 #[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
@@ -781,8 +783,8 @@ pub struct Dimension {
     pub is_partition: bool,
     pub type_params: Option<DimensionTypeParams>,
     pub expr: Option<String>,
-    pub metadata: Option<YmlValue>,
-    pub config: Option<DimensionConfig>,
+    pub metadata: Option<SourceFileMetadata>,
+    pub config: Option<SemanticLayerElementConfig>,
 }
 fn default_false() -> bool {
     false
@@ -799,11 +801,6 @@ pub enum DimensionType {
 pub struct DimensionTypeParams {
     pub time_granularity: Option<TimeGranularity>,
     pub validity_params: Option<DimensionValidityParams>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
-pub struct DimensionConfig {
-    pub meta: BTreeMap<String, YmlValue>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
