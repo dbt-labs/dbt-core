@@ -202,8 +202,6 @@ pub async fn resolve_snapshots(
     {
         {
             let mut final_config = *sql_file_info.config;
-            let database = final_config.database.clone().unwrap_or(database.to_owned());
-            let schema = final_config.schema.clone().unwrap_or(schema.to_owned());
             let snapshot_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
 
             let properties = if let Some(properties) = maybe_properties {
@@ -261,10 +259,10 @@ pub async fn resolve_snapshots(
                     meta: final_config.meta.clone().unwrap_or_default(),
                 },
                 __base_attr__: NodeBaseAttributes {
-                    database: database.to_owned(), // will be updated below
-                    schema: schema.to_owned(),     // will be updated below
-                    alias: "".to_owned(),          // will be updated below
-                    relation_name: None,           // will be updated below
+                    database: "".to_owned(), // will be updated below
+                    schema: "".to_owned(),   // will be updated below
+                    alias: "".to_owned(),    // will be updated below
+                    relation_name: None,     // will be updated below
                     columns,
                     depends_on: NodeDependsOn::default(),
                     enabled: final_config.enabled.unwrap_or(true),

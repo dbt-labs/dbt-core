@@ -58,6 +58,12 @@ pub struct ProjectSnapshotConfig {
     pub snapshot_meta_column_names: Option<SnapshotMetaColumnNames>,
     #[serde(rename = "+hard_deletes")]
     pub hard_deletes: Option<HardDeletes>,
+    // Legacy snapshot configs (these behave differently than `database` and `schemas`,
+    // they're not not just aliases)
+    #[serde(rename = "+target_database")]
+    pub target_database: Option<String>,
+    #[serde(rename = "+target_schema")]
+    pub target_schema: Option<String>,
     // General Configuration
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
@@ -310,6 +316,10 @@ pub struct SnapshotConfig {
     pub dbt_valid_to_current: Option<String>,
     pub snapshot_meta_column_names: Option<SnapshotMetaColumnNames>,
     pub hard_deletes: Option<HardDeletes>,
+    // Legacy snapshot configs (these behave differently than `database` and `schemas`,
+    // they're not not just aliases)
+    pub target_database: Option<String>,
+    pub target_schema: Option<String>,
     // General Configuration
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
@@ -393,6 +403,8 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
             dbt_valid_to_current: config.dbt_valid_to_current,
             snapshot_meta_column_names: config.snapshot_meta_column_names,
             hard_deletes: config.hard_deletes,
+            target_database: config.target_database,
+            target_schema: config.target_schema,
             enabled: config.enabled,
             tags: config.tags,
             pre_hook: config.pre_hook,
@@ -493,6 +505,8 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             dbt_valid_to_current: config.dbt_valid_to_current,
             snapshot_meta_column_names: config.snapshot_meta_column_names,
             hard_deletes: config.hard_deletes,
+            target_database: config.target_database,
+            target_schema: config.target_schema,
             enabled: config.enabled,
             tags: config.tags,
             pre_hook: config.pre_hook,
@@ -620,6 +634,8 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
             dbt_valid_to_current,
             snapshot_meta_column_names,
             hard_deletes,
+            target_database,
+            target_schema,
             enabled,
             tags,
             pre_hook,
@@ -665,6 +681,8 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
                 alias,
                 schema,
                 database,
+                target_database,
+                target_schema,
                 materialized,
                 group,
                 persist_docs,

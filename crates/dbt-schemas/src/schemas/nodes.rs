@@ -221,8 +221,14 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
 
 pub trait InternalDbtNodeAttributes: InternalDbtNode {
     // Required Fields
+    fn skip_generate_database_name_macro(&self) -> bool {
+        false
+    }
     fn database(&self) -> String {
         self.base().database.clone()
+    }
+    fn skip_generate_schema_name_macro(&self) -> bool {
+        false
     }
     fn schema(&self) -> String {
         self.base().schema.clone()
@@ -809,6 +815,30 @@ impl InternalDbtNode for DbtSnapshot {
 }
 
 impl InternalDbtNodeAttributes for DbtSnapshot {
+    fn skip_generate_schema_name_macro(&self) -> bool {
+        self.deprecated_config.target_schema.is_some()
+    }
+
+    fn schema(&self) -> String {
+        // prefer legacy config
+        self.deprecated_config
+            .target_schema
+            .clone()
+            .unwrap_or_else(|| self.base().schema.clone())
+    }
+
+    fn skip_generate_database_name_macro(&self) -> bool {
+        self.deprecated_config.target_database.is_some()
+    }
+
+    fn database(&self) -> String {
+        // prefer legacy config
+        self.deprecated_config
+            .target_database
+            .clone()
+            .unwrap_or_else(|| self.base().database.clone())
+    }
+
     fn static_analysis(&self) -> StaticAnalysisKind {
         self.__base_attr__.static_analysis
     }

@@ -205,15 +205,13 @@ pub fn generate_relation_components(
     node: &dyn InternalDbtNodeAttributes,
     adapter_type: &str,
 ) -> FsResult<(String, String, String, String, ResolvedQuoting)> {
-    // Determine node type
-    let is_snapshot = node.resource_type() == "snapshot";
     // TODO handle jinja rendering errors on each component name rendering
     // Get default values from the node
     let (default_database, default_schema, default_alias) =
         (node.database(), node.schema(), node.base().alias.clone());
     // Generate database name
-    let database = if is_snapshot && components.database.is_some() {
-        components.database.clone().unwrap()
+    let database = if node.skip_generate_database_name_macro() {
+        components.database.clone().unwrap_or(default_database)
     } else {
         generate_component_name(
             env,
@@ -228,8 +226,8 @@ pub fn generate_relation_components(
     };
 
     // Generate schema name
-    let schema = if is_snapshot && components.schema.is_some() {
-        components.schema.clone().unwrap()
+    let schema = if node.skip_generate_schema_name_macro() {
+        components.schema.clone().unwrap_or(default_schema)
     } else {
         generate_component_name(
             env,
