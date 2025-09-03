@@ -96,8 +96,8 @@ impl PyTimeDelta {
         ))
     }
 
-    pub fn total_seconds(&self) -> Option<Value> {
-        Some(Value::from(self.duration.num_seconds() as f64))
+    pub fn total_seconds(&self) -> Result<Value, Error> {
+        Ok(Value::from(self.duration.num_seconds() as f64))
     }
 
     // ----------------------------------------------------------------
@@ -201,7 +201,9 @@ impl Object for PyTimeDelta {
             "days" => self.days(),
             "seconds" => self.seconds(),
             "microseconds" => self.microseconds(),
-            "total_seconds" => self.total_seconds(),
+            "total_seconds" => Some(Value::from(
+                "<built-in method total_seconds of datetime.timedelta object>",
+            )),
             _ => None,
         }
     }
@@ -216,6 +218,7 @@ impl Object for PyTimeDelta {
         match method {
             "__add__" => self.add(args),
             "__sub__" => self.sub(args),
+            "total_seconds" => self.total_seconds(),
             _ => Err(Error::new(
                 ErrorKind::UnknownMethod,
                 format!("timedelta object has no method named '{method}'"),
@@ -337,6 +340,13 @@ mod tests {
             .unwrap();
         let result = template.render(minijinja::context!(), &[]).unwrap();
         assert_eq!(result, "3");
+
+        // Test the total_seconds() method
+        let template = env
+            .template_from_str("{{ timedelta(4).total_seconds() }}", &[])
+            .unwrap();
+        let result = template.render(minijinja::context!(), &[]).unwrap();
+        assert_eq!(result, "345600.0");
     }
 
     #[test]
