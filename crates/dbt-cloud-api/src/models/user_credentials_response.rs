@@ -23,7 +23,7 @@ pub struct UserCredentialsResponse {
     pub user_id: Option<i32>,
     /// The project the user credentials are associated with
     #[serde(rename = "project_id", skip_serializing_if = "Option::is_none")]
-    pub project_id: Option<i32>,
+    pub project_id: Option<u64>,
     /// The credentials the user is associated with
     #[serde(rename = "credentials_id", skip_serializing_if = "Option::is_none")]
     pub credentials_id: Option<i32>,

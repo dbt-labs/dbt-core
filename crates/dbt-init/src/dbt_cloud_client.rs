@@ -50,7 +50,7 @@ pub struct DbtCloudContext {
 pub struct CredentialInfo {
     pub adapter_type: String,
     pub target_name: String,
-    pub project_id: Option<i32>,
+    pub project_id: Option<u64>,
     pub state: i32,
 }
 
@@ -565,20 +565,6 @@ impl DbtCloudClient {
         // Get the current user ID first
         let user_id = Self::get_current_user_id(base_url).await?;
 
-        // Parse project_id as integer if provided for filtering
-        let project_id_int: Option<i32> = if let Some(project_id) = project_id {
-            Some(project_id.parse().map_err(|e| {
-                fs_err!(
-                    ErrorCode::InvalidArgument,
-                    "Invalid project ID '{}': {}",
-                    project_id,
-                    e
-                )
-            })?)
-        } else {
-            None
-        };
-
         // Configure the generated client
         let configuration = Configuration {
             base_path: base_url.to_string(),
@@ -632,10 +618,9 @@ impl DbtCloudClient {
 
             let mut basic_filter = state == 1;
 
-            // If project_id is specified, also filter by that
-            if let Some(target_project_id) = project_id_int {
-                basic_filter = basic_filter && user_cred.project_id == Some(target_project_id);
-            }
+            basic_filter = basic_filter
+                && user_cred.project_id.map(|id| id.to_string())
+                    == project_id.map(|id| id.to_string());
 
             // If adapter_type is specified, also filter by that
             if let Some(adapter) = adapter_type {
