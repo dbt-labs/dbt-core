@@ -10,9 +10,6 @@ use crate::schemas::{
     common::NodeDependsOn,
     manifest::common::{SourceFileMetadata, WhereFilterIntersection},
     project::MetricConfig,
-    properties::metrics_properties::{
-        self as props, StringOrMetricInput, StringOrMetricInputMeasure,
-    },
     ref_and_source::DbtRef,
 };
 
@@ -169,168 +166,170 @@ pub enum GrainToDate {
     Year,
 }
 
-// From implementations for converting from properties to manifest types
-
-impl From<StringOrMetricInputMeasure> for MetricInputMeasure {
-    fn from(source: StringOrMetricInputMeasure) -> Self {
-        match source {
-            StringOrMetricInputMeasure::String(name) => Self {
-                name,
-                ..Default::default()
-            },
-            StringOrMetricInputMeasure::MetricInputMeasure(measure) => Self::from(measure),
-        }
-    }
-}
-
-impl From<props::MetricInputMeasure> for MetricInputMeasure {
-    fn from(source: props::MetricInputMeasure) -> Self {
-        Self {
-            name: source.name,
-            filter: source.filter.map(Into::into),
-            alias: source.alias,
-            join_to_timespine: source.join_to_timespine.or(Some(false)),
-            fill_nulls_with: source.fill_nulls_with,
-        }
-    }
-}
-
-impl From<StringOrMetricInput> for MetricInput {
-    fn from(source: StringOrMetricInput) -> Self {
-        match source {
-            StringOrMetricInput::String(name) => Self {
-                name,
-                ..Default::default()
-            },
-            StringOrMetricInput::MetricInput(input) => Self::from(input),
-        }
-    }
-}
-
-impl From<props::MetricInput> for MetricInput {
-    fn from(source: props::MetricInput) -> Self {
-        Self {
-            name: source.name,
-            filter: source.filter.map(Into::into),
-            alias: source.alias,
-            offset_window: source.offset_window.map(MetricTimeWindow::from_string),
-            offset_to_grain: source.offset_to_grain,
-        }
-    }
-}
-
-impl From<props::PeriodAggregationType> for PeriodAggregationType {
-    fn from(source: props::PeriodAggregationType) -> Self {
-        match source {
-            props::PeriodAggregationType::First => Self::First,
-            props::PeriodAggregationType::Last => Self::Last,
-            props::PeriodAggregationType::Average => Self::Average,
-        }
-    }
-}
-
-impl From<props::CumulativeTypeParams> for CumulativeTypeParams {
-    fn from(source: props::CumulativeTypeParams) -> Self {
-        Self {
-            window: source.window.map(MetricTimeWindow::from_string),
-            grain_to_date: source.grain_to_date,
-            period_agg: Some(source.period_agg.unwrap_or_default().into()),
-        }
-    }
-}
-
-impl From<props::MetricsProperties> for MetricTypeParams {
-    fn from(source: props::MetricsProperties) -> Self {
-        let numerator = source
-            .type_params
-            .numerator
-            .as_ref()
-            .map(|n| MetricInput::from(n.clone()));
-        let denominator = source
-            .type_params
-            .denominator
-            .as_ref()
-            .map(|d| MetricInput::from(d.clone()));
-
-        let input_measures = if matches!(source.type_, props::MetricType::Ratio)
-            && numerator.is_some()
-            && denominator.is_some()
-        {
-            // For ratio metrics, create input measures from numerator and denominator
-            let num = numerator.as_ref().unwrap();
-            let den = denominator.as_ref().unwrap();
-            Some(vec![
-                MetricInputMeasure {
-                    name: num.name.clone(),
-                    filter: num.filter.clone(),
-                    alias: num.alias.clone(),
-                    join_to_timespine: Some(false),
-                    fill_nulls_with: None,
-                },
-                MetricInputMeasure {
-                    name: den.name.clone(),
-                    filter: den.filter.clone(),
-                    alias: den.alias.clone(),
-                    join_to_timespine: Some(false),
-                    fill_nulls_with: None,
-                },
-            ])
-        } else if let Some(ref metrics) = source.type_params.metrics {
-            // If we have metrics, convert them to input measures
-            Some(
-                metrics
-                    .iter()
-                    .map(|metric_input| match metric_input {
-                        StringOrMetricInput::String(name) => MetricInputMeasure {
-                            name: name.clone(),
-                            ..Default::default()
-                        },
-                        StringOrMetricInput::MetricInput(input) => MetricInputMeasure {
-                            name: input.name.clone(),
-                            filter: input.filter.as_ref().map(|f| f.clone().into()),
-                            alias: input.alias.clone(),
-                            join_to_timespine: Some(false), // Default for metrics converted to measures
-                            fill_nulls_with: None,
-                        },
-                    })
-                    .collect(),
-            )
-        } else if let Some(ref measure) = source.type_params.measure {
-            // Fallback to single measure as array
-            Some(vec![MetricInputMeasure::from(measure.clone())])
-        } else {
-            None
-        };
-
-        Self {
-            measure: source.type_params.measure.map(Into::into),
-            input_measures,
-            numerator,
-            denominator,
-            expr: source.type_params.expr,
-            window: source.type_params.window.map(MetricTimeWindow::from_string),
-            grain_to_date: None, // TODO: Convert appropriately
-            metrics: Some(
-                source
-                    .type_params
-                    .metrics
-                    .unwrap_or_default()
-                    .iter()
-                    .map(|metric_input| metric_input.clone().into())
-                    .collect(),
-            ),
-            conversion_type_params: None, // TODO: Convert from source.type_params.conversion_type_params
-            cumulative_type_params: if matches!(source.type_, props::MetricType::Cumulative) {
-                Some(
-                    source
-                        .type_params
-                        .cumulative_type_params
-                        .unwrap_or_default()
-                        .into(),
-                )
-            } else {
-                None
-            },
-        }
-    }
-}
+// COMMENTED OUT TO BE REWRITTEN LATER
+//
+// // From implementations for converting from properties to manifest types
+//
+// impl From<StringOrMetricInputMeasure> for MetricInputMeasure {
+//     fn from(source: StringOrMetricInputMeasure) -> Self {
+//         match source {
+//             StringOrMetricInputMeasure::String(name) => Self {
+//                 name,
+//                 ..Default::default()
+//             },
+//             StringOrMetricInputMeasure::MetricInputMeasure(measure) => Self::from(measure),
+//         }
+//     }
+// }
+//
+// impl From<props::MetricInputMeasure> for MetricInputMeasure {
+//     fn from(source: props::MetricInputMeasure) -> Self {
+//         Self {
+//             name: source.name,
+//             filter: source.filter.map(Into::into),
+//             alias: source.alias,
+//             join_to_timespine: source.join_to_timespine.or(Some(false)),
+//             fill_nulls_with: source.fill_nulls_with,
+//         }
+//     }
+// }
+//
+// impl From<StringOrMetricInput> for MetricInput {
+//     fn from(source: StringOrMetricInput) -> Self {
+//         match source {
+//             StringOrMetricInput::String(name) => Self {
+//                 name,
+//                 ..Default::default()
+//             },
+//             StringOrMetricInput::MetricInput(input) => Self::from(input),
+//         }
+//     }
+// }
+//
+// impl From<props::MetricInput> for MetricInput {
+//     fn from(source: props::MetricInput) -> Self {
+//         Self {
+//             name: source.name,
+//             filter: source.filter.map(Into::into),
+//             alias: source.alias,
+//             offset_window: source.offset_window.map(MetricTimeWindow::from_string),
+//             offset_to_grain: source.offset_to_grain,
+//         }
+//     }
+// }
+//
+// impl From<props::PeriodAggregationType> for PeriodAggregationType {
+//     fn from(source: props::PeriodAggregationType) -> Self {
+//         match source {
+//             props::PeriodAggregationType::First => Self::First,
+//             props::PeriodAggregationType::Last => Self::Last,
+//             props::PeriodAggregationType::Average => Self::Average,
+//         }
+//     }
+// }
+//
+// impl From<props::CumulativeTypeParams> for CumulativeTypeParams {
+//     fn from(source: props::CumulativeTypeParams) -> Self {
+//         Self {
+//             window: source.window.map(MetricTimeWindow::from_string),
+//             grain_to_date: source.grain_to_date,
+//             period_agg: Some(source.period_agg.unwrap_or_default().into()),
+//         }
+//     }
+// }
+//
+// impl From<props::MetricsProperties> for MetricTypeParams {
+//     fn from(_source: props::MetricsProperties) -> Self {
+//         let numerator = source
+//             .type_params
+//             .numerator
+//             .as_ref()
+//             .map(|n| MetricInput::from(n.clone()));
+//         let denominator = source
+//             .type_params
+//             .denominator
+//             .as_ref()
+//             .map(|d| MetricInput::from(d.clone()));
+//
+//         let input_measures = if matches!(source.type_, props::MetricType::Ratio)
+//             && numerator.is_some()
+//             && denominator.is_some()
+//         {
+//             // For ratio metrics, create input measures from numerator and denominator
+//             let num = numerator.as_ref().unwrap();
+//             let den = denominator.as_ref().unwrap();
+//             Some(vec![
+//                 MetricInputMeasure {
+//                     name: num.name.clone(),
+//                     filter: num.filter.clone(),
+//                     alias: num.alias.clone(),
+//                     join_to_timespine: Some(false),
+//                     fill_nulls_with: None,
+//                 },
+//                 MetricInputMeasure {
+//                     name: den.name.clone(),
+//                     filter: den.filter.clone(),
+//                     alias: den.alias.clone(),
+//                     join_to_timespine: Some(false),
+//                     fill_nulls_with: None,
+//                 },
+//             ])
+//         } else if let Some(ref metrics) = source.type_params.metrics {
+//             // If we have metrics, convert them to input measures
+//             Some(
+//                 metrics
+//                     .iter()
+//                     .map(|metric_input| match metric_input {
+//                         StringOrMetricInput::String(name) => MetricInputMeasure {
+//                             name: name.clone(),
+//                             ..Default::default()
+//                         },
+//                         StringOrMetricInput::MetricInput(input) => MetricInputMeasure {
+//                             name: input.name.clone(),
+//                             filter: input.filter.as_ref().map(|f| f.clone().into()),
+//                             alias: input.alias.clone(),
+//                             join_to_timespine: Some(false), // Default for metrics converted to measures
+//                             fill_nulls_with: None,
+//                         },
+//                     })
+//                     .collect(),
+//             )
+//         } else if let Some(ref measure) = source.type_params.measure {
+//             // Fallback to single measure as array
+//             Some(vec![MetricInputMeasure::from(measure.clone())])
+//         } else {
+//             None
+//         };
+//
+//         Self {
+//             measure: source.type_params.measure.map(Into::into),
+//             input_measures,
+//             numerator,
+//             denominator,
+//             expr: source.type_params.expr,
+//             window: source.type_params.window.map(MetricTimeWindow::from_string),
+//             grain_to_date: None, // TODO: Convert appropriately
+//             metrics: Some(
+//                 source
+//                     .type_params
+//                     .metrics
+//                     .unwrap_or_default()
+//                     .iter()
+//                     .map(|metric_input| metric_input.clone().into())
+//                     .collect(),
+//             ),
+//             conversion_type_params: None, // TODO: Convert from source.type_params.conversion_type_params
+//             cumulative_type_params: if matches!(source.type_, props::MetricType::Cumulative) {
+//                 Some(
+//                     source
+//                         .type_params
+//                         .cumulative_type_params
+//                         .unwrap_or_default()
+//                         .into(),
+//                 )
+//             } else {
+//                 None
+//             },
+//         }
+//     }
+// }

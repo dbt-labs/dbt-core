@@ -3,7 +3,11 @@ use crate::schemas::common::ModelFreshnessRules;
 use crate::schemas::common::Versions;
 use crate::schemas::data_tests::DataTests;
 use crate::schemas::dbt_column::ColumnProperties;
+use crate::schemas::dbt_column::ColumnPropertiesDimensionType;
+use crate::schemas::dbt_column::ColumnPropertiesEntityType;
+use crate::schemas::dbt_column::ColumnPropertiesGranularity;
 use crate::schemas::project::ModelConfig;
+use crate::schemas::properties::MetricsProperties;
 use crate::schemas::properties::properties::GetConfig;
 use crate::schemas::serde::FloatOrString;
 use dbt_serde_yaml::JsonSchema;
@@ -45,6 +49,15 @@ pub struct ModelProperties {
     pub tests: Option<Vec<DataTests>>,
     pub time_spine: Option<ModelsTimeSpine>,
     pub versions: Option<Vec<Versions>>,
+
+    pub semantic_model: Option<bool>,
+    pub agg_time_dimension: Option<String>,
+    // TODO: rename to metrics once we figure out how to not render jinja for metrics nested under models
+    // Currently, dbt commands won't work because we attempt to render Jinja for model nodes, but with
+    // metrics in models, we attempt to render the `{{ Dimension(...) }}` jinja that should NOT be rendered
+    pub metrics_todo: Option<Vec<MetricsProperties>>,
+    pub derived_semantics: Option<Vec<DerivedSemantics>>,
+    pub primary_entity: Option<String>,
 }
 
 impl ModelProperties {
@@ -62,6 +75,11 @@ impl ModelProperties {
             tests: None,
             time_spine: None,
             versions: None,
+            semantic_model: None,
+            agg_time_dimension: None,
+            metrics_todo: None,
+            derived_semantics: None,
+            primary_entity: None,
         }
     }
 }
@@ -90,4 +108,31 @@ pub struct CustomGranularity {
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
 pub struct ModelFreshness {
     pub build_after: Option<ModelFreshnessRules>,
+}
+
+// derived_semantics properties nested in models
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
+pub struct DerivedSemantics {
+    pub dimensions: Option<Vec<DerivedDimension>>,
+    pub entities: Option<Vec<DerivedEntity>>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
+pub struct DerivedDimension {
+    pub name: String,
+    pub expr: String,
+    #[serde(rename = "type")]
+    pub type_: Option<ColumnPropertiesDimensionType>,
+    pub granularity: Option<ColumnPropertiesGranularity>,
+    pub is_partition: Option<bool>,
+    pub label: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
+pub struct DerivedEntity {
+    pub name: String,
+    pub expr: String,
+    #[serde(rename = "type")]
+    pub type_: ColumnPropertiesEntityType,
+    pub description: Option<String>,
 }

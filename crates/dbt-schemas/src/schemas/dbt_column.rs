@@ -43,9 +43,12 @@ pub struct ColumnProperties {
     pub policy_tags: Option<Vec<String>>,
     pub quote: Option<bool>,
     pub config: Option<ColumnConfig>,
+
+    pub entity: Option<Entity>,
+    pub dimension: Option<Dimension>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, Default, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, Default, JsonSchema, Eq, PartialEq)]
 #[allow(non_camel_case_types)]
 pub enum ColumnPropertiesGranularity {
     #[default]
@@ -110,4 +113,50 @@ pub fn process_columns(
                 .collect::<BTreeMap<_, _>>()
         })
         .unwrap_or_default())
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Eq, PartialEq)]
+#[serde(untagged)]
+pub enum Dimension {
+    DimensionConfig(DimensionConfig),
+    DimensionType(ColumnPropertiesDimensionType),
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Eq, PartialEq)]
+#[allow(non_camel_case_types)]
+pub enum ColumnPropertiesDimensionType {
+    categorical,
+    time,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Eq, PartialEq)]
+pub struct DimensionConfig {
+    #[serde(rename = "type")]
+    pub type_: ColumnPropertiesDimensionType,
+    pub granularity: Option<ColumnPropertiesGranularity>,
+    pub is_partition: Option<bool>,
+    pub label: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[serde(untagged)]
+pub enum Entity {
+    EntityConfig(EntityConfig),
+    EntityType(ColumnPropertiesEntityType),
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Eq, PartialEq)]
+#[allow(non_camel_case_types)]
+pub enum ColumnPropertiesEntityType {
+    foreign,
+    natural,
+    primary,
+    unique,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+pub struct EntityConfig {
+    #[serde(rename = "type")]
+    pub type_: ColumnPropertiesEntityType,
+    pub name: Option<String>,
 }

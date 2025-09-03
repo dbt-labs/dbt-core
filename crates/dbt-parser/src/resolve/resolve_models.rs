@@ -123,6 +123,8 @@ pub async fn resolve_models(
     };
 
     let mut model_sql_resources_map: Vec<SqlFileRenderResult<ModelConfig, ModelProperties>> =
+        // FIXME -- this attempts to deserialize the model properties
+        // and renders jinja but we shouldn't be doing so with metrics.filter
         render_unresolved_sql_files::<ModelConfig, ModelProperties>(
             &render_ctx,
             &package.model_sql_files,

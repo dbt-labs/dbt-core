@@ -150,7 +150,6 @@ pub mod schemas {
         mod properties;
         mod saved_queries_properties;
         mod seed_properties;
-        mod semantic_models_properties;
         mod snapshot_properties;
         mod source_properties;
         mod unit_test_properties;
@@ -167,7 +166,6 @@ pub mod schemas {
         };
         pub use saved_queries_properties::SavedQueriesProperties;
         pub use seed_properties::SeedProperties;
-        pub use semantic_models_properties::SemanticModelsProperties;
         pub use snapshot_properties::SnapshotProperties;
         pub use source_properties::{SourceProperties, Tables};
         pub use unit_test_properties::{UnitTestOverrides, UnitTestProperties};
