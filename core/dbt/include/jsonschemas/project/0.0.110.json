@@ -88,7 +88,16 @@
         }
       ]
     },
-    "flags": true,
+    "flags": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/AnyValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "log-path": {
       "anyOf": [
         {
@@ -143,7 +152,7 @@
     "on-run-end": {
       "anyOf": [
         {
-          "$ref": "#/definitions/StringOrArrayOfStrings"
+          "$ref": "#/definitions/SpannedStringOrArrayOfStrings"
         },
         {
           "type": "null"
@@ -153,7 +162,7 @@
     "on-run-start": {
       "anyOf": [
         {
-          "$ref": "#/definitions/StringOrArrayOfStrings"
+          "$ref": "#/definitions/SpannedStringOrArrayOfStrings"
         },
         {
           "type": "null"
@@ -386,30 +395,9 @@
         },
         "field": {
           "type": "string"
-        },
-        "time_ingestion_partitioning": {
-          "default": false,
-          "type": "boolean"
         }
       },
       "additionalProperties": false
-    },
-    "BigqueryPartitionConfigLegacy": {
-      "description": "dbt-core allows either of the variants for the `partition_by` in the model config but the bigquery-adapter throws RunTime error the behaviors are tested from the latest dbt-core + bigquery-adapter as this is written we're conformant to this behavior via here and via the `validate` method",
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        {
-          "$ref": "#/definitions/BigqueryPartitionConfig"
-        }
-      ]
     },
     "DbtBatchSize": {
       "type": "string",
@@ -427,7 +415,16 @@
           "default": true,
           "type": "boolean"
         },
-        "checksum": true,
+        "checksum": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AnyValue"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "enforced": {
           "default": false,
           "type": "boolean"
@@ -481,6 +478,13 @@
           ]
         },
         {
+          "description": "only for snowflake",
+          "type": "string",
+          "enum": [
+            "dynamic_table"
+          ]
+        },
+        {
           "type": "object",
           "required": [
             "unknown"
@@ -510,6 +514,12 @@
           ]
         },
         "schema": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "snowflake_ignore_case": {
           "type": [
             "boolean",
             "null"
@@ -570,6 +580,10 @@
       "type": "object",
       "properties": {
         "error_after": {
+          "default": {
+            "count": null,
+            "period": null
+          },
           "anyOf": [
             {
               "$ref": "#/definitions/FreshnessRules"
@@ -586,6 +600,10 @@
           ]
         },
         "warn_after": {
+          "default": {
+            "count": null,
+            "period": null
+          },
           "anyOf": [
             {
               "$ref": "#/definitions/FreshnessRules"
@@ -707,7 +725,40 @@
         "build_after": {
           "anyOf": [
             {
-              "$ref": "#/definitions/FreshnessRules"
+              "$ref": "#/definitions/ModelFreshnessRules"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ModelFreshnessRules": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "period": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessPeriod"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "updates_on": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/UpdatesOn"
             },
             {
               "type": "null"
@@ -736,6 +787,23 @@
         "unknown"
       ]
     },
+    "PartitionConfig": {
+      "description": "dbt-core allows either of the variants for the `partition_by` in the model config but the bigquery-adapter throws RunTime error the behaviors are tested from the latest dbt-core + bigquery-adapter as this is written we're conformant to this behavior via here and via the `validate` method",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "$ref": "#/definitions/BigqueryPartitionConfig"
+        }
+      ]
+    },
     "PersistDocsConfig": {
       "type": "object",
       "properties": {
@@ -754,12 +822,45 @@
       },
       "additionalProperties": false
     },
+    "PostgresIndex": {
+      "type": "object",
+      "required": [
+        "columns"
+      ],
+      "properties": {
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unique": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "ProjectDataTestConfig": {
       "type": "object",
       "properties": {
         "+alias": {
           "type": [
             "string",
+            "null"
+          ]
+        },
+        "+as_columnstore": {
+          "type": [
+            "boolean",
             "null"
           ]
         },
@@ -863,7 +964,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+description": {
           "type": [
@@ -942,6 +1045,15 @@
             "null"
           ]
         },
+        "+indexes": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/PostgresIndex"
+          }
+        },
         "+initialize": {
           "type": [
             "string",
@@ -1015,7 +1127,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+not_matched_by_source_action": {
           "type": [
@@ -1038,7 +1152,7 @@
         "+partition_by": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BigqueryPartitionConfigLegacy"
+              "$ref": "#/definitions/PartitionConfig"
             },
             {
               "type": "null"
@@ -1096,6 +1210,22 @@
           "type": [
             "boolean",
             "null"
+          ]
+        },
+        "+row_access_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ScheduleConfig"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "+schema": {
@@ -1186,6 +1316,18 @@
             }
           ]
         },
+        "+table_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+table_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+tags": {
           "anyOf": [
             {
@@ -1213,7 +1355,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+tmp_relation_type": {
           "type": [
@@ -1247,6 +1391,12 @@
     "ProjectDbtCloudConfig": {
       "type": "object",
       "properties": {
+        "account-host": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "account_id": {
           "anyOf": [
             {
@@ -1344,7 +1494,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+tags": {
           "anyOf": [
@@ -1381,7 +1533,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+tags": {
           "anyOf": [
@@ -1414,6 +1568,12 @@
         "+alias": {
           "type": [
             "string",
+            "null"
+          ]
+        },
+        "+as_columnstore": {
+          "type": [
+            "boolean",
             "null"
           ]
         },
@@ -1564,7 +1724,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+description": {
           "type": [
@@ -1691,6 +1853,15 @@
             }
           ]
         },
+        "+indexes": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/PostgresIndex"
+          }
+        },
         "+initialize": {
           "type": [
             "string",
@@ -1800,7 +1971,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+not_matched_by_source_action": {
           "type": [
@@ -1853,7 +2026,7 @@
         "+partition_by": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BigqueryPartitionConfigLegacy"
+              "$ref": "#/definitions/PartitionConfig"
             },
             {
               "type": "null"
@@ -1952,6 +2125,22 @@
             "null"
           ]
         },
+        "+row_access_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ScheduleConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+schema": {
           "type": [
             "string",
@@ -2026,6 +2215,18 @@
             "null"
           ]
         },
+        "+table_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+table_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+tags": {
           "$ref": "#/definitions/StringOrArrayOfStrings"
         },
@@ -2046,7 +2247,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+tmp_relation_type": {
           "type": [
@@ -2115,7 +2318,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+schema": {
           "type": [
@@ -2144,6 +2349,12 @@
         "+alias": {
           "type": [
             "string",
+            "null"
+          ]
+        },
+        "+as_columnstore": {
+          "type": [
+            "boolean",
             "null"
           ]
         },
@@ -2256,7 +2467,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+delimiter": {
           "type": [
@@ -2360,6 +2573,15 @@
             "null"
           ]
         },
+        "+indexes": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/PostgresIndex"
+          }
+        },
         "+initialize": {
           "type": [
             "string",
@@ -2426,7 +2648,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+not_matched_by_source_action": {
           "type": [
@@ -2449,7 +2673,7 @@
         "+partition_by": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BigqueryPartitionConfigLegacy"
+              "$ref": "#/definitions/PartitionConfig"
             },
             {
               "type": "null"
@@ -2545,6 +2769,22 @@
             "null"
           ]
         },
+        "+row_access_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ScheduleConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+schema": {
           "type": [
             "string",
@@ -2597,6 +2837,18 @@
             "null"
           ]
         },
+        "+table_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+table_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+tags": {
           "anyOf": [
             {
@@ -2624,7 +2876,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+tmp_relation_type": {
           "type": [
@@ -2673,7 +2927,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": true
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         }
       },
       "additionalProperties": {
@@ -2686,6 +2942,12 @@
         "+alias": {
           "type": [
             "string",
+            "null"
+          ]
+        },
+        "+as_columnstore": {
+          "type": [
+            "boolean",
             "null"
           ]
         },
@@ -2799,7 +3061,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+dbt_valid_to_current": {
           "type": [
@@ -2907,6 +3171,15 @@
             "null"
           ]
         },
+        "+indexes": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/PostgresIndex"
+          }
+        },
         "+initialize": {
           "type": [
             "string",
@@ -2989,7 +3262,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+not_matched_by_source_action": {
           "type": [
@@ -3012,7 +3287,7 @@
         "+partition_by": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BigqueryPartitionConfigLegacy"
+              "$ref": "#/definitions/PartitionConfig"
             },
             {
               "type": "null"
@@ -3108,6 +3383,22 @@
             "null"
           ]
         },
+        "+row_access_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ScheduleConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+schema": {
           "type": [
             "string",
@@ -3186,6 +3477,18 @@
             "null"
           ]
         },
+        "+table_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+table_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+tags": {
           "anyOf": [
             {
@@ -3213,7 +3516,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+tmp_relation_type": {
           "type": [
@@ -3251,6 +3556,12 @@
     "ProjectSourceConfig": {
       "type": "object",
       "properties": {
+        "+as_columnstore": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+auto_liquid_cluster": {
           "type": [
             "boolean",
@@ -3345,7 +3656,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+description": {
           "type": [
@@ -3421,6 +3734,15 @@
             "boolean",
             "null"
           ]
+        },
+        "+indexes": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/PostgresIndex"
+          }
         },
         "+initialize": {
           "type": [
@@ -3500,7 +3822,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+not_matched_by_source_action": {
           "type": [
@@ -3523,7 +3847,7 @@
         "+partition_by": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BigqueryPartitionConfigLegacy"
+              "$ref": "#/definitions/PartitionConfig"
             },
             {
               "type": "null"
@@ -3583,6 +3907,22 @@
             "null"
           ]
         },
+        "+row_access_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ScheduleConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+secure": {
           "type": [
             "boolean",
@@ -3639,6 +3979,18 @@
             }
           ]
         },
+        "+table_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+table_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+tags": {
           "anyOf": [
             {
@@ -3666,7 +4018,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+tmp_relation_type": {
           "type": [
@@ -3688,6 +4042,12 @@
     "ProjectUnitTestConfig": {
       "type": "object",
       "properties": {
+        "+as_columnstore": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "+auto_liquid_cluster": {
           "type": [
             "boolean",
@@ -3782,7 +4142,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+description": {
           "type": [
@@ -3842,6 +4204,15 @@
             "boolean",
             "null"
           ]
+        },
+        "+indexes": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/PostgresIndex"
+          }
         },
         "+initialize": {
           "type": [
@@ -3909,7 +4280,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+not_matched_by_source_action": {
           "type": [
@@ -3932,7 +4305,7 @@
         "+partition_by": {
           "anyOf": [
             {
-              "$ref": "#/definitions/BigqueryPartitionConfigLegacy"
+              "$ref": "#/definitions/PartitionConfig"
             },
             {
               "type": "null"
@@ -3980,6 +4353,22 @@
           "type": [
             "boolean",
             "null"
+          ]
+        },
+        "+row_access_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ScheduleConfig"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "+secure": {
@@ -4038,6 +4427,18 @@
             }
           ]
         },
+        "+table_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+table_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+tags": {
           "anyOf": [
             {
@@ -4065,7 +4466,9 @@
             "object",
             "null"
           ],
-          "additionalProperties": false
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+tmp_relation_type": {
           "type": [
@@ -4089,7 +4492,9 @@
         {
           "type": "string"
         },
-        true
+        {
+          "$ref": "#/definitions/AnyValue"
+        }
       ]
     },
     "Range": {
@@ -4136,6 +4541,24 @@
         "enabled": {
           "type": [
             "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ScheduleConfig": {
+      "type": "object",
+      "properties": {
+        "cron": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "time_zone_value": {
+          "type": [
+            "string",
             "null"
           ]
         }
@@ -4190,6 +4613,19 @@
       },
       "additionalProperties": false
     },
+    "SpannedStringOrArrayOfStrings": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
     "StaticAnalysisKind": {
       "type": "string",
       "enum": [
@@ -4242,9 +4678,21 @@
         "granularity": {
           "default": "day",
           "type": "string"
+        },
+        "time_ingestion_partitioning": {
+          "description": "When this is true, the [`BigqueryPartitionConfig::field`] will be used as the `_PARTITIONTIME` pseudo column _PARTITIONTIME: https://cloud.google.com/bigquery/docs/partitioned-tables#ingestion_time https://docs.getdbt.com/reference/resource-configs/bigquery-configs#partitioning-by-an-ingestion-date-or-timestamp",
+          "default": false,
+          "type": "boolean"
         }
       },
       "additionalProperties": false
+    },
+    "UpdatesOn": {
+      "type": "string",
+      "enum": [
+        "any",
+        "all"
+      ]
     },
     "_Dispatch": {
       "type": "object",
