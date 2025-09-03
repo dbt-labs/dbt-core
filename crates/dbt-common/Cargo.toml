@@ -75,6 +75,7 @@ dunce = "1.0.5"
 powershell_script = "1.1.0"
 
 [dev-dependencies]
+bytes = { workspace = true }
 indoc = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 

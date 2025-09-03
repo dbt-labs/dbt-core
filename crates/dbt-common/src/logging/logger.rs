@@ -41,6 +41,7 @@ pub enum LogFormat {
     Text,
     Json,
     Default,
+    Otel,
 }
 
 impl Default for LogFormat {
@@ -54,6 +55,7 @@ impl Display for LogFormat {
             LogFormat::Text => write!(f, "text"),
             LogFormat::Json => write!(f, "json"),
             LogFormat::Default => write!(f, "default"),
+            LogFormat::Otel => write!(f, "otel"),
         }
     }
 }
@@ -325,6 +327,8 @@ impl log::Log for Logger {
                         );
                         locked_writeln!(self, "{}", json);
                     }
+                    // This is handled in new tracing infra
+                    LogFormat::Otel => {}
                 },
             }
         }
@@ -553,7 +557,10 @@ pub fn init_logger(log_config: FsLogConfig) -> FsResult<()> {
     // Build the multi-logger
     let mut builder = MultiLoggerBuilder::new(log_config.invocation_id);
 
-    builder = builder.add_terminal_loggers(&log_config);
+    // Skip terminal loggers when using Otel format (will be handled by tracing)
+    if log_config.log_format != LogFormat::Otel {
+        builder = builder.add_terminal_loggers(&log_config);
+    }
 
     // Add file logger
     let file_config = LoggerConfig {

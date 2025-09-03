@@ -950,13 +950,16 @@ impl TryFrom<ArrowAttributes<'_>> for TelemetryAttributes {
 /// This generates the Arrow schema definition that can be used to serialize
 /// telemetry records to Parquet or other Arrow-compatible formats.
 ///
-/// Timestamp fields are not using Timestamp(NANOSECOND) type due to serde_arrow
-/// limitations. However, serialization function casts them to Timestamp(NANOSECOND)
-/// after initial serialization to u64.
+/// It returns two schemas:
+/// 1. `serialisable_schema`: The initial schema used for serialization with timestamp fields as `u64`.
+///    This is a cyrrent limitation of the `serde_arrow` library.
+/// 2. `schema_with_timestamps`: The final schema with timestamp fields converted to `Timestamp(NANOSECOND)`.
+///
+/// This function is tighly coupled with `serialize_to_arrow` and `deserialize_from_arrow`.
 ///
 /// # Returns
 ///
-/// Returns a vector of Arrow field references that define the schema structure,
+/// Returns two vectors of Arrow field references that define the schema structure,
 /// or an error if schema generation fails.
 ///
 /// # Examples
@@ -964,7 +967,7 @@ impl TryFrom<ArrowAttributes<'_>> for TelemetryAttributes {
 /// ```rust
 /// use dbt_telemetry::serialize::arrow::create_arrow_schema;
 ///
-/// let schema = create_arrow_schema().expect("Failed to create schema");
+/// let (serialisable_schema, schema_with_timestamps) = create_arrow_schema().expect("Failed to create schema");
 /// // Use schema for serialization...
 /// ```
 pub fn create_arrow_schema() -> Result<(Vec<FieldRef>, Vec<FieldRef>), serde_arrow::Error> {
@@ -999,6 +1002,8 @@ pub fn create_arrow_schema() -> Result<(Vec<FieldRef>, Vec<FieldRef>), serde_arr
 /// Converts a slice of telemetry records into an Arrow RecordBatch that can be
 /// written to Parquet files or other Arrow-compatible storage formats.
 ///
+/// Top-level envelope datetime fields are converted to Timestamp(NANOSECOND) type.
+///
 /// # Arguments
 ///
 /// * `records` - Slice of telemetry records to serialize
@@ -1017,8 +1022,8 @@ pub fn create_arrow_schema() -> Result<(Vec<FieldRef>, Vec<FieldRef>), serde_arr
 /// use dbt_telemetry::TelemetryRecord;
 ///
 /// let records: Vec<TelemetryRecord> = vec![/* ... */];
-/// let schema = create_arrow_schema().expect("Failed to create schema");
-/// let batch = serialize_to_arrow(&records, &schema).expect("Failed to serialize");
+/// let (serialisable_schema, schema_with_timestamps) = = create_arrow_schema().expect("Failed to create schema");
+/// let batch = serialize_to_arrow(&records, &&serialisable_schema, &schema_with_timestamps).expect("Failed to serialize");
 /// ```
 pub fn serialize_to_arrow(
     records: &[TelemetryRecord],
@@ -1081,11 +1086,12 @@ pub fn serialize_to_arrow(
 /// # Examples
 ///
 /// ```rust
-/// use dbt_telemetry::serialize::arrow::deserialize_from_arrow;
+/// use dbt_telemetry::serialize::arrow::{deserialize_from_arrow, create_arrow_schema};
 /// use arrow::record_batch::RecordBatch;
 ///
 /// let batch: RecordBatch = /* read from file */;
-/// let records = deserialize_from_arrow(&batch).expect("Failed to deserialize");
+/// let (serialisable_schema, _) = create_arrow_schema().unwrap();
+/// let records = deserialize_from_arrow(&batch, &serialisable_schema).expect("Failed to deserialize");
 /// ```
 pub fn deserialize_from_arrow(
     batch: &RecordBatch,

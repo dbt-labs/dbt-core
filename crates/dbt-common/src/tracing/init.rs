@@ -1,4 +1,4 @@
-use std::sync::{Arc, OnceLock, RwLock};
+use std::sync::OnceLock;
 
 use dbt_telemetry::{ProcessInfo, TelemetryAttributes};
 use tracing::{Subscriber, level_filters::LevelFilter, span};
@@ -10,15 +10,18 @@ use tracing_subscriber::{
 };
 
 use super::{
+    background_writer::BackgroundWriter,
     config::FsTraceConfig,
     event_info::store_event_attributes,
-    file_writer::TelemetryFileWriter,
     layers::{
-        data_layer::TelemetryDataLayer, jsonl_writer::TelemetryWriterLayer,
+        data_layer::TelemetryDataLayer, jsonl_writer::TelemetryJsonlWriterLayer,
         otlp::OTLPExporterLayer, parquet_writer::TelemetryParquetWriterLayer,
     },
 };
-use crate::{FsError, FsResult, stdfs::File, tracing::layers::progress_bar::ProgressBarLayer};
+use crate::{
+    ErrorCode, FsError, FsResult, logging::LogFormat, stdfs::File,
+    tracing::layers::progress_bar::ProgressBarLayer,
+};
 
 // We use a global to store a special "process" span Id, that
 // is created during initialization and used as a fallback span
@@ -218,20 +221,44 @@ where
 
     // Create jsonl writer layer if file path provided
     let jsonl_writer_layer = if let Some(file_path) = config.otm_file_path {
-        let file = Arc::new(File::create(file_path)?);
-        let channel_writer = Arc::new(RwLock::new(TelemetryFileWriter::new(Box::new(file))));
+        let file = File::create(file_path)?;
+        let (writer, handle) = BackgroundWriter::new(file);
 
-        shutdown_items.push(Box::new(channel_writer.clone()));
+        // Keep a handle for shutdown
+        shutdown_items.push(Box::new(handle));
 
         // Create layer and apply user specified filtering
-        Some(TelemetryWriterLayer::new(channel_writer).with_filter(config.max_log_verbosity))
+        Some(TelemetryJsonlWriterLayer::new(writer).with_filter(config.max_log_verbosity))
+    } else {
+        None
+    };
+
+    // Create jsonl writer layer on stdout if log format is OTEL
+    let jsonl_stdout_writer_layer = if config.log_format == LogFormat::Otel {
+        // No shutdown logic as we flushing to stdout as we write anyway
+        Some(
+            TelemetryJsonlWriterLayer::new(std::io::stdout()).with_filter(config.max_log_verbosity),
+        )
     } else {
         None
     };
 
     // Create parquet writer layer if file path provided
     let parquet_writer_layer = if let Some(file_path) = config.otm_parquet_file_path {
-        let (parquet_layer, writer_handle) = TelemetryParquetWriterLayer::new(file_path)?;
+        // Create the file and initialize the Parquet layer
+        let file_dir = file_path.parent().ok_or_else(|| {
+            fs_err!(
+                ErrorCode::IoError,
+                "Failed to get parent directory for file path"
+            )
+        })?;
+
+        crate::stdfs::create_dir_all(file_dir)?;
+
+        let file = std::fs::File::create(&file_path)
+            .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create parquet file: {}", e))?;
+
+        let (parquet_layer, writer_handle) = TelemetryParquetWriterLayer::new(file)?;
 
         shutdown_items.push(Box::new(writer_handle));
 
@@ -241,8 +268,8 @@ where
         None
     };
 
-    // Create progress bar layer if log-format default enabled
-    let progress_bar_layer = if config.enable_progress {
+    // Create progress bar layer if log-format default enabled (but not for Otel)
+    let progress_bar_layer = if config.enable_progress && config.log_format != LogFormat::Otel {
         // Create layer and apply user specified filtering
         Some(ProgressBarLayer.with_filter(config.max_log_verbosity))
     } else {
@@ -265,6 +292,7 @@ where
     // and disables all tracing
     let layers = data_layer
         .and_then(jsonl_writer_layer)
+        .and_then(jsonl_stdout_writer_layer)
         .and_then(parquet_writer_layer)
         .and_then(progress_bar_layer)
         .and_then(maybe_otlp_layer)

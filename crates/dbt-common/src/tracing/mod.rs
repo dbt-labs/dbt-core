@@ -3,13 +3,14 @@ pub mod constants;
 mod convert;
 #[macro_use]
 pub mod emit;
+mod background_writer;
 pub mod event_info;
-mod file_writer;
 mod init;
 mod invocation;
 mod layers;
 pub mod metrics;
 mod shared;
+mod shared_writer;
 pub mod span_info;
 
 pub use config::FsTraceConfig;
@@ -20,6 +21,8 @@ pub use shared::ToTracingValue;
 
 #[cfg(test)]
 mod tests {
+    use crate::logging::LogFormat;
+
     use super::*;
 
     use constants::TRACING_ATTR_FIELD;
@@ -121,6 +124,7 @@ mod tests {
                 otm_parquet_file_path: None,
                 enable_progress: false,
                 export_to_otlp: false,
+                log_format: LogFormat::Default,
             },
             test_layer,
         )
@@ -215,6 +219,7 @@ mod tests {
                 otm_parquet_file_path: None,
                 enable_progress: false,
                 export_to_otlp: false,
+                log_format: LogFormat::Default,
             },
             None::<Box<dyn Layer<Layered<EnvFilter, Registry>> + Send + Sync>>,
         )
@@ -366,6 +371,7 @@ mod tests {
                 otm_parquet_file_path: None,
                 enable_progress: false,
                 export_to_otlp: false,
+                log_format: LogFormat::Default,
             },
             test_layer,
         )
@@ -549,6 +555,7 @@ mod tests {
                 otm_parquet_file_path: None,
                 enable_progress: false,
                 export_to_otlp: false,
+                log_format: LogFormat::Default,
             },
             test_layer,
         )
@@ -617,6 +624,7 @@ mod tests {
                 otm_parquet_file_path: None,
                 enable_progress: false,
                 export_to_otlp: false,
+                log_format: LogFormat::Default,
             },
             test_layer,
         )
@@ -812,6 +820,7 @@ mod tests {
                 otm_parquet_file_path: Some(temp_file_path.clone()),
                 enable_progress: false,
                 export_to_otlp: false,
+                log_format: LogFormat::Default,
             },
             None::<Box<dyn Layer<Layered<EnvFilter, Registry>> + Send + Sync>>,
         )

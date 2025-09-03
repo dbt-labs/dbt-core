@@ -193,7 +193,7 @@ pub struct LogRecordInfo {
 /// and combines them under a single enum type.
 ///
 /// This is a discriminated union on `record_type` field, which is not part of the OTLP schema.
-#[derive(Serialize, Deserialize, Debug, JsonSchema, EnumDiscriminants, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, EnumDiscriminants, PartialEq)]
 #[serde(tag = "record_type")]
 // The following derives a variant disciriminator enum for the telemetry records,
 // used for type-safe (de)serialization and matching.

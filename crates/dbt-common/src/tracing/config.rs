@@ -31,6 +31,9 @@ pub struct FsTraceConfig {
     pub(super) export_to_otlp: bool,
     /// If True, progress bar layer will be enabled
     pub(super) enable_progress: bool,
+    /// The log format being used. As of today (while old logging infra exists) - this is used to
+    /// enable jsonl output on stdout if needed.
+    pub(super) log_format: LogFormat,
 }
 
 impl Default for FsTraceConfig {
@@ -43,6 +46,7 @@ impl Default for FsTraceConfig {
             invocation_id: uuid::Uuid::new_v4(),
             enable_progress: false,
             export_to_otlp: false,
+            log_format: LogFormat::Default,
         }
     }
 }
@@ -111,6 +115,7 @@ impl FsTraceConfig {
             // TODO. For now never print to stdout. Maybe remove with the debug layer?
             enable_progress: io_args.log_format == LogFormat::Default,
             export_to_otlp: io_args.export_to_otlp,
+            log_format: io_args.log_format,
         }
     }
 }
