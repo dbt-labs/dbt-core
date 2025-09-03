@@ -1021,7 +1021,7 @@ impl InternalDbtNode for DbtSavedQuery {
     }
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_saved_query) = other.as_any().downcast_ref::<DbtSavedQuery>() {
-            self.config == other_saved_query.config
+            self.deprecated_config == other_saved_query.deprecated_config
         } else {
             false
         }
@@ -1126,6 +1126,7 @@ pub struct Nodes {
     pub exposures: BTreeMap<String, Arc<DbtExposure>>,
     pub semantic_models: BTreeMap<String, Arc<DbtSemanticModel>>,
     pub metrics: BTreeMap<String, Arc<DbtMetric>>,
+    pub saved_queries: BTreeMap<String, Arc<DbtSavedQuery>>,
 }
 
 impl Nodes {
@@ -1180,6 +1181,11 @@ impl Nodes {
             .iter()
             .map(|(id, node)| (id.clone(), Arc::new((**node).clone())))
             .collect();
+        let saved_queries = self
+            .saved_queries
+            .iter()
+            .map(|(id, node)| (id.clone(), Arc::new((**node).clone())))
+            .collect();
         Nodes {
             models,
             seeds,
@@ -1191,6 +1197,7 @@ impl Nodes {
             exposures,
             semantic_models,
             metrics,
+            saved_queries,
         }
     }
 
@@ -1548,6 +1555,7 @@ impl Nodes {
         self.analyses.extend(other.analyses);
         self.exposures.extend(other.exposures);
         self.metrics.extend(other.metrics);
+        self.saved_queries.extend(other.saved_queries);
     }
 
     pub fn warn_on_custom_materializations(&self) -> FsResult<()> {

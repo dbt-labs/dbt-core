@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::schemas::Nodes;
 use crate::schemas::manifest::DbtManifest;
 use crate::schemas::semantic_layer::metric::SemanticManifestMetric;
+use crate::schemas::semantic_layer::saved_query::SemanticManifestSavedQuery;
 use crate::schemas::semantic_layer::semantic_model::SemanticManifestSemanticModel;
 
 // Type aliases for clarity
@@ -22,9 +23,6 @@ pub struct SemanticManifest {
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct SemanticManifestProjectConfiguration {}
 
-#[derive(Debug, Default, Serialize, Deserialize)]
-pub struct SemanticManifestSavedQuery {}
-
 impl From<Nodes> for SemanticManifest {
     fn from(nodes: Nodes) -> Self {
         SemanticManifest {
@@ -39,7 +37,11 @@ impl From<Nodes> for SemanticManifest {
                 .map(|m| (*m).clone().into())
                 .collect(),
             project_configuration: SemanticManifestProjectConfiguration {},
-            saved_queries: vec![],
+            saved_queries: nodes
+                .saved_queries
+                .into_values()
+                .map(|m| (*m).clone().into())
+                .collect(),
         }
     }
 }

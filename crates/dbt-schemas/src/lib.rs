@@ -80,12 +80,13 @@ pub mod schemas {
             nodes_from_dbt_manifest,
         };
         pub use manifest_nodes::{
-            ManifestDataTest, ManifestExposure, ManifestMetric, ManifestModel, ManifestSeed,
-            ManifestSemanticModel, ManifestSnapshot, ManifestSource, ManifestUnitTest,
+            ManifestDataTest, ManifestExposure, ManifestMetric, ManifestModel, ManifestSavedQuery,
+            ManifestSeed, ManifestSemanticModel, ManifestSnapshot, ManifestSource,
+            ManifestUnitTest,
         };
         pub use metric::DbtMetric;
         pub use operation::DbtOperation;
-        pub use saved_query::DbtSavedQuery;
+        pub use saved_query::{DbtSavedQuery, DbtSavedQueryAttr};
         pub use selector::DbtSelector;
         pub use semantic_model::DbtSemanticModel;
         pub use v10::DbtManifestV10;
@@ -97,6 +98,7 @@ pub mod schemas {
 
     pub mod semantic_layer {
         pub mod metric;
+        pub mod saved_query;
         pub mod semantic_manifest;
         pub mod semantic_model;
     }
@@ -110,7 +112,7 @@ pub mod schemas {
             pub mod model_config;
             pub mod omissible_utils;
             pub mod omissible_utils_tests;
-            pub mod saved_queries_config;
+            pub mod saved_query_config;
             pub mod seed_config;
             pub mod semantic_model_config;
             pub mod snapshot_config;
@@ -123,8 +125,8 @@ pub mod schemas {
         pub use configs::exposure_config::{ExposureConfig, ProjectExposureConfig};
         pub use configs::metric_config::{MetricConfig, ProjectMetricConfigs};
         pub use configs::model_config::{ModelConfig, ProjectModelConfig};
-        pub use configs::saved_queries_config::{
-            ExportConfigExportAs, SavedQueriesConfig, SavedQueriesConfigCache,
+        pub use configs::saved_query_config::{
+            ExportConfigExportAs, SavedQueryCache, SavedQueryConfig,
         };
         pub use configs::seed_config::{ProjectSeedConfig, SeedConfig};
         pub use configs::semantic_model_config::{ProjectSemanticModelConfig, SemanticModelConfig};

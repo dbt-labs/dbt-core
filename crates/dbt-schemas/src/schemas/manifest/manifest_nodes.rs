@@ -14,14 +14,14 @@ use crate::schemas::{
     },
     dbt_column::DbtColumnRef,
     manifest::{
-        DbtOperation,
+        DbtOperation, DbtSavedQuery,
         common::{DbtOwner, SourceFileMetadata, WhereFilterIntersection},
         semantic_model::{NodeRelation, SemanticEntity, SemanticMeasure, SemanticModelDefaults},
     },
     nodes::TestMetadata,
     project::{
-        DataTestConfig, ExposureConfig, MetricConfig, ModelConfig, SeedConfig, SemanticModelConfig,
-        SnapshotConfig, SourceConfig, UnitTestConfig,
+        DataTestConfig, ExposureConfig, MetricConfig, ModelConfig, SavedQueryConfig, SeedConfig,
+        SemanticModelConfig, SnapshotConfig, SourceConfig, UnitTestConfig,
     },
     properties::{ModelConstraint, UnitTestOverrides},
     ref_and_source::{DbtRef, DbtSourceWrapper},
@@ -729,4 +729,72 @@ pub struct ManifestSemanticModel {
     pub config: ManifestSemanticModelConfig,
 
     pub __other__: BTreeMap<String, YmlValue>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct ManifestSavedQueryNodeBaseAttributes {
+    // Derived
+    pub depends_on: NodeDependsOn,
+
+    #[serde(default)]
+    pub refs: Vec<DbtRef>,
+
+    #[serde(default)]
+    pub unrendered_config: BTreeMap<String, YmlValue>,
+
+    #[serde(default)]
+    pub created_at: f64,
+}
+
+// #[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ManifestSavedQuery {
+    pub __common_attr__: ManifestCommonAttributes,
+    pub __base_attr__: ManifestSavedQueryNodeBaseAttributes,
+
+    // Saved Query Specific Attributes
+    pub query_params: crate::schemas::manifest::saved_query::SavedQueryParams,
+    pub exports: Vec<crate::schemas::manifest::saved_query::SavedQueryExport>,
+    pub label: Option<String>,
+    pub metadata: Option<SourceFileMetadata>,
+    pub group: Option<String>,
+
+    #[serde(default)]
+    pub config: SavedQueryConfig,
+
+    pub __other__: BTreeMap<String, YmlValue>,
+}
+
+impl From<DbtSavedQuery> for ManifestSavedQuery {
+    fn from(saved_query: DbtSavedQuery) -> Self {
+        Self {
+            __common_attr__: ManifestCommonAttributes {
+                unique_id: saved_query.__common_attr__.unique_id,
+                name: saved_query.__common_attr__.name,
+                package_name: saved_query.__common_attr__.package_name,
+                fqn: saved_query.__common_attr__.fqn,
+                path: saved_query.__common_attr__.path,
+                original_file_path: saved_query.__common_attr__.original_file_path,
+                description: saved_query.__common_attr__.description,
+                tags: saved_query.__common_attr__.tags,
+                meta: saved_query.__common_attr__.meta,
+            },
+            __base_attr__: ManifestSavedQueryNodeBaseAttributes {
+                depends_on: saved_query.__saved_query_attr__.depends_on,
+                refs: saved_query.__saved_query_attr__.refs,
+                unrendered_config: saved_query.__saved_query_attr__.unrendered_config,
+                created_at: saved_query.__saved_query_attr__.created_at,
+            },
+            query_params: saved_query.__saved_query_attr__.query_params,
+            exports: saved_query.__saved_query_attr__.exports,
+            label: saved_query.__saved_query_attr__.label,
+            metadata: saved_query.__saved_query_attr__.metadata,
+            group: saved_query.__saved_query_attr__.group,
+            config: saved_query.deprecated_config,
+            __other__: saved_query.__other__,
+        }
+    }
 }

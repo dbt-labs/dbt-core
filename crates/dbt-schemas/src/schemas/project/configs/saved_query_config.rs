@@ -17,9 +17,9 @@ use crate::{
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
-pub struct ProjectSavedQueriesConfig {
+pub struct ProjectSavedQueryConfig {
     #[serde(rename = "+cache")]
-    pub cache: Option<SavedQueriesConfigCache>,
+    pub cache: Option<SavedQueryCache>,
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     #[serde(rename = "+export_as")]
@@ -33,19 +33,18 @@ pub struct ProjectSavedQueriesConfig {
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
     // Flattened fields
-    pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectSavedQueriesConfig>>,
+    pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectSavedQueryConfig>>,
 }
 
-impl IterChildren<ProjectSavedQueriesConfig> for ProjectSavedQueriesConfig {
+impl IterChildren<ProjectSavedQueryConfig> for ProjectSavedQueryConfig {
     fn iter_children(&self) -> Iter<String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }
 }
 
-#[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq, JsonSchema)]
-pub struct SavedQueriesConfig {
-    pub cache: Option<SavedQueriesConfigCache>,
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, JsonSchema)]
+pub struct SavedQueryConfig {
+    pub cache: Option<SavedQueryCache>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub export_as: Option<ExportConfigExportAs>,
@@ -57,7 +56,7 @@ pub struct SavedQueriesConfig {
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, JsonSchema)]
-pub struct SavedQueriesConfigCache {
+pub struct SavedQueryCache {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
 }
@@ -71,8 +70,24 @@ pub enum ExportConfigExportAs {
     cache,
 }
 
-impl From<ProjectSavedQueriesConfig> for SavedQueriesConfig {
-    fn from(config: ProjectSavedQueriesConfig) -> Self {
+impl Default for SavedQueryConfig {
+    fn default() -> Self {
+        Self {
+            cache: Some(SavedQueryCache {
+                enabled: Some(false),
+            }),
+            enabled: Some(true),
+            export_as: None,
+            schema: None,
+            group: None,
+            meta: Some(BTreeMap::new()),
+            tags: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![])),
+        }
+    }
+}
+
+impl From<ProjectSavedQueryConfig> for SavedQueryConfig {
+    fn from(config: ProjectSavedQueryConfig) -> Self {
         Self {
             cache: config.cache,
             enabled: config.enabled,
@@ -85,8 +100,8 @@ impl From<ProjectSavedQueriesConfig> for SavedQueriesConfig {
     }
 }
 
-impl From<SavedQueriesConfig> for ProjectSavedQueriesConfig {
-    fn from(config: SavedQueriesConfig) -> Self {
+impl From<SavedQueryConfig> for ProjectSavedQueryConfig {
+    fn from(config: SavedQueryConfig) -> Self {
         Self {
             cache: config.cache,
             enabled: config.enabled,
@@ -100,13 +115,13 @@ impl From<SavedQueriesConfig> for ProjectSavedQueriesConfig {
     }
 }
 
-impl DefaultTo<SavedQueriesConfig> for SavedQueriesConfig {
+impl DefaultTo<SavedQueryConfig> for SavedQueryConfig {
     fn get_enabled(&self) -> Option<bool> {
         self.enabled
     }
 
-    fn default_to(&mut self, parent: &SavedQueriesConfig) {
-        let SavedQueriesConfig {
+    fn default_to(&mut self, parent: &SavedQueryConfig) {
+        let SavedQueryConfig {
             cache,
             enabled,
             export_as,

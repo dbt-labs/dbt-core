@@ -13,8 +13,11 @@ use crate::{
         CommonAttributes, DbtModel, DbtModelAttr, DbtSeed, DbtSnapshot, DbtSource, DbtTest,
         DbtUnitTest, DbtUnitTestAttr, IntrospectionKind, NodeBaseAttributes, Nodes,
         common::{DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn},
-        manifest::manifest_nodes::{
-            ManifestDataTest, ManifestModel, ManifestOperation, ManifestSeed, ManifestSnapshot,
+        manifest::{
+            manifest_nodes::{
+                ManifestDataTest, ManifestModel, ManifestOperation, ManifestSeed, ManifestSnapshot,
+            },
+            saved_query::DbtSavedQueryAttr,
         },
         nodes::{AdapterAttr, DbtSeedAttr, DbtSnapshotAttr, DbtSourceAttr, DbtTestAttr},
     },
@@ -170,10 +173,14 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
             .iter()
             .map(|(id, exposure)| (id.clone(), (**exposure).clone().into()))
             .collect(),
-        // TODO: map from resolver_state.nodes after they are implemented
-        semantic_models: BTreeMap::new(),
-        metrics: BTreeMap::new(),
-        saved_queries: BTreeMap::new(),
+        semantic_models: BTreeMap::new(), // TODO: map from resolver_state.nodes
+        metrics: BTreeMap::new(),         // TODO: map from resolver_state.nodes
+        saved_queries: resolver_state
+            .nodes
+            .saved_queries
+            .iter()
+            .map(|(id, saved_query)| (id.clone(), (**saved_query).clone().into()))
+            .collect(),
         unit_tests: resolver_state
             .nodes
             .unit_tests
@@ -809,8 +816,52 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
             }),
         );
     }
+    for (_unique_id, _semantic_model) in manifest.semantic_models {
+        // TODO: insert DbtSemanticModel into node.semantic_models
+    }
     for (_unique_id, _metric) in manifest.metrics {
         // TODO: insert DbtMetric into node.metrics
+    }
+    for (unique_id, saved_query) in manifest.saved_queries {
+        nodes.saved_queries.insert(
+            unique_id,
+            Arc::new(crate::schemas::manifest::DbtSavedQuery {
+                __common_attr__: CommonAttributes {
+                    unique_id: saved_query.__common_attr__.unique_id,
+                    name: saved_query.__common_attr__.name,
+                    package_name: saved_query.__common_attr__.package_name,
+                    path: saved_query.__common_attr__.path,
+                    original_file_path: saved_query.__common_attr__.original_file_path,
+                    patch_path: None, // TODO: Add to ManifestSavedQueryCommonAttributes if needed
+                    fqn: saved_query.__common_attr__.fqn,
+                    description: saved_query.__common_attr__.description,
+                    raw_code: None,
+                    checksum: DbtChecksum::default(),
+                    name_span: Span::default(),
+                    language: None,
+                    tags: saved_query
+                        .config
+                        .tags
+                        .clone()
+                        .map(|tags| tags.into())
+                        .unwrap_or_default(),
+                    meta: saved_query.config.meta.clone().unwrap_or_default(),
+                },
+                __saved_query_attr__: DbtSavedQueryAttr {
+                    query_params: saved_query.query_params,
+                    exports: saved_query.exports,
+                    label: saved_query.label,
+                    metadata: saved_query.metadata,
+                    unrendered_config: saved_query.__base_attr__.unrendered_config,
+                    depends_on: saved_query.__base_attr__.depends_on,
+                    refs: saved_query.__base_attr__.refs,
+                    created_at: saved_query.__base_attr__.created_at,
+                    group: saved_query.group,
+                },
+                deprecated_config: saved_query.config,
+                __other__: saved_query.__other__,
+            }),
+        );
     }
 
     nodes
@@ -833,8 +884,9 @@ mod tests {
             exposures: BTreeMap::new(),
             sources: BTreeMap::new(),
             unit_tests: BTreeMap::new(),
-            metrics: BTreeMap::new(),
             semantic_models: BTreeMap::new(),
+            metrics: BTreeMap::new(),
+            saved_queries: BTreeMap::new(),
         }
     }
 

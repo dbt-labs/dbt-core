@@ -19,7 +19,7 @@ use strum::{Display, EnumString};
 
 use crate::schemas::common::DbtQuoting;
 use crate::schemas::project::ProjectSemanticModelConfig;
-use crate::schemas::project::configs::saved_queries_config::ProjectSavedQueriesConfig;
+use crate::schemas::project::configs::saved_query_config::ProjectSavedQueryConfig;
 use crate::schemas::serde::FloatOrString;
 use crate::schemas::serde::SpannedStringOrArrayOfStrings;
 use crate::schemas::serde::StringOrArrayOfStrings;
@@ -143,7 +143,7 @@ pub struct DbtProject {
     pub data_tests: Option<ProjectDataTestConfig>,
     pub exposures: Option<ProjectExposureConfig>,
     #[serde(rename = "saved-queries")]
-    pub saved_queries: Option<ProjectSavedQueriesConfig>,
+    pub saved_queries: Option<ProjectSavedQueryConfig>,
     #[serde(rename = "semantic-models")]
     pub semantic_models: Option<ProjectSemanticModelConfig>,
     // Misc

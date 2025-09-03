@@ -41,6 +41,7 @@ use crate::resolve::resolve_macros::resolve_macros;
 use crate::resolve::resolve_metrics::resolve_metrics;
 use crate::resolve::resolve_models::resolve_models;
 use crate::resolve::resolve_properties::resolve_minimal_properties;
+use crate::resolve::resolve_saved_queries::resolve_saved_queries;
 use crate::resolve::resolve_seeds::resolve_seeds;
 use crate::resolve::resolve_semantic_models::resolve_semantic_models;
 use crate::resolve::resolve_snapshots::resolve_snapshots;
@@ -545,6 +546,22 @@ pub async fn resolve_inner(
     let (metrics, disabled_metrics) = resolve_metrics().await?;
     nodes.metrics.extend(metrics);
     disabled_nodes.metrics.extend(disabled_metrics);
+
+    let (saved_queries, disabled_saved_queries) = resolve_saved_queries(
+        arg,
+        package,
+        root_package_name,
+        root_project_configs,
+        &mut min_properties.saved_queries,
+        database,
+        schema,
+        package_name,
+        jinja_env.clone(),
+        &base_ctx,
+    )
+    .await?;
+    nodes.saved_queries.extend(saved_queries);
+    disabled_nodes.saved_queries.extend(disabled_saved_queries);
 
     let (data_tests, disabled_tests) = resolve_data_tests(
         arg,
