@@ -747,6 +747,12 @@ impl Value {
     /// and this is the only way to construct it.
     pub const UNDEFINED: Value = Value(ValueRepr::Undefined);
 
+    /// The none value.
+    ///
+    /// This constant exists because the none type does not exist in Rust
+    /// and this is the only way to construct it.
+    pub const NONE: Value = Value(ValueRepr::None);
+
     /// Creates a value from something that can be serialized.
     ///
     /// This is the method that MiniJinja will generally use whenever a serializable
