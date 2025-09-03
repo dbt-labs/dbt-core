@@ -111,7 +111,7 @@ pub fn create_invocation_attributes(package: &str, eval_arg: &EvalArgs) -> Telem
     let raw_command = std::env::args().collect::<Vec<_>>().join(" ");
 
     TelemetryAttributes::Invocation(Box::new(InvocationInfo {
-        invocation_id: eval_arg.io.invocation_id.to_string(),
+        invocation_id: eval_arg.io.invocation_id,
         raw_command,
         eval_args: create_invocation_eval_args(eval_arg),
         process_info: ProcessInfo::new(package),

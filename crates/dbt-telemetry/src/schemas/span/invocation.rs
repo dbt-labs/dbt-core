@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 
+use super::process::ProcessInfo;
+use crate::serialize::serde_uuid;
 use dbt_serde_yaml::{JsonSchema, Value};
 #[cfg(test)]
 use fake::Dummy;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-
-use super::process::ProcessInfo;
 
 #[skip_serializing_none]
 #[cfg_attr(test, derive(Dummy))]
@@ -151,7 +151,9 @@ impl InvocationCloudAttributes {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 pub struct InvocationInfo {
     /// Unique identifier for the invocation
-    pub invocation_id: String,
+    #[schemars(with = "String")]
+    #[serde(with = "serde_uuid::required")]
+    pub invocation_id: uuid::Uuid,
 
     /// Raw command string as executed
     pub raw_command: String,

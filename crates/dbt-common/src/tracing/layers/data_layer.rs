@@ -4,9 +4,10 @@ use super::super::{
     init::process_span,
     span_info::{get_span_debug_extra_attrs, get_span_event_attrs},
 };
+use rand::RngCore;
 use tracing_log::NormalizeEvent;
 
-use std::{sync::atomic::AtomicU64, time::SystemTime};
+use std::time::SystemTime;
 
 use tracing::{Level, Subscriber, span};
 use tracing_subscriber::{Layer, layer::Context};
@@ -24,11 +25,10 @@ pub(in crate::tracing) struct TelemetryDataLayer<S>
 where
     S: Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
 {
-    /// The trace ID for the current invocation
-    trace_id: u128,
-    /// A globally unique span ID generator. Unlike `tracing` span IDs, this
-    /// generator ensures that span IDs are unique across the entire process
-    next_span_id: AtomicU64,
+    /// The trace ID used for spans & events lacking a proper parent span
+    /// (essentially the root span and any buggy tracing calls missing proper invocation
+    /// span tree in their context).
+    fallback_trace_id: u128,
     /// Whether to strip code location from span & log attributes.
     strip_code_location: bool,
     __phantom: std::marker::PhantomData<S>,
@@ -38,21 +38,22 @@ impl<S> TelemetryDataLayer<S>
 where
     S: Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
 {
-    pub(crate) fn new(trace_id: u128, strip_code_location: bool) -> Self {
+    pub(crate) fn new(fallback_trace_id: u128, strip_code_location: bool) -> Self {
         Self {
-            trace_id,
-            next_span_id: AtomicU64::new(1),
+            fallback_trace_id,
             strip_code_location,
             __phantom: std::marker::PhantomData,
         }
     }
 
-    /// Returns a global unique span ID for the next span. We can't use the span ID from
+    /// Returns a globally unique span ID for the next span. We can't use the span ID from
     /// `tracing` directly because it is not guaranteed to be unique across even within a single
     /// process, especially in a multi-threaded environment.
+    ///
+    /// This uses a thread-local random number generator which is thread-safe by design.
+    /// The probability of collision for a 64-bit random number is negligible in practice.
     fn next_span_id(&self) -> u64 {
-        self.next_span_id
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        rand::rng().next_u64()
     }
 
     fn get_location(&self, metadata: &tracing::Metadata<'_>) -> RecordCodeLocation {
@@ -77,25 +78,7 @@ where
 
         let global_span_id = self.next_span_id();
 
-        let global_parent_span_id = span
-            .parent()
-            .or_else(|| {
-                // If no parent span is found, use process span as parent.
-                // This will trigger for the process span itself,
-                // but process span helper will just return None
-                process_span(&ctx)
-            })
-            .and_then(|parent_span| {
-                parent_span
-                    .extensions()
-                    .get::<SpanStartInfo>()
-                    .map(|parent_span_record| parent_span_record.span_id)
-            });
-
-        let start_time = SystemTime::now();
-        let (severity_number, severity_text) = tracing_level_to_severity(metadata.level());
-
-        // Extract event attributes if any. To avoid leakage, we extract internal metadata
+        // Start by extracting event attributes if any. To avoid leakage, we extract internal metadata
         // such as location, name etc. only in debug builds
 
         // Extract attributes in the following priority:
@@ -126,8 +109,37 @@ where
             })
         };
 
+        let (trace_id, global_parent_span_id) = span
+            .parent()
+            .and_then(|parent_span| {
+                parent_span
+                    .extensions()
+                    .get::<SpanStartInfo>()
+                    .map(|parent_span_record| {
+                        (
+                            parent_span_record.trace_id,
+                            Some(parent_span_record.span_id),
+                        )
+                    })
+            })
+            .unwrap_or_else(|| {
+                // If no parent span is found, we have a couple possible scenarios:
+                // 1. This is the root span of the trace, in which case we use the fallback trace ID, and no parent span ID
+                // 2. This is an invocation span and we calculate the trace ID from `invocation_id` of the span
+                // 3. This is a buggy tracing call missing proper invocation span tree in their context,
+                //  in which case we fallback to the fallback trace ID and no parent span ID
+                if let TelemetryAttributes::Invocation(boxed_info) = &attributes {
+                    (boxed_info.invocation_id.as_u128(), None)
+                } else {
+                    (self.fallback_trace_id, None)
+                }
+            });
+
+        let start_time = SystemTime::now();
+        let (severity_number, severity_text) = tracing_level_to_severity(metadata.level());
+
         let record = SpanStartInfo {
-            trace_id: self.trace_id,
+            trace_id,
             span_id: global_span_id,
             span_name: attributes.to_string(),
             parent_span_id: global_parent_span_id,
@@ -155,6 +167,7 @@ where
 
         // Get the shared info from the stored SpanStart record
         let (
+            trace_id,
             span_id,
             parent_span_id,
             start_time_unix_nano,
@@ -162,6 +175,7 @@ where
             severity_text,
             start_attributes,
         ) = if let Some(SpanStartInfo {
+            trace_id,
             span_id,
             parent_span_id,
             start_time_unix_nano,
@@ -172,6 +186,7 @@ where
         }) = span.extensions().get::<SpanStartInfo>()
         {
             (
+                *trace_id,
                 *span_id,
                 *parent_span_id,
                 *start_time_unix_nano,
@@ -183,6 +198,7 @@ where
             let (severity_number, severity_text) = tracing_level_to_severity(metadata.level());
 
             (
+                self.fallback_trace_id,
                 self.next_span_id(),
                 None,
                 SystemTime::now(),
@@ -207,7 +223,7 @@ where
             });
 
         let record = SpanEndInfo {
-            trace_id: self.trace_id,
+            trace_id,
             span_id,
             span_name: attributes.to_string(),
             parent_span_id,
@@ -225,7 +241,7 @@ where
 
     fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
         // Extract information about the current span
-        let (span_id, span_name) = ctx
+        let (trace_id, span_id, span_name) = ctx
             .event_span(event)
             .or_else(|| process_span(&ctx))
             // Get the parent span to extract span information
@@ -235,6 +251,7 @@ where
                     .get::<SpanStartInfo>()
                     .map(|parent_span_start_info| {
                         (
+                            parent_span_start_info.trace_id,
                             Some(parent_span_start_info.span_id),
                             Some(parent_span_start_info.span_name.clone()),
                         )
@@ -296,7 +313,7 @@ where
 
         let log_record = LogRecordInfo {
             time_unix_nano: SystemTime::now(),
-            trace_id: self.trace_id,
+            trace_id,
             span_id,
             span_name,
             severity_number,

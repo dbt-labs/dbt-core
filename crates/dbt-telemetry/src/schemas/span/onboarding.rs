@@ -8,6 +8,4 @@ use serde::{Deserialize, Serialize};
 pub struct OnboardingInfo {
     /// Onboarding step identifier (e.g. "Welcome", "DbtParse")
     pub step: String,
-    /// Unique identifier for the invocation (root correlation id)
-    pub invocation_id: String,
 }

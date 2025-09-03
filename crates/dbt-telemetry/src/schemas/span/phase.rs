@@ -7,15 +7,6 @@ use strum::EnumIter;
 use strum::{EnumDiscriminants, IntoStaticStr};
 
 #[cfg_attr(test, derive(Dummy))]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Default)]
-pub struct SharedPhaseInfo {
-    // Invocation id is added to all phase for consumer convenience.
-    // It will always match the `invocation_id` in the root `Invocation` span.
-    /// Unique identifier for the invocation
-    pub invocation_id: String,
-}
-
-#[cfg_attr(test, derive(Dummy))]
 #[derive(
     Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, EnumDiscriminants, strum::Display,
 )]
@@ -41,75 +32,41 @@ pub struct SharedPhaseInfo {
 pub enum BuildPhaseInfo {
     /// # File Discovery
     /// Analyzing dbt_project, profiles.yml and scanning files
-    Loading {
-        #[serde(flatten)]
-        shared: SharedPhaseInfo,
-    },
+    Loading {},
 
     /// # Dependency Loading
     /// Check that dependencies are met
-    DependencyLoading {
-        #[serde(flatten)]
-        shared: SharedPhaseInfo,
-    },
+    DependencyLoading {},
 
     /// # Parsing
     /// Parsing and macro name resolution of all dbt files
-    Parsing {
-        #[serde(flatten)]
-        shared: SharedPhaseInfo,
-    },
+    Parsing {},
 
     /// # Scheduling
     /// Graph construction and graph slicing
-    Scheduling {
-        #[serde(flatten)]
-        shared: SharedPhaseInfo,
-    },
+    Scheduling {},
 
     /// # Freshness Analysis
     /// Freshness analysis of sources and models
-    FreshnessAnalysis {
-        #[serde(flatten)]
-        shared: SharedPhaseInfo,
-    },
+    FreshnessAnalysis {},
 
     /// # Lineage
     /// Analysis of individual node lineages
-    Lineage {
-        #[serde(flatten)]
-        shared: SharedPhaseInfo,
-    },
+    Lineage {},
 
     /// # Compiling
     /// Dbt compile (called render) and Sql analysis
-    Compiling {
-        #[serde(flatten)]
-        shared: SharedPhaseInfo,
-        node_count: u64,
-    },
+    Compiling { node_count: u64 },
 
     /// # Hydrating
     /// Hydration of models, seeds, snapshots and sources
-    Hydrating {
-        #[serde(flatten)]
-        shared: SharedPhaseInfo,
-        node_count: u64,
-    },
+    Hydrating { node_count: u64 },
 
     /// # Analyzing
     /// Dbt compile (called render) and Sql analysis
-    Analyzing {
-        #[serde(flatten)]
-        shared: SharedPhaseInfo,
-        node_count: u64,
-    },
+    Analyzing { node_count: u64 },
 
     /// # Executing
     /// Execution against the target database
-    Executing {
-        #[serde(flatten)]
-        shared: SharedPhaseInfo,
-        node_count: u64,
-    },
+    Executing { node_count: u64 },
 }

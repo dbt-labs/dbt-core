@@ -27,7 +27,6 @@ use crate::dbt_project_config::{RootProjectConfigs, build_root_project_configs};
 use crate::resolve::resolve_operations::resolve_operations;
 use crate::utils::{self, clear_package_diagnostics};
 use dbt_schemas::schemas::telemetry::BuildPhaseInfo;
-use dbt_schemas::schemas::telemetry::SharedPhaseInfo;
 use dbt_schemas::schemas::telemetry::TelemetryAttributes;
 use dbt_schemas::state::DbtState;
 use dbt_schemas::state::ResolverState;
@@ -61,11 +60,7 @@ use crate::resolve::resolve_selectors::resolve_final_selectors;
 #[tracing::instrument(
     skip_all,
     fields(
-        __event = TelemetryAttributes::Phase(BuildPhaseInfo::Parsing {
-            shared: SharedPhaseInfo {
-                invocation_id: invocation_args.invocation_id.to_string(),
-            }
-        }).to_tracing_value(),
+        __event = TelemetryAttributes::Phase(BuildPhaseInfo::Parsing { }).to_tracing_value(),
     )
 )]
 pub async fn resolve(

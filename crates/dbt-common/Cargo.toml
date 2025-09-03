@@ -26,6 +26,7 @@ counter = { workspace = true }
 dialoguer = { workspace = true }
 int-enum = { workspace = true }
 itertools = { workspace = true }
+rand = { workspace = true }
 regex = { workspace = true }
 unicode-segmentation = { version = "1.12" }
 uuid = { workspace = true }

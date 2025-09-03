@@ -864,14 +864,22 @@ mod tests {
 
         // We do not need location here, but this is easier than unwrapping later
         let mut test_location = Location::caller();
+        // Same for expected span id
+        let mut expected_span_id = 0;
 
         tracing::subscriber::with_default(subscriber, || {
             // Use DevInternal type as we currently forced to include it in the output
-            let _dev_span = tracing::trace_span!(
+            let dev_span = tracing::trace_span!(
                 "dev_internal_span",
                 { TRACING_ATTR_FIELD } = dev_span_attrs.clone().to_tracing_value()
-            )
-            .entered();
+            );
+
+            let _sp = dev_span.enter();
+
+            span_info::with_span(&dev_span, |span_ref| {
+                let span_ext = span_ref.extensions();
+                expected_span_id = span_ext.get::<SpanStartInfo>().unwrap().span_id;
+            });
 
             // Emit a log with Log attributes (should be included) & save the location (almost, one line off)
             test_location = Location::caller();
@@ -931,7 +939,7 @@ mod tests {
         }) = span_end_record
         {
             assert_eq!(*trace_id, invocation_id.as_u128());
-            assert_eq!(*span_id, 1);
+            assert_eq!(*span_id, expected_span_id);
             assert_eq!(span_name, "DevInternal(dev_test | log)");
             assert!(parent_span_id.is_none());
             assert_eq!(*severity_number, SeverityNumber::Trace);
@@ -957,7 +965,7 @@ mod tests {
         }) = log_record_record
         {
             assert_eq!(*trace_id, invocation_id.as_u128());
-            assert_eq!(*span_id, Some(1));
+            assert_eq!(*span_id, Some(expected_span_id));
             assert_eq!(*span_name, Some("DevInternal(dev_test | log)".to_string()));
             assert!(*time_unix_nano > before_start);
             assert_eq!(body, "Valid log message");

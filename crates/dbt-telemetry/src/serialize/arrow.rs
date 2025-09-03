@@ -5,7 +5,7 @@ use crate::{
     BuildPhase, BuildPhaseInfo, DevInternalInfo, InvocationCloudAttributes, InvocationEvalArgs,
     InvocationInfo, InvocationMetrics, LegacyLogEventInfo, LogEventInfo, LogRecordInfo,
     NodeExecutionStatus, NodeIdentifier, NodeInfo, ProcessInfo, RecordCodeLocation, SeverityNumber,
-    SharedPhaseInfo, SpanEndInfo, SpanStartInfo, SpanStatus, StatusCode, TelemetryAttributes,
+    SpanEndInfo, SpanStartInfo, SpanStatus, StatusCode, TelemetryAttributes,
     TelemetryAttributesType, TelemetryRecord, TelemetryRecordType, UnknownInfo, UpdateInfo,
     WriteArtifactInfo,
 };
@@ -43,7 +43,11 @@ impl Default for TelemetryAttributesType {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ArrowTelemetryRecord<'a> {
     pub record_type: TelemetryRecordType,
-    pub trace_id: String, // Arrow doesn't support u128 natively, so...
+    /// Arrow doesn't support u128 natively, so this is stored as a hex string.
+    ///
+    /// Note that this is the exact same value as `invocation_id` which is generated
+    /// as UUID::v4 and stored as OTEL trace_id field for spans/logs.
+    pub trace_id: String,
     pub span_id: Option<u64>,
     pub span_name: Option<&'a str>,
     pub parent_span_id: Option<u64>,
@@ -69,7 +73,6 @@ pub struct ArrowAttributes<'a> {
     pub host_os: Option<&'a str>,
     pub host_arch: Option<&'a str>,
     // Invocation fields
-    pub invocation_id: Option<&'a str>,
     pub raw_command: Option<&'a str>,
     // Invocation eval args
     pub command: Option<&'a str>,
@@ -147,7 +150,6 @@ pub struct ArrowAttributes<'a> {
     pub exe_path: Option<&'a str>,
     // Onboarding fields
     pub onboarding_step: Option<&'a str>,
-    pub onboarding_invocation_id: Option<&'a str>,
     // Phase fields - BuildPhaseInfo union fields
     pub phase: Option<BuildPhase>,
     pub node_count: Option<u64>,
@@ -284,7 +286,11 @@ impl<'a> From<&'a TelemetryAttributes> for ArrowAttributes<'a> {
             },
             TelemetryAttributes::Invocation(boxed_info) => {
                 let InvocationInfo {
-                    invocation_id,
+                    // we are not serializing `invocation_id` as a separate column,
+                    // as it should be canonically used via the `trace_id` field.
+                    // Invocation span is the only place where `invocation_id` exist
+                    // and used in fusion telemetry infra to set the trace_id field.
+                    invocation_id: _,
                     raw_command,
                     eval_args,
                     process_info,
@@ -293,7 +299,6 @@ impl<'a> From<&'a TelemetryAttributes> for ArrowAttributes<'a> {
                 } = boxed_info.as_ref();
 
                 ArrowAttributes {
-                    invocation_id: Some(invocation_id),
                     raw_command: Some(raw_command),
                     // Eval args
                     command: Some(eval_args.command.as_str()),
@@ -388,23 +393,21 @@ impl<'a> From<&'a TelemetryAttributes> for ArrowAttributes<'a> {
                 ..Default::default()
             },
             TelemetryAttributes::Phase(phase_info) => match phase_info {
-                BuildPhaseInfo::Loading { shared }
-                | BuildPhaseInfo::DependencyLoading { shared }
-                | BuildPhaseInfo::Parsing { shared }
-                | BuildPhaseInfo::Scheduling { shared }
-                | BuildPhaseInfo::FreshnessAnalysis { shared }
-                | BuildPhaseInfo::Lineage { shared } => ArrowAttributes {
+                BuildPhaseInfo::Loading {}
+                | BuildPhaseInfo::DependencyLoading {}
+                | BuildPhaseInfo::Parsing {}
+                | BuildPhaseInfo::Scheduling {}
+                | BuildPhaseInfo::FreshnessAnalysis {}
+                | BuildPhaseInfo::Lineage {} => ArrowAttributes {
                     phase: Some(phase_info.into()),
-                    invocation_id: Some(&shared.invocation_id),
                     event_type: TelemetryAttributesType::from(attr),
                     ..Default::default()
                 },
-                BuildPhaseInfo::Analyzing { shared, node_count }
-                | BuildPhaseInfo::Hydrating { shared, node_count }
-                | BuildPhaseInfo::Compiling { shared, node_count }
-                | BuildPhaseInfo::Executing { shared, node_count } => ArrowAttributes {
+                BuildPhaseInfo::Analyzing { node_count }
+                | BuildPhaseInfo::Hydrating { node_count }
+                | BuildPhaseInfo::Compiling { node_count }
+                | BuildPhaseInfo::Executing { node_count } => ArrowAttributes {
                     phase: Some(phase_info.into()),
-                    invocation_id: Some(&shared.invocation_id),
                     node_count: Some(*node_count),
                     event_type: TelemetryAttributesType::from(attr),
                     ..Default::default()
@@ -481,7 +484,6 @@ impl<'a> From<&'a TelemetryAttributes> for ArrowAttributes<'a> {
             },
             TelemetryAttributes::Onboarding(info) => ArrowAttributes {
                 onboarding_step: Some(&info.step),
-                onboarding_invocation_id: Some(&info.invocation_id),
                 event_type: TelemetryAttributesType::from(attr),
                 ..Default::default()
             },
@@ -493,6 +495,9 @@ impl TryFrom<ArrowTelemetryRecord<'_>> for TelemetryRecord {
     type Error = String;
 
     fn try_from(arrow: ArrowTelemetryRecord) -> Result<Self, Self::Error> {
+        let trace_id = u128::from_str_radix(&arrow.trace_id, 16)
+            .map_err(|e| format!("Invalid trace_id: {e}"))?;
+
         match arrow.record_type {
             TelemetryRecordType::SpanStart => {
                 let span_id = arrow
@@ -506,13 +511,12 @@ impl TryFrom<ArrowTelemetryRecord<'_>> for TelemetryRecord {
                     .ok_or("Missing start_time_unix_nano for SpanStart record")?;
 
                 Ok(TelemetryRecord::SpanStart(SpanStartInfo {
-                    trace_id: u128::from_str_radix(&arrow.trace_id, 16)
-                        .map_err(|e| format!("Invalid trace_id: {e}"))?,
+                    trace_id,
                     span_id,
                     parent_span_id: arrow.parent_span_id,
                     span_name: span_name.to_string(),
                     start_time_unix_nano: nanos_to_system_time(start_time_unix_nano),
-                    attributes: TelemetryAttributes::try_from(arrow.attributes)?,
+                    attributes: deserialize_attrs_from_arrow(arrow.attributes, trace_id)?,
                     severity_number: SeverityNumber::from_repr(arrow.severity_number)
                         .ok_or("Invalid severity_number")?,
                     severity_text: arrow.severity_text.to_string(),
@@ -541,14 +545,13 @@ impl TryFrom<ArrowTelemetryRecord<'_>> for TelemetryRecord {
                 };
 
                 Ok(TelemetryRecord::SpanEnd(SpanEndInfo {
-                    trace_id: u128::from_str_radix(&arrow.trace_id, 16)
-                        .map_err(|e| format!("Invalid trace_id: {e}"))?,
+                    trace_id,
                     span_id,
                     parent_span_id: arrow.parent_span_id,
                     span_name: span_name.to_string(),
                     start_time_unix_nano: nanos_to_system_time(start_time_unix_nano),
                     end_time_unix_nano: nanos_to_system_time(end_time_unix_nano),
-                    attributes: TelemetryAttributes::try_from(arrow.attributes)?,
+                    attributes: deserialize_attrs_from_arrow(arrow.attributes, trace_id)?,
                     status,
                     severity_number: SeverityNumber::from_repr(arrow.severity_number)
                         .ok_or("Invalid severity_number")?,
@@ -563,18 +566,43 @@ impl TryFrom<ArrowTelemetryRecord<'_>> for TelemetryRecord {
 
                 Ok(TelemetryRecord::LogRecord(LogRecordInfo {
                     time_unix_nano: nanos_to_system_time(time_unix_nano),
-                    trace_id: u128::from_str_radix(&arrow.trace_id, 16)
-                        .map_err(|e| format!("Invalid trace_id: {e}"))?,
+                    trace_id,
                     span_id: arrow.span_id,
                     span_name: arrow.span_name.map(str::to_string),
                     severity_number: SeverityNumber::from_repr(arrow.severity_number)
                         .ok_or("Invalid severity_number")?,
                     severity_text: arrow.severity_text.to_string(),
                     body: body.to_string(),
-                    attributes: TelemetryAttributes::try_from(arrow.attributes)?,
+                    attributes: deserialize_attrs_from_arrow(arrow.attributes, trace_id)?,
                 }))
             }
         }
+    }
+}
+
+/// Deserialize TelemetryAttributes from ArrowAttributes. This is a thin wrapper
+/// over `TryFrom` implementation to handle one special case of `Invocation`
+/// attribute type that needs `trace_id` to be passed separately as it is not
+/// available in `ArrowAttributes` itself.
+fn deserialize_attrs_from_arrow(
+    arrow: ArrowAttributes,
+    trace_id: u128,
+) -> Result<TelemetryAttributes, String> {
+    match arrow.event_type {
+        TelemetryAttributesType::Invocation => {
+            Ok(TelemetryAttributes::Invocation(Box::new(InvocationInfo {
+                invocation_id: uuid::Uuid::from_u128(trace_id),
+                raw_command: arrow
+                    .raw_command
+                    .ok_or("Missing raw_command for Invocation attributes")?
+                    .to_string(),
+                eval_args: InvocationEvalArgs::try_from(&arrow)?,
+                process_info: ProcessInfo::try_from(&arrow)?,
+                cloud_args: InvocationCloudAttributes::from(&arrow),
+                metrics: InvocationMetrics::from(&arrow),
+            })))
+        }
+        _ => TelemetryAttributes::try_from(arrow),
     }
 }
 
@@ -798,56 +826,35 @@ impl TryFrom<ArrowAttributes<'_>> for TelemetryAttributes {
             TelemetryAttributesType::Process => {
                 Ok(TelemetryAttributes::Process(ProcessInfo::try_from(&arrow)?))
             }
-            TelemetryAttributesType::Invocation => {
-                Ok(TelemetryAttributes::Invocation(Box::new(InvocationInfo {
-                    invocation_id: arrow
-                        .invocation_id
-                        .ok_or("Missing invocation_id for Invocation attributes")?
-                        .to_string(),
-                    raw_command: arrow
-                        .raw_command
-                        .ok_or("Missing raw_command for Invocation attributes")?
-                        .to_string(),
-                    eval_args: InvocationEvalArgs::try_from(&arrow)?,
-                    process_info: ProcessInfo::try_from(&arrow)?,
-                    cloud_args: InvocationCloudAttributes::from(&arrow),
-                    metrics: InvocationMetrics::from(&arrow),
-                })))
-            }
+            TelemetryAttributesType::Invocation => Err(
+                "`Invocation` attributes can't be deserialized from `ArrowAttributes` directly.\
+                    Use `deserialize_attrs_from_arrow` instead"
+                    .to_string(),
+            ),
             TelemetryAttributesType::Update => Ok(TelemetryAttributes::Update(UpdateInfo {
                 version: arrow.update_version.map(str::to_string),
                 package: arrow.update_package.map(str::to_string),
                 exe_path: arrow.exe_path.map(str::to_string),
             })),
             TelemetryAttributesType::Phase => {
-                let shared = SharedPhaseInfo {
-                    invocation_id: arrow
-                        .invocation_id
-                        .ok_or("Missing invocation_id for Phase attributes")?
-                        .to_string(),
-                };
                 let phase = arrow.phase.ok_or("Missing phase for Phase attributes")?;
                 let phase_info = match phase {
-                    BuildPhase::Loading => BuildPhaseInfo::Loading { shared },
-                    BuildPhase::DependencyLoading => BuildPhaseInfo::DependencyLoading { shared },
-                    BuildPhase::Parsing => BuildPhaseInfo::Parsing { shared },
-                    BuildPhase::Scheduling => BuildPhaseInfo::Scheduling { shared },
-                    BuildPhase::FreshnessAnalysis => BuildPhaseInfo::FreshnessAnalysis { shared },
-                    BuildPhase::Lineage => BuildPhaseInfo::Lineage { shared },
+                    BuildPhase::Loading => BuildPhaseInfo::Loading {},
+                    BuildPhase::DependencyLoading => BuildPhaseInfo::DependencyLoading {},
+                    BuildPhase::Parsing => BuildPhaseInfo::Parsing {},
+                    BuildPhase::Scheduling => BuildPhaseInfo::Scheduling {},
+                    BuildPhase::FreshnessAnalysis => BuildPhaseInfo::FreshnessAnalysis {},
+                    BuildPhase::Lineage => BuildPhaseInfo::Lineage {},
                     BuildPhase::Analyzing => BuildPhaseInfo::Analyzing {
-                        shared,
                         node_count: arrow.node_count.unwrap_or(0),
                     },
                     BuildPhase::Hydrating => BuildPhaseInfo::Hydrating {
-                        shared,
                         node_count: arrow.node_count.unwrap_or(0),
                     },
                     BuildPhase::Compiling => BuildPhaseInfo::Compiling {
-                        shared,
                         node_count: arrow.node_count.unwrap_or(0),
                     },
                     BuildPhase::Executing => BuildPhaseInfo::Executing {
-                        shared,
                         node_count: arrow.node_count.unwrap_or(0),
                     },
                 };
@@ -898,10 +905,6 @@ impl TryFrom<ArrowAttributes<'_>> for TelemetryAttributes {
                     step: arrow
                         .onboarding_step
                         .ok_or("Missing onboarding_step for Onboarding attributes")?
-                        .to_string(),
-                    invocation_id: arrow
-                        .onboarding_invocation_id
-                        .ok_or("Missing onboarding_invocation_id for Onboarding attributes")?
                         .to_string(),
                 }))
             }
@@ -1173,28 +1176,23 @@ mod tests {
                     return TelemetryAttributes::Phase(Faker.fake_with_rng(&mut rng));
                 };
 
-                let shared = Faker.fake_with_rng(&mut rng);
                 let phase_info = match phase {
-                    BuildPhase::Loading => BuildPhaseInfo::Loading { shared },
-                    BuildPhase::DependencyLoading => BuildPhaseInfo::DependencyLoading { shared },
-                    BuildPhase::Parsing => BuildPhaseInfo::Parsing { shared },
-                    BuildPhase::Scheduling => BuildPhaseInfo::Scheduling { shared },
-                    BuildPhase::FreshnessAnalysis => BuildPhaseInfo::FreshnessAnalysis { shared },
-                    BuildPhase::Lineage => BuildPhaseInfo::Lineage { shared },
+                    BuildPhase::Loading => BuildPhaseInfo::Loading {},
+                    BuildPhase::DependencyLoading => BuildPhaseInfo::DependencyLoading {},
+                    BuildPhase::Parsing => BuildPhaseInfo::Parsing {},
+                    BuildPhase::Scheduling => BuildPhaseInfo::Scheduling {},
+                    BuildPhase::FreshnessAnalysis => BuildPhaseInfo::FreshnessAnalysis {},
+                    BuildPhase::Lineage => BuildPhaseInfo::Lineage {},
                     BuildPhase::Analyzing => BuildPhaseInfo::Analyzing {
-                        shared,
                         node_count: Faker.fake_with_rng(&mut rng),
                     },
                     BuildPhase::Hydrating => BuildPhaseInfo::Hydrating {
-                        shared,
                         node_count: Faker.fake_with_rng(&mut rng),
                     },
                     BuildPhase::Compiling => BuildPhaseInfo::Compiling {
-                        shared,
                         node_count: Faker.fake_with_rng(&mut rng),
                     },
                     BuildPhase::Executing => BuildPhaseInfo::Executing {
-                        shared,
                         node_count: Faker.fake_with_rng(&mut rng),
                     },
                 };
