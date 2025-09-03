@@ -8,12 +8,16 @@ use arrow::compute::concat_batches;
 use arrow_schema::Schema;
 use core::result::Result;
 use dbt_common::cancellation::{Cancellable, CancellationToken};
+use dbt_common::constants::EXECUTING;
 use dbt_xdbc::semaphore::Semaphore;
 use dbt_xdbc::{Backend, Connection, Database, QueryCtx, connection, database, driver};
+use log;
+use serde_json::json;
 use std::borrow::Cow;
 use tracy_client::span;
 
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::hash::{BuildHasher, Hasher};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -242,7 +246,7 @@ impl SqlEngine {
         options: &HashMap<String, String>,
     ) -> AdapterResult<RecordBatch> {
         assert!(query_ctx.sql().is_some() || !options.is_empty());
-        query_ctx.log_for_execution();
+        Self::log_query_ctx_for_execution(query_ctx);
 
         let token = self.cancellation_token();
         let do_execute = |conn: &'_ mut dyn Connection| -> Result<
@@ -294,6 +298,38 @@ impl SqlEngine {
         };
         let total_batch = concat_batches(&schema, &batches)?;
         Ok(total_batch)
+    }
+
+    /// Format query context as we want to see it in a log file and log it in query_log
+    pub fn log_query_ctx_for_execution(ctx: &QueryCtx) {
+        let mut buf = String::new();
+
+        writeln!(&mut buf, "-- created_at: {}", ctx.created_at_as_str()).unwrap();
+        writeln!(&mut buf, "-- dialect: {}", ctx.adapter_type()).unwrap();
+
+        let node_id = match ctx.node_id() {
+            Some(id) => id,
+            None => "not available".to_string(),
+        };
+        writeln!(&mut buf, "-- node_id: {node_id}").unwrap();
+
+        match ctx.desc() {
+            Some(desc) => writeln!(&mut buf, "-- desc: {desc}").unwrap(),
+            None => writeln!(&mut buf, "-- desc: not provided").unwrap(),
+        }
+
+        if let Some(sql) = ctx.sql() {
+            write!(&mut buf, "{sql}").unwrap();
+            if !sql.ends_with(";") {
+                write!(&mut buf, ";").unwrap();
+            }
+        }
+
+        if node_id != "not available" {
+            log::debug!(target: EXECUTING, name = "SQLQuery", data:serde = json!({ "node_info": { "unique_id": node_id } }); "{buf}");
+        } else {
+            log::debug!(target: EXECUTING, name = "SQLQuery"; "{buf}");
+        }
     }
 
     /// Get the configured database name. Used by
@@ -350,5 +386,23 @@ pub fn execute_query_with_retry(
         Err(err)
     } else {
         unreachable!("last_error should not be None if we exit the loop")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use dbt_xdbc::QueryCtx;
+
+    use super::SqlEngine;
+
+    #[test]
+    fn test_log_for_execution() {
+        let query_ctx = QueryCtx::new("test_adapter")
+            .with_node_id("test_node_123")
+            .with_sql("SELECT * FROM test_table")
+            .with_desc("Test query for logging");
+
+        // Should not panic
+        SqlEngine::log_query_ctx_for_execution(&query_ctx);
     }
 }

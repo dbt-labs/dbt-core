@@ -19,7 +19,7 @@ workspace = true
 default = []
 odbc = ["odbc-sys"]
 xdbc-fuzzying = []
-repl = ["dialoguer", "clap"]
+repl = ["dialoguer", "clap", "dbt-common"]
 
 [dependencies]
 adbc-core = { workspace = true }
@@ -30,21 +30,18 @@ atomic-wait = { version = "1.1.0" }
 base64 = { workspace = true }
 chrono = { workspace = true }
 dbt-cancel = { workspace = true }
-dbt-common = { workspace = true }
 dirs = { workspace = true }
 futures = { workspace = true }
 getrandom = "0.2.15"
 http = { workspace = true }
 ini = { workspace = true }
 libloading = { version = "0.8" }
-log = { workspace = true }
 odbc-sys = { version = "0.25.0", optional = true }
 parking_lot = { workspace = true }
 percent-encoding = "2.3.1"
 rand = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
 sha2 = { workspace = true }
 siphasher = { workspace = true }
 tokio = { workspace = true }
@@ -60,6 +57,10 @@ test-with = { version = "0.14.7", default-features = false }
 name = "dbt-xdbc-repl"
 path = "src/bin/repl.rs"
 required-features = ["repl"]
+
+[dependencies.dbt-common]
+optional = true
+path = "../dbt-common"
 
 [dependencies.dialoguer]
 features = ["history"]
