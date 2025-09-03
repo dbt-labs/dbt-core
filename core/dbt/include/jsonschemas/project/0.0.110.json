@@ -514,12 +514,6 @@
             "boolean",
             "null"
           ]
-        },
-        "snowflake_ignore_case": {
-          "type": [
-            "boolean",
-            "null"
-          ]
         }
       },
       "additionalProperties": false
