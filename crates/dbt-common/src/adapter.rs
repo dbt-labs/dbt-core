@@ -23,8 +23,6 @@ pub trait SchemaRegistry: Send + Sync {
 #[strum(serialize_all = "lowercase", ascii_case_insensitive)]
 #[serde(rename_all = "lowercase")]
 pub enum AdapterType {
-    /// Adapter used in parse phase
-    Parse,
     /// Postgres
     Postgres,
     /// Snowflake
@@ -51,7 +49,6 @@ impl From<AdapterType> for Dialect {
             // https://developer.salesforce.com/docs/data/data-cloud-query-guide/references/data-cloud-query-api-reference/c360a-api-query-v2-call-overview.html
             // falls back to Postgresql at the moment
             AdapterType::Salesforce => Dialect::Postgresql,
-            AdapterType::Parse => unimplemented!("Parse adapter type is not supported"),
         }
     }
 }

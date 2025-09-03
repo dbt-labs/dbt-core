@@ -225,13 +225,6 @@ impl ProfileSetup {
                 };
                 todo!("setup_salesforce_profile")
             }
-            AdapterType::Parse => {
-                return Err(fs_err!(
-                    ErrorCode::InvalidArgument,
-                    "Unsupported adapter: {}",
-                    adapter
-                ));
-            }
         };
 
         let mut outputs = HashMap::new();

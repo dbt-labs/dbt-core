@@ -232,7 +232,6 @@ pub fn create_relation(
             identifier,
             relation_type,
         )) as Arc<dyn BaseRelation>,
-        AdapterType::Parse => panic!("Adapter type not supported: {adapter_type}"),
     };
     Ok(relation)
 }

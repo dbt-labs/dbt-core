@@ -43,7 +43,6 @@ pub fn create_static_relation(
             let salesforce_relation_type = SalesforceRelationType(quoting);
             StaticBaseRelationObject::new(Arc::new(salesforce_relation_type))
         }
-        _ => unimplemented!("{} doesn't support relation types", adapter_type),
     };
     Some(Value::from_object(result))
 }
