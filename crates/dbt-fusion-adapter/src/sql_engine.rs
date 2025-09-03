@@ -8,16 +8,12 @@ use arrow::compute::concat_batches;
 use arrow_schema::Schema;
 use core::result::Result;
 use dbt_common::cancellation::{Cancellable, CancellationToken};
-use dbt_common::constants::EXECUTING;
 use dbt_xdbc::semaphore::Semaphore;
 use dbt_xdbc::{Backend, Connection, Database, QueryCtx, connection, database, driver};
-use log;
-use serde_json::json;
 use std::borrow::Cow;
 use tracy_client::span;
 
 use std::collections::HashMap;
-use std::fmt::Write;
 use std::hash::{BuildHasher, Hasher};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -246,7 +242,7 @@ impl SqlEngine {
         options: &HashMap<String, String>,
     ) -> AdapterResult<RecordBatch> {
         assert!(query_ctx.sql().is_some() || !options.is_empty());
-        log_query(query_ctx);
+        query_ctx.log_for_execution();
 
         let token = self.cancellation_token();
         let do_execute = |conn: &'_ mut dyn Connection| -> Result<
@@ -354,37 +350,5 @@ pub fn execute_query_with_retry(
         Err(err)
     } else {
         unreachable!("last_error should not be None if we exit the loop")
-    }
-}
-
-/// Format query context as we want to see it in a log file.
-fn log_query(query_ctx: &QueryCtx) {
-    let mut buf = String::new();
-
-    writeln!(&mut buf, "-- created_at: {}", query_ctx.created_at_as_str()).unwrap();
-    writeln!(&mut buf, "-- dialect: {}", query_ctx.adapter_type()).unwrap();
-
-    let node_id = match query_ctx.node_id() {
-        Some(id) => id,
-        None => "not available".to_string(),
-    };
-    writeln!(&mut buf, "-- node_id: {node_id}").unwrap();
-
-    match query_ctx.desc() {
-        Some(desc) => writeln!(&mut buf, "-- desc: {desc}").unwrap(),
-        None => writeln!(&mut buf, "-- desc: not provided").unwrap(),
-    }
-
-    if let Some(sql) = query_ctx.sql() {
-        write!(&mut buf, "{sql}").unwrap();
-        if !sql.ends_with(";") {
-            write!(&mut buf, ";").unwrap();
-        }
-    }
-
-    if node_id != "not available" {
-        log::debug!(target: EXECUTING, name = "SQLQuery", data:serde = json!({ "node_info": { "unique_id": node_id } }); "{buf}");
-    } else {
-        log::debug!(target: EXECUTING, name = "SQLQuery"; "{buf}");
     }
 }
