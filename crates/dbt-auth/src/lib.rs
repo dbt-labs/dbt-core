@@ -1,4 +1,5 @@
 #![allow(clippy::let_and_return)]
+#![allow(clippy::collapsible_else_if)]
 
 use std::io;
 
