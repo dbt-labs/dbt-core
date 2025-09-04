@@ -1,8 +1,16 @@
 ---
-source: minijinja/tests/test_templates.rs
+source: crates/dbt-jinja/minijinja/tests/test_templates.rs
 description: "{{ hello[0] }}\n{{ hello[3] }}\n{{ hello[-1] }}\n{{ hello[999] is undefined }}\n{{ intrange[0] }}\n{{ intrange[3] }}\n{{ intrange[-1] }}\n{{ intrange[999] is undefined }}"
 info:
-  hello: Hello World
+  __minijinja_current_path: indexing.txt
+  __minijinja_current_span:
+    end_col: 1
+    end_line: 1
+    end_offset: 0
+    start_col: 1
+    start_line: 1
+    start_offset: 0
+  hello: Hällo Wörld
   intrange:
     - 0
     - 1
@@ -14,14 +22,13 @@ info:
     - 7
     - 8
     - 9
-input_file: minijinja/tests/inputs/indexing.txt
+input_file: crates/dbt-jinja/minijinja/tests/inputs/indexing.txt
 ---
 H
 l
 d
-true
+True
 0
 3
 9
-true
-
+True

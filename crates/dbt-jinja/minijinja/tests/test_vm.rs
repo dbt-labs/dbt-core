@@ -154,7 +154,7 @@ fn test_op_eq() {
     c.add(Instruction::Emit(Span::default()));
 
     let output = simple_eval(&c.finish().0, ()).unwrap();
-    assert_eq!(output, "true");
+    assert_eq!(output, "True");
 
     let mut c = CodeGenerator::new("hello.html", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(1)));
@@ -163,7 +163,7 @@ fn test_op_eq() {
     c.add(Instruction::Emit(Span::default()));
 
     let output = simple_eval(&c.finish().0, ()).unwrap();
-    assert_eq!(output, "false");
+    assert_eq!(output, "False");
 }
 
 #[test]
@@ -175,7 +175,7 @@ fn test_op_ne() {
     c.add(Instruction::Emit(Span::default()));
 
     let output = simple_eval(&c.finish().0, ()).unwrap();
-    assert_eq!(output, "true");
+    assert_eq!(output, "True");
 
     let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from("foo")));
@@ -184,7 +184,7 @@ fn test_op_ne() {
     c.add(Instruction::Emit(Span::default()));
 
     let output = simple_eval(&c.finish().0, ()).unwrap();
-    assert_eq!(output, "false");
+    assert_eq!(output, "False");
 }
 
 #[test]
@@ -196,7 +196,7 @@ fn test_op_lt() {
     c.add(Instruction::Emit(Span::default()));
 
     let output = simple_eval(&c.finish().0, ()).unwrap();
-    assert_eq!(output, "true");
+    assert_eq!(output, "True");
 
     let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(2)));
@@ -205,7 +205,7 @@ fn test_op_lt() {
     c.add(Instruction::Emit(Span::default()));
 
     let output = simple_eval(&c.finish().0, ()).unwrap();
-    assert_eq!(output, "false");
+    assert_eq!(output, "False");
 }
 
 #[test]
@@ -217,7 +217,7 @@ fn test_op_gt() {
     c.add(Instruction::Emit(Span::default()));
 
     let output = simple_eval(&c.finish().0, ()).unwrap();
-    assert_eq!(output, "false");
+    assert_eq!(output, "False");
 
     let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(2)));
@@ -226,7 +226,7 @@ fn test_op_gt() {
     c.add(Instruction::Emit(Span::default()));
 
     let output = simple_eval(&c.finish().0, ()).unwrap();
-    assert_eq!(output, "true");
+    assert_eq!(output, "True");
 }
 
 #[test]
@@ -238,7 +238,7 @@ fn test_op_lte() {
     c.add(Instruction::Emit(Span::default()));
 
     let output = simple_eval(&c.finish().0, ()).unwrap();
-    assert_eq!(output, "true");
+    assert_eq!(output, "True");
 
     let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(2)));
@@ -247,7 +247,7 @@ fn test_op_lte() {
     c.add(Instruction::Emit(Span::default()));
 
     let output = simple_eval(&c.finish().0, ()).unwrap();
-    assert_eq!(output, "false");
+    assert_eq!(output, "False");
 }
 
 #[test]
@@ -259,7 +259,7 @@ fn test_op_gte() {
     c.add(Instruction::Emit(Span::default()));
 
     let output = simple_eval(&c.finish().0, ()).unwrap();
-    assert_eq!(output, "false");
+    assert_eq!(output, "False");
 
     let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(1)));
@@ -268,7 +268,7 @@ fn test_op_gte() {
     c.add(Instruction::Emit(Span::default()));
 
     let output = simple_eval(&c.finish().0, ()).unwrap();
-    assert_eq!(output, "true");
+    assert_eq!(output, "True");
 }
 
 #[test]
@@ -279,7 +279,7 @@ fn test_op_not() {
     c.add(Instruction::Emit(Span::default()));
 
     let output = simple_eval(&c.finish().0, ()).unwrap();
-    assert_eq!(output, "true");
+    assert_eq!(output, "True");
 
     let mut c = CodeGenerator::new("<unknown>", "", CodeGenerationProfile::Render);
     c.add(Instruction::LoadConst(Value::from(true)));
@@ -287,7 +287,7 @@ fn test_op_not() {
     c.add(Instruction::Emit(Span::default()));
 
     let output = simple_eval(&c.finish().0, ()).unwrap();
-    assert_eq!(output, "false");
+    assert_eq!(output, "False");
 }
 
 #[test]

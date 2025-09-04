@@ -709,5 +709,5 @@ fn test_test_caching() {
         .unwrap()
         .render((), &[])
         .unwrap();
-    assert_eq!(rv, "false");
+    assert_eq!(rv, "False");
 }

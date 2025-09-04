@@ -949,7 +949,7 @@ fn test_plain_object() {
 
     let x = Value::from_object(X);
     assert!(x.try_iter().is_err());
-    assert_snapshot!(render!("{{ x }}|{{ x.missing_attr is undefined }}", x), @"X|true");
+    assert_snapshot!(render!("{{ x }}|{{ x.missing_attr is undefined }}", x), @"X|True");
 }
 
 #[test]

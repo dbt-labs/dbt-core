@@ -9,5 +9,5 @@ fn test_state_lookup_global() {
     });
     env.add_global("the_global", true);
     let rv = env.render_str("[{{ lookup_global() }}]", (), &[]).unwrap();
-    assert_eq!(rv, "[true]");
+    assert_eq!(rv, "[True]");
 }
