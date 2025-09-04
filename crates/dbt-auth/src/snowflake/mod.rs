@@ -284,7 +284,6 @@ impl AuthMethod {
     }
 }
 
-#[derive(Debug, Default)]
 pub struct SnowflakeAuth;
 
 impl SnowflakeAuth {

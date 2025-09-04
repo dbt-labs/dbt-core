@@ -2,7 +2,6 @@ use crate::{AdapterConfig, Auth, AuthError};
 
 use dbt_xdbc::{Backend, database};
 
-#[derive(Debug, Default)]
 pub struct PostgresAuth;
 
 impl Auth for PostgresAuth {

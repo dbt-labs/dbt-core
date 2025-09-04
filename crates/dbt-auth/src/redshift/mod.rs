@@ -3,7 +3,6 @@ use crate::{AdapterConfig, Auth, AuthError};
 use dbt_xdbc::{Backend, database, redshift};
 use percent_encoding::utf8_percent_encode;
 
-#[derive(Debug, Default)]
 pub struct RedshiftAuth;
 
 impl Auth for RedshiftAuth {

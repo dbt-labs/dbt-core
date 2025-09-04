@@ -1,144 +1,44 @@
+use std::borrow::Cow;
 use std::fs;
 
 use crate::{AdapterConfig, Auth, AuthError};
 
-use database::Builder as DatabaseBuilder;
+use dbt_xdbc::salesforce::auth_type;
 use dbt_xdbc::{Backend, database, salesforce};
-use strum::{AsRefStr, IntoEnumIterator};
-use strum_macros::EnumIter;
 
-/// Main Salesforce authentication implementation
-#[derive(Debug, Default)]
 pub struct SalesforceAuth;
 
-/// Required options for Salesforce authentication
-#[derive(EnumIter, AsRefStr)]
-#[strum(serialize_all = "snake_case")]
-enum RequiredConfigOptions {
-    Username,
-    ClientId,
-    LoginUrl,
+/// Salesforce authentication methods
+enum AuthMethod {
+    /// JWT Bearer authentication for Salesforce
+    JwtBearer { private_key: String },
+    /// Username/Password authentication
+    UsernamePassword {
+        client_secret: String,
+        password: String,
+    },
 }
 
 impl SalesforceAuth {
-    /// Configure database builder using the specified authentication method
-    fn configure_builder_with_method(
-        &self,
-        config: &AdapterConfig,
-        method: String,
-    ) -> Result<DatabaseBuilder, AuthError> {
-        let mut builder = DatabaseBuilder::new(self.backend());
-
-        for option in RequiredConfigOptions::iter() {
-            match option {
-                RequiredConfigOptions::Username => {
-                    builder.with_named_option(
-                        salesforce::USERNAME,
-                        config.require_string(option.as_ref())?,
-                    )?;
-                }
-                RequiredConfigOptions::ClientId => {
-                    builder.with_named_option(
-                        salesforce::CLIENT_ID,
-                        config.require_string(option.as_ref())?,
-                    )?;
-                }
-                RequiredConfigOptions::LoginUrl => {
-                    builder.with_named_option(
-                        salesforce::LOGIN_URL,
-                        config.require_string("login_url")?,
-                    )?;
-                }
-            }
-        }
-
-        AuthMethod::new(config, &method)?.configure(&mut builder)?;
-        Ok(builder)
-    }
-}
-
-/// JWT Bearer authentication for Salesforce
-#[derive(Debug)]
-struct JwtBearerAuth {
-    private_key: String,
-}
-
-impl JwtBearerAuth {
-    fn new(config: &AdapterConfig) -> Result<Self, AuthError> {
-        let private_key = config.get_string("private_key");
-        let private_key_path = config.get_string("private_key_path");
-
-        // Validate that exactly one private key source is provided
-        let private_key = match (private_key, private_key_path) {
-            (Some(_), Some(_)) => Err(AuthError::config(
-                "Cannot specify both 'private_key' and 'private_key_path'. Choose one.",
-            )),
-            (None, None) => Err(AuthError::config(
-                "JWT authentication requires either 'private_key' or 'private_key_path'.",
-            )),
-            (Some(private_key), None) => Ok(private_key.to_string()),
-            (None, Some(private_key_path)) => {
-                let private_key = fs::read_to_string(private_key_path.as_ref())?;
-                Ok(private_key)
-            }
-        }?;
-
-        Ok(JwtBearerAuth { private_key })
-    }
-}
-
-/// Username/Password authentication for Salesforce
-#[derive(Debug)]
-struct UsernamePasswordAuth {
-    client_secret: String,
-    password: String,
-}
-
-impl UsernamePasswordAuth {
-    fn new(config: &AdapterConfig) -> Result<Self, AuthError> {
-        let client_secret = config.require_string("client_secret")?.to_string();
-        let password = config.require_string("password")?.to_string();
-
-        Ok(UsernamePasswordAuth {
-            client_secret,
-            password,
-        })
-    }
-}
-
-/// Enum representing different Salesforce authentication methods
-#[derive(Debug)]
-enum AuthMethod {
-    Jwt(JwtBearerAuth),
-    UsernamePassword(UsernamePasswordAuth),
-}
-
-impl AuthMethod {
-    pub fn new(config: &AdapterConfig, method: &str) -> Result<Self, AuthError> {
+    /// Configure the database builder with the selected authentication method.
+    ///
+    /// The required options have already been set at this point (e.g. client_id, username).
+    fn configure_with_method(
+        method: AuthMethod,
+        builder: &mut database::Builder,
+    ) -> Result<(), AuthError> {
         match method {
-            "jwt_bearer" => JwtBearerAuth::new(config).map(Self::Jwt),
-            "username_password" => UsernamePasswordAuth::new(config).map(Self::UsernamePassword),
-            unsupported_method => Err(AuthError::config(format!(
-                "Unsupported authentication method '{unsupported_method}' for Salesforce. Supported methods: jwt_bearer, username_password"
-            ))),
-        }
-    }
-
-    pub fn configure(self, builder: &mut DatabaseBuilder) -> Result<(), AuthError> {
-        match self {
-            AuthMethod::Jwt(auth) => {
-                builder.with_named_option(salesforce::AUTH_TYPE, salesforce::auth_type::JWT)?;
-
-                builder.with_named_option(salesforce::JWT_PRIVATE_KEY, auth.private_key)?;
+            AuthMethod::JwtBearer { private_key } => {
+                builder.with_named_option(salesforce::AUTH_TYPE, auth_type::JWT)?;
+                builder.with_named_option(salesforce::JWT_PRIVATE_KEY, private_key)?;
             }
-            AuthMethod::UsernamePassword(auth) => {
-                builder.with_named_option(
-                    salesforce::AUTH_TYPE,
-                    salesforce::auth_type::USERNAME_PASSWORD,
-                )?;
-
-                builder.with_named_option(salesforce::CLIENT_SECRET, auth.client_secret)?;
-                builder.with_named_option(salesforce::PASSWORD, auth.password)?;
+            AuthMethod::UsernamePassword {
+                client_secret,
+                password,
+            } => {
+                builder.with_named_option(salesforce::AUTH_TYPE, auth_type::USERNAME_PASSWORD)?;
+                builder.with_named_option(salesforce::CLIENT_SECRET, client_secret)?;
+                builder.with_named_option(salesforce::PASSWORD, password)?;
             }
         }
 
@@ -151,9 +51,67 @@ impl Auth for SalesforceAuth {
         Backend::Salesforce
     }
 
-    fn configure(&self, config: &AdapterConfig) -> Result<DatabaseBuilder, AuthError> {
-        // Check if an explicit method is specified
-        let method = config.require_string("method")?.to_string();
-        self.configure_builder_with_method(config, method)
+    fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError> {
+        // Require a "method" option to guide the interpretation of other options.
+        // We can enforce this because Salesforce is a new adapter without legacy users.
+        let method = config.require_string("method")?;
+
+        let mut builder = database::Builder::new(Backend::Salesforce);
+        for (opt_name, adbc_opt_name) in [
+            ("username", salesforce::USERNAME),
+            ("client_id", salesforce::CLIENT_ID),
+            ("login_url", salesforce::LOGIN_URL),
+        ] {
+            let opt_value = config.require_string(opt_name)?;
+            builder.with_named_option(adbc_opt_name, opt_value)?;
+        }
+
+        let auth_method = match method.as_ref() {
+            "jwt_bearer" => {
+                let private_key = config.get_string("private_key");
+                let private_key_path = config.get_string("private_key_path");
+
+                // Validate that exactly one private key source is provided
+                let private_key = match (private_key, private_key_path) {
+                    (Some(_), Some(_)) => {
+                        return Err(AuthError::config(
+                            "Cannot specify both 'private_key' and 'private_key_path'. Choose one.",
+                        ));
+                    }
+                    (None, None) => {
+                        return Err(AuthError::config(
+                            "JWT authentication requires either 'private_key' or 'private_key_path'.",
+                        ));
+                    }
+                    (Some(private_key), None) => private_key,
+                    (None, Some(private_key_path)) => {
+                        let private_key = fs::read_to_string(private_key_path.as_ref())?;
+                        Cow::Owned(private_key)
+                    }
+                };
+                AuthMethod::JwtBearer {
+                    private_key: private_key.to_string(),
+                }
+            }
+            "username_password" => {
+                let client_secret = config.require_string("client_secret")?;
+                let password = config.require_string("password")?;
+
+                AuthMethod::UsernamePassword {
+                    client_secret: client_secret.to_string(),
+                    password: password.to_string(),
+                }
+            }
+            unsupported_method => {
+                return Err(AuthError::config(format!(
+                    "Unsupported authentication method '{unsupported_method}' for Salesforce.
+ Supported methods: 'jwt_bearer', 'username_password'"
+                )));
+            }
+        };
+
+        Self::configure_with_method(auth_method, &mut builder)?;
+
+        Ok(builder)
     }
 }

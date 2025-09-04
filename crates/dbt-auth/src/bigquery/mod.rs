@@ -91,7 +91,7 @@ impl BigqueryAuth {
         config: &AdapterConfig,
         builder: &mut database::Builder,
     ) -> Result<(), AuthError> {
-        // is has "json" in the name, but it's actually a YAML mapping
+        // it has "json" in the name, but it's actually a YAML mapping
         let keyfile_json = config.require("keyfile_json")?;
         let keyfile_yaml = match keyfile_json {
             YmlValue::Mapping(_, _) => keyfile_json.clone(),

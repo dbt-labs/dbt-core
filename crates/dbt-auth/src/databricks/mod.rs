@@ -2,8 +2,6 @@ use crate::{AdapterConfig, Auth, AuthError};
 
 use dbt_xdbc::{Backend, database, databricks};
 
-/// Databricks auth
-#[derive(Debug, Default)]
 pub struct DatabricksAuth;
 
 impl Auth for DatabricksAuth {
