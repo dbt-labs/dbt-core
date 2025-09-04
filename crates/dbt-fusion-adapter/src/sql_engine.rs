@@ -3,6 +3,7 @@ use crate::auth::Auth;
 use crate::config::AdapterConfig;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 
+use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::RecordBatch;
 use arrow::compute::concat_batches;
 use arrow_schema::Schema;
@@ -25,6 +26,8 @@ use std::sync::RwLock;
 use std::{thread, time::Duration};
 
 use super::record_and_replay::{RecordEngine, ReplayEngine};
+
+type Options = Vec<(String, OptionValue)>;
 
 #[derive(Default)]
 struct IdentityHasher {
@@ -235,7 +238,7 @@ impl SqlEngine {
         conn: &'_ mut dyn Connection,
         query_ctx: &QueryCtx,
     ) -> AdapterResult<RecordBatch> {
-        self.execute_with_options(query_ctx, conn, &HashMap::new())
+        self.execute_with_options(query_ctx, conn, Options::new())
     }
 
     /// Execute the given SQL query or statement.
@@ -243,7 +246,7 @@ impl SqlEngine {
         &self,
         query_ctx: &QueryCtx,
         conn: &'_ mut dyn Connection,
-        options: &HashMap<String, String>,
+        options: Options,
     ) -> AdapterResult<RecordBatch> {
         assert!(query_ctx.sql().is_some() || !options.is_empty());
         Self::log_query_ctx_for_execution(query_ctx);
@@ -258,12 +261,9 @@ impl SqlEngine {
             let mut stmt = conn.new_statement()?;
             stmt.set_sql_query(query_ctx)?;
 
-            for (key, value) in options {
-                stmt.set_option(
-                    adbc_core::options::OptionStatement::Other(key.clone()),
-                    adbc_core::options::OptionValue::String(value.clone()),
-                )?;
-            }
+            options
+                .into_iter()
+                .try_for_each(|(key, value)| stmt.set_option(OptionStatement::Other(key), value))?;
 
             // Make sure we don't create more statements after global cancellation.
             token.check_cancellation()?;
