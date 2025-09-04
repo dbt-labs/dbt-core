@@ -239,7 +239,7 @@ pub fn convert_macro_result_to_record_batch(
         ));
     };
 
-    let record_batch = table.to_record_batch();
+    let record_batch = table.original_record_batch();
     Ok(record_batch)
 }
 

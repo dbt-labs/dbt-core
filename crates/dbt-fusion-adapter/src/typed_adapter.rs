@@ -357,7 +357,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         table: Arc<AgateTable>,
         col_idx: i64,
     ) -> AdapterResult<String> {
-        let schema = table.to_record_batch().schema();
+        let schema = table.original_record_batch().schema();
         let data_type = schema.field(col_idx as usize).data_type();
 
         // XXX: There is divergence here with Core's behavior as Agate only supports a limited
@@ -532,7 +532,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         grants_table: Arc<AgateTable>,
     ) -> AdapterResult<BTreeMap<String, Vec<String>>> {
-        let record_batch = grants_table.to_record_batch();
+        let record_batch = grants_table.original_record_batch();
 
         let grantee_cols = get_column_values::<StringArray>(&record_batch, "grantee")?;
         let privilege_cols = get_column_values::<StringArray>(&record_batch, "privilege_type")?;
@@ -633,7 +633,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         let result = result.downcast_object::<ResultObject>().unwrap();
 
         let table = result.table.as_ref().expect("AgateTable exists");
-        let record_batch = table.to_record_batch();
+        let record_batch = table.original_record_batch();
 
         let identifier_column_values =
             get_column_values::<StringArray>(&record_batch, "IDENTIFIER")?;

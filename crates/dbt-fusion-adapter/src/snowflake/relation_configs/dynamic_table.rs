@@ -29,7 +29,7 @@ impl TryFrom<&Value> for DescribeDynamicTableResults {
             .map_err(|e| format!("Expected key `dynamic_table`: {e}"))?
             .downcast_object::<AgateTable>()
             .ok_or("Failed to convert dynamic_table to AgateTable".to_string())?
-            .to_record_batch();
+            .original_record_batch();
 
         let catalog_value = value
             .get_item(&Value::from_safe_string("catalog".into()))
@@ -41,7 +41,7 @@ impl TryFrom<&Value> for DescribeDynamicTableResults {
                 catalog_value
                     .downcast_object::<AgateTable>()
                     .ok_or("Failed to convert catalog to AgateTable".to_string())?
-                    .to_record_batch(),
+                    .original_record_batch(),
             )
         };
 

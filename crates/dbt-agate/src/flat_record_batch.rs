@@ -501,7 +501,7 @@ pub(crate) struct FlatRecordBatch {
     /// Flat record batch.
     flat: Arc<RecordBatch>,
     /// The original record batch before the flattening of nested columns.
-    _original: Option<Arc<RecordBatch>>,
+    original: Option<Arc<RecordBatch>>,
     /// Array converters for each column in the flat record batch.
     ///
     /// These are pre-built converters allow converting any value
@@ -526,7 +526,7 @@ impl FlatRecordBatch {
             .collect::<Result<Vec<_>, ArrowError>>()?;
         Ok(Self {
             flat,
-            _original: original,
+            original,
             converters,
         })
     }
@@ -534,6 +534,15 @@ impl FlatRecordBatch {
     /// The inner [RecordBatch] with only flat columns.
     pub fn inner(&self) -> &Arc<RecordBatch> {
         &self.flat
+    }
+
+    /// The original [RecordBatch] before flattening nested columns, if available.
+    ///
+    /// Some operations (e.g. [FlatRecordBatch::with_single_column] create a [FlatRecordBatch]
+    /// without keeping the original batch. The "original" batch only applies to the first
+    /// flattening operation performed by [FlatRecordBatch::try_new].
+    pub fn original(&self) -> Option<&Arc<RecordBatch>> {
+        self.original.as_ref()
     }
 
     pub fn with_single_column(&self, idx: usize) -> Self {

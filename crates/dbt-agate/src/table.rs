@@ -284,7 +284,23 @@ impl AgateTable {
         Self { repr }
     }
 
-    /// Converts this AgateTable into an Arrow RecordBatch.
+    /// Returns the original Arrow [RecordBatch] used to create this Agate table.
+    ///
+    /// Some Agate operations like [TableRepr::single_column_table] may create new tables
+    /// that do not have to go through the flattening process, so this function will simply
+    /// return the flat [RecordBatch] in those cases.
+    pub fn original_record_batch(&self) -> Arc<RecordBatch> {
+        match self.repr.flat.original() {
+            Some(original) => Arc::clone(original),
+            None => self.repr.to_record_batch(),
+        }
+    }
+
+    /// Returns the underlying Arrow [RecordBatch] backing this Agate table.
+    ///
+    /// This will return the [RecordBatch] produced at construction time after
+    /// the flattening process of nested columns (Structs, Lists, etc). For the
+    /// original, unflattened [RecordBatch], use [AgateTable::original_record_batch].
     pub fn to_record_batch(&self) -> Arc<RecordBatch> {
         self.repr.to_record_batch()
     }
@@ -594,7 +610,7 @@ mod tests {
         let downcasted = table_value.downcast_object::<AgateTable>().unwrap();
         assert_eq!(downcasted.num_columns(), 2);
         assert_eq!(downcasted.num_rows(), 3);
-        let record_batch = downcasted.to_record_batch();
+        let record_batch = downcasted.original_record_batch();
         assert_eq!(record_batch.num_columns(), 2);
         assert_eq!(record_batch.num_rows(), 3);
     }
