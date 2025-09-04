@@ -165,6 +165,68 @@ All notable changes to this project will be documented in this file.
 - Adjusted deserialization logic for warehouse specific configs
 - Use relation cache in defer
 
+## 2.0.0-preview.8 - September 04, 2025
+
+### Features
+
+- [dbt-fusion] Implement catalog.json generation for Bigquery (@jzhu13)
+- [dbt-fusion] Implement catalog.json generation for Redshift (@jzhu13)
+- [dbt-fusion] Implement catalog.json generation for Postgres adapter (@jzhu13)
+- [dbt-fusion] Implement catalog.json generation for databricks (@jzhu13)
+- [dbt-fusion] Add materialized view materialization for databricks ([#548](https://github.com/dbt-labs/dbt-fusion/issues/548)) (@danielacraciun)
+- [dbt-fusion] Support `target_database` and `target_schema` in snapshot configs ([#580](https://github.com/dbt-labs/dbt-fusion/issues/580)) (@serramatutu)
+- [dbt-fusion] Add ability to pass invocation id via cli argument `--invocation-id` or env var `DBT_INVOCATION_ID` (@mishamsk)
+- [dbt-fusion] Saved queries in manifest and semantic manifest (@eddowh)
+
+### Fixes
+
+- [dbt-fusion] `parent_map` and `child_map` are now correctly populated (#499) ([#499](https://github.com/dbt-labs/dbt-fusion/issues/499)) (@stevenayers)
+- [dbt-fusion] Implement rendering modules.re.Match objects (@fornwall)
+- [dbt-fusion] Make the timedelta.total_seconds() method work
+- [dbt-fusion] Get exposures selector working ([#4744](https://github.com/dbt-labs/dbt-fusion/issues/4744)) (@gshank)
+- [dbt-fusion] Improved typechecking of some JSON-accepting functions in BigQuery
+- [dbt-fusion] Fix for `dbt test` with deferred state ([#607](https://github.com/dbt-labs/dbt-fusion/issues/607)) (@akbog)
+- [dbt-fusion] LSP+Cache: Schema file dependents are properly considered
+- [dbt-fusion] Fix Agate flattening of doubly-nested Arrow types (@felipecrv)
+- [internal] Fix processing versioned selectors ([#590](https://github.com/dbt-labs/dbt-fusion/issues/590)) (@MartinNeupauer)
+- [dbt-fusion] LSP: Fixed 'ref' error when using an existing 'ref' that wasn't used before in a file
+- [dbt-fusion] add unittest error message ([#523](https://github.com/dbt-labs/dbt-fusion/issues/523)) (@wizardxz)
+- [dbt-fusion] fix DbtReplayAdapter.convert_type (@wizardxz)
+- [dbt-fusion] fix salesforce adapter convert_type_inner (@wizardxz)
+- [dbt-fusion] LSP: Fixed column completions from not showing up after incremental compile
+- [dbt-fusion] Correctly reject qualified column references after set operation such as UNION (@findepi)
+- [dbt-fusion] fix 632 [BUG] dbt show queries not appearing within logs/query_log.sql ([#632](https://github.com/dbt-labs/dbt-fusion/issues/632)) (@zoltanersek)
+- [dbt-fusion] Fixed dbt init failing to parse large project ids ([#638](https://github.com/dbt-labs/dbt-fusion/issues/638)) (@olehpidhi)
+- [dbt-extension] Clarify message when dbt Fusion installation can not be found. ([#5393](https://github.com/dbt-labs/dbt-fusion/issues/5393)) (@emerson-paiva)
+- [dbt-fusion] Fix user facing config serialization (@ChenyuLInx)
+- [dbt-fusion] Fix doc macro original_file_path_pnode_conversion (@ChenyuLInx)
+- [dbt-fusion] Don't require project/database in BigQuery config ([#566](https://github.com/dbt-labs/dbt-fusion/issues/566)) (@felipecrv)
+
+### Under the Hood
+
+- [dbt-fusion] Move need_quotes to AdapterType
+- [dbt-fusion] Better driver discovery. Better makefile integration. Better driver ergonomics.
+- [dbt-fusion] Use catalog macros to generate catalog.json
+- [dbt-fusion] add extract-sources subcommand (@wizardxz)
+- [dbt-fusion] Stubs for populating metrics in manifest and semantic_manifest (@eddowh)
+- [dbt-fusion] implement inline source replay (@wizardxz)
+- [dbt-fusion] [Redshift] Relation cache pre-hydration (@ajhlee-dbt)
+- [dbt-fusion] Stubs for semantic models in manifest and semantic manifest (@eddowh)
+- [dbt-fusion] Minor refactor/cleanup of adapter code (@jzhu13)
+- [dbt-fusion] Only include nodes with catalog info in the catalog.json (@jzhu13)
+- [dbt-fusion] Fix SLT's SnowflakeExe dropping all data (@findepi)
+- [dbt-fusion] Bump BigQuery driver and swap Redshift driver ([#4578](https://github.com/dbt-labs/dbt-fusion/issues/4578)) (@ajhlee-dbt)
+- [dbt-fusion] Define new semantic resources spec in dbt_schemas::properties (@eddowh)
+
+### Contributors
+- [@ajhlee-dbt](https://github.com/ajhlee-dbt) ([#4578](https://github.com/dbt-labs/dbt-fusion/issues/4578))
+- [@akbog](https://github.com/akbog) ([#607](https://github.com/dbt-labs/dbt-fusion/issues/607))
+- [@emerson-paiva](https://github.com/emerson-paiva) ([#5393](https://github.com/dbt-labs/dbt-fusion/issues/5393))
+- [@fornwall](https://github.com/fornwall)
+- [@serramatutu](https://github.com/serramatutu) ([#580](https://github.com/dbt-labs/dbt-fusion/issues/580))
+- [@stevenayers](https://github.com/stevenayers) ([#499](https://github.com/dbt-labs/dbt-fusion/issues/499))
+
+
 ## 2.0.0-preview.7 - August 28, 2025
 
 ### Features
