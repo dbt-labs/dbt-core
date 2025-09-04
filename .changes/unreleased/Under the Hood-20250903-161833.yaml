@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Update jsonschemas used for schema-based deprecations
-time: 2025-09-03T16:18:33.931722-04:00
-custom:
-    Author: michellark
-    Issue: "11987"
