@@ -39,7 +39,7 @@ fn value_to_datetime(
                             ErrorKind::InvalidOperation,
                             "not a valid date or timestamp",
                         )
-                        .with_source(original_err))
+                        .with_source(original_err));
                     }
                 },
             },

@@ -49,14 +49,14 @@ fn re_compile(args: &[Value]) -> Result<Value, Error> {
 #[derive(Debug, Clone)]
 pub struct Pattern {
     raw: String,
-    _compiled: Regex,
+    compiled: Regex,
 }
 
 impl Pattern {
     pub fn new(raw: &str, compiled: Regex) -> Self {
         Self {
             raw: raw.to_string(),
-            _compiled: compiled, // TODO: use this in re methods
+            compiled,
         }
     }
 }
@@ -307,13 +307,27 @@ fn get_or_compile_regex_and_text(args: &[Value]) -> Result<(Box<Regex>, &str), E
     }
 
     // First arg: either compiled or raw pattern
-    let pattern = args[0].to_string();
-    let compiled = Box::new(Regex::new(&pattern).map_err(|e| {
-        Error::new(
-            ErrorKind::InvalidOperation,
-            format!("Failed to compile regex: {e}"),
-        )
-    })?);
+    let compiled = if let Some(object) = args[0].as_object() {
+        if let Some(pattern) = object.downcast_ref::<Pattern>() {
+            Box::new(pattern.compiled.clone())
+        } else {
+            let pattern = args[0].to_string();
+            Box::new(Regex::new(&pattern).map_err(|e| {
+                Error::new(
+                    ErrorKind::InvalidOperation,
+                    format!("Failed to compile regex: {e}"),
+                )
+            })?)
+        }
+    } else {
+        let pattern = args[0].to_string();
+        Box::new(Regex::new(&pattern).map_err(|e| {
+            Error::new(
+                ErrorKind::InvalidOperation,
+                format!("Failed to compile regex: {e}"),
+            )
+        })?)
+    };
 
     // Second arg: the text to match against
     let text = args[1].to_string();
@@ -471,5 +485,19 @@ mod tests {
         .unwrap();
         assert!(!result.is_true());
         assert_eq!(result.to_string(), "none");
+    }
+
+    #[test]
+    fn test_re_glob_search() {
+        let result = re_search(&[
+            Value::from(".*".to_string()),
+            Value::from("xyz".to_string()),
+        ])
+        .unwrap();
+        assert!(result.is_true());
+
+        let compiled_pattern = re_compile(&[Value::from(".*".to_string())]).unwrap();
+        let result = re_search(&[compiled_pattern, Value::from("xyz".to_string())]).unwrap();
+        assert!(result.is_true());
     }
 }

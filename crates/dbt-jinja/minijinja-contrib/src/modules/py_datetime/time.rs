@@ -92,7 +92,7 @@ impl PyTimeClass {
                 return Err(Error::new(
                     ErrorKind::InvalidArgument,
                     format!("Invalid iso time format: {iso_str}: {e}"),
-                ))
+                ));
             }
         };
 
