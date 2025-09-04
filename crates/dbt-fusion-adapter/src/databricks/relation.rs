@@ -253,6 +253,10 @@ impl BaseRelation for DatabricksRelation {
         Value::from(result)
     }
 
+    fn is_delta(&self) -> bool {
+        self.is_delta
+    }
+
     fn is_materialized_view(&self) -> bool {
         let result = matches!(self.relation_type, Some(RelationType::MaterializedView));
         result

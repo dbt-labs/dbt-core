@@ -118,6 +118,7 @@ impl Object for RelationObject {
             Some("schema") => Some(self.schema()),
             Some("identifier") | Some("name") | Some("table") => Some(self.identifier()),
             Some("is_table") => Some(Value::from(self.is_table())),
+            Some("is_delta") => Some(Value::from(self.is_delta())),
             Some("is_view") => Some(Value::from(self.is_view())),
             Some("is_materialized_view") => Some(Value::from(self.is_materialized_view())),
             Some("is_streaming_table") => Some(Value::from(self.is_streaming_table())),

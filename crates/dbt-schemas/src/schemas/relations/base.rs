@@ -275,6 +275,11 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         matches!(self.relation_type(), Some(RelationType::Table))
     }
 
+    /// Helper: check if the relation is a delta table
+    fn is_delta(&self) -> bool {
+        false
+    }
+
     /// Helper: check if the relation is a CTE
     fn is_cte(&self) -> bool {
         matches!(
