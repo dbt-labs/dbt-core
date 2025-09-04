@@ -201,14 +201,26 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
         &self,
         resolved_state: &ResolverState,
         run_stats: &Stats,
+        parent_map: &BTreeMap<String, Vec<String>>,
     ) -> Vec<Arc<dyn BaseRelation>> {
         let adapter_type = resolved_state.adapter_type;
         let mut relations: Vec<Arc<dyn BaseRelation>> = Vec::new();
-        let executed_unique_ids = run_stats
+        let mut executed_unique_ids = run_stats
             .stats
             .iter()
             .map(|stat| stat.unique_id.clone())
             .collect::<Vec<String>>();
+        let mut nodes_to_add = Vec::new();
+        nodes_to_add.extend(executed_unique_ids.clone());
+        // Add all nodes that are dependencies of the executed nodes
+        while let Some(unique_id) = nodes_to_add.pop() {
+            if !executed_unique_ids.contains(&unique_id) {
+                executed_unique_ids.push(unique_id.clone());
+            }
+            if let Some(parents) = parent_map.get(&unique_id) {
+                nodes_to_add.extend(parents.clone());
+            }
+        }
         let nodes = match run_stats.nodes.as_ref() {
             Some(nodes) => nodes,
             None => return relations,
