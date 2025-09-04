@@ -27,7 +27,6 @@ use chrono::{DateTime, Local, Utc};
 use dbt_common::{
     ErrorCode, FsResult, adapter::AdapterType, fs_err, serde_utils::convert_yml_to_map,
 };
-use minijinja::compiler::parser::materialization_macro_name;
 use minijinja::{MacroSpans, Value as MinijinjaValue, value::Object};
 use serde::Deserialize;
 use serde::Serialize;
@@ -382,35 +381,6 @@ pub struct ResolverState {
     pub defer_nodes: Option<Nodes>,
     /// Nodes that had resolution errors (e.g., unresolved refs/sources)
     pub nodes_with_resolution_errors: HashSet<String>,
-}
-
-impl ResolverState {
-    // TODO: support finding custom materialization https://github.com/dbt-labs/fs/issues/2736
-    // a few details is here https://github.com/dbt-labs/fs/pull/3967#discussion_r2153355927
-    pub fn find_materialization_macro_name(
-        &self,
-        materialization: impl fmt::Display,
-        adapter: AdapterType,
-    ) -> FsResult<String> {
-        let adapter_package = format!("dbt_{adapter}");
-        for package in [&adapter_package, "dbt"] {
-            for adapter in [adapter.as_ref(), "default"] {
-                if let Some(macro_) = self.macros.macros.values().find(|m| {
-                    m.name == materialization_macro_name(&materialization, adapter)
-                        && m.package_name == package
-                }) {
-                    return Ok(format!("{}.{}", package, macro_.name));
-                }
-            }
-        }
-
-        Err(fs_err!(
-            ErrorCode::Unexpected,
-            "Materialization macro not found for materialization: {}, adapter: {}",
-            materialization,
-            adapter
-        ))
-    }
 }
 
 impl fmt::Display for ResolverState {

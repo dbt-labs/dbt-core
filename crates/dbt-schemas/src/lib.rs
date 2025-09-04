@@ -3,6 +3,7 @@ pub mod dbt_types;
 pub mod dbt_utils;
 pub mod filter;
 pub mod man;
+pub mod materialization_resolver;
 pub mod state;
 pub mod stats;
 

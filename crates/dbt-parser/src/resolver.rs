@@ -18,8 +18,7 @@ use dbt_schemas::schemas::macros::build_macro_units;
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_schemas::state::RenderResults;
-use dbt_schemas::state::{DbtPackage, GenericTestAsset, Macros};
+use dbt_schemas::state::{DbtPackage, GenericTestAsset, Macros, RenderResults};
 use dbt_schemas::state::{DbtRuntimeConfig, Operations};
 
 use crate::args::ResolveArgs;
@@ -216,16 +215,6 @@ pub async fn resolve(
     // Ensure that there are no duplicate relations
     check_relation_uniqueness(&nodes)?;
 
-    match nodes.warn_on_custom_materializations() {
-        Ok(_) => {}
-        Err(e) => {
-            if arg.command == "parse" {
-                show_warning!(arg.io, e);
-            } else {
-                show_error!(arg.io, e);
-            }
-        }
-    }
     match nodes.warn_on_microbatch() {
         Ok(_) => {}
         Err(e) => {
