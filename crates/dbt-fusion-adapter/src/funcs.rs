@@ -314,6 +314,7 @@ pub fn format_sql_with_bindings(
                     }
                     ValueKind::Bytes => result.push_str(&formatter.format_bytes(&value)),
                     ValueKind::None => result.push_str(&formatter.none_value()),
+                    ValueKind::Bool => result.push_str(&formatter.format_bool(value.is_true())),
                     _ => {
                         // TODO: handle the SQL escaping of more data types
                         if let Some(date) = value.downcast_object::<PyDate>() {

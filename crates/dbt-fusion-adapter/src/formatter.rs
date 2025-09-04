@@ -13,6 +13,14 @@ use crate::snowflake::formatter::SnowflakeSqlLiteralFormatter;
 /// Formatter for SQL Literals
 /// This trait contains default implementations based on the SQL standard
 pub trait SqlLiteralFormatter {
+    fn format_bool(&self, b: bool) -> String {
+        if b {
+            "true".to_string()
+        } else {
+            "false".to_string()
+        }
+    }
+
     fn format_str(&self, l: &str) -> String {
         let escaped_str = l.replace("'", "''");
         format!("'{escaped_str}'")
@@ -48,6 +56,6 @@ pub fn create_sql_literal_formatter(adapter_type: AdapterType) -> Box<dyn SqlLit
         AdapterType::Bigquery => Box::new(BigquerySqlLiteralFormatter {}),
         AdapterType::Databricks => Box::new(DatabricksSqlLiteralFormatter {}),
         AdapterType::Redshift => Box::new(RedshiftSqlLiteralFormatter {}),
-        _ => unimplemented!("{} doesn't support a literal formatter", adapter_type),
+        AdapterType::Salesforce => Box::new(PostgreSqlLiteralFormatter {}), // XXX: using Postgres
     }
 }
