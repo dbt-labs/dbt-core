@@ -36,6 +36,7 @@ serde_json = { workspace = true }
 tracy-client = { workspace = true }
 uuid = { workspace = true }
 
+dbt-fusion-workspace-hack = { version = "0.1" }
 tracing = { workspace = true }
 
 

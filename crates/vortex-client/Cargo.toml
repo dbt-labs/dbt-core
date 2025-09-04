@@ -17,6 +17,7 @@ proto-rust = { path = "../proto-rust" }
 
 # client dependencies
 dbt-env = { workspace = true }
+dbt-fusion-workspace-hack = { version = "0.1" }
 http = { workspace = true }
 log = { workspace = true }
 pbjson-types = { workspace = true }
@@ -26,6 +27,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 ureq = { workspace = true }
 uuid = { workspace = true }
+
 
 [lib]
 name = "vortex_client"

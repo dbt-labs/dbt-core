@@ -46,7 +46,7 @@ strum_macros = { workspace = true }
 
 tokio = { workspace = true, features = ["fs"] }
 
-
+dbt-fusion-workspace-hack = { version = "0.1" }
 log = { workspace = true }
 rust-embed = { workspace = true }
 

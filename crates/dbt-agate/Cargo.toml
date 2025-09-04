@@ -22,6 +22,7 @@ arrow-schema = { workspace = true }
 
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
+dbt-fusion-workspace-hack = { version = "0.1" }
 minijinja = { workspace = true, features = ["loader", "deserialization"] }
 minijinja-contrib = { workspace = true, features = [
   "pycompat",

@@ -13,5 +13,6 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
+dbt-fusion-workspace-hack = { version = "0.1" }
 serde = { workspace = true }
 ustr = { workspace = true }

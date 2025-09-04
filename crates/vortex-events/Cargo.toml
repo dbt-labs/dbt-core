@@ -14,12 +14,14 @@ proto-rust = { path = "../proto-rust" }
 dashmap = { workspace = true }
 dbt-common = { workspace = true }
 dbt-env = { workspace = true }
+dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-jinja-utils = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-serde_yaml = { workspace = true }
 md5 = { workspace = true }
 uuid = { workspace = true }
 vortex-client = { workspace = true }
+
 
 [lib]
 name = "vortex_events"

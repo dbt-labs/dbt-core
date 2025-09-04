@@ -16,6 +16,7 @@ async-trait = { workspace = true }
 chrono-tz = { workspace = true }
 clap = { workspace = true }
 dbt-common = { workspace = true }
+dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-jinja-utils = { workspace = true }
 dbt-loader = { workspace = true }
 dbt-schemas = { workspace = true }
@@ -40,6 +41,7 @@ serde_json = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 vortex-events = { workspace = true }
+
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["fileapi"] }

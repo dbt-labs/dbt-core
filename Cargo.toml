@@ -51,11 +51,12 @@ license = "<>"
 repository = "https://github.com/dbt-labs/dbt-core"
 version = "2.0.0-preview.8"
 
+[patch.crates-io]
+
 # We currently need a fork of apache/arrow-datafusion with a few patches.
 # However, note that we declare dependencies in our crates with the same version
 # numbers as crates.io / the upstream repository.
 # See https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html#the-patch-section
-[patch.crates-io]
 datafusion = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
 datafusion-common = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45
 datafusion-catalog = { git = "https://github.com/sdf-labs/datafusion", rev = "1d8fe1ebabbd0dbfe41d57b03fbf60bd49f5b354" } # @ sdf/45

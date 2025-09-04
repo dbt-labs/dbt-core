@@ -31,11 +31,13 @@ tracing = { workspace = true }
 
 chrono = { workspace = true }
 console = { workspace = true }
+dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-serde_yaml = { workspace = true }
 git-version = { version = "0.3.9" }
 strum = { workspace = true }
 uuid = { workspace = true }
 vortex-events = { workspace = true }
+
 
 [dev-dependencies]
 tempfile = { workspace = true }

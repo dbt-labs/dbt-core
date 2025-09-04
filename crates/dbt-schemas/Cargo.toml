@@ -19,6 +19,7 @@ chrono-tz = { workspace = true }
 dbt-adapter-proc-macros = { workspace = true }
 dbt-common = { workspace = true }
 dbt-frontend-common = { workspace = true }
+dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-serde_yaml = { workspace = true }
 dbt-telemetry = { workspace = true }
 hex = { workspace = true }

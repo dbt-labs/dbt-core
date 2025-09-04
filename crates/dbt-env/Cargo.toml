@@ -18,3 +18,4 @@ path = "src/mod.rs"
 doctest = false
 
 [dependencies]
+dbt-fusion-workspace-hack = { version = "0.1" }

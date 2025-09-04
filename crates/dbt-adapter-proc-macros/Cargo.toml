@@ -15,6 +15,6 @@ proc-macro = true
 doctest = false
 
 [dependencies]
+dbt-fusion-workspace-hack = { version = "0.1" }
 quote = "1.0"
 syn = "2.0"
-

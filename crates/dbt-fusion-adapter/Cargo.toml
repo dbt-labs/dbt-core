@@ -29,6 +29,7 @@ parquet = { workspace = true }
 adbc-core = { workspace = true }
 crossbeam-skiplist = { workspace = true }
 dashmap = { workspace = true }
+dbt-fusion-workspace-hack = { version = "0.1" }
 log = { workspace = true, features = ["serde"] }
 minijinja = { workspace = true, features = ["loader", "deserialization"] }
 minijinja-contrib = { workspace = true, features = ["datetime", "timezone"] }

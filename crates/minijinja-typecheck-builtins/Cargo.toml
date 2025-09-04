@@ -11,6 +11,7 @@ name = "minijinja_typecheck_builtins"
 path = "src/lib.rs"
 
 [dependencies]
+dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-serde_yaml = { workspace = true }
 rust-embed = { workspace = true }
 serde = { workspace = true }

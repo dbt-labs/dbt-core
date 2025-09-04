@@ -66,6 +66,7 @@ tracing-log = { workspace = true } # temporary until we migrate to tracing exclu
 tracing-subscriber = { workspace = true }
 
 # Embedded OTLP exporter for traces
+dbt-fusion-workspace-hack = { version = "0.1" }
 opentelemetry = { workspace = true }
 opentelemetry-otlp = { workspace = true }
 opentelemetry-semantic-conventions = { workspace = true }

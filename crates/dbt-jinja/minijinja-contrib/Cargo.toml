@@ -32,6 +32,7 @@ unicode_wordwrap = [
 [dependencies]
 chrono = { version = "0.4.26", features = ["serde"] }
 chrono-tz = { workspace = true }
+dbt-fusion-workspace-hack = { version = "0.1" }
 fancy-regex = { workspace = true }
 iana-time-zone = { workspace = true }
 minijinja = { workspace = true }
@@ -52,6 +53,7 @@ time = { version = "0.3.35", optional = true, features = [
 ] }
 time-tz = { version = "2.0.0", features = ["db"], optional = true }
 unicode_categories = { version = "0.1.1", optional = true }
+
 
 [dev-dependencies]
 insta = { version = "1.38.0", features = ["glob", "serde"] }

@@ -40,8 +40,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 # Async errors
+dbt-fusion-workspace-hack = { version = "0.1" }
 tokio = { workspace = true }
-
 
 [target.'cfg(windows)'.dependencies]
 # Used to provide better canonical paths on Windows

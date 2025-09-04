@@ -20,6 +20,7 @@ dbt-xdbc = { workspace = true }
 adbc-core = { workspace = true }
 arrow-schema = { workspace = true }
 base64 = { workspace = true }
+dbt-fusion-workspace-hack = { version = "0.1" }
 minijinja = { workspace = true }
 parquet = { workspace = true }
 percent-encoding = "2.3.1"
