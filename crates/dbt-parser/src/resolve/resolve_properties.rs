@@ -42,6 +42,7 @@ pub struct MinimalProperties {
     pub tests: BTreeMap<String, MinimalPropertiesEntry>,
     pub exposures: BTreeMap<String, MinimalPropertiesEntry>,
     pub saved_queries: BTreeMap<String, MinimalPropertiesEntry>,
+    pub groups: BTreeMap<String, MinimalPropertiesEntry>,
 }
 
 // impl try extend from MinimalResolvedProperties
@@ -378,6 +379,37 @@ impl MinimalProperties {
                             name_span: Span::default(),
                             relative_path: properties_path.to_path_buf(),
                             schema_value: test_value,
+                            table_value: None,
+                            version_info: None,
+                            duplicate_paths: vec![],
+                        },
+                    );
+                }
+            }
+        }
+        if let Some(groups) = other.groups {
+            for group_value in groups {
+                let group = into_typed_with_jinja::<MinimalSchemaValue, _>(
+                    io_args,
+                    group_value.clone(),
+                    false,
+                    jinja_env,
+                    base_ctx,
+                    &[],
+                    dependency_package_name_from_ctx(jinja_env, base_ctx),
+                )?;
+                if let Some(existing_group) = self.groups.get_mut(&group.name) {
+                    existing_group
+                        .duplicate_paths
+                        .push(properties_path.to_path_buf());
+                } else {
+                    self.groups.insert(
+                        group.name.clone(),
+                        MinimalPropertiesEntry {
+                            name: group.name.clone(),
+                            name_span: Span::default(),
+                            relative_path: properties_path.to_path_buf(),
+                            schema_value: group_value,
                             table_value: None,
                             version_info: None,
                             duplicate_paths: vec![],

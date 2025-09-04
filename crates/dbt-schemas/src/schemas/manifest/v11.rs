@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
 
-use super::{DbtGroup, DbtSelector, DbtSemanticModel};
+use super::{DbtSelector, DbtSemanticModel, ManifestGroup};
 use crate::schemas::{
     macros::{DbtDocsMacro, DbtMacro},
     manifest::{
@@ -28,5 +28,5 @@ pub struct DbtManifestV11 {
     pub group_map: BTreeMap<String, Vec<String>>,
     pub disabled: BTreeMap<String, Vec<YmlValue>>,
     pub selectors: BTreeMap<String, DbtSelector>,
-    pub groups: BTreeMap<String, DbtGroup>,
+    pub groups: BTreeMap<String, ManifestGroup>,
 }

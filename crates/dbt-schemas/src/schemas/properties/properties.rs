@@ -1,5 +1,6 @@
 use crate::schemas::common::DocsConfig;
 use crate::schemas::common::Versions;
+use crate::schemas::manifest::common::DbtOwner;
 use crate::schemas::serde::{FloatOrString, bool_or_string_bool, string_or_array};
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::Spanned;
@@ -75,7 +76,7 @@ pub struct DbtPropertiesFile {
     pub data_tests: Option<Vec<DataTestProperties>>,
     pub analyses: Option<Vec<AnalysesProperties>>,
     pub exposures: Option<Vec<ExposureProperties>>,
-    pub groups: Option<Vec<GroupsProperties>>,
+    pub groups: Option<Vec<GroupProperties>>,
     pub macros: Option<Vec<MacrosProperties>>,
     pub metrics: Option<Vec<MetricsProperties>>,
     // semantic_models cannot be removed for backward compatibility
@@ -118,24 +119,17 @@ pub struct AnalysesConfig {
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
-pub struct GroupsProperties {
+pub struct GroupProperties {
     pub name: String,
-    pub owner: GroupsOwner,
+    pub owner: DbtOwner,
     pub description: Option<String>,
-    pub config: Option<GroupsConfig>,
+    pub config: Option<GroupConfig>,
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
-pub struct GroupsOwner {
-    pub email: Option<String>,
-    pub name: Option<String>,
-}
-
-#[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
-pub struct GroupsConfig {
-    pub meta: Option<YmlValue>,
+#[derive(Deserialize, Default, Serialize, Debug, Clone, JsonSchema)]
+pub struct GroupConfig {
+    pub meta: Option<BTreeMap<String, YmlValue>>,
 }
 
 #[skip_serializing_none]

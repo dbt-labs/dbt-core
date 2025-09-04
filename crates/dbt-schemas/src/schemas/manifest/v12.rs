@@ -17,7 +17,7 @@ use crate::schemas::{
     },
 };
 
-use super::{DbtGroup, DbtSelector};
+use super::{DbtSelector, ManifestGroup};
 
 #[derive(Debug, Default, Deserialize, Clone)]
 pub struct DbtManifestV12 {
@@ -36,7 +36,7 @@ pub struct DbtManifestV12 {
     pub group_map: BTreeMap<String, Vec<String>>,
     pub disabled: BTreeMap<String, Vec<YmlValue>>,
     pub selectors: BTreeMap<String, DbtSelector>,
-    pub groups: BTreeMap<String, DbtGroup>,
+    pub groups: BTreeMap<String, ManifestGroup>,
 }
 
 impl DbtManifestV12 {

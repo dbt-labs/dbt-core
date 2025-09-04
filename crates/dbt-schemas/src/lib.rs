@@ -74,7 +74,7 @@ pub mod schemas {
             BigqueryClusterConfig, BigqueryPartitionConfig, BigqueryPartitionConfigInner,
             GrantAccessToTarget, PartitionConfig, Range, RangeConfig, TimeConfig,
         };
-        pub use group::DbtGroup;
+        pub use group::ManifestGroup;
         pub use manifest::{
             BaseMetadata, DbtManifest, DbtNode, ManifestMetadata, build_manifest,
             nodes_from_dbt_manifest,
@@ -160,6 +160,8 @@ pub mod schemas {
         pub use model_properties::ModelConstraint;
         pub use model_properties::ModelFreshness;
         pub use model_properties::ModelProperties;
+        pub use properties::GroupConfig;
+        pub use properties::GroupProperties;
         pub use properties::{
             DbtPropertiesFile, DbtPropertiesFileValues, GetConfig, MinimalSchemaValue,
             MinimalTableValue,

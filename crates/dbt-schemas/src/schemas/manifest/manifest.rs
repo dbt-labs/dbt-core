@@ -19,7 +19,10 @@ use crate::{
             },
             saved_query::DbtSavedQueryAttr,
         },
-        nodes::{AdapterAttr, DbtSeedAttr, DbtSnapshotAttr, DbtSourceAttr, DbtTestAttr},
+        nodes::{
+            AdapterAttr, DbtGroup, DbtGroupAttr, DbtSeedAttr, DbtSnapshotAttr, DbtSourceAttr,
+            DbtTestAttr,
+        },
     },
     state::ResolverState,
 };
@@ -97,7 +100,7 @@ pub fn serialize_with_resource_type(mut value: YmlValue, resource_type: &str) ->
 
 pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> DbtManifest {
     let (parent_map, child_map) = build_parent_and_child_maps(&resolver_state.nodes);
-
+    let group_map = build_group_map(&resolver_state.nodes);
     DbtManifest {
         metadata: ManifestMetadata {
             __base__: BaseMetadata {
@@ -188,11 +191,44 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
             .map(|(id, unit_test)| (id.clone(), (**unit_test).clone().into()))
             .collect(),
         macros: resolver_state.macros.macros.clone(),
+        groups: resolver_state
+            .nodes
+            .groups
+            .iter()
+            .map(|(id, group)| (id.clone(), (**group).clone().into()))
+            .collect(),
         docs: resolver_state.macros.docs_macros.clone(),
         parent_map,
         child_map,
+        group_map,
         ..Default::default()
     }
+}
+
+// Build map of group names to nodes in the group
+fn build_group_map(nodes: &Nodes) -> BTreeMap<String, Vec<String>> {
+    let mut group_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for (id, model) in &nodes.models {
+        if let Some(group) = &model.__model_attr__.group {
+            group_map.entry(group.clone()).or_default().push(id.clone());
+        }
+    }
+    for (id, semantic_model) in &nodes.semantic_models {
+        if let Some(group) = &semantic_model.__semantic_model_attr__.group {
+            group_map.entry(group.clone()).or_default().push(id.clone());
+        }
+    }
+    for (id, metric) in &nodes.metrics {
+        if let Some(group) = &metric.__metric_attr__.group {
+            group_map.entry(group.clone()).or_default().push(id.clone());
+        }
+    }
+    for (id, saved_query) in &nodes.saved_queries {
+        if let Some(group) = &saved_query.__saved_query_attr__.group {
+            group_map.entry(group.clone()).or_default().push(id.clone());
+        }
+    }
+    group_map
 }
 
 /// Build parent and child dependency maps from the nodes.
@@ -863,7 +899,48 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
             }),
         );
     }
-
+    for (unique_id, group) in manifest.groups {
+        nodes.groups.insert(
+            unique_id.clone(),
+            Arc::new(DbtGroup {
+                __common_attr__: CommonAttributes {
+                    name: group.name.to_string(),
+                    package_name: group.package_name.to_string(),
+                    path: group.path.clone(),
+                    name_span: Span::default(),
+                    original_file_path: group.original_file_path.clone(),
+                    unique_id: unique_id.clone(),
+                    fqn: vec![],
+                    description: Some(group.description.unwrap_or_default()),
+                    patch_path: None,
+                    checksum: Default::default(),
+                    language: None,
+                    raw_code: None,
+                    tags: vec![],
+                    meta: BTreeMap::new(),
+                },
+                __base_attr__: NodeBaseAttributes {
+                    database: "".to_string(),
+                    schema: "".to_string(),
+                    alias: "".to_string(),
+                    relation_name: None,
+                    quoting: Default::default(),
+                    materialized: Default::default(),
+                    static_analysis: Default::default(),
+                    enabled: true,
+                    extended_model: false,
+                    persist_docs: None,
+                    columns: BTreeMap::new(),
+                    depends_on: NodeDependsOn::default(),
+                    quoting_ignore_case: false,
+                    refs: vec![],
+                    sources: vec![],
+                    metrics: vec![],
+                },
+                __group_attr__: DbtGroupAttr { owner: group.owner },
+            }),
+        );
+    }
     nodes
 }
 
@@ -887,6 +964,7 @@ mod tests {
             semantic_models: BTreeMap::new(),
             metrics: BTreeMap::new(),
             saved_queries: BTreeMap::new(),
+            groups: BTreeMap::new(),
         }
     }
 

@@ -1127,6 +1127,7 @@ pub struct Nodes {
     pub semantic_models: BTreeMap<String, Arc<DbtSemanticModel>>,
     pub metrics: BTreeMap<String, Arc<DbtMetric>>,
     pub saved_queries: BTreeMap<String, Arc<DbtSavedQuery>>,
+    pub groups: BTreeMap<String, Arc<DbtGroup>>,
 }
 
 impl Nodes {
@@ -1186,6 +1187,11 @@ impl Nodes {
             .iter()
             .map(|(id, node)| (id.clone(), Arc::new((**node).clone())))
             .collect();
+        let groups = self
+            .groups
+            .iter()
+            .map(|(id, node)| (id.clone(), Arc::new((**node).clone())))
+            .collect();
         Nodes {
             models,
             seeds,
@@ -1198,6 +1204,7 @@ impl Nodes {
             semantic_models,
             metrics,
             saved_queries,
+            groups,
         }
     }
 
@@ -1556,6 +1563,7 @@ impl Nodes {
         self.exposures.extend(other.exposures);
         self.metrics.extend(other.metrics);
         self.saved_queries.extend(other.saved_queries);
+        self.groups.extend(other.groups);
     }
 
     pub fn warn_on_custom_materializations(&self) -> FsResult<()> {
@@ -1730,6 +1738,22 @@ pub struct DbtExposureAttr {
     pub url: Option<String>,
     pub unrendered_config: BTreeMap<String, YmlValue>,
     pub created_at: Option<f64>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct DbtGroup {
+    pub __common_attr__: CommonAttributes,
+    pub __base_attr__: NodeBaseAttributes,
+    pub __group_attr__: DbtGroupAttr,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct DbtGroupAttr {
+    pub owner: DbtOwner,
 }
 
 #[skip_serializing_none]

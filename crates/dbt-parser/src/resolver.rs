@@ -24,6 +24,7 @@ use dbt_schemas::state::{DbtRuntimeConfig, Operations};
 
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, build_root_project_configs};
+use crate::resolve::resolve_groups::resolve_groups;
 use crate::resolve::resolve_operations::resolve_operations;
 use crate::utils::{self, clear_package_diagnostics};
 use dbt_schemas::schemas::telemetry::BuildPhaseInfo;
@@ -184,7 +185,6 @@ pub async fn resolve(
                 token,
             )
             .await?;
-
         nodes.extend(resolved_nodes);
         disabled_nodes.extend(resolved_disabled_nodes);
         collector
@@ -207,7 +207,6 @@ pub async fn resolve(
                 token,
             )
             .await?;
-
         nodes.extend(resolved_nodes);
         disabled_nodes.extend(resolved_disabled_nodes);
         collector
@@ -250,7 +249,6 @@ pub async fn resolve(
 
     // Check access
     check_access(arg, &nodes, &all_runtime_configs);
-
 
     Ok((
         ResolverState {
@@ -593,8 +591,21 @@ pub async fn resolve_inner(
         runtime_config,
         &nodes.models,
     )?;
+
     nodes.unit_tests.extend(unit_tests);
     disabled_nodes.unit_tests.extend(disabled_unit_tests);
+
+    let (groups, disabled_groups) = resolve_groups(
+        arg,
+        &mut min_properties.groups,
+        package_name,
+        &jinja_env,
+        &base_ctx,
+    )
+    .await?;
+
+    nodes.groups.extend(groups);
+    disabled_nodes.groups.extend(disabled_groups);
 
     let collector = RenderResults {
         rendering_results: rendering_results

@@ -2,6 +2,8 @@
 pub(crate) mod resolve_analyses;
 /// Functions for resolving exposures
 pub(crate) mod resolve_exposures;
+/// Functions for resolving groups
+pub(crate) mod resolve_groups;
 /// Functions for resolving macros
 pub mod resolve_macros;
 /// Functions for resolving metrics
