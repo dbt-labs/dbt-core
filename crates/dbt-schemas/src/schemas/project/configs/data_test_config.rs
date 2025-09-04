@@ -8,7 +8,9 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
 use crate::default_to;
-use crate::schemas::common::{DbtQuoting, ScheduleConfig, Severity, StoreFailuresAs};
+use crate::schemas::common::{
+    DbtMaterialization, DbtQuoting, ScheduleConfig, Severity, StoreFailuresAs,
+};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::postgres::PostgresIndex;
 use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
@@ -293,6 +295,7 @@ pub struct DataTestConfig {
     #[serde(rename = "where")]
     pub where_: Option<String>,
     pub description: Option<String>,
+    pub materialized: Option<DbtMaterialization>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
 }
@@ -318,6 +321,7 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
             where_: config.where_,
             static_analysis: config.static_analysis,
             description: config.description,
+            materialized: Some(DbtMaterialization::Test),
             // Initialize adapter specific configs with values from flattened fields
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
                 external_volume: config.external_volume,
@@ -522,6 +526,7 @@ impl DefaultTo<DataTestConfig> for DataTestConfig {
             where_,
             static_analysis,
             description,
+            materialized,
             // Adapter specific configs
             __warehouse_specific_config__: warehouse_specific_config,
         } = self;
@@ -556,6 +561,7 @@ impl DefaultTo<DataTestConfig> for DataTestConfig {
                 where_,
                 static_analysis,
                 description,
+                materialized,
             ]
         );
     }

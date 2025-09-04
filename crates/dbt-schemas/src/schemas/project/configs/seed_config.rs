@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
 use crate::default_to;
+use crate::schemas::common::DbtMaterialization;
 use crate::schemas::common::DbtQuoting;
 use crate::schemas::common::DocsConfig;
 use crate::schemas::common::Hooks;
@@ -289,6 +290,7 @@ pub struct SeedConfig {
     pub tags: Option<StringOrArrayOfStrings>,
     pub quoting: Option<DbtQuoting>,
     pub description: Option<String>,
+    pub materialized: Option<DbtMaterialization>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
 }
@@ -315,6 +317,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
             tags: config.tags,
             quoting: config.quoting,
             description: config.description,
+            materialized: Some(DbtMaterialization::Seed),
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
                 external_volume: config.external_volume,
                 base_location_root: config.base_location_root,
@@ -526,6 +529,7 @@ impl DefaultTo<SeedConfig> for SeedConfig {
             group,
             persist_docs,
             description,
+            materialized,
             // Adapter specific configs
             __warehouse_specific_config__: warehouse_specific_config,
         } = self;
@@ -563,6 +567,7 @@ impl DefaultTo<SeedConfig> for SeedConfig {
                 group,
                 persist_docs,
                 description,
+                materialized,
             ]
         );
     }

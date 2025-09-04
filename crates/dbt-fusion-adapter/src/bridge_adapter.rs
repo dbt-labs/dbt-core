@@ -300,7 +300,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn quote(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn quote(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 1, 1)?;
 
@@ -309,12 +309,12 @@ impl BaseAdapter for BridgeAdapter {
             .expect("quote requires exactly one argument")
             .to_string();
 
-        let quoted_identifier = self.typed_adapter.quote(&identifier);
+        let quoted_identifier = self.typed_adapter.quote(state, &identifier)?;
         Ok(Value::from(quoted_identifier))
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn quote_as_configured(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn quote_as_configured(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 2, 2)?;
 
@@ -339,7 +339,7 @@ impl BaseAdapter for BridgeAdapter {
 
         let result = self
             .typed_adapter
-            .quote_as_configured(identifier, &quote_key);
+            .quote_as_configured(state, identifier, &quote_key)?;
 
         Ok(Value::from(result))
     }
@@ -355,7 +355,7 @@ impl BaseAdapter for BridgeAdapter {
 
         let result = self
             .typed_adapter
-            .quote_seed_column(state, &column, quote_config);
+            .quote_seed_column(state, &column, quote_config)?;
         Ok(Value::from(result))
     }
 
@@ -496,6 +496,21 @@ impl BaseAdapter for BridgeAdapter {
     #[tracing::instrument(skip(self, state), level = "trace")]
     fn rename_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         self.cache_renamed(state, args)?;
+        if self.typed_adapter.is_replay() {
+            let iter = ArgsIter::new(
+                current_function_name!(),
+                &["from_relation", "to_relation"],
+                args,
+            );
+            let from_relation_obj = iter.next_arg::<&RelationObject>()?;
+            let to_relation_obj = iter.next_arg::<&RelationObject>()?;
+            let from_relation = from_relation_obj.inner();
+            let to_relation = to_relation_obj.inner();
+            iter.finish()?;
+            let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+            self.typed_adapter
+                .rename_relation(conn.as_mut(), from_relation, to_relation)?;
+        }
         execute_macro(state, args, "rename_relation")?;
         Ok(none_value())
     }
@@ -704,6 +719,19 @@ impl BaseAdapter for BridgeAdapter {
         )?;
 
         if let Some(cached_entry) = self.relation_cache.get_relation(&temp_relation) {
+            // we need to advance the replay adapter's recording to the next record
+            if self.typed_adapter.is_replay() {
+                let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+                let query_ctx = query_ctx_from_state(state)?.with_desc("get_relation adapter call");
+                let _ = self.typed_adapter.get_relation(
+                    state,
+                    &query_ctx,
+                    conn.as_mut(),
+                    database,
+                    schema,
+                    identifier,
+                )?;
+            }
             return Ok(cached_entry.relation().as_value());
         }
         // If we have captured the entire schema previously, we can check for non-existence
@@ -711,6 +739,8 @@ impl BaseAdapter for BridgeAdapter {
         else if self
             .relation_cache
             .contains_full_schema_for_relation(&temp_relation)
+            // Escape hatch for replay mode to aid replaying results 
+            && !self.typed_adapter.is_replay()
         {
             return Ok(none_value());
         }
@@ -721,6 +751,7 @@ impl BaseAdapter for BridgeAdapter {
         let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
         let query_ctx = query_ctx_from_state(state)?.with_desc("get_relation adapter call");
         let relation = self.typed_adapter.get_relation(
+            state,
             &query_ctx,
             conn.as_mut(),
             database,

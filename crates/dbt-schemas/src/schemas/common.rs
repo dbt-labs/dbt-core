@@ -196,6 +196,8 @@ impl<T: Clone + Merge<T>> Merge<Option<T>> for Option<T> {
 #[serde(rename_all = "snake_case")]
 pub enum DbtMaterialization {
     #[default]
+    Snapshot,
+    Seed,
     View,
     Table,
     Incremental,
@@ -253,6 +255,8 @@ impl std::fmt::Display for DbtMaterialization {
             DbtMaterialization::DynamicTable => "dynamic_table",
             DbtMaterialization::Analysis => "analysis",
             DbtMaterialization::Unknown(s) => s.as_str(),
+            DbtMaterialization::Snapshot => "snapshot",
+            DbtMaterialization::Seed => "seed",
         };
         write!(f, "{materialized_str}")
     }
@@ -274,6 +278,8 @@ impl From<DbtMaterialization> for RelationType {
             DbtMaterialization::DynamicTable => RelationType::DynamicTable,
             DbtMaterialization::Analysis => RelationType::External, // TODO Validate this
             DbtMaterialization::Unknown(_) => RelationType::External, // TODO Validate this
+            DbtMaterialization::Snapshot => RelationType::Table,    // TODO Validate this
+            DbtMaterialization::Seed => RelationType::Table,        // TODO Validate this
         }
     }
 }

@@ -16,6 +16,7 @@ use dbt_schemas::schemas::{
 use dbt_schemas::state::ResolverState;
 use dbt_schemas::stats::Stats;
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
+use minijinja::{Environment, State};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
@@ -307,7 +308,9 @@ pub fn create_schemas_if_not_exists(
     let map_f = move |conn: &'_ mut dyn Connection,
                       (catalog, schema): &(String, String)|
           -> AdapterResult<AdapterResult<()>> {
-        let sql = create_schema_sql(&adapter, catalog, schema);
+        let env = Environment::new();
+        let state = State::new_for_env(&env); // TODO: Only when DbtReplayAdapter is the adapter we need the state, so we set an empty state and let DbtReplayAdapter panic
+        let sql = create_schema_sql(&state, &adapter, catalog, schema)?;
         let query_ctx = QueryCtx::new(adapter.adapter_type().to_string())
             .with_sql(sql)
             .with_desc("Ensure catalogs and schemas exist");
@@ -361,16 +364,21 @@ pub fn flatten_catalog_schemas(
 ///
 /// catalog here refers to database entity - that'll be dataset for BigQuery, schema for Databricks, database for Snowflake etc
 /// TODO: revisit this to reuse an existing macro
-fn create_schema_sql(adapter: &Arc<dyn MetadataAdapter>, catalog: &str, schema: &str) -> String {
-    let catalog = adapter.quote_component(catalog, ComponentName::Database);
-    let schema = adapter.quote_component(schema, ComponentName::Schema);
+fn create_schema_sql(
+    state: &State,
+    adapter: &Arc<dyn MetadataAdapter>,
+    catalog: &str,
+    schema: &str,
+) -> AdapterResult<String> {
+    let catalog = adapter.quote_component(state, catalog, ComponentName::Database)?;
+    let schema = adapter.quote_component(state, schema, ComponentName::Schema)?;
     let adapter_type = adapter.adapter_type();
     match adapter_type {
         AdapterType::Snowflake | AdapterType::Databricks => {
-            format!("CREATE SCHEMA IF NOT EXISTS {catalog}.{schema}")
+            Ok(format!("CREATE SCHEMA IF NOT EXISTS {catalog}.{schema}"))
         }
         // Redshift connetions are always to a specific database
-        AdapterType::Redshift => format!("CREATE SCHEMA IF NOT EXISTS {schema}"),
+        AdapterType::Redshift => Ok(format!("CREATE SCHEMA IF NOT EXISTS {schema}")),
         _ => unimplemented!("create_schema_sql for adapter type: {}", adapter_type),
     }
 }

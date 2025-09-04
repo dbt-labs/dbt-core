@@ -55,7 +55,7 @@ pub fn downcast_value_to_dyn_base_relation(
 
 /// Attempts to downcast a Vec of BaseColumn trait objects to a specific column type
 pub fn downcast_base_columns<T: BaseColumn + Clone + 'static>(
-    columns: &[Box<dyn BaseColumn>],
+    columns: &[Arc<dyn BaseColumn>],
 ) -> Option<Vec<T>> {
     let mut result = Vec::with_capacity(columns.len());
 
@@ -73,7 +73,7 @@ pub fn downcast_base_columns<T: BaseColumn + Clone + 'static>(
 
 /// Attempts to convert a vector of dyn BaseColumn objects values to a MinijinjaValue
 pub fn dyn_base_columns_to_value(
-    columns: Vec<Box<dyn BaseColumn>>,
+    columns: Vec<Arc<dyn BaseColumn>>,
 ) -> Result<MinijinjaValue, MinijinjaError> {
     try_downcast_columns!(
         &columns,

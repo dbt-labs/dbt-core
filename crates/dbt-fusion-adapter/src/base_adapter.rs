@@ -54,7 +54,12 @@ pub trait AdapterTyping {
     fn quoting(&self) -> ResolvedQuoting;
 
     /// Quote a component of a relation
-    fn quote_component(&self, identifier: &str, component: ComponentName) -> String {
+    fn quote_component(
+        &self,
+        state: &State,
+        identifier: &str,
+        component: ComponentName,
+    ) -> AdapterResult<String> {
         let quoted = match component {
             ComponentName::Database => self.quoting().database,
             ComponentName::Schema => self.quoting().schema,
@@ -62,9 +67,9 @@ pub trait AdapterTyping {
         };
         if quoted {
             let adapter = self.as_typed_base_adapter();
-            adapter.quote(identifier)
+            adapter.quote(state, identifier)
         } else {
-            identifier.to_string()
+            Ok(identifier.to_string())
         }
     }
 
