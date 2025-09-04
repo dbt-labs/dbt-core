@@ -34,6 +34,10 @@ use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::common::ModelFreshnessRules;
 use dbt_schemas::schemas::common::NodeDependsOn;
+use dbt_schemas::schemas::common::Versions;
+use dbt_schemas::schemas::dbt_column::ColumnInheritanceRules;
+use dbt_schemas::schemas::dbt_column::ColumnProperties;
+use dbt_schemas::schemas::dbt_column::DbtColumnRef;
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::nodes::AdapterAttr;
 use dbt_schemas::schemas::project::DbtProject;
@@ -235,11 +239,20 @@ pub async fn resolve_models(
             }
         }
 
-        let columns = process_columns(
+        let mut columns = process_columns(
             properties.columns.as_ref(),
             model_config.meta.clone(),
             model_config.tags.clone().map(|tags| tags.into()),
         )?;
+
+        if let Some(versions) = &properties.versions {
+            columns = process_versioned_columns(
+                &model_config,
+                maybe_version.as_ref(),
+                versions,
+                columns,
+            )?;
+        }
 
         validate_merge_update_columns_xor(&model_config, &dbt_asset.path)?;
 
@@ -459,6 +472,53 @@ pub async fn resolve_models(
     models.extend(models_with_execute);
 
     Ok((models, rendering_results, disabled_models))
+}
+
+fn process_versioned_columns(
+    model_config: &ModelConfig,
+    maybe_version: Option<&String>,
+    versions: &[Versions],
+    columns: BTreeMap<String, DbtColumnRef>,
+) -> Result<BTreeMap<String, DbtColumnRef>, Box<dbt_common::FsError>> {
+    for version in versions.iter() {
+        if maybe_version.is_some_and(|v| Some(v) == version.get_version().as_ref()) {
+            if let Some(column_props) = version.__additional_properties__.get("columns") {
+                let column_map: Vec<ColumnProperties> = column_props
+                    .as_sequence()
+                    .map(|cols| {
+                        cols.iter()
+                            .filter_map(|col| col.as_mapping())
+                            .filter(|map| {
+                                !(map.contains_key("include") || map.contains_key("exclude"))
+                            })
+                            .filter_map(|map| {
+                                dbt_serde_yaml::from_value::<ColumnProperties>(map.clone().into())
+                                    .ok()
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                let mut versioned_columns = process_columns(
+                    Some(&column_map),
+                    model_config.meta.clone(),
+                    model_config.tags.clone().map(|tags| tags.into()),
+                )?;
+
+                if let Some(rules) = ColumnInheritanceRules::from_version_columns(column_props) {
+                    columns
+                        .iter()
+                        .filter(|(name, _)| rules.should_include_column(name))
+                        .for_each(|(name, col)| {
+                            versioned_columns.insert(name.clone(), col.clone());
+                        });
+                }
+                return Ok(versioned_columns);
+            }
+        }
+    }
+
+    Ok(columns)
 }
 
 pub fn validate_merge_update_columns_xor(model_config: &ModelConfig, path: &Path) -> FsResult<()> {

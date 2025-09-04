@@ -18,6 +18,7 @@ use dbt_schemas::schemas::common::Versions;
 use dbt_schemas::schemas::common::normalize_quote;
 use dbt_schemas::schemas::data_tests::{CustomTest, DataTests};
 
+use dbt_schemas::schemas::dbt_column::ColumnInheritanceRules;
 use dbt_schemas::schemas::dbt_column::ColumnProperties;
 use dbt_schemas::schemas::project::DataTestConfig;
 use dbt_schemas::schemas::properties::Tables;
@@ -645,77 +646,6 @@ fn generate_test_name(
     maybe_truncate_test_name(&test_identifier, &result)
 }
 
-/// Represents column inheritance rules for a model version
-#[derive(Debug, Clone)]
-struct GenericTestColumnInheritanceRules {
-    includes: Vec<String>, // Empty vec means include all
-    excludes: Vec<String>,
-}
-impl GenericTestColumnInheritanceRules {
-    // Given a column block in a versioned model, return the includes and excludes for that model
-    fn from_version_columns(columns: &dbt_serde_yaml::Value) -> Option<Self> {
-        if let dbt_serde_yaml::Value::Sequence(cols, _) = columns {
-            for col in cols {
-                if let dbt_serde_yaml::Value::Mapping(map, _) = col {
-                    // Only create inheritance rules if there's an include or exclude
-                    let include_key = dbt_serde_yaml::Value::string("include".to_string());
-                    let exclude_key = dbt_serde_yaml::Value::string("exclude".to_string());
-
-                    if map.contains_key(&include_key) || map.contains_key(&exclude_key) {
-                        let includes = map
-                            .get(&include_key)
-                            .map(|v| match v {
-                                dbt_serde_yaml::Value::String(s, _) if s == "*" || s == "all" => {
-                                    Vec::new()
-                                } // Empty vec means include all
-                                dbt_serde_yaml::Value::Sequence(arr, _) => arr
-                                    .iter()
-                                    .filter_map(|v| match v {
-                                        dbt_serde_yaml::Value::String(s, _) => Some(s.clone()),
-                                        _ => None,
-                                    })
-                                    .collect(),
-                                dbt_serde_yaml::Value::String(s, _) => vec![s.clone()],
-                                _ => Vec::new(),
-                            })
-                            .unwrap_or_default(); // Default to empty vec (include all)
-
-                        let excludes = map
-                            .get(&exclude_key)
-                            .map(|v| match v {
-                                dbt_serde_yaml::Value::Sequence(arr, _) => arr
-                                    .iter()
-                                    .filter_map(|v| match v {
-                                        dbt_serde_yaml::Value::String(s, _) => Some(s.clone()),
-                                        _ => None,
-                                    })
-                                    .collect(),
-                                dbt_serde_yaml::Value::String(s, _) => vec![s.clone()],
-                                _ => Vec::new(),
-                            })
-                            .unwrap_or_default();
-
-                        return Some(GenericTestColumnInheritanceRules { includes, excludes });
-                    }
-                }
-            }
-        }
-        None // No inheritance rules specified means use default (inherit all)
-    }
-
-    /// given a column name, return true if it should be included in the tests based on the includes and excludes and inheritance rules
-    fn should_include_column(&self, column_name: &str) -> bool {
-        if self.includes.is_empty() {
-            // Empty includes means include all except excluded
-            !self.excludes.contains(&column_name.to_string())
-        } else {
-            // Specific includes: must be in includes and not in excludes
-            self.includes.contains(&column_name.to_string())
-                && !self.excludes.contains(&column_name.to_string())
-        }
-    }
-}
-
 /// Represents test configuration for a model version
 #[derive(Debug, Clone)]
 struct GenericTestConfig {
@@ -839,12 +769,7 @@ fn collect_versioned_model_tests(
     let mut version_tests = vec![];
     // For each version, merge base tests with version-specific tests
     for version in versions {
-        let version_suffix = match &version.v {
-            dbt_serde_yaml::Value::String(s, _) => Some(s.to_string()),
-            dbt_serde_yaml::Value::Number(n, _) => Some(n.to_string()),
-            _ => None,
-        }
-        .unwrap_or_else(|| {
+        let version_suffix = version.get_version().unwrap_or_else(|| {
             panic!(
                 "Version '{:?}' does not meet the required format",
                 version.v
@@ -870,7 +795,7 @@ fn collect_versioned_model_tests(
         // Handle version-specific column tests and inheritance
         if let Some(columns) = version.__additional_properties__.get("columns") {
             let mut column_tests = if let Some(inheritance_rules) =
-                GenericTestColumnInheritanceRules::from_version_columns(columns)
+                ColumnInheritanceRules::from_version_columns(columns)
             {
                 // Apply inheritance rules
                 base_test_config

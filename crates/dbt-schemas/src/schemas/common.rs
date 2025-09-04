@@ -861,6 +861,15 @@ pub struct Versions {
     pub __additional_properties__: Verbatim<HashMap<String, YmlValue>>,
 }
 
+impl Versions {
+    pub fn get_version(&self) -> Option<String> {
+        match &self.v {
+            dbt_serde_yaml::Value::String(s, _) => Some(s.to_string()),
+            dbt_serde_yaml::Value::Number(n, _) => Some(n.to_string()),
+            _ => None,
+        }
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeInfoWrapper {
     #[serde(skip_serializing_if = "Option::is_none")]

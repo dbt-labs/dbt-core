@@ -73,6 +73,78 @@ pub struct ColumnConfig {
     pub meta: Option<BTreeMap<String, YmlValue>>,
 }
 
+/// Represents column inheritance rules for a model version
+#[derive(Debug, Clone)]
+pub struct ColumnInheritanceRules {
+    includes: Vec<String>, // Empty vec means include all
+    excludes: Vec<String>,
+}
+
+impl ColumnInheritanceRules {
+    // Given a column block in a versioned model, return the includes and excludes for that model
+    pub fn from_version_columns(columns: &dbt_serde_yaml::Value) -> Option<Self> {
+        if let dbt_serde_yaml::Value::Sequence(cols, _) = columns {
+            for col in cols {
+                if let dbt_serde_yaml::Value::Mapping(map, _) = col {
+                    // Only create inheritance rules if there's an include or exclude
+                    let include_key = dbt_serde_yaml::Value::string("include".to_string());
+                    let exclude_key = dbt_serde_yaml::Value::string("exclude".to_string());
+
+                    if map.contains_key(&include_key) || map.contains_key(&exclude_key) {
+                        let includes = map
+                            .get(&include_key)
+                            .map(|v| match v {
+                                dbt_serde_yaml::Value::String(s, _) if s == "*" || s == "all" => {
+                                    Vec::new()
+                                } // Empty vec means include all
+                                dbt_serde_yaml::Value::Sequence(arr, _) => arr
+                                    .iter()
+                                    .filter_map(|v| match v {
+                                        dbt_serde_yaml::Value::String(s, _) => Some(s.clone()),
+                                        _ => None,
+                                    })
+                                    .collect(),
+                                dbt_serde_yaml::Value::String(s, _) => vec![s.clone()],
+                                _ => Vec::new(),
+                            })
+                            .unwrap_or_default(); // Default to empty vec (include all)
+
+                        let excludes = map
+                            .get(&exclude_key)
+                            .map(|v| match v {
+                                dbt_serde_yaml::Value::Sequence(arr, _) => arr
+                                    .iter()
+                                    .filter_map(|v| match v {
+                                        dbt_serde_yaml::Value::String(s, _) => Some(s.clone()),
+                                        _ => None,
+                                    })
+                                    .collect(),
+                                dbt_serde_yaml::Value::String(s, _) => vec![s.clone()],
+                                _ => Vec::new(),
+                            })
+                            .unwrap_or_default();
+
+                        return Some(ColumnInheritanceRules { includes, excludes });
+                    }
+                }
+            }
+        }
+        None // No inheritance rules specified means use default (inherit all)
+    }
+
+    /// given a column name, return true if it should be included in the tests based on the includes and excludes and inheritance rules
+    pub fn should_include_column(&self, column_name: &str) -> bool {
+        if self.includes.is_empty() {
+            // Empty includes means include all except excluded
+            !self.excludes.contains(&column_name.to_string())
+        } else {
+            // Specific includes: must be in includes and not in excludes
+            self.includes.contains(&column_name.to_string())
+                && !self.excludes.contains(&column_name.to_string())
+        }
+    }
+}
+
 /// Process columns by merging parent config with each column's config.
 /// Returns a BTreeMap of column name to DbtColumn.
 pub fn process_columns(
