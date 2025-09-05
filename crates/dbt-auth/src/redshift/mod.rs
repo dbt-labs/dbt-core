@@ -1,6 +1,13 @@
 use crate::{AdapterConfig, Auth, AuthError};
 
-use dbt_xdbc::{Backend, database, redshift};
+use adbc_core::ffi::constants::ADBC_OPTION_USERNAME;
+use dbt_xdbc::{
+    Backend, database,
+    redshift::{
+        self, AWS_PROFILE, AWS_REGION, CLUSTER_IDENTIFIER, CLUSTER_TYPE,
+        cluster_type::{REDSHIFT, SERVERLESS},
+    },
+};
 use percent_encoding::utf8_percent_encode;
 
 pub struct RedshiftAuth;
@@ -50,7 +57,17 @@ impl Auth for RedshiftAuth {
                 .and_then(|v| v.as_str())
                 .unwrap_or("database");
 
-            let connection_str = match method {
+            // Shared required configs and encoding
+            let host = config.require_string("host")?;
+            let port = config.require_string("port")?;
+            let dbname = config.require_string("database")?;
+            let host = utf8_percent_encode(&host, SET).to_string();
+            let port = utf8_percent_encode(&port, SET).to_string();
+            let dbname = utf8_percent_encode(&dbname, SET).to_string();
+
+            // ignored for serverless, but still required
+            let user = config.require_string("user")?;
+            match method {
                 "database" => {
                     for key in ["iam_profile", "cluster_id"].iter() {
                         if config.contains_key(key) {
@@ -60,33 +77,46 @@ impl Auth for RedshiftAuth {
                         };
                     }
 
-                    let user = config.require_string("user")?;
+                    builder.with_named_option(CLUSTER_TYPE, REDSHIFT)?;
+
                     let password = config.require_string("password")?;
-                    let host = config.require_string("host")?;
-                    let port = config.require_string("port")?;
-                    let dbname = config.require_string("database")?;
 
                     let user = utf8_percent_encode(&user, SET).to_string();
                     let password = utf8_percent_encode(&password, SET).to_string();
-                    let host = utf8_percent_encode(&host, SET).to_string();
-                    let port = utf8_percent_encode(&port, SET).to_string();
-                    let dbname = utf8_percent_encode(&dbname, SET).to_string();
 
-                    format!("postgresql://{user}:{password}@{host}:{port}/{dbname}")
+                    let connection_str =
+                        format!("postgresql://{user}:{password}@{host}:{port}/{dbname}");
+                    builder.with_parse_uri(connection_str)?;
                 }
                 "iam" => {
-                    return Err(AuthError::config(
-                        "IAM auth for Redshift is not supported yet. Please use username/password auth instead.",
-                    ));
+                    // XXX: We can only tell serverless vs cluster from the host input
+                    let is_serverless = host.contains("redshift-serverless");
+
+                    // cluster_id doesn't exist for serverless
+                    if is_serverless {
+                        builder.with_named_option(CLUSTER_TYPE, SERVERLESS)?;
+                    } else {
+                        builder.with_named_option(CLUSTER_TYPE, REDSHIFT)?;
+                        let cluster_id = config.require_string("cluster_id")?;
+                        builder.with_named_option(CLUSTER_IDENTIFIER, cluster_id)?;
+                    }
+
+                    let region = config.require_string("region")?;
+                    let iam_profile = config.require_string("iam_profile")?;
+
+                    builder.with_named_option(AWS_REGION, region)?;
+                    builder.with_named_option(AWS_PROFILE, iam_profile)?;
+                    builder.with_named_option(ADBC_OPTION_USERNAME, user)?;
+
+                    let connection_str = format!("postgresql://{host}:{port}/{dbname}");
+                    builder.with_parse_uri(connection_str)?;
                 }
                 method => {
                     return Err(AuthError::config(format!(
-                        "Unsupported auth method '{method}' for Redshift. Try 'database' instead ('iam' will be supported in later releases)."
+                        "Unsupported auth method '{method}' for Redshift. Try 'database' or 'iam' instead."
                     )));
                 }
             };
-
-            builder.with_parse_uri(connection_str)?;
         }
 
         Ok(builder)
