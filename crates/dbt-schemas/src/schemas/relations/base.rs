@@ -5,6 +5,7 @@ use crate::schemas::common::ResolvedQuoting;
 
 use dbt_common::constants::DBT_CTE_PREFIX;
 use dbt_common::{FsResult, current_function_name};
+use dbt_frontend_common::FullyQualifiedName;
 use minijinja::arg_utils::{ArgParser, check_num_args};
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
 use minijinja::{invalid_argument, invalid_argument_inner, jinja_err};
@@ -124,6 +125,13 @@ pub trait BaseRelationProperties {
     fn get_schema(&self) -> FsResult<String>;
 
     fn get_identifier(&self) -> FsResult<String>;
+
+    fn get_fqn(&self) -> FsResult<FullyQualifiedName> {
+        let catalog = self.get_database()?;
+        let schema = self.get_schema()?;
+        let table = self.get_identifier()?;
+        Ok(FullyQualifiedName::new(catalog, schema, table))
+    }
 }
 
 /// Base trait for all fs adapter objects

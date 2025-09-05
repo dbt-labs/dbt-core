@@ -791,7 +791,7 @@ impl BaseAdapter for BridgeAdapter {
                 // since the compiled sql in incremental run may represent a schema of which the model that will have when the run is done
                 && !state.is_run_incremental()
             {
-                let schema = db.get_schema_by_fqn(&relation.semantic_fqn());
+                let schema = db.get_schema(&relation.get_fqn().unwrap_or_default());
                 if let Some(schema) = schema {
                     let from_local = self.typed_adapter.arrow_schema_to_dbt_columns(schema)?;
 

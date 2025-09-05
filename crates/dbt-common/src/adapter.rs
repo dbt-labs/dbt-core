@@ -1,17 +1,17 @@
 use std::sync::Arc;
 
 use arrow_schema::Schema;
-use dbt_frontend_common::dialect::Dialect;
+use dbt_frontend_common::{FullyQualifiedName, dialect::Dialect};
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumString};
 
 /// Schema registry access interface.
 pub trait SchemaRegistry: Send + Sync {
     /// Get the schema of a table by its unique identifier.
-    fn get_schema(&self, unique_id: &str) -> Option<Arc<Schema>>;
+    fn get_schema_by_unique_id(&self, unique_id: &str) -> Option<Arc<Schema>>;
 
     /// Get the schema of a table by its fully-qualified name (FQN).
-    fn get_schema_by_fqn(&self, fqn: &str) -> Option<Arc<Schema>>;
+    fn get_schema(&self, fqn: &FullyQualifiedName) -> Option<Arc<Schema>>;
 }
 
 /// The type of the adapter.
