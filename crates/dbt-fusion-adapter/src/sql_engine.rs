@@ -2,6 +2,7 @@ use crate::TrackedStatement;
 use crate::auth::Auth;
 use crate::config::AdapterConfig;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
+use crate::stmt_splitter::StmtSplitter;
 
 use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::RecordBatch;
@@ -10,6 +11,7 @@ use arrow_schema::Schema;
 use core::result::Result;
 use dbt_common::cancellation::{Cancellable, CancellationToken};
 use dbt_common::constants::EXECUTING;
+use dbt_frontend_common::dialect::Dialect;
 use dbt_xdbc::semaphore::Semaphore;
 use dbt_xdbc::{Backend, Connection, Database, QueryCtx, connection, database, driver};
 use log;
@@ -79,10 +81,17 @@ pub struct ActualEngine {
     semaphore: Arc<Semaphore>,
     /// Global CLI cancellation token
     cancellation_token: CancellationToken,
+    /// Statement splitter
+    splitter: Arc<dyn StmtSplitter>,
 }
 
 impl ActualEngine {
-    pub fn new(auth: Arc<dyn Auth>, config: AdapterConfig, token: CancellationToken) -> Self {
+    pub fn new(
+        auth: Arc<dyn Auth>,
+        config: AdapterConfig,
+        token: CancellationToken,
+        splitter: Arc<dyn StmtSplitter>,
+    ) -> Self {
         let threads = config
             .get("threads")
             .and_then(|t| {
@@ -100,6 +109,7 @@ impl ActualEngine {
             configured_databases: RwLock::new(DatabaseMap::default()),
             semaphore: Arc::new(Semaphore::new(permits)),
             cancellation_token: token,
+            splitter,
         }
     }
 
@@ -179,8 +189,13 @@ pub enum SqlEngine {
 
 impl SqlEngine {
     /// Create a new [`SqlEngine::Warehouse`] based on the given configuration.
-    pub fn new(auth: Arc<dyn Auth>, config: AdapterConfig, token: CancellationToken) -> Arc<Self> {
-        let engine = ActualEngine::new(auth, config, token);
+    pub fn new(
+        auth: Arc<dyn Auth>,
+        config: AdapterConfig,
+        token: CancellationToken,
+        splitter: Arc<dyn StmtSplitter>,
+    ) -> Arc<Self> {
+        let engine = ActualEngine::new(auth, config, token, splitter);
         Arc::new(SqlEngine::Warehouse(Arc::new(engine)))
     }
 
@@ -190,8 +205,9 @@ impl SqlEngine {
         path: PathBuf,
         config: AdapterConfig,
         token: CancellationToken,
+        splitter: Arc<dyn StmtSplitter>,
     ) -> Arc<Self> {
-        let engine = ReplayEngine::new(backend, path, config, token);
+        let engine = ReplayEngine::new(backend, path, config, token, splitter);
         Arc::new(SqlEngine::Replay(engine))
     }
 
@@ -199,6 +215,25 @@ impl SqlEngine {
     pub fn new_for_recording(path: PathBuf, engine: Arc<SqlEngine>) -> Arc<Self> {
         let engine = RecordEngine::new(path, engine);
         Arc::new(SqlEngine::Record(engine))
+    }
+
+    /// Get the statement splitter for this engine
+    pub fn splitter(&self) -> Arc<dyn StmtSplitter> {
+        match self {
+            SqlEngine::Warehouse(engine) => engine.splitter.clone(),
+            SqlEngine::Record(engine) => engine.splitter(),
+            SqlEngine::Replay(engine) => engine.splitter(),
+        }
+    }
+
+    /// Split SQL statements using the provided dialect
+    ///
+    /// This method handles the splitting of SQL statements based on the dialect's rules.
+    /// The dialect must be provided by the caller since the mapping from Backend to
+    /// AdapterType/Dialect is not always deterministic (e.g., Generic backend,
+    /// shared drivers like Postgres/Redshift).
+    pub fn split_statements(&self, sql: &str, dialect: Dialect) -> Vec<String> {
+        self.splitter().split(sql, dialect)
     }
 
     /// Create a new connection to the warehouse.

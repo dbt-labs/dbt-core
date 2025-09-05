@@ -80,9 +80,6 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// Create a new connection
     fn new_connection(&self, node_id: Option<String>) -> AdapterResult<Box<dyn Connection>>;
 
-    /// Split a sql statement into a list of statements
-    fn self_split_statements(&self, sql: &str, dialect: Dialect) -> Vec<String>;
-
     /// Helper method for execute
     #[allow(clippy::too_many_arguments)]
     #[inline(always)]
@@ -105,7 +102,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         let statements = if self.adapter_type() == AdapterType::Bigquery {
             vec![sql]
         } else {
-            self.self_split_statements(&sql, dialect)
+            engine.split_statements(&sql, dialect)
         };
         let mut last_batch = None;
         for statement in statements {

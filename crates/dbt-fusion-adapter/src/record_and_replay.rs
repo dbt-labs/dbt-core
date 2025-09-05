@@ -1,6 +1,7 @@
 use crate::config::AdapterConfig;
 use crate::errors::AdapterResult;
 use crate::sql_engine::SqlEngine;
+use crate::stmt_splitter::StmtSplitter;
 
 use adbc_core::error::{Error as AdbcError, Result as AdbcResult, Status as AdbcStatus};
 use adbc_core::options::{OptionStatement, OptionValue};
@@ -123,6 +124,10 @@ impl RecordEngine {
 
     pub fn cancellation_token(&self) -> CancellationToken {
         self.0.engine.cancellation_token()
+    }
+
+    pub fn splitter(&self) -> Arc<dyn StmtSplitter> {
+        self.0.engine.splitter()
     }
 }
 
@@ -364,6 +369,8 @@ struct ReplayEngineInner {
     config: AdapterConfig,
     /// Global CLI cancellation token
     cancellation_token: CancellationToken,
+    /// Statement splitter
+    splitter: Arc<dyn StmtSplitter>,
 }
 
 impl ReplayEngineInner {
@@ -381,12 +388,14 @@ impl ReplayEngine {
         path: PathBuf,
         config: AdapterConfig,
         token: CancellationToken,
+        splitter: Arc<dyn StmtSplitter>,
     ) -> Self {
         let inner = ReplayEngineInner {
             backend,
             path,
             config,
             cancellation_token: token,
+            splitter,
         };
         ReplayEngine(Arc::new(inner))
     }
@@ -406,6 +415,10 @@ impl ReplayEngine {
 
     pub fn cancellation_token(&self) -> CancellationToken {
         self.0.cancellation_token.clone()
+    }
+
+    pub fn splitter(&self) -> Arc<dyn StmtSplitter> {
+        self.0.splitter.clone()
     }
 }
 

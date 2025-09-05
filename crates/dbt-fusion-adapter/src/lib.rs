@@ -21,6 +21,7 @@ pub mod reserved_keywords;
 pub mod response;
 pub mod snapshots;
 pub mod sql_engine;
+pub mod stmt_splitter;
 pub mod typed_adapter;
 
 // Re-export types and modules that were moved to dbt_auth
