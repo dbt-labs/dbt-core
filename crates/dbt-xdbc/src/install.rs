@@ -16,6 +16,15 @@ use crate::{
     REDSHIFT_DRIVER_VERSION, SALESFORCE_DRIVER_VERSION, SNOWFLAKE_DRIVER_VERSION,
 };
 
+static INSTALLABLE_DRIVERS: &[Backend; 6] = &[
+    Backend::Snowflake,
+    Backend::BigQuery,
+    Backend::Postgres,
+    Backend::Databricks,
+    Backend::Redshift,
+    Backend::Salesforce,
+];
+
 #[derive(Debug)]
 pub enum InstallError {
     /// Generic HTTP error. Set up of the client of request failed.
@@ -236,15 +245,7 @@ pub fn pre_install_driver(backend: Backend) -> Result<()> {
 }
 
 pub fn is_installable_driver(backend: Backend) -> bool {
-    matches!(
-        backend,
-        Backend::Snowflake
-            | Backend::BigQuery
-            | Backend::Postgres
-            | Backend::Databricks
-            | Backend::Redshift
-            | Backend::Salesforce
-    )
+    INSTALLABLE_DRIVERS.contains(&backend)
 }
 
 #[allow(dead_code)]
@@ -622,6 +623,10 @@ mod tests {
             ("salesforce", SALESFORCE_DRIVER_VERSION),
             ("redshift", REDSHIFT_DRIVER_VERSION),
         ];
+        debug_assert!(
+            backend_and_versions.len() == INSTALLABLE_DRIVERS.len(),
+            "backend_and_versions must have the same length as INSTALLABLE_DRIVERS"
+        );
         let target_os_and_archs = [
             (LINUX_TARGET_OS, vec!["x86_64", "aarch64"]),
             (MACOS_TARGET_OS, vec!["x86_64", "aarch64"]),
