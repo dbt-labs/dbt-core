@@ -289,10 +289,11 @@ pub fn empty_map_value() -> Value {
 
 // Helper function to format SQL with bindings
 pub fn format_sql_with_bindings(
+    adapter_type: AdapterType,
     sql: &str,
     bindings: &Value,
-    formatter: Box<dyn SqlLiteralFormatter>,
 ) -> AdapterResult<String> {
+    let formatter = SqlLiteralFormatter::new(adapter_type);
     let mut result = String::with_capacity(sql.len());
     // this placeholder char is seen from `get_binding_char` macro
     let mut parts = sql.split("%s");

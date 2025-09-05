@@ -1,4 +1,3 @@
-pub(crate) mod formatter;
 /// Snowflake relation
 pub mod relation;
 pub mod relation_configs;

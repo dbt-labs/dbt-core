@@ -1,7 +1,6 @@
 use crate::base_adapter::{AdapterType, AdapterTyping};
 use crate::cache::RelationCache;
 use crate::cast_util::{downcast_value_to_dyn_base_relation, dyn_base_columns_to_value};
-use crate::formatter::create_sql_literal_formatter;
 use crate::funcs::{
     dispatch_adapter_calls, dispatch_adapter_get_value, execute_macro, execute_macro_wrapper,
     none_value,
@@ -450,10 +449,8 @@ impl BaseAdapter for BridgeAdapter {
         abridge_sql_log: bool,
     ) -> AdapterResult<()> {
         let adapter_type = self.typed_adapter.adapter_type();
-        let formatter = create_sql_literal_formatter(adapter_type);
-
         let formatted_sql = if let Some(bindings) = bindings {
-            format_sql_with_bindings(sql, bindings, formatter)?
+            format_sql_with_bindings(adapter_type, sql, bindings)?
         } else {
             sql.to_string()
         };

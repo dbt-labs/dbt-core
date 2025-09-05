@@ -1,19 +1,22 @@
+use dbt_common::adapter::AdapterType;
 use minijinja::Value;
 use minijinja::value::ValueKind;
 use minijinja_contrib::modules::py_datetime::date::PyDate;
 use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
 
-use crate::AdapterType;
-use crate::bigquery::formatter::BigquerySqlLiteralFormatter;
-use crate::databricks::formatter::DatabricksSqlLiteralFormatter;
-use crate::postgres::formatter::PostgreSqlLiteralFormatter;
-use crate::redshift::formatter::RedshiftSqlLiteralFormatter;
-use crate::snowflake::formatter::SnowflakeSqlLiteralFormatter;
+/// Formatter for SQL Literals.
+///
+/// Differences in SQL dialects are handled by matching on the [AdapterType].
+pub struct SqlLiteralFormatter {
+    adapter_type: AdapterType,
+}
 
-/// Formatter for SQL Literals
-/// This trait contains default implementations based on the SQL standard
-pub trait SqlLiteralFormatter {
-    fn format_bool(&self, b: bool) -> String {
+impl SqlLiteralFormatter {
+    pub fn new(adapter_type: AdapterType) -> Self {
+        Self { adapter_type }
+    }
+
+    pub fn format_bool(&self, b: bool) -> String {
         if b {
             "true".to_string()
         } else {
@@ -21,41 +24,68 @@ pub trait SqlLiteralFormatter {
         }
     }
 
-    fn format_str(&self, l: &str) -> String {
-        let escaped_str = l.replace("'", "''");
-        format!("'{escaped_str}'")
+    pub fn format_str(&self, l: &str) -> String {
+        match self.adapter_type {
+            AdapterType::Bigquery | AdapterType::Databricks => {
+                // BigQuery and Databricks uses \ for string escapes
+                // https://docs.databricks.com/aws/en/sql/language-manual/data-types/string-type
+                let escaped_str = l.replace("'", "\\'");
+                format!("'{escaped_str}'")
+            }
+            _ => {
+                // XXX: this of course not enough for all strings in any SQL dialect
+                // but it's a start
+                let escaped_str = l.replace("'", "''");
+                format!("'{escaped_str}'")
+            }
+        }
     }
 
     /// ## Panics
     /// If the value is not a bytes array
-    fn format_bytes(&self, bytes_value: &Value) -> String {
+    pub fn format_bytes(&self, bytes_value: &Value) -> String {
         assert!(bytes_value.kind() == ValueKind::Bytes);
         // uses what is defined by impl fmt::Display for Value
         format!("'{bytes_value}'")
     }
 
-    fn format_date(&self, l: PyDate) -> String {
+    pub fn format_date(&self, l: PyDate) -> String {
         format!("'{}'", l.date.format("%Y-%m-%d"))
     }
 
-    fn format_datetime(&self, l: PyDateTime) -> String {
+    pub fn format_datetime(&self, l: PyDateTime) -> String {
         format!("'{}'", l.isoformat())
     }
 
-    fn none_value(&self) -> String {
+    pub fn none_value(&self) -> String {
         "NULL".to_string()
     }
 }
 
-/// Create a literal formatter from an adapter type
-/// To be used internally for formatting literals in SQL
-pub fn create_sql_literal_formatter(adapter_type: AdapterType) -> Box<dyn SqlLiteralFormatter> {
-    match adapter_type {
-        AdapterType::Postgres => Box::new(PostgreSqlLiteralFormatter {}),
-        AdapterType::Snowflake => Box::new(SnowflakeSqlLiteralFormatter {}),
-        AdapterType::Bigquery => Box::new(BigquerySqlLiteralFormatter {}),
-        AdapterType::Databricks => Box::new(DatabricksSqlLiteralFormatter {}),
-        AdapterType::Redshift => Box::new(RedshiftSqlLiteralFormatter {}),
-        AdapterType::Salesforce => Box::new(PostgreSqlLiteralFormatter {}), // XXX: using Postgres
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bigquery_format_str() {
+        let formatter = SqlLiteralFormatter::new(AdapterType::Bigquery);
+        assert_eq!(formatter.format_str("hello"), "'hello'");
+        assert_eq!(formatter.format_str("it's"), "'it\\'s'");
+        assert_eq!(formatter.format_str("it's a test's"), "'it\\'s a test\\'s'");
+        assert_eq!(formatter.format_str(""), "''");
+        assert_eq!(formatter.format_str("\\"), "'\\'");
+        assert_eq!(formatter.format_str("\\'"), "'\\\\''");
+    }
+
+    #[test]
+    fn test_databricks_format_str() {
+        let formatter = SqlLiteralFormatter::new(AdapterType::Databricks);
+
+        assert_eq!(formatter.format_str("hello"), "'hello'");
+        assert_eq!(formatter.format_str("it's"), "'it\\'s'");
+        assert_eq!(formatter.format_str("it's a test's"), "'it\\'s a test\\'s'");
+        assert_eq!(formatter.format_str(""), "''");
+        assert_eq!(formatter.format_str("\\"), "'\\'");
+        assert_eq!(formatter.format_str("\\'"), "'\\\\''");
     }
 }
