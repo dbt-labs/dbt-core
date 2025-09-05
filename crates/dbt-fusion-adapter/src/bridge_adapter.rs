@@ -788,6 +788,16 @@ impl BaseAdapter for BridgeAdapter {
         let relation = parser.get::<Value>("relation")?;
         let relation = downcast_value_to_dyn_base_relation(&relation)?;
 
+        if self.typed_adapter.is_replay() {
+            return match self.typed_adapter.get_columns_in_relation(state, relation) {
+                Ok(result) => Ok(Value::from_iter(result.iter().map(|c| c.as_value()))),
+                Err(e) => Err(MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError,
+                    e.to_string(),
+                )),
+            };
+        }
+
         if let Some(db) = &self.db {
             // skip local compilation results if it's invoked upon a snapshot
             // as we considered risk is too high to trust the types to be consistent with the remote
