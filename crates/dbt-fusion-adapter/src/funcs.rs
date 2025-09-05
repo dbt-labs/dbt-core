@@ -5,9 +5,9 @@ use crate::errors::AdapterResult;
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::formatter::SqlLiteralFormatter;
 use crate::response::ResultObject;
-use dbt_agate::AgateTable;
 
 use arrow::array::RecordBatch;
+use dbt_agate::AgateTable;
 use minijinja::arg_utils::ArgsIter;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::ValueKind;
@@ -15,8 +15,9 @@ use minijinja::value::mutable_vec::MutableVec;
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
 use minijinja_contrib::modules::py_datetime::date::PyDate;
 use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
+use serde::Deserialize;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -39,7 +40,17 @@ pub fn dispatch_adapter_calls(
                 .unwrap_or(false);
             let fetch = iter.next_kwarg::<Option<bool>>("fetch")?.unwrap_or(false);
             let limit = iter.next_kwarg::<Option<i64>>("limit")?;
-            let (response, table) = adapter.execute(state, sql, auto_begin, fetch, limit)?;
+            let options = if let Some(value) = iter.next_kwarg::<Option<Value>>("options")? {
+                Some(HashMap::<String, String>::deserialize(value).map_err(|e| {
+                    MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+                })?)
+            } else {
+                None
+            };
+            // TODO(harry): add iter.finish() and fix the tests
+
+            let (response, table) =
+                adapter.execute(state, sql, auto_begin, fetch, limit, options)?;
             Ok(Value::from_iter([
                 Value::from_object(response),
                 Value::from_object(table),

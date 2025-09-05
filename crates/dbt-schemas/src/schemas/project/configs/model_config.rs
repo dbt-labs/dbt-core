@@ -312,8 +312,26 @@ pub struct ProjectModelConfig {
     // Schedule (Databricks streaming tables)
     #[serde(rename = "+schedule")]
     pub schedule: Option<ScheduleConfig>,
+
+    // Primary Key (Salesforce)
+    #[serde(rename = "+primary_key")]
+    pub primary_key: Option<String>,
+    #[serde(rename = "+category")]
+    pub category: Option<DataLakeObjectCategory>,
     // Flattened field:
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectModelConfig>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "PascalCase")]
+/// See `category` from https://developer.salesforce.com/docs/data/connectapi/references/spec?meta=postDataLakeObject
+pub enum DataLakeObjectCategory {
+    Profile,
+    Engagement,
+    #[serde(rename = "Directory_Table")]
+    DirectoryTable,
+    Insights,
+    Other,
 }
 
 impl IterChildren<ProjectModelConfig> for ProjectModelConfig {
@@ -479,6 +497,9 @@ impl From<ProjectModelConfig> for ModelConfig {
 
                 table_type: config.table_type,
                 indexes: config.indexes,
+
+                primary_key: config.primary_key,
+                category: config.category,
             },
         }
     }
@@ -599,6 +620,8 @@ impl From<ModelConfig> for ProjectModelConfig {
             indexes: config.__warehouse_specific_config__.indexes,
             schedule: config.__warehouse_specific_config__.schedule,
             description: config.description,
+            primary_key: config.__warehouse_specific_config__.primary_key,
+            category: config.__warehouse_specific_config__.category,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -719,7 +742,7 @@ impl DefaultTo<ModelConfig> for ModelConfig {
                 sql_header,
                 location,
                 predicates,
-                description
+                description,
             ]
         );
     }

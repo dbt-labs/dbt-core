@@ -346,6 +346,10 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 table_type: config.table_type,
 
                 indexes: config.indexes,
+
+                // sources doesn't need this field
+                primary_key: None,
+                category: None,
             },
         }
     }

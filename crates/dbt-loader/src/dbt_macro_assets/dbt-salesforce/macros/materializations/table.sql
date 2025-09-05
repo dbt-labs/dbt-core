@@ -1,9 +1,6 @@
 {% materialization table, adapter='salesforce', supported_languages=['sql']%}
 
-  {% set original_query_tag = set_query_tag() %}
-
   {%- set identifier = model['alias'] -%}
-  {%- set language = model['language'] -%}
 
   {%- set target_relation = api.Relation.create(
 	identifier=identifier,
@@ -12,7 +9,17 @@
 	type='table'
    ) -%}
 
-  {# TODO: Implement table creation #}
+  {# The options here are unstable and susceptible to breaking changes #}
+  {% do adapter.execute(
+    sql=compiled_code,
+    auto_begin=False,
+    fetch=False,
+    limit=None,
+    options={
+      "adbc.salesforce.dc.dlo.primary_key": config.get('primary_key', default=None),
+      "adbc.salesforce.dc.dlo.category": config.get('category', default='Profile'),
+      "adbc.salesforce.dc.dlo.target_dlo": identifier
+    })%}
 
   {{ return({'relations': [target_relation]}) }}
 

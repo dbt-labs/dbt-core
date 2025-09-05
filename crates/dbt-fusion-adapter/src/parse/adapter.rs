@@ -28,7 +28,7 @@ use minijinja::value::Object;
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
 use serde::Deserialize;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -243,6 +243,7 @@ impl BaseAdapter for ParseAdapter {
         _auto_begin: bool,
         _fetch: bool,
         _limit: Option<i64>,
+        _options: Option<HashMap<String, String>>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         let response = AdapterResponse::default();
         let table = AgateTable::default();

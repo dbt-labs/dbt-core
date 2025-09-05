@@ -14,6 +14,7 @@ use crate::schemas::common::{DbtQuoting, ScheduleConfig};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::postgres::PostgresIndex;
 use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
+use crate::schemas::project::configs::model_config::DataLakeObjectCategory;
 use crate::schemas::project::dbt_project::DefaultTo;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{bool_or_string_bool, u64_or_string_u64};
@@ -241,6 +242,10 @@ pub struct WarehouseSpecificNodeConfig {
     // Postgres
     // XXX: This is an incomplete set of configs
     pub indexes: Option<Vec<PostgresIndex>>,
+
+    // Salesforce
+    pub primary_key: Option<String>,
+    pub category: Option<DataLakeObjectCategory>,
 }
 
 impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
@@ -322,6 +327,10 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
 
             // Postgres
             indexes,
+
+            // Salesforce
+            primary_key,
+            category,
         } = self;
 
         default_to!(
@@ -394,6 +403,9 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
                 table_type,
                 // Postgres
                 indexes,
+                // Salesforce
+                primary_key,
+                category,
             ]
         );
     }

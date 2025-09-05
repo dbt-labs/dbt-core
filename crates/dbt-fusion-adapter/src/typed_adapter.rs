@@ -31,7 +31,7 @@ use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::{State, Value, args};
 
 use std::borrow::Cow;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::sync::Arc;
 
@@ -92,6 +92,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         _auto_begin: bool,
         _fetch: bool,
         _limit: Option<i64>,
+        options: Option<HashMap<String, String>>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         let sql = query_ctx.sql().ok_or_else(|| {
             AdapterError::new(AdapterErrorKind::Internal, "Missing query in the context")
@@ -104,6 +105,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         } else {
             engine.split_statements(&sql, dialect)
         };
+        let options = options.unwrap_or_default();
         let mut last_batch = None;
         for statement in statements {
             last_batch = Some(execute_query_with_retry(
@@ -111,6 +113,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 conn,
                 &query_ctx.with_sql(statement),
                 1,
+                &options,
             )?);
         }
 
@@ -139,6 +142,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         auto_begin: bool,
         fetch: bool,
         limit: Option<i64>,
+        options: Option<HashMap<String, String>>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)>;
 
     /// Execute a statement, expect no results.
@@ -155,6 +159,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             auto_begin, // auto_begin
             false,      // fetch
             None,       // limit
+            None,       // options
         )?;
         Ok(response)
     }
@@ -172,6 +177,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             false,     // auto_begin
             true,      // fetch
             limit,     // limit
+            None,      // options
         )
     }
 
@@ -184,7 +190,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         limit: Option<i64>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         let mut conn = self.new_connection(None)?;
-        self.execute(&mut *conn, query_ctx, auto_begin, fetch, limit)
+        self.execute(&mut *conn, query_ctx, auto_begin, fetch, limit, None)
     }
 
     /// Add a query to run.

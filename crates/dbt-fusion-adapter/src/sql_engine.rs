@@ -403,11 +403,17 @@ pub fn execute_query_with_retry(
     conn: &'_ mut dyn Connection,
     query_ctx: &QueryCtx,
     retry_limit: u32,
+    options: &HashMap<String, String>,
 ) -> AdapterResult<RecordBatch> {
     let mut attempt = 0;
     let mut last_error = None;
+
+    let options = options
+        .iter()
+        .map(|(key, value)| (key.clone(), OptionValue::String(value.clone())))
+        .collect::<Options>();
     while attempt < retry_limit {
-        match engine.execute(conn, query_ctx) {
+        match engine.execute_with_options(query_ctx, conn, options.clone()) {
             Ok(result) => return Ok(result),
             Err(err) => {
                 last_error = Some(err.clone());

@@ -486,6 +486,10 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 table_type: config.table_type,
 
                 indexes: config.indexes,
+
+                // snapshot is unsupported for Salesforce yet
+                primary_key: None,
+                category: None,
             },
         }
     }

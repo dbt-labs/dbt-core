@@ -43,7 +43,7 @@ use tracing;
 use tracy_client::span;
 
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
@@ -429,13 +429,19 @@ impl BaseAdapter for BridgeAdapter {
         auto_begin: bool,
         fetch: bool,
         limit: Option<i64>,
+        options: Option<HashMap<String, String>>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
         let query_ctx =
             query_ctx_from_state_with_sql(state, sql)?.with_desc("execute adapter call");
-        let (response, table) =
-            self.typed_adapter
-                .execute(conn.as_mut(), &query_ctx, auto_begin, fetch, limit)?;
+        let (response, table) = self.typed_adapter.execute(
+            conn.as_mut(),
+            &query_ctx,
+            auto_begin,
+            fetch,
+            limit,
+            options,
+        )?;
         Ok((response, table))
     }
 

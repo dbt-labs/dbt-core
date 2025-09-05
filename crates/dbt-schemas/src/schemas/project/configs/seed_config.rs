@@ -384,6 +384,10 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 table_type: config.table_type,
 
                 indexes: config.indexes,
+
+                // seed is unsupported for Salesforce yet
+                primary_key: None,
+                category: None,
             },
         }
     }

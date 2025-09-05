@@ -49,15 +49,15 @@ pub struct SalesforceRelation {
 
 impl BaseRelationProperties for SalesforceRelation {
     fn quote_policy(&self) -> Policy {
-        Policy::disabled()
+        Policy::enabled()
     }
 
     fn include_policy(&self) -> Policy {
-        Policy::new(true, false, true)
+        Policy::new(false, false, true)
     }
 
     fn quote_character(&self) -> char {
-        unimplemented!("Salesforce quote character")
+        '"'
     }
 
     fn get_database(&self) -> FsResult<String> {
@@ -135,10 +135,6 @@ impl BaseRelation for SalesforceRelation {
     /// Helper: is this relation replaceable?
     fn can_be_replaced(&self) -> bool {
         unimplemented!("Salesforce can_be_replaced")
-    }
-
-    fn quoted(&self, s: &str) -> String {
-        s.to_string()
     }
 
     /// Returns the relation type

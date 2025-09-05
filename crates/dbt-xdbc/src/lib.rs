@@ -87,7 +87,7 @@ pub const BIGQUERY_DRIVER_VERSION: &str = "0.18.0+dbt0.0.13";
 pub const POSTGRES_DRIVER_VERSION: &str = "0.18.0+dbt0.0.3";
 pub const DATABRICKS_DRIVER_VERSION: &str = "0.18.0+dbt0.0.6";
 pub const REDSHIFT_DRIVER_VERSION: &str = "0.18.0+dbt0.18.1";
-pub const SALESFORCE_DRIVER_VERSION: &str = "0.18.0+dbt0.0.1";
+pub const SALESFORCE_DRIVER_VERSION: &str = "0.18.0+dbt0.0.2";
 
 pub use install::pre_install_all_drivers;
 pub use install::pre_install_driver;

@@ -11,7 +11,7 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         &str, // version
     ),
     &str, // checksum
-); 99] = [
+); 104] = [
     (
         ("bigquery", "apple-darwin", "aarch64", "0.18.0+dbt0.0.10"),
         "2fd7deeb5e71f322a6d71e0b28070493c0efb6766436b49d65669d59e96c42cb",
@@ -293,20 +293,40 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "5df3c896502d16a734054560b654ffeb924ea51601de18320bfacfdbc97cac92",
     ),
     (
+        ("salesforce", "apple-darwin", "aarch64", "0.18.0+dbt0.0.2"),
+        "7905dcdca5f7d965357b4ddff28b41ad03ed7d106c08fe3878194af6c80edb40",
+    ),
+    (
         ("salesforce", "apple-darwin", "x86_64", "0.18.0+dbt0.0.1"),
         "db941ee4ee0211a99e29555b55df2eca79beecfcb22a95923cd359726f942c06",
+    ),
+    (
+        ("salesforce", "apple-darwin", "x86_64", "0.18.0+dbt0.0.2"),
+        "c4abe3bc717d381dd9328f00737d0ec6cfcc3d3233b1edc49626685594959901",
     ),
     (
         ("salesforce", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.1"),
         "54ed9eeac931bd4e8cab1f5398d6a66b219b805f180e06d6f1e69270b9140ede",
     ),
     (
+        ("salesforce", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.2"),
+        "5c75a37b1a52d083005e7d6a055152b617332ad83ce83e79bd166e04297d8d12",
+    ),
+    (
         ("salesforce", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.1"),
         "ba1ec1559c34da9134570de94a43417f85bc79801480a3043208ec492f2cb7b9",
     ),
     (
+        ("salesforce", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.2"),
+        "cfd03128ea16639b075bdf0df7d9c8686f608102befeb9588f257234a93d5b17",
+    ),
+    (
         ("salesforce", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.1"),
         "9a780ce6bc8a134fafe037588a2c99f23cdd67690b0d05ec30e95b8c2de2c3d3",
+    ),
+    (
+        ("salesforce", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.2"),
+        "944b06f4348b924df96629950a17933bf479c180d7411d28cec8db1bb9d2c623",
     ),
     (
         ("snowflake", "apple-darwin", "aarch64", "0.18.0+dbt0.0.10"),
