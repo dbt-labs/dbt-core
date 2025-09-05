@@ -244,6 +244,14 @@ pub fn pre_install_driver(backend: Backend) -> Result<()> {
     install_driver_internal(backend_name, version, target_os)
 }
 
+/// Pre-install all supported drivers for the current platform.
+pub fn pre_install_all_drivers() -> Result<()> {
+    for backend in INSTALLABLE_DRIVERS.iter() {
+        pre_install_driver(*backend)?;
+    }
+    Ok(())
+}
+
 pub fn is_installable_driver(backend: Backend) -> bool {
     INSTALLABLE_DRIVERS.contains(&backend)
 }
