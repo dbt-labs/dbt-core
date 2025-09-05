@@ -1,9 +1,14 @@
 //! Core tasks.
 
-use std::{io::Write, path::PathBuf, process::Command, sync::Arc};
+use std::{
+    io::Write,
+    path::PathBuf,
+    process::Command,
+    sync::{Arc, Mutex, atomic::AtomicI32},
+};
 
 use async_trait::async_trait;
-use dbt_common::{FsResult, constants::DBT_INTERNAL_PACKAGES_DIR_NAME};
+use dbt_common::{FsResult, constants::DBT_INTERNAL_PACKAGES_DIR_NAME, stdfs};
 
 use super::{
     ProjectEnv, Task, TestEnv, TestError, TestResult, goldie::execute_and_compare,
@@ -50,6 +55,130 @@ pub fn prepare_command_vec(
     ));
 
     cmd_vec
+}
+
+/// A task that executes a command without comparing output to goldie files and captures stdout and stderr.
+pub struct ExecuteOnly {
+    name: String,
+    cmd_vec: Vec<String>,
+    func: Arc<CommandFn>,
+    redirect_outputs: bool,
+    stdout: Arc<Mutex<String>>,
+    stderr: Arc<Mutex<String>>,
+    exit_code: AtomicI32,
+}
+
+impl ExecuteOnly {
+    /// Construct a new execute only task.
+    ///
+    /// If `redirect_outputs` is true, `target-path`, `project-dir`, and `log-path`
+    /// will be added to the command vector automatically.
+    pub fn new(
+        name: String,
+        cmd_vec: Vec<String>,
+        func: Arc<CommandFn>,
+        redirect_outputs: bool,
+    ) -> Self {
+        Self {
+            name,
+            cmd_vec,
+            func,
+            redirect_outputs,
+            stdout: Arc::new(Mutex::new(String::default())),
+            stderr: Arc::new(Mutex::new(String::default())),
+            exit_code: AtomicI32::new(0),
+        }
+    }
+
+    pub fn get_exit_code(&self) -> i32 {
+        self.exit_code.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    pub fn get_stdout(&self) -> String {
+        self.stdout.lock().expect("Lock is poisoned").clone()
+    }
+
+    pub fn get_stderr(&self) -> String {
+        self.stderr.lock().expect("Lock is poisoned").clone()
+    }
+}
+
+#[async_trait]
+impl Task for ExecuteOnly {
+    async fn run(
+        &self,
+        project_env: &ProjectEnv,
+        test_env: &TestEnv,
+        task_index: usize,
+    ) -> TestResult<()> {
+        let mut cmd_vec = self.cmd_vec.clone();
+
+        // Prepare cli command using the common helper if `redirect_outputs` is true
+        if self.redirect_outputs {
+            cmd_vec = prepare_command_vec(
+                cmd_vec,
+                project_env,
+                test_env,
+                false, // don't filter brackets for ExecuteOnly
+            );
+        }
+
+        // Create stdout and stderr files
+        let task_suffix = if task_index > 0 {
+            format!("_{task_index}")
+        } else {
+            "".to_string()
+        };
+        let stdout_path = test_env
+            .temp_dir
+            .join(format!("{}{}.stdout", self.name, task_suffix));
+        let stderr_path = test_env
+            .temp_dir
+            .join(format!("{}{}.stderr", self.name, task_suffix));
+
+        let stdout_file = stdfs::File::create(&stdout_path)?;
+        let stderr_file = stdfs::File::create(&stderr_path)?;
+
+        // Execute the command
+        let res = (self.func)(
+            cmd_vec,
+            project_env.absolute_project_dir.clone(),
+            stdout_file,
+            stderr_file,
+        )
+        .await?;
+
+        // Store stdout and stderr contents contents in the struct for later access if needed
+        *self.stdout.lock().unwrap() = stdfs::read_to_string(&stdout_path)?;
+        *self.stderr.lock().unwrap() = stdfs::read_to_string(&stderr_path)?;
+
+        // Store exit code
+        self.exit_code
+            .store(res, std::sync::atomic::Ordering::SeqCst);
+
+        // Don't compare with goldie files
+        Ok(())
+    }
+
+    fn is_counted(&self) -> bool {
+        true
+    }
+}
+
+#[async_trait]
+impl Task for Arc<ExecuteOnly> {
+    async fn run(
+        &self,
+        project_env: &ProjectEnv,
+        test_env: &TestEnv,
+        task_index: usize,
+    ) -> TestResult<()> {
+        self.as_ref().run(project_env, test_env, task_index).await
+    }
+
+    fn is_counted(&self) -> bool {
+        true
+    }
 }
 
 pub struct ExecuteAndCompare {
