@@ -709,40 +709,28 @@ impl BaseAdapter for BridgeAdapter {
         schema: &str,
         identifier: &str,
     ) -> Result<Value, MinijinjaError> {
-        let temp_relation = relation_object::create_relation(
-            self.typed_adapter.adapter_type(),
-            database.to_string(),
-            schema.to_string(),
-            Some(identifier.to_string()),
-            None,
-            self.typed_adapter().get_resolved_quoting(),
-        )?;
+        // Skip cache in replay mode
+        if !self.typed_adapter.is_replay() {
+            let temp_relation = relation_object::create_relation(
+                self.typed_adapter.adapter_type(),
+                database.to_string(),
+                schema.to_string(),
+                Some(identifier.to_string()),
+                None,
+                self.typed_adapter().get_resolved_quoting(),
+            )?;
 
-        if let Some(cached_entry) = self.relation_cache.get_relation(&temp_relation) {
-            // we need to advance the replay adapter's recording to the next record
-            if self.typed_adapter.is_replay() {
-                let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
-                let query_ctx = query_ctx_from_state(state)?.with_desc("get_relation adapter call");
-                let _ = self.typed_adapter.get_relation(
-                    state,
-                    &query_ctx,
-                    conn.as_mut(),
-                    database,
-                    schema,
-                    identifier,
-                )?;
+            if let Some(cached_entry) = self.relation_cache.get_relation(&temp_relation) {
+                return Ok(cached_entry.relation().as_value());
             }
-            return Ok(cached_entry.relation().as_value());
-        }
-        // If we have captured the entire schema previously, we can check for non-existence
-        // In these cases, return early with a None value
-        else if self
-            .relation_cache
-            .contains_full_schema_for_relation(&temp_relation)
-            // Escape hatch for replay mode to aid replaying results 
-            && !self.typed_adapter.is_replay()
-        {
-            return Ok(none_value());
+            // If we have captured the entire schema previously, we can check for non-existence
+            // In these cases, return early with a None value
+            else if self
+                .relation_cache
+                .contains_full_schema_for_relation(&temp_relation)
+            {
+                return Ok(none_value());
+            }
         }
 
         // Move on to query against the remote when we have:
