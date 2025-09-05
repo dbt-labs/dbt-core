@@ -22,6 +22,7 @@ dbt-jinja-utils = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-serde_yaml = { workspace = true }
 dirs = { workspace = true }
+flate2 = { workspace = true }
 ignore = { workspace = true }
 log = { workspace = true }
 minijinja = { workspace = true }

@@ -1,11 +1,13 @@
 use dbt_common::io_args::IoArgs;
 use dbt_common::{ErrorCode, FsResult, fs_err, fsinfo, show_progress, show_warning};
 use dbt_schemas::schemas::project::ProjectDbtCloudConfig;
+use flate2::read::GzDecoder;
 use reqwest_middleware::ClientBuilder;
 use reqwest_retry::{
     RetryTransientMiddleware, policies::ExponentialBackoff as RetryExponentialBackoff,
 };
 use std::error::Error;
+use std::io::Read;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
@@ -13,6 +15,35 @@ use crate::utils::load_raw_yml;
 
 const DOWNLOAD_INTERVAL: u64 = 3600; // 1 hour
 const MAX_CLIENT_RETRIES: u32 = 3;
+
+/// Process manifest bytes - handles both plain JSON and gzip-compressed JSON
+/// Returns the valid JSON bytes or None if the data is invalid
+fn process_manifest_bytes(bytes: &[u8]) -> Option<Vec<u8>> {
+    // First, check if it's already valid JSON
+    if serde_json::from_slice::<serde_json::Value>(bytes).is_ok() {
+        return Some(bytes.to_vec());
+    }
+
+    // Not valid JSON, try to decompress as gzip
+    let mut decoder = GzDecoder::new(bytes);
+    let mut decompressed = Vec::new();
+
+    match decoder.read_to_end(&mut decompressed) {
+        Ok(_) => {
+            // Check if decompressed content is valid JSON
+            if serde_json::from_slice::<serde_json::Value>(&decompressed).is_ok() {
+                Some(decompressed)
+            } else {
+                // Decompressed but still not valid JSON
+                None
+            }
+        }
+        Err(_) => {
+            // Failed to decompress
+            None
+        }
+    }
+}
 
 /// Downloads manifest from dbt Cloud if available and not recently cached
 #[allow(clippy::cognitive_complexity)]
@@ -231,13 +262,42 @@ pub async fn hydrate_or_download_manifest_from_cloud(
         return Ok(None);
     }
 
-    // Save manifest to file
+    // Download manifest bytes
     let manifest_bytes = manifest_response
         .bytes()
         .await
         .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to read manifest body: {}", e))?;
 
-    std::fs::write(&manifest_path, manifest_bytes).map_err(|e| {
+    // Process the manifest bytes to ensure we have valid JSON
+    let json_bytes = match process_manifest_bytes(&manifest_bytes) {
+        Some(json) => {
+            // Log if we had to decompress
+            if json.len() != manifest_bytes.len() {
+                show_progress!(
+                    io,
+                    fsinfo!(
+                        "INFO".into(),
+                        "Decompressed gzip-encoded deferral manifest".to_string()
+                    )
+                );
+            }
+            json
+        }
+        None => {
+            // Invalid manifest data, fail gracefully
+            show_warning!(
+                io,
+                fs_err!(
+                    ErrorCode::Generic,
+                    "Downloaded manifest is neither valid JSON nor gzip-compressed JSON. Continuing without deferral."
+                )
+            );
+            return Ok(None);
+        }
+    };
+
+    // Write the valid JSON to file
+    std::fs::write(&manifest_path, json_bytes).map_err(|e| {
         fs_err!(
             ErrorCode::IoError,
             "Failed to write manifest to file: {}",
@@ -259,4 +319,97 @@ pub async fn hydrate_or_download_manifest_from_cloud(
     );
 
     Ok(Some(default_dir))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    fn create_sample_manifest() -> serde_json::Value {
+        serde_json::json!({
+            "version": 12,
+            "project_id": "test_project",
+            "metadata": {
+                "project_id": "test_project",
+                "dbt_version": "1.0.0"
+            },
+            "nodes": {}
+        })
+    }
+
+    #[test]
+    fn test_process_manifest_bytes_plain_json() {
+        // Create plain JSON manifest
+        let manifest = create_sample_manifest();
+        let json_bytes = serde_json::to_vec(&manifest).unwrap();
+
+        // Process should return the same bytes
+        let result = process_manifest_bytes(&json_bytes);
+        assert!(result.is_some());
+
+        let processed = result.unwrap();
+        assert_eq!(processed, json_bytes);
+
+        // Verify the result is valid JSON
+        let parsed: serde_json::Value = serde_json::from_slice(&processed).unwrap();
+        assert_eq!(parsed["version"], 12);
+    }
+
+    #[test]
+    fn test_process_manifest_bytes_gzipped_json() {
+        // Create gzipped JSON manifest
+        let manifest = create_sample_manifest();
+        let json_bytes = serde_json::to_vec(&manifest).unwrap();
+
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        encoder.write_all(&json_bytes).unwrap();
+        let compressed_bytes = encoder.finish().unwrap();
+
+        // Process should decompress and return valid JSON
+        let result = process_manifest_bytes(&compressed_bytes);
+        assert!(result.is_some());
+
+        let processed = result.unwrap();
+        assert_ne!(processed.len(), compressed_bytes.len()); // Should be different size after decompression
+
+        // Verify the result is valid JSON
+        let parsed: serde_json::Value = serde_json::from_slice(&processed).unwrap();
+        assert_eq!(parsed["version"], 12);
+        assert_eq!(parsed["project_id"], "test_project");
+    }
+
+    #[test]
+    fn test_process_manifest_bytes_invalid_data() {
+        // Test with data that's neither JSON nor gzip
+        let invalid_data = b"This is not JSON or gzip data";
+
+        // Process should return None
+        let result = process_manifest_bytes(invalid_data);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_process_manifest_bytes_gzipped_non_json() {
+        // Create gzipped non-JSON data
+        let non_json_data = b"This is not JSON but will be gzipped";
+
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        encoder.write_all(non_json_data).unwrap();
+        let compressed_bytes = encoder.finish().unwrap();
+
+        // Process should return None because decompressed data is not JSON
+        let result = process_manifest_bytes(&compressed_bytes);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_process_manifest_bytes_corrupt_gzip() {
+        // Create corrupted gzip data
+        let corrupt_gzip = b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\x00corrupted data";
+
+        // Process should return None
+        let result = process_manifest_bytes(corrupt_gzip);
+        assert!(result.is_none());
+    }
 }
