@@ -1,9 +1,9 @@
-use std::collections::BTreeMap;
-
 use insta::assert_snapshot;
 use minijinja::{
-    constants::MACRO_NAMESPACE_REGISTRY, context, value::mutable_vec::MutableVec, Environment,
-    Value,
+    constants::MACRO_NAMESPACE_REGISTRY,
+    context,
+    value::{mutable_vec::MutableVec, ValueMap},
+    Environment, Value,
 };
 
 #[test]
@@ -45,7 +45,7 @@ fn test_set_append() {
 #[test]
 fn test_macro_namespace_lookup() {
     let mut env = Environment::new();
-    let mut macro_namespace_registry: BTreeMap<Value, Value> = BTreeMap::new();
+    let mut macro_namespace_registry = ValueMap::new();
     macro_namespace_registry.insert(
         Value::from("test_2"),
         Value::from_object(MutableVec::from(vec![Value::from("two")])),

@@ -190,6 +190,7 @@ minijinja-typecheck-builtins = { path = "crates/minijinja-typecheck-builtins" }
 minijinja = { path = "crates/dbt-jinja/minijinja", features = [
   "loader",
   "custom_syntax",
+  "preserve_order",
 ] }
 minijinja-contrib = { path = "crates/dbt-jinja/minijinja-contrib", features = [
   "pycompat",

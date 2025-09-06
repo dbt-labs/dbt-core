@@ -7,6 +7,7 @@ use dbt_fusion_adapter::BaseAdapter;
 use minijinja::{
     AdapterDispatchFunction, Argument, DynTypeObject, Environment, Error as MinijinjaError,
     ErrorKind as MinijinjaErrorKind, UndefinedFunctionType, UserDefinedFunctionType, Value,
+    compiler::typecheck::FunctionRegistry,
     constants::{
         DBT_AND_ADAPTERS_NAMESPACE, MACRO_NAMESPACE_REGISTRY, MACRO_TEMPLATE_REGISTRY,
         NON_INTERNAL_PACKAGES, ROOT_PACKAGE_NAME,
@@ -14,7 +15,7 @@ use minijinja::{
     dispatch_object::get_internal_packages,
     funcsign_parser, load_builtins,
     macro_unit::MacroUnit,
-    value::ValueKind,
+    value::{ValueKind, ValueMap},
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
@@ -46,7 +47,7 @@ pub struct JinjaEnvBuilder {
     root_package: Option<String>,
     undefined_behavior: minijinja::UndefinedBehavior,
     io_args: IoArgs,
-    function_registry: Arc<minijinja::compiler::typecheck::FunctionRegistry>,
+    function_registry: Arc<FunctionRegistry>,
 }
 
 impl JinjaEnvBuilder {
@@ -59,7 +60,7 @@ impl JinjaEnvBuilder {
             root_package: None,
             undefined_behavior: Default::default(),
             io_args: IoArgs::default(),
-            function_registry: Arc::new(BTreeMap::new()),
+            function_registry: Arc::new(FunctionRegistry::new()),
         }
     }
 
@@ -119,15 +120,14 @@ impl JinjaEnvBuilder {
         let internal_packages = get_internal_packages(adapter.adapter_type().as_ref());
 
         // Initialize all registries
-        let mut macro_namespace_registry = BTreeMap::new(); // package_name → [macro_names]
+        let mut macro_namespace_registry = ValueMap::new(); // package_name → [macro_names]
         let mut macro_namespace_registry_for_builtins = Vec::new(); // package_name → DynTypeObject
-        let mut macro_template_registry = BTreeMap::new(); // template_name → macro_info
+        let mut macro_template_registry = ValueMap::new(); // template_name → macro_info
 
-        let mut non_internal_packages: BTreeMap<Value, Value> = BTreeMap::new(); // package_name → [macro_names]
+        let mut non_internal_packages: ValueMap = ValueMap::new(); // package_name → [macro_names]
         let mut internal_packages_macros: BTreeMap<String, BTreeMap<String, Value>> =
             BTreeMap::new(); // package_name → {macro_name → info}
-        let mut function_registry: minijinja::compiler::typecheck::FunctionRegistry =
-            BTreeMap::new(); // macro_name → DynObject
+        let mut function_registry = FunctionRegistry::new(); // macro_name → DynObject
 
         // Process all macros
         for (package_name, macro_units) in macros.macros.clone() {
@@ -271,7 +271,7 @@ impl JinjaEnvBuilder {
         AdapterDispatchFunction::instance().set_function_registry(self.function_registry.clone());
 
         // Process internal packages in reverse order (like dbt)
-        let mut dbt_and_adapters_namespace = BTreeMap::new();
+        let mut dbt_and_adapters_namespace = ValueMap::new();
         for pkg in internal_packages.iter().rev() {
             if let Some(pkg_macros) = internal_packages_macros.get(pkg) {
                 for macro_name in pkg_macros.keys() {
@@ -695,7 +695,7 @@ all okay!");
         // Set non-default dispatch order of a_package and dbt
         let ctx = BTreeMap::from([(
             MACRO_DISPATCH_ORDER,
-            Value::from_object(BTreeMap::from([
+            Value::from_object(ValueMap::from([
                 (
                     Value::from("a_package".to_string()),
                     Value::from(vec!["test_package".to_string(), "a_package".to_string()]),

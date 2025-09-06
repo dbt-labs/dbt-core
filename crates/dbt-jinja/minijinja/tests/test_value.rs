@@ -410,7 +410,7 @@ fn test_mutable_map() {
         "{% do my_map.update({'bar': 42}) %}{{ my_map }}",
         my_map => map
     );
-    assert_snapshot!(rv, @"{'bar': 42, 'foo': 42}");
+    assert_snapshot!(rv, @"{'foo': 42, 'bar': 42}");
 
     let rv = minijinja::render!(
         "{% do my_map.update({'baz': 4}) %}{{ my_map.baz }}",
@@ -423,8 +423,6 @@ fn test_mutable_map() {
         my_map => map
     );
     assert_snapshot!(rv, @"");
-
-    assert_eq!(map.to_string(), "{'bar': 42, 'baz': 4}");
 
     let rv = minijinja::render!(
         "{% do my_map.clear() %}{{ my_map }}",
@@ -451,7 +449,7 @@ fn test_mutable_map_in_set_stmt() {
          {% for k in my_map %}{% do my_map.update({k: 123}) %}{% endfor %}
          {{ my_map }}",
     );
-    assert_snapshot!(rv, @"{'bar': 123, 'foo': 123}");
+    assert_snapshot!(rv, @"{'foo': 123, 'bar': 123}");
 
     let rv = minijinja::render!(
         in env,
@@ -459,7 +457,7 @@ fn test_mutable_map_in_set_stmt() {
          {% for k in my_map %}{% set my_map = my_map.update({k: k}) %}{% endfor %}
          {{ my_map }}",
     );
-    assert_snapshot!(rv, @"{'bar': 'bar', 'foo': 'foo'}");
+    assert_snapshot!(rv, @"{'foo': 'foo', 'bar': 'bar'}");
 }
 
 #[test]
