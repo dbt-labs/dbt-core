@@ -376,6 +376,9 @@ macro_rules! show_completed {
 
             let desc = if matches!($node_status, NodeStatus::Succeeded) {
                 $with_cache.then_some("New changes detected".to_string())
+            } else if matches!($node_status, NodeStatus::TestWarned | NodeStatus::Errored) &&
+                      let Some(location) = $node_info.defined_at {
+                Some(location.to_string())
             } else {
                 $node_status.get_message()
             };

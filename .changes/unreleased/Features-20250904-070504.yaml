@@ -1,0 +1,7 @@
+kind: Features
+body: Add Yaml source location to test status output
+time: 2025-09-04T07:05:04.140202651-07:00
+custom:
+    author: sadboy
+    issue: ""
+    project: dbt-fusion

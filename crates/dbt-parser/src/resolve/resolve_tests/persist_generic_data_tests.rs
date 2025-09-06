@@ -209,6 +209,7 @@ fn persist_inner(
         resource_name: test_config.resource_name.clone(),
         resource_type: test_config.resource_type.clone(),
         test_name: full_name,
+        defined_at: test.span().clone().into(),
     })
 }
 
@@ -271,7 +272,7 @@ fn get_test_details(
             let (test_macro_name, namespace) = parse_test_name_and_namespace(test_name);
             (test_macro_name, None, namespace)
         }
-        DataTests::CustomTest(custom_test) => match custom_test {
+        DataTests::CustomTest(custom_test) => match custom_test.as_ref() {
             CustomTest::MultiKey(mk) => {
                 let (test_name, namespace) = parse_test_name_and_namespace(&mk.test_name);
                 let extraction_result = extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
@@ -1329,8 +1330,8 @@ mod tests {
             resource_name: "my_model_with_a_long_name_beyond_64_chars_and_some_other_chars_aa"
                 .to_string(),
             version_num: None,
-            model_tests: Some(vec![DataTests::CustomTest(CustomTest::MultiKey(Box::new(
-                CustomTestMultiKey {
+            model_tests: Some(vec![DataTests::CustomTest(
+                CustomTest::MultiKey(Box::new(CustomTestMultiKey {
                     arguments: Verbatim::from(Some(
                         dbt_serde_yaml::to_value(json!({
                             "column_names": ["id"]
@@ -1343,8 +1344,9 @@ mod tests {
                     name: Some("noop?=p+:".to_string()),
                     test_name: "noop?=p+:".to_string(),
                     description: None,
-                },
-            )))]),
+                }))
+                .into(),
+            )]),
             column_tests: None,
             source_name: None,
         };

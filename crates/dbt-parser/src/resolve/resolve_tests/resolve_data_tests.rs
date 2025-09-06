@@ -224,6 +224,9 @@ pub async fn resolve_data_tests(
         test_config.enabled = Some(!(*status == ModelStatus::Disabled));
 
         let mut dbt_test = DbtTest {
+            defined_at: test_path_to_test_asset
+                .get(&dbt_asset.path)
+                .map(|test_asset| test_asset.defined_at.clone()),
             __common_attr__: CommonAttributes {
                 name: test_name.to_owned(),
                 package_name: package_name.to_owned(),

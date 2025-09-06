@@ -153,6 +153,9 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     fn is_versioned(&self) -> bool {
         false
     }
+    fn defined_at(&self) -> Option<&dbt_common::CodeLocation> {
+        None
+    }
     fn resource_type(&self) -> &str;
     fn as_any(&self) -> &dyn Any;
     fn serialize(&self) -> YmlValue {
@@ -188,6 +191,7 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         NodeInfoWrapper {
             unique_id: None,
             skipped_nodes: None,
+            defined_at: self.defined_at().cloned(),
             node_info: NodeInfo {
                 node_name: self.common().name.clone(),
                 unique_id: self.common().unique_id.clone(),
@@ -207,6 +211,7 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         NodeInfoWrapper {
             unique_id: None,
             skipped_nodes: None,
+            defined_at: self.defined_at().cloned(),
             node_info: NodeInfo {
                 node_name: self.common().name.clone(),
                 unique_id: self.common().unique_id.clone(),
@@ -521,6 +526,10 @@ impl InternalDbtNode for DbtTest {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn defined_at(&self) -> Option<&dbt_common::CodeLocation> {
+        self.defined_at.as_ref()
     }
 
     fn serialize_inner(&self) -> YmlValue {
@@ -1791,6 +1800,7 @@ pub struct DbtTest {
     pub __common_attr__: CommonAttributes,
     pub __base_attr__: NodeBaseAttributes,
     pub __test_attr__: DbtTestAttr,
+    pub defined_at: Option<dbt_common::CodeLocation>,
 
     // To be deprecated
     #[serde(rename = "config")]

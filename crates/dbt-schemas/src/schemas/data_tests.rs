@@ -1,4 +1,4 @@
-use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize, Verbatim};
+use dbt_serde_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize, Verbatim};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
@@ -8,8 +8,17 @@ use crate::schemas::project::DataTestConfig;
 #[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, JsonSchema)]
 #[serde(untagged)]
 pub enum DataTests {
-    String(String),
-    CustomTest(CustomTest),
+    String(Spanned<String>),
+    CustomTest(Spanned<CustomTest>),
+}
+
+impl DataTests {
+    pub fn span(&self) -> &dbt_serde_yaml::Span {
+        match self {
+            DataTests::String(spanned) => spanned.span(),
+            DataTests::CustomTest(spanned) => spanned.span(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, UntaggedEnumDeserialize, Serialize, JsonSchema)]
@@ -47,7 +56,7 @@ impl DataTests {
     pub fn column_name(&self) -> Option<&str> {
         match self {
             DataTests::String(_) => None,
-            DataTests::CustomTest(test) => match test {
+            DataTests::CustomTest(test) => match test.as_ref() {
                 CustomTest::MultiKey(test) => test.column_name.as_deref(),
                 CustomTest::SimpleKeyValue(test) => {
                     test.values().next().and_then(|v| v.column_name.as_deref())
@@ -59,7 +68,7 @@ impl DataTests {
     pub fn test_name(&self) -> Option<&str> {
         match self {
             DataTests::String(test) => Some(test),
-            DataTests::CustomTest(test) => match test {
+            DataTests::CustomTest(test) => match test.as_ref() {
                 CustomTest::MultiKey(test) => test.name.as_deref(),
                 CustomTest::SimpleKeyValue(test) => {
                     test.values().next().and_then(|v| v.name.as_deref())

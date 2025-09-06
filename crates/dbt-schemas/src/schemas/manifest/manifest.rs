@@ -405,6 +405,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 nodes.tests.insert(
                     unique_id,
                     Arc::new(DbtTest {
+                        defined_at: None,
                         __common_attr__: CommonAttributes {
                             unique_id: test.__common_attr__.unique_id,
                             name: test.__common_attr__.name,

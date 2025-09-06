@@ -882,6 +882,8 @@ pub struct NodeInfoWrapper {
     pub unique_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub skipped_nodes: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub defined_at: Option<CodeLocation>,
     pub node_info: NodeInfo,
 }
 
