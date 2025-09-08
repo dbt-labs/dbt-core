@@ -47,7 +47,7 @@ description = "Fusion: A fast dbt engine, SQL compiler, local development framew
 edition = "2024"
 homepage = "https://getdbt.com"
 keywords = ["sql", "parquet", "json", "csv", "dbt"]
-license = "<>"
+license = "Elastic-2.0"
 repository = "https://github.com/dbt-labs/dbt-core"
 version = "2.0.0-preview.9"
 
@@ -464,7 +464,7 @@ log = { version = "0.4.27", features = ["kv_serde"] }
 # tracing (observability)
 tracing = "0.1.41"
 tracing-log = "0.2.0" # temporary until we migrate to tracing exclusively
-tracing-subscriber = { version = "0.3.19", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
 
 # OpenTelemetry (optional embedded OTLP exporter for traces, see dbt-common)
 opentelemetry = "0.30.0"
