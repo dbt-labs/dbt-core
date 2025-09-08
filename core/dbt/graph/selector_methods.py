@@ -612,20 +612,11 @@ class StateSelectorManifestUpgrade:
         pass
 
 
-class SourceConfigDescriptionUpgrade(StateSelectorManifestUpgrade):
-    def __call__(self, manifest: Manifest) -> None:
-        for source in manifest.sources.values():
-            source.config.description = source.description
-            source.unrendered_config["description"] = source.description
-
-
 class StateSelectorMethod(SelectorMethod):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.modified_macros: Optional[List[str]] = None
-        self.upgrades: List[StateSelectorManifestUpgrade] = [
-            SourceConfigDescriptionUpgrade(),
-        ]
+        self.upgrades: List[StateSelectorManifestUpgrade] = []
 
     def _macros_modified(self) -> List[str]:
         # we checked in the caller!
