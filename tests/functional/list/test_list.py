@@ -897,7 +897,7 @@ class TestList:
                     "original_file_path": normalize("seeds/s.yml"),
                     "package_name": "test",
                     "resource_type": "test",
-                    "tags": [],
+                    "tags": ["tag"],
                     "unique_id": "test.test.not_null_seed__a_.6b59640cde",
                 },
                 {
@@ -929,7 +929,7 @@ class TestList:
                     "original_file_path": normalize("seeds/s.yml"),
                     "package_name": "test",
                     "resource_type": "test",
-                    "tags": [],
+                    "tags": ["tag"],
                     "unique_id": "test.test.not_null_seed__b_.a088b263cb",
                 },
                 {
