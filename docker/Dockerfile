@@ -7,11 +7,32 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     build-essential=12.9 \
     ca-certificates=20210119 \
-    git=1:2.30.2-1+deb11u2 \
     libpq-dev=13.22-0+deb11u1 \
     make=4.3-4.1 \
     openssh-client=1:8.4p1-5+deb11u3 \
     software-properties-common=0.96.20.2-2.1 \
+    # Additional dependencies for building git from source
+    wget \
+    libcurl4-gnutls-dev \
+    libexpat1-dev \
+    libssl-dev \
+    zlib1g-dev \
+  # Build and install git from source to get 2.50.1 since debian only ships with 2.47 for now
+  && wget https://github.com/git/git/archive/refs/tags/v2.50.1.tar.gz \
+  && tar -xf v2.50.1.tar.gz \
+  && cd git-2.50.1 \
+  && make prefix=/usr/local NO_TCLTK=1 NO_GETTEXT=1 all \
+  && make prefix=/usr/local NO_TCLTK=1 NO_GETTEXT=1 install \
+  && cd .. \
+  && rm -rf git-2.50.1 v2.50.1.tar.gz \
+  # Remove build dependencies to keep image slim
+  && apt-get remove -y \
+    libcurl4-gnutls-dev \
+    libexpat1-dev \
+    libssl-dev \
+    wget \
+    zlib1g-dev \
+  && apt-get autoremove -y \
   && apt-get clean \
   && rm -rf \
     /var/lib/apt/lists/* \
