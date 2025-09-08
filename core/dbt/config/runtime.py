@@ -23,7 +23,7 @@ from dbt.adapters.contracts.connection import (
 )
 from dbt.adapters.contracts.relation import ComponentName
 from dbt.adapters.factory import get_include_paths, get_relation_class_by_name
-from dbt.artifacts.resources.v1.components import Quoting
+from dbt.artifacts.resources import Quoting
 from dbt.config.project import load_raw_project
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.project import Configuration

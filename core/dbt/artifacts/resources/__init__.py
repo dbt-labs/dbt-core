@@ -25,6 +25,8 @@ from dbt.artifacts.resources.v1.config import (
     NodeAndTestConfig,
     NodeConfig,
     TestConfig,
+    list_str,
+    metas,
 )
 from dbt.artifacts.resources.v1.documentation import Documentation
 from dbt.artifacts.resources.v1.exposure import (
@@ -49,6 +51,7 @@ from dbt.artifacts.resources.v1.metric import (
     MetricTypeParams,
 )
 from dbt.artifacts.resources.v1.model import (
+    CustomGranularity,
     Model,
     ModelConfig,
     ModelFreshness,
@@ -80,6 +83,7 @@ from dbt.artifacts.resources.v1.semantic_model import (
     MeasureAggregationParameters,
     NodeRelation,
     NonAdditiveDimension,
+    SemanticLayerElementConfig,
     SemanticModel,
     SemanticModelConfig,
 )

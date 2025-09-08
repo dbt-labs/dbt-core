@@ -1,0 +1,6 @@
+kind: Fixes
+body: Quoting the event_time field when the configuration says so
+time: 2025-07-25T11:29:03.342884+02:00
+custom:
+    Author: pablomc87
+    Issue: "11858"
