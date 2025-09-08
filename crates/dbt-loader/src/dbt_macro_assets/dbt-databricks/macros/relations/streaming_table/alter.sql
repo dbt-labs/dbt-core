@@ -58,18 +58,19 @@
 {% endmacro %}
 
 {% macro get_create_st_internal(relation, configuration_changes, sql) %}
-  {%- set partition_by = configuration_changes.changes["partition_by"].partition_by -%}
-  {%- set tblproperties = configuration_changes.changes["tblproperties"].tblproperties -%}
-  {%- set comment = configuration_changes.changes["comment"].comment -%}
+  {# Deviation from core: partitioned_by is used here instead of partition_by when retrieving partitioning config #}
+  {%- set partition_by = configuration_changes.changes["partitioned_by"] -%}
+  {%- set tblproperties = configuration_changes.changes["tblproperties"] -%}
+  {%- set comment = configuration_changes.changes["comment"] -%}
   CREATE OR REFRESH STREAMING TABLE {{ relation }}
     {% if partition_by -%}
-        {{ get_create_sql_partition_by(partition_by) }}
+        {{ get_create_sql_partition_by(partition_by.partition_by) }}
     {%- endif %}
     {% if comment -%}
-        {{ get_create_sql_comment(comment) }}
+        {{ get_create_sql_comment(comment.comment) }}
     {%- endif %}
     {% if tblproperties -%}
-        {{ get_create_sql_tblproperties(tblproperties) }}
+        {{ get_create_sql_tblproperties(tblproperties.tblproperties) }}
     {%- endif %}
     AS {{ sql }}
 {% endmacro %}

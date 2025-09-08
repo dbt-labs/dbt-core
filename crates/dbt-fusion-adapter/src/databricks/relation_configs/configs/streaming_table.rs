@@ -64,9 +64,7 @@ impl DatabricksRelationConfigBase for StreamingTableConfig {
             if let (Some(value), Some(existing_value)) =
                 (self.get_config(key), existing.get_component(key))
             {
-                let diff = value
-                    .get_diff(&existing_value)
-                    .or_else(|| Some(Arc::new(value.clone()) as Arc<dyn ComponentConfig>));
+                let diff = value.get_diff(&existing_value);
 
                 // Special handling for partition_by changes
                 if key == "partition_by" && diff.is_some() {

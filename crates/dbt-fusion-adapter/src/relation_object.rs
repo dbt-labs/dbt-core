@@ -133,6 +133,7 @@ impl Object for RelationObject {
             }
             Some("Table") => Some(Value::from(RelationType::Table.to_string())),
             Some("DynamicTable") => Some(Value::from(RelationType::DynamicTable.to_string())),
+            Some("StreamingTable") => Some(Value::from(RelationType::StreamingTable.to_string())),
             _ => None,
         }
     }
