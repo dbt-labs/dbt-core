@@ -25,10 +25,15 @@ from dbt.artifacts.resources.v1.components import Quoting
 from dbt.artifacts.schemas.base import (
     ArtifactMixin,
     BaseArtifactMetadata,
+    get_artifact_dbt_version,
     get_artifact_schema_version,
     schema_version,
 )
-from dbt.artifacts.schemas.upgrades import upgrade_manifest_json
+from dbt.artifacts.schemas.upgrades import (
+    upgrade_manifest_json,
+    upgrade_manifest_json_dbt_version,
+)
+from dbt.version import __version__
 from dbt_common.exceptions import DbtInternalError
 
 NodeEdgeMap = Dict[str, List[str]]
@@ -185,6 +190,10 @@ class WritableManifest(ArtifactMixin):
         manifest_schema_version = get_artifact_schema_version(data)
         if manifest_schema_version < cls.dbt_schema_version.version:
             data = upgrade_manifest_json(data, manifest_schema_version)
+
+        manifest_dbt_version = get_artifact_dbt_version(data)
+        if manifest_dbt_version and manifest_dbt_version != __version__:
+            data = upgrade_manifest_json_dbt_version(data)
         return cls.from_dict(data)
 
     @classmethod
