@@ -5,6 +5,7 @@ from dbt.adapters.exceptions import MissingMaterializationError
 from dbt.artifacts.schemas.results import NodeStatus, RunStatus
 from dbt.artifacts.schemas.run import RunResult
 from dbt.clients.jinja import MacroGenerator
+from dbt.context.providers import generate_runtime_function_context
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import FunctionNode
 from dbt.events.types import LogNodeResult, LogStartLine
@@ -72,10 +73,9 @@ class FunctionRunner(CompileRunner):
             )
 
     def build_result(self, compiled_node: FunctionNode, result: Any) -> RunResult:
-        adapter_response = {}
-        response = result.response
-        if isinstance(response, dbtClassMixin):
-            adapter_response = response.to_dict(omit_none=True)
+        adapter_response = result
+        if isinstance(adapter_response, dbtClassMixin):
+            adapter_response = adapter_response.to_dict(omit_none=True)
 
         return RunResult(
             node=compiled_node,
@@ -83,7 +83,7 @@ class FunctionRunner(CompileRunner):
             timing=[],
             thread_id=threading.current_thread().name,
             execution_time=0.0,  # TODO: add execution time
-            message=str(result.response),
+            message="The function did it's thing!",
             adapter_response=adapter_response,
             failures=result.get("failures"),
             batch_results=None,
@@ -92,13 +92,12 @@ class FunctionRunner(CompileRunner):
     def execute(self, compiled_node: FunctionNode, manifest: Manifest) -> RunResult:
         materialization_macro = self._get_materialization_macro(compiled_node, manifest)
         self._check_lang_supported(compiled_node, materialization_macro)
+        context = generate_runtime_function_context(compiled_node, self.config, manifest)
 
-        result = MacroGenerator(
-            materialization_macro, {}
-        )()  # TODO: Should we be passing in a context here? If so, what should be in it?
+        result = MacroGenerator(materialization_macro, context=context)()
 
         # TODO: Should we be caching something here?
-        # for relation in self._materialization_relations(result, model):
+        # for relation in self._materialization_relations(result, compiled_node):
         #     self.adapter.cache_added(relation.incorporate(dbt_created=True))
 
         return self.build_result(compiled_node, result)
