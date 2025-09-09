@@ -14,6 +14,7 @@ use crate::{
         DbtUnitTest, DbtUnitTestAttr, IntrospectionKind, NodeBaseAttributes, Nodes,
         common::{DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn},
         manifest::{
+            ManifestExposure, ManifestGroup, ManifestSavedQuery, ManifestUnitTest,
             manifest_nodes::{
                 ManifestDataTest, ManifestModel, ManifestOperation, ManifestSeed, ManifestSnapshot,
             },
@@ -101,6 +102,8 @@ pub fn serialize_with_resource_type(mut value: YmlValue, resource_type: &str) ->
 pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> DbtManifest {
     let (parent_map, child_map) = build_parent_and_child_maps(&resolver_state.nodes);
     let group_map = build_group_map(&resolver_state.nodes);
+
+    let disabled = build_disabled_map(resolver_state);
     DbtManifest {
         metadata: ManifestMetadata {
             __base__: BaseMetadata {
@@ -201,8 +204,151 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
         parent_map,
         child_map,
         group_map,
+        disabled,
         ..Default::default()
     }
+}
+
+fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<YmlValue>> {
+    let disabled: BTreeMap<String, Vec<YmlValue>> = resolver_state
+        .disabled_nodes
+        .models
+        .iter()
+        .map(|(id, model)| {
+            (
+                id.clone(),
+                vec![
+                    dbt_serde_yaml::to_value(ManifestModel::from((**model).clone()))
+                        .unwrap_or_default(),
+                ],
+            )
+        })
+        .chain(
+            resolver_state
+                .disabled_nodes
+                .tests
+                .iter()
+                .map(|(id, test)| {
+                    (
+                        id.clone(),
+                        vec![
+                            dbt_serde_yaml::to_value(ManifestDataTest::from((**test).clone()))
+                                .unwrap_or_default(),
+                        ],
+                    )
+                }),
+        )
+        .chain(
+            resolver_state
+                .disabled_nodes
+                .snapshots
+                .iter()
+                .map(|(id, snapshot)| {
+                    (
+                        id.clone(),
+                        vec![
+                            dbt_serde_yaml::to_value(ManifestSnapshot::from((**snapshot).clone()))
+                                .unwrap_or_default(),
+                        ],
+                    )
+                }),
+        )
+        .chain(
+            resolver_state
+                .disabled_nodes
+                .seeds
+                .iter()
+                .map(|(id, seed)| {
+                    (
+                        id.clone(),
+                        vec![
+                            dbt_serde_yaml::to_value(ManifestSeed::from((**seed).clone()))
+                                .unwrap_or_default(),
+                        ],
+                    )
+                }),
+        )
+        .chain(
+            resolver_state
+                .disabled_nodes
+                .analyses
+                .iter()
+                .map(|(id, analysis)| {
+                    (
+                        id.clone(),
+                        vec![
+                            dbt_serde_yaml::to_value(ManifestModel::from((**analysis).clone()))
+                                .unwrap_or_default(),
+                        ],
+                    )
+                }),
+        )
+        .chain(
+            resolver_state
+                .disabled_nodes
+                .exposures
+                .iter()
+                .map(|(id, exposure)| {
+                    (
+                        id.clone(),
+                        vec![
+                            dbt_serde_yaml::to_value(ManifestExposure::from((**exposure).clone()))
+                                .unwrap_or_default(),
+                        ],
+                    )
+                }),
+        )
+        .chain(
+            resolver_state
+                .disabled_nodes
+                .saved_queries
+                .iter()
+                .map(|(id, saved_query)| {
+                    (
+                        id.clone(),
+                        vec![
+                            dbt_serde_yaml::to_value(ManifestSavedQuery::from(
+                                (**saved_query).clone(),
+                            ))
+                            .unwrap_or_default(),
+                        ],
+                    )
+                }),
+        )
+        .chain(
+            resolver_state
+                .disabled_nodes
+                .unit_tests
+                .iter()
+                .map(|(id, unit_test)| {
+                    (
+                        id.clone(),
+                        vec![
+                            dbt_serde_yaml::to_value(ManifestUnitTest::from((**unit_test).clone()))
+                                .unwrap_or_default(),
+                        ],
+                    )
+                }),
+        )
+        .chain(
+            resolver_state
+                .disabled_nodes
+                .groups
+                .iter()
+                .map(|(id, group)| {
+                    (
+                        id.clone(),
+                        vec![
+                            dbt_serde_yaml::to_value(ManifestGroup::from((**group).clone()))
+                                .unwrap_or_default(),
+                        ],
+                    )
+                }),
+        )
+        //.chain(resolver_state.disabled_nodes.metrics.iter().map(|(id, metric)| (id.clone(), vec![dbt_serde_yaml::to_value(ManifestMetric::from((**metric).clone())).unwrap_or_default()])))
+        //.chain(resolver_state.disabled_nodes.semantic_models.iter().map(|(id, semantic_model)| (id.clone(), vec![dbt_serde_yaml::to_value(ManifestSemanticModel::from((**semantic_model).clone())).unwrap_or_default()])))
+        .collect();
+    disabled
 }
 
 // Build map of group names to nodes in the group
