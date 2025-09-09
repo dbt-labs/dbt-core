@@ -63,7 +63,7 @@ pub mod schemas {
         pub mod postgres;
         pub mod saved_query;
         mod selector;
-        pub(crate) mod semantic_model;
+        pub mod semantic_model;
 
         // Versioned manifest modules
         pub mod v10;
@@ -105,7 +105,7 @@ pub mod schemas {
     }
     pub mod project {
         mod dbt_project;
-        mod configs {
+        pub(crate) mod configs {
             pub mod common;
             pub mod data_test_config;
             pub mod exposure_config;

@@ -466,7 +466,7 @@ pub async fn resolve_inner(
         package_quoting,
         dbt_state.root_project(),
         root_project_configs,
-        &mut min_properties.models,
+        &mut min_properties.models.clone(),
         database,
         schema,
         adapter_type,
@@ -519,7 +519,16 @@ pub async fn resolve_inner(
     nodes.exposures.extend(exposures);
     disabled_nodes.exposures.extend(disabled_exposures);
 
-    let (semantic_models, disabled_semantic_models) = resolve_semantic_models().await?;
+    let (semantic_models, disabled_semantic_models) = resolve_semantic_models(
+        arg,
+        package,
+        root_project_configs,
+        &mut min_properties.models.clone(),
+        package_name,
+        &jinja_env,
+        &base_ctx,
+    )
+    .await?;
     nodes.semantic_models.extend(semantic_models);
     disabled_nodes
         .semantic_models

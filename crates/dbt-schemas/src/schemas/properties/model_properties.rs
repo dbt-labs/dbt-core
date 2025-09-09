@@ -1,3 +1,4 @@
+use crate::default_to;
 use crate::schemas::common::ConstraintType;
 use crate::schemas::common::ModelFreshnessRules;
 use crate::schemas::common::Versions;
@@ -6,9 +7,13 @@ use crate::schemas::dbt_column::ColumnProperties;
 use crate::schemas::dbt_column::ColumnPropertiesDimensionType;
 use crate::schemas::dbt_column::ColumnPropertiesEntityType;
 use crate::schemas::dbt_column::ColumnPropertiesGranularity;
+use crate::schemas::project::DefaultTo;
 use crate::schemas::project::ModelConfig;
+use crate::schemas::project::SemanticModelConfig;
+use crate::schemas::project::configs::common::default_meta_and_tags;
 use crate::schemas::properties::MetricsProperties;
 use crate::schemas::properties::properties::GetConfig;
+use crate::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfig;
 use crate::schemas::serde::FloatOrString;
 use dbt_serde_yaml::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -50,14 +55,42 @@ pub struct ModelProperties {
     pub time_spine: Option<ModelsTimeSpine>,
     pub versions: Option<Vec<Versions>>,
 
-    pub semantic_model: Option<bool>,
+    pub semantic_model: Option<ModelPropertiesSemanticModelConfig>,
     pub agg_time_dimension: Option<String>,
     // TODO: rename to metrics once we figure out how to not render jinja for metrics nested under models
     // Currently, dbt commands won't work because we attempt to render Jinja for model nodes, but with
     // metrics in models, we attempt to render the `{{ Dimension(...) }}` jinja that should NOT be rendered
     pub metrics_todo: Option<Vec<MetricsProperties>>,
-    pub derived_semantics: Option<Vec<DerivedSemantics>>,
+    pub derived_semantics: Option<DerivedSemantics>,
     pub primary_entity: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Default)]
+pub struct ModelPropertiesSemanticModelConfig {
+    pub enabled: bool,
+    pub name: Option<String>,
+    pub group: Option<String>,
+    pub config: Option<SemanticLayerElementConfig>,
+}
+
+impl DefaultTo<SemanticModelConfig> for ModelPropertiesSemanticModelConfig {
+    fn get_enabled(&self) -> Option<bool> {
+        Some(self.enabled)
+    }
+
+    fn default_to(&mut self, parent: &SemanticModelConfig) {
+        let enabled = &mut Some(self.enabled);
+        let group = &mut self.group;
+        let meta = &mut self.config.clone().unwrap_or_default().meta;
+        let tags = &mut None;
+
+        #[allow(unused, clippy::let_unit_value)]
+        let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
+        #[allow(unused)]
+        let tags = ();
+
+        default_to!(parent, [enabled, group]);
+    }
 }
 
 impl ModelProperties {
@@ -117,15 +150,26 @@ pub struct DerivedSemantics {
     pub entities: Option<Vec<DerivedEntity>>,
 }
 
+impl Default for DerivedSemantics {
+    fn default() -> Self {
+        Self {
+            dimensions: Some(vec![]),
+            entities: Some(vec![]),
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
 pub struct DerivedDimension {
     pub name: String,
     pub expr: String,
     #[serde(rename = "type")]
-    pub type_: Option<ColumnPropertiesDimensionType>,
+    pub type_: ColumnPropertiesDimensionType,
     pub granularity: Option<ColumnPropertiesGranularity>,
     pub is_partition: Option<bool>,
     pub label: Option<String>,
+    pub description: Option<String>,
+    pub config: Option<SemanticLayerElementConfig>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
@@ -135,4 +179,6 @@ pub struct DerivedEntity {
     #[serde(rename = "type")]
     pub type_: ColumnPropertiesEntityType,
     pub description: Option<String>,
+    pub label: Option<String>,
+    pub config: Option<SemanticLayerElementConfig>,
 }

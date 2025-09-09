@@ -16,6 +16,7 @@ use sha2::{Digest, Sha256};
 use strum::{Display, EnumIter, EnumString};
 
 use crate::dbt_types::RelationType;
+use crate::schemas::dbt_column::{ColumnPropertiesDimensionType, ColumnPropertiesGranularity};
 use crate::schemas::manifest::common::SourceFileMetadata;
 use crate::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfig;
 
@@ -783,7 +784,7 @@ pub struct HookConfig {
 pub struct Dimension {
     pub name: String,
     #[serde(rename = "type")]
-    pub dimension_type: DimensionType,
+    pub dimension_type: ColumnPropertiesDimensionType,
     pub description: Option<String>,
     pub label: Option<String>,
     #[serde(default = "default_false")]
@@ -797,16 +798,9 @@ fn default_false() -> bool {
     false
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum DimensionType {
-    Categorical,
-    Time,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct DimensionTypeParams {
-    pub time_granularity: Option<TimeGranularity>,
+    pub time_granularity: Option<ColumnPropertiesGranularity>,
     pub validity_params: Option<DimensionValidityParams>,
 }
 
@@ -822,22 +816,6 @@ pub struct DimensionValidityParams {
 pub struct SemanticModelDependsOn {
     pub macros: Vec<String>,
     pub nodes: Vec<String>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum TimeGranularity {
-    Nanosecond,
-    Microsecond,
-    Millisecond,
-    Second,
-    Minute,
-    Hour,
-    Day,
-    Week,
-    Month,
-    Quarter,
-    Year,
 }
 
 #[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]

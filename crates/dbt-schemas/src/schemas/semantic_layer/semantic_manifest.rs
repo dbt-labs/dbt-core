@@ -4,7 +4,6 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::schemas::Nodes;
-use crate::schemas::manifest::DbtManifest;
 use crate::schemas::semantic_layer::metric::SemanticManifestMetric;
 use crate::schemas::semantic_layer::saved_query::SemanticManifestSavedQuery;
 use crate::schemas::semantic_layer::semantic_model::SemanticManifestSemanticModel;
@@ -46,18 +45,7 @@ impl From<Nodes> for SemanticManifest {
     }
 }
 
-impl From<DbtManifest> for SemanticManifest {
-    fn from(_manifest: DbtManifest) -> Self {
-        SemanticManifest {
-            semantic_models: vec![],
-            metrics: vec![],
-            project_configuration: SemanticManifestProjectConfiguration {},
-            saved_queries: vec![],
-        }
-    }
-}
-
-#[derive(Debug, Default, Serialize, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct SemanticLayerElementConfig {
     pub meta: Option<BTreeMap<String, YmlValue>>,
 }

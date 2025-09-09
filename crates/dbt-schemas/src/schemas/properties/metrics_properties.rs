@@ -1,4 +1,4 @@
-use crate::schemas::common::TimeGranularity;
+use crate::schemas::dbt_column::ColumnPropertiesGranularity;
 use crate::schemas::project::MetricConfig;
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::UntaggedEnumDeserialize;
@@ -27,7 +27,7 @@ pub struct MetricsProperties {
     pub non_additive_dimension: Option<NonAdditiveDimension>,
     pub agg_time_dimension: Option<String>,
     pub window: Option<String>,
-    pub grain_to_date: Option<TimeGranularity>,
+    pub grain_to_date: Option<ColumnPropertiesGranularity>,
     pub period_agg: Option<PeriodAggregationType>,
     pub input_metric: Option<StringOrMetricReference>,
     pub numerator: Option<StringOrMetricReference>,

@@ -34,13 +34,15 @@ impl From<DbtSemanticModel> for SemanticManifestSemanticModel {
             config: Some(SemanticLayerElementConfig {
                 meta: model.deprecated_config.meta,
             }),
-            defaults: model.__semantic_model_attr__.defaults,
             node_relation: model.__semantic_model_attr__.node_relation,
             primary_entity: model.__semantic_model_attr__.primary_entity,
             entities: model.__semantic_model_attr__.entities,
-            measures: model.__semantic_model_attr__.measures,
             dimensions: model.__semantic_model_attr__.dimensions,
-            metadata: model.__semantic_model_attr__.metadata,
+
+            // TODO: make sure these are supposed to be empty for backward compatibility
+            defaults: None,
+            measures: vec![],
+            metadata: None,
         }
     }
 }

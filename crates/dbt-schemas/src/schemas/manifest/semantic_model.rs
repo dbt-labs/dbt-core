@@ -1,6 +1,7 @@
 use crate::schemas::{
     CommonAttributes,
     common::{Dimension, NodeDependsOn},
+    dbt_column::ColumnPropertiesEntityType,
     manifest::common::SourceFileMetadata,
     project::SemanticModelConfig,
     ref_and_source::DbtRef,
@@ -14,12 +15,13 @@ use std::collections::BTreeMap;
 type YmlValue = dbt_serde_yaml::Value;
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtSemanticModel {
     pub __common_attr__: CommonAttributes,
     pub __semantic_model_attr__: DbtSemanticModelAttr,
 
+    // semantic models are models so they inherit from model config
     pub deprecated_config: SemanticModelConfig,
 
     pub __other__: BTreeMap<String, YmlValue>,
@@ -63,21 +65,13 @@ pub struct SemanticModelDefaults {
 pub struct SemanticEntity {
     pub name: String,
     #[serde(rename = "type")]
-    pub entity_type: EntityType,
+    pub entity_type: ColumnPropertiesEntityType,
     pub description: Option<String>,
     pub label: Option<String>,
     pub role: Option<String>,
     pub expr: Option<String>,
     pub config: Option<SemanticLayerElementConfig>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum EntityType {
-    Foreign,
-    Natural,
-    Primary,
-    Unique,
+    pub metadata: Option<SourceFileMetadata>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -8,7 +8,9 @@ use serde_with::skip_serializing_none;
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
 
-use crate::schemas::serde::StringOrArrayOfStrings;
+use crate::schemas::{
+    semantic_layer::semantic_manifest::SemanticLayerElementConfig, serde::StringOrArrayOfStrings,
+};
 
 use super::{common::Constraint, data_tests::DataTests};
 
@@ -45,7 +47,7 @@ pub struct ColumnProperties {
     pub config: Option<ColumnConfig>,
 
     pub entity: Option<Entity>,
-    pub dimension: Option<Dimension>,
+    pub dimension: Option<ColumnPropertiesDimension>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, Default, JsonSchema, Eq, PartialEq)]
@@ -189,8 +191,8 @@ pub fn process_columns(
 
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Eq, PartialEq)]
 #[serde(untagged)]
-pub enum Dimension {
-    DimensionConfig(DimensionConfig),
+pub enum ColumnPropertiesDimension {
+    DimensionConfig(ColumnPropertiesDimensionConfig),
     DimensionType(ColumnPropertiesDimensionType),
 }
 
@@ -202,12 +204,14 @@ pub enum ColumnPropertiesDimensionType {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Eq, PartialEq)]
-pub struct DimensionConfig {
+pub struct ColumnPropertiesDimensionConfig {
     #[serde(rename = "type")]
     pub type_: ColumnPropertiesDimensionType,
-    pub granularity: Option<ColumnPropertiesGranularity>,
     pub is_partition: Option<bool>,
     pub label: Option<String>,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub config: Option<SemanticLayerElementConfig>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
@@ -231,4 +235,7 @@ pub struct EntityConfig {
     #[serde(rename = "type")]
     pub type_: ColumnPropertiesEntityType,
     pub name: Option<String>,
+    pub description: Option<String>,
+    pub label: Option<String>,
+    pub config: Option<SemanticLayerElementConfig>,
 }

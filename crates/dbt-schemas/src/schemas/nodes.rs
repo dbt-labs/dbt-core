@@ -1570,6 +1570,7 @@ impl Nodes {
         self.snapshots.extend(other.snapshots);
         self.analyses.extend(other.analyses);
         self.exposures.extend(other.exposures);
+        self.semantic_models.extend(other.semantic_models);
         self.metrics.extend(other.metrics);
         self.saved_queries.extend(other.saved_queries);
         self.groups.extend(other.groups);
