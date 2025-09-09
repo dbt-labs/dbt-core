@@ -222,9 +222,23 @@ impl Serialize for DbtManifestV12 {
             "selectors".to_string(),
             dbt_serde_yaml::to_value(&self.selectors).map_err(serde::ser::Error::custom)?,
         );
+        // Serialize groups
+        let groups_serialized: BTreeMap<String, YmlValue> = self
+            .groups
+            .iter()
+            .map(|(k, v)| {
+                Ok((
+                    k.clone(),
+                    serialize_with_resource_type(
+                        dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?,
+                        "group",
+                    ),
+                ))
+            })
+            .collect::<Result<_, _>>()?;
         map.insert(
             "groups".to_string(),
-            dbt_serde_yaml::to_value(&self.groups).map_err(serde::ser::Error::custom)?,
+            dbt_serde_yaml::to_value(groups_serialized).map_err(serde::ser::Error::custom)?,
         );
 
         map.serialize(serializer)
