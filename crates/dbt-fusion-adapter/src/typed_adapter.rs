@@ -1,4 +1,3 @@
-use crate::cast_util::dyn_base_columns_to_value;
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::funcs::{execute_macro, none_value};
 use crate::record_batch_utils::get_column_values;
@@ -272,7 +271,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         state: &State,
         source_relation: Arc<dyn BaseRelation>,
         target_relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Value> {
+    ) -> AdapterResult<Vec<Arc<dyn BaseColumn>>> {
         // Get columns for both relations
         let source_cols = self.get_columns_in_relation(state, source_relation)?;
         let target_cols = self.get_columns_in_relation(state, target_relation)?;
@@ -284,7 +283,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         let target_cols_set: std::collections::HashSet<_> =
             target_cols.into_iter().map(|col| col.name()).collect();
 
-        let result: Vec<Arc<dyn BaseColumn>> = source_cols_map
+        Ok(source_cols_map
             .into_iter()
             .filter_map(|(name, col)| {
                 if target_cols_set.contains(&name) {
@@ -293,9 +292,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                     Some(col)
                 }
             })
-            .collect();
-        let result = dyn_base_columns_to_value(result)?;
-        Ok(result)
+            .collect())
     }
 
     /// Get columns in relation
@@ -664,6 +661,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// Get column schema from query
     fn get_column_schema_from_query(
         &self,
+        _state: &State,
         conn: &mut dyn Connection,
         query_ctx: &QueryCtx,
     ) -> AdapterResult<Vec<Arc<dyn BaseColumn>>>;

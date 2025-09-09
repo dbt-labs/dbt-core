@@ -52,14 +52,11 @@ pub fn resolve_unit_tests(
     unit_test_properties: BTreeMap<String, MinimalPropertiesEntry>,
     package: &DbtPackage,
     package_quoting: DbtQuoting,
-    root_project: &DbtProject,
     root_project_configs: &RootProjectConfigs,
-    adapter_type: AdapterType,
     package_name: &str,
     jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     model_properties: &BTreeMap<String, MinimalPropertiesEntry>,
-    runtime_config: Arc<DbtRuntimeConfig>,
     models: &BTreeMap<String, Arc<DbtModel>>,
 ) -> FsResult<(
     BTreeMap<String, Arc<DbtUnitTest>>,
@@ -137,73 +134,18 @@ pub fn resolve_unit_tests(
 
         // todo: generalize given input format, according to https://docs.getdbt.com/docs/build/unit-tests
 
-        let mut dependent_refs = vec![];
-
-        // Add the model ref to the dependent refs
-        dependent_refs.push(DbtRef {
+        let dependent_refs = vec![DbtRef {
             name: unit_test.model.to_owned(),
             package: Some(package_name.to_owned()),
             version: None,
             location: Some(CodeLocation::default()),
-        });
+        }];
 
-        let mut dependent_sources = vec![];
         // Process unit test given inputs to extract ref nodes
         for given_group in unit_test.given.iter() {
             for g in given_group.iter() {
                 let input = &g.input;
-                if input.contains("ref") || input.contains("source") {
-                    let sql_resources: Arc<Mutex<Vec<SqlResource<UnitTestConfig>>>> =
-                        Arc::new(Mutex::new(Vec::new()));
-                    let mut resolve_model_context = base_ctx.clone();
-                    let relative_path = mpe.relative_path.clone();
-                    resolve_model_context.extend(build_resolve_model_context(
-                        &properties_config,
-                        adapter_type,
-                        &database,
-                        &schema,
-                        &unit_test_name,
-                        fqn.clone(),
-                        package_name,
-                        &root_project.name,
-                        package_quoting,
-                        runtime_config.clone(),
-                        sql_resources.clone(),
-                        Arc::new(AtomicBool::new(false)),
-                        &relative_path,
-                        io_args,
-                    ));
-                    let sql_resource = render_extract_ref_or_source_expr(
-                        jinja_env,
-                        &resolve_model_context,
-                        sql_resources.clone(),
-                        input,
-                    )?;
-                    match sql_resource {
-                        SqlResource::Ref(ref_info) => {
-                            dependent_refs.push(DbtRef {
-                                name: ref_info.0,
-                                package: ref_info.1,
-                                version: ref_info.2.map(|v| v.into()),
-                                location: Some(ref_info.3.with_file(&mpe.relative_path)),
-                            });
-                        }
-                        SqlResource::Source(source_info) => {
-                            dependent_sources.push(DbtSourceWrapper {
-                                source: vec![source_info.0, source_info.1],
-                                location: Some(source_info.2.with_file(&mpe.relative_path)),
-                            });
-                        }
-                        _ => {
-                            return err!(
-                                ErrorCode::Unexpected,
-                                "Invalid given input: {}",
-                                input.as_str()
-                            );
-                        }
-                    }
-                } else if input.as_str().eq("this") {
-                    // this is handled at render time.
+                if input.contains("ref") || input.contains("source") || input.as_str().eq("this") {
                     continue;
                 } else {
                     return err!(
@@ -289,7 +231,7 @@ pub fn resolve_unit_tests(
                 relation_name: None,
                 depends_on: NodeDependsOn::default(),
                 refs: dependent_refs,
-                sources: dependent_sources,
+                sources: vec![],
                 enabled,
                 extended_model: false,
                 persist_docs: None,

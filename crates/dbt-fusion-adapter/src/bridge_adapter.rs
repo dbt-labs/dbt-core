@@ -773,6 +773,7 @@ impl BaseAdapter for BridgeAdapter {
             .typed_adapter
             .get_missing_columns(state, from_relation, to_relation)?;
 
+        let result = dyn_base_columns_to_value(result)?;
         Ok(result)
     }
 
@@ -941,9 +942,9 @@ impl BaseAdapter for BridgeAdapter {
         let query_ctx = query_ctx_from_state_with_sql(state, sql)?
             .with_desc("get_column_schema_from_query adapter call");
         let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
-        let result = self
-            .typed_adapter
-            .get_column_schema_from_query(conn.as_mut(), &query_ctx)?;
+        let result =
+            self.typed_adapter
+                .get_column_schema_from_query(state, conn.as_mut(), &query_ctx)?;
         let result = dyn_base_columns_to_value(result)?;
         Ok(result)
     }
