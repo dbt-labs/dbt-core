@@ -8,7 +8,7 @@ use dbt_common::{
     ErrorCode, FsResult, adapter::AdapterType, cancellation::CancellationToken, fs_err,
     io_args::IoArgs,
 };
-use dbt_fusion_adapter::parse::adapter::create_parse_adapter;
+use dbt_fusion_adapter::{BaseAdapter, ParseAdapter};
 use dbt_schemas::{
     dbt_utils::resolve_package_quoting,
     schemas::profiles::{DbConfig, TargetContext},
@@ -38,6 +38,7 @@ pub fn initialize_load_jinja_environment(
     io_args: IoArgs,
     token: CancellationToken,
 ) -> FsResult<JinjaEnv> {
+    let adapter_config_mapping = db_config.to_mapping().unwrap();
     let target_context = TargetContext::try_from(db_config)
         .map_err(|e| fs_err!(ErrorCode::InvalidConfig, "{}", &e))?;
     let target_context = Arc::new(build_target_context_map(profile, target, target_context));
@@ -65,8 +66,9 @@ pub fn initialize_load_jinja_environment(
 
     let package_quoting = resolve_package_quoting(None, adapter_type);
 
+    let adapter = ParseAdapter::new(adapter_type, adapter_config_mapping, package_quoting, token);
     Ok(JinjaEnvBuilder::new()
-        .with_adapter(create_parse_adapter(adapter_type, package_quoting, token)?)
+        .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
         .with_root_package("dbt".to_string())
         .with_io_args(io_args)
         .with_globals(globals)

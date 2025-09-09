@@ -13,7 +13,7 @@ mod tests {
     use dbt_common::cancellation::never_cancels;
     use dbt_common::{FsResult, io_args::IoArgs};
     use dbt_frontend_common::error::CodeLocation;
-    use dbt_fusion_adapter::parse::adapter::create_parse_adapter;
+    use dbt_fusion_adapter::{BaseAdapter, ParseAdapter};
     use dbt_jinja_utils::invocation_args::InvocationArgs;
     use dbt_jinja_utils::jinja_environment::JinjaEnv;
     use dbt_jinja_utils::listener::DefaultRenderingEventListenerFactory;
@@ -289,9 +289,12 @@ mod tests {
             ctx: S,
         ) -> Result<String, Error> {
             let mut env = Environment::new();
-            let adapter =
-                create_parse_adapter(AdapterType::Postgres, DEFAULT_DBT_QUOTING, never_cancels())
-                    .unwrap();
+            let adapter = Arc::new(ParseAdapter::new(
+                AdapterType::Postgres,
+                dbt_serde_yaml::Mapping::default(),
+                DEFAULT_DBT_QUOTING,
+                never_cancels(),
+            )) as Arc<dyn BaseAdapter>;
             env.add_global("adapter", adapter.as_value());
             let empty_blocks = BTreeMap::new();
             let vm = Vm::new(&env);

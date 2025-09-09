@@ -1,3 +1,4 @@
+use crate::cache::RelationCache;
 use crate::metadata::{CatalogAndSchema, MetadataAdapter};
 use crate::sql_engine::SqlEngine;
 use crate::typed_adapter::TypedBaseAdapter;
@@ -5,7 +6,11 @@ use crate::{AdapterResponse, AdapterResult};
 
 use dbt_agate::AgateTable;
 use dbt_common::FsResult;
+use dbt_common::adapter::SchemaRegistry;
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::io_args::ReplayMode;
+use dbt_schemas::schemas::InternalDbtNodeAttributes;
+use dbt_schemas::schemas::columns::base::BaseColumn;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_xdbc::{Backend, Connection};
@@ -17,9 +22,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::sync::Arc;
 
-/// The type of the adapter.
-///
-/// Used to identify the specific database adapter being used.
+/// The type of the adapter. Used to identify the specific database adapter being used.
 pub type AdapterType = dbt_common::adapter::AdapterType;
 
 pub fn backend_of(adapter_type: AdapterType) -> Backend {
@@ -47,8 +50,12 @@ pub trait AdapterTyping {
     /// Get column type instance
     fn column_type(&self) -> Option<Value>;
 
-    /// Get the [SqlEngine], if available
-    fn engine(&self) -> Option<&Arc<SqlEngine>>;
+    /// Get the [SqlEngine]
+    fn engine(&self) -> &Arc<SqlEngine>;
+
+    fn adapter_factory(&self) -> &dyn AdapterFactory {
+        self.engine().adapter_factory()
+    }
 
     /// Get the [ResolvedQuoting]
     fn quoting(&self) -> ResolvedQuoting;
@@ -584,4 +591,61 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     fn is_cached(&self, _relation: &Arc<dyn BaseRelation>) -> bool {
         false
     }
+}
+
+/// A factory for adapters, relations and columns.
+///
+/// It can create adapters wrapped in a boxed `dyn BaseAdapter`
+/// objects. Similarly, it can create boxed `dyn BaseRelation`
+/// and `dyn BaseColumn` objects.
+pub trait AdapterFactory: Send + Sync {
+    #[allow(clippy::too_many_arguments)]
+    fn create_adapter(
+        &self,
+        adapter_type: AdapterType,
+        config: dbt_serde_yaml::Mapping,
+        replay_mode: Option<ReplayMode>,
+        flags: BTreeMap<String, Value>,
+        db: Option<Arc<dyn SchemaRegistry>>,
+        quoting: ResolvedQuoting,
+        token: CancellationToken,
+    ) -> FsResult<Arc<dyn BaseAdapter>>;
+
+    /// Create a relation from a InternalDbtNode
+    fn create_relation_from_node(
+        &self,
+        node: &dyn InternalDbtNodeAttributes,
+        adapter_type: AdapterType,
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error>;
+
+    /// Creates a column based on the adapter type
+    #[allow(clippy::too_many_arguments)]
+    fn create_column(
+        &self,
+        adapter_type: AdapterType,
+        name: String,
+        dtype: String,
+        char_size: Option<u32>,
+        numeric_precision: Option<u64>,
+        numeric_scale: Option<u64>,
+        mode: Option<String>,
+    ) -> Result<Arc<dyn BaseColumn>, minijinja::Error>;
+
+    /// Return a new instance of the factory with a different relation cache.
+    fn with_relation_cache(&self, relation_cache: Arc<RelationCache>) -> Arc<dyn AdapterFactory>;
+
+    fn to_owned(&self) -> Arc<dyn AdapterFactory>;
+}
+
+/// Check if the adapter type is supported
+///
+/// XXX: the definition of "supported" is lost here
+pub fn is_supported_dialect(adapter_type: AdapterType) -> bool {
+    matches!(
+        adapter_type,
+        AdapterType::Snowflake
+            | AdapterType::Bigquery
+            | AdapterType::Redshift
+            | AdapterType::Databricks
+    )
 }

@@ -11,3 +11,20 @@ pub trait StmtSplitter: Send + Sync + Debug {
     /// - Handle dialect-specific syntax correctly
     fn split(&self, sql: &str, dialect: Dialect) -> Vec<String>;
 }
+
+/// Naive implementation of StmtSplitter
+///
+/// Used as a placeholder until a more robust solution is made available
+/// to this crate.
+#[derive(Debug)]
+pub struct NaiveStmtSplitter;
+
+impl StmtSplitter for NaiveStmtSplitter {
+    fn split(&self, sql: &str, _dialect: Dialect) -> Vec<String> {
+        sql.split(';')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .collect()
+    }
+}

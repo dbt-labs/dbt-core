@@ -1,3 +1,4 @@
+use crate::base_adapter::AdapterFactory;
 use crate::config::AdapterConfig;
 use crate::errors::AdapterResult;
 use crate::sql_engine::SqlEngine;
@@ -122,12 +123,16 @@ impl RecordEngine {
         self.0.engine.config(key)
     }
 
-    pub fn cancellation_token(&self) -> CancellationToken {
-        self.0.engine.cancellation_token()
+    pub(crate) fn adapter_factory(&self) -> &dyn AdapterFactory {
+        self.0.engine.adapter_factory()
     }
 
-    pub fn splitter(&self) -> Arc<dyn StmtSplitter> {
+    pub fn splitter(&self) -> &dyn StmtSplitter {
         self.0.engine.splitter()
+    }
+
+    pub fn cancellation_token(&self) -> CancellationToken {
+        self.0.engine.cancellation_token()
     }
 }
 
@@ -367,10 +372,10 @@ struct ReplayEngineInner {
     path: PathBuf,
     /// Adapter config
     config: AdapterConfig,
+    adapter_factory: Arc<dyn AdapterFactory>,
+    stmt_splitter: Arc<dyn StmtSplitter>,
     /// Global CLI cancellation token
     cancellation_token: CancellationToken,
-    /// Statement splitter
-    splitter: Arc<dyn StmtSplitter>,
 }
 
 impl ReplayEngineInner {
@@ -387,15 +392,17 @@ impl ReplayEngine {
         backend: Backend,
         path: PathBuf,
         config: AdapterConfig,
+        adapter_factory: Arc<dyn AdapterFactory>,
+        stmt_splitter: Arc<dyn StmtSplitter>,
         token: CancellationToken,
-        splitter: Arc<dyn StmtSplitter>,
     ) -> Self {
         let inner = ReplayEngineInner {
             backend,
             path,
             config,
+            adapter_factory,
+            stmt_splitter,
             cancellation_token: token,
-            splitter,
         };
         ReplayEngine(Arc::new(inner))
     }
@@ -413,12 +420,16 @@ impl ReplayEngine {
         self.0.config.get_string(key)
     }
 
-    pub fn cancellation_token(&self) -> CancellationToken {
-        self.0.cancellation_token.clone()
+    pub(crate) fn adapter_factory(&self) -> &dyn AdapterFactory {
+        self.0.adapter_factory.as_ref()
     }
 
-    pub fn splitter(&self) -> Arc<dyn StmtSplitter> {
-        self.0.splitter.clone()
+    pub fn splitter(&self) -> &dyn StmtSplitter {
+        self.0.stmt_splitter.as_ref()
+    }
+
+    pub fn cancellation_token(&self) -> CancellationToken {
+        self.0.cancellation_token.clone()
     }
 }
 

@@ -149,7 +149,7 @@ impl JinjaEnv {
         self.env.add_global("api", Value::from_object(api_map));
 
         // Add the adapter type to the environment for easy access
-        self.sql_engine = adapter.engine().cloned();
+        self.sql_engine = Some(Arc::clone(adapter.engine()));
         self.env
             .add_global("dialect", Value::from(adapter.adapter_type().to_string()));
         self.env.add_global("adapter", adapter.as_value());

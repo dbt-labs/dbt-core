@@ -489,7 +489,7 @@ mod tests {
 
     use dbt_common::adapter::AdapterType;
     use dbt_common::cancellation::never_cancels;
-    use dbt_fusion_adapter::parse::adapter::create_parse_adapter;
+    use dbt_fusion_adapter::ParseAdapter;
     use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
     use minijinja::{
         constants::MACRO_DISPATCH_ORDER, context, dispatch_object::THREAD_LOCAL_DEPENDENCIES,
@@ -599,11 +599,14 @@ all okay!");
                 "{% macro default__one() %}test_package one{% endmacro %}",
             )],
         );
+        let adapter = ParseAdapter::new(
+            AdapterType::Postgres,
+            dbt_serde_yaml::Mapping::default(),
+            DEFAULT_DBT_QUOTING,
+            never_cancels(),
+        );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
-            .with_adapter(
-                create_parse_adapter(AdapterType::Postgres, DEFAULT_DBT_QUOTING, never_cancels())
-                    .unwrap(),
-            )
+            .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
             .with_root_package("test_package".to_string())
             .try_with_macros(macro_units, None)
             .expect("Failed to register macros");
@@ -682,11 +685,14 @@ all okay!");
                 ),
             ],
         );
+        let adapter = ParseAdapter::new(
+            AdapterType::Postgres,
+            dbt_serde_yaml::Mapping::default(),
+            DEFAULT_DBT_QUOTING,
+            never_cancels(),
+        );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
-            .with_adapter(
-                create_parse_adapter(AdapterType::Postgres, DEFAULT_DBT_QUOTING, never_cancels())
-                    .unwrap(),
-            )
+            .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
             .with_root_package("test_package".to_string())
             .try_with_macros(macro_units, None)
             .expect("Failed to register macros");
@@ -740,9 +746,15 @@ all okay!");
 
     #[test]
     fn test_macro_assignment() {
+        let adapter = ParseAdapter::new(
+            AdapterType::Postgres,
+            dbt_serde_yaml::Mapping::default(),
+            DEFAULT_DBT_QUOTING,
+            never_cancels(),
+        );
         let env = JinjaEnvBuilder::new()
             .with_root_package("test_package".to_string())
-            .with_adapter(create_parse_adapter(AdapterType::Postgres, DEFAULT_DBT_QUOTING, never_cancels()).unwrap())
+            .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
             .try_with_macros(MacroUnitsWrapper::new(BTreeMap::from([(
                 "test_package".to_string(),
                 vec![
@@ -848,14 +860,18 @@ all okay!");
             )],
         );
 
+        let adapter = ParseAdapter::new(
+            AdapterType::Postgres,
+            dbt_serde_yaml::Mapping::default(),
+            DEFAULT_DBT_QUOTING,
+            never_cancels(),
+        );
+
         // Root package has no macros
 
         // Build environment with the empty root package
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
-            .with_adapter(
-                create_parse_adapter(AdapterType::Postgres, DEFAULT_DBT_QUOTING, never_cancels())
-                    .unwrap(),
-            )
+            .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
             .with_root_package("empty_root".to_string())
             .try_with_macros(macro_units, None)
             .expect("Failed to register macros");

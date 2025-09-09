@@ -1,5 +1,6 @@
 use crate::TrackedStatement;
 use crate::auth::Auth;
+use crate::base_adapter::{AdapterFactory, backend_of};
 use crate::config::AdapterConfig;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::stmt_splitter::StmtSplitter;
@@ -9,7 +10,8 @@ use arrow::array::RecordBatch;
 use arrow::compute::concat_batches;
 use arrow_schema::Schema;
 use core::result::Result;
-use dbt_common::cancellation::{Cancellable, CancellationToken};
+use dbt_common::adapter::AdapterType;
+use dbt_common::cancellation::{Cancellable, CancellationToken, never_cancels};
 use dbt_common::constants::EXECUTING;
 use dbt_frontend_common::dialect::Dialect;
 use dbt_xdbc::semaphore::Semaphore;
@@ -23,13 +25,20 @@ use std::collections::HashMap;
 use std::fmt::Write;
 use std::hash::{BuildHasher, Hasher};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::RwLock;
+use std::sync::{Arc, LazyLock};
 use std::{thread, time::Duration};
 
 use super::record_and_replay::{RecordEngine, ReplayEngine};
 
 type Options = Vec<(String, OptionValue)>;
+
+/// Naive statement splitter used in the MockAdapter
+///
+/// IMPORTANT: not suitable for production use.
+/// TODO: remove when the full stmt splitter is available to this crate.
+static NAIVE_STMT_SPLITTER: LazyLock<Arc<dyn StmtSplitter>> =
+    LazyLock::new(|| Arc::new(crate::stmt_splitter::NaiveStmtSplitter));
 
 #[derive(Default)]
 struct IdentityHasher {
@@ -79,18 +88,21 @@ pub struct ActualEngine {
     configured_databases: RwLock<DatabaseMap>,
     /// Semaphore for limiting the number of concurrent connections
     semaphore: Arc<Semaphore>,
-    /// Global CLI cancellation token
-    cancellation_token: CancellationToken,
+    /// Adapter factory for creating relations and columns
+    adapter_factory: Arc<dyn AdapterFactory>,
     /// Statement splitter
     splitter: Arc<dyn StmtSplitter>,
+    /// Global CLI cancellation token
+    cancellation_token: CancellationToken,
 }
 
 impl ActualEngine {
     pub fn new(
         auth: Arc<dyn Auth>,
         config: AdapterConfig,
-        token: CancellationToken,
+        adapter_factory: Arc<dyn AdapterFactory>,
         splitter: Arc<dyn StmtSplitter>,
+        token: CancellationToken,
     ) -> Self {
         let threads = config
             .get("threads")
@@ -108,8 +120,9 @@ impl ActualEngine {
             config,
             configured_databases: RwLock::new(DatabaseMap::default()),
             semaphore: Arc::new(Semaphore::new(permits)),
-            cancellation_token: token,
+            adapter_factory,
             splitter,
+            cancellation_token: token,
         }
     }
 
@@ -185,6 +198,8 @@ pub enum SqlEngine {
     Record(RecordEngine),
     /// Engine used for replaying db interaction
     Replay(ReplayEngine),
+    /// Mock engine for the MockAdapter
+    Mock(AdapterType),
 }
 
 impl SqlEngine {
@@ -192,10 +207,11 @@ impl SqlEngine {
     pub fn new(
         auth: Arc<dyn Auth>,
         config: AdapterConfig,
+        adapter_factory: Arc<dyn AdapterFactory>,
+        stmt_splitter: Arc<dyn StmtSplitter>,
         token: CancellationToken,
-        splitter: Arc<dyn StmtSplitter>,
     ) -> Arc<Self> {
-        let engine = ActualEngine::new(auth, config, token, splitter);
+        let engine = ActualEngine::new(auth, config, adapter_factory, stmt_splitter, token);
         Arc::new(SqlEngine::Warehouse(Arc::new(engine)))
     }
 
@@ -204,10 +220,12 @@ impl SqlEngine {
         backend: Backend,
         path: PathBuf,
         config: AdapterConfig,
+        adapter_factory: Arc<dyn AdapterFactory>,
+        stmt_splitter: Arc<dyn StmtSplitter>,
         token: CancellationToken,
-        splitter: Arc<dyn StmtSplitter>,
     ) -> Arc<Self> {
-        let engine = ReplayEngine::new(backend, path, config, token, splitter);
+        let engine =
+            ReplayEngine::new(backend, path, config, adapter_factory, stmt_splitter, token);
         Arc::new(SqlEngine::Replay(engine))
     }
 
@@ -218,11 +236,12 @@ impl SqlEngine {
     }
 
     /// Get the statement splitter for this engine
-    pub fn splitter(&self) -> Arc<dyn StmtSplitter> {
+    pub fn splitter(&self) -> &dyn StmtSplitter {
         match self {
-            SqlEngine::Warehouse(engine) => engine.splitter.clone(),
+            SqlEngine::Warehouse(engine) => engine.splitter.as_ref(),
             SqlEngine::Record(engine) => engine.splitter(),
             SqlEngine::Replay(engine) => engine.splitter(),
+            SqlEngine::Mock(_) => NAIVE_STMT_SPLITTER.as_ref(),
         }
     }
 
@@ -246,6 +265,9 @@ impl SqlEngine {
             Self::Warehouse(actual_engine) => actual_engine.new_connection_with_config(config),
             Self::Record(record_engine) => record_engine.new_connection(None),
             Self::Replay(replay_engine) => replay_engine.new_connection(None),
+            Self::Mock(_) => {
+                unreachable!("Mock engine does not support new_connection_with_config")
+            }
         }?;
         Ok(conn)
     }
@@ -255,6 +277,17 @@ impl SqlEngine {
             SqlEngine::Warehouse(actual_engine) => actual_engine.auth.backend(),
             SqlEngine::Record(record_engine) => record_engine.backend(),
             SqlEngine::Replay(replay_engine) => replay_engine.backend(),
+            SqlEngine::Mock(adapter_type) => backend_of(*adapter_type),
+        }
+    }
+
+    /// Used to create columns after the adapter that owns this engine is created.
+    pub fn adapter_factory(&self) -> &dyn AdapterFactory {
+        match self {
+            SqlEngine::Warehouse(actual_engine) => actual_engine.adapter_factory.as_ref(),
+            SqlEngine::Record(record_engine) => record_engine.adapter_factory(),
+            SqlEngine::Replay(replay_engine) => replay_engine.adapter_factory(),
+            SqlEngine::Mock(_) => unreachable!("Mock engine does not support adapter_factory"),
         }
     }
 
@@ -264,6 +297,7 @@ impl SqlEngine {
             Self::Warehouse(actual_engine) => actual_engine.new_connection(node_id),
             Self::Record(record_engine) => record_engine.new_connection(node_id),
             Self::Replay(replay_engine) => replay_engine.new_connection(node_id),
+            Self::Mock(_) => unreachable!("Mock engine does not support new_connection"),
         }
     }
 
@@ -382,6 +416,7 @@ impl SqlEngine {
             Self::Warehouse(actual_engine) => actual_engine.config.get_string(key),
             Self::Record(record_engine) => record_engine.config(key),
             Self::Replay(replay_engine) => replay_engine.config(key),
+            Self::Mock(_) => None,
         }
     }
 
@@ -390,6 +425,7 @@ impl SqlEngine {
             Self::Warehouse(actual_engine) => actual_engine.cancellation_token(),
             Self::Record(record_engine) => record_engine.cancellation_token(),
             Self::Replay(replay_engine) => replay_engine.cancellation_token(),
+            Self::Mock(_) => never_cancels(),
         }
     }
 }

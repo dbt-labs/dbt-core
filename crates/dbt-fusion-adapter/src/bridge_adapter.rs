@@ -200,7 +200,7 @@ impl AdapterTyping for BridgeAdapter {
         self.typed_adapter.column_type()
     }
 
-    fn engine(&self) -> Option<&Arc<SqlEngine>> {
+    fn engine(&self) -> &Arc<SqlEngine> {
         self.typed_adapter.engine()
     }
 

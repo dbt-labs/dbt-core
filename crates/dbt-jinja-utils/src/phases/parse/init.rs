@@ -12,7 +12,7 @@ use dbt_common::{
     ErrorCode, FsResult, adapter::AdapterType, cancellation::CancellationToken, fs_err,
     io_args::IoArgs,
 };
-use dbt_fusion_adapter::parse::adapter::create_parse_adapter;
+use dbt_fusion_adapter::{BaseAdapter, ParseAdapter};
 use dbt_schemas::{
     schemas::{
         common::DbtQuoting,
@@ -58,6 +58,7 @@ pub fn initialize_parse_jinja_environment(
 ) -> FsResult<JinjaEnv> {
     // Set the thread local dependencies
     THREAD_LOCAL_DEPENDENCIES.get_or_init(|| Mutex::new(all_package_names));
+    let adapter_config_mapping = db_config.to_mapping().unwrap();
     let database = db_config.get_database().cloned();
     let schema = db_config.get_schema().cloned();
     let target_context = TargetContext::try_from(db_config)
@@ -117,9 +118,11 @@ pub fn initialize_parse_jinja_environment(
         )
     })?;
 
+    let adapter = ParseAdapter::new(adapter_type, adapter_config_mapping, package_quoting, token);
+
     let env = JinjaEnvBuilder::new()
         .with_undefined_behavior(minijinja::UndefinedBehavior::AllowAll)
-        .with_adapter(create_parse_adapter(adapter_type, package_quoting, token)?)
+        .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
         .with_root_package(project_name.to_string())
         .with_globals(globals)
         .with_io_args(io_args)

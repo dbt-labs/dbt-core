@@ -1,4 +1,4 @@
-use crate::base_adapter::{AdapterType, AdapterTyping, BaseAdapter};
+use crate::base_adapter::{AdapterFactory, AdapterType, AdapterTyping, BaseAdapter, backend_of};
 use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::funcs::{
     dispatch_adapter_calls, empty_map_value, empty_mutable_vec_value, empty_string_value,
@@ -8,13 +8,17 @@ use crate::metadata::MetadataAdapter;
 use crate::parse::relation::EmptyRelation;
 use crate::relation_object::{RelationObject, create_relation};
 use crate::response::AdapterResponse;
+use crate::stmt_splitter::NaiveStmtSplitter;
 use crate::typed_adapter::TypedBaseAdapter;
 use crate::{AdapterResult, SqlEngine};
 
 use dashmap::{DashMap, DashSet};
 use dbt_agate::AgateTable;
+use dbt_auth::{AdapterConfig, Auth, auth_for_backend};
+use dbt_common::adapter::SchemaRegistry;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::io_args::ReplayMode;
 use dbt_common::{FsError, FsResult, current_function_name};
 use dbt_schemas::schemas::columns::base::StdColumnType;
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
@@ -36,10 +40,14 @@ use std::sync::Arc;
 /// Parse adapter for Jinja templates.
 ///
 /// Returns stub values to enable the parsing phase.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ParseAdapter {
-    /// Adapter type
     adapter_type: AdapterType,
+    /// The SQL engine for the ParseAdapter
+    ///
+    /// Not actually used to run SQL queries during parse, but needed since
+    /// this object carries useful dependencies.
+    engine: Arc<SqlEngine>,
     /// The call_get_relation method calls found during parse
     call_get_relation: DashMap<String, Vec<Value>>,
     /// The call_get_columns_in_relation method calls found during parse
@@ -56,6 +64,26 @@ pub struct ParseAdapter {
     cancellation_token: CancellationToken,
 }
 
+impl fmt::Debug for ParseAdapter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ParseAdapter")
+            .field("adapter_type", &self.adapter_type)
+            .field("call_get_relation", &self.call_get_relation)
+            .field(
+                "call_get_columns_in_relation",
+                &self.call_get_columns_in_relation,
+            )
+            .field(
+                "patterned_dangling_sources",
+                &self.patterned_dangling_sources,
+            )
+            .field("unsafe_nodes", &self.unsafe_nodes)
+            .field("execute_sqls", &self.execute_sqls)
+            .field("quoting", &self.quoting)
+            .finish()
+    }
+}
+
 type RelationsToFetch = (
     Result<BTreeMap<String, Vec<Arc<dyn BaseRelation>>>, FsError>,
     Result<BTreeMap<String, Vec<Arc<dyn BaseRelation>>>, FsError>,
@@ -66,11 +94,28 @@ impl ParseAdapter {
     /// Make a new adapter
     pub fn new(
         adapter_type: AdapterType,
+        config: dbt_serde_yaml::Mapping,
         package_quoting: DbtQuoting,
         token: CancellationToken,
     ) -> Self {
+        let backend = backend_of(adapter_type);
+
+        let auth: Arc<dyn Auth> = auth_for_backend(backend).into();
+        let adapter_config = AdapterConfig::new(config);
+        let adapter_factory = Arc::new(AdapterFactoryForParse {});
+        let stmt_splitter = Arc::new(NaiveStmtSplitter {});
+
+        let engine = SqlEngine::new(
+            auth,
+            adapter_config,
+            adapter_factory,
+            stmt_splitter,
+            token.clone(),
+        );
+
         Self {
             adapter_type,
+            engine,
             call_get_relation: DashMap::new(),
             call_get_columns_in_relation: DashMap::new(),
             patterned_dangling_sources: DashMap::new(),
@@ -215,8 +260,8 @@ impl AdapterTyping for ParseAdapter {
         Some(value)
     }
 
-    fn engine(&self) -> Option<&Arc<SqlEngine>> {
-        None
+    fn engine(&self) -> &Arc<SqlEngine> {
+        &self.engine
     }
 
     fn quoting(&self) -> ResolvedQuoting {
@@ -749,15 +794,51 @@ impl Object for ParseAdapter {
     }
 }
 
-/// Make parse factory
-pub fn create_parse_adapter(
-    adapter_type: AdapterType,
-    package_quoting: DbtQuoting,
-    token: CancellationToken,
-) -> FsResult<Arc<dyn BaseAdapter>> {
-    Ok(Arc::new(ParseAdapter::new(
-        adapter_type,
-        package_quoting,
-        token,
-    )))
+struct AdapterFactoryForParse;
+
+impl AdapterFactory for AdapterFactoryForParse {
+    fn create_adapter(
+        &self,
+        _adapter_type: AdapterType,
+        _config: dbt_serde_yaml::Mapping,
+        _replay_mode: Option<ReplayMode>,
+        _flags: BTreeMap<String, Value>,
+        _db: Option<Arc<dyn SchemaRegistry>>,
+        _quoting: ResolvedQuoting,
+        _token: CancellationToken,
+    ) -> FsResult<Arc<dyn BaseAdapter>> {
+        unreachable!("AdapterFactoryForParse should not be used to create more adapters")
+    }
+
+    fn create_relation_from_node(
+        &self,
+        _node: &dyn dbt_schemas::schemas::InternalDbtNodeAttributes,
+        _adapter_type: AdapterType,
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
+        unreachable!("AdapterFactoryForParse should not be used to create relations")
+    }
+
+    fn create_column(
+        &self,
+        _adapter_type: AdapterType,
+        _name: String,
+        _dtype: String,
+        _char_size: Option<u32>,
+        _numeric_precision: Option<u64>,
+        _numeric_scale: Option<u64>,
+        _mode: Option<String>,
+    ) -> Result<Arc<dyn dbt_schemas::schemas::columns::base::BaseColumn>, minijinja::Error> {
+        unreachable!("AdapterFactoryForParse should not be used to create columns")
+    }
+
+    fn with_relation_cache(
+        &self,
+        _relation_cache: Arc<crate::cache::RelationCache>,
+    ) -> Arc<dyn AdapterFactory> {
+        unreachable!("AdapterFactoryForParse should not be used to create more adapters")
+    }
+
+    fn to_owned(&self) -> Arc<dyn AdapterFactory> {
+        Arc::new(AdapterFactoryForParse)
+    }
 }

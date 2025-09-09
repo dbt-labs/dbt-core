@@ -1,4 +1,3 @@
-use crate::AdapterType;
 use crate::cast_util::dyn_base_columns_to_value;
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::funcs::{execute_macro, none_value};
@@ -7,7 +6,7 @@ use crate::relation_object::RelationObject;
 use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
 use crate::sql_engine::{SqlEngine, execute_query_with_retry};
-use crate::{AdapterResult, AdapterTyping};
+use crate::{AdapterResult, AdapterType, AdapterTyping};
 use dbt_agate::AgateTable;
 
 use arrow::array::{RecordBatch, StringArray, TimestampMillisecondArray};
