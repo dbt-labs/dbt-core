@@ -35,7 +35,6 @@ use std::fmt;
 #[derive(Debug, Hash, Eq, PartialEq, Clone, Ord, PartialOrd)]
 pub enum ResourcePathKind {
     ProfilePaths,
-    ProjectPaths,
     ModelPaths,
     AnalysisPaths,
     AssetPaths,
@@ -45,6 +44,7 @@ pub enum ResourcePathKind {
     SnapshotPaths,
     TestPaths,
     FixturePaths,
+    SessionPaths,
 }
 
 impl fmt::Display for ResourcePathKind {
@@ -58,9 +58,9 @@ impl fmt::Display for ResourcePathKind {
             ResourcePathKind::SeedPaths => "seed paths",
             ResourcePathKind::SnapshotPaths => "snapshot paths",
             ResourcePathKind::TestPaths => "test paths",
-            ResourcePathKind::ProjectPaths => "project paths",
             ResourcePathKind::ProfilePaths => "profile paths",
             ResourcePathKind::FixturePaths => "fixture paths",
+            ResourcePathKind::SessionPaths => "session paths",
         };
         write!(f, "{kind_str}")
     }

@@ -11,7 +11,7 @@ use dbt_common::stdfs;
 
 use dbt_common::{ErrorCode, FsResult};
 use dbt_common::{err, fs_err, show_warning};
-use dbt_schemas::state::{DbtPackage, DbtVars};
+use dbt_schemas::state::{DbtPackage, DbtProfile, DbtVars};
 
 use crate::args::LoadArgs;
 use crate::loader::load_inner;
@@ -29,6 +29,7 @@ mod assets {
 pub async fn load_packages(
     arg: &LoadArgs,
     env: &JinjaEnv,
+    dbt_profile: &DbtProfile,
     collected_vars: &mut Vec<(String, BTreeMap<String, DbtVars>)>,
     lookup_map: &BTreeMap<String, String>,
     packages_install_path: &Path,
@@ -56,12 +57,22 @@ pub async fn load_packages(
     // `false` indicates that this is a root project
     dirs.insert(0, (arg.io.in_dir.clone(), false));
 
-    collect_packages(arg, env, collected_vars, dirs, lookup_map, token).await
+    collect_packages(
+        arg,
+        env,
+        dbt_profile,
+        collected_vars,
+        dirs,
+        lookup_map,
+        token,
+    )
+    .await
 }
 
 pub async fn load_internal_packages(
     arg: &LoadArgs,
     env: &JinjaEnv,
+    dbt_profile: &DbtProfile,
     collected_vars: &mut Vec<(String, BTreeMap<String, DbtVars>)>,
     internal_packages_install_path: &Path,
     token: &CancellationToken,
@@ -76,6 +87,7 @@ pub async fn load_internal_packages(
     collect_packages(
         arg,
         env,
+        dbt_profile,
         collected_vars,
         dbt_internal_packages_dirs,
         &BTreeMap::new(),
@@ -139,6 +151,7 @@ pub fn persist_internal_packages(
 async fn collect_packages(
     arg: &LoadArgs,
     env: &JinjaEnv,
+    dbt_profile: &DbtProfile,
     collected_vars: &mut Vec<(String, BTreeMap<String, DbtVars>)>,
     package_paths: Vec<(PathBuf, bool)>,
     lookup_map: &BTreeMap<String, String>,
@@ -154,6 +167,7 @@ async fn collect_packages(
                     arg,
                     env,
                     &package_path,
+                    dbt_profile,
                     is_dependency,
                     lookup_map,
                     false,

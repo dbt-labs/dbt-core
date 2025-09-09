@@ -1,6 +1,9 @@
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::constants::DBT_DEPENDENCIES_YML;
+use dbt_common::constants::DBT_PACKAGES_LOCK_FILE;
+use dbt_common::constants::DBT_PACKAGES_YML;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::show_warning;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
@@ -11,6 +14,7 @@ use dbt_jinja_utils::serde::yaml_to_fs_error;
 use dbt_schemas::schemas::serde::StringOrInteger;
 use dbt_schemas::schemas::telemetry::BuildPhaseInfo;
 use dbt_schemas::schemas::telemetry::TelemetryAttributes;
+use dbt_schemas::state::DbtProfile;
 use fs_deps::get_or_install_packages;
 use pathdiff::diff_paths;
 use serde::Deserialize;
@@ -203,7 +207,7 @@ pub async fn load(
 
     let arg_ref = &arg;
     if let Some(prev_dbt_state) = arg.prev_dbt_state.clone() {
-        let root_package = prev_dbt_state.root_package();
+        let prev_root_package = prev_dbt_state.root_package();
 
         let package_map_lookup = BTreeMap::new();
         let mut dummy_collected_vars = Vec::new();
@@ -211,13 +215,14 @@ pub async fn load(
             arg_ref,
             &env,
             &arg.io.in_dir,
+            &dbt_state.dbt_profile,
             false,
             &package_map_lookup,
             true,
             &mut dummy_collected_vars,
         )
         .await?;
-        new_root_package.dependencies = root_package.dependencies.clone();
+        new_root_package.dependencies = prev_root_package.dependencies.clone();
         dbt_state.vars = prev_dbt_state.vars.clone();
 
         let packages = prev_dbt_state
@@ -271,6 +276,7 @@ pub async fn load(
         let packages = load_packages(
             &arg,
             &env,
+            &dbt_state.dbt_profile,
             &mut collected_vars,
             &lookup_map,
             &packages_install_path,
@@ -285,6 +291,7 @@ pub async fn load(
         let packages = load_internal_packages(
             &arg,
             &env,
+            &dbt_state.dbt_profile,
             &mut collected_vars,
             &internal_packages_install_path,
             token,
@@ -296,10 +303,12 @@ pub async fn load(
     Ok((dbt_state, final_threads, simplified_dbt_project.dbt_cloud))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn load_inner(
     arg: &LoadArgs,
     env: &JinjaEnv,
     package_path: &Path,
+    dbt_profile: &DbtProfile,
     // Indicates if we are loading a dependency or a root project
     is_dependency: bool,
     package_lookup_map: &BTreeMap<String, String>,
@@ -366,11 +375,8 @@ pub async fn load_inner(
         }
     }
 
-    let dbt_project_modified = last_modified(&dbt_project_path)?;
-    all_files.insert(
-        ResourcePathKind::ProjectPaths,
-        vec![(dbt_project_path, dbt_project_modified)],
-    );
+    let session_files = find_session_files(package_path)?;
+    all_files.insert(ResourcePathKind::SessionPaths, session_files);
 
     // Collect file paths and their timestamps for fields with a suffix `_paths`
     let all_dirs = collect_paths(&dbt_project);
@@ -526,6 +532,10 @@ pub async fn load_inner(
             dependency_package_name.as_deref(),
         )?
     };
+    // Only do this for the root package.
+    if !is_dependency {
+        collect_profiles_yml_if_exists(dbt_profile, &mut all_files);
+    }
     Ok(DbtPackage {
         dbt_project,
         package_root_path: package_path.to_path_buf(),
@@ -745,6 +755,40 @@ fn get_packages_install_path(
     };
 
     (packages_install_path, internal_packages_install_path)
+}
+
+fn collect_profiles_yml_if_exists(
+    dbt_profile: &DbtProfile,
+    all_paths: &mut HashMap<ResourcePathKind, Vec<(PathBuf, SystemTime)>>,
+) {
+    if let Ok(timestamp) = last_modified(&dbt_profile.relative_profile_path) {
+        let entry = all_paths.entry(ResourcePathKind::ProfilePaths).or_default();
+        entry.push((dbt_profile.relative_profile_path.clone(), timestamp));
+    }
+}
+
+fn find_session_files(package_path: &Path) -> FsResult<Vec<(PathBuf, SystemTime)>> {
+    let dbt_project_path = package_path.join(DBT_PROJECT_YML);
+    let dependencies_path = package_path.join(DBT_DEPENDENCIES_YML);
+    let packages_path = package_path.join(DBT_PACKAGES_YML);
+    let package_lock_path = package_path.join(DBT_PACKAGES_LOCK_FILE);
+
+    let mut result = Vec::new();
+
+    let dbt_project_timestamp = last_modified(&dbt_project_path)?;
+    result.push((dbt_project_path, dbt_project_timestamp));
+
+    if let Ok(timestamp) = last_modified(&dependencies_path) {
+        result.push((dependencies_path, timestamp));
+    }
+    if let Ok(timestamp) = last_modified(&packages_path) {
+        result.push((packages_path, timestamp));
+    }
+    if let Ok(timestamp) = last_modified(&package_lock_path) {
+        result.push((package_lock_path, timestamp));
+    }
+
+    Ok(result)
 }
 
 #[cfg(test)]
