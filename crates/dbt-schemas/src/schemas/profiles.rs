@@ -452,7 +452,7 @@ pub struct RedshiftDbConfig {
     pub method: Option<String>,
     pub host: Option<String>, // Setting as Option but required as of dbt 1.7.1
     pub user: Option<String>, // Setting as Option but required as of dbt 1.7.1
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", alias = "pass")]
     pub password: Option<String>,
     // Authentication Parameters (IAM)
     #[serde(skip_serializing_if = "Option::is_none")]
