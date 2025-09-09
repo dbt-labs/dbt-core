@@ -134,8 +134,27 @@ pub fn default_to_grants(
             // If only parent exists, set child to parent
             *child_grants = Some(parent_grants_map.clone());
         }
-        (_, None) => {
-            // no parent, leave child as is
+        (Some(child_grants_map), None) => {
+            // Parent doesn't exist but child does - still need to strip + prefixes
+            let keys_to_process: Vec<String> = child_grants_map
+                .keys()
+                .filter(|key| key.starts_with('+'))
+                .cloned()
+                .collect();
+
+            for child_key in keys_to_process {
+                // Remove the + prefix to get the actual key
+                let actual_key = child_key.trim_start_matches('+');
+
+                // Get the value and remove the + prefixed key
+                if let Some(value) = child_grants_map.remove(&child_key) {
+                    // No parent to merge with, just insert the child value with stripped prefix
+                    child_grants_map.insert(actual_key.to_string(), value);
+                }
+            }
+        }
+        (None, None) => {
+            // Neither child nor parent exists, nothing to do
         }
     }
 }
