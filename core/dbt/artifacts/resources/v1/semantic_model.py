@@ -5,9 +5,13 @@ from typing import Any, Dict, List, Optional, Sequence
 from dbt.artifacts.resources import SourceFileMetadata
 from dbt.artifacts.resources.base import GraphResource
 from dbt.artifacts.resources.v1.components import DependsOn, RefArgs
+from dbt.artifacts.resources.v1.metric import Metric
+from dbt.artifacts.resources.v1.semantic_layer_components import (
+    MeasureAggregationParameters,
+    NonAdditiveDimension,
+)
 from dbt_common.contracts.config.base import BaseConfig, CompareBehavior, MergeBehavior
 from dbt_common.dataclass_schema import dbtClassMixin
-from dbt_semantic_interfaces.protocols.metric import Metric
 from dbt_semantic_interfaces.references import (
     DimensionReference,
     EntityReference,
@@ -129,23 +133,9 @@ class Entity(dbtClassMixin):
 
 
 # ====================================
-# Measure objects
+# Measure object
 # Measure protocols: https://github.com/dbt-labs/dbt-semantic-interfaces/blob/main/dbt_semantic_interfaces/protocols/measure.py
 # ====================================
-
-
-@dataclass
-class MeasureAggregationParameters(dbtClassMixin):
-    percentile: Optional[float] = None
-    use_discrete_percentile: bool = False
-    use_approximate_percentile: bool = False
-
-
-@dataclass
-class NonAdditiveDimension(dbtClassMixin):
-    name: str
-    window_choice: AggregationType
-    window_groupings: List[str]
 
 
 @dataclass
