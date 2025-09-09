@@ -1,0 +1,6 @@
+kind: Fixes
+body: Implement checked_agg_time_dimension_for_simple_metric to satisfy dbt-semantic-interfaces>0.9.0
+time: 2025-09-09T17:11:32.936696-04:00
+custom:
+    Author: michelleark
+    Issue: "11998"
