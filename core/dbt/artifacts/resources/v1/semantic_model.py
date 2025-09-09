@@ -269,7 +269,6 @@ class SemanticModel(GraphResource):
     def checked_agg_time_dimension_for_simple_metric(
         self, metric: Metric
     ) -> TimeDimensionReference:
-        metric_time_dimension_name = None
         assert (
             metric.type == MetricType.SIMPLE
         ), "Only simple metrics can have an agg time dimension."
@@ -284,6 +283,7 @@ class SemanticModel(GraphResource):
         f"than the one that the metric belongs to. Metric `{metric.name}` belongs to model "
         f"`{metric_agg_params.semantic_model}`, but we requested the agg time dimension from model `{self.name}`."
 
+        metric_time_dimension_name = None
         if (
             metric.type_params
             and metric.type_params.metric_aggregation_params
