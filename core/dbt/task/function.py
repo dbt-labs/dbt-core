@@ -84,7 +84,7 @@ class FunctionRunner(CompileRunner):
             thread_id=threading.current_thread().name,
             execution_time=0.0,  # TODO: add execution time
             message="The function did it's thing!",
-            adapter_response=adapter_response,
+            adapter_response={},
             failures=result.get("failures"),
             batch_results=None,
         )
