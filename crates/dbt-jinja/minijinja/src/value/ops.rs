@@ -266,11 +266,17 @@ pub fn add(lhs: &Value, rhs: &Value) -> Result<Value, Error> {
     {
         let lhs = lhs.clone();
         let rhs = rhs.clone();
+        let are_both_tuples = !lhs.is_mutable() && !rhs.is_mutable();
 
         if let Ok(lhs) = lhs.try_iter() {
             if let Ok(rhs) = rhs.try_iter() {
-                let res = mutable_vec::MutableVec::from(lhs.chain(rhs).collect::<Vec<_>>());
-                return Ok(Value::from(res));
+                if are_both_tuples {
+                    let res = lhs.chain(rhs).collect::<Vec<_>>();
+                    return Ok(Value::from(res));
+                } else {
+                    let res = mutable_vec::MutableVec::from(lhs.chain(rhs).collect::<Vec<_>>());
+                    return Ok(Value::from(res));
+                }
             }
         }
 

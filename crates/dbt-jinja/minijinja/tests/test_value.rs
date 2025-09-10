@@ -461,6 +461,16 @@ fn test_mutable_map_in_set_stmt() {
 }
 
 #[test]
+fn test_tuple_addition() {
+    let tuple = Value::from_object(tuple![1, 2, 3, 4, 5, 6]);
+    let rv = minijinja::render!(
+        "{% set my_tuple = (1,2,3) + (4,5,6) %}{{ my_tuple }}",
+        my_tuple => tuple
+    );
+    assert_snapshot!(rv, @"(1, 2, 3, 4, 5, 6)");
+}
+
+#[test]
 fn test_builtin_seq_objects() {
     let rv = minijinja::render!(
         "{{ val }}",
