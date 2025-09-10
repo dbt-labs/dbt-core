@@ -1044,7 +1044,6 @@ class GenericTestNode(GenericTestResource, TestShouldStoreFailures, CompiledNode
         if other is None:
             return False
 
-        print(self.unrendered_config, other.unrendered_config)
         return self.same_config(other) and self.same_fqn(other) and True
 
     @property
