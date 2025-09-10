@@ -159,3 +159,35 @@ class TestDuplicateWriteIntegration:
             error_msg = "Catalog 'write_catalog' cannot have multiple 'write_integrations' with the same name: 'write_integration_1'."
             with pytest.raises(DbtValidationError, match=error_msg):
                 run_dbt(["run"])
+
+
+class TestIcebergRESTCatalogIntegration:
+    @pytest.fixture
+    def catalogs(self):
+        return {
+            "catalogs": [
+                {
+                    "name": "standard_catalog",
+                    "active_write_integration": "external_iceberg_catalog",
+                    "write_integrations": [
+                        {
+                            "name": "external_iceberg_catalog",
+                            "external_volume": "S3_ICEBERG_SNOW",
+                            "table_format": "iceberg",
+                            "catalog_type": "iceberg_rest",
+                        },
+                    ],
+                },
+            ]
+        }
+
+    def test_integration(self, project, catalogs, adapter):
+        write_config_file(catalogs, project.project_root, "catalogs.yml")
+
+        with mock.patch.object(
+            type(project.adapter), "CATALOG_INTEGRATIONS", [WriteCatalogIntegration]
+        ):
+            run_dbt(["run"])
+
+            write_integration = project.adapter.get_catalog_integration("standard_catalog")
+            assert write_integration.name == "standard_catalog"
