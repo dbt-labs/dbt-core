@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_semantic_interfaces.call_parameter_sets import JinjaCallParameterSets
@@ -7,6 +7,7 @@ from dbt_semantic_interfaces.parsing.where_filter.jinja_object_parser import (
     JinjaObjectParser,
     QueryItemLocation,
 )
+from dbt_semantic_interfaces.type_enums import AggregationType
 
 
 @dataclass
@@ -55,3 +56,17 @@ class SourceFileMetadata(dbtClassMixin):
 
     repo_file_path: str
     file_slice: FileSlice
+
+
+@dataclass
+class MeasureAggregationParameters(dbtClassMixin):
+    percentile: Optional[float] = None
+    use_discrete_percentile: bool = False
+    use_approximate_percentile: bool = False
+
+
+@dataclass
+class NonAdditiveDimension(dbtClassMixin):
+    name: str
+    window_choice: AggregationType
+    window_groupings: List[str]
