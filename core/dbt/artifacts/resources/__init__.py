@@ -44,6 +44,7 @@ from dbt.artifacts.resources.v1.metric import (
     ConversionTypeParams,
     CumulativeTypeParams,
     Metric,
+    MetricAggregationParams,
     MetricConfig,
     MetricInput,
     MetricInputMeasure,
@@ -69,6 +70,8 @@ from dbt.artifacts.resources.v1.saved_query import (
 from dbt.artifacts.resources.v1.seed import Seed, SeedConfig
 from dbt.artifacts.resources.v1.semantic_layer_components import (
     FileSlice,
+    MeasureAggregationParameters,
+    NonAdditiveDimension,
     SourceFileMetadata,
     WhereFilter,
     WhereFilterIntersection,
@@ -80,9 +83,7 @@ from dbt.artifacts.resources.v1.semantic_model import (
     DimensionValidityParams,
     Entity,
     Measure,
-    MeasureAggregationParameters,
     NodeRelation,
-    NonAdditiveDimension,
     SemanticLayerElementConfig,
     SemanticModel,
     SemanticModelConfig,
