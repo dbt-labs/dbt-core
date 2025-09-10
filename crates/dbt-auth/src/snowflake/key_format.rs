@@ -132,8 +132,9 @@ pub fn normalize_key(input: &str) -> Result<String, AuthError> {
 
             // case a: the decoded bytes are actually pem text that was base64-encoded.
             if looks_like_pem_text_after_decode(&decoded) {
-                let pem = String::from_utf8(decoded)
-                    .map_err(|_| AuthError::config("key body is not valid PKCS#8 DER."))?;
+                let pem = String::from_utf8(decoded).map_err(|_| {
+                    AuthError::config("decoded base64 looked like PEM but was not UTF-8")
+                })?;
                 return Ok(pem.trim().to_string());
             }
 
@@ -158,9 +159,9 @@ pub fn normalize_key(input: &str) -> Result<String, AuthError> {
                       • you wrapped a PKCS#1 DER with PKCS#8 headers\n\
                       • you base64-encoded pem text and treated it as DER\n",
                 )),
-                BodyKind::UnknownMalformed => {
-                    Err(AuthError::config("key body is not valid PKCS#8 DER."))
-                }
+                BodyKind::UnknownMalformed => Err(AuthError::config(
+                    "key body is not PKCS#8 (after one base64 decode)",
+                )),
             }
         }
         PemHeaderAndFooterState::DoNotMatch => Err(AuthError::config(
@@ -244,7 +245,7 @@ mod tests {
     fn unknown_malformed_errors() {
         let bad_b64 = STANDARD.encode(b"not-a-real-key");
         let err = normalize_key(&bad_b64).unwrap_err();
-        assert!(format!("{err:?}").contains("not valid PKCS#8 DER"));
+        assert!(format!("{err:?}").contains("key body is not PKCS#8"));
     }
     #[test]
     fn pem_encrypted_passthrough() {
@@ -344,7 +345,7 @@ mod tests {
     #[test]
     fn empty_input_errors() {
         let err = normalize_key("").unwrap_err();
-        assert!(format!("{err:?}").contains("not valid PKCS#8 DER"));
+        assert!(format!("{err:?}").contains("key body is not PKCS#8"));
     }
 
     #[test]
