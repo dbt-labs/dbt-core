@@ -1,5 +1,5 @@
 import threading
-from typing import Any
+from typing import Any, Dict
 
 from dbt.adapters.exceptions import MissingMaterializationError
 from dbt.artifacts.schemas.results import NodeStatus, RunStatus
@@ -12,7 +12,6 @@ from dbt.events.types import LogNodeResult, LogStartLine
 from dbt.task import group_lookup
 from dbt.task.compile import CompileRunner
 from dbt_common.clients.jinja import MacroProtocol
-from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
 from dbt_common.exceptions import DbtValidationError
@@ -72,10 +71,8 @@ class FunctionRunner(CompileRunner):
                 f'got "{compiled_node.language}"'
             )
 
-    def build_result(self, compiled_node: FunctionNode, result: Any) -> RunResult:
-        adapter_response = result
-        if isinstance(adapter_response, dbtClassMixin):
-            adapter_response = adapter_response.to_dict(omit_none=True)
+    def build_result(self, compiled_node: FunctionNode, context: Dict[str, Any]) -> RunResult:
+        loaded_result = context["load_result"]("main")
 
         return RunResult(
             node=compiled_node,
@@ -83,9 +80,9 @@ class FunctionRunner(CompileRunner):
             timing=[],
             thread_id=threading.current_thread().name,
             execution_time=0.0,  # TODO: add execution time
-            message="The function did it's thing!",
-            adapter_response={},
-            failures=result.get("failures"),
+            message=str(loaded_result.response),
+            adapter_response=loaded_result.response.to_dict(omit_none=True),
+            failures=loaded_result.get("failures"),
             batch_results=None,
         )
 
@@ -94,13 +91,13 @@ class FunctionRunner(CompileRunner):
         self._check_lang_supported(compiled_node, materialization_macro)
         context = generate_runtime_function_context(compiled_node, self.config, manifest)
 
-        result = MacroGenerator(materialization_macro, context=context)()
+        MacroGenerator(materialization_macro, context=context)()
 
         # TODO: Should we be caching something here?
         # for relation in self._materialization_relations(result, compiled_node):
         #     self.adapter.cache_added(relation.incorporate(dbt_created=True))
 
-        return self.build_result(compiled_node, result)
+        return self.build_result(compiled_node, context)
 
     def after_execute(self, result: RunResult) -> None:
         pass  # TODO: add after_execute logic to print the result
