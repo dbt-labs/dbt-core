@@ -79,6 +79,118 @@ impl DateTimeField {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum TimeZoneSpec {
+    /// WITH LOCAL TIME ZONE
+    Local,
+    // WITH TIME ZONE
+    With,
+    // WITHOUT TIME ZONE
+    Without,
+    // no specification (e.g. TIMESTAMP)
+    Unspecified,
+}
+
+impl TimeZoneSpec {
+    fn write_with_leading_space(&self, backend: Backend, out: &mut String) -> fmt::Result {
+        use Backend::*;
+        use TimeZoneSpec::*;
+        use fmt::Write as _;
+        match (backend, self) {
+            // BigQuery TIMESTAMP is always stored without a time zone so the type name never says
+            // anything about time zones.
+            //
+            // NOTE: literals can contain time zone information, so *there are more types of
+            // literals than types that end up stored in the database.* So in case a type were to
+            // be instantiated with a time zone spec and we have to render it, we will produce the
+            // "WITH TIME ZONE" form which can be useful for debugging.
+            (BigQuery, Without | Unspecified) => Ok(()),
+
+            // PostgreSQL TIMESTAMP WITHOUT TIME ZONE can be rendered as TIMESTAMP
+            (Postgres | Redshift | RedshiftODBC, Without) => Ok(()),
+
+            (_, Local) => write!(out, " WITH LOCAL TIME ZONE"),
+            (_, With) => write!(out, " WITH TIME ZONE"),
+            (_, Without) => write!(out, " WITHOUT TIME ZONE"),
+
+            (_, Unspecified) => Ok(()),
+        }
+    }
+
+    fn write_single_token_suffix(&self, backend: Backend, out: &mut String) -> fmt::Result {
+        use Backend::*;
+        use TimeZoneSpec::*;
+        use fmt::Write as _;
+        match (backend, self) {
+            // See [TimeZoneSpec::write_with_leading_space] for explanation about BigQuery.
+            (BigQuery, _) => {
+                debug_assert!(
+                    matches!(self, Without | Unspecified),
+                    "BigQuery does not support time zone suffixes in its type names"
+                );
+                Ok(())
+            }
+
+            // TIMETZ and TIMESTAMPTZ in PostgreSQL which doesn't have
+            // a type that is specifically for local time zone.
+            (Postgres | Redshift | RedshiftODBC, Local | With) => {
+                debug_assert!(
+                    matches!(self, With),
+                    "PostgreSQL does not have a TIMESTAMP WITH LOCAL TIME ZONE type"
+                );
+                write!(out, "TZ")
+            }
+            // In PostgreSQL, TIMESTAMP WITHOUT TIME ZONE is just TIMESTAMP
+            (Postgres | Redshift | RedshiftODBC, Without | Unspecified) => Ok(()),
+
+            // See [TimeZoneSpec::write_with_leading_space] for explanation about Databricks.
+            (Databricks | DatabricksODBC, Local | Unspecified) => {
+                debug_assert!(
+                    !matches!(self, Local),
+                    "Databricks does not have a TIMESTAMP WITH LOCAL TIME ZONE type"
+                );
+                Ok(())
+            }
+            (Databricks | DatabricksODBC, Without) => write!(out, "_NTZ"),
+            (Databricks | DatabricksODBC, With) => Ok(()),
+
+            (_, Local) => write!(out, "_LTZ"),
+            (_, With) => write!(out, "_TZ"),
+            (_, Without) => write!(out, "_NTZ"),
+
+            // No suffix for unspecified time zone spec.
+            //
+            // In Snowflake, TIMESTAMP without a time zone spec is ambiguous,
+            // we forward the ambiguity to the rendered SQL instead of picking
+            // a default.
+            (_, Unspecified) => Ok(()),
+        }
+    }
+
+    pub fn is_with_time_zone(self, backend: Backend) -> bool {
+        use Backend::*;
+        use TimeZoneSpec::*;
+        match (backend, self) {
+            // Databricks TIMESTAMP is "WITH TIME ZONE" by default
+            (Databricks, Unspecified | With | Local) => true,
+
+            (Snowflake, Unspecified) => {
+                // Users can run `ALTER SESSION SET TIMESTAMP_TYPE_MAPPING = TIMESTAMP_TZ;`
+                // so the meaning of `TIMESTAMP` is dependent on the session state.
+                debug_assert!(
+                    false,
+                    "Snowflake TIMESTAMP without a time zone spec is ambiguous. \
+Avoid constructing Snowflake TIME/TIMESTAMP types without an explicit time zone specification."
+                );
+                false
+            }
+
+            (_, With | Local) => true,
+            (_, Without | Unspecified) => false,
+        }
+    }
+}
+
 /// Syntactic representation of SQL types.
 ///
 /// The string representation and semantics of each SQL type can only be
@@ -122,15 +234,15 @@ pub enum SqlType {
     Binary,
     /// DATE
     Date,
-    /// TIME [ '(' precision ')' ] [ WITH TIME ZONE | WITHOUT TIME ZONE ]
+    /// TIME [ '(' precision ')' ] [ WITH TIME ZONE | WITH LOCAL | WITHOUT TIME ZONE ]
     Time {
         precision: Option<u8>,
-        with_time_zone: bool,
+        time_zone_spec: TimeZoneSpec,
     },
     /// TIMESTAMP
     Timestamp {
         precision: Option<u8>,
-        with_time_zone: bool,
+        time_zone_spec: TimeZoneSpec,
     },
     /// DATETIME is different from timestamps in BigQuery.
     DateTime,
@@ -228,29 +340,16 @@ impl SqlType {
                 write!(out, "STRING")
             }
             (BigQuery, Blob | Binary) => write!(out, "BYTES"),
-            (BigQuery, Time { with_time_zone, .. }) => {
+            (BigQuery, Time { time_zone_spec, .. }) => {
                 write!(out, "TIME")?;
-                if *with_time_zone {
-                    write!(out, " WITH TIME ZONE")
-                } else {
-                    Ok(())
-                }
+                // BigQuery does not use precision for time and timestamp types
+                time_zone_spec.write_with_leading_space(backend, out)
             }
-            (
-                BigQuery,
-                Timestamp {
-                    precision: _, // BigQuery does not use precision for timestamps
-                    with_time_zone,
-                },
-            ) => write!(
-                out,
-                "TIMESTAMP{}",
-                if *with_time_zone {
-                    " WITH TIME ZONE"
-                } else {
-                    ""
-                }
-            ),
+            (BigQuery, Timestamp { time_zone_spec, .. }) => {
+                write!(out, "TIMESTAMP",)?;
+                // BigQuery does not use precision for timestamps
+                time_zone_spec.write_with_leading_space(backend, out)
+            }
             // }}}
 
             // Snowflake {{{
@@ -268,34 +367,38 @@ impl SqlType {
             (Snowflake, Blob) => write!(out, "BINARY"),
             (
                 Snowflake,
-                Timestamp {
-                    precision: None,
-                    with_time_zone,
+                Time {
+                    precision,
+                    time_zone_spec,
                 },
-            ) => write!(
-                out,
-                "{}",
-                if *with_time_zone {
-                    "TIMESTAMP_TZ"
-                } else {
-                    "TIMESTAMP_NTZ"
-                },
-            ),
+            ) => {
+                write!(out, "TIME")?;
+                if let Some(p) = precision {
+                    write!(out, "({p})")?;
+                }
+                // Snowflake does not have a TIME WITH TIME ZONE type
+                match time_zone_spec {
+                    TimeZoneSpec::Unspecified | TimeZoneSpec::Without => Ok(()),
+                    TimeZoneSpec::Local | TimeZoneSpec::With => {
+                        // for debugging purposes, we still render these invalid specs
+                        time_zone_spec.write_with_leading_space(backend, out)
+                    }
+                }
+            }
             (
                 Snowflake,
                 Timestamp {
-                    precision: Some(p),
-                    with_time_zone,
+                    precision,
+                    time_zone_spec,
                 },
-            ) => write!(
-                out,
-                "{}({p})",
-                if *with_time_zone {
-                    "TIMESTAMP_TZ"
-                } else {
-                    "TIMESTAMP_NTZ"
-                },
-            ),
+            ) => {
+                write!(out, "TIMESTAMP")?;
+                time_zone_spec.write_single_token_suffix(backend, out)?;
+                match precision {
+                    Some(p) => write!(out, "({p})"),
+                    None => Ok(()),
+                }
+            }
             (Snowflake, DateTime) => write!(out, "TIMESTAMP_NTZ"),
             // }}}
 
@@ -307,24 +410,18 @@ impl SqlType {
                 Postgres | Redshift | RedshiftODBC,
                 Timestamp {
                     precision,
-                    with_time_zone,
+                    time_zone_spec,
                 },
             ) => match precision {
-                Some(p) => write!(
-                    out,
-                    "TIMESTAMP({p}){}",
-                    if *with_time_zone {
-                        " WITH TIME ZONE"
-                    } else {
-                        ""
-                    }
-                ),
+                Some(p) => {
+                    // if there is a precision, we use the (..) WITH TIME ZONE form
+                    write!(out, "TIMESTAMP({p})")?;
+                    time_zone_spec.write_with_leading_space(backend, out)
+                }
                 None => {
-                    if *with_time_zone {
-                        write!(out, "TIMESTAMPTZ")
-                    } else {
-                        write!(out, "TIMESTAMP")
-                    }
+                    // if there is no precision, we use the TIMESTAMPTZ / TIMESTAMP form
+                    write!(out, "TIMESTAMP")?;
+                    time_zone_spec.write_single_token_suffix(backend, out)
                 }
             },
             (Postgres | Redshift | RedshiftODBC, Float(_)) => write!(out, "REAL"),
@@ -356,12 +453,9 @@ impl SqlType {
             (Databricks | DatabricksODBC, Real | Float(_)) => write!(out, "FLOAT"),
             (Databricks | DatabricksODBC, Double) => write!(out, "DOUBLE"),
             (Databricks | DatabricksODBC, DateTime) => write!(out, "TIMESTAMP_NTZ"),
-            (Databricks | DatabricksODBC, Timestamp { with_time_zone, .. }) => {
-                if *with_time_zone {
-                    write!(out, "TIMESTAMP")
-                } else {
-                    write!(out, "TIMESTAMP_NTZ")
-                }
+            (Databricks | DatabricksODBC, Timestamp { time_zone_spec, .. }) => {
+                write!(out, "TIMESTAMP")?;
+                time_zone_spec.write_single_token_suffix(backend, out)
             }
             // }}}
 
@@ -410,36 +504,28 @@ impl SqlType {
                 _,
                 Time {
                     precision,
-                    with_time_zone,
+                    time_zone_spec,
                 },
             ) => {
                 match precision {
                     Some(p) => write!(out, "TIME({p})"),
                     None => write!(out, "TIME"),
                 }?;
-                if *with_time_zone {
-                    write!(out, " WITH TIME ZONE")
-                } else {
-                    Ok(())
-                }
+                time_zone_spec.write_with_leading_space(backend, out)
             }
             (_, DateTime) => write!(out, "DATETIME"),
             (
                 _,
                 Timestamp {
                     precision,
-                    with_time_zone,
+                    time_zone_spec,
                 },
             ) => {
                 match precision {
                     Some(p) => write!(out, "TIMESTAMP({p})"),
                     None => write!(out, "TIMESTAMP"),
                 }?;
-                if *with_time_zone {
-                    write!(out, " WITH TIME ZONE")
-                } else {
-                    Ok(())
-                }
+                time_zone_spec.write_with_leading_space(backend, out)
             }
 
             (_, Interval(qualifier)) => match qualifier {
@@ -533,38 +619,54 @@ impl SqlType {
             DataType::Date32 | DataType::Date64 => SqlType::Date,
             DataType::Time32(TimeUnit::Second) => SqlType::Time {
                 precision: None,
-                with_time_zone: false,
+                time_zone_spec: TimeZoneSpec::Without,
             },
             DataType::Time32(TimeUnit::Millisecond) => SqlType::Time {
                 precision: Some(3),
-                with_time_zone: false,
+                time_zone_spec: TimeZoneSpec::Without,
             },
             DataType::Time64(TimeUnit::Microsecond) => SqlType::Time {
                 precision: Some(6),
-                with_time_zone: false,
+                time_zone_spec: TimeZoneSpec::Without,
             },
             DataType::Time64(TimeUnit::Nanosecond) => SqlType::Time {
                 precision: Some(9),
-                with_time_zone: false,
+                time_zone_spec: TimeZoneSpec::Without,
             },
             DataType::Time32(_) | DataType::Time64(_) => {
                 unreachable!("unexpected time unit in Arrow data type: {data_type:?}")
             }
             DataType::Timestamp(TimeUnit::Second, tz) => SqlType::Timestamp {
                 precision: None,
-                with_time_zone: tz.is_some(),
+                time_zone_spec: if tz.is_some() {
+                    TimeZoneSpec::With
+                } else {
+                    TimeZoneSpec::Without
+                },
             },
             DataType::Timestamp(TimeUnit::Millisecond, tz) => SqlType::Timestamp {
                 precision: Some(3),
-                with_time_zone: tz.is_some(),
+                time_zone_spec: if tz.is_some() {
+                    TimeZoneSpec::With
+                } else {
+                    TimeZoneSpec::Without
+                },
             },
             DataType::Timestamp(TimeUnit::Microsecond, tz) => SqlType::Timestamp {
                 precision: Some(6),
-                with_time_zone: tz.is_some(),
+                time_zone_spec: if tz.is_some() {
+                    TimeZoneSpec::With
+                } else {
+                    TimeZoneSpec::Without
+                },
             },
             DataType::Timestamp(TimeUnit::Nanosecond, tz) => SqlType::Timestamp {
                 precision: Some(9),
-                with_time_zone: tz.is_some(),
+                time_zone_spec: if tz.is_some() {
+                    TimeZoneSpec::With
+                } else {
+                    TimeZoneSpec::Without
+                },
             },
             DataType::Duration(..) => todo!(),
             // Proposal for extending Arrow to support more SQL interval types:
@@ -733,6 +835,8 @@ impl<'source> Parser<'source> {
         }
     }
 
+    // Basic token operations
+
     fn next(&mut self) -> Result<Token<'source>, ParseError<'source>> {
         self.tokenizer
             .next()
@@ -769,6 +873,8 @@ impl<'source> Parser<'source> {
         }
     }
 
+    // Grammar productions
+
     /// Parse optional parenthesized integer value (e.g. `(3)`).
     fn precision<T>(&mut self) -> Result<Option<T>, ParseError<'source>>
     where
@@ -798,17 +904,22 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn with_time_zone(&mut self) -> Result<Option<bool>, ParseError<'source>> {
+    fn time_zone_spec(&mut self) -> Result<TimeZoneSpec, ParseError<'source>> {
         if self.match_word("WITH") {
+            let local = self.match_word("LOCAL");
             self.expect(Token::Word("TIME"))?;
             self.expect(Token::Word("ZONE"))?;
-            Ok(Some(true))
+            Ok(if local {
+                TimeZoneSpec::Local
+            } else {
+                TimeZoneSpec::With
+            })
         } else if self.match_word("WITHOUT") {
             self.expect(Token::Word("TIME"))?;
             self.expect(Token::Word("ZONE"))?;
-            Ok(Some(false))
+            Ok(TimeZoneSpec::Without)
         } else {
-            Ok(None)
+            Ok(TimeZoneSpec::Unspecified)
         }
     }
 
@@ -861,6 +972,51 @@ impl<'source> Parser<'source> {
             Ok(None)
         }
     }
+
+    /// Parse the inner fields of a struct type after `(` or after `STRUCT<`.
+    ///
+    /// `terminator` is either `Token::RParen` or `Token::RAndle`.
+    fn struct_fields(
+        &mut self,
+        backend: Backend,
+        terminator: Token<'source>,
+    ) -> Result<Vec<(String, SqlType, bool)>, ParseError<'source>> {
+        let mut fields = Vec::new();
+        loop {
+            let tok = self.next()?;
+            let name = match tok {
+                tok if tok == terminator => break,
+                Token::Word(w) => w.to_string(),
+                _ => {
+                    let e = ParseError::Unexpected(tok);
+                    return Err(e);
+                }
+            };
+            let ty = self.parse_unconstrained_type(backend)?;
+            let nullable = if self.match_word("NOT") {
+                self.expect(Token::Word("NULL"))?;
+                false
+            } else if self.match_word("NULLABLE") {
+                true
+            } else {
+                true
+            };
+            fields.push((name, ty, nullable));
+
+            let tok = self.next()?;
+            match tok {
+                Token::Comma => continue,
+                tok if tok == terminator => break,
+                _ => {
+                    let e = ParseError::Unexpected(tok);
+                    return Err(e);
+                }
+            }
+        }
+        Ok(fields)
+    }
+
+    // External API
 
     /// Parse the SQL type and return it along with a boolean indicating if its nullable.
     fn parse(&mut self, backend: Backend) -> Result<(SqlType, bool), ParseError<'source>> {
@@ -919,7 +1075,7 @@ impl<'source> Parser<'source> {
                 //         qty        INT
                 //     );
                 if matches!(backend, Postgres | Redshift | RedshiftODBC | Generic { .. }) {
-                    let fields = self.parse_struct_fields(backend, Token::RParen)?;
+                    let fields = self.struct_fields(backend, Token::RParen)?;
                     SqlType::Struct(Some(fields))
                 } else {
                     return Err(ParseError::Unexpected(tok));
@@ -1037,37 +1193,42 @@ impl<'source> Parser<'source> {
                     SqlType::Date
                 } else if eqi(w, "TIME") {
                     let precision = self.precision()?;
-                    let with_time_zone = self.with_time_zone()?.unwrap_or(false);
+                    let time_zone_spec = self.time_zone_spec()?;
                     SqlType::Time {
                         precision,
-                        with_time_zone,
+                        time_zone_spec:
+                            // For the TIME type, it's fair to assume that if the time zone
+                            // is not specified, then it is WITHOUT time zone. TIMESTAMP is
+                            // more complicated because of the different defaults in different
+                            // SQL dialects.
+                            if let TimeZoneSpec::Unspecified = time_zone_spec {
+                                TimeZoneSpec::Without
+                            } else {
+                                time_zone_spec
+                            }
                     }
                 } else if eqi(w, "TIMETZ") {
                     SqlType::Time {
                         precision: None,
-                        with_time_zone: true,
+                        time_zone_spec: TimeZoneSpec::With,
                     }
                 } else if eqi(w, "TIMESTAMP") {
                     let precision = self.precision()?;
-                    let with_time_zone = self
-                        .with_time_zone()?
-                        // Databkicks TIMESTAMP is "WITH TIME ZONE" by default, and
-                        // "WITHOUT TIME ZONE" is allowed as a modifier in later versions.
-                        .unwrap_or(matches!(backend, Databricks | DatabricksODBC));
+                    let time_zone_spec = self.time_zone_spec()?;
                     SqlType::Timestamp {
                         precision,
-                        with_time_zone,
+                        time_zone_spec,
                     }
                 } else if eqi(w, "TIMESTAMPTZ") {
                     SqlType::Timestamp {
                         precision: None,
-                        with_time_zone: true,
+                        time_zone_spec: TimeZoneSpec::With,
                     }
                 } else if eqi(w, "TIMESTAMP_NTZ") {
                     let precision = self.precision()?;
                     SqlType::Timestamp {
                         precision,
-                        with_time_zone: false,
+                        time_zone_spec: TimeZoneSpec::Without,
                     }
                 } else if eqi(w, "DATETIME") {
                     // In Snowflake DATETIME is an alias for TIMESTAMP_NTZ,
@@ -1076,7 +1237,7 @@ impl<'source> Parser<'source> {
                     if backend == Snowflake {
                         SqlType::Timestamp {
                             precision,
-                            with_time_zone: false,
+                            time_zone_spec: TimeZoneSpec::Without,
                         }
                     } else {
                         SqlType::DateTime
@@ -1085,7 +1246,7 @@ impl<'source> Parser<'source> {
                     let precision = self.precision()?;
                     SqlType::Timestamp {
                         precision,
-                        with_time_zone: true,
+                        time_zone_spec: TimeZoneSpec::With,
                     }
                 } else if eqi(w, "INTERVAL") {
                     // Some backends (like PostgreSQL) support a precision for the sub-second part
@@ -1146,7 +1307,7 @@ impl<'source> Parser<'source> {
                     }
                 } else if eqi(w, "STRUCT") {
                     let inner_fields = if self.match_(Token::LAngle) {
-                        let fields = self.parse_struct_fields(backend, Token::RAngle)?;
+                        let fields = self.struct_fields(backend, Token::RAngle)?;
                         Some(fields)
                     } else {
                         None
@@ -1216,49 +1377,6 @@ impl<'source> Parser<'source> {
         //     txid_snapshot  user-level transaction ID snapshot (deprecated; see pg_snapshot)
         Ok(sql_type)
     }
-
-    /// Parse the inner fields of a struct type after `(` or after `STRUCT<`.
-    ///
-    /// `terminator` is either `Token::RParen` or `Token::RAndle`.
-    fn parse_struct_fields(
-        &mut self,
-        backend: Backend,
-        terminator: Token<'source>,
-    ) -> Result<Vec<(String, SqlType, bool)>, ParseError<'source>> {
-        let mut fields = Vec::new();
-        loop {
-            let tok = self.next()?;
-            let name = match tok {
-                tok if tok == terminator => break,
-                Token::Word(w) => w.to_string(),
-                _ => {
-                    let e = ParseError::Unexpected(tok);
-                    return Err(e);
-                }
-            };
-            let ty = self.parse_unconstrained_type(backend)?;
-            let nullable = if self.match_word("NOT") {
-                self.expect(Token::Word("NULL"))?;
-                false
-            } else if self.match_word("NULLABLE") {
-                true
-            } else {
-                true
-            };
-            fields.push((name, ty, nullable));
-
-            let tok = self.next()?;
-            match tok {
-                Token::Comma => continue,
-                tok if tok == terminator => break,
-                _ => {
-                    let e = ParseError::Unexpected(tok);
-                    return Err(e);
-                }
-            }
-        }
-        Ok(fields)
-    }
 }
 
 #[cfg(test)]
@@ -1268,10 +1386,11 @@ mod tests {
     /// String inputs that parse the same way no matter the backend.
     #[test]
     fn test_parser() {
-        use Backend::*;
+        #[allow(unused_imports)]
+        // use Backend::*;
         use DateTimeField::*;
         use SqlType::*;
-        let data_for_backend = |backend: Backend| {
+        let data_for_backend = |_backend: Backend| {
             vec![
                 ("   boOL ", Boolean),
                 ("boOLEan ", Boolean),
@@ -1323,56 +1442,56 @@ mod tests {
                     "tiME ( 0)  ",
                     Time {
                         precision: Some(0),
-                        with_time_zone: false,
+                        time_zone_spec: TimeZoneSpec::Without,
                     },
                 ),
                 (
                     "TIMe(   5) ",
                     Time {
                         precision: Some(5),
-                        with_time_zone: false,
+                        time_zone_spec: TimeZoneSpec::Without,
                     },
                 ),
                 (
                     "TIMe(5) without time ZONE",
                     Time {
                         precision: Some(5),
-                        with_time_zone: false,
+                        time_zone_spec: TimeZoneSpec::Without,
                     },
                 ),
                 (
                     "TIME(5)   WITH   TIME ZONE",
                     Time {
                         precision: Some(5),
-                        with_time_zone: true,
+                        time_zone_spec: TimeZoneSpec::With,
                     },
                 ),
                 (
                     "timESTamp ( 0) ",
                     Timestamp {
                         precision: Some(0),
-                        with_time_zone: matches!(backend, Databricks | DatabricksODBC),
+                        time_zone_spec: TimeZoneSpec::Unspecified,
                     },
                 ),
                 (
                     "TIMestamp(   5)",
                     Timestamp {
                         precision: Some(5),
-                        with_time_zone: matches!(backend, Databricks | DatabricksODBC),
+                        time_zone_spec: TimeZoneSpec::Unspecified,
                     },
                 ),
                 (
                     "TIMestamp(9) without TIME ZONE",
                     Timestamp {
                         precision: Some(9),
-                        with_time_zone: false,
+                        time_zone_spec: TimeZoneSpec::Without,
                     },
                 ),
                 (
                     "TIMestamp(9) with TIME ZONE",
                     Timestamp {
                         precision: Some(9),
-                        with_time_zone: true,
+                        time_zone_spec: TimeZoneSpec::With,
                     },
                 ),
                 ("INTERVal", Interval(None)),
@@ -1496,12 +1615,13 @@ mod tests {
         ]
     }
 
-    /// Returns a vector of pairs with a SQL type and its rendering for a given backend.
-    fn expected_type_rendering_for(backend: Backend) -> Vec<(SqlType, &'static str)> {
+    /// Returns a vector of triplets with a line number, SQL type, and its rendering for a given backend.
+    fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static str)> {
         use DateTimeField::*;
         // | SQL type | BigQuery | Snowflake | Postgres | generic |
         let sqltype_bg_generic_snow_table = vec![
             (
+                line!(),
                 SqlType::Boolean,
                 "BOOL",
                 "BOOLEAN",
@@ -1510,6 +1630,7 @@ mod tests {
                 "BOOLEAN",
             ),
             (
+                line!(),
                 SqlType::TinyInt,
                 "INT64",
                 "TINYINT",
@@ -1518,6 +1639,7 @@ mod tests {
                 "TINYINT",
             ),
             (
+                line!(),
                 SqlType::SmallInt,
                 "INT64",
                 "SMALLINT",
@@ -1525,8 +1647,17 @@ mod tests {
                 "SMALLINT",
                 "SMALLINT",
             ),
-            (SqlType::Integer, "INT64", "INT", "INT", "INT", "INT"),
             (
+                line!(),
+                SqlType::Integer,
+                "INT64",
+                "INT",
+                "INT",
+                "INT",
+                "INT",
+            ),
+            (
+                line!(),
                 SqlType::BigInt,
                 "INT64",
                 "BIGINT",
@@ -1534,8 +1665,17 @@ mod tests {
                 "BIGINT",
                 "BIGINT",
             ),
-            (SqlType::Real, "FLOAT64", "REAL", "REAL", "FLOAT", "REAL"),
             (
+                line!(),
+                SqlType::Real,
+                "FLOAT64",
+                "REAL",
+                "REAL",
+                "FLOAT",
+                "REAL",
+            ),
+            (
+                line!(),
                 SqlType::Float(None),
                 "FLOAT64",
                 "FLOAT",
@@ -1544,6 +1684,7 @@ mod tests {
                 "FLOAT",
             ),
             (
+                line!(),
                 SqlType::Float(Some(3)),
                 "FLOAT64",
                 "FLOAT",
@@ -1552,6 +1693,7 @@ mod tests {
                 "FLOAT(3)",
             ),
             (
+                line!(),
                 SqlType::Double,
                 "FLOAT64",
                 "DOUBLE PRECISION",
@@ -1560,6 +1702,7 @@ mod tests {
                 "DOUBLE PRECISION",
             ),
             (
+                line!(),
                 SqlType::Numeric(None),
                 "NUMERIC",
                 "NUMBER",
@@ -1568,6 +1711,7 @@ mod tests {
                 "NUMERIC",
             ),
             (
+                line!(),
                 SqlType::Numeric(Some((20, None))),
                 "NUMERIC(20)",
                 "NUMBER(20)",
@@ -1576,6 +1720,7 @@ mod tests {
                 "NUMERIC(20)",
             ),
             (
+                line!(),
                 SqlType::Numeric(Some((60, Some(2)))),
                 "NUMERIC(60, 2)",
                 "NUMBER(60, 2)",
@@ -1584,6 +1729,7 @@ mod tests {
                 "NUMERIC(60, 2)",
             ),
             (
+                line!(),
                 SqlType::Varchar(None),
                 "STRING",
                 "VARCHAR",
@@ -1592,6 +1738,7 @@ mod tests {
                 "VARCHAR",
             ),
             (
+                line!(),
                 SqlType::Varchar(Some(255)),
                 "STRING",
                 "VARCHAR(255)",
@@ -1599,10 +1746,35 @@ mod tests {
                 "STRING",
                 "VARCHAR(255)",
             ),
-            (SqlType::Text, "STRING", "TEXT", "TEXT", "STRING", "TEXT"),
-            (SqlType::Clob, "STRING", "TEXT", "TEXT", "STRING", "CLOB"),
-            (SqlType::Blob, "BYTES", "BINARY", "BYTEA", "BINARY", "BLOB"),
             (
+                line!(),
+                SqlType::Text,
+                "STRING",
+                "TEXT",
+                "TEXT",
+                "STRING",
+                "TEXT",
+            ),
+            (
+                line!(),
+                SqlType::Clob,
+                "STRING",
+                "TEXT",
+                "TEXT",
+                "STRING",
+                "CLOB",
+            ),
+            (
+                line!(),
+                SqlType::Blob,
+                "BYTES",
+                "BINARY",
+                "BYTEA",
+                "BINARY",
+                "BLOB",
+            ),
+            (
+                line!(),
                 SqlType::Binary,
                 "BYTES",
                 "BINARY",
@@ -1610,55 +1782,68 @@ mod tests {
                 "BINARY",
                 "BINARY",
             ),
-            (SqlType::Date, "DATE", "DATE", "DATE", "DATE", "DATE"),
             (
+                line!(),
+                SqlType::Date,
+                "DATE",
+                "DATE",
+                "DATE",
+                "DATE",
+                "DATE",
+            ),
+            (
+                line!(),
                 SqlType::Time {
                     precision: None,
-                    with_time_zone: false,
+                    time_zone_spec: TimeZoneSpec::Without,
                 },
                 "TIME",
                 "TIME",
                 "TIME",
-                "TIME", // Databricks doesn't actually have a TIME type
-                "TIME",
+                "TIME WITHOUT TIME ZONE", // Databricks doesn't actually have a TIME type
+                "TIME WITHOUT TIME ZONE",
             ),
             (
+                line!(),
                 SqlType::Time {
                     precision: Some(0),
-                    with_time_zone: false,
+                    time_zone_spec: TimeZoneSpec::Without,
                 },
                 "TIME",
                 "TIME(0)",
                 "TIME(0)",
-                "TIME(0)", // Databricks doesn't actually have a TIME type
-                "TIME(0)",
+                "TIME(0) WITHOUT TIME ZONE", // Databricks doesn't actually have a TIME type
+                "TIME(0) WITHOUT TIME ZONE",
             ),
             (
+                line!(),
                 SqlType::Time {
                     precision: Some(5),
-                    with_time_zone: false,
+                    time_zone_spec: TimeZoneSpec::Without,
                 },
                 "TIME",
                 "TIME(5)",
                 "TIME(5)",
-                "TIME(5)", // Databricks doesn't actually have a TIME type
-                "TIME(5)",
+                "TIME(5) WITHOUT TIME ZONE", // Databricks doesn't actually have a TIME type
+                "TIME(5) WITHOUT TIME ZONE",
             ),
             (
+                line!(),
                 SqlType::Time {
                     precision: Some(9),
-                    with_time_zone: false,
+                    time_zone_spec: TimeZoneSpec::Without,
                 },
                 "TIME",
                 "TIME(9)",
                 "TIME(9)",
-                "TIME(9)", // Databricks doesn't actually have a TIME type
-                "TIME(9)",
+                "TIME(9) WITHOUT TIME ZONE", // Databricks doesn't actually have a TIME type
+                "TIME(9) WITHOUT TIME ZONE",
             ),
             (
+                line!(),
                 SqlType::Time {
                     precision: Some(9),
-                    with_time_zone: true,
+                    time_zone_spec: TimeZoneSpec::With,
                 },
                 "TIME WITH TIME ZONE",
                 "TIME(9) WITH TIME ZONE",
@@ -1667,6 +1852,7 @@ mod tests {
                 "TIME(9) WITH TIME ZONE",
             ),
             (
+                line!(),
                 SqlType::DateTime,
                 "DATETIME",
                 "TIMESTAMP_NTZ",
@@ -1675,20 +1861,22 @@ mod tests {
                 "DATETIME",
             ),
             (
+                line!(),
                 SqlType::Timestamp {
                     precision: None,
-                    with_time_zone: false,
+                    time_zone_spec: TimeZoneSpec::Without,
                 },
                 "TIMESTAMP",
                 "TIMESTAMP_NTZ",
                 "TIMESTAMP",
                 "TIMESTAMP_NTZ",
-                "TIMESTAMP",
+                "TIMESTAMP WITHOUT TIME ZONE",
             ),
             (
+                line!(),
                 SqlType::Timestamp {
                     precision: None,
-                    with_time_zone: true,
+                    time_zone_spec: TimeZoneSpec::With,
                 },
                 "TIMESTAMP WITH TIME ZONE",
                 "TIMESTAMP_TZ",
@@ -1697,20 +1885,22 @@ mod tests {
                 "TIMESTAMP WITH TIME ZONE",
             ),
             (
+                line!(),
                 SqlType::Timestamp {
                     precision: Some(3),
-                    with_time_zone: false,
+                    time_zone_spec: TimeZoneSpec::Without,
                 },
                 "TIMESTAMP",
                 "TIMESTAMP_NTZ(3)",
                 "TIMESTAMP(3)",
                 "TIMESTAMP_NTZ",
-                "TIMESTAMP(3)",
+                "TIMESTAMP(3) WITHOUT TIME ZONE",
             ),
             (
+                line!(),
                 SqlType::Timestamp {
                     precision: Some(3),
-                    with_time_zone: true,
+                    time_zone_spec: TimeZoneSpec::With,
                 },
                 "TIMESTAMP WITH TIME ZONE",
                 "TIMESTAMP_TZ(3)",
@@ -1719,6 +1909,7 @@ mod tests {
                 "TIMESTAMP(3) WITH TIME ZONE",
             ),
             (
+                line!(),
                 SqlType::Interval(None),
                 "INTERVAL",
                 "INTERVAL",
@@ -1727,6 +1918,7 @@ mod tests {
                 "INTERVAL",
             ),
             (
+                line!(),
                 SqlType::Interval(Some((Second, None))),
                 "INTERVAL SECOND",
                 "INTERVAL SECOND",
@@ -1735,6 +1927,7 @@ mod tests {
                 "INTERVAL SECOND",
             ),
             (
+                line!(),
                 SqlType::Interval(Some((Millisecond, None))),
                 "INTERVAL MILLISECOND",
                 "INTERVAL MILLISECOND",
@@ -1743,6 +1936,7 @@ mod tests {
                 "INTERVAL MILLISECOND",
             ),
             (
+                line!(),
                 SqlType::Interval(Some((Day, Some(Microsecond)))),
                 "INTERVAL DAY TO MICROSECOND",
                 "INTERVAL DAY TO MICROSECOND",
@@ -1751,6 +1945,7 @@ mod tests {
                 "INTERVAL DAY TO MICROSECOND",
             ),
             (
+                line!(),
                 SqlType::Interval(Some((Year, None))),
                 "INTERVAL YEAR",
                 "INTERVAL YEAR",
@@ -1759,6 +1954,7 @@ mod tests {
                 "INTERVAL YEAR",
             ),
             (
+                line!(),
                 SqlType::Interval(Some((Day, Some(Hour)))),
                 "INTERVAL DAY TO HOUR",
                 "INTERVAL DAY TO HOUR",
@@ -1767,6 +1963,7 @@ mod tests {
                 "INTERVAL DAY TO HOUR",
             ),
             (
+                line!(),
                 SqlType::Interval(Some((Day, Some(Minute)))),
                 "INTERVAL DAY TO MINUTE",
                 "INTERVAL DAY TO MINUTE",
@@ -1775,6 +1972,7 @@ mod tests {
                 "INTERVAL DAY TO MINUTE",
             ),
             (
+                line!(),
                 SqlType::Interval(Some((Day, Some(Second)))),
                 "INTERVAL DAY TO SECOND",
                 "INTERVAL DAY TO SECOND",
@@ -1783,6 +1981,7 @@ mod tests {
                 "INTERVAL DAY TO SECOND",
             ),
             (
+                line!(),
                 SqlType::Interval(Some((Hour, Some(Minute)))),
                 "INTERVAL HOUR TO MINUTE",
                 "INTERVAL HOUR TO MINUTE",
@@ -1791,6 +1990,7 @@ mod tests {
                 "INTERVAL HOUR TO MINUTE",
             ),
             (
+                line!(),
                 SqlType::Interval(Some((Hour, Some(Second)))),
                 "INTERVAL HOUR TO SECOND",
                 "INTERVAL HOUR TO SECOND",
@@ -1799,6 +1999,7 @@ mod tests {
                 "INTERVAL HOUR TO SECOND",
             ),
             (
+                line!(),
                 SqlType::Interval(Some((Minute, Some(Second)))),
                 "INTERVAL MINUTE TO SECOND",
                 "INTERVAL MINUTE TO SECOND",
@@ -1807,6 +2008,7 @@ mod tests {
                 "INTERVAL MINUTE TO SECOND",
             ),
             (
+                line!(),
                 SqlType::Interval(Some((Month, Some(Day)))),
                 "INTERVAL MONTH TO DAY",
                 "INTERVAL MONTH TO DAY",
@@ -1815,6 +2017,7 @@ mod tests {
                 "INTERVAL MONTH TO DAY",
             ),
             (
+                line!(),
                 SqlType::Interval(Some((Month, Some(Hour)))),
                 "INTERVAL MONTH TO HOUR",
                 "INTERVAL MONTH TO HOUR",
@@ -1823,6 +2026,7 @@ mod tests {
                 "INTERVAL MONTH TO HOUR",
             ),
             (
+                line!(),
                 SqlType::Interval(Some((Month, Some(Minute)))),
                 "INTERVAL MONTH TO MINUTE",
                 "INTERVAL MONTH TO MINUTE",
@@ -1831,6 +2035,7 @@ mod tests {
                 "INTERVAL MONTH TO MINUTE",
             ),
             (
+                line!(),
                 SqlType::Interval(Some((Month, Some(Second)))),
                 "INTERVAL MONTH TO SECOND",
                 "INTERVAL MONTH TO SECOND",
@@ -1839,6 +2044,7 @@ mod tests {
                 "INTERVAL MONTH TO SECOND",
             ),
             (
+                line!(),
                 SqlType::Interval(Some((Year, Some(Day)))),
                 "INTERVAL YEAR TO DAY",
                 "INTERVAL YEAR TO DAY",
@@ -1847,6 +2053,7 @@ mod tests {
                 "INTERVAL YEAR TO DAY",
             ),
             (
+                line!(),
                 SqlType::Interval(Some((Year, Some(Hour)))),
                 "INTERVAL YEAR TO HOUR",
                 "INTERVAL YEAR TO HOUR",
@@ -1855,6 +2062,7 @@ mod tests {
                 "INTERVAL YEAR TO HOUR",
             ),
             (
+                line!(),
                 SqlType::Interval(Some((Year, Some(Minute)))),
                 "INTERVAL YEAR TO MINUTE",
                 "INTERVAL YEAR TO MINUTE",
@@ -1863,6 +2071,7 @@ mod tests {
                 "INTERVAL YEAR TO MINUTE",
             ),
             (
+                line!(),
                 SqlType::Interval(Some((Year, Some(Month)))),
                 "INTERVAL YEAR TO MONTH",
                 "INTERVAL YEAR TO MONTH",
@@ -1871,6 +2080,7 @@ mod tests {
                 "INTERVAL YEAR TO MONTH",
             ),
             (
+                line!(),
                 SqlType::Interval(Some((Year, Some(Second)))),
                 "INTERVAL YEAR TO SECOND",
                 "INTERVAL YEAR TO SECOND",
@@ -1879,6 +2089,7 @@ mod tests {
                 "INTERVAL YEAR TO SECOND",
             ),
             (
+                line!(),
                 SqlType::Array(Some(Box::new(SqlType::Json))),
                 "ARRAY<JSON>",
                 "ARRAY<JSON>",
@@ -1887,6 +2098,7 @@ mod tests {
                 "ARRAY<JSON>",
             ),
             (
+                line!(),
                 SqlType::Struct(Some(vec![("a".to_string(), SqlType::Float(None), true)])),
                 "STRUCT<a FLOAT64>",
                 "STRUCT<a FLOAT>",
@@ -1895,6 +2107,7 @@ mod tests {
                 "STRUCT<a FLOAT>",
             ),
             (
+                line!(),
                 SqlType::Struct(Some(vec![
                     ("name".to_string(), SqlType::Varchar(None), true),
                     ("age".to_string(), SqlType::Integer, false),
@@ -1906,12 +2119,13 @@ mod tests {
                 "STRUCT<name VARCHAR, age INT NOT NULL>",
             ),
             (
+                line!(),
                 SqlType::Struct(Some(vec![
                     (
                         "last_completion_time".to_string(),
                         SqlType::Timestamp {
                             precision: None,
-                            with_time_zone: false,
+                            time_zone_spec: TimeZoneSpec::Without,
                         },
                         true,
                     ),
@@ -1919,7 +2133,7 @@ mod tests {
                         "error_time".to_string(),
                         SqlType::Timestamp {
                             precision: None,
-                            with_time_zone: false,
+                            time_zone_spec: TimeZoneSpec::Without,
                         },
                         true,
                     ),
@@ -1937,9 +2151,10 @@ mod tests {
                 "STRUCT<last_completion_time TIMESTAMP_NTZ, error_time TIMESTAMP_NTZ, error STRUCT<reason VARCHAR, location VARCHAR, message VARCHAR>>",
                 "(last_completion_time TIMESTAMP, error_time TIMESTAMP, error (reason VARCHAR, location VARCHAR, message VARCHAR))",
                 "STRUCT<last_completion_time TIMESTAMP_NTZ, error_time TIMESTAMP_NTZ, error STRUCT<reason STRING, location STRING, message STRING>>",
-                "STRUCT<last_completion_time TIMESTAMP, error_time TIMESTAMP, error STRUCT<reason VARCHAR, location VARCHAR, message VARCHAR>>",
+                "STRUCT<last_completion_time TIMESTAMP WITHOUT TIME ZONE, error_time TIMESTAMP WITHOUT TIME ZONE, error STRUCT<reason VARCHAR, location VARCHAR, message VARCHAR>>",
             ),
             (
+                line!(),
                 SqlType::Array(Some(Box::new(SqlType::Struct(Some(vec![
                     ("date".to_string(), SqlType::Date, true),
                     ("value".to_string(), SqlType::Varchar(None), true),
@@ -1951,6 +2166,7 @@ mod tests {
                 "ARRAY<STRUCT<date DATE, value VARCHAR>>",
             ),
             (
+                line!(),
                 SqlType::Struct(Some(vec![(
                     "elements".to_string(),
                     SqlType::Array(Some(Box::new(SqlType::Struct(Some(vec![
@@ -1966,6 +2182,7 @@ mod tests {
                 "STRUCT<elements ARRAY<STRUCT<date DATE, value VARCHAR>>>",
             ),
             (
+                line!(),
                 SqlType::Map(Some((
                     Box::new(SqlType::Varchar(None)),
                     Box::new(SqlType::Integer),
@@ -1977,6 +2194,7 @@ mod tests {
                 "MAP<VARCHAR, INT>",
             ),
             (
+                line!(),
                 SqlType::Variant,
                 "VARIANT",
                 "VARIANT",
@@ -1984,8 +2202,17 @@ mod tests {
                 "VARIANT",
                 "VARIANT",
             ),
-            (SqlType::Void, "VOID", "VOID", "VOID", "VOID", "VOID"),
             (
+                line!(),
+                SqlType::Void,
+                "VOID",
+                "VOID",
+                "VOID",
+                "VOID",
+                "VOID",
+            ),
+            (
+                line!(),
                 SqlType::Other("ANY OTHER TYPE".to_string()),
                 "ANY OTHER TYPE",
                 "ANY OTHER TYPE",
@@ -1996,7 +2223,7 @@ mod tests {
         ];
         let zipped = sqltype_bg_generic_snow_table
             .into_iter()
-            .map(|(t, bq, snow, pq, dbx, generic)| {
+            .map(|(line, t, bq, snow, pq, dbx, generic)| {
                 let s = match backend {
                     Backend::BigQuery => bq,
                     Backend::Snowflake => snow,
@@ -2007,7 +2234,7 @@ mod tests {
                     Backend::Databricks | Backend::DatabricksODBC => dbx,
                     Backend::Generic { .. } => generic,
                 };
-                (t, s)
+                (line, t, s)
             })
             .collect::<Vec<_>>();
         zipped
@@ -2016,15 +2243,41 @@ mod tests {
     #[test]
     fn test_string_roundtrip() {
         for backend in backends() {
-            for (t, s) in expected_type_rendering_for(backend) {
+            for (line, t, s) in expected_type_rendering_for(backend) {
                 let rendered = format!("{} ({backend})", t.to_string(backend));
                 let expected = format!("{s} ({backend})");
-                assert_eq!(rendered, expected, "rendering: {t:?}");
+                assert_eq!(
+                    rendered,
+                    expected,
+                    "rendered != expected while rendering: {t:?} ({backend:?}) from {}:{line}",
+                    file!()
+                );
 
                 let (parsed, _nullable) = SqlType::parse(backend, s).unwrap();
                 let rendered = format!("{} ({backend})", parsed.to_string(backend));
                 assert_eq!(rendered, expected, "parsing: {parsed:?}, expected: {t:?}");
             }
         }
+    }
+
+    #[test]
+    fn test_timestamp_on_databricks() {
+        use Backend::Databricks;
+        let s = "TIMESTAMP";
+        let t = SqlType::Timestamp {
+            precision: None,
+            time_zone_spec: TimeZoneSpec::With,
+        };
+
+        let rendered = t.to_string(Databricks);
+        let expected = s;
+        assert_eq!(
+            rendered, expected,
+            "rendered != expected while rendering: {t:?} (Databricks)"
+        );
+
+        let (parsed, _nullable) = SqlType::parse(Databricks, s).unwrap();
+        let rendered = parsed.to_string(Databricks);
+        assert_eq!(rendered, expected, "parsing: {parsed:?}, expected: {t:?}");
     }
 }
