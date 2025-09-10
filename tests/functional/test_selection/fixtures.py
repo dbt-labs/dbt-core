@@ -38,6 +38,8 @@ models:
     columns:
       - name: fun
         tags: [column_level_tag]
+        config:
+          tags: [column_config_level_tag]
         data_tests:
           - unique
           - relationships:

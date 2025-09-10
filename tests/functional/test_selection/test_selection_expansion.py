@@ -323,6 +323,32 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
+    def test_select_column_config_level_tag(
+        self,
+        project,
+    ):
+        select = "tag:column_config_level_tag"
+        exclude = None
+        expected = [
+            "relationships_model_a_fun__fun__ref_model_b_",
+            "relationships_model_a_fun__fun__source_my_src_my_tbl_",
+            "unique_model_a_fun",
+        ]
+
+        self.list_tests_and_assert(select, exclude, expected)
+        self.run_tests_and_assert(select, exclude, expected)
+
+    def test_exclude_column_config_level_tag(
+        self,
+        project,
+    ):
+        select = None
+        exclude = "tag:column_config_level_tag"
+        expected = ["cf_a_b", "cf_a_src", "just_a", "source_unique_my_src_my_tbl_fun"]
+
+        self.list_tests_and_assert(select, exclude, expected)
+        self.run_tests_and_assert(select, exclude, expected)
+
     def test_test_level_tag(
         self,
         project,
