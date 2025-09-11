@@ -1,0 +1,6 @@
+kind: Features
+body: Parse catalogs.yml during parse, seed, and test commands
+time: 2025-09-10T14:45:54.065327-04:00
+custom:
+    Author: michelleark
+    Issue: "12002"
