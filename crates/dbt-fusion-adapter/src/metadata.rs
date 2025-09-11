@@ -31,7 +31,7 @@ pub type RelationSchemaPair = (Arc<dyn BaseRelation>, Arc<Schema>);
 /// A collection of relations
 pub type RelationVec = Vec<Arc<dyn BaseRelation>>;
 /// A struct representing a catalog and a schema
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct CatalogAndSchema {
     pub rendered_catalog: String,
     pub rendered_schema: String,

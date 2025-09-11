@@ -1,5 +1,6 @@
 use std::fmt;
 
+use dbt_common::adapter::AdapterType;
 use serde::{Deserialize, Serialize};
 
 /// Enum representing different types of relations.
@@ -28,31 +29,30 @@ pub enum RelationType {
 }
 
 impl RelationType {
-    /// Convert BigQuery table type to dbt RelationType
-    ///
-    /// https://cloud.google.com/bigquery/docs/information-schema-tables
-    pub fn from_bigquery_table_type(table_type: &str) -> Self {
-        match table_type {
-            "BASE TABLE" | "CLONE" | "SNAPSHOT" => RelationType::Table,
-            "VIEW" => RelationType::View,
-            "MATERIALIZED VIEW" => RelationType::MaterializedView,
-            "EXTERNAL" => RelationType::External,
-            _ => panic!("unknown table type: {table_type}"),
-        }
-    }
-
-    /// Convert Databricks table type to dbt RelationType
-    ///
-    /// https://docs.databricks.com/aws/en/sql/language-manual/information-schema/tables#table-types
-    pub fn from_databricks_table_type(table_type: &String) -> Self {
-        match table_type.to_uppercase().as_str() {
-            "TABLE" => RelationType::Table,
-            "VIEW" => RelationType::View,
-            "MATERIALIZED_VIEW" => RelationType::MaterializedView,
-            "EXTERNAL" | "EXTERNAL_SHALLOW_CLONE" | "FOREIGN" => RelationType::External,
-            "STREAMING_TABLE" => RelationType::StreamingTable,
-            "MANAGED" | "MANAGED_SHALLOW_CLONE" => RelationType::Table,
-            _ => panic!("unknown table type: {table_type}"),
+    /// Convert a given type string for a given [AdapterType] to a dbt RelationType
+    pub fn from_adapter_type(adapter_type: AdapterType, type_string: &str) -> Self {
+        match adapter_type {
+            AdapterType::Bigquery => {
+                // https://cloud.google.com/bigquery/docs/information-schema-tables
+                match type_string {
+                    "BASE TABLE" | "CLONE" | "SNAPSHOT" => RelationType::Table,
+                    "VIEW" => RelationType::View,
+                    "MATERIALIZED VIEW" => RelationType::MaterializedView,
+                    "EXTERNAL" => RelationType::External,
+                    _ => panic!("unknown table type: {type_string}"),
+                }
+            }
+            // https://docs.databricks.com/aws/en/sql/language-manual/information-schema/tables#table-types
+            AdapterType::Databricks => match type_string.to_uppercase().as_str() {
+                "TABLE" => RelationType::Table,
+                "VIEW" => RelationType::View,
+                "MATERIALIZED_VIEW" => RelationType::MaterializedView,
+                "EXTERNAL" | "EXTERNAL_SHALLOW_CLONE" | "FOREIGN" => RelationType::External,
+                "STREAMING_TABLE" => RelationType::StreamingTable,
+                "MANAGED" | "MANAGED_SHALLOW_CLONE" => RelationType::Table,
+                _ => panic!("unknown table type: {type_string}"),
+            },
+            _ => RelationType::from(type_string),
         }
     }
 }
