@@ -6,6 +6,7 @@ use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
 use crate::sql_engine::{SqlEngine, execute_query_with_retry};
 use crate::{AdapterResult, AdapterType, AdapterTyping};
+use adbc_core::options::OptionValue;
 use dbt_agate::AgateTable;
 
 use arrow::array::{RecordBatch, StringArray, TimestampMillisecondArray};
@@ -88,7 +89,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         conn: &'_ mut dyn Connection,
         query_ctx: &QueryCtx,
         _auto_begin: bool,
-        _fetch: bool,
+        fetch: bool,
         _limit: Option<i64>,
         options: Option<HashMap<String, String>>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
@@ -103,7 +104,12 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         } else {
             engine.split_statements(&sql, dialect)
         };
-        let options = options.unwrap_or_default();
+        let options = options
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(key, value)| (key, OptionValue::String(value)))
+            .collect::<Vec<_>>();
+
         let mut last_batch = None;
         for statement in statements {
             last_batch = Some(execute_query_with_retry(
@@ -112,6 +118,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 &query_ctx.with_sql(statement),
                 1,
                 &options,
+                fetch,
             )?);
         }
 

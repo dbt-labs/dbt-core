@@ -307,7 +307,7 @@ impl SqlEngine {
         conn: &'_ mut dyn Connection,
         query_ctx: &QueryCtx,
     ) -> AdapterResult<RecordBatch> {
-        self.execute_with_options(query_ctx, conn, Options::new())
+        self.execute_with_options(query_ctx, conn, Options::new(), true)
     }
 
     /// Execute the given SQL query or statement.
@@ -316,6 +316,7 @@ impl SqlEngine {
         query_ctx: &QueryCtx,
         conn: &'_ mut dyn Connection,
         options: Options,
+        fetch: bool,
     ) -> AdapterResult<RecordBatch> {
         assert!(query_ctx.sql().is_some() || !options.is_empty());
         Self::log_query_ctx_for_execution(query_ctx);
@@ -344,6 +345,9 @@ impl SqlEngine {
             let reader = stmt.execute()?;
             let schema = reader.schema();
             let mut batches = Vec::with_capacity(1);
+            if !fetch {
+                return Ok((schema, batches));
+            }
             for res in reader {
                 let batch = res.map_err(adbc_core::error::Error::from)?;
                 batches.push(batch);
@@ -439,17 +443,14 @@ pub fn execute_query_with_retry(
     conn: &'_ mut dyn Connection,
     query_ctx: &QueryCtx,
     retry_limit: u32,
-    options: &HashMap<String, String>,
+    options: &Options,
+    fetch: bool,
 ) -> AdapterResult<RecordBatch> {
     let mut attempt = 0;
     let mut last_error = None;
 
-    let options = options
-        .iter()
-        .map(|(key, value)| (key.clone(), OptionValue::String(value.clone())))
-        .collect::<Options>();
     while attempt < retry_limit {
-        match engine.execute_with_options(query_ctx, conn, options.clone()) {
+        match engine.execute_with_options(query_ctx, conn, options.clone(), fetch) {
             Ok(result) => return Ok(result),
             Err(err) => {
                 last_error = Some(err.clone());

@@ -1,0 +1,7 @@
+kind: Fixes
+body: (adapters) support fetch on adapter.execute
+time: 2025-09-10T19:08:14.966499357-07:00
+custom:
+    author: xuliangs
+    issue: ""
+    project: dbt-fusion
