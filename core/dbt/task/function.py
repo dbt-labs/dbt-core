@@ -8,7 +8,7 @@ from dbt.clients.jinja import MacroGenerator
 from dbt.context.providers import generate_runtime_function_context
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import FunctionNode
-from dbt.events.types import LogNodeResult, LogStartLine
+from dbt.events.types import LogFunctionResult, LogStartLine
 from dbt.task import group_lookup
 from dbt.task.compile import CompileRunner
 from dbt_common.clients.jinja import MacroProtocol
@@ -100,7 +100,7 @@ class FunctionRunner(CompileRunner):
         return self.build_result(compiled_node, context)
 
     def after_execute(self, result: RunResult) -> None:
-        pass  # TODO: add after_execute logic to print the result
+        self.print_result_line(result)
 
     # def compile() defined on CompileRunner
 
@@ -111,15 +111,13 @@ class FunctionRunner(CompileRunner):
         group = group_lookup.get(node.unique_id)
         level = EventLevel.ERROR if result.status == NodeStatus.Error else EventLevel.INFO
         fire_event(
-            LogNodeResult(  # TODO: rename to LogFunctionResult
+            LogFunctionResult(
+                description=self.describe_node(),
                 status=result.status,
-                result_message=result.message,
                 index=self.node_index,
                 total=self.num_nodes,
                 execution_time=result.execution_time,
-                schema=self.node.schema,
-                relation=node.alias,
-                node_info=node.node_info,
+                node_info=self.node.node_info,
                 group=group,
             ),
             level=level,
