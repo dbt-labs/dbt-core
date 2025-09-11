@@ -528,8 +528,25 @@ sources:
         identifier: source
         config:
           loaded_at_query: "select {{current_timestamp()}}"
-
 """
+
+freshness_via_custom_sql_source_config_schema_yml = """version: 2
+sources:
+  - name: test_source
+    config:
+      freshness:
+        warn_after: {count: 10, period: hour}
+      loaded_at_query: "select {{current_timestamp()}}"
+    schema: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}"
+    quoting:
+      identifier: True
+    tags:
+      - my_test_source_tag
+    tables:
+      - name: source_c
+        identifier: source
+"""
+
 
 freshness_with_explicit_null_in_table_schema_yml = """version: 2
 sources:
