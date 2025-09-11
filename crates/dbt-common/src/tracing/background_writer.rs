@@ -178,6 +178,7 @@ mod tests {
     use super::*;
     use std::io::{self, Write};
     use std::sync::{Arc, Mutex};
+    use std::time::{Duration, Instant};
 
     /// Mock writer that captures output
     struct MockWriter {
@@ -295,15 +296,23 @@ mod tests {
 
         // Lock until we reach count of 1
         {
-            let count = counter.lock().unwrap();
-            if *count < 2 {
-                drop(count);
-                // Wait a bit for the writer thread to process
-                thread::sleep(std::time::Duration::from_millis(10));
-            }
+            let timeout = Duration::from_secs(5);
+            let start = Instant::now();
 
-            let count = counter.lock().unwrap();
-            assert!(*count > 1);
+            // Wait until the writer thread has processed at least 2 messages
+            loop {
+                if let Ok(c) = counter.try_lock() {
+                    if *c > 1 {
+                        break;
+                    }
+                }
+
+                if start.elapsed() > timeout {
+                    panic!("Timed out waiting for writer thread to process second message");
+                }
+
+                thread::sleep(Duration::from_millis(10));
+            }
         };
 
         // The next write should fail
