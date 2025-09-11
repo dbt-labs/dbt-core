@@ -15,7 +15,7 @@ use crate::schemas::{
 use super::{common::Constraint, data_tests::DataTests};
 
 #[skip_serializing_none]
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtColumn {
     pub name: String,

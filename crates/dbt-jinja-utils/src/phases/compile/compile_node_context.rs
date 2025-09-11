@@ -115,8 +115,7 @@ pub fn build_compile_node_context(
         "builtins".to_owned(),
         MinijinjaValue::from_object(base_builtins),
     );
-
-    ctx.insert("model".to_owned(), MinijinjaValue::from_serialize(model));
+    ctx.insert("model".to_owned(), model.clone());
 
     let result_store = ResultStore::default();
     ctx.insert(
