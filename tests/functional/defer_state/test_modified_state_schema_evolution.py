@@ -22,6 +22,10 @@ class TestModifiedStateSchemaEvolution:
 
     def test_modified_state_schema_evolution(self, happy_path_project):
         # Uncomment this line when happy_path_project is updated
+        # If the happy_path_project needs to be updated in order to
+        # test schema evolutions not introducing state:modified false positives,
+        # make sure to update state off of main so that the functional changes of the
+        # schema evolution branch do not get reflected in the 'previous' state.
         # self.update_state(happy_path_project.test_data_dir)
 
         results = run_dbt(
