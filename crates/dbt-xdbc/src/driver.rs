@@ -89,8 +89,7 @@ impl Backend {
             Backend::Postgres => Some("adbc_driver_postgresql"),
             Backend::Databricks => Some("adbc_driver_databricks"),
             Backend::Salesforce => Some("adbc_driver_salesforce"),
-            // todo: swap over to Redshift specific driver once available
-            Backend::Redshift => Some("adbc_driver_postgresql"),
+            Backend::Redshift => Some("adbc_driver_redshift"),
             Backend::DatabricksODBC | Backend::RedshiftODBC => None, // these use ODBC
             Backend::Generic { library_name, .. } => Some(library_name),
         }
