@@ -1,3 +1,5 @@
+#![allow(clippy::let_and_return)]
+
 use core::fmt;
 use std::rc::Rc;
 use std::sync::Arc;

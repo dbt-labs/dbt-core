@@ -4,9 +4,68 @@ use std::sync::Arc;
 
 use crate::table::TableRepr;
 use crate::{MappedSequence, Tuple, TupleRepr};
+use arrow_array::{Array, StringViewArray};
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Object, ObjectRepr};
 use minijinja::{Error as MinijinjaError, State, Value};
+
+#[derive(Debug)]
+pub struct RowNamesAsTuple {
+    row_names_array: Arc<StringViewArray>,
+}
+
+impl RowNamesAsTuple {
+    pub fn new(row_names_array: Arc<StringViewArray>) -> Self {
+        Self { row_names_array }
+    }
+}
+
+impl TupleRepr for RowNamesAsTuple {
+    fn get_item_by_index(&self, idx: isize) -> Option<Value> {
+        let idx = if idx < 0 {
+            self.row_names_array.len() as isize + idx
+        } else {
+            idx
+        };
+        if idx < 0 || (idx as usize) >= self.row_names_array.len() {
+            None
+        } else {
+            let value = Value::from(self.row_names_array.value(idx as usize).to_string());
+            Some(value)
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.row_names_array.len()
+    }
+
+    fn count_occurrences_of(&self, needle: &Value) -> usize {
+        if let Some(name) = needle.as_str() {
+            self.row_names_array
+                .iter()
+                .filter(|opt| *opt == Some(name))
+                .count()
+        } else {
+            0
+        }
+    }
+
+    fn index_of(&self, needle: &Value) -> Option<usize> {
+        if let Some(name) = needle.as_str() {
+            self.row_names_array
+                .iter()
+                .position(|opt| opt == Some(name))
+        } else {
+            None
+        }
+    }
+
+    fn clone_repr(&self) -> Box<dyn TupleRepr> {
+        Box::new(RowNamesAsTuple {
+            row_names_array: Arc::clone(&self.row_names_array),
+        })
+    }
+}
 
 #[derive(Debug)]
 struct RowsAsTuple {
@@ -97,9 +156,7 @@ impl MappedSequence for Rows {
     }
 
     fn keys(&self) -> Option<Tuple> {
-        // TODO(felipecrv): implement row_names logic
-        // See https://github.com/wireservice/agate/blob/7023e35b51e8abfe9784fe292a23dd4d7d983c63/agate/table/__init__.py#L144
-        todo!("Rows::keys")
+        self.of_table.row_names()
     }
 }
 

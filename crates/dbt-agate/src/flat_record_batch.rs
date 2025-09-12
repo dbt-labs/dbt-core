@@ -545,12 +545,14 @@ impl FlatRecordBatch {
         self.original.as_ref()
     }
 
-    pub fn with_single_column(&self, idx: usize) -> Self {
+    pub fn with_single_column(&self, idx: usize) -> Arc<FlatRecordBatch> {
         let column_batch = single_column_batch(&self.flat, idx);
-        Self::_from_flattened_record_batch(Arc::new(column_batch), None).unwrap()
+        // one column pulled from an already flat batch is still flat, so .unwrap() is safe
+        let flat = Self::_from_flattened_record_batch(Arc::new(column_batch), None).unwrap();
+        Arc::new(flat)
     }
 
-    pub(crate) fn with_renamed_columns(&self, renamed_columns: &[String]) -> FlatRecordBatch {
+    pub(crate) fn with_renamed_columns(&self, renamed_columns: &[String]) -> Arc<FlatRecordBatch> {
         debug_assert!(renamed_columns.len() == self.flat.num_columns());
         let new_schema = {
             let mut renamed_columns = renamed_columns.iter();
@@ -564,7 +566,7 @@ impl FlatRecordBatch {
         };
         // only column names changed, so .unwrap() is safe
         let new_flat = RecordBatch::try_new(new_schema, self.flat.columns().to_vec()).unwrap();
-        Self::_from_flattened_record_batch(Arc::new(new_flat), None).unwrap()
+        Arc::new(Self::_from_flattened_record_batch(Arc::new(new_flat), None).unwrap())
     }
 
     pub(crate) fn converters(&self) -> &[Box<dyn ArrayConverter>] {
