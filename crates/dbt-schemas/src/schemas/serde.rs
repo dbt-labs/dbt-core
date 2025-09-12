@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::str::FromStr;
 
-use dbt_common::{CodeLocation, ErrorCode, FsError, FsResult};
+use dbt_common::{CodeLocation, ErrorCode, FsError, FsResult, stdfs};
 use dbt_serde_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize};
 use serde::{
     self, Deserialize, Deserializer, Serialize,
@@ -17,24 +17,11 @@ pub fn typed_struct_from_json_file<T>(path: &Path) -> FsResult<T>
 where
     T: DeserializeOwned,
 {
-    // TODO: use the file path for error reporting.
-    // Open the file and parse as JSON directly using serde_json::from_reader
-    let file = std::fs::File::open(path).map_err(|e| {
-        FsError::new(
-            ErrorCode::SerializationError,
-            format!("Failed to open file: {e}"),
-        )
-        .with_location(CodeLocation::from(path.to_path_buf()))
-    })?;
+    // Note: Do **NOT** open the file and parse as JSON directly using
+    // `serde_json::from_reader`! That will be ~30x slower.
+    let json_str = stdfs::read_to_string(path)?;
 
-    let yml_val: YmlValue = serde_json::from_reader(file).map_err(|e| {
-        FsError::new(
-            ErrorCode::SerializationError,
-            format!("Failed to parse JSON: {e}"),
-        )
-    })?;
-
-    T::deserialize(yml_val).map_err(|e| yaml_to_fs_error(e, Some(path)))
+    typed_struct_from_json_str(&json_str, Some(path))
 }
 
 pub fn typed_struct_to_pretty_json_file<T>(path: &Path, value: &T) -> FsResult<()>
@@ -63,7 +50,7 @@ where
 }
 
 /// Deserializes a JSON string into a `T`.
-pub fn typed_struct_from_json_str<T>(json_str: &str) -> FsResult<T>
+pub fn typed_struct_from_json_str<T>(json_str: &str, source: Option<&Path>) -> FsResult<T>
 where
     T: DeserializeOwned,
 {
@@ -74,7 +61,7 @@ where
         )
     })?;
 
-    T::deserialize(yml_val).map_err(|e| yaml_to_fs_error(e, None))
+    T::deserialize(yml_val).map_err(|e| yaml_to_fs_error(e, source))
 }
 
 /// Converts a `dbt_serde_yaml::Error` into a `FsError`, attaching the error location
