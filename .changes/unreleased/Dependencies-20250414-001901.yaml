@@ -1,0 +1,6 @@
+kind: "Dependencies"
+body: "Bump peter-evans/find-comment from 2 to 3"
+time: 2025-04-14T00:19:01.00000Z
+custom:
+  Author: dependabot[bot]
+  Issue: 11494
