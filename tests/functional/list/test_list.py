@@ -800,7 +800,7 @@ class TestList:
                     "original_file_path": normalize("models/schema.yml"),
                     "package_name": "test",
                     "resource_type": "test",
-                    "tags": ["test_tag"],
+                    "tags": ["column_level_tag", "test_tag"],
                     "unique_id": "test.test.my_favorite_test.b488d63233",
                 },
                 {
@@ -897,7 +897,7 @@ class TestList:
                     "original_file_path": normalize("seeds/s.yml"),
                     "package_name": "test",
                     "resource_type": "test",
-                    "tags": [],
+                    "tags": ["tag"],
                     "unique_id": "test.test.not_null_seed__a_.6b59640cde",
                 },
                 {
@@ -929,7 +929,7 @@ class TestList:
                     "original_file_path": normalize("seeds/s.yml"),
                     "package_name": "test",
                     "resource_type": "test",
-                    "tags": [],
+                    "tags": ["tag"],
                     "unique_id": "test.test.not_null_seed__b_.a088b263cb",
                 },
                 {
@@ -990,7 +990,7 @@ class TestList:
                     "original_file_path": normalize("models/schema.yml"),
                     "package_name": "test",
                     "resource_type": "test",
-                    "tags": [],
+                    "tags": ["column_level_tag"],
                     "unique_id": "test.test.unique_model_with_lots_of_schema_configs_id.8328d84982",
                 },
                 {

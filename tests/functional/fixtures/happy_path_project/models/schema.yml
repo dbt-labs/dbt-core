@@ -36,6 +36,10 @@ models:
     columns:
       - name: id
         description: The id value
+        tags:
+          - "column_level_tag"
+        meta:
+          column_meta: "column_meta_value"
         data_tests:
           - unique
           - not_null:
