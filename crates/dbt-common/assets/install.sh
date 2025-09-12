@@ -229,9 +229,6 @@ check_binary_version() {
 
     if [ -f "$binary_path" ] && [ -x "$binary_path" ]; then
         version=$("$binary_path" --version 2>/dev/null | cut -d ' ' -f 2 || echo "")
-        if [ ! -z "$version" ]; then
-            log_grey "Current installed $binary_name version: $version"
-        fi
     fi
 
     echo "$version"
@@ -483,6 +480,8 @@ install_package() {
     if [ -n "$current_version" ] && [ "$current_version" = "$version" ]; then
         log "$package_name version $version is already installed"
         return 0
+    elif [ -n "$current_version" ]; then
+        log_grey "Current installed $package_name version: $current_version"
     fi
 
     # If we get here, version is different, so check if we can proceed
@@ -554,6 +553,10 @@ install_package() {
     done
 
     display_ascii_art "$package_name" "$version"
+
+    if [ "$update" = true ] && [ -n "$current_version" ]; then
+        log_grey "Successfully updated $package_name from $current_version to $version"
+    fi
 
     rm -rf "$td"
     return 0

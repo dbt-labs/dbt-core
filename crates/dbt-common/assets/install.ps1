@@ -575,7 +575,7 @@ Write-Host @"
 
  =====              =====    DBT  
 =========        =========  FUSION
- ===========    >========   -----
+ ===========    >========   ------
   ======================    ********************************************
    ====================     *          FUSION ENGINE INSTALLED         *
     ========--========      *                                          *
@@ -588,6 +588,10 @@ Write-Host @"
  =====             =====    
 
 "@
+
+if ($Update -and $currentVersion) {
+    Write-GrayLog "Successfully updated dbt from $currentVersion to $Version"
+}
 
 # Show appropriate final messages
 if ($script:PathUpdated) {
