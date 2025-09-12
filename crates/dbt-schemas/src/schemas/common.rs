@@ -646,6 +646,28 @@ impl DbtChecksum {
             checksum: hex::encode(checksum),
         })
     }
+    pub fn seed_file_hash(s: &[u8], path: &str) -> Self {
+        const MAXIMUM_SEED_SIZE: usize = 1024 * 1024; // 1MB
+
+        if s.len() > MAXIMUM_SEED_SIZE {
+            // For large seeds, use path-based checksum like dbt-core
+            Self::Object(DbtChecksumObject {
+                name: "path".to_string(),
+                checksum: path.to_string(),
+            })
+        } else {
+            // For normal seeds, hash the content
+            let mut hasher = Sha256::new();
+            let utf8_string = String::from_utf8_lossy(s);
+            let trimmed_string = utf8_string.trim();
+            hasher.update(trimmed_string.as_bytes());
+            let checksum = hasher.finalize();
+            Self::Object(DbtChecksumObject {
+                name: "SHA256".to_string(),
+                checksum: hex::encode(checksum),
+            })
+        }
+    }
 }
 
 #[skip_serializing_none]
@@ -780,7 +802,7 @@ pub struct HookConfig {
     pub transaction: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 pub struct Dimension {
     pub name: String,
     #[serde(rename = "type")]
@@ -798,7 +820,7 @@ fn default_false() -> bool {
     false
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct DimensionTypeParams {
     pub time_granularity: Option<ColumnPropertiesGranularity>,
     pub validity_params: Option<DimensionValidityParams>,

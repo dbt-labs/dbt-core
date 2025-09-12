@@ -162,6 +162,11 @@ pub fn resolve_seeds(
 
         validate_delimeter(&properties_config.delimiter)?;
 
+        // Calculate original file path first so we can use it for the checksum
+        // if necessary for large seeds
+        let original_file_path =
+            stdfs::diff_paths(seed_file.base_path.join(&path), &io_args.in_dir)?;
+
         // Create initial seed with default values
         let mut dbt_seed = DbtSeed {
             __common_attr__: CommonAttributes {
@@ -169,16 +174,14 @@ pub fn resolve_seeds(
                 package_name: package_name.to_owned(),
                 path: path.to_owned(),
                 name_span: dbt_common::Span::default(),
-                original_file_path: stdfs::diff_paths(
-                    seed_file.base_path.join(&path),
-                    &io_args.in_dir,
-                )?,
-                checksum: DbtChecksum::hash(
+                original_file_path: original_file_path.clone(),
+                checksum: DbtChecksum::seed_file_hash(
                     std::fs::read(seed_file.base_path.join(&path))
                         .map_err(|e| {
                             fs_err!(ErrorCode::IoError, "Failed to read seed file: {}", e)
                         })?
                         .as_slice(),
+                    &original_file_path.to_string_lossy(),
                 ),
                 patch_path: patch_path.clone(),
                 unique_id: unique_id.clone(),

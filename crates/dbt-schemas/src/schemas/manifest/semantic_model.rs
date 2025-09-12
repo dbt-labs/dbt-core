@@ -68,7 +68,7 @@ pub struct SemanticModelDefaults {
     pub agg_time_dimension: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SemanticEntity {
     pub name: String,
     #[serde(rename = "type")]
@@ -81,7 +81,7 @@ pub struct SemanticEntity {
     pub metadata: Option<SourceFileMetadata>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SemanticMeasure {
     pub name: String,
     pub agg: AggregationType,
@@ -95,7 +95,7 @@ pub struct SemanticMeasure {
     pub config: Option<SemanticLayerElementConfig>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MeasureAggregationParameters {
     pub percentile: Option<f32>,
     pub use_discrete_percentile: Option<bool>,

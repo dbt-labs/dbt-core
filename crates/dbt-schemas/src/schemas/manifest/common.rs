@@ -10,12 +10,12 @@ use crate::schemas::serde::StringOrArrayOfStrings;
 type YmlValue = dbt_serde_yaml::Value;
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WhereFilterIntersection {
     pub where_filters: Vec<WhereFilter>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WhereFilter {
     pub where_sql_template: String,
 }

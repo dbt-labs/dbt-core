@@ -53,7 +53,7 @@ pub enum MetricType {
     Conversion,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct MetricTypeParams {
     pub measure: Option<MetricInputMeasure>,
     pub input_measures: Option<Vec<MetricInputMeasure>>,
@@ -67,7 +67,7 @@ pub struct MetricTypeParams {
     pub cumulative_type_params: Option<CumulativeTypeParams>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MetricInputMeasure {
     pub name: String,
     pub filter: Option<WhereFilterIntersection>,
@@ -88,7 +88,7 @@ impl Default for MetricInputMeasure {
     }
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MetricInput {
     pub name: String,
     pub filter: Option<WhereFilterIntersection>,
@@ -97,7 +97,7 @@ pub struct MetricInput {
     pub offset_to_grain: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MetricTimeWindow {
     pub count: i32,
     pub granularity: String,
@@ -125,7 +125,7 @@ impl Default for MetricTimeWindow {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CumulativeTypeParams {
     pub window: Option<MetricTimeWindow>,
     pub grain_to_date: Option<String>,

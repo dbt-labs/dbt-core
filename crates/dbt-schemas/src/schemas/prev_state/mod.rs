@@ -2,7 +2,7 @@ use super::{RunResultsArtifact, manifest::DbtManifest};
 use crate::schemas::common::{DbtQuoting, ResolvedQuoting};
 use crate::schemas::manifest::nodes_from_dbt_manifest;
 use crate::schemas::serde::typed_struct_from_json_file;
-use crate::schemas::{InternalDbtNode, Nodes};
+use crate::schemas::{InternalDbtNode, Nodes, nodes::DbtModel};
 use dbt_common::{FsResult, constants::DBT_MANIFEST_JSON};
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -30,6 +30,7 @@ impl fmt::Display for PreviousState {
         write!(f, "PreviousState from {}", self.state_path.display())
     }
 }
+
 impl PreviousState {
     pub fn try_new(state_path: &Path, root_project_quoting: ResolvedQuoting) -> FsResult<Self> {
         let manifest: DbtManifest =
@@ -82,24 +83,22 @@ impl PreviousState {
         }
 
         match modification_type {
-            // TODO chenyu: confirm with product if it is okay to merge the body check with content check
             Some(ModificationType::Body) => self.check_modified_content(node),
             Some(ModificationType::Configs) => self.check_configs_modified(node),
-            // Some(ModificationType::Relation) => self.check_relation_modified(node, unique_id),
-            // Some(ModificationType::PersistedDescriptions) => {
-            //     self.check_persisted_descriptions_modified(node, unique_id)
-            // }
-            // Some(ModificationType::Macros) => self.check_macros_modified(node, unique_id),
-            // Some(ModificationType::Contract) => self.check_contract_modified(node, unique_id),
-            // Some(ModificationType::Any) | None => {
-            //     self.check_body_modified(node, unique_id)
-            //         || self.check_configs_modified(node, unique_id)
-            //         || self.check_relation_modified(node, unique_id)
-            //         || self.check_persisted_descriptions_modified(node, unique_id)
-            //         || self.check_macros_modified(node, unique_id)
-            //         || self.check_contract_modified(node, unique_id)
-            // }
-            _ => self.check_modified_content(node),
+            Some(ModificationType::Relation) => self.check_relation_modified(node),
+            Some(ModificationType::PersistedDescriptions) => {
+                self.check_persisted_descriptions_modified(node)
+            }
+            // Macro modification is check_modified_content as per dbt-core
+            Some(ModificationType::Macros) => self.check_modified_content(node),
+            Some(ModificationType::Contract) => self.check_contract_modified(node),
+            Some(ModificationType::Any) | None => {
+                self.check_contract_modified(node)
+                    || self.check_configs_modified(node)
+                    || self.check_relation_modified(node)
+                    || self.check_persisted_descriptions_modified(node)
+                    || self.check_modified_content(node) // Order is important here, check_modified_content should be last as it is the most generic and could potentially match prevuous cases
+            }
         }
     }
 
@@ -127,6 +126,76 @@ impl PreviousState {
             Some(node) => node,
             None => return true, // If previous node doesn't exist, consider it modified
         };
-        current_node.has_same_config(previous_node)
+
+        !current_node.has_same_config(previous_node)
+    }
+
+    fn check_relation_modified(&self, current_node: &dyn InternalDbtNode) -> bool {
+        // Get the previous node from the manifest
+        let previous_node = match self
+            .nodes
+            .get_node(current_node.common().unique_id.as_str())
+        {
+            Some(node) => node,
+            None => return true, // If previous node doesn't exist, consider it modified
+        };
+
+        // Check if database representation changed (database, schema, alias)
+        // Compare the database representation fields from the base attributes
+        let current_database = &current_node.base().database;
+        let current_schema = &current_node.base().schema;
+        let current_alias = &current_node.base().alias;
+
+        let previous_database = &previous_node.base().database;
+        let previous_schema = &previous_node.base().schema;
+        let previous_alias = &previous_node.base().alias;
+
+        current_database != previous_database
+            || current_schema != previous_schema
+            || current_alias != previous_alias
+    }
+
+    fn check_persisted_descriptions_modified(&self, current_node: &dyn InternalDbtNode) -> bool {
+        // Get the previous node from the manifest
+        let previous_node = match self
+            .nodes
+            .get_node(current_node.common().unique_id.as_str())
+        {
+            Some(node) => node,
+            None => return true, // If previous node doesn't exist, consider it modified
+        };
+
+        // Check if persisted descriptions changed
+        // Persist docs for relations and columns are deprecated in fusion, so they are not used
+        // as additional check flags as they are in dbt-core.
+        // https://github.com/dbt-labs/dbt-core/blob/906e07c1f2161aaf8873f17ba323221a3cf48c9f/core/dbt/contracts/graph/nodes.py#L330-L345
+
+        // Helper function to normalize descriptions: treat None and Some("") as equal
+        fn normalize_description(desc: &Option<String>) -> Option<&str> {
+            desc.as_deref().filter(|s| !s.is_empty())
+        }
+
+        normalize_description(&current_node.common().description)
+            != normalize_description(&previous_node.common().description)
+    }
+
+    fn check_contract_modified(&self, current_node: &dyn InternalDbtNode) -> bool {
+        // Get the previous node from the manifest
+        let previous_node = match self
+            .nodes
+            .get_node(current_node.common().unique_id.as_str())
+        {
+            Some(node) => node,
+            None => return true, // If previous node doesn't exist, consider it modified
+        };
+
+        if let (Some(current_model), Some(previous_model)) = (
+            current_node.as_any().downcast_ref::<DbtModel>(),
+            previous_node.as_any().downcast_ref::<DbtModel>(),
+        ) {
+            !current_model.same_contract(previous_model)
+        } else {
+            false
+        }
     }
 }

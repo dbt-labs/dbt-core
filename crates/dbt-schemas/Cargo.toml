@@ -24,6 +24,7 @@ dbt-serde_yaml = { workspace = true }
 dbt-telemetry = { workspace = true }
 hex = { workspace = true }
 humantime = { workspace = true }
+log = { workspace = true }
 md5 = { workspace = true }
 merge = { workspace = true }
 minijinja = { workspace = true }

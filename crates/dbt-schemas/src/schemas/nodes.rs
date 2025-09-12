@@ -303,6 +303,99 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
     fn serialized_config(&self) -> YmlValue;
 }
 
+// Shared helper functions for has_same_content implementation across node types
+// These match the dbt-core same_contents method logic for ParsedNode
+
+fn same_body(self_common: &CommonAttributes, other_common: &CommonAttributes) -> bool {
+    self_common.checksum == other_common.checksum
+}
+
+fn same_persisted_description(
+    self_common: &CommonAttributes,
+    self_base: &NodeBaseAttributes,
+    other_common: &CommonAttributes,
+    other_base: &NodeBaseAttributes,
+) -> bool {
+    // Check persist_docs settings to determine what to compare
+    let self_persist_relation = self_base
+        .persist_docs
+        .as_ref()
+        .and_then(|pd| pd.relation)
+        .unwrap_or(false);
+    let other_persist_relation = other_base
+        .persist_docs
+        .as_ref()
+        .and_then(|pd| pd.relation)
+        .unwrap_or(false);
+
+    let self_persist_columns = self_base
+        .persist_docs
+        .as_ref()
+        .and_then(|pd| pd.columns)
+        .unwrap_or(false);
+    let other_persist_columns = other_base
+        .persist_docs
+        .as_ref()
+        .and_then(|pd| pd.columns)
+        .unwrap_or(false);
+
+    // If persist_docs settings differ, they're not the same
+    if self_persist_relation != other_persist_relation
+        || self_persist_columns != other_persist_columns
+    {
+        return false;
+    }
+
+    // Helper function to normalize descriptions: treat None and Some("") as equal
+    fn normalize_description(desc: &Option<String>) -> Option<&str> {
+        desc.as_deref().filter(|s| !s.is_empty())
+    }
+
+    // If relation docs are persisted, compare descriptions
+    if self_persist_relation
+        && normalize_description(&self_common.description)
+            != normalize_description(&other_common.description)
+    {
+        return false;
+    }
+
+    // If column docs are persisted, compare column descriptions
+    if self_persist_columns {
+        let self_column_descriptions: BTreeMap<_, _> = self_base
+            .columns
+            .iter()
+            .map(|(k, v)| (k.clone(), v.description.clone()))
+            .collect();
+
+        let other_column_descriptions: BTreeMap<_, _> = other_base
+            .columns
+            .iter()
+            .map(|(k, v)| (k.clone(), v.description.clone()))
+            .collect();
+
+        if self_column_descriptions != other_column_descriptions {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn same_fqn(self_common: &CommonAttributes, other_common: &CommonAttributes) -> bool {
+    self_common.fqn == other_common.fqn
+}
+
+fn same_database_representation(
+    self_base: &NodeBaseAttributes,
+    other_base: &NodeBaseAttributes,
+) -> bool {
+    // Compare database, schema, alias from the configuration
+    // This matches the dbt-core method which compares unrendered_config values
+    self_base.database == other_base.database
+        && self_base.schema == other_base.schema
+        && self_base.alias == other_base.alias
+}
+
 impl InternalDbtNode for DbtModel {
     fn common(&self) -> &CommonAttributes {
         &self.__common_attr__
@@ -353,7 +446,8 @@ impl InternalDbtNode for DbtModel {
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtModel>() {
-            self.deprecated_config == other_model.deprecated_config
+            self.deprecated_config
+                .same_config(&other_model.deprecated_config)
         } else {
             false
         }
@@ -364,8 +458,20 @@ impl InternalDbtNode for DbtModel {
         if self.is_extended_model() {
             return true;
         }
+
         if let Some(other_model) = other.as_any().downcast_ref::<DbtModel>() {
-            self.__common_attr__.checksum == other_model.__common_attr__.checksum
+            // Equivalent to dbt-core's same_contents method for ParsedNode
+            same_body(&self.__common_attr__, &other_model.__common_attr__)
+                && self.has_same_config(other)
+                && same_persisted_description(
+                    &self.__common_attr__,
+                    &self.__base_attr__,
+                    &other_model.__common_attr__,
+                    &other_model.__base_attr__,
+                )
+                && same_fqn(&self.__common_attr__, &other_model.__common_attr__)
+                && same_database_representation(&self.__base_attr__, &other_model.__base_attr__)
+                && self.same_contract(other_model)
         } else {
             false
         }
@@ -427,6 +533,167 @@ impl InternalDbtNodeAttributes for DbtModel {
     }
 }
 
+/// Helper function to compare materialized fields for seeds, treating None and default Seed materialization as equivalent
+fn seed_materialized_eq(a: &Option<DbtMaterialization>, b: &Option<DbtMaterialization>) -> bool {
+    use crate::schemas::common::DbtMaterialization;
+    // Default value for seeds is always "seed"
+    // See https://github.com/dbt-labs/dbt-core/blob/main/core/dbt/artifacts/resources/v1/seed.py#L16
+    let default_seed_materialized = DbtMaterialization::Seed;
+
+    match (a, b) {
+        // Both None
+        (None, None) => true,
+        // Both Some - direct comparison
+        (Some(a_val), Some(b_val)) => a_val == b_val,
+        // One None, one Some - check if the Some value equals default seed materialization
+        (None, Some(b_val)) => b_val == &default_seed_materialized,
+        (Some(a_val), None) => a_val == &default_seed_materialized,
+    }
+}
+
+/// Helper functions for smart comparison of SeedConfig fields that considers
+/// None vs Some(empty) representations as equivalent
+fn seed_configs_equal(left: &SeedConfig, right: &SeedConfig) -> bool {
+    // Compare each field with smart empty comparison
+    btree_map_equal(&left.column_types, &right.column_types) &&
+    docs_config_equal(&left.docs, &right.docs) &&
+    left.enabled == right.enabled &&
+    btree_map_string_or_array_equal(&left.grants, &right.grants) &&
+    left.quote_columns == right.quote_columns &&
+    // left.delimiter == right.delimiter && // TODO: re-enable when no longer using mantle/core manifests in IA
+    left.event_time == right.event_time &&
+    left.full_refresh == right.full_refresh &&
+    btree_map_yml_value_equal(&left.meta, &right.meta) &&
+    persist_docs_config_equal(&left.persist_docs, &right.persist_docs) &&
+    left.post_hook == right.post_hook &&
+    left.pre_hook == right.pre_hook &&
+    // quoting_equal(&left.quoting, &right.quoting) && // TODO: re-enable when no longer using mantle/core manifests in IA
+    left.description == right.description &&
+    seed_materialized_eq(&left.materialized, &right.materialized) &&
+    left.__warehouse_specific_config__ == right.__warehouse_specific_config__
+}
+
+/// Compare BTreeMap<String, String> considering None vs Some(empty) as equal
+fn btree_map_equal(
+    left: &Option<BTreeMap<String, String>>,
+    right: &Option<BTreeMap<String, String>>,
+) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(l), Some(r)) => l == r,
+        (None, Some(r)) => r.is_empty(),
+        (Some(l), None) => l.is_empty(),
+    }
+}
+
+/// Compare BTreeMap<String, StringOrArrayOfStrings> considering None vs Some(empty) as equal
+fn btree_map_string_or_array_equal(
+    left: &Option<BTreeMap<String, StringOrArrayOfStrings>>,
+    right: &Option<BTreeMap<String, StringOrArrayOfStrings>>,
+) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(l), Some(r)) => l == r,
+        (None, Some(r)) => r.is_empty(),
+        (Some(l), None) => l.is_empty(),
+    }
+}
+
+/// Compare BTreeMap<String, YmlValue> considering None vs Some(empty) as equal
+fn btree_map_yml_value_equal(
+    left: &Option<BTreeMap<String, YmlValue>>,
+    right: &Option<BTreeMap<String, YmlValue>>,
+) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(l), Some(r)) => l == r,
+        (None, Some(r)) => r.is_empty(),
+        (Some(l), None) => l.is_empty(),
+    }
+}
+
+/// Compare DocsConfig considering None vs Some(default) as equal
+fn docs_config_equal(
+    left: &Option<crate::schemas::common::DocsConfig>,
+    right: &Option<crate::schemas::common::DocsConfig>,
+) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(l), Some(r)) => l == r,
+        (
+            None,
+            Some(crate::schemas::common::DocsConfig {
+                show: true,
+                node_color: None,
+            }),
+        ) => true,
+        (
+            Some(crate::schemas::common::DocsConfig {
+                show: true,
+                node_color: None,
+            }),
+            None,
+        ) => true,
+        _ => false,
+    }
+}
+
+/// Compare PersistDocsConfig considering None vs Some(all None fields) as equal
+fn persist_docs_config_equal(
+    left: &Option<PersistDocsConfig>,
+    right: &Option<PersistDocsConfig>,
+) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(l), Some(r)) => l == r,
+        (
+            None,
+            Some(PersistDocsConfig {
+                columns: None,
+                relation: None,
+            }),
+        ) => true,
+        (
+            Some(PersistDocsConfig {
+                columns: None,
+                relation: None,
+            }),
+            None,
+        ) => true,
+        _ => false,
+    }
+}
+
+/// Compare DbtQuoting structures with more nuanced logic
+/// This handles cases where one side has values and the other has all None fields
+#[allow(dead_code)]
+fn quoting_equal(
+    left: &Option<crate::schemas::common::DbtQuoting>,
+    right: &Option<crate::schemas::common::DbtQuoting>,
+) -> bool {
+    match (left, right) {
+        (None, None) => true,
+        (Some(l), Some(r)) => {
+            // If one is "default" (all None) and the other has values, they might still be considered equal
+            // depending on the context. For now, we'll use strict comparison but we can adjust this
+            // if needed based on the specific requirements.
+            l == r
+        }
+        (None, Some(r)) => {
+            r.database.is_none()
+                && r.identifier.is_none()
+                && r.schema.is_none()
+                && r.snowflake_ignore_case.is_none()
+        }
+        (Some(l), None) => {
+            l.database.is_none()
+                && l.identifier.is_none()
+                && l.schema.is_none()
+                && l.snowflake_ignore_case.is_none()
+        }
+    }
+}
+
 impl InternalDbtNode for DbtSeed {
     fn resource_type(&self) -> &str {
         "seed"
@@ -457,20 +724,35 @@ impl InternalDbtNode for DbtSeed {
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtSeed>() {
-            self.deprecated_config == other_model.deprecated_config
+            seed_configs_equal(&self.deprecated_config, &other_model.deprecated_config)
         } else {
             false
         }
     }
 
-    fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
-        //TODO: the checksum for seed is different between mantle and fusion.
-        true
-        // if let Some(other_model) = other.as_any().downcast_ref::<DbtSeed>() {
-        //     self.common_attr.checksum == other_model.common_attr.checksum
-        // } else {
-        //     false
-        // }
+    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+        if let Some(other_seed) = other.as_any().downcast_ref::<DbtSeed>() {
+            // Equivalent to dbt-core's same_contents method for ParsedNode
+            // TODO: Seeds might have path based checksum. When they do,
+            // warnings are logged about this. Implement these warnings later
+            // after confirming they make sense. See:
+            //https://github.com/dbt-labs/dbt-core/blob/b75d5e701ef4dc2d7a98c5301ef63ecfc02eae15/core/dbt/contracts/graph/nodes.py#L900-L933
+            same_body(&self.__common_attr__, &other_seed.__common_attr__)
+                && self.has_same_config(other)
+                && same_persisted_description(
+                    &self.__common_attr__,
+                    &self.__base_attr__,
+                    &other_seed.__common_attr__,
+                    &other_seed.__base_attr__,
+                )
+                && same_fqn(&self.__common_attr__, &other_seed.__common_attr__)
+                && same_database_representation(&self.__base_attr__, &other_seed.__base_attr__)
+            // For seeds, same_contract always returns true in dbt-core
+            // Seeds don't have complex contract validation like models,
+            // so we do not need to do a contract check for seeds.
+        } else {
+            false
+        }
     }
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
         panic!("DbtSeed does not support setting detected_unsafe");
@@ -552,9 +834,12 @@ impl InternalDbtNode for DbtTest {
         }
     }
 
-    fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
-        // TODO: test currently is not supported for state selector due to the difference of test name generation between fusion and dbt-mantle.
-        true
+    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+        if let Some(other) = other.as_any().downcast_ref::<DbtTest>() {
+            self.has_same_config(other) && self.common().fqn == other.common().fqn
+        } else {
+            false
+        }
     }
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
         panic!("DbtTest does not support setting detected_unsafe");
@@ -724,10 +1009,11 @@ impl InternalDbtNode for DbtSource {
         if let Some(other_source) = other.as_any().downcast_ref::<DbtSource>() {
             // Relation name capture database, schema and identifier
             self.__base_attr__.relation_name == other_source.__base_attr__.relation_name
+                && self.__base_attr__.database == other_source.__base_attr__.database
+                && self.__base_attr__.schema == other_source.__base_attr__.schema
+                && self.__base_attr__.quoting == other_source.__base_attr__.quoting
                 && self.__common_attr__.fqn == other_source.__common_attr__.fqn
-                //TODO: uncomment this when we have a way to compare the config
-                // && self.deprecated_config == other_source.deprecated_config
-                // && self.base_attr.quoting == other_source.base_attr.quoting
+                && self.has_same_config(other)
                 && self.__source_attr__.loader == other_source.__source_attr__.loader
         } else {
             false
@@ -809,14 +1095,25 @@ impl InternalDbtNode for DbtSnapshot {
         }
     }
 
-    fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
-        // TODO: support snapshot state comparison by generate the same hash.
-        true
-        // if let Some(other_snapshot) = other.as_any().downcast_ref::<DbtSnapshot>() {
-        //     self.common_attr.checksum == other_snapshot.common_attr.checksum
-        // } else {
-        //     false
-        // }
+    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+        if let Some(other_snapshot) = other.as_any().downcast_ref::<DbtSnapshot>() {
+            // Equivalent to dbt-core's same_contents method for ParsedNode
+            same_body(&self.__common_attr__, &other_snapshot.__common_attr__)
+                && self.has_same_config(other)
+                && same_persisted_description(
+                    &self.__common_attr__,
+                    &self.__base_attr__,
+                    &other_snapshot.__common_attr__,
+                    &other_snapshot.__base_attr__,
+                )
+                && same_fqn(&self.__common_attr__, &other_snapshot.__common_attr__)
+                && same_database_representation(&self.__base_attr__, &other_snapshot.__base_attr__)
+            // For snapshots, same_contract always returns true in dbt-core,
+            // so we do not need to do a contract check for snapshots.
+            // See: https://github.com/dbt-labs/dbt-core/blob/main/core/dbt/contracts/graph/nodes.py#L374
+        } else {
+            false
+        }
     }
 
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
@@ -920,8 +1217,29 @@ impl InternalDbtNode for DbtSemanticModel {
         }
     }
 
-    fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
-        unimplemented!("semantic model content comparison")
+    // This function only compares a subset of the DbSemanticModel node, similar to what
+    // dbt-core does in SemanticModel.same_contents(). See:
+    // https://github.com/dbt-labs/dbt-core/blob/906e07c1f2161aaf8873f17ba323221a3cf48c9f/core/dbt/contracts/graph/nodes.py#L1585-L1602
+    // TODO: group is not compared while it is in dbt-core. SemanticModel group is not implemented in dbt-fusion.
+    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+        if let Some(other_semantic_model) = other.as_any().downcast_ref::<DbtSemanticModel>() {
+            self.has_same_config(other)
+                && self.__semantic_model_attr__.model
+                    == other_semantic_model.__semantic_model_attr__.model
+                && self.__common_attr__.description
+                    == other_semantic_model.__common_attr__.description
+                && self.__semantic_model_attr__.entities
+                    == other_semantic_model.__semantic_model_attr__.entities
+                && self.__semantic_model_attr__.dimensions
+                    == other_semantic_model.__semantic_model_attr__.dimensions
+                && self.__semantic_model_attr__.measures
+                    == other_semantic_model.__semantic_model_attr__.measures
+                && self.deprecated_config == other_semantic_model.deprecated_config
+                && self.__semantic_model_attr__.primary_entity
+                    == other_semantic_model.__semantic_model_attr__.primary_entity
+        } else {
+            false
+        }
     }
 
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
@@ -963,6 +1281,10 @@ impl InternalDbtNode for DbtExposure {
         if let Some(other_exposure) = other.as_any().downcast_ref::<DbtExposure>() {
             self.__common_attr__.name == other_exposure.__common_attr__.name
                 && self.__common_attr__.fqn == other_exposure.__common_attr__.fqn
+                && self.__exposure_attr__.owner == other_exposure.__exposure_attr__.owner
+                && self.__exposure_attr__.maturity == other_exposure.__exposure_attr__.maturity
+                && self.__exposure_attr__.url == other_exposure.__exposure_attr__.url
+                && self.__exposure_attr__.label == other_exposure.__exposure_attr__.label
         } else {
             false
         }
@@ -1035,8 +1357,22 @@ impl InternalDbtNode for DbtSavedQuery {
             false
         }
     }
-    fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
-        unimplemented!("semantic model content comparison")
+    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+        if let Some(other_saved_query) = other.as_any().downcast_ref::<DbtSavedQuery>() {
+            self.has_same_config(other)
+                && self.__common_attr__.description == other_saved_query.__common_attr__.description
+                && self.__common_attr__.fqn == other_saved_query.__common_attr__.fqn
+                && self.__saved_query_attr__.label == other_saved_query.__saved_query_attr__.label
+                && self.__common_attr__.tags == other_saved_query.__common_attr__.tags
+                && self.__saved_query_attr__.exports
+                    == other_saved_query.__saved_query_attr__.exports
+                && self.__saved_query_attr__.query_params.group_by
+                    == other_saved_query.__saved_query_attr__.query_params.group_by
+                && self.__saved_query_attr__.query_params.where_
+                    == other_saved_query.__saved_query_attr__.query_params.where_
+        } else {
+            false
+        }
     }
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
         panic!("DbtSavedQuery does not support setting detected_unsafe");
@@ -1078,9 +1414,18 @@ impl InternalDbtNode for DbtMetric {
             false
         }
     }
+    // This function only compares a subset of the DbMetric node, similar to what
+    // dbt-core does in Metric.same_contents(). See:
+    // https://github.com/dbt-labs/dbt-core/blob/906e07c1f2161aaf8873f17ba323221a3cf48c9f/core/dbt/contracts/graph/nodes.py#L1496-L1511
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_metric) = other.as_any().downcast_ref::<DbtMetric>() {
-            self.__common_attr__.checksum == other_metric.__common_attr__.checksum
+            self.has_same_config(other)
+                && self.__metric_attr__.filter == other_metric.__metric_attr__.filter
+                && self.__metric_attr__.metadata == other_metric.__metric_attr__.metadata
+                && self.__metric_attr__.type_params == other_metric.__metric_attr__.type_params
+                && self.__common_attr__.description == other_metric.__common_attr__.description
+                && self.__common_attr__.fqn == other_metric.__common_attr__.fqn
+                && self.__metric_attr__.label == other_metric.__metric_attr__.label
         } else {
             false
         }
@@ -1115,8 +1460,12 @@ impl InternalDbtNode for DbtMacro {
     fn has_same_config(&self, _other: &dyn InternalDbtNode) -> bool {
         unimplemented!("macro config comparison")
     }
-    fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
-        unimplemented!("macro content comparison")
+    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+        if let Some(other_macro) = other.as_any().downcast_ref::<DbtMacro>() {
+            self.macro_sql == other_macro.macro_sql
+        } else {
+            false
+        }
     }
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
         panic!("DbtMacro does not support setting detected_unsafe");
@@ -1929,6 +2278,359 @@ pub struct DbtModel {
     pub deprecated_config: ModelConfig,
 
     pub __other__: BTreeMap<String, YmlValue>,
+}
+
+impl DbtModel {
+    pub fn same_contract(&self, old: &DbtModel) -> bool {
+        match (&self.__model_attr__.contract, &old.__model_attr__.contract) {
+            (Some(current_contract), Some(old_contract)) => {
+                self.same_contract_both_present(old, old_contract, current_contract)
+            }
+            (Some(_self_contract), None) => false,
+            (None, Some(old_contract)) => self.same_contract_removed(old, old_contract),
+            (None, None) => true,
+        }
+    }
+
+    // If a previous state contract and current state contract are both present,
+    // compare them for changes.
+    fn same_contract_both_present(
+        &self,
+        old: &DbtModel,
+        old_contract: &DbtContract,
+        current_contract: &DbtContract,
+    ) -> bool {
+        // Contract was not previously enforced
+        if !old_contract.enforced && !current_contract.enforced {
+            // No change -- same_contract: True
+            return true;
+        }
+        if !old_contract.enforced && current_contract.enforced {
+            // Now it's enforced. This is a change, but not a breaking change -- same_contract: False
+            return false;
+        }
+
+        // Otherwise: The contract was previously enforced, and we need to check for changes.
+        // Happy path: The contract is still being enforced, and the checksums are identical.
+        if current_contract.enforced && current_contract.checksum == old_contract.checksum {
+            // No change -- same_contract: True
+            return true;
+        }
+
+        // Otherwise: There has been a change.
+        // We need to determine if it is a **breaking** change.
+        // These are the categories of breaking changes:
+        let mut contract_enforced_disabled: bool = false;
+        let mut columns_removed: Vec<String> = Vec::new();
+        let mut column_type_changes: Vec<BTreeMap<String, String>> = Vec::new();
+        let mut enforced_column_constraint_removed: Vec<BTreeMap<String, YmlValue>> = Vec::new(); // column_name, constraint_type
+        let mut enforced_model_constraint_removed: Vec<BTreeMap<String, YmlValue>> = Vec::new(); // constraint_type, columns
+        let mut materialization_changed: Vec<String> = Vec::new();
+
+        if old_contract.enforced && !current_contract.enforced {
+            // Breaking change: the contract was previously enforced, and it no longer is
+            contract_enforced_disabled = true;
+        }
+        let mut column_constraints_exist: bool = false;
+
+        // Helper function to check if materialization enforces constraints
+        let materialization_enforces_constraints = |mat: &DbtMaterialization| -> bool {
+            matches!(
+                mat,
+                DbtMaterialization::Table | DbtMaterialization::Incremental
+            )
+        };
+
+        // Next, compare each column from the previous contract (old.columns)
+        for (old_key, old_value) in old.__base_attr__.columns.iter() {
+            // Has this column been removed?
+            if !self.__base_attr__.columns.contains_key(old_key) {
+                columns_removed.push(old_value.name.clone());
+            }
+            // Has this column's data type changed?
+            else if let Some(current_column) = self.__base_attr__.columns.get(old_key) {
+                if old_value.data_type != current_column.data_type {
+                    let mut type_change = BTreeMap::new();
+                    type_change.insert("column_name".to_string(), old_value.name.clone());
+                    type_change.insert(
+                        "previous_column_type".to_string(),
+                        old_value
+                            .data_type
+                            .as_ref()
+                            .unwrap_or(&"unknown".to_string())
+                            .clone(),
+                    );
+                    type_change.insert(
+                        "current_column_type".to_string(),
+                        current_column
+                            .data_type
+                            .as_ref()
+                            .unwrap_or(&"unknown".to_string())
+                            .clone(),
+                    );
+                    column_type_changes.push(type_change);
+                }
+            }
+
+            // track if there are any column level constraints for the materialization check later
+            if !old_value.constraints.is_empty() {
+                column_constraints_exist = true;
+            }
+
+            // Have enforced columns level constraints changed?
+            // Constraints are only enforced for table and incremental materializations.
+            // We only really care if the old node was one of those materializations for breaking changes
+            if let Some(current_column) = self.__base_attr__.columns.get(old_key) {
+                if old_value.constraints != current_column.constraints
+                    && materialization_enforces_constraints(&old.materialized())
+                {
+                    for old_constraint in &old_value.constraints {
+                        if !current_column.constraints.contains(old_constraint) {
+                            let mut constraint_removed = BTreeMap::new();
+                            constraint_removed.insert(
+                                "column_name".to_string(),
+                                YmlValue::string(old_key.clone()),
+                            );
+                            constraint_removed.insert(
+                                "constraint_name".to_string(),
+                                YmlValue::string(old_constraint.name.clone().unwrap_or_default()),
+                            );
+                            constraint_removed.insert(
+                                "constraint_type".to_string(),
+                                YmlValue::string(format!("{:?}", old_constraint.type_)),
+                            );
+                            enforced_column_constraint_removed.push(constraint_removed);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Now compare the model level constraints
+        if old.__model_attr__.constraints != self.__model_attr__.constraints
+            && materialization_enforces_constraints(&old.materialized())
+        {
+            for old_constraint in &old.__model_attr__.constraints {
+                if !self.__model_attr__.constraints.contains(old_constraint) {
+                    let mut constraint_removed = BTreeMap::new();
+                    constraint_removed.insert(
+                        "constraint_name".to_string(),
+                        YmlValue::string(old_constraint.name.clone().unwrap_or_default()),
+                    );
+                    constraint_removed.insert(
+                        "constraint_type".to_string(),
+                        YmlValue::string(format!("{:?}", old_constraint.type_)),
+                    );
+                    enforced_model_constraint_removed.push(constraint_removed);
+                }
+            }
+        }
+
+        // Check for relevant materialization changes.
+        if materialization_enforces_constraints(&old.materialized())
+            && !materialization_enforces_constraints(&self.materialized())
+            && (!old.__model_attr__.constraints.is_empty() || column_constraints_exist)
+        {
+            materialization_changed = vec![
+                format!("{:?}", old.materialized()),
+                format!("{:?}", self.materialized()),
+            ];
+        }
+
+        // If a column has been added, it will be missing in the old.columns, and present in self.columns
+        // That's a change (caught by the different checksums), but not a breaking change
+
+        // Did we find any changes that we consider breaking? If there's an enforced contract, that's
+        // a warning unless the model is versioned, then it's an error.
+        if contract_enforced_disabled
+            || !columns_removed.is_empty()
+            || !column_type_changes.is_empty()
+            || !enforced_model_constraint_removed.is_empty()
+            || !enforced_column_constraint_removed.is_empty()
+            || !materialization_changed.is_empty()
+        {
+            let mut breaking_changes = Vec::new();
+
+            if contract_enforced_disabled {
+                breaking_changes.push(
+                        "Contract enforcement was removed: Previously, this model had an enforced contract. It is no longer configured to enforce its contract, and this is a breaking change.".to_string()
+                    );
+            }
+
+            if !columns_removed.is_empty() {
+                let columns_removed_str = columns_removed.join("\n    - ");
+                breaking_changes.push(format!(
+                    "Columns were removed: \n    - {columns_removed_str}"
+                ));
+            }
+
+            if !column_type_changes.is_empty() {
+                let column_type_changes_str = column_type_changes
+                    .iter()
+                    .map(|c| {
+                        format!(
+                            "{} ({} -> {})",
+                            c.get("column_name").unwrap_or(&"unknown".to_string()),
+                            c.get("previous_column_type")
+                                .unwrap_or(&"unknown".to_string()),
+                            c.get("current_column_type")
+                                .unwrap_or(&"unknown".to_string())
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n    - ");
+                breaking_changes.push(format!(
+                    "Columns with data_type changes: \n    - {column_type_changes_str}"
+                ));
+            }
+
+            if !enforced_column_constraint_removed.is_empty() {
+                let column_constraint_changes_str = enforced_column_constraint_removed
+                    .iter()
+                    .map(|c| {
+                        let constraint_name = c
+                            .get("constraint_name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_else(|| {
+                                c.get("constraint_type")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("unknown")
+                            });
+                        let column_name = c
+                            .get("column_name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown");
+                        format!("'{constraint_name}' constraint on column {column_name}")
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n    - ");
+                breaking_changes.push(format!(
+                        "Enforced column level constraints were removed: \n    - {column_constraint_changes_str}"
+                    ));
+            }
+
+            if !enforced_model_constraint_removed.is_empty() {
+                let model_constraint_changes_str = enforced_model_constraint_removed
+                    .iter()
+                    .map(|c| {
+                        let constraint_name = c
+                            .get("constraint_name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_else(|| {
+                                c.get("constraint_type")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("unknown")
+                            });
+                        let columns = c
+                            .get("columns")
+                            .and_then(|v| v.as_sequence())
+                            .map(|seq| {
+                                seq.iter()
+                                    .filter_map(|v| v.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            })
+                            .unwrap_or_else(|| "unknown".to_string());
+                        format!("'{constraint_name}' constraint on columns {columns}")
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n    - ");
+                breaking_changes.push(format!(
+                        "Enforced model level constraints were removed: \n    - {model_constraint_changes_str}"
+                    ));
+            }
+
+            if !materialization_changed.is_empty() {
+                let materialization_changes_str = format!(
+                    "{} -> {}",
+                    materialization_changed
+                        .first()
+                        .unwrap_or(&"unknown".to_string()),
+                    materialization_changed
+                        .get(1)
+                        .unwrap_or(&"unknown".to_string())
+                );
+                breaking_changes.push(format!(
+                        "Materialization changed with enforced constraints: \n    - {materialization_changes_str}"
+                    ));
+            }
+
+            // Generate warning or error depending on if the model is versioned
+            let reasons = breaking_changes.join("\n  - ");
+            if old.is_versioned() {
+                self.log_contract_breaking_change_error(&reasons, &old.__common_attr__.name);
+            } else {
+                self.log_unversioned_breaking_change_warning(
+                    &reasons,
+                    &old.__common_attr__.name,
+                    old.file_path(),
+                );
+            }
+        }
+        // Otherwise, the contract has changed -- same_contract: False
+        false
+    }
+    fn same_contract_removed(&self, old: &DbtModel, old_contract: &DbtContract) -> bool {
+        // If the contract wasn't previously enforced, no contract change has occurred
+        if !old_contract.enforced {
+            return true;
+        }
+        // Removed node is past its deprecation_date, so deletion does not constitute a contract change
+        if let Some(deprecation_date_str) = &old.__model_attr__.deprecation_date {
+            // Parse the deprecation date string using common formats
+            if let Ok(deprecation_date) =
+                chrono::NaiveDate::parse_from_str(deprecation_date_str, "%Y-%m-%d")
+            {
+                let deprecation_datetime = deprecation_date.and_hms_opt(0, 0, 0).unwrap();
+                if deprecation_datetime < Utc::now().naive_utc() {
+                    return true;
+                }
+            }
+        }
+
+        // Disabled, deleted, or renamed node with previously enforced contract.
+        let breaking_change = if old.__base_attr__.enabled {
+            format!(
+                "Contracted model '{}' was deleted or renamed.",
+                old.__common_attr__.unique_id
+            )
+        } else {
+            format!(
+                "Contracted model '{}' was disabled.",
+                old.__common_attr__.unique_id
+            )
+        };
+
+        self.log_contract_breaking_change_error(&breaking_change, &old.__common_attr__.name);
+
+        // Otherwise, the contract has changed -- same_contract: False
+        false
+    }
+
+    fn log_contract_breaking_change_error(&self, breaking_change: &String, node_name: &String) {
+        let error_message = format!(
+            "While comparing to previous project state, dbt detected a breaking change to an enforced contract.\n  - {breaking_change}\n\
+            Consider making an additive (non-breaking) change instead, if possible.\n\
+            Otherwise, create a new model version: https://docs.getdbt.com/docs/collaborate/govern/model-versions"
+        );
+
+        log::error!("Breaking Change to Contract for model '{node_name}': {error_message}");
+    }
+
+    fn log_unversioned_breaking_change_warning(
+        &self,
+        breaking_change: &String,
+        node_name: &String,
+        file_path: String,
+    ) {
+        let warning_message = format!(
+            "Breaking change to contracted, unversioned model {node_name} ({file_path})\
+            \nWhile comparing to previous project state, dbt detected a breaking change to an unversioned model.\
+            \n  - {breaking_change}\n"
+        );
+
+        log::warn!("{warning_message}");
+    }
 }
 
 #[skip_serializing_none]

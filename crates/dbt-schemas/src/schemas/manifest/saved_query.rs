@@ -51,7 +51,7 @@ pub struct SavedQueryParams {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct SavedQueryExport {
     pub name: String,
     pub config: SavedQueryExportConfig,
@@ -59,7 +59,7 @@ pub struct SavedQueryExport {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct SavedQueryExportConfig {
     pub export_as: ExportConfigExportAs,
     pub schema_name: Option<String>,
