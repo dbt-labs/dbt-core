@@ -186,7 +186,8 @@ pub(crate) async fn download_publication_artifacts(
         if !response.status().is_success() {
             return Err(fs_err!(
                 ErrorCode::IoError,
-                "Failed to download publication artifact: HTTP status {}",
+                "Failed to download publication artifact from {}: HTTP status {}",
+                url,
                 response.status()
             ));
         }

@@ -164,8 +164,9 @@ pub async fn hydrate_or_download_manifest_from_cloud(
                 io,
                 fs_err!(
                     ErrorCode::Generic,
-                    "Failed to request deferral manifest from the dbt platform for project {}, continuing without deferral. Error: {}",
+                    "Failed to request deferral manifest from the dbt platform for project {}, continuing without deferral. URL: {}, Error: {}",
                     project_id,
+                    url,
                     e
                 )
             );
