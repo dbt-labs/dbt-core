@@ -7,7 +7,7 @@ from dbt.contracts.graph.nodes import FunctionNode
 from dbt.tests.util import run_dbt
 
 area_of_circle_sql = """
-pi() * radius * radius
+SELECT pi() * radius * radius
 """
 
 area_of_circle_yml = """
