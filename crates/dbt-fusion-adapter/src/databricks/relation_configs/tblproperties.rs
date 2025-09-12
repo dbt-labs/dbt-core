@@ -35,6 +35,9 @@ pub const IGNORE_LIST: &[&str] = &[
     "delta.rowTracking.materializedRowIdColumnName",
     "spark.internal.pipelines.top_level_entry.user_specified_name",
     "delta.columnMapping.maxColumnId",
+    "spark.sql.internal.pipelines.parentTableId",
+    "delta.enableDeletionVectors",
+    "delta.feature.deletionVectors",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

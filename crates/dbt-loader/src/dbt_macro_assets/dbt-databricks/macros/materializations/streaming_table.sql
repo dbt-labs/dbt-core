@@ -34,6 +34,7 @@
         {% set on_configuration_change = config.get('on_configuration_change', 'apply') %}
         {% set configuration_changes = get_streaming_table_configuration_changes(existing_relation, config) %}
         {% if configuration_changes is none %}
+            {{ log("REFRESHING STREAMING TABLE: " ~ target_relation) }}
             {% set build_sql = refresh_streaming_table(target_relation, sql) %}
 
         {% elif on_configuration_change == 'apply' %}

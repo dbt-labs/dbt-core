@@ -12,7 +12,7 @@ use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use minijinja::Value;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, Serialize, Deserialize)]
 pub struct RefreshConfig {
     pub cron: Option<String>,
     pub time_zone_value: Option<String>,
@@ -38,6 +38,19 @@ impl RefreshConfig {
         } else {
             None
         }
+    }
+}
+
+impl PartialEq for RefreshConfig {
+    // Reference: https://github.com/databricks/dbt-databricks/blob/87073fe7f26bede434a3bd783717a6e49d35893f/dbt/adapters/databricks/relation_configs/refresh.py#L28
+    fn eq(&self, other: &Self) -> bool {
+        self.cron == other.cron
+            && (self.time_zone_value == other.time_zone_value
+                || (self.time_zone_value.is_none()
+                    && other
+                        .time_zone_value
+                        .as_ref()
+                        .is_some_and(|value| value.to_lowercase().contains("utc"))))
     }
 }
 
