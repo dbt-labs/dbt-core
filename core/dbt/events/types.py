@@ -2058,6 +2058,31 @@ class LogBatchResult(DynamicLevel):
         return f"Batch {formatted}"
 
 
+class LogFunctionResult(DynamicLevel):
+    def code(self) -> str:
+        return "Q047"
+
+    def message(self) -> str:
+        if self.status == "error":
+            info = "ERROR creating"
+            status = red(self.status.upper())
+        elif self.status == "skipped":
+            info = "SKIP"
+            status = yellow(self.status.upper())
+        else:
+            info = "OK created"
+            status = green(self.status)
+
+        msg = f"{info} {self.description}"
+        return format_fancy_output_line(
+            msg=msg,
+            status=status,
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+        )
+
+
 # =======================================================
 # W - Node testing
 # =======================================================

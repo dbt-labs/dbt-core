@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional, Type
 
 from dbt.artifacts.resources import (
     ExposureConfig,
+    FunctionConfig,
     GroupConfig,
     MetricConfig,
     ModelConfig,
@@ -52,6 +53,7 @@ RESOURCE_TYPES: Dict[NodeType, Type[BaseConfig]] = {
     NodeType.Snapshot: SnapshotConfig,
     NodeType.Unit: UnitTestConfig,
     NodeType.Group: GroupConfig,
+    NodeType.Function: FunctionConfig,
 }
 
 

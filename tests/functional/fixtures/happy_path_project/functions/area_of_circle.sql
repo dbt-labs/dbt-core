@@ -1,1 +1,1 @@
-pi() * radius * radius
+SELECT pi() * radius * radius

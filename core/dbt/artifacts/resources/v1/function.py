@@ -13,7 +13,9 @@ from dbt_common.dataclass_schema import dbtClassMixin
 
 @dataclass
 class FunctionConfig(NodeConfig):
-    pass
+    # The fact that this is a property, that can be changed, seems wrong.
+    # A function's materialization should never be changed, so why allow for it?
+    materialized: str = "function"
 
 
 # =============

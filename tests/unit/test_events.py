@@ -456,6 +456,13 @@ sample_values = [
         total_batches=0,
         execution_time=0,
     ),
+    core_types.LogFunctionResult(
+        description="",
+        status="",
+        index=0,
+        total=0,
+        execution_time=0,
+    ),
     # W - Node testing ======================
     core_types.CatchableExceptionOnRun(exc=""),
     core_types.InternalErrorOnRun(build_path="", exc=""),

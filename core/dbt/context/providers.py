@@ -56,6 +56,7 @@ from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
 from dbt.contracts.graph.nodes import (
     AccessType,
     Exposure,
+    FunctionNode,
     Macro,
     ManifestNode,
     ModelNode,
@@ -1791,6 +1792,14 @@ class UnitTestContext(ModelContext):
         return None
 
 
+class FunctionContext(ModelContext):
+    model: FunctionNode
+
+    @contextproperty()
+    def this(self) -> Optional[RelationProxy]:
+        return self.db_wrapper.Relation.create_from(self.config, self.model)
+
+
 # This is called by '_context_for', used in 'render_with_context'
 def generate_parser_model_context(
     model: ManifestNode,
@@ -1886,6 +1895,15 @@ def generate_runtime_unit_test_context(
                 ctx_dict["dbt"][macro_name] = macro_override_value
 
     return ctx_dict
+
+
+def generate_runtime_function_context(
+    function: FunctionNode,
+    config: RuntimeConfig,
+    manifest: Manifest,
+) -> Dict[str, Any]:
+    ctx = FunctionContext(function, config, manifest, OperationProvider(), None)
+    return ctx.to_dict()
 
 
 class ExposureRefResolver(BaseResolver):

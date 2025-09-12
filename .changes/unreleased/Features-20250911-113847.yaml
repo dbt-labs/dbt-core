@@ -1,0 +1,6 @@
+kind: Features
+body: Handle creation of function nodes during DAG execution
+time: 2025-09-11T11:38:47.780819-07:00
+custom:
+  Author: QMalcolm
+  Issue: "11965"
