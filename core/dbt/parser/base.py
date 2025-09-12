@@ -390,15 +390,18 @@ class ConfiguredParser(
 
         if get_flags().state_modified_compare_more_unrendered_values:
             # Use the patch_file.unrendered_configs if available to update patch_dict_config,
-            # as provided patch_config_dict may actuallly already be rendered and thus sensitive to jinja evaluations
+            # as provided patch_config_dict may actually already be rendered and thus sensitive to jinja evaluations
             if patch_file_id:
                 patch_file = self.manifest.files.get(patch_file_id, None)
                 if patch_file and isinstance(patch_file, SchemaSourceFile):
-                    schema_key = resource_types_to_schema_file_keys[parsed_node.resource_type]
-                    if unrendered_patch_config := patch_file.get_unrendered_config(
-                        schema_key, parsed_node.name, getattr(parsed_node, "version", None)
-                    ):
-                        patch_config_dict = deep_merge(patch_config_dict, unrendered_patch_config)
+                    schema_key = resource_types_to_schema_file_keys.get(parsed_node.resource_type)
+                    if schema_key:
+                        if unrendered_patch_config := patch_file.get_unrendered_config(
+                            schema_key, parsed_node.name, getattr(parsed_node, "version", None)
+                        ):
+                            patch_config_dict = deep_merge(
+                                patch_config_dict, unrendered_patch_config
+                            )
 
         # unrendered_config is used to compare the original database/schema/alias
         # values and to handle 'same_config' and 'same_contents' calls

@@ -3,6 +3,7 @@ analysis-paths:
 config-version: 2
 flags:
   send_anonymous_usage_stats: false
+  state_modified_compare_more_unrendered_values: true
 macro-paths:
 - macros
 name: test

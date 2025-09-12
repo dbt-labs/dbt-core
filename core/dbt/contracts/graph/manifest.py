@@ -1165,6 +1165,7 @@ class Manifest(MacroMethods, dbtClassMixin):
                 selector_id: selector
                 for selector_id, selector in writable_manifest.selectors.items()
             },
+            metadata=writable_manifest.metadata,
         )
 
         return manifest

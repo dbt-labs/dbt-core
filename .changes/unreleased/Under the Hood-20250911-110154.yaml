@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Introduce dbt_version-based manifest json upgrade framework to avoid state:modified false positives on minor evolutions
+time: 2025-09-11T11:01:54.180698-04:00
+custom:
+    Author: michelleark
+    Issue: "12006"

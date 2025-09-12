@@ -181,3 +181,11 @@ def get_artifact_schema_version(dct: dict) -> int:
     # 4. Convert to int
     # TODO: If this gets more complicated, turn into a regex
     return int(schema_version.split("/")[-1].split(".")[0][1:])
+
+
+def get_artifact_dbt_version(dct: dict) -> Optional[str]:
+    dbt_version = dct.get("metadata", {}).get("dbt_version", None)
+    if dbt_version is None:
+        return None
+
+    return str(dbt_version)
