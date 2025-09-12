@@ -505,6 +505,49 @@ sources:
 
 """
 
+freshness_via_custom_sql_config_schema_yml = """version: 2
+sources:
+  - name: test_source
+    config:
+      freshness:
+        warn_after: {count: 10, period: hour}
+    schema: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}"
+    quoting:
+      identifier: True
+    tags:
+      - my_test_source_tag
+    tables:
+      - name: source_a
+        identifier: source
+        loaded_at_field: "{{ var('test_loaded_at') | as_text }}"
+      - name: source_b
+        identifier: source
+        config:
+          loaded_at_query: "select max({{ var('test_loaded_at') | as_text }}) from {{this}}"
+      - name: source_c
+        identifier: source
+        config:
+          loaded_at_query: "select {{current_timestamp()}}"
+"""
+
+freshness_via_custom_sql_source_config_schema_yml = """version: 2
+sources:
+  - name: test_source
+    config:
+      freshness:
+        warn_after: {count: 10, period: hour}
+      loaded_at_query: "select {{current_timestamp()}}"
+    schema: "{{ var(env_var('DBT_TEST_SCHEMA_NAME_VARIABLE')) }}"
+    quoting:
+      identifier: True
+    tags:
+      - my_test_source_tag
+    tables:
+      - name: source_c
+        identifier: source
+"""
+
+
 freshness_with_explicit_null_in_table_schema_yml = """version: 2
 sources:
   - name: test_source

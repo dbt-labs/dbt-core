@@ -18,7 +18,9 @@ from tests.functional.sources.fixtures import (
     error_models_model_sql,
     error_models_schema_yml,
     filtered_models_schema_yml,
+    freshness_via_custom_sql_config_schema_yml,
     freshness_via_custom_sql_schema_yml,
+    freshness_via_custom_sql_source_config_schema_yml,
     freshness_via_metadata_schema_yml,
     freshness_with_explicit_null_in_source_schema_yml,
     freshness_with_explicit_null_in_table_schema_yml,
@@ -599,6 +601,24 @@ class TestSourceFreshnessCustomSQL(SuccessfulSourceFreshnessTest):
         assert {r.node.name: r.status for r in result} == {
             "source_a": "warn",
             "source_b": "warn",
+            "source_c": "pass",
+        }
+
+
+class TestSourceFreshnessCustomSQLConfig(TestSourceFreshnessCustomSQL):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"schema.yml": freshness_via_custom_sql_config_schema_yml}
+
+
+class TestSourceFreshnessCustomSQLSourceConfig(SuccessfulSourceFreshnessTest):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"schema.yml": freshness_via_custom_sql_source_config_schema_yml}
+
+    def test_source_freshness_custom_sql(self, project):
+        result = self.run_dbt_with_vars(project, ["source", "freshness"], expect_pass=True)
+        assert {r.node.name: r.status for r in result} == {
             "source_c": "pass",
         }
 
