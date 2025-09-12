@@ -41,7 +41,7 @@ impl From<DbtSemanticModel> for SemanticManifestSemanticModel {
 
             // TODO: make sure these are supposed to be empty for backward compatibility
             defaults: None,
-            measures: vec![],
+            measures: vec![], // Do NOT map from DbtSemanticModel.measures, that's only for manifest.json
             metadata: None,
         }
     }

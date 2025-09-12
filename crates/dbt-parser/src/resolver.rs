@@ -12,9 +12,12 @@ use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::phases::parse::build_resolve_context;
 use dbt_jinja_utils::phases::parse::init::initialize_parse_jinja_environment;
 use dbt_jinja_utils::refs_and_sources::{RefsAndSources, resolve_dependencies};
+use dbt_jinja_utils::serde::{into_typed_with_error, into_typed_with_jinja};
+use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::schemas::common::Access;
 use dbt_schemas::schemas::macros::build_macro_units;
+use dbt_schemas::schemas::properties::{MetricsProperties, ModelProperties};
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -49,6 +52,9 @@ use crate::resolve::resolve_tests::resolve_data_tests::resolve_data_tests;
 use crate::resolve::resolve_tests::resolve_unit_tests::resolve_unit_tests;
 
 use crate::resolve::resolve_selectors::resolve_final_selectors;
+
+// Type aliases for clarity
+type YmlValue = dbt_serde_yaml::Value;
 
 /// Entrypoint for the resolve phase.
 ///
@@ -399,6 +405,37 @@ pub async fn resolve_inner(
     let dbt_tests_dir = arg.io.out_dir.join(DBT_GENERIC_TESTS_DIR_NAME);
     stdfs::create_dir_all(&dbt_tests_dir)?;
 
+    let dependency_package_name = dependency_package_name_from_ctx(&jinja_env, &base_ctx);
+    let mut typed_models_properties: BTreeMap<String, ModelProperties> = BTreeMap::new();
+
+    for (model_name, minimal_model_props) in &min_properties.models {
+        // Extract metrics to be parsed separately because they are not supposed to be rendered with Jinja
+        let mut maybe_model_metrics_yml: Option<YmlValue> = None;
+        let mut model_yml = minimal_model_props.clone().schema_value;
+        if let Some(m) = model_yml.as_mapping_mut() {
+            maybe_model_metrics_yml = m.remove("metrics");
+        }
+
+        let mut typed_model_props: ModelProperties = into_typed_with_jinja(
+            &arg.io,
+            model_yml,
+            false,
+            &jinja_env,
+            &base_ctx,
+            &[],
+            dependency_package_name,
+        )?;
+
+        if let Some(model_metrics_yml) = maybe_model_metrics_yml {
+            let typed_model_metrics_props: Option<Vec<MetricsProperties>> =
+                into_typed_with_error(&arg.io, model_metrics_yml, false, None, None)?;
+
+            typed_model_props.metrics = typed_model_metrics_props;
+        }
+
+        typed_models_properties.insert(model_name.clone(), typed_model_props);
+    }
+
     // Resolve sources based on the dbt_state, database, schema, and project name
     let (sources, disabled_sources) = resolve_sources(
         arg,
@@ -467,6 +504,7 @@ pub async fn resolve_inner(
         dbt_state.root_project(),
         root_project_configs,
         &mut min_properties.models.clone(),
+        // TODO: pass in typed_models_properties
         database,
         schema,
         adapter_type,
@@ -519,11 +557,15 @@ pub async fn resolve_inner(
     nodes.exposures.extend(exposures);
     disabled_nodes.exposures.extend(disabled_exposures);
 
+    // dbg!(&nodes.clone().models);
+
     let (semantic_models, disabled_semantic_models) = resolve_semantic_models(
         arg,
         package,
         root_project_configs,
         &mut min_properties.models.clone(),
+        &typed_models_properties,
+        nodes.clone().models,
         package_name,
         &jinja_env,
         &base_ctx,
@@ -534,7 +576,10 @@ pub async fn resolve_inner(
         .semantic_models
         .extend(disabled_semantic_models);
 
-    let (metrics, disabled_metrics) = resolve_metrics().await?;
+    let (metrics, disabled_metrics) = resolve_metrics(
+        // TODO: pass in typed_models_properties
+    )
+    .await?;
     nodes.metrics.extend(metrics);
     disabled_nodes.metrics.extend(disabled_metrics);
 

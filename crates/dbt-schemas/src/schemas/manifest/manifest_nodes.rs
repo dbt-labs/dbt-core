@@ -14,17 +14,24 @@ use crate::schemas::{
     },
     dbt_column::DbtColumnRef,
     manifest::{
-        DbtOperation, DbtSavedQuery,
+        DbtOperation, DbtSavedQuery, DbtSemanticModel,
         common::{DbtOwner, SourceFileMetadata, WhereFilterIntersection},
-        semantic_model::{NodeRelation, SemanticEntity, SemanticMeasure, SemanticModelDefaults},
+        semantic_model::{
+            MeasureAggregationParameters, NodeRelation, SemanticEntity, SemanticMeasure,
+            SemanticModelDefaults,
+        },
     },
     nodes::TestMetadata,
     project::{
         DataTestConfig, ExposureConfig, MetricConfig, ModelConfig, SavedQueryConfig, SeedConfig,
         SemanticModelConfig, SnapshotConfig, SourceConfig, UnitTestConfig,
     },
-    properties::{ModelConstraint, UnitTestOverrides},
+    properties::{
+        ModelConstraint, UnitTestOverrides,
+        metrics_properties::{AggregationType, NonAdditiveDimension, WindowChoice},
+    },
     ref_and_source::{DbtRef, DbtSourceWrapper},
+    semantic_layer::semantic_manifest::SemanticLayerElementConfig,
     serde::{StringOrArrayOfStrings, StringOrInteger},
 };
 
@@ -720,7 +727,7 @@ pub struct ManifestSemanticModel {
     pub label: Option<String>,
     pub defaults: Option<SemanticModelDefaults>,
     pub entities: Vec<SemanticEntity>,
-    pub measures: Vec<SemanticMeasure>,
+    pub measures: Vec<ManifestSemanticModelMeasure>,
     pub dimensions: Vec<crate::schemas::common::Dimension>,
     pub metadata: Option<SourceFileMetadata>,
     pub primary_entity: Option<String>,
@@ -729,6 +736,97 @@ pub struct ManifestSemanticModel {
     pub config: ManifestSemanticModelConfig,
 
     pub __other__: BTreeMap<String, YmlValue>,
+}
+
+impl From<DbtSemanticModel> for ManifestSemanticModel {
+    fn from(semantic_model: DbtSemanticModel) -> Self {
+        Self {
+            __common_attr__: ManifestCommonAttributes {
+                unique_id: semantic_model.__common_attr__.unique_id,
+                name: semantic_model.__common_attr__.name,
+                package_name: semantic_model.__common_attr__.package_name,
+                fqn: semantic_model.__common_attr__.fqn,
+                path: semantic_model.__common_attr__.path,
+                original_file_path: semantic_model.__common_attr__.original_file_path,
+                description: semantic_model.__common_attr__.description,
+                tags: semantic_model.__common_attr__.tags,
+                meta: semantic_model.__common_attr__.meta,
+            },
+            __base_attr__: ManifestSemanticModelNodeBaseAttributes {
+                depends_on: semantic_model.__semantic_model_attr__.depends_on,
+                refs: semantic_model.__semantic_model_attr__.refs,
+                unrendered_config: semantic_model.__semantic_model_attr__.unrendered_config,
+                created_at: semantic_model.__semantic_model_attr__.created_at,
+            },
+            label: semantic_model.__semantic_model_attr__.label,
+            metadata: semantic_model.__semantic_model_attr__.metadata,
+            group: semantic_model.__semantic_model_attr__.group,
+            config: semantic_model.deprecated_config.into(),
+            __other__: semantic_model.__other__,
+            model: semantic_model.__semantic_model_attr__.model,
+            node_relation: semantic_model.__semantic_model_attr__.node_relation,
+            defaults: semantic_model.__semantic_model_attr__.defaults,
+            entities: semantic_model.__semantic_model_attr__.entities,
+            measures: semantic_model
+                .__semantic_model_attr__
+                .measures
+                .into_iter()
+                .map(ManifestSemanticModelMeasure::from)
+                .collect(),
+            dimensions: semantic_model.__semantic_model_attr__.dimensions,
+            primary_entity: semantic_model.__semantic_model_attr__.primary_entity,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManifestNonAdditiveDimension {
+    pub name: String,
+    pub window_choice: WindowChoice,
+    pub window_groupings: Option<Vec<String>>,
+}
+
+impl From<NonAdditiveDimension> for ManifestNonAdditiveDimension {
+    fn from(dim: NonAdditiveDimension) -> Self {
+        Self {
+            name: dim.name,
+            window_choice: dim.window_agg,
+            window_groupings: dim.group_by,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManifestSemanticModelMeasure {
+    pub name: String,
+    pub agg: AggregationType,
+    pub description: Option<String>,
+    pub label: Option<String>,
+    pub create_metric: Option<bool>,
+    pub expr: Option<String>,
+    pub agg_params: Option<MeasureAggregationParameters>,
+    pub non_additive_dimension: Option<ManifestNonAdditiveDimension>,
+    pub agg_time_dimension: Option<String>,
+    pub config: Option<SemanticLayerElementConfig>,
+}
+
+impl From<SemanticMeasure> for ManifestSemanticModelMeasure {
+    fn from(measure: SemanticMeasure) -> Self {
+        Self {
+            name: measure.name,
+            agg: measure.agg,
+            description: measure.description,
+            label: measure.label,
+            create_metric: measure.create_metric,
+            expr: measure.expr,
+            agg_params: measure.agg_params,
+            non_additive_dimension: measure
+                .non_additive_dimension
+                .map(ManifestNonAdditiveDimension::from),
+            agg_time_dimension: measure.agg_time_dimension,
+            config: measure.config,
+        }
+    }
 }
 
 #[skip_serializing_none]

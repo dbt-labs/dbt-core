@@ -145,7 +145,7 @@ pub mod schemas {
     pub mod properties {
         mod data_test_properties;
         mod exposure_properties;
-        pub(crate) mod metrics_properties;
+        pub mod metrics_properties;
         mod model_properties;
         #[allow(clippy::module_inception)]
         mod properties;

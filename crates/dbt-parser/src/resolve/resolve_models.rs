@@ -66,7 +66,7 @@ pub async fn resolve_models(
     package_quoting: DbtQuoting,
     root_project: &DbtProject,
     root_project_configs: &RootProjectConfigs,
-    model_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
+    models_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     database: &str,
     schema: &str,
     adapter_type: AdapterType,
@@ -126,13 +126,33 @@ pub async fn resolve_models(
         runtime_config: runtime_config.clone(),
     };
 
+    // HACK: strip semantic resources out of all model properties
+    // this is because semantic resources have fields that have jinja expressions
+    // but should not be rendered (they are hydrated verbatim in manifest.json)
+    //
+    // This is a hack because we treat models and models.metrics differently in an attempt
+    // for only-once parsing of model yaml properties in resolver.rs, which duplicates the knowledge
+    // that you must treat them separately, such as the removal of semantic properties here.
+    let mut models_properties_sans_semantics: BTreeMap<String, MinimalPropertiesEntry> =
+        BTreeMap::new();
+    models_properties.iter().for_each(|(model_key, v)| {
+        let mut v = v.clone();
+        v.schema_value.as_mapping_mut().map(|m| {
+            m.remove("metrics");
+            // derived semantics shouldn't have jinja, but also has no use in this function
+            m.remove("derived_semantics")
+        });
+
+        models_properties_sans_semantics.insert(model_key.clone(), v);
+    });
+
     let mut model_sql_resources_map: Vec<SqlFileRenderResult<ModelConfig, ModelProperties>> =
         // FIXME -- this attempts to deserialize the model properties
         // and renders jinja but we shouldn't be doing so with metrics.filter
         render_unresolved_sql_files::<ModelConfig, ModelProperties>(
             &render_ctx,
             &package.model_sql_files,
-            model_properties,
+            &mut models_properties_sans_semantics,
             token,
         )
         .await?;
@@ -165,16 +185,16 @@ pub async fn resolve_models(
             model_config.materialized = Some(DbtMaterialization::View);
         }
 
-        let model_name = model_properties
+        let model_name = models_properties_sans_semantics
             .get(ref_name)
             .map(|mpe| mpe.name.clone())
             .unwrap_or_else(|| ref_name.to_owned());
 
-        let maybe_version = model_properties
+        let maybe_version = models_properties_sans_semantics
             .get(ref_name)
             .and_then(|mpe| mpe.version_info.as_ref().map(|v| v.version.clone()));
 
-        let maybe_latest_version = model_properties
+        let maybe_latest_version = models_properties_sans_semantics
             .get(ref_name)
             .and_then(|mpe| mpe.version_info.as_ref().map(|v| v.latest_version.clone()));
 
@@ -412,7 +432,7 @@ pub async fn resolve_models(
         }
     }
 
-    for (model_name, mpe) in model_properties.iter() {
+    for (model_name, mpe) in models_properties_sans_semantics.iter() {
         // Skip until we support better error messages for versioned models
         if mpe.version_info.is_some() {
             continue;

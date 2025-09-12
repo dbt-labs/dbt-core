@@ -4,18 +4,23 @@ use crate::utils::{get_node_fqn, get_original_file_path, get_unique_id};
 
 use dbt_common::FsResult;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
-use dbt_schemas::schemas::CommonAttributes;
 use dbt_schemas::schemas::common::{DbtChecksum, Dimension, DimensionTypeParams, NodeDependsOn};
 use dbt_schemas::schemas::dbt_column::{
     ColumnPropertiesDimension, ColumnPropertiesDimensionConfig, Entity, EntityConfig,
 };
 use dbt_schemas::schemas::manifest::semantic_model::{
-    DbtSemanticModel, DbtSemanticModelAttr, SemanticEntity,
+    DbtSemanticModel, DbtSemanticModelAttr, MeasureAggregationParameters, NodeRelation,
+    SemanticEntity, SemanticMeasure, SemanticModelDefaults,
 };
 use dbt_schemas::schemas::project::{DefaultTo, ModelConfig, SemanticModelConfig};
 use dbt_schemas::schemas::properties::ModelProperties;
+use dbt_schemas::schemas::properties::metrics_properties::{
+    AggregationType, MetricExpr, PercentileType,
+};
+use dbt_schemas::schemas::ref_and_source::DbtRef;
+use dbt_schemas::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfig;
+use dbt_schemas::schemas::{CommonAttributes, DbtModel, InternalDbtNodeAttributes};
 use dbt_schemas::state::DbtPackage;
 use minijinja::value::Value as MinijinjaValue;
 use std::collections::{BTreeMap, HashMap};
@@ -56,6 +61,8 @@ pub async fn resolve_semantic_models(
     package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
     minimal_model_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
+    typed_models_properties: &BTreeMap<String, ModelProperties>,
+    resolved_models: BTreeMap<String, Arc<DbtModel>>,
     package_name: &str,
     env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
@@ -91,34 +98,9 @@ pub async fn resolve_semantic_models(
         dependency_package_name,
     )?;
 
-    for (model_name, mpe) in minimal_model_properties.iter_mut() {
-        if mpe.schema_value.is_null() {
-            continue;
-        }
-
+    for (model_name, model_props) in typed_models_properties.iter() {
         // TODO: Do we need to validate semantic_model like how we validate
         // exposure names to only contain letters, numbers, and underscores?
-
-        let mut model_schema_value =
-            std::mem::replace(&mut mpe.schema_value, dbt_serde_yaml::Value::null());
-
-        // strip metrics out of model properties
-        // this is because metrics have fields that have jinja expressions
-        // but should not be rendered (they are hydrated verbatim in manifest.json)
-        if let Some(m) = model_schema_value.as_mapping_mut() {
-            m.remove("metrics");
-        }
-
-        // Parse the semantic_model properties from YAML
-        let model_props: ModelProperties = into_typed_with_jinja(
-            &args.io,
-            model_schema_value,
-            false,
-            env,
-            base_ctx,
-            &[],
-            dependency_package_name,
-        )?;
 
         if model_props.semantic_model.is_none() {
             continue;
@@ -127,23 +109,20 @@ pub async fn resolve_semantic_models(
             continue;
         }
 
+        let mpe = minimal_model_properties
+            .get(model_name)
+            .unwrap_or_else(|| panic!("ModelPropertiesEntry must exist for model '{model_name}'"));
+
         // TODO: These are reused from resolve_models, can probably refactor to implement methods in MinimalPropertiesEntry
         let model_maybe_version = mpe.version_info.as_ref().map(|v| v.version.clone());
-        // Model fqn includes v{version} for versioned models
-        let model_fqn_components = if let Some(version) = &model_maybe_version {
-            vec![model_name.to_owned(), format!("v{}", version)]
-        } else {
-            vec![model_name.to_owned()]
-        };
+        let model_unique_id = get_unique_id(model_name, package_name, model_maybe_version, "model");
 
-        // We only need to model_fqn if we need to reconcile model config with semantic model config
-        // but it seems like we may not be using `models.$.config` at all and instead using `models.$.semantic_models`
-        let _model_fqn = get_node_fqn(
-            package_name,
-            mpe.relative_path.clone(),
-            model_fqn_components,
-            &package.dbt_project.all_source_paths(),
-        );
+        // TODO: should we be panicking if model cannot be found?
+        // This would for example happen if you declare model yaml properties but not the sql itself
+        // or should we just silently skip hydrating the fields that depend on resolved_model?
+        let resolved_model = resolved_models
+            .get(&model_unique_id)
+            .unwrap_or_else(|| panic!("Cannot find resolved model '{model_unique_id}'"));
 
         // TODO: semantic_model_name may not always be equal to model_name in the future
         // TODO: if the underlying model has versions, which version is the semantic_model tied to?
@@ -169,8 +148,54 @@ pub async fn resolve_semantic_models(
             &semantic_model_fqn,
             root_project_configs,
             semantic_model_resource_config,
-            &model_props,
+            model_props,
         );
+
+        let measures: Vec<SemanticMeasure> = model_props
+            .metrics
+            .clone()
+            .unwrap_or_default()
+            .iter()
+            .map(|metric| {
+                SemanticMeasure {
+                    name: metric.name.clone(),
+                    expr: metric.expr.clone().map(|expr| match expr {
+                        MetricExpr::String(ref str) => str.clone(),
+                        MetricExpr::Integer(ref int) => int.to_string(),
+                    }),
+                    description: metric.description.clone(),
+                    label: metric.label.clone(),
+                    config: metric.config.as_ref().map(|c| SemanticLayerElementConfig {
+                        meta: c.meta.clone(),
+                    }),
+                    agg: metric.agg.clone().unwrap_or(AggregationType::Sum), // FIXME: if metric.agg is optional what should it default to?
+                    create_metric: Some(true), // TODO: confirm this: "old spec can declare measure without creating metric, but since this is a metric, always true"
+                    agg_params: if metric.percentile.is_some() {
+                        Some(MeasureAggregationParameters {
+                            percentile: metric.percentile,
+                            use_discrete_percentile: metric
+                                .percentile_type
+                                .as_ref()
+                                .map(|pt| matches!(pt, PercentileType::Discrete)),
+                            // TODO: confirm approximate == continuous percentile
+                            use_approximate_percentile: metric
+                                .percentile_type
+                                .as_ref()
+                                .map(|pt| matches!(pt, PercentileType::Continuous)),
+                        })
+                    } else {
+                        None
+                    },
+                    non_additive_dimension: metric.non_additive_dimension.clone(),
+                    agg_time_dimension: Some(
+                        metric
+                            .agg_time_dimension
+                            .clone()
+                            .unwrap_or(model_props.agg_time_dimension.clone().unwrap_or_default()),
+                    ),
+                }
+            })
+            .collect();
 
         let dbt_semantic_model = DbtSemanticModel {
             __common_attr__: CommonAttributes {
@@ -202,17 +227,34 @@ pub async fn resolve_semantic_models(
             },
             __semantic_model_attr__: DbtSemanticModelAttr {
                 unrendered_config: BTreeMap::new(), // TODO: do we need to hydrate?
-                depends_on: NodeDependsOn::default(), // TODO: should it depend on the underlying model itself or inherit the depends_on of the model?
+                depends_on: NodeDependsOn {
+                    nodes: vec![model_unique_id.clone()],
+                    macros: vec![],
+                    nodes_with_ref_location: vec![],
+                },
                 group: semantic_model_config.group.clone(),
                 created_at: chrono::Utc::now().timestamp() as f64,
-                metadata: None,            // TODO: confirm no need for this and remove
-                refs: vec![], // TODO: should it ref the underlying model itself or inherit the refs of the model?
-                label: None, // TODO: confirm no need for this and remove - there doesn't seem to be a top level label for semantic_model, but there are labels in entities and dimensions
-                model: Default::default(), // TODO: confirm no need for this and remove
-                node_relation: Default::default(), // TODO: definitely need this. get from a model's database.schema.alias
-                defaults: None,                    // TODO: confirm no need for this and remove
+                metadata: None, // deprioritized feature. always null for now.
+                refs: vec![DbtRef {
+                    // only name is hydrated for parity with Mantle
+                    name: model_name.clone(),
+                    package: None,
+                    version: None,
+                    location: None,
+                }],
+                label: None, // no semantic model level label (could maybe inherit from model?)
+                model: format!("ref('{model_name}')"),
+                node_relation: Some(NodeRelation {
+                    database: Some(resolved_model.database()),
+                    schema_name: resolved_model.schema(),
+                    alias: resolved_model.alias(),
+                    relation_name: resolved_model.__base_attr__.relation_name.clone(),
+                }),
+                defaults: Some(SemanticModelDefaults {
+                    agg_time_dimension: model_props.agg_time_dimension.clone(),
+                }),
                 entities: model_props_to_semantic_entities(model_props.clone()),
-                measures: vec![], // TODO: confirm no need for this and remove
+                measures,
                 dimensions: model_props_to_dimensions(model_props.clone()),
                 primary_entity: model_props.primary_entity.clone(),
             },

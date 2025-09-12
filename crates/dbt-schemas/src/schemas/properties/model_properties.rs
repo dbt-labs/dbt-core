@@ -57,10 +57,7 @@ pub struct ModelProperties {
 
     pub semantic_model: Option<ModelPropertiesSemanticModelConfig>,
     pub agg_time_dimension: Option<String>,
-    // TODO: rename to metrics once we figure out how to not render jinja for metrics nested under models
-    // Currently, dbt commands won't work because we attempt to render Jinja for model nodes, but with
-    // metrics in models, we attempt to render the `{{ Dimension(...) }}` jinja that should NOT be rendered
-    pub metrics_todo: Option<Vec<MetricsProperties>>,
+    pub metrics: Option<Vec<MetricsProperties>>,
     pub derived_semantics: Option<DerivedSemantics>,
     pub primary_entity: Option<String>,
 }
@@ -110,7 +107,7 @@ impl ModelProperties {
             versions: None,
             semantic_model: None,
             agg_time_dimension: None,
-            metrics_todo: None,
+            metrics: None,
             derived_semantics: None,
             primary_entity: None,
         }

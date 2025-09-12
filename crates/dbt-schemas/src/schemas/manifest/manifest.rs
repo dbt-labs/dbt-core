@@ -179,8 +179,13 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
             .iter()
             .map(|(id, exposure)| (id.clone(), (**exposure).clone().into()))
             .collect(),
-        semantic_models: BTreeMap::new(), // TODO: map from resolver_state.nodes
-        metrics: BTreeMap::new(),         // TODO: map from resolver_state.nodes
+        semantic_models: resolver_state
+            .nodes
+            .semantic_models
+            .iter()
+            .map(|(id, semantic_model)| (id.clone(), (**semantic_model).clone().into()))
+            .collect(),
+        metrics: BTreeMap::new(), // TODO: map from resolver_state.nodes
         saved_queries: resolver_state
             .nodes
             .saved_queries

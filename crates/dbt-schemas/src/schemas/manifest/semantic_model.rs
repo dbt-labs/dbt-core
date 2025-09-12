@@ -4,6 +4,7 @@ use crate::schemas::{
     dbt_column::ColumnPropertiesEntityType,
     manifest::common::SourceFileMetadata,
     project::SemanticModelConfig,
+    properties::metrics_properties::{AggregationType, NonAdditiveDimension},
     ref_and_source::DbtRef,
     semantic_layer::semantic_manifest::SemanticLayerElementConfig,
 };
@@ -21,7 +22,7 @@ pub struct DbtSemanticModel {
     pub __common_attr__: CommonAttributes,
     pub __semantic_model_attr__: DbtSemanticModelAttr,
 
-    // semantic models are models so they inherit from model config
+    // yaml path is `models.$.semantic_model`
     pub deprecated_config: SemanticModelConfig,
 
     pub __other__: BTreeMap<String, YmlValue>,
@@ -35,10 +36,16 @@ pub struct DbtSemanticModelAttr {
     pub label: Option<String>,
     pub defaults: Option<SemanticModelDefaults>,
     pub entities: Vec<SemanticEntity>,
-    pub measures: Vec<SemanticMeasure>,
     pub dimensions: Vec<Dimension>,
     pub metadata: Option<SourceFileMetadata>,
     pub primary_entity: Option<String>,
+
+    // measures is not a concept in the Fusion compatible Semantic Layer yaml spec
+    // but it is still needed for manifest.json
+    //
+    // this was hydrated by `.semantic_models.$.measures` but it will now be
+    // hydrated by `.models.$.metrics`
+    pub measures: Vec<SemanticMeasure>,
 
     // Node dependencies and references
     pub depends_on: NodeDependsOn,
@@ -88,30 +95,9 @@ pub struct SemanticMeasure {
     pub config: Option<SemanticLayerElementConfig>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum AggregationType {
-    Sum,
-    Min,
-    Max,
-    CountDistinct,
-    SumBoolean,
-    Average,
-    Percentile,
-    Median,
-    Count,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MeasureAggregationParameters {
-    pub percentile: Option<f64>,
+    pub percentile: Option<f32>,
     pub use_discrete_percentile: Option<bool>,
     pub use_approximate_percentile: Option<bool>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NonAdditiveDimension {
-    pub name: String,
-    pub window_choice: AggregationType,
-    pub window_groupings: Vec<String>,
 }
