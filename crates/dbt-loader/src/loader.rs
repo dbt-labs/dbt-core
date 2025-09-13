@@ -67,57 +67,9 @@ pub async fn load(
 ) -> FsResult<(DbtState, Option<usize>, Option<ProjectDbtCloudConfig>)> {
     let _pb = with_progress!(arg.io, spinner => LOADING);
 
-    // Read the input file
-    let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);
+    let (simplified_dbt_project, mut dbt_profile) =
+        load_simplified_project_and_profiles(arg).await?;
 
-    let raw_dbt_project_in_val = value_from_file(&arg.io, &dbt_project_path, false, None)?;
-    let env = initialize_load_profile_jinja_environment();
-    let ctx: BTreeMap<String, minijinja::Value> = BTreeMap::from([
-        (
-            "env_var".to_owned(),
-            minijinja::Value::from_func_func("env_var", secret_context_env_var),
-        ),
-        (
-            "var".to_owned(),
-            minijinja::Value::from_function(var_fn(arg.vars.clone())),
-        ),
-    ]);
-
-    let simplified_dbt_project: DbtProjectSimplified =
-        into_typed_with_jinja(&arg.io, raw_dbt_project_in_val, true, &env, &ctx, &[], None)?;
-
-    if simplified_dbt_project.data_paths.is_some() {
-        return err!(
-            ErrorCode::InvalidConfig,
-            "'data-paths' cannot be specified in dbt_project.yml",
-        );
-    }
-    if simplified_dbt_project.source_paths.is_some() {
-        return err!(
-            ErrorCode::InvalidConfig,
-            "'source-paths' cannot be specified in dbt_project.yml",
-        );
-    }
-    if (*simplified_dbt_project.log_path)
-        .as_ref()
-        .is_some_and(|path| path != "logs")
-    {
-        return err!(
-            ErrorCode::InvalidConfig,
-            "'log-path' cannot be specified in dbt_project.yml",
-        );
-    }
-    if (*simplified_dbt_project.target_path)
-        .as_ref()
-        .is_some_and(|path| path != "target")
-    {
-        return err!(
-            ErrorCode::InvalidConfig,
-            "'target-path' cannot be specified in dbt_project.yml",
-        );
-    }
-
-    let mut dbt_profile = load_profiles(arg, &simplified_dbt_project, &env, &ctx)?;
     // Check if .gitignore exists and add dbt_internal_packages/ if not present
     let gitignore_path = arg.io.in_dir.join(".gitignore");
     if gitignore_path.exists() {
@@ -301,6 +253,64 @@ pub async fn load(
         dbt_state.vars = collected_vars.into_iter().collect();
     }
     Ok((dbt_state, final_threads, simplified_dbt_project.dbt_cloud))
+}
+
+pub async fn load_simplified_project_and_profiles(
+    arg: &LoadArgs,
+) -> FsResult<(DbtProjectSimplified, DbtProfile)> {
+    // Read the input file
+    let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);
+
+    let raw_dbt_project_in_val = value_from_file(&arg.io, &dbt_project_path, false, None)?;
+    let env = initialize_load_profile_jinja_environment();
+    let ctx: BTreeMap<String, minijinja::Value> = BTreeMap::from([
+        (
+            "env_var".to_owned(),
+            minijinja::Value::from_func_func("env_var", secret_context_env_var),
+        ),
+        (
+            "var".to_owned(),
+            minijinja::Value::from_function(var_fn(arg.vars.clone())),
+        ),
+    ]);
+
+    let simplified_dbt_project: DbtProjectSimplified =
+        into_typed_with_jinja(&arg.io, raw_dbt_project_in_val, true, &env, &ctx, &[], None)?;
+
+    if simplified_dbt_project.data_paths.is_some() {
+        return err!(
+            ErrorCode::InvalidConfig,
+            "'data-paths' cannot be specified in dbt_project.yml",
+        );
+    }
+    if simplified_dbt_project.source_paths.is_some() {
+        return err!(
+            ErrorCode::InvalidConfig,
+            "'source-paths' cannot be specified in dbt_project.yml",
+        );
+    }
+    if (*simplified_dbt_project.log_path)
+        .as_ref()
+        .is_some_and(|path| path != "logs")
+    {
+        return err!(
+            ErrorCode::InvalidConfig,
+            "'log-path' cannot be specified in dbt_project.yml",
+        );
+    }
+    if (*simplified_dbt_project.target_path)
+        .as_ref()
+        .is_some_and(|path| path != "target")
+    {
+        return err!(
+            ErrorCode::InvalidConfig,
+            "'target-path' cannot be specified in dbt_project.yml",
+        );
+    }
+
+    let dbt_profile = load_profiles(arg, &simplified_dbt_project, &env, &ctx)?;
+
+    Ok((simplified_dbt_project, dbt_profile))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -767,25 +777,32 @@ fn collect_profiles_yml_if_exists(
     }
 }
 
-fn find_session_files(package_path: &Path) -> FsResult<Vec<(PathBuf, SystemTime)>> {
-    let dbt_project_path = package_path.join(DBT_PROJECT_YML);
-    let dependencies_path = package_path.join(DBT_DEPENDENCIES_YML);
-    let packages_path = package_path.join(DBT_PACKAGES_YML);
-    let package_lock_path = package_path.join(DBT_PACKAGES_LOCK_FILE);
+/// These are the built-in session file paths relative to a project.
+pub fn get_session_relative_file_paths() -> Vec<String> {
+    vec![
+        DBT_PROJECT_YML.into(),
+        DBT_DEPENDENCIES_YML.into(),
+        DBT_PACKAGES_YML.into(),
+        DBT_PACKAGES_LOCK_FILE.into(),
+    ]
+}
 
+fn find_session_files(package_path: &Path) -> FsResult<Vec<(PathBuf, SystemTime)>> {
     let mut result = Vec::new();
 
-    let dbt_project_timestamp = last_modified(&dbt_project_path)?;
-    result.push((dbt_project_path, dbt_project_timestamp));
-
-    if let Ok(timestamp) = last_modified(&dependencies_path) {
-        result.push((dependencies_path, timestamp));
-    }
-    if let Ok(timestamp) = last_modified(&packages_path) {
-        result.push((packages_path, timestamp));
-    }
-    if let Ok(timestamp) = last_modified(&package_lock_path) {
-        result.push((package_lock_path, timestamp));
+    for relative_path in get_session_relative_file_paths() {
+        // Heuristic for DBT_PROJECT_YML.
+        // We actually want to raise an error if it was not able to be read.
+        if relative_path == DBT_PROJECT_YML {
+            let dbt_project_path = package_path.join(relative_path);
+            let dbt_project_timestamp = last_modified(&dbt_project_path)?;
+            result.push((dbt_project_path, dbt_project_timestamp));
+        } else {
+            let path = package_path.join(relative_path);
+            if let Ok(timestamp) = last_modified(&path) {
+                result.push((path, timestamp));
+            }
+        }
     }
 
     Ok(result)
