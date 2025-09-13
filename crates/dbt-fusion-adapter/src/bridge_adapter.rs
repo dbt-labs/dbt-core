@@ -734,10 +734,33 @@ impl BaseAdapter for BridgeAdapter {
             {
                 return Ok(none_value());
             }
+
+            let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+            let db_schema = CatalogAndSchema::from(&temp_relation);
+            let query_ctx =
+                query_ctx_from_state(state)?.with_desc("get_relation > list_relations call");
+            let maybe_relations_list =
+                self.typed_adapter
+                    .list_relations(&query_ctx, conn.as_mut(), &db_schema);
+
+            // TODO(jason): We are ignoring this optimization in the logging
+            // this needs to be reported somewhere
+            if let Ok(relations_list) = maybe_relations_list {
+                let _ = self.update_relation_cache(BTreeMap::from([(db_schema, relations_list)]));
+
+                // After calling list_relations_without_caching, the cache should be populated
+                // with the full schema.
+                if let Some(cached_entry) = self.relation_cache.get_relation(&temp_relation) {
+                    return Ok(cached_entry.relation().as_value());
+                } else {
+                    return Ok(none_value());
+                }
+            }
         }
 
+        // TODO(jason): Adjust replay mode to be integrated with the cache
         // Move on to query against the remote when we have:
-        // 1. A cache miss
+        // 1. A cache miss and we failed to execute list_relations
         // 2. The schema was not previously cached
         let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
         let query_ctx = query_ctx_from_state(state)?.with_desc("get_relation adapter call");
@@ -1306,12 +1329,23 @@ impl BaseAdapter for BridgeAdapter {
         check_num_args(current_function_name!(), &parser, 1, 1)?;
 
         let relation = parser.get::<Value>("schema_relation")?;
+        let relation = downcast_value_to_dyn_base_relation(&relation)?;
 
+        let query_ctx =
+            query_ctx_from_state(state)?.with_desc("list_relations_without_caching adapter call");
         let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
-        let result =
-            self.typed_adapter
-                .list_relations_without_caching(state, conn.as_mut(), relation)?;
-        Ok(result)
+        let result = self.typed_adapter.list_relations(
+            &query_ctx,
+            conn.as_mut(),
+            &CatalogAndSchema::from(&relation),
+        )?;
+
+        Ok(Value::from_object(
+            result
+                .into_iter()
+                .map(|r| RelationObject::new(r).into_value())
+                .collect::<Vec<_>>(),
+        ))
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]

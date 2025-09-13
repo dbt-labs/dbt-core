@@ -1,5 +1,6 @@
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::funcs::{execute_macro, none_value};
+use crate::metadata::CatalogAndSchema;
 use crate::record_batch_utils::get_column_values;
 use crate::relation_object::RelationObject;
 use crate::response::{AdapterResponse, ResultObject};
@@ -731,14 +732,20 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         unimplemented!("only available with BigQuery adapter")
     }
 
-    /// list_relations_without_caching
-    fn list_relations_without_caching(
+    /// Lists all relations in the provided [CatalogAndSchema]
+    fn list_relations(
         &self,
-        _state: &State,
+        _query_ctx: &QueryCtx,
         _conn: &'_ mut dyn Connection,
-        _relation: Value,
-    ) -> AdapterResult<Value> {
-        unimplemented!("only available with BigQuery adapter")
+        _db_schema: &CatalogAndSchema,
+    ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+        Err(AdapterError::new(
+            AdapterErrorKind::Internal,
+            format!(
+                "list_relations_without_caching is not implemented for this adapter: {}",
+                self.adapter_type()
+            ),
+        ))
     }
 
     /// Behavior (flags)

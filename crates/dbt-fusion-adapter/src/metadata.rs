@@ -7,7 +7,6 @@ use crate::typed_adapter::TypedBaseAdapter;
 use arrow::array::RecordBatch;
 use arrow_schema::Schema;
 use dbt_common::cancellation::{Cancellable, CancellationToken};
-use dbt_common::io_args::IoArgs;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::{
     legacy_catalog::{CatalogTable, ColumnMetadata},
@@ -78,27 +77,6 @@ impl From<&Arc<dyn BaseRelation>> for CatalogAndSchema {
 pub struct MetadataFreshness {
     pub last_altered: i128,
     pub is_view: bool,
-}
-
-/// Used to represent status of remote download from warehouse
-pub enum MetadataDownloadStatus {
-    /// To represent no data being found - e.g. empty schema
-    NoDataFound,
-    /// Successful operation
-    Success,
-    /// Operation had an error
-    Failed,
-}
-
-impl fmt::Display for MetadataDownloadStatus {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let status_str = match self {
-            MetadataDownloadStatus::NoDataFound => "empty",
-            MetadataDownloadStatus::Success => "success",
-            MetadataDownloadStatus::Failed => "failed",
-        };
-        write!(f, "{status_str}")
-    }
 }
 
 /// Allows serializing record batches into maps and Arrow schemas
@@ -185,15 +163,13 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
         relations: &[Arc<dyn BaseRelation>],
     ) -> AsyncAdapterResult<BTreeMap<String, MetadataFreshness>>;
 
-    /// List relations in the specified database schemas
+    /// List relations in the specified [CatalogAndSchema] in parallel
     ///
     /// # Arguments
-    /// * `io` - I/O Arguments to report progress to
     /// * `db_schemas` - List of (catalog, schema) pairs to discover relations in
     ///
-    fn list_relations(
+    fn list_relations_in_parallel(
         &self,
-        _io: &IoArgs,
         _db_schemas: &[CatalogAndSchema],
     ) -> AsyncAdapterResult<BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>>;
 
