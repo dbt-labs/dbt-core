@@ -901,6 +901,16 @@ impl BaseAdapter for BridgeAdapter {
         let database = parser.get::<String>("database")?;
         let schema = parser.get::<String>("schema")?;
 
+        // Replay fast-path: consult trace-derived cache if available
+        if self.typed_adapter.is_replay() {
+            if let Some(exists) = self
+                .typed_adapter
+                .schema_exists_from_trace(&database, &schema)
+            {
+                return Ok(Value::from(exists));
+            }
+        }
+
         let information_schema = InformationSchema {
             database: Some(database),
             schema: "INFORMATION_SCHEMA".to_string(),

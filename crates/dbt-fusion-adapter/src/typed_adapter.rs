@@ -945,4 +945,10 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn is_replay(&self) -> bool {
         false
     }
+
+    /// Optional fast-path for replay adapters: return schema existence from the trace
+    /// when available. Default is None for non-replay adapters.
+    fn schema_exists_from_trace(&self, _database: &str, _schema: &str) -> Option<bool> {
+        None
+    }
 }
