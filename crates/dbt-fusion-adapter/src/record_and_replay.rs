@@ -7,7 +7,6 @@ use crate::stmt_splitter::StmtSplitter;
 use adbc_core::error::{Error as AdbcError, Result as AdbcResult, Status as AdbcStatus};
 use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::{RecordBatch, RecordBatchIterator, RecordBatchReader};
-use arrow_json::writer::LineDelimitedWriter;
 use arrow_schema::{ArrowError, Field, Schema, SchemaBuilder};
 use dashmap::DashMap;
 use dbt_common::cancellation::CancellationToken;
@@ -24,7 +23,6 @@ use std::collections::hash_map::DefaultHasher;
 use std::fmt;
 use std::fs::{self, File, create_dir_all, metadata};
 use std::hash::{Hash, Hasher};
-use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -273,7 +271,6 @@ impl Statement for RecordEngineStatement {
         create_dir_all(&path).map_err(|e| from_io_error(e, Some(&path)))?;
 
         let file_name = compute_file_name(&query_ctx)?;
-        let json_path = path.join(format!("{file_name}.json"));
         let sql_path = path.join(format!("{file_name}.sql"));
         let err_path = path.join(format!("{file_name}.err"));
         let parquet_path = path.join(format!("{file_name}.parquet"));
@@ -285,15 +282,6 @@ impl Statement for RecordEngineStatement {
             Ok(mut reader) => {
                 let schema = reader.schema();
                 let batches: Vec<RecordBatch> = reader.by_ref().collect::<Result<_, _>>()?;
-                let file =
-                    File::create(&json_path).map_err(|e| from_io_error(e, Some(&json_path)))?;
-                let writer = BufWriter::new(file);
-                let mut json_writer = LineDelimitedWriter::new(writer);
-
-                for batch in &batches {
-                    json_writer.write(batch)?;
-                }
-                json_writer.finish()?;
 
                 let file = File::create(&parquet_path)
                     .map_err(|e| from_io_error(e, Some(&parquet_path)))?;
@@ -585,7 +573,6 @@ impl Statement for ReplayEngineStatement {
 
         let path = self.replay_engine.full_path();
         let file_name = compute_file_name(&query_ctx)?;
-        let json_path = path.join(format!("{file_name}.json"));
         let parquet_path = path.join(format!("{file_name}.parquet"));
         let sql_path = path.join(format!("{file_name}.sql"));
         let err_path = path.join(format!("{file_name}.err"));
@@ -616,13 +603,10 @@ impl Statement for ReplayEngineStatement {
             ));
         }
 
-        if !json_path.exists() {
-            panic!("{json_path:?} does not exist during replay");
-        }
-
         // If parquet file is empty, then there was no schema during
         // recording
-        let metadata = metadata(&parquet_path).map_err(|e| from_io_error(e, Some(&json_path)))?;
+        let metadata =
+            metadata(&parquet_path).map_err(|e| from_io_error(e, Some(&parquet_path)))?;
         let reader: Box<dyn RecordBatchReader + Send + 'a> = if metadata.len() == 0 {
             let schema = Arc::new(Schema::new(Vec::<Field>::new()));
             let batch = RecordBatch::new_empty(schema.clone());
