@@ -226,9 +226,13 @@ class ParserRef:
         column_config_meta = (
             column.config["meta"] if isinstance(column.config.get("meta"), dict) else {}
         )
-        column_config_tags = (
-            column.config["tags"] if isinstance(column.config.get("tags"), list) else []
-        )
+        column_config_tags = []
+        if "tags" in column.config:
+            if isinstance(column.config["tags"], list):
+                column_config_tags = column.config["tags"]
+            elif isinstance(column.config["tags"], str):
+                column_config_tags = [column.config["tags"]]
+
         column_meta = {**column.meta, **column_config_meta}
         column_tags = list(set(tags + column_config_tags))
         self.column_info[column.name] = ColumnInfo(
