@@ -30,6 +30,8 @@ sources:
         identifier: model_b
         columns:
           - name: fun
+            config:
+              tags: [source_column_config_tag]
             data_tests:
               - unique
 

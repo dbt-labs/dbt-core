@@ -338,6 +338,19 @@ class TestSelectionExpansion:
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
 
+    def test_select_source_column_config_level_tag(
+        self,
+        project,
+    ):
+        select = "tag:source_column_config_tag"
+        exclude = None
+        expected = [
+            "source_unique_my_src_my_tbl_fun",
+        ]
+
+        self.list_tests_and_assert(select, exclude, expected)
+        self.run_tests_and_assert(select, exclude, expected)
+
     def test_exclude_column_config_level_tag(
         self,
         project,
