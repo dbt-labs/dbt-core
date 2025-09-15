@@ -24,7 +24,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    RootProjectConfigs, init_project_config, strip_resource_paths_from_ref_path,
+};
 use crate::renderer::{
     RenderCtx, RenderCtxInner, SqlFileRenderResult, render_unresolved_sql_files,
 };
@@ -62,16 +64,21 @@ pub async fn resolve_snapshots(
         None
     };
 
-    let local_project_config = init_project_config(
-        &arg.io,
-        &package.dbt_project.snapshots,
-        SnapshotConfig {
-            enabled: Some(true),
-            quoting: Some(package_quoting),
-            ..Default::default()
-        },
-        dependency_package_name,
-    )?;
+    let local_project_config = if package.dbt_project.name == root_project.name {
+        root_project_configs.snapshots.clone()
+    } else {
+        init_project_config(
+            &arg.io,
+            &package.dbt_project.snapshots,
+            SnapshotConfig {
+                enabled: Some(true),
+                quoting: Some(package_quoting),
+                ..Default::default()
+            },
+            dependency_package_name,
+        )?
+    };
+
     let package_name = package.dbt_project.name.to_owned();
 
     // Create the `snapshots` directory
@@ -91,9 +98,21 @@ pub async fn resolve_snapshots(
                 .strip_prefix("snapshot_")
                 .expect("All snapshot macros should start with 'snapshot_'")
                 .to_string();
-            let target_path =
-                PathBuf::from(DBT_SNAPSHOTS_DIR_NAME).join(format!("{snapshot_name}.sql"));
+            // Preserve file layout for proper fqn generation
+            let original_relative_path = strip_resource_paths_from_ref_path(
+                &macro_node.path,
+                package
+                    .dbt_project
+                    .snapshot_paths
+                    .as_ref()
+                    .unwrap_or(&vec![DBT_SNAPSHOTS_DIR_NAME.to_string()]),
+            );
+            let target_path = PathBuf::from(DBT_SNAPSHOTS_DIR_NAME)
+                .join(original_relative_path.with_file_name(format!("{snapshot_name}.sql")));
             let snapshot_path = arg.io.out_dir.join(&target_path);
+            if let Some(parent) = snapshot_path.parent() {
+                stdfs::create_dir_all(parent)?;
+            }
             stdfs::write(snapshot_path, macro_call)?;
             snapshot_files.push(DbtAsset {
                 path: target_path,
@@ -335,6 +354,15 @@ pub async fn resolve_snapshots(
                 &components,
                 adapter_type,
             )?;
+
+            // For backwards compatibility with target_schema and target_database configs
+            if let Some(target_database) = &final_config.target_database {
+                dbt_snapshot.__base_attr__.database = target_database.clone();
+            }
+            if let Some(target_schema) = &final_config.target_schema {
+                dbt_snapshot.__base_attr__.schema = target_schema.clone();
+            }
+
             match refs_and_sources.insert_ref(&dbt_snapshot, adapter_type, status, false) {
                 Ok(_) => (),
                 Err(e) => {
