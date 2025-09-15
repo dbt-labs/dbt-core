@@ -73,6 +73,7 @@ class TestSelectionExpansion:
             "relationships_model_a_fun__fun__ref_model_b_",
             "relationships_model_a_fun__fun__source_my_src_my_tbl_",
             "source_unique_my_src_my_tbl_fun",
+            "source_unique_my_src_my_tbl_fun_2",
             "unique_model_a_fun",
         ]
 
@@ -127,6 +128,7 @@ class TestSelectionExpansion:
             "just_a",
             "unique_model_a_fun",
             "source_unique_my_src_my_tbl_fun",
+            "source_unique_my_src_my_tbl_fun_2",
             "relationships_model_a_fun__fun__ref_model_b_",
             "relationships_model_a_fun__fun__source_my_src_my_tbl_",
         ]
@@ -145,6 +147,7 @@ class TestSelectionExpansion:
             "just_a",
             "relationships_model_a_fun__fun__source_my_src_my_tbl_",
             "source_unique_my_src_my_tbl_fun",
+            "source_unique_my_src_my_tbl_fun_2",
             "unique_model_a_fun",
         ]
 
@@ -208,6 +211,7 @@ class TestSelectionExpansion:
             "relationships_model_a_fun__fun__ref_model_b_",
             "relationships_model_a_fun__fun__source_my_src_my_tbl_",
             "source_unique_my_src_my_tbl_fun",
+            "source_unique_my_src_my_tbl_fun_2",
             "unique_model_a_fun",
         ]
 
@@ -318,7 +322,13 @@ class TestSelectionExpansion:
     ):
         select = None
         exclude = "tag:column_level_tag"
-        expected = ["cf_a_b", "cf_a_src", "just_a", "source_unique_my_src_my_tbl_fun"]
+        expected = [
+            "cf_a_b",
+            "cf_a_src",
+            "just_a",
+            "source_unique_my_src_my_tbl_fun",
+            "source_unique_my_src_my_tbl_fun_2",
+        ]
 
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
@@ -346,6 +356,7 @@ class TestSelectionExpansion:
         exclude = None
         expected = [
             "source_unique_my_src_my_tbl_fun",
+            "source_unique_my_src_my_tbl_fun_2",
         ]
 
         self.list_tests_and_assert(select, exclude, expected)
@@ -357,7 +368,13 @@ class TestSelectionExpansion:
     ):
         select = None
         exclude = "tag:column_config_level_tag"
-        expected = ["cf_a_b", "cf_a_src", "just_a", "source_unique_my_src_my_tbl_fun"]
+        expected = [
+            "cf_a_b",
+            "cf_a_src",
+            "just_a",
+            "source_unique_my_src_my_tbl_fun",
+            "source_unique_my_src_my_tbl_fun_2",
+        ]
 
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)

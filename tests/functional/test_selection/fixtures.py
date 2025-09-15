@@ -34,6 +34,11 @@ sources:
               tags: [source_column_config_tag]
             data_tests:
               - unique
+          - name: fun_2
+            config:
+              tags: [source_column_config_tag]
+            data_tests:
+              - unique
 
 models:
   - name: model_a
@@ -58,7 +63,7 @@ models__model_b_sql = """
     tags = ['a_or_b']
 ) }}
 
-select 1 as fun
+select 1 as fun, 2 as fun_2
 """
 
 models__model_a_sql = """
