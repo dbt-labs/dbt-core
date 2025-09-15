@@ -185,7 +185,7 @@ fn update_dbt_project_profile(profile_name: &str) -> FsResult<()> {
     let mut profile_added = false;
 
     for line in lines.iter() {
-        new_lines.push(line.to_string());
+        new_lines.push((*line).to_string());
 
         // If we find the 'name:' field, add the profile field right after it
         if !profile_added && line.trim_start().starts_with("name:") {
@@ -204,7 +204,7 @@ fn update_dbt_project_profile(profile_name: &str) -> FsResult<()> {
             // Insert profile before this line
             new_lines.pop(); // Remove the current line
             new_lines.push(format!("profile: {profile_name}"));
-            new_lines.push(line.to_string());
+            new_lines.push((*line).to_string());
             profile_added = true;
         }
     }

@@ -27,14 +27,14 @@ pub fn strip_version_hash(
 pub fn get_version_hash(table_name: &str) -> (Option<String>, Option<String>) {
     let parts = table_name.split('_').collect_vec();
     if parts.len() > 1 {
-        let suffix = parts.last().unwrap().to_string();
+        let suffix = (*parts.last().unwrap()).to_string();
         if suffix.len() == HASH_SIZE {
             // Get second to last part
             if let Some(maybe_version) = parts.get(parts.len() - 2) {
                 if maybe_version.len() == VERSION_SIZE
                     && maybe_version.chars().all(|c| c.is_ascii_digit())
                 {
-                    (Some(maybe_version.to_string()), Some(suffix))
+                    (Some((*maybe_version).to_string()), Some(suffix))
                 } else {
                     (None, None)
                 }

@@ -1638,6 +1638,6 @@ impl From<&String> for Variable {
 
 impl From<&&str> for Variable {
     fn from(s: &&str) -> Self {
-        Variable::String(s.to_string())
+        Variable::String((*s).to_string())
     }
 }

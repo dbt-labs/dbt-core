@@ -127,7 +127,7 @@ pub fn get_contract_mismatches(
     let schema = Schema::new(
         column_names
             .iter()
-            .map(|name| Field::new(name.to_string(), DataType::Utf8, false))
+            .map(|name| Field::new((*name).to_string(), DataType::Utf8, false))
             .collect::<Vec<_>>(),
     );
     let columns = vec![

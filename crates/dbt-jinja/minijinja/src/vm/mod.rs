@@ -449,7 +449,7 @@ impl<'env> Vm<'env> {
                                     let context =
                                         state.get_base_context_with_path_and_span(&path, &span);
                                     Value::from_object(DispatchObject {
-                                        macro_name: name.to_string(),
+                                        macro_name: (*name).to_string(),
                                         package_name: Some(namespace.get_name().to_string()),
                                         strict: true,
                                         auto_execute: false,
@@ -932,7 +932,7 @@ impl<'env> Vm<'env> {
                         let function_name = func
                             .get_attr_fast("function_name")
                             .map(|x| x.to_string())
-                            .unwrap_or(name.to_string());
+                            .unwrap_or((*name).to_string());
 
                         let args: Vec<Value> =
                             if function_name == "ref" || function_name == "source" {
@@ -1104,7 +1104,7 @@ impl<'env> Vm<'env> {
                         let function_name = args[0]
                             .get_attr_fast("function_name")
                             .map(|x| x.to_string())
-                            .unwrap_or(name.to_string());
+                            .unwrap_or((*name).to_string());
                         let args_vals = if function_name == "ref" || function_name == "source" {
                             let start: (u32, u32, u32) = (
                                 this_span.start_line,
@@ -1306,7 +1306,7 @@ impl<'env> Vm<'env> {
                     });
                 }
                 Instruction::MacroName(name, _) => {
-                    current_macro_name = Some(name.to_string());
+                    current_macro_name = Some((*name).to_string());
                 }
                 Instruction::TypeConstraint(_type_constraint, _is_true, _span) => {
                     // no-op, we don't need to do anything here

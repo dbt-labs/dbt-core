@@ -721,7 +721,7 @@ impl<'src> TypeChecker<'src> {
                         None
                     };
                     typestate.locals.insert(
-                        name.to_string(),
+                        (*name).to_string(),
                         value_type.clone(),
                         listener.clone(),
                         span_location,

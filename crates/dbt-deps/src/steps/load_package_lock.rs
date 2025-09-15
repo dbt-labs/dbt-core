@@ -127,7 +127,7 @@ fn try_load_from_deprecated_dbt_packages_lock(
                         if avail_packages.contains(package_name.to_lowercase().as_str()) {
                             packages.push(DbtPackageLock::Hub(HubPackageLock {
                                 package: package.to_string(),
-                                name: package_name.to_string(),
+                                name: (*package_name).to_string(),
                                 version,
                             }));
                         } else {
@@ -155,7 +155,7 @@ fn try_load_from_deprecated_dbt_packages_lock(
                         if avail_packages.contains(package_name.to_lowercase().as_str()) {
                             packages.push(DbtPackageLock::Git(GitPackageLock {
                                 git: git.to_owned().into(),
-                                name: package_name.to_string(),
+                                name: (*package_name).to_string(),
                                 revision,
                                 warn_unpinned,
                                 subdirectory,
