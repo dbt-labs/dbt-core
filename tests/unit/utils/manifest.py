@@ -19,6 +19,12 @@ from dbt.artifacts.resources import (
 )
 from dbt.artifacts.resources.types import ModelLanguage
 from dbt.artifacts.resources.v1.model import ModelConfig
+from dbt.artifacts.resources.v1.semantic_model import (
+    Defaults,
+    Dimension,
+    DimensionTypeParams,
+    Measure,
+)
 from dbt.contracts.files import AnySourceFile, FileHash
 from dbt.contracts.graph.manifest import Manifest, ManifestMetadata
 from dbt.contracts.graph.nodes import (
@@ -44,7 +50,12 @@ from dbt.contracts.graph.nodes import (
 )
 from dbt.contracts.graph.unparsed import UnitTestInputFixture, UnitTestOutputFixture
 from dbt.node_types import NodeType
-from dbt_semantic_interfaces.type_enums import MetricType
+from dbt_semantic_interfaces.type_enums import (
+    AggregationType,
+    DimensionType,
+    MetricType,
+    TimeGranularity,
+)
 
 
 def make_model(
@@ -485,6 +496,21 @@ def make_semantic_model(
         unique_id=f"semantic_model.{pkg}.{name}",
         original_file_path=path,
         fqn=[pkg, "semantic_models", name],
+        defaults=Defaults(agg_time_dimension="created_at"),
+        dimensions=[
+            Dimension(
+                name="created_at",
+                type=DimensionType.TIME,
+                type_params=DimensionTypeParams(time_granularity=TimeGranularity.DAY),
+            )
+        ],
+        measures=[
+            Measure(
+                name="a_measure",
+                agg=AggregationType.COUNT,
+                expr="1",
+            )
+        ],
     )
 
 
