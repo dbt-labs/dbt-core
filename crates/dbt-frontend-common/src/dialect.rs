@@ -315,6 +315,19 @@ impl Dialect {
         let idents = self
             .parse_dot_separated_identifiers(sql)
             .map_err(|e| make_internal_err!("Failed to parse {sql} as qualified name: {e}"))?;
+        let idents = if self == &Dialect::Bigquery
+            && idents.len() == 4
+            && idents[2].matches("information_schema")
+        {
+            vec![
+                Identifier::new(format!("{}.{}", idents[0].to_value(), idents[1].to_value())),
+                idents[2].clone(),
+                idents[3].clone(),
+            ]
+        } else {
+            idents
+        };
+
         QualifiedName::try_from(idents)
     }
 
