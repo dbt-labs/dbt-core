@@ -127,7 +127,7 @@ models:
         columns: ["id"]
         expression: "id > 0"
         name: "Check that id is greater than 0"
-    deprecation_date: "2052-05-01"
+    deprecation_date: "2052-05-01 00:00:00-04:00"
     description: A model with lots of configs
 
 sources:
