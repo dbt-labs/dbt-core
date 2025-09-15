@@ -133,7 +133,7 @@ pub enum ErrorCode {
     UnsupportedLocalExecutionDialect = 2001,
 
     // --------------------------------------------------------------------------------------------
-    // Error parsing an .slt file
+    // Error processing an .slt file
     SltParse = 3000,
     SltLimits = 3001,
     SltConfig = 3002,
