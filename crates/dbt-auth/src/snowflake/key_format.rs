@@ -1,7 +1,10 @@
-use crate::AuthError;
-use base64::{Engine, engine::general_purpose::STANDARD};
-use pkcs8::{EncryptedPrivateKeyInfo, PrivateKeyInfo, der::Decode};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
+use pkcs8::der::{Decode, oid::ObjectIdentifier};
+use pkcs8::{EncryptedPrivateKeyInfo, PrivateKeyInfo};
 use rsa::{RsaPrivateKey, pkcs1::DecodeRsaPrivateKey};
+use std::sync::Once;
+
+use crate::AuthError;
 
 pub const PEM_UNENCRYPTED_START: &str = "-----BEGIN PRIVATE KEY-----";
 pub const PEM_UNENCRYPTED_END: &str = "-----END PRIVATE KEY-----";
@@ -46,13 +49,50 @@ fn has_single_valid_pem_pair(s: &str) -> bool {
     has_only_unencrypted_pair || has_only_encrypted_pair
 }
 
+const OID_DES_EDE3_CBC: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.113549.3.7");
+const OID_P12_SHA_3KEY_3DES: ObjectIdentifier =
+    ObjectIdentifier::new_unwrap("1.2.840.113549.1.12.1.3");
+static WARN_ONCE: Once = Once::new();
+
 /// Take the DER [1] payload of a key and recognize its format.
 ///
 /// [1] https://en.wikipedia.org/wiki/X.690#DER_encoding
 fn parse_der_key_type(der: &[u8]) -> BodyKind {
     if PrivateKeyInfo::from_der(der).is_ok() {
         BodyKind::Pkcs8Unencrypted
-    } else if EncryptedPrivateKeyInfo::from_der(der).is_ok() {
+    } else if let Ok(enc) = EncryptedPrivateKeyInfo::from_der(der) {
+        let alg = enc.encryption_algorithm;
+
+        // TODO: Add a PBES1 3DES check?
+        let is_pbes2: bool = if let Some(p) = alg.pbes2() {
+            p.encryption.oid() == OID_DES_EDE3_CBC
+        } else {
+            Default::default()
+        };
+
+        // Some encoders use PKCS#12 3DES PBE as the top-level algorithm
+        let is_p12_3des = alg.oid() == OID_P12_SHA_3KEY_3DES;
+
+        const WARNING: &str = "------------------------------------------------------------------------ \n\
+         Warning: You appear to be using a 3DES encrypted, headerless PEM body. We \n\
+         encourage re-exporting your key using a modern algorithm such as AES-256: \n\
+         >   $ openssl pkcs8 -topk8 -in rsa_key.pem -v2 aes256 -out rsa_key_aes.pem\n\
+         \n\
+         If you'd prefer to keep your current key and can supply your body PEM in a \n\
+         multiline format, affix the customary header and footer:\n\
+         >   -----BEGIN ENCRYPTED PRIVATE KEY-----\n\
+         >   ...PEM BODY...\n\
+         >   -----END ENCRYPTED PRIVATE KEY-----\n\
+         \n\
+         Note: Future releases may reject 3DES-encrypted keys entirely. \n\
+         ------------------------------------------------------------------------";
+
+        if is_p12_3des || is_pbes2 {
+            WARN_ONCE.call_once(|| {
+                eprintln!("{WARNING}");
+            });
+        }
+
         BodyKind::Pkcs8Encrypted
     } else if RsaPrivateKey::from_pkcs1_der(der).is_ok() {
         BodyKind::Pkcs1Rsa
@@ -159,9 +199,7 @@ pub fn normalize_key(input: &str) -> Result<String, AuthError> {
                       • you wrapped a PKCS#1 DER with PKCS#8 headers\n\
                       • you base64-encoded pem text and treated it as DER\n",
                 )),
-                BodyKind::UnknownMalformed => Err(AuthError::config(
-                    "key body is not PKCS#8 (after one base64 decode)",
-                )),
+                BodyKind::UnknownMalformed => Err(AuthError::config("key body is not PKCS#8 DER.")),
             }
         }
         PemHeaderAndFooterState::DoNotMatch => Err(AuthError::config(
@@ -173,10 +211,8 @@ pub fn normalize_key(input: &str) -> Result<String, AuthError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::{Engine, engine::general_purpose::STANDARD};
     use pkcs8::{EncodePrivateKey, LineEnding};
-    use rsa::rand_core::OsRng;
-    use rsa::{RsaPrivateKey, pkcs1::EncodeRsaPrivateKey};
+    use rsa::{RsaPrivateKey, pkcs1::EncodeRsaPrivateKey, rand_core::OsRng};
 
     fn gen_rsa() -> RsaPrivateKey {
         RsaPrivateKey::new(&mut OsRng, 2048).unwrap()
@@ -372,5 +408,63 @@ mod tests {
         let pem = "-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA...\n-----END OPENSSH PRIVATE KEY-----";
         let err = normalize_key(pem).unwrap_err();
         assert!(format!("{err:?}").contains("malformed key"));
+    }
+
+    #[test]
+    fn headerless_pbes2_3des_body_is_wrapped_as_encrypted_pem() {
+        use base64::{Engine as _, engine::general_purpose::STANDARD};
+
+        // Minimal EncryptedPrivateKeyInfo (PBES2 + 3DES-CBC)
+        //   Command used to generate:
+        //
+        //   hex='303d303806092a864886f70d01050d302b301306092a864886f70d01050c3006040100020101301406082a864886f70d03070408aaaaaaaaaaaaaaaa040100'
+        //   printf '%s' "$hex" | xxd -r -p > minimal.der
+        //   openssl asn1parse -inform DER -in minimal.der -i
+        //   openssl base64 -A -in minimal.der > body.b64
+        //   { echo '-----BEGIN ENCRYPTED PRIVATE KEY-----'; fold -w64 body.b64; echo '-----END ENCRYPTED PRIVATE KEY-----'; } > minimal.pem
+        //   diff <(openssl base64 -d -A < body.b64) minimal.der && echo 'OK'
+        let der: Vec<u8> = vec![
+            0x30, 0x3D, // EncryptedPrivateKeyInfo SEQ (61)
+            0x30, 0x38, // AlgorithmIdentifier SEQ (56)
+            0x06, 0x09, //   OID PBES2 (1.2.840.113549.1.5.13)
+            0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x05, 0x0D, 0x30,
+            0x2B, //   PBES2-params SEQ (43)
+            0x30, 0x13, //     keyDerivationFunc: AlgorithmIdentifier (19)
+            0x06, 0x09, //       OID PBKDF2 (1.2.840.113549.1.5.12)
+            0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x05, 0x0C, 0x30,
+            0x06, //       PBKDF2-params SEQ (6)
+            0x04, 0x01, 0x00, //         salt OCTET STRING (1B)
+            0x02, 0x01, 0x01, //         iter INTEGER (1)
+            0x30, 0x14, //     encryptionScheme: AlgorithmIdentifier (20)
+            0x06, 0x08, //       OID des-ede3-cbc (1.2.840.113549.3.7)
+            0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x03, 0x07, 0x04,
+            0x08, //       IV OCTET STRING (8B)
+            0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0x04, 0x01,
+            0x00, // encryptedData OCTET STRING (1B)
+        ];
+
+        let body_b64 = STANDARD.encode(&der);
+
+        let normalized = normalize_key(&body_b64).expect("normalize_key failed");
+
+        assert!(
+            normalized.starts_with(PEM_ENCRYPTED_START),
+            "expected BEGIN ENCRYPTED PRIVATE KEY header"
+        );
+        assert!(
+            normalized.ends_with(PEM_ENCRYPTED_END),
+            "expected END ENCRYPTED PRIVATE KEY footer"
+        );
+
+        let re_body = normalized
+            .lines()
+            .skip(1)
+            .take_while(|l| !l.starts_with(PEM_ENCRYPTED_END))
+            .collect::<String>();
+
+        let der_roundtrip = STANDARD
+            .decode(re_body.as_bytes())
+            .expect("emitted body not base64");
+        assert_eq!(der_roundtrip, der, "PEM rewrap must be byte-preserving");
     }
 }
