@@ -54,11 +54,11 @@ class SchemaYamlRenderer(BaseRenderer):
         ):
             return True
 
-        # pre- and post-hooks
+        # config: pre- and post-hooks, and loaded_at_query
         if (
             len(keypath) >= 2
             and keypath[0] == "config"
-            and keypath[1] in ("pre_hook", "post_hook")
+            and keypath[1] in ("pre_hook", "post_hook", "loaded_at_query")
         ):
             return True
 
@@ -81,6 +81,8 @@ class SchemaYamlRenderer(BaseRenderer):
             return True
         if self.key == "sources":
             if keypath[0] in ("description", "loaded_at_query"):
+                return False
+            if len(keypath) >= 2 and keypath[0] == "config" and keypath[1] == "loaded_at_query":
                 return False
             if keypath[0] == "tables":
                 if self._is_norender_key(keypath[2:]):
