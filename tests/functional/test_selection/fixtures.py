@@ -30,6 +30,13 @@ sources:
         identifier: model_b
         columns:
           - name: fun
+            config:
+              tags: [source_column_config_tag]
+            data_tests:
+              - unique
+          - name: fun_2
+            config:
+              tags: [source_column_config_tag]
             data_tests:
               - unique
 
@@ -38,6 +45,8 @@ models:
     columns:
       - name: fun
         tags: [column_level_tag]
+        config:
+          tags: [column_config_level_tag]
         data_tests:
           - unique
           - relationships:
@@ -47,6 +56,12 @@ models:
           - relationships:
               to: source('my_src', 'my_tbl')
               field: fun
+      - name: fun_2
+        tags: [column_level_tag]
+        config:
+          tags: column_config_level_tag
+        data_tests:
+          - unique
 """
 
 models__model_b_sql = """
@@ -54,7 +69,7 @@ models__model_b_sql = """
     tags = ['a_or_b']
 ) }}
 
-select 1 as fun
+select 1 as fun, 2 as fun_2
 """
 
 models__model_a_sql = """
