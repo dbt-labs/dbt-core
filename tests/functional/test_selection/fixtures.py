@@ -56,6 +56,12 @@ models:
           - relationships:
               to: source('my_src', 'my_tbl')
               field: fun
+      - name: fun_2
+        tags: [column_level_tag]
+        config:
+          tags: column_config_level_tag
+        data_tests:
+          - unique
 """
 
 models__model_b_sql = """

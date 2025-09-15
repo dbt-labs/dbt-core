@@ -75,6 +75,7 @@ class TestSelectionExpansion:
             "source_unique_my_src_my_tbl_fun",
             "source_unique_my_src_my_tbl_fun_2",
             "unique_model_a_fun",
+            "unique_model_a_fun_2",
         ]
 
         self.list_tests_and_assert(select, exclude, expected)
@@ -93,6 +94,7 @@ class TestSelectionExpansion:
             "relationships_model_a_fun__fun__ref_model_b_",
             "relationships_model_a_fun__fun__source_my_src_my_tbl_",
             "unique_model_a_fun",
+            "unique_model_a_fun_2",
         ]
 
         self.list_tests_and_assert(select, exclude, expected)
@@ -109,6 +111,7 @@ class TestSelectionExpansion:
             "cf_a_src",
             "just_a",
             "unique_model_a_fun",
+            "unique_model_a_fun_2",
             "relationships_model_a_fun__fun__ref_model_b_",
             "relationships_model_a_fun__fun__source_my_src_my_tbl_",
         ]
@@ -127,6 +130,7 @@ class TestSelectionExpansion:
             "cf_a_src",
             "just_a",
             "unique_model_a_fun",
+            "unique_model_a_fun_2",
             "source_unique_my_src_my_tbl_fun",
             "source_unique_my_src_my_tbl_fun_2",
             "relationships_model_a_fun__fun__ref_model_b_",
@@ -149,6 +153,7 @@ class TestSelectionExpansion:
             "source_unique_my_src_my_tbl_fun",
             "source_unique_my_src_my_tbl_fun_2",
             "unique_model_a_fun",
+            "unique_model_a_fun_2",
         ]
 
         self.list_tests_and_assert(select, exclude, expected)
@@ -166,6 +171,7 @@ class TestSelectionExpansion:
             "just_a",
             "relationships_model_a_fun__fun__ref_model_b_",
             "relationships_model_a_fun__fun__source_my_src_my_tbl_",
+            "unique_model_a_fun_2",
         ]
 
         self.list_tests_and_assert(select, exclude, expected)
@@ -177,7 +183,7 @@ class TestSelectionExpansion:
     ):
         select = "model_a"
         exclude = "unique_model_a_fun"
-        expected = ["just_a"]
+        expected = ["just_a", "unique_model_a_fun_2"]
         indirect_selection = "cautious"
 
         self.list_tests_and_assert(select, exclude, expected, indirect_selection)
@@ -195,6 +201,7 @@ class TestSelectionExpansion:
             "cf_a_src",
             "relationships_model_a_fun__fun__ref_model_b_",
             "relationships_model_a_fun__fun__source_my_src_my_tbl_",
+            "unique_model_a_fun_2",
         ]
         indirect_selection = "buildable"
 
@@ -213,6 +220,7 @@ class TestSelectionExpansion:
             "source_unique_my_src_my_tbl_fun",
             "source_unique_my_src_my_tbl_fun_2",
             "unique_model_a_fun",
+            "unique_model_a_fun_2",
         ]
 
         self.list_tests_and_assert(select, exclude, expected)
@@ -282,7 +290,7 @@ class TestSelectionExpansion:
     ):
         select = "model_a,test_name:unique"
         exclude = None
-        expected = ["unique_model_a_fun"]
+        expected = ["unique_model_a_fun", "unique_model_a_fun_2"]
 
         self.list_tests_and_assert(select, exclude, expected)
         self.run_tests_and_assert(select, exclude, expected)
@@ -311,6 +319,7 @@ class TestSelectionExpansion:
             "relationships_model_a_fun__fun__ref_model_b_",
             "relationships_model_a_fun__fun__source_my_src_my_tbl_",
             "unique_model_a_fun",
+            "unique_model_a_fun_2",
         ]
 
         self.list_tests_and_assert(select, exclude, expected)
@@ -343,6 +352,7 @@ class TestSelectionExpansion:
             "relationships_model_a_fun__fun__ref_model_b_",
             "relationships_model_a_fun__fun__source_my_src_my_tbl_",
             "unique_model_a_fun",
+            "unique_model_a_fun_2",
         ]
 
         self.list_tests_and_assert(select, exclude, expected)
@@ -402,6 +412,7 @@ class TestSelectionExpansion:
             "relationships_model_a_fun__fun__ref_model_b_",
             "relationships_model_a_fun__fun__source_my_src_my_tbl_",
             "unique_model_a_fun",
+            "unique_model_a_fun_2",
         ]
 
         self.list_tests_and_assert(select, exclude, expected)
@@ -420,6 +431,7 @@ class TestSelectionExpansion:
             "relationships_model_a_fun__fun__ref_model_b_",
             "relationships_model_a_fun__fun__source_my_src_my_tbl_",
             "unique_model_a_fun",
+            "unique_model_a_fun_2",
         ]
 
         self.list_tests_and_assert(select, exclude, expected)
@@ -438,6 +450,7 @@ class TestSelectionExpansion:
             "relationships_model_a_fun__fun__ref_model_b_",
             "relationships_model_a_fun__fun__source_my_src_my_tbl_",
             "unique_model_a_fun",
+            "unique_model_a_fun_2",
         ]
         indirect_selection = "eager"
 
@@ -453,6 +466,7 @@ class TestSelectionExpansion:
         expected = [
             "just_a",
             "unique_model_a_fun",
+            "unique_model_a_fun_2",
         ]
         indirect_selection = "cautious"
 
@@ -472,6 +486,7 @@ class TestSelectionExpansion:
             "relationships_model_a_fun__fun__ref_model_b_",
             "relationships_model_a_fun__fun__source_my_src_my_tbl_",
             "unique_model_a_fun",
+            "unique_model_a_fun_2",
         ]
         indirect_selection = "buildable"
 
@@ -538,6 +553,7 @@ class TestExpansionWithSelectors(TestSelectionExpansion):
             "relationships_model_a_fun__fun__ref_model_b_",
             "relationships_model_a_fun__fun__source_my_src_my_tbl_",
             "unique_model_a_fun",
+            "unique_model_a_fun_2",
         ]
 
         self.list_tests_and_assert(
@@ -557,7 +573,7 @@ class TestExpansionWithSelectors(TestSelectionExpansion):
         self,
         project,
     ):
-        expected = ["just_a", "unique_model_a_fun"]
+        expected = ["just_a", "unique_model_a_fun", "unique_model_a_fun_2"]
 
         self.list_tests_and_assert(
             include=None,
@@ -583,6 +599,7 @@ class TestExpansionWithSelectors(TestSelectionExpansion):
             "relationships_model_a_fun__fun__ref_model_b_",
             "relationships_model_a_fun__fun__source_my_src_my_tbl_",
             "unique_model_a_fun",
+            "unique_model_a_fun_2",
         ]
 
         self.list_tests_and_assert(
@@ -609,6 +626,7 @@ class TestExpansionWithSelectors(TestSelectionExpansion):
             "relationships_model_a_fun__fun__ref_model_b_",
             "relationships_model_a_fun__fun__source_my_src_my_tbl_",
             "unique_model_a_fun",
+            "unique_model_a_fun_2",
         ]
 
         self.list_tests_and_assert(
