@@ -87,12 +87,6 @@ class TestValidTimeSpines:
         semantic_manifest = SemanticManifest(manifest)
         assert semantic_manifest.validate()
         project_config = semantic_manifest._get_pydantic_semantic_manifest().project_configuration
-        # Legacy config
-        assert len(project_config.time_spine_table_configurations) == 1
-        legacy_time_spine_config = project_config.time_spine_table_configurations[0]
-        assert legacy_time_spine_config.column_name == day_column_name
-        assert legacy_time_spine_config.location.replace('"', "").split(".")[-1] == day_model_name
-        assert legacy_time_spine_config.grain == TimeGranularity.DAY
         # Current configs
         assert len(project_config.time_spines) == 2
         sl_time_spine_aliases: Set[str] = set()
