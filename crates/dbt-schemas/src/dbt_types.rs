@@ -32,16 +32,14 @@ impl RelationType {
     /// Convert a given type string for a given [AdapterType] to a dbt RelationType
     pub fn from_adapter_type(adapter_type: AdapterType, type_string: &str) -> Self {
         match adapter_type {
-            AdapterType::Bigquery => {
-                // https://cloud.google.com/bigquery/docs/information-schema-tables
-                match type_string {
-                    "BASE TABLE" | "CLONE" | "SNAPSHOT" => RelationType::Table,
-                    "VIEW" => RelationType::View,
-                    "MATERIALIZED VIEW" => RelationType::MaterializedView,
-                    "EXTERNAL" => RelationType::External,
-                    _ => panic!("unknown table type: {type_string}"),
-                }
-            }
+            // https://cloud.google.com/bigquery/docs/information-schema-tables
+            AdapterType::Bigquery => match type_string.to_uppercase().as_str() {
+                "BASE TABLE" | "CLONE" | "SNAPSHOT" | "TABLE" => RelationType::Table,
+                "VIEW" => RelationType::View,
+                "MATERIALIZED VIEW" => RelationType::MaterializedView,
+                "EXTERNAL" => RelationType::External,
+                _ => panic!("unknown table type: {type_string}"),
+            },
             // https://docs.databricks.com/aws/en/sql/language-manual/information-schema/tables#table-types
             AdapterType::Databricks => match type_string.to_uppercase().as_str() {
                 "TABLE" => RelationType::Table,
