@@ -176,13 +176,19 @@ pub async fn resolve_data_tests(
             test_config.schema = Some(DEFAULT_TEST_SCHEMA.to_string());
         }
 
-        let test_name = dbt_asset
-            .path
-            .file_stem()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string();
+        // Use the custom test name from GenericTestAsset if available, otherwise use the filename
+        let test_name = test_path_to_test_asset
+            .get(&dbt_asset.path)
+            .map(|test_asset| test_asset.test_name.clone())
+            .unwrap_or_else(|| {
+                dbt_asset
+                    .path
+                    .file_stem()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string()
+            });
 
         let properties = if let Some(properties) = maybe_properties {
             properties

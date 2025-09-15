@@ -561,6 +561,11 @@ fn generate_test_name(
     package_name: Option<&String>,
     jinja_set_vars: &BTreeMap<String, String>,
 ) -> String {
+    // If a custom test name is provided, use it directly for the display name
+    if let Some(custom_test_name) = custom_test_name {
+        return custom_test_name;
+    }
+
     // Flatten args (excluding 'model' and config args)
     let mut flat_args = Vec::new();
     for (arg_name, arg_val) in kwargs.iter().sorted_by(|a, b| a.0.cmp(b.0)) {
@@ -588,11 +593,6 @@ fn generate_test_name(
         };
 
         flat_args.extend(parts);
-    }
-
-    // Include custom_test_name as suffix if provided
-    if let Some(custom_test_name) = custom_test_name {
-        flat_args.push(custom_test_name);
     }
 
     // Clean args to only allow alphanumeric and underscore
@@ -1312,9 +1312,9 @@ mod tests {
             &BTreeMap::new(),
         );
 
-        assert!(
-            test_name_no_vars.contains(custom_test_name),
-            "Test name should contain the custom test name when provided"
+        assert_eq!(
+            test_name_no_vars, custom_test_name,
+            "Test name should exactly match the custom test name when provided"
         );
     }
 
