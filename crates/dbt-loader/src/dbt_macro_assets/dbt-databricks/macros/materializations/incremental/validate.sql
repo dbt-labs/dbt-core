@@ -19,11 +19,6 @@
 {% macro dbt_databricks_validate_get_incremental_strategy(raw_strategy, file_format) %}
   {#-- Validate the incremental strategy #}
 
-  {% set invalid_strategy_msg -%}
-    Invalid incremental strategy provided: {{ raw_strategy }}
-    Expected one of: 'merge', 'replace_where', 'append', 'insert_overwrite'
-  {%- endset %}
-
   {% set invalid_delta_only_msg -%}
     Invalid incremental strategy provided: {{ raw_strategy }}
     You can only choose this strategy when file_format is set to 'delta'
@@ -36,7 +31,8 @@
   {%- endset %}
 
   {% if raw_strategy not in adapter.valid_incremental_strategies() %}
-    {% do exceptions.raise_compiler_error(invalid_strategy_msg) %}
+    {{ log("WARNING - You are using an unsupported incremental strategy: " ~ raw_strategy) }}
+    {{ log("You can ignore this warning if you are using a custom incremental strategy") }}
   {%-else %}
     {% if raw_strategy == 'merge' and file_format not in ['delta', 'hudi'] %}
       {% do exceptions.raise_compiler_error(invalid_delta_only_msg) %}

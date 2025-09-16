@@ -603,7 +603,7 @@ impl BaseAdapter for BridgeAdapter {
                 .typed_adapter
                 .valid_incremental_strategies()
                 .contains(&strategy_)
-                && !builtin_incremental_strategies(false).contains(&strategy_)
+                && builtin_incremental_strategies(false).contains(&strategy_)
             {
                 return invalid_argument!(
                     "The incremental strategy '{}' is not valid for this adapter",

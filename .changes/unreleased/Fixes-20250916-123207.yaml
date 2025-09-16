@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix the DbtIncrementalStrategy enum to take into account custom strategies.
+time: 2025-09-16T12:32:07.624849723-07:00
+custom:
+    author: xuliangs
+    issue: "762"
+    project: dbt-fusion

@@ -504,8 +504,9 @@ pub enum DbtIncrementalStrategy {
     /// replace_where (Databricks only)
     /// see https://docs.getdbt.com/reference/resource-configs/databricks-configs
     ReplaceWhere,
-    #[serde(other)]
-    Unknown,
+    #[strum(default)]
+    #[serde(untagged)]
+    Custom(String),
 }
 
 #[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, JsonSchema)]
