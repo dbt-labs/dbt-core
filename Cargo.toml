@@ -467,6 +467,7 @@ tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
 # OpenTelemetry (optional embedded OTLP exporter for traces, see dbt-common)
 opentelemetry = "0.30.0"
 opentelemetry-otlp = "0.30.0"
+opentelemetry-proto = "=0.30.0"
 opentelemetry-semantic-conventions = "0.30.0"
 opentelemetry_sdk = "0.30.0"
 

@@ -13,9 +13,6 @@ prost-types = { workspace = true }
 serde = { workspace = true }
 
 
-[dev-dependencies]
-prost-reflect = "0.14"
-
 [lib]
 name = "proto_rust"
 path = "src/lib.rs"

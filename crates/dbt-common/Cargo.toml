@@ -69,6 +69,7 @@ tracing-subscriber = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 opentelemetry = { workspace = true }
 opentelemetry-otlp = { workspace = true }
+opentelemetry-proto = { workspace = true }
 opentelemetry-semantic-conventions = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 
