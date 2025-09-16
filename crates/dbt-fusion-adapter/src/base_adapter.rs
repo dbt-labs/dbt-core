@@ -10,7 +10,7 @@ use dbt_common::adapter::SchemaRegistry;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::ReplayMode;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
-use dbt_schemas::schemas::columns::base::BaseColumn;
+use dbt_schemas::schemas::columns::{BigqueryColumnMode, StdColumn};
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_xdbc::{Backend, Connection};
@@ -597,7 +597,7 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
 ///
 /// It can create adapters wrapped in a boxed `dyn BaseAdapter`
 /// objects. Similarly, it can create boxed `dyn BaseRelation`
-/// and `dyn BaseColumn` objects.
+/// and `StdColumn` objects.
 pub trait AdapterFactory: Send + Sync {
     #[allow(clippy::too_many_arguments)]
     fn create_adapter(
@@ -628,8 +628,8 @@ pub trait AdapterFactory: Send + Sync {
         char_size: Option<u32>,
         numeric_precision: Option<u64>,
         numeric_scale: Option<u64>,
-        mode: Option<String>,
-    ) -> Result<Arc<dyn BaseColumn>, minijinja::Error>;
+        mode: Option<BigqueryColumnMode>,
+    ) -> Result<StdColumn, minijinja::Error>;
 
     /// Return a new instance of the factory with a different relation cache.
     fn with_relation_cache(&self, relation_cache: Arc<RelationCache>) -> Arc<dyn AdapterFactory>;

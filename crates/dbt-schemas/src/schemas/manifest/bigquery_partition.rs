@@ -1,3 +1,4 @@
+use dbt_common::adapter::AdapterType;
 use dbt_common::current_function_name;
 use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize};
 use minijinja::value::Enumerator;
@@ -10,8 +11,7 @@ use minijinja::{
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumIter, EnumString, IntoEnumIterator};
 
-use crate::schemas::columns::bigquery::BigqueryColumn;
-use crate::schemas::serde::minijinja_value_to_typed_struct;
+use crate::schemas::columns::StdColumn;
 
 use std::convert::AsRef;
 use std::{rc::Rc, sync::Arc};
@@ -167,7 +167,7 @@ impl BigqueryPartitionConfig {
         parser.check_num_args(current_function_name!(), 0, 1)?;
 
         let columns = parser.get::<MinijinjaValue>("columns")?;
-        if let Ok(columns) = minijinja_value_to_typed_struct::<Vec<BigqueryColumn>>(columns) {
+        if let Ok(columns) = StdColumn::vec_from_jinja_value(AdapterType::Bigquery, columns) {
             let columns = columns
                 .into_iter()
                 .filter_map(|c| {
@@ -182,7 +182,7 @@ impl BigqueryPartitionConfig {
         } else {
             Err(MinijinjaError::new(
                 MinijinjaErrorKind::InvalidArgument,
-                "columns must be a list of BigqueryColumn",
+                "columns must be a list of StdColumn",
             ))
         }
     }

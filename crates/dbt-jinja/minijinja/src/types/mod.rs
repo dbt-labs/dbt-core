@@ -89,6 +89,7 @@ pub enum Type {
     Frame,
     /// Object type
     Object(DynObject),
+    // TODO(serramatutu): remove this
     /// StdColumn type
     StdColumn,
     /// Namespace type

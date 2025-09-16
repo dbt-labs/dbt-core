@@ -1,6 +1,6 @@
 use crate::base_adapter::{AdapterType, AdapterTyping};
 use crate::cache::RelationCache;
-use crate::cast_util::{downcast_value_to_dyn_base_relation, dyn_base_columns_to_value};
+use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::funcs::{
     dispatch_adapter_calls, dispatch_adapter_get_value, execute_macro, execute_macro_wrapper,
     none_value,
@@ -22,7 +22,7 @@ use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::{FsError, FsResult, current_function_name};
 use dbt_schemas::schemas::InternalDbtNodeWrapper;
-use dbt_schemas::schemas::columns::base::StdColumn;
+use dbt_schemas::schemas::columns::StdColumn;
 use dbt_schemas::schemas::common::{DbtIncrementalStrategy, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::{
@@ -795,9 +795,7 @@ impl BaseAdapter for BridgeAdapter {
         let result = self
             .typed_adapter
             .get_missing_columns(state, from_relation, to_relation)?;
-
-        let result = dyn_base_columns_to_value(result)?;
-        Ok(result)
+        Ok(Value::from_object(result))
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
@@ -814,7 +812,7 @@ impl BaseAdapter for BridgeAdapter {
 
         if self.typed_adapter.is_replay() {
             return match self.typed_adapter.get_columns_in_relation(state, relation) {
-                Ok(result) => Ok(Value::from_iter(result.iter().map(|c| c.as_value()))),
+                Ok(result) => Ok(Value::from(result)),
                 Err(e) => Err(MinijinjaError::new(
                     MinijinjaErrorKind::SerdeDeserializeError,
                     e.to_string(),
@@ -843,10 +841,10 @@ impl BaseAdapter for BridgeAdapter {
                                 .get_columns_in_relation(state, relation.clone())
                             {
                                 Ok(mut from_remote) => {
-                                    from_remote.sort_by_key(|c| c.name());
+                                    from_remote.sort_by(|a, b| a.name.cmp(&b.name));
 
                                     let mut from_local = from_local.clone();
-                                    from_local.sort_by_key(|c| c.name());
+                                    from_local.sort_by(|a, b| a.name.cmp(&b.name));
 
                                     println!("local  remote mismatches");
                                     if !from_remote.is_empty() {
@@ -854,9 +852,8 @@ impl BaseAdapter for BridgeAdapter {
                                         for (local, remote) in
                                             from_local.iter().zip(from_remote.iter())
                                         {
-                                            let mismatch = (local.data_type()
-                                                != remote.data_type())
-                                                || (local.name() != remote.name());
+                                            let mismatch = (local.dtype != remote.dtype)
+                                                || (local.name != remote.name);
                                             if mismatch {
                                                 println!(
                                                     "adapter.get_columns_in_relation for {}",
@@ -864,10 +861,10 @@ impl BaseAdapter for BridgeAdapter {
                                                 );
                                                 println!(
                                                     "{}:{}  {}:{}",
-                                                    local.name(),
-                                                    local.data_type(),
-                                                    remote.name(),
-                                                    remote.data_type()
+                                                    local.name,
+                                                    local.dtype,
+                                                    remote.name,
+                                                    remote.dtype
                                                 );
                                             }
                                         }
@@ -881,7 +878,7 @@ impl BaseAdapter for BridgeAdapter {
                             }
                         }
                     }
-                    return Ok(Value::from_iter(from_local.iter().map(|c| c.as_value())));
+                    return Ok(Value::from(from_local));
                 }
             }
         }
@@ -889,8 +886,7 @@ impl BaseAdapter for BridgeAdapter {
         let from_remote = self
             .typed_adapter
             .get_columns_in_relation(state, relation)?;
-        let result = dyn_base_columns_to_value(from_remote)?;
-        Ok(result)
+        Ok(Value::from(from_remote))
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
@@ -978,8 +974,7 @@ impl BaseAdapter for BridgeAdapter {
         let result =
             self.typed_adapter
                 .get_column_schema_from_query(state, conn.as_mut(), &query_ctx)?;
-        let result = dyn_base_columns_to_value(result)?;
-        Ok(result)
+        Ok(Value::from(result))
     }
 
     /// reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L443-L444
@@ -1536,10 +1531,10 @@ impl BaseAdapter for BridgeAdapter {
 
         let model_columns = parser.get::<Value>("model_columns")?;
 
-        let existing_columns = minijinja_value_to_typed_struct::<Vec<StdColumn>>(existing_columns)
-            .map_err(|e| {
-                MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
-            })?;
+        let existing_columns =
+            StdColumn::vec_from_jinja_value(AdapterType::Databricks, existing_columns).map_err(
+                |e| MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string()),
+            )?;
         let model_columns =
             minijinja_value_to_typed_struct::<BTreeMap<String, DbtColumnRef>>(model_columns)
                 .map_err(|e| {

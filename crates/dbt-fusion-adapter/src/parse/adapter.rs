@@ -20,7 +20,7 @@ use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::ReplayMode;
 use dbt_common::{FsError, FsResult, current_function_name};
-use dbt_schemas::schemas::columns::base::StdColumnType;
+use dbt_schemas::schemas::columns::{BigqueryColumnMode, StdColumn, StdColumnType};
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
 use dbt_xdbc::Connection;
@@ -256,7 +256,7 @@ impl AdapterTyping for ParseAdapter {
     }
 
     fn column_type(&self) -> Option<Value> {
-        let value = Value::from_object(StdColumnType);
+        let value = Value::from_object(StdColumnType::new(self.adapter_type));
         Some(value)
     }
 
@@ -826,8 +826,8 @@ impl AdapterFactory for AdapterFactoryForParse {
         _char_size: Option<u32>,
         _numeric_precision: Option<u64>,
         _numeric_scale: Option<u64>,
-        _mode: Option<String>,
-    ) -> Result<Arc<dyn dbt_schemas::schemas::columns::base::BaseColumn>, minijinja::Error> {
+        _mode: Option<BigqueryColumnMode>,
+    ) -> Result<StdColumn, minijinja::Error> {
         unreachable!("AdapterFactoryForParse should not be used to create columns")
     }
 

@@ -15,7 +15,7 @@ use arrow_schema::{DataType, Schema};
 use dbt_common::FsResult;
 use dbt_common::behavior_flags::BehaviorFlag;
 use dbt_frontend_common::dialect::Dialect;
-use dbt_schemas::schemas::columns::base::{BaseColumn, StdColumn, string_type};
+use dbt_schemas::schemas::columns::StdColumn;
 use dbt_schemas::schemas::common::Constraint;
 use dbt_schemas::schemas::common::ConstraintSupport;
 use dbt_schemas::schemas::common::ConstraintType;
@@ -279,17 +279,17 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         state: &State,
         source_relation: Arc<dyn BaseRelation>,
         target_relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Vec<Arc<dyn BaseColumn>>> {
+    ) -> AdapterResult<Vec<StdColumn>> {
         // Get columns for both relations
         let source_cols = self.get_columns_in_relation(state, source_relation)?;
         let target_cols = self.get_columns_in_relation(state, target_relation)?;
 
         let source_cols_map: BTreeMap<_, _> = source_cols
             .into_iter()
-            .map(|col| (col.name(), col))
+            .map(|col| (col.name.to_string(), col))
             .collect();
         let target_cols_set: std::collections::HashSet<_> =
-            target_cols.into_iter().map(|col| col.name()).collect();
+            target_cols.into_iter().map(|col| col.name).collect();
 
         Ok(source_cols_map
             .into_iter()
@@ -308,13 +308,10 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         state: &State,
         relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Vec<Arc<dyn BaseColumn>>>;
+    ) -> AdapterResult<Vec<StdColumn>>;
 
-    /// Convert a Schema of Arrow to be represented via BaseColumn
-    fn arrow_schema_to_dbt_columns(
-        &self,
-        schema: Arc<Schema>,
-    ) -> AdapterResult<Vec<Arc<dyn BaseColumn>>>;
+    /// Convert a Schema of Arrow to be represented via StdColumn
+    fn arrow_schema_to_dbt_columns(&self, schema: Arc<Schema>) -> AdapterResult<Vec<StdColumn>>;
 
     /// Truncate relation
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L147
@@ -400,20 +397,24 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         // Create HashMaps for efficient lookup
         let from_columns_map = from_columns
             .into_iter()
-            .map(|c| (c.name(), c))
+            .map(|c| (c.name.to_string(), c))
             .collect::<BTreeMap<_, _>>();
 
         let to_columns_map = to_columns
             .into_iter()
-            .map(|c| (c.name(), c))
+            .map(|c| (c.name.to_string(), c))
             .collect::<BTreeMap<_, _>>();
 
         for (column_name, reference_column) in from_columns_map {
             let to_relation_cloned = to_relation.clone();
             if let Some(target_column) = to_columns_map.get(&column_name) {
-                if target_column.can_expand_to(reference_column.to_value()?)? {
-                    let col_string_size = reference_column.string_size()?;
-                    let new_type = string_type(col_string_size);
+                if target_column.can_expand_to(&reference_column)? {
+                    let col_string_size = reference_column.string_size().map_err(|msg| {
+                        AdapterError::new(AdapterErrorKind::UnexpectedResult, msg)
+                    })?;
+                    let new_type = reference_column
+                        .as_static()
+                        .string_type(Some(col_string_size as usize));
 
                     // Create args for macro execution
                     execute_macro(
@@ -672,14 +673,14 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         _state: &State,
         conn: &mut dyn Connection,
         query_ctx: &QueryCtx,
-    ) -> AdapterResult<Vec<Arc<dyn BaseColumn>>>;
+    ) -> AdapterResult<Vec<StdColumn>>;
 
     /// Get columns in select sql
     fn get_columns_in_select_sql(
         &self,
         _conn: &'_ mut dyn Connection,
         _sql: &str,
-    ) -> AdapterResult<Vec<Arc<dyn BaseColumn>>> {
+    ) -> AdapterResult<Vec<StdColumn>> {
         unimplemented!("only available with BigQuery adapter")
     }
 
@@ -851,10 +852,8 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         strategy: Arc<SnapshotStrategy>,
     ) -> AdapterResult<()> {
         let columns = self.get_columns_in_relation(state, relation)?;
-        let names_in_relation: Vec<String> = columns
-            .iter()
-            .map(|c| c.name_prop().to_lowercase())
-            .collect();
+        let names_in_relation: Vec<String> =
+            columns.iter().map(|c| c.name.to_lowercase()).collect();
 
         // missing columns
         let mut missing: Vec<String> = Vec::new();
