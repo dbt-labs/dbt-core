@@ -569,6 +569,29 @@ impl FlatRecordBatch {
         Arc::new(Self::_from_flattened_record_batch(Arc::new(new_flat), None).unwrap())
     }
 
+    /// Create a new [FlatRecordBatch] by selecting a subset of columns from the current one.
+    ///
+    /// PRE-CONDITION: the indices are valid for the current batch.
+    pub(crate) fn select<'a>(
+        &'a self,
+        indices: impl Iterator<Item = usize> + 'a,
+    ) -> Arc<FlatRecordBatch> {
+        let mut fields = Vec::new();
+        let mut columns = Vec::new();
+
+        let schema = self.flat.schema_ref();
+        for idx in indices {
+            fields.push(schema.field(idx).clone());
+            columns.push(Arc::clone(self.flat.column(idx)));
+        }
+
+        let schema_metadata = schema.metadata().clone();
+        let schema = Arc::new(Schema::new_with_metadata(fields, schema_metadata));
+        // only column selection, so .unwrap() is safe
+        let new_flat = RecordBatch::try_new(schema, columns).unwrap();
+        Arc::new(Self::_from_flattened_record_batch(Arc::new(new_flat), None).unwrap())
+    }
+
     pub(crate) fn converters(&self) -> &[Box<dyn ArrayConverter>] {
         &self.converters
     }

@@ -153,6 +153,27 @@ impl TableRepr {
             .map(|field| field.name())
     }
 
+    /// Indices of the columns with the given names.
+    ///
+    /// If a name is not found, it is simply skipped. And if a name appears multiple
+    /// times, only the first occurrence is returned.
+    pub fn column_indices<'a>(&'a self, keys: &'a [String]) -> impl Iterator<Item = usize> + 'a {
+        let fields = self.flat.schema_ref().as_ref().fields();
+        let iter = keys
+            .iter()
+            .filter_map(|k| fields.iter().position(|f| f.name() == k));
+        iter
+    }
+
+    pub fn select<'a>(&'a self, indices: impl Iterator<Item = usize> + 'a) -> Arc<Self> {
+        // get a new FlatRecordBatch with only the selected columns
+        let flat = self.flat.select(indices);
+        // row names remain the same when selecting columns
+        let row_names = self.row_names.as_ref().map(Arc::clone);
+        let repr = TableRepr::new(flat, None, row_names);
+        Arc::new(repr)
+    }
+
     pub fn single_column_table(&self, idx: isize) -> Option<Arc<TableRepr>> {
         let idx = self.adjusted_column_index(idx)?;
         let flat_with_single_column = self.flat.with_single_column(idx);
@@ -400,6 +421,13 @@ impl AgateTable {
         self.repr.column_names().map(|s| s.to_owned()).collect()
     }
 
+    /// Create a new table with only the specified columns.
+    pub fn select(&self, keys: &[String]) -> AgateTable {
+        let indices = self.repr.column_indices(keys);
+        let repr = self.repr.select(indices);
+        AgateTable::from_repr(repr)
+    }
+
     // Rows -------------------------------------------------------------------
 
     /// Get the number of rows.
@@ -557,6 +585,7 @@ impl Object for AgateTable {
                 let columns = self.columns();
                 Some(Value::from_object(columns))
             }
+            "column_types" => todo!("AgateTable::column_types"),
             "column_names" => {
                 let names = self.column_names();
                 let repr = ColumnNamesAsTuple::new(names);
@@ -588,6 +617,8 @@ impl Object for AgateTable {
         _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
         match name {
+            // TODO: print_csv
+            // TODO: print_json
             "print_table" => {
                 // Parse arguments or use defaults matching Python implementation:
                 //
@@ -609,6 +640,55 @@ impl Object for AgateTable {
                 iter.finish()?;
 
                 print_table(self, max_rows, max_columns, max_column_width)
+            }
+            "select" => {
+                // ```python
+                // def select(self, key):
+                //     """
+                //     Create a new table with only the specified columns.
+                //
+                //     :param key:
+                //         Either the name of a single column to include or a sequence of such
+                //         names.
+                //     :returns:
+                //         A new :class:`.Table`.
+                //     """
+                // ```
+                let iter = ArgsIter::new("Table.select", &["key"], args);
+                let key = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+
+                let keys = if let Some(single_key) = key.as_str() {
+                    Vec::from([single_key.to_string()])
+                } else {
+                    let iter = match key.try_iter() {
+                        Ok(iter) => iter,
+                        Err(e) => {
+                            return Err(MinijinjaError::new(
+                                minijinja::ErrorKind::InvalidArgument,
+                                format!(
+                                    "Table.select: key must be a string or an array of strings: {e}"
+                                ),
+                            ));
+                        }
+                    };
+                    let mut keys = Vec::new();
+                    for v in iter {
+                        if let Some(s) = v.as_str() {
+                            keys.push(s.to_string());
+                        } else {
+                            return Err(MinijinjaError::new(
+                                minijinja::ErrorKind::InvalidArgument,
+                                format!(
+                                    "Table.select: key must be a string or an array of strings: {v} found instead"
+                                ),
+                            ));
+                        }
+                    }
+                    keys
+                };
+                let table = self.select(keys.as_slice());
+                Ok(Value::from_object(table))
             }
             "rename" => {
                 //     def rename(column_names=None, row_names=None,
@@ -638,13 +718,6 @@ impl Object for AgateTable {
                     kwargs,
                 )?;
                 Ok(Value::from_object(table))
-            }
-            "row_names" => {
-                let value = match self.row_names() {
-                    Some(row_names) => Value::from_object(row_names),
-                    None => Value::from(()),
-                };
-                Ok(value)
             }
             other => unimplemented!("AgateTable::{}", other),
         }
@@ -708,6 +781,54 @@ mod tests {
     }
 
     #[test]
+    fn test_select() {
+        let batch = simple_record_batch();
+        let agate_table = AgateTable::from_record_batch(batch);
+        let table = Value::from_object(agate_table);
+
+        let env = Environment::new();
+        let state = env.empty_state();
+        let select = |table: &Value, args: &[Value]| -> Result<Value, MinijinjaError> {
+            table.call_method(&state, "select", args, &[])
+        };
+
+        let selected = select(
+            &table,
+            &[Value::from_iter([
+                Value::from("country"),
+                Value::from("id"),
+                Value::from("country"),
+            ])],
+        )
+        .unwrap()
+        .downcast_object::<AgateTable>()
+        .unwrap();
+
+        assert_eq!(selected.num_columns(), 3);
+        assert_eq!(selected.num_rows(), 3);
+
+        assert_eq!(selected.column_name(0).unwrap(), "country");
+        assert_eq!(selected.column_name(1).unwrap(), "id");
+        assert_eq!(selected.column_name(2).unwrap(), "country");
+
+        let cols = selected.columns().values();
+        let country = cols.get(2).unwrap();
+        assert_eq!(country.len(), Some(3));
+        assert_eq!(
+            country.get_item_by_index(0).unwrap().as_str().unwrap(),
+            "Brazil"
+        );
+        assert_eq!(
+            country.get_item_by_index(1).unwrap().as_str().unwrap(),
+            "USA"
+        );
+        assert_eq!(
+            country.get_item_by_index(2).unwrap().as_str().unwrap(),
+            "Canada"
+        );
+    }
+
+    #[test]
     fn test_rows() {
         let table = AgateTable::from_record_batch(simple_record_batch());
         let rows = table.rows();
@@ -752,10 +873,8 @@ mod tests {
         assert_eq!(row_names.count(&row_2_name), 1);
 
         // Now get the rows via the Jinja API
-        let env = Environment::new();
-        let state = env.empty_state();
         let table = Value::from_object(table);
-        let row_names = table.call_method(&state, "row_names", &[], &[]).unwrap();
+        let row_names = table.get_attr("row_names").unwrap();
         row_names
             .try_iter()
             .unwrap()
