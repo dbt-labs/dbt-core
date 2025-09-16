@@ -79,7 +79,8 @@ class FunctionRunner(CompileRunner):
             status=RunStatus.Success,
             timing=[],
             thread_id=threading.current_thread().name,
-            execution_time=0.0,  # TODO: add execution time
+            # This gets set later in `from_run_result` called by `BaseRunner.safe_run`
+            execution_time=0.0,
             message=str(loaded_result.response),
             adapter_response=loaded_result.response.to_dict(omit_none=True),
             failures=loaded_result.get("failures"),
@@ -92,10 +93,6 @@ class FunctionRunner(CompileRunner):
         context = generate_runtime_function_context(compiled_node, self.config, manifest)
 
         MacroGenerator(materialization_macro, context=context)()
-
-        # TODO: Should we be caching something here?
-        # for relation in self._materialization_relations(result, compiled_node):
-        #     self.adapter.cache_added(relation.incorporate(dbt_created=True))
 
         return self.build_result(compiled_node, context)
 
