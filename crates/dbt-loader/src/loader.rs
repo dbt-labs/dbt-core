@@ -204,6 +204,8 @@ pub async fn load(
         &packages_install_path,
         arg.install_deps,
         arg.add_package.clone(),
+        arg.upgrade,
+        arg.lock,
         arg.vars.clone(),
         token,
     )

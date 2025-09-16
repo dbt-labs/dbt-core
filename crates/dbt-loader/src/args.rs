@@ -31,6 +31,10 @@ pub struct LoadArgs {
     pub install_deps: bool,
     /// add_package cli option
     pub add_package: Option<String>,
+    /// upgrade dependencies
+    pub upgrade: bool,
+    /// generate lock file only
+    pub lock: bool,
     // Whether to load only profiles
     pub debug_profile: bool,
     /// This is for incremental.
@@ -52,6 +56,8 @@ impl LoadArgs {
             target: arg.target.clone(),
             update_deps: arg.update_deps,
             add_package: arg.add_package.clone(),
+            upgrade: arg.upgrade,
+            lock: arg.lock,
             vars: arg.vars.clone(),
             from_main: arg.from_main,
             threads: arg.num_threads,

@@ -110,6 +110,10 @@ pub struct InitArgs {
 pub struct DepsArgs {
     #[arg(long)]
     pub add_package: Option<String>,
+    #[arg(long)]
+    pub upgrade: bool,
+    #[arg(long)]
+    pub lock: bool,
 
     // Flattened Common args
     #[clap(flatten)]
@@ -383,6 +387,9 @@ impl DepsArgs {
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
         eval_args.phase = Phases::Deps;
+        eval_args.add_package = self.add_package.clone();
+        eval_args.upgrade = self.upgrade;
+        eval_args.lock = self.lock;
         eval_args
     }
 }

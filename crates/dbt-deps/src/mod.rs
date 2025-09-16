@@ -27,14 +27,16 @@ use steps::{
     compute_package_lock, install_packages, load_dbt_packages, try_load_valid_dbt_packages_lock,
 };
 
-#[allow(clippy::cognitive_complexity)]
 /// Loads and installs packages, and returns the packages lock and the dependencies map
+#[allow(clippy::cognitive_complexity, clippy::too_many_arguments)]
 pub async fn get_or_install_packages(
     io: &IoArgs,
     env: &JinjaEnv,
     packages_install_path: &Path,
     install_deps: bool,
     add_package: Option<String>,
+    upgrade: bool,
+    lock: bool,
     vars: BTreeMap<String, dbt_serde_yaml::Value>,
     token: &CancellationToken,
 ) -> FsResult<(DbtPackagesLock, Vec<UpstreamProject>)> {
@@ -57,6 +59,7 @@ pub async fn get_or_install_packages(
         add_package::add_package(&add_package, &io.in_dir)?;
     }
 
+    // This gets the package entries from packages.yml or dependencies.yml
     let (package_def, package_yml_name) = load_dbt_packages(io, &io.in_dir)?;
 
     // Store projects for later use if package_def exists
@@ -67,8 +70,10 @@ pub async fn get_or_install_packages(
     };
 
     let dbt_packages_lock = if let Some(ref dbt_packages) = package_def {
-        if let Some(dbt_packages_lock) =
-            try_load_valid_dbt_packages_lock(io, packages_install_path, dbt_packages)?
+        if !upgrade
+            && !lock
+            && let Some(dbt_packages_lock) =
+                try_load_valid_dbt_packages_lock(io, packages_install_path, dbt_packages)?
         {
             show_progress!(io, fsinfo!(LOADING.into(), package_yml_name.to_string()));
             dbt_packages_lock
@@ -80,7 +85,7 @@ pub async fn get_or_install_packages(
         DbtPackagesLock::default()
     };
 
-    if install_deps && !dbt_packages_lock.packages.is_empty() {
+    if install_deps && !lock && !dbt_packages_lock.packages.is_empty() {
         // Write out the lock file
         show_progress!(io, fsinfo!(INSTALLING.into(), "packages".to_string()));
         // check if the packages install path exists
@@ -100,15 +105,17 @@ pub async fn get_or_install_packages(
     }
 
     let mut missing_packages = Vec::new();
-    for package in dbt_packages_lock.packages.iter() {
-        if !packages_install_path.join(package.package_name()).exists() {
-            missing_packages.push(package.package_name());
+    if !lock {
+        for package in dbt_packages_lock.packages.iter() {
+            if !packages_install_path.join(package.package_name()).exists() {
+                missing_packages.push(package.package_name());
+            }
         }
     }
     let mut missing_packages_after_auto_install = Vec::new();
 
     // Auto install missing packages if not installing deps
-    if !missing_packages.is_empty() {
+    if !lock && !missing_packages.is_empty() {
         if !install_deps {
             // check if the packages install path exists
             if !packages_install_path.exists() {

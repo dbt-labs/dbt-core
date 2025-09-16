@@ -179,6 +179,10 @@ pub struct EvalArgs {
     pub packages_install_path: Option<PathBuf>,
     // A package to add to deps
     pub add_package: Option<String>,
+    // Upgrade deps
+    pub upgrade: bool,
+    // Generate lock file only
+    pub lock: bool,
     // The profile to use
     pub profile: Option<String>,
     // The target within the profile to use for the dbt run
