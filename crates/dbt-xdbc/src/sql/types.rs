@@ -7,6 +7,7 @@ use arrow_schema::{DataType, Field, IntervalUnit, TimeUnit};
 
 use crate::Backend;
 
+use super::ident::Ident;
 use super::tokenizer::{Token, Tokenizer};
 
 #[derive(Debug, Copy, Clone)]
@@ -262,7 +263,7 @@ pub enum SqlType {
     /// ARRAY
     Array(Option<Box<SqlType>>),
     /// STRUCT, STRUCT<>, STRUCT<...>
-    Struct(Option<Vec<(String, SqlType, bool)>>),
+    Struct(Option<Vec<(Ident, SqlType, bool)>>),
     /// MAP <key type, value type>
     Map(Option<(Box<SqlType>, Box<SqlType>)>),
     /// VARIANT
@@ -563,7 +564,7 @@ impl SqlType {
                     if i > 0 {
                         write!(out, ", ")?;
                     }
-                    write!(out, "{name} ")?;
+                    write!(out, "{} ", name.display(backend))?;
                     sql_type.write(backend, out)?;
                     if !nullable {
                         write!(out, " NOT NULL")?;
@@ -729,7 +730,11 @@ impl SqlType {
                 for field in fields {
                     let sql_type = Self::_from_arrow_type(backend, field.data_type());
                     let nullable = field.is_nullable();
-                    sql_fields.push((field.name().to_string(), sql_type, nullable));
+                    // XXX: this is not necessarily correct, field names might contain
+                    // quote characters that need to be escaped (meaning they should exist
+                    // in a Ident::Unquoted). But we don't have that information here.
+                    let name = Ident::Plain(field.name().clone());
+                    sql_fields.push((name, sql_type, nullable));
                 }
                 SqlType::Struct(Some(sql_fields))
             }
@@ -794,6 +799,7 @@ enum ParseError<'source> {
     UnexpectedEndOfInput,
     Unexpected(Token<'source>),
     ParseIntError(ParseIntError),
+    UnclosedQuote(char),
     ExpectedDateTimeField,
 }
 
@@ -805,6 +811,7 @@ impl fmt::Display for ParseError<'_> {
             ParseError::UnexpectedEndOfInput => write!(f, "unexpected end of input"),
             ParseError::Unexpected(token) => write!(f, "unexpected token: {token:}"),
             ParseError::ParseIntError(err) => write!(f, "{err}"),
+            ParseError::UnclosedQuote(quote) => write!(f, "'{}' is not closed", *quote),
             ParseError::ExpectedDateTimeField => {
                 write!(
                     f,
@@ -819,6 +826,74 @@ impl From<ParseIntError> for ParseError<'_> {
     fn from(err: ParseIntError) -> Self {
         ParseError::ParseIntError(err)
     }
+}
+
+/// Converts a [Token::Word] to an identifier by removing quotes and resolving escape sequences.
+///
+/// NOTE: uppercasing IS NOT performed, callers should use [eqi] if case-insensitive comparison is
+/// needed. PostgreSQL docs, for instance, say "Quoting an identifier also makes it case-sensitive" [1].
+///
+/// [1] https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS
+fn word2ident<'source>(word: String, backend: Backend) -> Result<Ident, ParseError<'source>> {
+    let mut bytes = word.bytes();
+    let first_byte = bytes.next().ok_or(ParseError::UnexpectedEndOfInput)?;
+    let is_quoted = [b'\'', b'"', b'`'].contains(&first_byte);
+
+    // TODO: handle the U&"..." quoted identifiers in PostgreSQL
+
+    if is_quoted {
+        // If the first byte is a quote, the last byte must be the same quote.
+        // This is not enough to validate the quoted identifier, but it's a necessary
+        // condition. More thorough validation is done in _unescape_quoted_ident.
+        //
+        // For instance, "abc"" passes this check, but is not a valid quoted identifier
+        // because the last "" are a escaped "" and the closing quote is missing.
+        let open_ended = match bytes.next_back() {
+            Some(b) => b != first_byte,
+            None => true,
+        };
+        if open_ended {
+            let err = ParseError::UnclosedQuote(first_byte as char);
+            return Err(err);
+        }
+        let s = _unescape_quoted_ident(word.as_ref(), first_byte, backend)?;
+        Ok(Ident::Unquoted(first_byte.try_into().unwrap(), s))
+    } else {
+        // Plain identifier, return as is
+        Ok(Ident::Plain(word))
+    }
+}
+
+/// Unescape a quoted identifier based on the backend rules.
+///
+/// PRE-CONDITIONS:
+/// - `quote` is one of: `"`, `'`, or `` ` ``
+/// - `word` is quoted with the same quote character at the start and end.
+fn _unescape_quoted_ident<'source>(
+    word: &str,
+    quote: u8,
+    backend: Backend,
+) -> Result<String, ParseError<'source>> {
+    use Backend::*;
+
+    debug_assert!(word.len() >= 2);
+    debug_assert!(word.as_bytes()[0] == quote);
+    debug_assert!(word.as_bytes()[word.len() - 1] == quote);
+
+    let inner = &word[1..word.len() - 1];
+    // TODO: review all the ident escaping rules for different backends here
+    let unescaped_string = match (backend, quote) {
+        (Postgres | Redshift | RedshiftODBC, b'"') => {
+            // In PostgreSQL, double quotes are escaped by doubling them
+            inner.replace("\"\"", "\"")
+        }
+        (_, b'\'') => {
+            // In SQL, single quotes are escaped by doubling them
+            inner.replace("''", "'")
+        }
+        _ => inner.to_string(),
+    };
+    Ok(unescaped_string)
 }
 
 struct Parser<'source> {
@@ -853,11 +928,11 @@ impl<'source> Parser<'source> {
     }
 
     fn match_(&mut self, pat: Token<'source>) -> bool {
-        self.tokenizer.match_(pat)
+        self.tokenizer.match_(move |tok| tok == pat)
     }
 
     fn match_word(&mut self, word: &'source str) -> bool {
-        self.tokenizer.match_(Token::Word(word))
+        self.match_(Token::Word(word))
     }
 
     fn next_int<T>(&mut self) -> Result<T, ParseError<'source>>
@@ -973,6 +1048,27 @@ impl<'source> Parser<'source> {
         }
     }
 
+    fn nullable(&mut self) -> Result<Option<bool>, ParseError<'source>> {
+        if self.match_word("NOT") {
+            self.expect(Token::Word("NULL"))?;
+            Ok(Some(false))
+        } else if self.match_word("NULLABLE") {
+            Ok(Some(true))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Parse an identifier, which can be a quoted or unquoted word.
+    #[allow(dead_code)]
+    fn expect_identifier(&mut self, backend: Backend) -> Result<Ident, ParseError<'source>> {
+        let tok = self.next()?;
+        match tok {
+            Token::Word(w) => word2ident(w.to_string(), backend),
+            _ => Err(ParseError::Unexpected(tok)),
+        }
+    }
+
     /// Parse the inner fields of a struct type after `(` or after `STRUCT<`.
     ///
     /// `terminator` is either `Token::RParen` or `Token::RAndle`.
@@ -980,28 +1076,21 @@ impl<'source> Parser<'source> {
         &mut self,
         backend: Backend,
         terminator: Token<'source>,
-    ) -> Result<Vec<(String, SqlType, bool)>, ParseError<'source>> {
+    ) -> Result<Vec<(Ident, SqlType, bool)>, ParseError<'source>> {
         let mut fields = Vec::new();
         loop {
             let tok = self.next()?;
             let name = match tok {
                 tok if tok == terminator => break,
-                Token::Word(w) => w.to_string(),
+                Token::Word(w) => word2ident(w.to_string(), backend)?,
                 _ => {
                     let e = ParseError::Unexpected(tok);
                     return Err(e);
                 }
             };
-            let ty = self.parse_unconstrained_type(backend)?;
-            let nullable = if self.match_word("NOT") {
-                self.expect(Token::Word("NULL"))?;
-                false
-            } else if self.match_word("NULLABLE") {
-                true
-            } else {
-                true
-            };
-            fields.push((name, ty, nullable));
+            let (ty, nullable) = self.parse_constrained_type(backend)?;
+            // Assume nullable if NOT NULL or NULLABLE is not specified for the field
+            fields.push((name, ty, nullable.unwrap_or(true)));
 
             let tok = self.next()?;
             match tok {
@@ -1016,20 +1105,22 @@ impl<'source> Parser<'source> {
         Ok(fields)
     }
 
+    /// Parse a SQL type that might have a NOT NULL constraint.
+    fn parse_constrained_type(
+        &mut self,
+        backend: Backend,
+    ) -> Result<(SqlType, Option<bool>), ParseError<'source>> {
+        let sql_type = self.parse_unconstrained_type(backend)?;
+        let nullable = self.nullable()?;
+        Ok((sql_type, nullable))
+    }
+
     // External API
 
     /// Parse the SQL type and return it along with a boolean indicating if its nullable.
     fn parse(&mut self, backend: Backend) -> Result<(SqlType, bool), ParseError<'source>> {
-        let sql_type = self.parse_unconstrained_type(backend)?;
-        if let Some(tok) = self.tokenizer.next() {
-            if tok == Token::Word("NOT") {
-                self.expect(Token::Word("NULL"))?;
-                return Ok((sql_type, false));
-            } else {
-                return Err(ParseError::Unexpected(tok));
-            }
-        }
-        Ok((sql_type, true))
+        let (ty, nullable) = self.parse_constrained_type(backend)?;
+        Ok((ty, nullable.unwrap_or(true)))
     }
 
     fn parse_unconstrained_type(
@@ -1382,63 +1473,78 @@ impl<'source> Parser<'source> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sql::ident::canonical_quote;
+    use Backend::*;
+    use DateTimeField::*;
+    use SqlType::*;
 
-    /// String inputs that parse the same way no matter the backend.
+    fn assert_parses_to(line: u32, input: &str, expected: &SqlType, backend: Backend) {
+        let (parsed, _nullable) = SqlType::parse(backend, input).unwrap();
+        let rendered = parsed.to_string(backend);
+        let expected_rendered = expected.to_string(backend);
+        assert_eq!(
+            rendered,
+            expected_rendered,
+            "input: {input}, expected: {expected:?} ({backend}) from {}:{line}",
+            file!()
+        );
+    }
+
+    /// Test that parsing leads to the expected SqlType on every backend.
+    ///
+    /// Uses [assert_parses_to] for every pair.
     #[test]
     fn test_parser() {
-        #[allow(unused_imports)]
-        // use Backend::*;
-        use DateTimeField::*;
-        use SqlType::*;
-        let data_for_backend = |_backend: Backend| {
+        let data_for_backend = |backend: Backend| {
             vec![
-                ("   boOL ", Boolean),
-                ("boOLEan ", Boolean),
-                (" tinyint", TinyInt),
-                ("smallint", SmallInt),
-                ("int2    ", SmallInt),
-                ("smallserial", SmallInt),
-                ("serial2 ", SmallInt),
-                ("iNTEger ", Integer),
-                (" iNT    ", Integer),
-                (" Int4   ", Integer),
-                ("serial  ", Integer),
-                (" Serial4", Integer),
-                (" bigint ", BigInt),
-                ("bigserial", BigInt),
-                ("serial8 ", BigInt),
-                (" int8   ", BigInt),
-                // ("  real  ", Float(None)), // Real/Float/Double depending on backend
-                // (" float4 ", Double), // Float/Double depending on backend
-                (" float8 ", Double),
-                ("Float64 ", Double),
-                ("  douBLE", Double),
-                ("double PRECIsion", Double),
-                ("DECimal         ", Numeric(None)),
-                ("decimal(20)     ", Numeric(Some((20, None)))),
-                ("deCImal( 60,  2)", Numeric(Some((60, Some(2))))),
-                ("NUMeric         ", Numeric(None)),
-                ("numeric(20)     ", Numeric(Some((20, None)))),
-                ("nuMERic( 60,  2)", Numeric(Some((60, Some(2))))),
-                ("bigDECimal      ", BigNumeric(None)),
-                ("bignumeric(20)  ", BigNumeric(Some((20, None)))),
-                ("bigdeCIMal(60,2)", BigNumeric(Some((60, Some(2))))),
-                ("bigNUMeric      ", BigNumeric(None)),
-                ("bignumeric(20)  ", BigNumeric(Some((20, None)))),
-                ("bignuMERic(60,2)", BigNumeric(Some((60, Some(2))))),
-                ("CHar         ", Char(None)),
-                ("CHar(20)     ", Char(Some(20))),
-                ("chARACter    ", Char(None)),
-                ("chARACter(20)", Char(Some(20))),
-                ("charaCTER VARying      ", Varchar(None)),
-                ("charaCTER VARying (20 )", Varchar(Some(20))),
-                ("natioNAL CHar          ", Char(None)),
-                ("natioNAL CHar vaRying  ", Varchar(None)),
-                ("charactER LARge  object", Clob),
-                ("  binaRY   LARge object", Blob),
-                ("bytea      ", Binary),
-                ("date       ", Date),
+                (line!(), "   boOL ", Boolean),
+                (line!(), "boOLEan ", Boolean),
+                (line!(), " tinyint", TinyInt),
+                (line!(), "smallint", SmallInt),
+                (line!(), "int2    ", SmallInt),
+                (line!(), "smallserial", SmallInt),
+                (line!(), "serial2 ", SmallInt),
+                (line!(), "iNTEger ", Integer),
+                (line!(), " iNT    ", Integer),
+                (line!(), " Int4   ", Integer),
+                (line!(), "serial  ", Integer),
+                (line!(), " Serial4", Integer),
+                (line!(), " bigint ", BigInt),
+                (line!(), "bigserial", BigInt),
+                (line!(), "serial8 ", BigInt),
+                (line!(), " int8   ", BigInt),
+                // (line!(), "  real  ", Float(None)), // Real/Float/Double depending on backend
+                // (line!(), " float4 ", Double), // Float/Double depending on backend
+                (line!(), " float8 ", Double),
+                (line!(), "Float64 ", Double),
+                (line!(), "  douBLE", Double),
+                (line!(), "double PRECIsion", Double),
+                (line!(), "DECimal         ", Numeric(None)),
+                (line!(), "decimal(20)     ", Numeric(Some((20, None)))),
+                (line!(), "deCImal( 60,  2)", Numeric(Some((60, Some(2))))),
+                (line!(), "NUMeric         ", Numeric(None)),
+                (line!(), "numeric(20)     ", Numeric(Some((20, None)))),
+                (line!(), "nuMERic( 60,  2)", Numeric(Some((60, Some(2))))),
+                (line!(), "bigDECimal      ", BigNumeric(None)),
+                (line!(), "bignumeric(20)  ", BigNumeric(Some((20, None)))),
+                (line!(), "bigdeCIMal(60,2)", BigNumeric(Some((60, Some(2))))),
+                (line!(), "bigNUMeric      ", BigNumeric(None)),
+                (line!(), "bignumeric(20)  ", BigNumeric(Some((20, None)))),
+                (line!(), "bignuMERic(60,2)", BigNumeric(Some((60, Some(2))))),
+                (line!(), "CHar         ", Char(None)),
+                (line!(), "CHar(20)     ", Char(Some(20))),
+                (line!(), "chARACter    ", Char(None)),
+                (line!(), "chARACter(20)", Char(Some(20))),
+                (line!(), "charaCTER VARying      ", Varchar(None)),
+                (line!(), "charaCTER VARying (20 )", Varchar(Some(20))),
+                (line!(), "natioNAL CHar          ", Char(None)),
+                (line!(), "natioNAL CHar vaRying  ", Varchar(None)),
+                (line!(), "charactER LARge  object", Clob),
+                (line!(), "  binaRY   LARge object", Blob),
+                (line!(), "bytea      ", Binary),
+                (line!(), "date       ", Date),
                 (
+                    line!(),
                     "tiME ( 0)  ",
                     Time {
                         precision: Some(0),
@@ -1446,6 +1552,7 @@ mod tests {
                     },
                 ),
                 (
+                    line!(),
                     "TIMe(   5) ",
                     Time {
                         precision: Some(5),
@@ -1453,6 +1560,7 @@ mod tests {
                     },
                 ),
                 (
+                    line!(),
                     "TIMe(5) without time ZONE",
                     Time {
                         precision: Some(5),
@@ -1460,6 +1568,7 @@ mod tests {
                     },
                 ),
                 (
+                    line!(),
                     "TIME(5)   WITH   TIME ZONE",
                     Time {
                         precision: Some(5),
@@ -1467,6 +1576,7 @@ mod tests {
                     },
                 ),
                 (
+                    line!(),
                     "timESTamp ( 0) ",
                     Timestamp {
                         precision: Some(0),
@@ -1474,6 +1584,7 @@ mod tests {
                     },
                 ),
                 (
+                    line!(),
                     "TIMestamp(   5)",
                     Timestamp {
                         precision: Some(5),
@@ -1481,6 +1592,7 @@ mod tests {
                     },
                 ),
                 (
+                    line!(),
                     "TIMestamp(9) without TIME ZONE",
                     Timestamp {
                         precision: Some(9),
@@ -1488,88 +1600,99 @@ mod tests {
                     },
                 ),
                 (
+                    line!(),
                     "TIMestamp(9) with TIME ZONE",
                     Timestamp {
                         precision: Some(9),
                         time_zone_spec: TimeZoneSpec::With,
                     },
                 ),
-                ("INTERVal", Interval(None)),
-                ("interval (0 )", Interval(Some((Second, None)))),
-                ("interval ( 3)", Interval(Some((Millisecond, None)))),
-                ("interval second(3)", Interval(Some((Millisecond, None)))),
+                (line!(), "INTERVal", Interval(None)),
+                (line!(), "interval (0 )", Interval(Some((Second, None)))),
                 (
+                    line!(),
+                    "interval ( 3)",
+                    Interval(Some((Millisecond, None))),
+                ),
+                (
+                    line!(),
+                    "interval second(3)",
+                    Interval(Some((Millisecond, None))),
+                ),
+                (
+                    line!(),
                     "interval year to second(6)",
                     Interval(Some((Year, Some(Microsecond)))),
                 ),
                 (
+                    line!(),
                     "interval year to microsecond",
                     Interval(Some((Year, Some(Microsecond)))),
                 ),
-                ("interval minute", Interval(Some((Minute, None)))),
-                ("jSON", Json),
-                ("jSONb", Jsonb),
-                ("geoMETRY", Geometry),
-                ("geoGRAPHy", Geography),
-                ("arrAY", Array(None)),
-                ("arrAY<INTeger>", Array(Some(Box::new(Integer)))),
+                (line!(), "interval minute", Interval(Some((Minute, None)))),
+                (line!(), "jSON", Json),
+                (line!(), "jSONb", Jsonb),
+                (line!(), "geoMETRY", Geometry),
+                (line!(), "geoGRAPHy", Geography),
+                (line!(), "arrAY", Array(None)),
+                (line!(), "arrAY<INTeger>", Array(Some(Box::new(Integer)))),
                 (
+                    line!(),
                     "arrAY<Array<CHARACTER VARYING>>",
                     Array(Some(Box::new(Array(Some(Box::new(Varchar(None))))))),
                 ),
-                ("struct", Struct(None)),
-                ("struct<>", Struct(Some(vec![]))),
+                (line!(), "struct", Struct(None)),
+                (line!(), "struct<>", Struct(Some(vec![]))),
                 (
+                    line!(),
                     "STRUCT<name varchar, age int NOT NULL>",
                     Struct(Some(vec![
-                        ("name".to_string(), Varchar(None), true),
-                        ("age".to_string(), Integer, false),
+                        (Ident::new("name", backend), Varchar(None), true),
+                        (Ident::new("age", backend), Integer, false),
                     ])),
                 ),
                 (
-                    "strUCT<name VARchar, age int NULLABLE>",
+                    line!(),
+                    r#"strUCT<name VARchar, age int NULLABLE>"#,
                     Struct(Some(vec![
-                        ("name".to_string(), Varchar(None), true),
-                        ("age".to_string(), Integer, true),
+                        (Ident::new("name", backend), Varchar(None), true),
+                        (Ident::new("age", backend), Integer, true),
                     ])),
                 ),
                 (
+                    line!(),
                     "struct<name varchar, info struct<id int, value varchar>>",
                     Struct(Some(vec![
-                        ("name".to_string(), Varchar(None), true),
+                        (Ident::new("name", backend), Varchar(None), true),
                         (
-                            "info".to_string(),
+                            Ident::new("info", backend),
                             Struct(Some(vec![
-                                ("id".to_string(), Integer, true),
-                                ("value".to_string(), Varchar(None), true),
+                                (Ident::new("id", backend), Integer, true),
+                                (Ident::new("value", backend), Varchar(None), true),
                             ])),
                             true,
                         ),
                     ])),
                 ),
                 (
+                    line!(),
                     "MAP<VARchar, int>",
                     Map(Some((Box::new(Varchar(None)), Box::new(Integer)))),
                 ),
-                ("Variant", Variant),
-                (" void  ", Void),
-                ("other", Other("other".to_string())),
+                (line!(), "Variant", Variant),
+                (line!(), " void  ", Void),
+                (line!(), "other", Other("other".to_string())),
                 (
-                    "another type that isn't known NOT NULL",
-                    Other("another type that isn't known".to_string()),
+                    line!(),
+                    "another type that is \"not\" known NOT NULL",
+                    Other("another type that is \"not\" known".to_string()),
                 ),
             ]
         };
         for backend in backends() {
             let data = data_for_backend(backend);
-            for (input, expected) in data.iter() {
-                let (parsed, _nullable) = SqlType::parse(backend, input).unwrap();
-                let rendered = parsed.to_string(backend);
-                let expected_rendered = expected.to_string(backend);
-                assert_eq!(
-                    rendered, expected_rendered,
-                    "input: {input}, expected: {expected:?} ({backend})"
-                );
+            for (line, input, expected) in data.iter() {
+                assert_parses_to(*line, input, expected, backend);
             }
         }
     }
@@ -1577,52 +1700,68 @@ mod tests {
     /// Test parsing of strings that might only be recognized by BigQuery.
     #[test]
     fn test_bigquery_types() {
-        use Backend::BigQuery;
-        use SqlType::*;
         let table = vec![
-            ("BOOL", Boolean),
-            ("BYTES", Binary),
-            ("INT64", BigInt),
-            ("FLOAT64", Double),
-            ("DATETIME", DateTime),
-            ("ARRAY<INT64>", Array(Some(Box::new(BigInt)))),
-            ("ARRAY<BIGNUMERIC>", Array(Some(Box::new(BigNumeric(None))))),
-            ("ARRAY<FLOAT64>", Array(Some(Box::new(Float(None))))),
+            (line!(), "BOOL", Boolean),
+            (line!(), "BYTES", Binary),
+            (line!(), "INT64", BigInt),
+            (line!(), "FLOAT64", Double),
+            (line!(), "DATETIME", DateTime),
+            (line!(), "ARRAY<INT64>", Array(Some(Box::new(BigInt)))),
+            (
+                line!(),
+                "ARRAY<BIGNUMERIC>",
+                Array(Some(Box::new(BigNumeric(None)))),
+            ),
+            (
+                line!(),
+                "ARRAY<FLOAT64>",
+                Array(Some(Box::new(Float(None)))),
+            ),
         ];
-        for (input, expected) in table {
-            let (parsed, _nullable) = SqlType::parse(BigQuery, input).unwrap();
-            let rendered = parsed.to_string(BigQuery);
-            let expected_rendered = expected.to_string(BigQuery);
-            assert_eq!(
-                rendered, expected_rendered,
-                "input: {input}, expected: {expected:?} (BigQuery)"
-            );
+        for (line, input, expected) in table {
+            assert_parses_to(line, input, &expected, BigQuery);
         }
     }
 
     fn backends() -> Vec<Backend> {
         vec![
-            Backend::Postgres,
-            Backend::Snowflake,
-            Backend::BigQuery,
-            Backend::Databricks,
-            Backend::DatabricksODBC,
-            Backend::RedshiftODBC,
-            Backend::Generic {
+            Postgres,
+            Snowflake,
+            BigQuery,
+            Databricks,
+            DatabricksODBC,
+            RedshiftODBC,
+            Generic {
                 library_name: "generic",
                 entrypoint: None,
             },
         ]
     }
 
+    /// Assert that `ty` renders to `s` on the given backend, and that parsing `s` back
+    /// to a [SqlType] results in the same type.
+    fn assert_roundtrip(line: u32, ty: &SqlType, s: &str, backend: Backend) {
+        let rendered = format!("{} ({backend})", ty.to_string(backend));
+        let expected = format!("{s} ({backend})");
+        assert_eq!(
+            rendered,
+            expected,
+            "rendered != expected while rendering: {ty:?} ({backend:?}) from {}:{line}",
+            file!()
+        );
+
+        let (parsed, _nullable) = SqlType::parse(backend, s).unwrap();
+        let rendered = format!("{} ({backend})", parsed.to_string(backend));
+        assert_eq!(rendered, expected, "parsing: {parsed:?}, expected: {ty:?}");
+    }
+
     /// Returns a vector of triplets with a line number, SQL type, and its rendering for a given backend.
     fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static str)> {
-        use DateTimeField::*;
-        // | SQL type | BigQuery | Snowflake | Postgres | generic |
+        // | # | SQLType | - | BigQuery | Snowflake | Postgres | Databricks | generic |
         let sqltype_bg_generic_snow_table = vec![
             (
                 line!(),
-                SqlType::Boolean,
+                Boolean,
                 "BOOL",
                 "BOOLEAN",
                 "BOOLEAN",
@@ -1631,7 +1770,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::TinyInt,
+                TinyInt,
                 "INT64",
                 "TINYINT",
                 "SMALLINT",
@@ -1640,43 +1779,27 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::SmallInt,
+                SmallInt,
                 "INT64",
                 "SMALLINT",
                 "SMALLINT",
                 "SMALLINT",
                 "SMALLINT",
             ),
+            (line!(), Integer, "INT64", "INT", "INT", "INT", "INT"),
             (
                 line!(),
-                SqlType::Integer,
-                "INT64",
-                "INT",
-                "INT",
-                "INT",
-                "INT",
-            ),
-            (
-                line!(),
-                SqlType::BigInt,
+                BigInt,
                 "INT64",
                 "BIGINT",
                 "BIGINT",
                 "BIGINT",
                 "BIGINT",
             ),
+            (line!(), Real, "FLOAT64", "REAL", "REAL", "FLOAT", "REAL"),
             (
                 line!(),
-                SqlType::Real,
-                "FLOAT64",
-                "REAL",
-                "REAL",
-                "FLOAT",
-                "REAL",
-            ),
-            (
-                line!(),
-                SqlType::Float(None),
+                Float(None),
                 "FLOAT64",
                 "FLOAT",
                 "REAL",
@@ -1685,7 +1808,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Float(Some(3)),
+                Float(Some(3)),
                 "FLOAT64",
                 "FLOAT",
                 "REAL",
@@ -1694,7 +1817,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Double,
+                Double,
                 "FLOAT64",
                 "DOUBLE PRECISION",
                 "DOUBLE PRECISION",
@@ -1703,7 +1826,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Numeric(None),
+                Numeric(None),
                 "NUMERIC",
                 "NUMBER",
                 "NUMERIC",
@@ -1712,7 +1835,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Numeric(Some((20, None))),
+                Numeric(Some((20, None))),
                 "NUMERIC(20)",
                 "NUMBER(20)",
                 "NUMERIC(20)",
@@ -1721,7 +1844,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Numeric(Some((60, Some(2)))),
+                Numeric(Some((60, Some(2)))),
                 "NUMERIC(60, 2)",
                 "NUMBER(60, 2)",
                 "NUMERIC(60, 2)",
@@ -1730,7 +1853,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Varchar(None),
+                Varchar(None),
                 "STRING",
                 "VARCHAR",
                 "VARCHAR",
@@ -1739,61 +1862,29 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Varchar(Some(255)),
+                Varchar(Some(255)),
                 "STRING",
                 "VARCHAR(255)",
                 "VARCHAR(255)",
                 "STRING",
                 "VARCHAR(255)",
             ),
+            (line!(), Text, "STRING", "TEXT", "TEXT", "STRING", "TEXT"),
+            (line!(), Clob, "STRING", "TEXT", "TEXT", "STRING", "CLOB"),
+            (line!(), Blob, "BYTES", "BINARY", "BYTEA", "BINARY", "BLOB"),
             (
                 line!(),
-                SqlType::Text,
-                "STRING",
-                "TEXT",
-                "TEXT",
-                "STRING",
-                "TEXT",
-            ),
-            (
-                line!(),
-                SqlType::Clob,
-                "STRING",
-                "TEXT",
-                "TEXT",
-                "STRING",
-                "CLOB",
-            ),
-            (
-                line!(),
-                SqlType::Blob,
-                "BYTES",
-                "BINARY",
-                "BYTEA",
-                "BINARY",
-                "BLOB",
-            ),
-            (
-                line!(),
-                SqlType::Binary,
+                Binary,
                 "BYTES",
                 "BINARY",
                 "BYTEA",
                 "BINARY",
                 "BINARY",
             ),
+            (line!(), Date, "DATE", "DATE", "DATE", "DATE", "DATE"),
             (
                 line!(),
-                SqlType::Date,
-                "DATE",
-                "DATE",
-                "DATE",
-                "DATE",
-                "DATE",
-            ),
-            (
-                line!(),
-                SqlType::Time {
+                Time {
                     precision: None,
                     time_zone_spec: TimeZoneSpec::Without,
                 },
@@ -1805,7 +1896,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Time {
+                Time {
                     precision: Some(0),
                     time_zone_spec: TimeZoneSpec::Without,
                 },
@@ -1817,7 +1908,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Time {
+                Time {
                     precision: Some(5),
                     time_zone_spec: TimeZoneSpec::Without,
                 },
@@ -1829,7 +1920,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Time {
+                Time {
                     precision: Some(9),
                     time_zone_spec: TimeZoneSpec::Without,
                 },
@@ -1841,7 +1932,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Time {
+                Time {
                     precision: Some(9),
                     time_zone_spec: TimeZoneSpec::With,
                 },
@@ -1853,7 +1944,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::DateTime,
+                DateTime,
                 "DATETIME",
                 "TIMESTAMP_NTZ",
                 "TIMESTAMP",
@@ -1862,7 +1953,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Timestamp {
+                Timestamp {
                     precision: None,
                     time_zone_spec: TimeZoneSpec::Without,
                 },
@@ -1874,7 +1965,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Timestamp {
+                Timestamp {
                     precision: None,
                     time_zone_spec: TimeZoneSpec::With,
                 },
@@ -1886,7 +1977,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Timestamp {
+                Timestamp {
                     precision: Some(3),
                     time_zone_spec: TimeZoneSpec::Without,
                 },
@@ -1898,7 +1989,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Timestamp {
+                Timestamp {
                     precision: Some(3),
                     time_zone_spec: TimeZoneSpec::With,
                 },
@@ -1910,7 +2001,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(None),
+                Interval(None),
                 "INTERVAL",
                 "INTERVAL",
                 "INTERVAL",
@@ -1919,7 +2010,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(Some((Second, None))),
+                Interval(Some((Second, None))),
                 "INTERVAL SECOND",
                 "INTERVAL SECOND",
                 "INTERVAL SECOND",
@@ -1928,7 +2019,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(Some((Millisecond, None))),
+                Interval(Some((Millisecond, None))),
                 "INTERVAL MILLISECOND",
                 "INTERVAL MILLISECOND",
                 "INTERVAL SECOND(3)",
@@ -1937,7 +2028,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(Some((Day, Some(Microsecond)))),
+                Interval(Some((Day, Some(Microsecond)))),
                 "INTERVAL DAY TO MICROSECOND",
                 "INTERVAL DAY TO MICROSECOND",
                 "INTERVAL DAY TO SECOND(6)",
@@ -1946,7 +2037,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(Some((Year, None))),
+                Interval(Some((Year, None))),
                 "INTERVAL YEAR",
                 "INTERVAL YEAR",
                 "INTERVAL YEAR",
@@ -1955,7 +2046,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(Some((Day, Some(Hour)))),
+                Interval(Some((Day, Some(Hour)))),
                 "INTERVAL DAY TO HOUR",
                 "INTERVAL DAY TO HOUR",
                 "INTERVAL DAY TO HOUR",
@@ -1964,7 +2055,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(Some((Day, Some(Minute)))),
+                Interval(Some((Day, Some(Minute)))),
                 "INTERVAL DAY TO MINUTE",
                 "INTERVAL DAY TO MINUTE",
                 "INTERVAL DAY TO MINUTE",
@@ -1973,7 +2064,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(Some((Day, Some(Second)))),
+                Interval(Some((Day, Some(Second)))),
                 "INTERVAL DAY TO SECOND",
                 "INTERVAL DAY TO SECOND",
                 "INTERVAL DAY TO SECOND",
@@ -1982,7 +2073,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(Some((Hour, Some(Minute)))),
+                Interval(Some((Hour, Some(Minute)))),
                 "INTERVAL HOUR TO MINUTE",
                 "INTERVAL HOUR TO MINUTE",
                 "INTERVAL HOUR TO MINUTE",
@@ -1991,7 +2082,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(Some((Hour, Some(Second)))),
+                Interval(Some((Hour, Some(Second)))),
                 "INTERVAL HOUR TO SECOND",
                 "INTERVAL HOUR TO SECOND",
                 "INTERVAL HOUR TO SECOND",
@@ -2000,7 +2091,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(Some((Minute, Some(Second)))),
+                Interval(Some((Minute, Some(Second)))),
                 "INTERVAL MINUTE TO SECOND",
                 "INTERVAL MINUTE TO SECOND",
                 "INTERVAL MINUTE TO SECOND",
@@ -2009,7 +2100,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(Some((Month, Some(Day)))),
+                Interval(Some((Month, Some(Day)))),
                 "INTERVAL MONTH TO DAY",
                 "INTERVAL MONTH TO DAY",
                 "INTERVAL MONTH TO DAY",
@@ -2018,7 +2109,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(Some((Month, Some(Hour)))),
+                Interval(Some((Month, Some(Hour)))),
                 "INTERVAL MONTH TO HOUR",
                 "INTERVAL MONTH TO HOUR",
                 "INTERVAL MONTH TO HOUR",
@@ -2027,7 +2118,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(Some((Month, Some(Minute)))),
+                Interval(Some((Month, Some(Minute)))),
                 "INTERVAL MONTH TO MINUTE",
                 "INTERVAL MONTH TO MINUTE",
                 "INTERVAL MONTH TO MINUTE",
@@ -2036,7 +2127,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(Some((Month, Some(Second)))),
+                Interval(Some((Month, Some(Second)))),
                 "INTERVAL MONTH TO SECOND",
                 "INTERVAL MONTH TO SECOND",
                 "INTERVAL MONTH TO SECOND",
@@ -2045,7 +2136,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(Some((Year, Some(Day)))),
+                Interval(Some((Year, Some(Day)))),
                 "INTERVAL YEAR TO DAY",
                 "INTERVAL YEAR TO DAY",
                 "INTERVAL YEAR TO DAY",
@@ -2054,7 +2145,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(Some((Year, Some(Hour)))),
+                Interval(Some((Year, Some(Hour)))),
                 "INTERVAL YEAR TO HOUR",
                 "INTERVAL YEAR TO HOUR",
                 "INTERVAL YEAR TO HOUR",
@@ -2063,7 +2154,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(Some((Year, Some(Minute)))),
+                Interval(Some((Year, Some(Minute)))),
                 "INTERVAL YEAR TO MINUTE",
                 "INTERVAL YEAR TO MINUTE",
                 "INTERVAL YEAR TO MINUTE",
@@ -2072,7 +2163,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(Some((Year, Some(Month)))),
+                Interval(Some((Year, Some(Month)))),
                 "INTERVAL YEAR TO MONTH",
                 "INTERVAL YEAR TO MONTH",
                 "INTERVAL YEAR TO MONTH",
@@ -2081,7 +2172,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Interval(Some((Year, Some(Second)))),
+                Interval(Some((Year, Some(Second)))),
                 "INTERVAL YEAR TO SECOND",
                 "INTERVAL YEAR TO SECOND",
                 "INTERVAL YEAR TO SECOND",
@@ -2090,7 +2181,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Array(Some(Box::new(SqlType::Json))),
+                Array(Some(Box::new(Json))),
                 "ARRAY<JSON>",
                 "ARRAY<JSON>",
                 "JSON[]",
@@ -2099,7 +2190,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Struct(Some(vec![("a".to_string(), SqlType::Float(None), true)])),
+                Struct(Some(vec![(Ident::plain("a"), Float(None), true)])),
                 "STRUCT<a FLOAT64>",
                 "STRUCT<a FLOAT>",
                 "(a REAL)",
@@ -2108,9 +2199,9 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Struct(Some(vec![
-                    ("name".to_string(), SqlType::Varchar(None), true),
-                    ("age".to_string(), SqlType::Integer, false),
+                Struct(Some(vec![
+                    (Ident::plain("name"), Varchar(None), true),
+                    (Ident::plain("age"), Integer, false),
                 ])),
                 "STRUCT<name STRING, age INT64 NOT NULL>",
                 "STRUCT<name VARCHAR, age INT NOT NULL>",
@@ -2120,29 +2211,29 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Struct(Some(vec![
+                Struct(Some(vec![
                     (
-                        "last_completion_time".to_string(),
-                        SqlType::Timestamp {
+                        Ident::plain("last_completion_time"),
+                        Timestamp {
                             precision: None,
                             time_zone_spec: TimeZoneSpec::Without,
                         },
                         true,
                     ),
                     (
-                        "error_time".to_string(),
-                        SqlType::Timestamp {
+                        Ident::plain("error_time"),
+                        Timestamp {
                             precision: None,
                             time_zone_spec: TimeZoneSpec::Without,
                         },
                         true,
                     ),
                     (
-                        "error".to_string(),
-                        SqlType::Struct(Some(vec![
-                            ("reason".to_string(), SqlType::Varchar(None), true),
-                            ("location".to_string(), SqlType::Varchar(None), true),
-                            ("message".to_string(), SqlType::Varchar(None), true),
+                        Ident::plain("error"),
+                        Struct(Some(vec![
+                            (Ident::plain("reason"), Varchar(None), true),
+                            (Ident::plain("location"), Varchar(None), true),
+                            (Ident::plain("message"), Varchar(None), true),
                         ])),
                         true,
                     ),
@@ -2155,9 +2246,9 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Array(Some(Box::new(SqlType::Struct(Some(vec![
-                    ("date".to_string(), SqlType::Date, true),
-                    ("value".to_string(), SqlType::Varchar(None), true),
+                Array(Some(Box::new(Struct(Some(vec![
+                    (Ident::plain("date"), Date, true),
+                    (Ident::plain("value"), Varchar(None), true),
                 ]))))),
                 "ARRAY<STRUCT<date DATE, value STRING>>",
                 "ARRAY<STRUCT<date DATE, value VARCHAR>>",
@@ -2167,11 +2258,11 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Struct(Some(vec![(
-                    "elements".to_string(),
-                    SqlType::Array(Some(Box::new(SqlType::Struct(Some(vec![
-                        ("date".to_string(), SqlType::Date, true),
-                        ("value".to_string(), SqlType::Varchar(None), true),
+                Struct(Some(vec![(
+                    Ident::plain("elements"),
+                    Array(Some(Box::new(Struct(Some(vec![
+                        (Ident::plain("date"), Date, true),
+                        (Ident::plain("value"), Varchar(None), true),
                     ]))))),
                     true,
                 )])),
@@ -2183,10 +2274,7 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Map(Some((
-                    Box::new(SqlType::Varchar(None)),
-                    Box::new(SqlType::Integer),
-                ))),
+                Map(Some((Box::new(Varchar(None)), Box::new(Integer)))),
                 "MAP<STRING, INT64>",
                 "MAP<VARCHAR, INT>",
                 "MAP<VARCHAR, INT>",
@@ -2195,25 +2283,17 @@ mod tests {
             ),
             (
                 line!(),
-                SqlType::Variant,
+                Variant,
                 "VARIANT",
                 "VARIANT",
                 "VARIANT",
                 "VARIANT",
                 "VARIANT",
             ),
+            (line!(), Void, "VOID", "VOID", "VOID", "VOID", "VOID"),
             (
                 line!(),
-                SqlType::Void,
-                "VOID",
-                "VOID",
-                "VOID",
-                "VOID",
-                "VOID",
-            ),
-            (
-                line!(),
-                SqlType::Other("ANY OTHER TYPE".to_string()),
+                Other("ANY OTHER TYPE".to_string()),
                 "ANY OTHER TYPE",
                 "ANY OTHER TYPE",
                 "ANY OTHER TYPE",
@@ -2225,14 +2305,11 @@ mod tests {
             .into_iter()
             .map(|(line, t, bq, snow, pq, dbx, generic)| {
                 let s = match backend {
-                    Backend::BigQuery => bq,
-                    Backend::Snowflake => snow,
-                    Backend::Postgres
-                    | Backend::Redshift
-                    | Backend::RedshiftODBC
-                    | Backend::Salesforce => pq,
-                    Backend::Databricks | Backend::DatabricksODBC => dbx,
-                    Backend::Generic { .. } => generic,
+                    BigQuery => bq,
+                    Snowflake => snow,
+                    Postgres | Redshift | RedshiftODBC | Salesforce => pq,
+                    Databricks | DatabricksODBC => dbx,
+                    Generic { .. } => generic,
                 };
                 (line, t, s)
             })
@@ -2241,43 +2318,64 @@ mod tests {
     }
 
     #[test]
-    fn test_string_roundtrip() {
+    fn test_string_roundtrip_for_all_types_on_all_backends() {
         for backend in backends() {
             for (line, t, s) in expected_type_rendering_for(backend) {
-                let rendered = format!("{} ({backend})", t.to_string(backend));
-                let expected = format!("{s} ({backend})");
-                assert_eq!(
-                    rendered,
-                    expected,
-                    "rendered != expected while rendering: {t:?} ({backend:?}) from {}:{line}",
-                    file!()
-                );
-
-                let (parsed, _nullable) = SqlType::parse(backend, s).unwrap();
-                let rendered = format!("{} ({backend})", parsed.to_string(backend));
-                assert_eq!(rendered, expected, "parsing: {parsed:?}, expected: {t:?}");
+                assert_roundtrip(line, &t, s, backend);
             }
         }
     }
 
     #[test]
+    fn test_roundtrip_struct_with_quoted_field() {
+        // the quote style carried on the SqlType depends on the backend
+        let expected_ty = |backend| {
+            Struct(Some(vec![
+                (Ident::plain("name"), Varchar(None), true),
+                (
+                    Ident::unquoted(canonical_quote(backend), "age"),
+                    Integer,
+                    true,
+                ),
+            ]))
+        };
+        let table = vec![
+            (line!(), BigQuery, r#"STRUCT<name VARCHAR, `age` INT>"#),
+            (line!(), Snowflake, r#"STRUCT<name VARCHAR, "age" INT>"#),
+            (line!(), Postgres, r#"STRUCT<name VARCHAR, "age" INT>"#),
+            (line!(), Databricks, r#"STRUCT<name VARCHAR, `age` INT>"#),
+        ];
+        for (line, backend, input) in table {
+            let ty = expected_ty(backend);
+            assert_parses_to(line, input, &ty, backend);
+        }
+    }
+
+    /// This test makes it easier to attach a debugger and step through
+    /// a specific function call compared to `test_string_roundtrip_for_all_types_on_all_backends`.
+    #[test]
     fn test_timestamp_on_databricks() {
-        use Backend::Databricks;
         let s = "TIMESTAMP";
-        let t = SqlType::Timestamp {
+        let t = Timestamp {
             precision: None,
             time_zone_spec: TimeZoneSpec::With,
         };
+        assert_roundtrip(line!(), &t, s, Databricks);
+    }
 
-        let rendered = t.to_string(Databricks);
-        let expected = s;
-        assert_eq!(
-            rendered, expected,
-            "rendered != expected while rendering: {t:?} (Databricks)"
-        );
-
-        let (parsed, _nullable) = SqlType::parse(Databricks, s).unwrap();
-        let rendered = parsed.to_string(Databricks);
-        assert_eq!(rendered, expected, "parsing: {parsed:?}, expected: {t:?}");
+    /// This test makes it easier to attach a debugger and step through
+    /// a specific function call compared to `test_string_roundtrip_for_all_types_on_all_backends`.
+    #[test]
+    fn test_struct_on_snowflake() {
+        let s = r#"STRUCT<name VARCHAR, "age" INT>"#;
+        let t = Struct(Some(vec![
+            (Ident::new("name", Snowflake), Varchar(None), true),
+            (
+                Ident::unquoted(canonical_quote(Snowflake), "age"),
+                Integer,
+                true,
+            ),
+        ]));
+        assert_roundtrip(line!(), &t, s, Snowflake);
     }
 }

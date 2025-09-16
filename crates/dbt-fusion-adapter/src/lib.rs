@@ -18,7 +18,6 @@ pub mod query_comment;
 pub mod query_ctx;
 pub mod record_and_replay;
 pub mod render_constraint;
-pub mod reserved_keywords;
 pub mod response;
 pub mod snapshots;
 pub mod sql_engine;

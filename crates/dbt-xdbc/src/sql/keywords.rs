@@ -3,7 +3,7 @@
 // All keywords are in uppercase and sorted so that binary search can be used
 // to check for membership.
 
-use dbt_xdbc::Backend;
+use crate::Backend;
 
 pub fn sorted_keywords_for(backend: Backend) -> &'static [&'static str] {
     use Backend::*;
@@ -41,7 +41,7 @@ fn keyword_cmp_ignore_ascii_case(kw: &str, token: &str) -> std::cmp::Ordering {
 }
 
 /// Returns the uppercase version of the given token if it is a reserved keyword.
-pub fn is_keyword_ignore_ascii_case(backend: Backend, token: &str) -> Option<&'static str> {
+pub fn is_keyword_ignore_ascii_case(token: &str, backend: Backend) -> Option<&'static str> {
     let sorted_keywords = sorted_keywords_for(backend);
     sorted_keywords
         .binary_search_by(|kw| keyword_cmp_ignore_ascii_case(kw, token))
@@ -356,8 +356,8 @@ mod tests {
         assert_eq!(keyword_cmp_ignore_ascii_case("SELECT", "ZSELECT"), Less);
     }
 
-    fn is_kw(token: &str) -> Option<&'static str> {
-        is_keyword_ignore_ascii_case(Backend::BigQuery, token)
+    fn is_kw(ident: &str) -> Option<&'static str> {
+        is_keyword_ignore_ascii_case(ident, Backend::BigQuery)
     }
 
     #[test]
