@@ -349,6 +349,8 @@ fn stringify_types_for_show(new_batches_slice: &[RecordBatch]) -> Vec<RecordBatc
             let unvarianted = None;
             // we're not supposed to throw here 🤷‍♂️
             #[allow(clippy::unnecessary_literal_unwrap)]
+            #[expect(clippy::or_fun_call)]
+            // it's easy to address by inlining the `unvarianted`, but would make above TODO less clear
             let maybe_converted = unvarianted.unwrap_or(Arc::clone(array));
             if Arc::ptr_eq(array, &maybe_converted) {
                 new_schema_fields.push(field.clone());

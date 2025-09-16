@@ -142,9 +142,9 @@ impl<'env> Vm<'env> {
             ok!(Frame::new_checked(root.clone())),
             self.env.recursion_limit(),
             root.get_attr_fast(CURRENT_PATH)
-                .map_or(PathBuf::new(), |value| deserialize_path(&value)),
+                .map_or_else(PathBuf::new, |value| deserialize_path(&value)),
             root.get_attr_fast(CURRENT_SPAN)
-                .map_or(Span::default(), |value| deserialize_span(&value)),
+                .map_or_else(Span::default, |value| deserialize_span(&value)),
             outer_stack_depth,
         );
 
@@ -176,10 +176,10 @@ impl<'env> Vm<'env> {
     ) -> Result<Value, Error> {
         let path = context_base
             .get_attr_fast(CURRENT_PATH)
-            .map_or(PathBuf::new(), |value| deserialize_path(&value));
+            .map_or_else(PathBuf::new, |value| deserialize_path(&value));
         let span = context_base
             .get_attr_fast(CURRENT_SPAN)
-            .map_or(Span::default(), |value| deserialize_span(&value));
+            .map_or_else(Span::default, |value| deserialize_span(&value));
         let mut ctx = Context::new_with_frame(
             Frame::new(context_base),
             self.env.recursion_limit(),
@@ -431,13 +431,11 @@ impl<'env> Vm<'env> {
                             if let Some(namespace) = a.downcast_object_ref::<NamespaceName>() {
                                 let ns_name = Value::from(namespace.get_name());
                                 // a could be a package name, we need to check if there's a macro in the namespace
-                                if namespace_registry
-                                    .get(&ns_name)
-                                    .unwrap_or(&Value::from_serialize(Vec::<Value>::new()))
-                                    .downcast_object::<MutableVec<Value>>()
-                                    .unwrap_or_default()
-                                    .contains(&Value::from(name as &str))
-                                {
+                                if namespace_registry.get(&ns_name).is_some_and(|val| {
+                                    val.downcast_object::<MutableVec<Value>>()
+                                        .unwrap_or_default()
+                                        .contains(&Value::from(name as &str))
+                                }) {
                                     let template_registry_entry = template_registry.get(&ns_name);
                                     let path = template_registry_entry
                                         .and_then(|entry| entry.get_attr_fast("path"))
@@ -932,7 +930,7 @@ impl<'env> Vm<'env> {
                         let function_name = func
                             .get_attr_fast("function_name")
                             .map(|x| x.to_string())
-                            .unwrap_or((*name).to_string());
+                            .unwrap_or_else(|| (*name).to_string());
 
                         let args: Vec<Value> =
                             if function_name == "ref" || function_name == "source" {
@@ -1104,7 +1102,7 @@ impl<'env> Vm<'env> {
                         let function_name = args[0]
                             .get_attr_fast("function_name")
                             .map(|x| x.to_string())
-                            .unwrap_or((*name).to_string());
+                            .unwrap_or_else(|| (*name).to_string());
                         let args_vals = if function_name == "ref" || function_name == "source" {
                             let start: (u32, u32, u32) = (
                                 this_span.start_line,

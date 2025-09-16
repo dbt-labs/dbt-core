@@ -52,7 +52,7 @@ pub fn load_project_yml(
         dbt_project
             .macro_paths
             .as_mut()
-            .ok_or(unexpected_fs_err!("Macro paths should exist"))?
+            .ok_or_else(|| unexpected_fs_err!("Macro paths should exist"))?
             .push(path.join("generic").to_string_lossy().to_string());
     }
 

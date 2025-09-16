@@ -749,7 +749,7 @@ pub fn zip_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
         for arg in args {
             match arg.try_iter() {
                 Ok(iter) => iterators.push(iter.collect()),
-                Err(_) => return Ok(default.unwrap_or(Value::from(()))),
+                Err(_) => return Ok(default.unwrap_or_else(|| Value::from(()))),
             }
         }
 
@@ -1006,9 +1006,7 @@ impl Object for Exceptions {
             "relation_wrong_type" => {
                 let mut args = ArgParser::new(args, None);
                 let relation = args.get::<Value>("relation").unwrap_or(Value::UNDEFINED);
-                let expected_type = args
-                    .get::<String>("expected_type")
-                    .unwrap_or("".to_string());
+                let expected_type = args.get::<String>("expected_type").unwrap_or_default();
 
                 // Get the relation type from the relation value
                 let relation_type = if relation.is_undefined() {

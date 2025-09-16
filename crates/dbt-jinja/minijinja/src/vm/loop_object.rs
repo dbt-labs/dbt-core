@@ -109,9 +109,10 @@ impl Object for Loop {
                     .unwrap_or(Value::UNDEFINED),
             ),
             "first" => Some(Value::from(idx == 0)),
-            "last" => Some(len.map_or(Value::from(false), |len| {
-                Value::from(len == 0 || idx == len - 1)
-            })),
+            "last" => Some(len.map_or_else(
+                || Value::from(false),
+                |len| Value::from(len == 0 || idx == len - 1),
+            )),
             "depth" => Some(Value::from(self.depth + 1)),
             "depth0" => Some(Value::from(self.depth)),
             #[cfg(feature = "adjacent_loop_items")]

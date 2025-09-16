@@ -331,7 +331,7 @@ impl<'env> Context<'env> {
         self.stack
             .first()
             .map(|x| x.ctx.clone())
-            .unwrap_or(Value::from_object(MutableMap::new()))
+            .unwrap_or_else(|| Value::from_object(MutableMap::new()))
     }
 
     /// Looks up a variable in the context.

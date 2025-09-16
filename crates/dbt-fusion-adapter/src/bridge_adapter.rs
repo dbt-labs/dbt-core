@@ -953,7 +953,7 @@ impl BaseAdapter for BridgeAdapter {
             .unwrap_or_default();
         let excluded_schemas = parser
             .get_optional::<Value>("excluded_schemas")
-            .unwrap_or(Value::from_iter::<Vec<String>>(vec![]));
+            .unwrap_or_else(|| Value::from_iter::<Vec<String>>(vec![]));
         let _ = minijinja_value_to_typed_struct::<Vec<String>>(excluded_schemas).map_err(|e| {
             MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
         })?;
@@ -1202,18 +1202,12 @@ impl BaseAdapter for BridgeAdapter {
         })?;
 
         let (database, schema) = (
-            grant_target
-                .project
-                .as_deref()
-                .ok_or(invalid_argument_inner!(
-                    "project in a GrantAccessToTarget cannot be empty"
-                ))?,
-            grant_target
-                .dataset
-                .as_deref()
-                .ok_or(invalid_argument_inner!(
-                    "dataset in a GrantAccessToTarget cannot be empty"
-                ))?,
+            grant_target.project.as_deref().ok_or_else(|| {
+                invalid_argument_inner!("project in a GrantAccessToTarget cannot be empty")
+            })?,
+            grant_target.dataset.as_deref().ok_or_else(|| {
+                invalid_argument_inner!("dataset in a GrantAccessToTarget cannot be empty")
+            })?,
         );
 
         let role = if role.is_none() {
@@ -1221,7 +1215,7 @@ impl BaseAdapter for BridgeAdapter {
         } else {
             Some(
                 role.as_str()
-                    .ok_or(invalid_argument_inner!("role must be a string"))?,
+                    .ok_or_else(|| invalid_argument_inner!("role must be a string"))?,
             )
         };
         let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
@@ -1478,7 +1472,7 @@ impl BaseAdapter for BridgeAdapter {
         let result = self
             .typed_adapter
             .describe_relation(conn.as_mut(), relation)?;
-        Ok(result.map_or(none_value(), Value::from_serialize))
+        Ok(result.map_or_else(none_value, Value::from_serialize))
     }
 
     #[tracing::instrument(skip(self, _state), level = "trace")]

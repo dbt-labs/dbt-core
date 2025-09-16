@@ -169,10 +169,11 @@ pub fn process_columns(
                         data_type: cp.data_type.clone(),
                         description: cp.description.clone(),
                         constraints: cp.constraints.clone().unwrap_or_default(),
-                        meta: cp_meta.unwrap_or(meta.clone().unwrap_or_default()),
+                        meta: cp_meta.or_else(|| meta.clone()).unwrap_or_default(),
                         tags: cp_tags
                             .map(|t| t.into())
-                            .unwrap_or(tags.clone().unwrap_or_default()),
+                            .or_else(|| tags.clone())
+                            .unwrap_or_default(),
                         policy_tags: cp.policy_tags.clone(),
                         quote: cp.quote,
                         deprecated_config: cp.config.clone().unwrap_or_default(),

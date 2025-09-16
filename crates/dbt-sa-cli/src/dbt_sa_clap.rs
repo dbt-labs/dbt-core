@@ -314,7 +314,7 @@ impl Cli {
                     let out_dir = self
                         .target_path()
                         .map(|p| if p.is_relative() { in_dir.join(p) } else { p })
-                        .unwrap_or(in_dir.join(DBT_TARGET_DIR_NAME));
+                        .unwrap_or_else(|| in_dir.join(DBT_TARGET_DIR_NAME));
                     stdfs::create_dir_all(&out_dir).map_err(|e| {
                         fs_err!(
                             ErrorCode::IoError,

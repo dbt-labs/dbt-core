@@ -71,10 +71,12 @@ impl Object for ConfiguredVar {
                 ),
             ));
         };
-        let vars_lookup = self.vars.get(&package_name).ok_or(Error::new(
-            ErrorKind::InvalidOperation,
-            format!("Package vars should be initialized for package: {package_name}"),
-        ))?;
+        let vars_lookup = self.vars.get(&package_name).ok_or_else(|| {
+            Error::new(
+                ErrorKind::InvalidOperation,
+                format!("Package vars should be initialized for package: {package_name}"),
+            )
+        })?;
         if let Some(var) = vars_lookup.get(&var_name) {
             Ok(Value::from_serialize(var))
         } else if let Some(default_value) = default_value {
@@ -133,10 +135,12 @@ impl Object for ConfiguredVar {
                     ),
                 ));
             };
-            let vars_lookup = self.vars.get(&package_name).ok_or(Error::new(
-                ErrorKind::InvalidOperation,
-                format!("Package vars should be initialized for package: {package_name}"),
-            ))?;
+            let vars_lookup = self.vars.get(&package_name).ok_or_else(|| {
+                Error::new(
+                    ErrorKind::InvalidOperation,
+                    format!("Package vars should be initialized for package: {package_name}"),
+                )
+            })?;
             if vars_lookup.contains_key(&var_name) {
                 Ok(Value::from(true))
             } else {

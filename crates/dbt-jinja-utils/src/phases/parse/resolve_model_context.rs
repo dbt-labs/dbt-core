@@ -592,7 +592,7 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
         // Get or insert enabled
         let enabled = result
             .remove("enabled")
-            .unwrap_or(MinijinjaValue::from(self.enabled));
+            .unwrap_or_else(|| MinijinjaValue::from(self.enabled));
         result.insert("enabled".to_string(), enabled.clone());
 
         let yaml_value = dbt_serde_yaml::to_value(result).map_err(|e| {

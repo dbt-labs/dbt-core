@@ -99,13 +99,14 @@ pub async fn resolve_snapshots(
                 .expect("All snapshot macros should start with 'snapshot_'")
                 .to_string();
             // Preserve file layout for proper fqn generation
+            let default_snapshots_path = vec![DBT_SNAPSHOTS_DIR_NAME.to_string()];
             let original_relative_path = strip_resource_paths_from_ref_path(
                 &macro_node.path,
                 package
                     .dbt_project
                     .snapshot_paths
                     .as_ref()
-                    .unwrap_or(&vec![DBT_SNAPSHOTS_DIR_NAME.to_string()]),
+                    .unwrap_or(&default_snapshots_path),
             );
             let target_path = PathBuf::from(DBT_SNAPSHOTS_DIR_NAME)
                 .join(original_relative_path.with_file_name(format!("{snapshot_name}.sql")));

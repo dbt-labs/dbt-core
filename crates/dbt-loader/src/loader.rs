@@ -336,11 +336,13 @@ pub async fn load_inner(
                 .parent()
                 .and_then(|p| p.file_name())
                 .map(|os_str| os_str.to_string_lossy().to_string())
-                .ok_or(fs_err!(
-                    ErrorCode::InvalidConfig,
-                    "Failed to get package name from path: {}",
-                    &dbt_project_path.display()
-                ))?,
+                .ok_or_else(|| {
+                    fs_err!(
+                        ErrorCode::InvalidConfig,
+                        "Failed to get package name from path: {}",
+                        &dbt_project_path.display()
+                    )
+                })?,
         )
     } else {
         None

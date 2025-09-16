@@ -77,7 +77,7 @@ impl DiscreteEventEmitter for FusionSaEventEmitter {
             //  project_id - MD5 hash of the project name
             project_id,
             //  user_id - UUID generated to identify a unique user (~/.dbt/.user.yml)
-            user_id: profile_path.map(get_user_id).unwrap_or("".to_string()),
+            user_id: profile_path.map(get_user_id).unwrap_or_default(),
             //  command - full string of the command that was run
             command,
             //  result_type - ok/error.

@@ -45,7 +45,10 @@ pub fn handle_git_like_package(
     let tmp_dir = packages_install_path
         .map_or_else(tempfile::tempdir, tempfile::tempdir_in)
         .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create temp dir: {}", e))?;
-    let revision = revisions.last().unwrap_or(&"HEAD".to_string()).clone();
+    let revision = revisions
+        .last()
+        .cloned()
+        .unwrap_or_else(|| "HEAD".to_string());
     let (checkout_path, commit_sha) = clone_and_checkout(
         repo_url,
         &tmp_dir
@@ -93,7 +96,7 @@ pub fn read_and_validate_dbt_project(
     )
     .map(|p| p.name)
     .ok()
-    .unwrap_or(path_to_dbt_project.to_string_lossy().to_string());
+    .unwrap_or_else(|| path_to_dbt_project.to_string_lossy().to_string());
 
     from_yaml_raw(
         io,

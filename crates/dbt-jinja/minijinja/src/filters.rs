@@ -456,11 +456,14 @@ mod builtins {
         }
 
         let by_value = matches!(
-            ok!(kwargs.get::<Option<&str>>("by")).unwrap_or(by_value.as_deref().unwrap_or("key")),
+            ok!(kwargs.get::<Option<&str>>("by"))
+                .or(by_value.as_deref())
+                .unwrap_or("key"),
             "value"
         );
         let case_sensitive = ok!(kwargs.get::<Option<bool>>("case_sensitive"))
-            .unwrap_or(case_sensitive.unwrap_or(false));
+            .or(case_sensitive)
+            .unwrap_or(false);
         let mut rv: Vec<_> = ok!(v.try_iter())
             .map(|key| (key.clone(), v.get_item(&key).unwrap_or(Value::UNDEFINED)))
             .collect();
@@ -468,7 +471,10 @@ mod builtins {
             let (a, b) = if by_value { (&a.1, &b.1) } else { (&a.0, &b.0) };
             cmp_helper(a, b, case_sensitive)
         });
-        if ok!(kwargs.get::<Option<bool>>("reverse")).unwrap_or(reverse.unwrap_or(false)) {
+        if ok!(kwargs.get::<Option<bool>>("reverse"))
+            .or(reverse)
+            .unwrap_or(false)
+        {
             rv.reverse();
         }
         kwargs.assert_all_used()?;

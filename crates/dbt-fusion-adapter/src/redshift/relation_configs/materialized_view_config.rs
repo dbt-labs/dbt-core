@@ -28,19 +28,19 @@ impl TryFrom<&Value> for DescribeMaterializedViewResults {
             .get_item(&Value::from_safe_string("materialized_view".into()))
             .map_err(|e| format!("Expected key `materialized_view`: {e}"))?
             .downcast_object::<AgateTable>()
-            .ok_or("Failed to convert materialized_view to AgateTable".to_string())?;
+            .ok_or("Failed to convert materialized_view to AgateTable")?;
 
         let columns = value
             .get_item(&Value::from_safe_string("columns".into()))
             .map_err(|e| format!("Expected key `columns`: {e}"))?
             .downcast_object::<AgateTable>()
-            .ok_or("Failed to convert columns to AgateTable".to_string())?;
+            .ok_or("Failed to convert columns to AgateTable")?;
 
         let query = value
             .get_item(&Value::from_safe_string("query".into()))
             .map_err(|e| format!("Expected key `query`: {e}"))?
             .downcast_object::<AgateTable>()
-            .ok_or("Failed to convert query to AgateTable".to_string())?;
+            .ok_or("Failed to convert query to AgateTable")?;
 
         Ok(Self {
             materialized_view,
@@ -318,14 +318,14 @@ impl TryFrom<DescribeMaterializedViewResults> for RedshiftMaterializedViewConfig
             .rows()
             .into_iter()
             .next()
-            .ok_or("query table is empty".to_string())?;
+            .ok_or("query table is empty")?;
 
         let mv = value
             .materialized_view
             .rows()
             .into_iter()
             .next()
-            .ok_or("materialized_view table is empty".to_string())?;
+            .ok_or("materialized_view table is empty")?;
 
         let mv_name = get_string_by_name_from_agate_row(&mv, "table")
             .ok_or("Failed to get table name from materialized_view")?;

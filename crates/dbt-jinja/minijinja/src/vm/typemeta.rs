@@ -2076,12 +2076,12 @@ pub fn macro_namespace_template_resolver(
     let current_package_name = typecheck_resolved_context
         .get(TARGET_PACKAGE_NAME)
         .cloned()
-        .unwrap_or(Value::from("dbt"));
+        .unwrap_or_else(|| Value::from("dbt"));
     let current_package_name = current_package_name.as_str().unwrap();
     let root_package = typecheck_resolved_context
         .get(ROOT_PACKAGE_NAME)
         .cloned()
-        .unwrap_or(Value::from("dbt"));
+        .unwrap_or_else(|| Value::from("dbt"));
     let root_package = root_package.as_str().unwrap();
     let dbt_and_adapters = typecheck_resolved_context
         .get(DBT_AND_ADAPTERS_NAMESPACE)

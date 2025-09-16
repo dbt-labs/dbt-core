@@ -136,8 +136,8 @@ pub async fn resolve_saved_queries(
                         name: export.name.clone(),
                         config: SavedQueryExportConfig {
                             export_as: config.export_as.unwrap_or_default(),
-                            schema_name: Some(config.schema.unwrap_or(schema.to_string())), // TODO: verify
-                            alias: Some(config.alias.unwrap_or(export.name.clone())),
+                            schema_name: Some(config.schema.unwrap_or_else(|| schema.to_string())), // TODO: verify
+                            alias: Some(config.alias.unwrap_or_else(|| export.name.clone())),
                             database: Some(database.to_string()), // TODO: verify
                         },
                         unrendered_config: BTreeMap::new(), // TODO

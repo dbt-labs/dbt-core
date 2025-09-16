@@ -359,15 +359,15 @@ impl TryFrom<DbtQuoting> for ResolvedQuoting {
 
     fn try_from(value: DbtQuoting) -> FsResult<Self> {
         Ok(ResolvedQuoting {
-            database: value.database.ok_or(fs_err!(
+            database: value.database.ok_or_else(|| fs_err!(
                 ErrorCode::InvalidArgument,
                 "Missing database in dbt quoting config. Failed to convert to ResolvedQuoting."
             ))?,
-            identifier: value.identifier.ok_or(fs_err!(
+            identifier: value.identifier.ok_or_else(|| fs_err!(
                 ErrorCode::InvalidArgument,
                 "Missing identifier in dbt quoting config. Failed to convert to ResolvedQuoting."
             ))?,
-            schema: value.schema.ok_or(fs_err!(
+            schema: value.schema.ok_or_else(|| fs_err!(
                 ErrorCode::InvalidArgument,
                 "Missing schema in dbt quoting config. Failed to convert to ResolvedQuoting."
             ))?,

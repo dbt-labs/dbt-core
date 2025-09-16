@@ -42,7 +42,7 @@ impl Object for RunConfig {
                 let name: String = args.get("name")?;
                 let default = args
                     .get_optional::<Value>("default")
-                    .unwrap_or(Value::from(None::<Option<String>>));
+                    .unwrap_or_else(|| Value::from(None::<Option<String>>));
 
                 match self.model_config.get(&name) {
                     Some(val) => {
@@ -85,7 +85,7 @@ impl Object for RunConfig {
 
                 Ok(persist_docs_map
                     .get_value(&Value::from("relation"))
-                    .unwrap_or(Value::from(false)))
+                    .unwrap_or_else(|| Value::from(false)))
             }
             "persist_column_docs" => {
                 let default_value = Value::from(BTreeMap::<String, Value>::new());
@@ -105,7 +105,7 @@ impl Object for RunConfig {
 
                 Ok(persist_docs_map
                     .get_value(&Value::from("columns"))
-                    .unwrap_or(Value::from(false)))
+                    .unwrap_or_else(|| Value::from(false)))
             }
             _ => Err(MinijinjaError::new(
                 MinijinjaErrorKind::UnknownMethod,

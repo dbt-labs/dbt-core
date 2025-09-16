@@ -160,7 +160,7 @@ impl TryFrom<GitUnpinnedPackage> for GitPinnedPackage {
         let revision = git_unpinned_package
             .revisions
             .pop()
-            .unwrap_or("HEAD".to_string());
+            .unwrap_or_else(|| "HEAD".to_string());
         Ok(Self {
             git: git_unpinned_package.git,
             // Unwrap or error
@@ -264,7 +264,7 @@ impl TryFrom<PrivateUnpinnedPackage> for PrivatePinnedPackage {
         let revision = private_unpinned_package
             .revisions
             .pop()
-            .unwrap_or("HEAD".to_string());
+            .unwrap_or_else(|| "HEAD".to_string());
         Ok(Self {
             private: private_unpinned_package.private,
             // Unwrap or error

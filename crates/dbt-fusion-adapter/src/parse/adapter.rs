@@ -469,13 +469,13 @@ impl BaseAdapter for ParseAdapter {
         let default_database = target.as_str().unwrap_or_default();
         let database = parser
             .get_optional::<String>("database")
-            .unwrap_or(default_database.to_string());
+            .unwrap_or_else(|| default_database.to_string());
         let _ = parser
             .get_optional::<bool>("quote_table")
             .unwrap_or_default();
         let excluded_schemas = parser
             .get_optional::<Value>("excluded_schemas")
-            .unwrap_or(Value::from_iter::<Vec<String>>(vec![]));
+            .unwrap_or_else(|| Value::from_iter::<Vec<String>>(vec![]));
         let _: Vec<String> = Vec::<String>::deserialize(excluded_schemas).map_err(|e| {
             MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
         })?;

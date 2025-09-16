@@ -203,7 +203,7 @@ pub async fn install_packages(
                 let package_name = local_unpinned_package
                     .name
                     .clone()
-                    .unwrap_or(package_path.display().to_string());
+                    .unwrap_or_else(|| package_path.display().to_string());
                 if std::env::var("NEXTEST").is_err() {
                     show_progress!(io_args, fsinfo!(INSTALLING.into(), package_name.clone()));
                 }
@@ -238,7 +238,7 @@ pub async fn install_packages(
                 let package_name = private_unpinned_package
                     .name
                     .clone()
-                    .unwrap_or(private_unpinned_package.private.clone());
+                    .unwrap_or_else(|| private_unpinned_package.private.clone());
                 if std::env::var("NEXTEST").is_err() {
                     show_progress!(io_args, fsinfo!(INSTALLING.into(), package_name.clone()));
                 }

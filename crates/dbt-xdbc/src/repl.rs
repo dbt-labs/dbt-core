@@ -75,8 +75,9 @@ impl ReplState {
                 //     GRANT ALL PRIVILEGES ON DATABASE adbc_test TO username;
                 // Shell:
                 //     export ADBC_POSTGRES_URI="postgres://username:an_secure_password@localhost/adbc_test"
-                let uri = env::var("ADBC_POSTGRES_URI")
-                    .unwrap_or("postgres://username:rocks_password@localhost/adbc_test".to_owned());
+                let uri = env::var("ADBC_POSTGRES_URI").unwrap_or_else(|_| {
+                    "postgres://username:rocks_password@localhost/adbc_test".to_owned()
+                });
                 let mut builder = database::Builder::new(backend);
                 builder.with_parse_uri(uri)?;
                 Ok(builder)

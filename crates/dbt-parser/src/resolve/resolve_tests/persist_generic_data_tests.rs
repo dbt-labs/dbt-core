@@ -408,7 +408,7 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
     if !config_from_deprecated.is_empty() {
         // Convert existing config to JSON if it exists
         let existing_config_json = if let Some(ref existing) = final_config {
-            serde_json::to_value(existing).unwrap_or(Value::Object(serde_json::Map::new()))
+            serde_json::to_value(existing).unwrap_or_else(|_| Value::Object(serde_json::Map::new()))
         } else {
             Value::Object(serde_json::Map::new())
         };

@@ -263,10 +263,9 @@ impl FromStr for VersionSpecifier {
     type Err = Box<FsError>;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let captures = VERSION_REGEX.captures(s).ok_or(fs_err!(
-            ErrorCode::RuntimeError,
-            "Error parsing semver version {s}"
-        ))?;
+        let captures = VERSION_REGEX
+            .captures(s)
+            .ok_or_else(|| fs_err!(ErrorCode::RuntimeError, "Error parsing semver version {s}"))?;
         let matcher = captures.name("matcher").map(|m| m.as_str().to_string());
         let major = captures
             .name("major")

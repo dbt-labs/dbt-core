@@ -889,7 +889,7 @@ impl<'source> Environment<'source> {
         self.get_global(DBT_AND_ADAPTERS_NAMESPACE)
             .unwrap_or_default()
             .downcast_object::<ValueMap>()
-            .unwrap_or(Arc::new(ValueMap::new()))
+            .unwrap_or_else(|| Arc::new(ValueMap::new()))
     }
 
     /// Looks up a filter.
@@ -937,7 +937,7 @@ impl<'source> Environment<'source> {
         self.get_global(MACRO_NAMESPACE_REGISTRY)
             .unwrap_or_default()
             .downcast_object::<ValueMap>()
-            .unwrap_or(Arc::new(ValueMap::new()))
+            .unwrap_or_else(|| Arc::new(ValueMap::new()))
     }
 
     /// The name of the root project
@@ -955,14 +955,14 @@ impl<'source> Environment<'source> {
         self.get_global(MACRO_TEMPLATE_REGISTRY)
             .unwrap_or_default()
             .downcast_object::<ValueMap>()
-            .unwrap_or(Arc::new(ValueMap::new()))
+            .unwrap_or_else(|| Arc::new(ValueMap::new()))
     }
 
     pub(crate) fn get_non_internal_packages(&self) -> Arc<ValueMap> {
         self.get_global(NON_INTERNAL_PACKAGES)
             .unwrap_or_default()
             .downcast_object::<ValueMap>()
-            .unwrap_or(Arc::new(ValueMap::new()))
+            .unwrap_or_else(|| Arc::new(ValueMap::new()))
     }
 }
 

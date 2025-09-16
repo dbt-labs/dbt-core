@@ -60,10 +60,7 @@ pub trait Database: Send + Sync + DatabaseInfo {
         self.new_connection()?
             .get_info(Some(HashSet::from_iter([InfoCode::DriverAdbcVersion])))?
             .next()
-            .ok_or(Error::with_message_and_status(
-                "failed to get info",
-                Status::Internal,
-            ))?
+            .ok_or_else(|| Error::with_message_and_status("failed to get info", Status::Internal))?
             .map_err(Into::into)
             .and_then(|record_batch| {
                 assert_eq!(
@@ -484,10 +481,7 @@ impl DatabaseInfo for AdbcDatabase {
         let mut record_batch_reader = conn.get_info(Some(HashSet::from_iter([info_code])))?;
         record_batch_reader
             .next()
-            .ok_or(Error::with_message_and_status(
-                "failed to get info",
-                Status::Internal,
-            ))?
+            .ok_or_else(|| Error::with_message_and_status("failed to get info", Status::Internal))?
             .map_err(Into::into)
             .and_then(|record_batch| {
                 if InfoCode::try_from(record_batch.column(0).as_primitive::<UInt32Type>().value(0))?

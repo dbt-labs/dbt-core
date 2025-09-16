@@ -131,7 +131,7 @@ pub async fn resolve_semantic_models(
             .clone()
             .unwrap()
             .name
-            .unwrap_or(model_name.clone());
+            .unwrap_or_else(|| model_name.clone());
         let semantic_model_unique_id =
             get_unique_id(&semantic_model_name, package_name, None, "semantic_model");
         let semantic_model_fqn = get_node_fqn(
@@ -191,7 +191,8 @@ pub async fn resolve_semantic_models(
                         metric
                             .agg_time_dimension
                             .clone()
-                            .unwrap_or(model_props.agg_time_dimension.clone().unwrap_or_default()),
+                            .or_else(|| model_props.agg_time_dimension.clone())
+                            .unwrap_or_default(),
                     ),
                 }
             })

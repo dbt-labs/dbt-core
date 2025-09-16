@@ -93,8 +93,8 @@ pub fn resolve_sources(
             .database
             .clone()
             .or_else(|| source.catalog.clone())
-            .unwrap_or(database.to_owned());
-        let schema = source.schema.clone().unwrap_or(source.name.clone());
+            .unwrap_or_else(|| database.to_owned());
+        let schema = source.schema.clone().unwrap_or_else(|| source.name.clone());
 
         let fqn = get_node_fqn(
             package_name,
@@ -123,7 +123,8 @@ pub fn resolve_sources(
 
         let is_enabled = table_config
             .enabled
-            .unwrap_or(source_properties_config.get_enabled().unwrap_or(true));
+            .or_else(|| source_properties_config.get_enabled())
+            .unwrap_or(true);
 
         let normalized_table_name = special_chars.replace_all(&table_name, "__");
         let unique_id = format!(
@@ -132,20 +133,18 @@ pub fn resolve_sources(
         );
 
         let merged_loaded_at_field = Some(
-            table_config.loaded_at_field.clone().unwrap_or(
-                source_properties_config
-                    .loaded_at_field
-                    .clone()
-                    .unwrap_or("".to_string()),
-            ),
+            table_config
+                .loaded_at_field
+                .clone()
+                .or_else(|| source_properties_config.loaded_at_field.clone())
+                .unwrap_or_default(),
         );
         let merged_loaded_at_query = Some(
-            table_config.loaded_at_query.clone().unwrap_or(
-                source_properties_config
-                    .loaded_at_query
-                    .clone()
-                    .unwrap_or("".to_string()),
-            ),
+            table_config
+                .loaded_at_query
+                .clone()
+                .or_else(|| source_properties_config.loaded_at_query.clone())
+                .unwrap_or_default(),
         );
         if !merged_loaded_at_field.as_ref().unwrap().is_empty()
             && !merged_loaded_at_query.as_ref().unwrap().is_empty()
@@ -177,7 +176,10 @@ pub fn resolve_sources(
             adapter_type,
             &database,
             &schema,
-            &table.identifier.clone().unwrap_or(table_name.to_owned()),
+            &table
+                .identifier
+                .clone()
+                .unwrap_or_else(|| table_name.to_owned()),
         );
 
         let parse_adapter = jinja_env
@@ -275,8 +277,8 @@ pub fn resolve_sources(
                 freshness: merged_freshness.clone(),
                 identifier,
                 source_name: source_name.to_owned(),
-                source_description: source.description.clone().unwrap_or("".to_string()), // needs to be some or empty string per dbt spec
-                loader: source.loader.clone().unwrap_or("".to_string()),
+                source_description: source.description.clone().unwrap_or_default(), // needs to be some or empty string per dbt spec
+                loader: source.loader.clone().unwrap_or_default(),
                 loaded_at_field: merged_loaded_at_field.clone(),
                 loaded_at_query: merged_loaded_at_query.clone(),
             },

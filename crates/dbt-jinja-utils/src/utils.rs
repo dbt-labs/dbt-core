@@ -170,7 +170,7 @@ pub async fn inject_and_persist_ephemeral_models(
         pos += start + DBT_CTE_PREFIX.len();
         let name_end = final_sql[pos..]
             .find(|c: char| !c.is_alphanumeric() && c != '_')
-            .unwrap_or(final_sql[pos..].len());
+            .unwrap_or_else(|| final_sql[pos..].len());
         let model_name = &final_sql[pos..pos + name_end];
         // Only add if not already seen
         if !ephemeral_model_names.contains(&model_name.to_string()) {
@@ -286,7 +286,7 @@ pub fn get_method(args: &[Value], map: &BTreeMap<String, Value>) -> Result<Value
     let name: String = args.get("name")?;
     let default = args
         .get_optional::<Value>("default")
-        .unwrap_or(Value::from(""));
+        .unwrap_or_else(|| Value::from(""));
 
     Ok(match map.get(&name) {
         Some(val) if !val.is_none() => val.clone(),
@@ -406,7 +406,7 @@ pub fn generate_component_name(
     // Build the args
     let mut args = custom_name
         .map(|name| vec![Value::from(name)])
-        .unwrap_or(vec![Value::from(())]); // If no custom name, pass in none so the macro reads from the target context
+        .unwrap_or_else(|| vec![Value::from(())]); // If no custom name, pass in none so the macro reads from the target context
     if let Some(node) = node {
         args.push(Value::from_serialize(node.serialize()));
     }

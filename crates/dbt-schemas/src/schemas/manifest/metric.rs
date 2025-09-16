@@ -108,7 +108,7 @@ impl MetricTimeWindow {
         let parts: Vec<&str> = str.split_whitespace().collect();
         let count = parts[0].parse().unwrap_or(1);
         // remove last 's' if plural, ex. 'days' -> 'day'
-        let mut granularity = parts[1].parse().unwrap_or("month".to_string());
+        let mut granularity = parts[1].parse().unwrap_or_else(|_| "month".to_string());
         if granularity.ends_with('s') {
             granularity.pop();
         }

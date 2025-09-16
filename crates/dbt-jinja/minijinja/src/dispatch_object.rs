@@ -210,7 +210,7 @@ impl DispatchObject {
                     .lookup(MACRO_DISPATCH_ORDER)
                     .unwrap_or_default()
                     .downcast_object::<ValueMap>()
-                    .unwrap_or(Arc::new(ValueMap::new()));
+                    .unwrap_or_else(|| Arc::new(ValueMap::new()));
 
                 if let Some(order) = macro_dispatch_order.get(&Value::from(namespace.as_str())) {
                     // Use configured order
@@ -376,7 +376,7 @@ pub fn macro_namespace_template_resolver(
     let current_package_name = state
         .lookup(TARGET_PACKAGE_NAME)
         .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or("dbt".to_string());
+        .unwrap_or_else(|| "dbt".to_string());
     let root_package = state.env().get_root_package_name();
     let dbt_and_adapters = state.env().get_dbt_and_adapters_namespace();
 

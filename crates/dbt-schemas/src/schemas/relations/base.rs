@@ -371,9 +371,9 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
 
         Ok(self
             .create_relation(
-                Some(database.unwrap_or(self.database().as_str().unwrap().to_string())),
-                Some(schema.unwrap_or(self.schema().as_str().unwrap().to_string())),
-                Some(identifier.unwrap_or(self.identifier().as_str().unwrap().to_string())),
+                Some(database.unwrap_or_else(|| self.database().as_str().unwrap().to_string())),
+                Some(schema.unwrap_or_else(|| self.schema().as_str().unwrap().to_string())),
+                Some(identifier.unwrap_or_else(|| self.identifier().as_str().unwrap().to_string())),
                 self.relation_type(),
                 self.quote_policy(),
             )?
@@ -508,15 +508,16 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     fn include(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut args = ArgParser::new(args, None);
 
+        let defaults = self.include_policy();
         let database: bool = args
             .consume_optional_only_from_kwargs::<bool>("database")
-            .unwrap_or(self.include_policy().database);
+            .unwrap_or(defaults.database);
         let schema: bool = args
             .consume_optional_only_from_kwargs("schema")
-            .unwrap_or(self.include_policy().schema);
+            .unwrap_or(defaults.schema);
         let identifier: bool = args
             .consume_optional_only_from_kwargs("identifier")
-            .unwrap_or(self.include_policy().identifier);
+            .unwrap_or(defaults.identifier);
 
         let include_policy = Policy {
             database,

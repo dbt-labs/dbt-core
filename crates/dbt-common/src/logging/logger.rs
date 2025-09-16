@@ -220,9 +220,9 @@ impl Logger {
         // Start with the base JSON structure
         let mut info_json = json!({
             "category": "",
-            "code": kvs.get("code").unwrap_or(&"".to_string()).to_string(),
+            "code": kvs.get("code").map(|s| s.as_str()).unwrap_or("").to_string(),
             "invocation_id": invocation_id,
-            "name": kvs.get("name").unwrap_or(&"Generic".to_string()).to_string(),
+            "name": kvs.get("name").map(|s| s.as_str()).unwrap_or("Generic").to_string(),
             "pid": std::process::id(),
             "thread": std::thread::current().name().unwrap_or("main").to_string(),
             // drop the timezone offset and format as microseconds to conform to python logging timestamp parsing

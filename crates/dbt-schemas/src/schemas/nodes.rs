@@ -2356,17 +2356,15 @@ impl DbtModel {
                         "previous_column_type".to_string(),
                         old_value
                             .data_type
-                            .as_ref()
-                            .unwrap_or(&"unknown".to_string())
-                            .clone(),
+                            .clone()
+                            .unwrap_or_else(|| "unknown".to_string()),
                     );
                     type_change.insert(
                         "current_column_type".to_string(),
                         current_column
                             .data_type
-                            .as_ref()
-                            .unwrap_or(&"unknown".to_string())
-                            .clone(),
+                            .clone()
+                            .unwrap_or_else(|| "unknown".to_string()),
                     );
                     column_type_changes.push(type_change);
                 }
@@ -2470,11 +2468,15 @@ impl DbtModel {
                     .map(|c| {
                         format!(
                             "{} ({} -> {})",
-                            c.get("column_name").unwrap_or(&"unknown".to_string()),
+                            c.get("column_name")
+                                .map(|s| s.as_str())
+                                .unwrap_or("unknown"),
                             c.get("previous_column_type")
-                                .unwrap_or(&"unknown".to_string()),
+                                .map(|s| s.as_str())
+                                .unwrap_or("unknown"),
                             c.get("current_column_type")
-                                .unwrap_or(&"unknown".to_string())
+                                .map(|s| s.as_str())
+                                .unwrap_or("unknown")
                         )
                     })
                     .collect::<Vec<_>>()
@@ -2545,10 +2547,12 @@ impl DbtModel {
                     "{} -> {}",
                     materialization_changed
                         .first()
-                        .unwrap_or(&"unknown".to_string()),
+                        .map(|s| s.as_str())
+                        .unwrap_or("unknown"),
                     materialization_changed
                         .get(1)
-                        .unwrap_or(&"unknown".to_string())
+                        .map(|s| s.as_str())
+                        .unwrap_or("unknown")
                 );
                 breaking_changes.push(format!(
                         "Materialization changed with enforced constraints: \n    - {materialization_changes_str}"

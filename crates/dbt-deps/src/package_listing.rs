@@ -249,7 +249,7 @@ impl PackageListing {
                 )
                 .map(|p| p.name)
                 .ok()
-                .unwrap_or(path_to_dbt_project.to_string_lossy().to_string());
+                .unwrap_or_else(|| path_to_dbt_project.to_string_lossy().to_string());
 
                 let dbt_project: DbtProject = from_yaml_raw(
                     &self.io_args,

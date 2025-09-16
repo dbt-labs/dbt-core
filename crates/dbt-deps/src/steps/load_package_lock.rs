@@ -201,7 +201,7 @@ fn try_load_from_deprecated_dbt_packages_lock(
                         )
                         .map(|p| p.name)
                         .ok()
-                        .unwrap_or(project_yml_file.to_string_lossy().to_string());
+                        .unwrap_or_else(|| project_yml_file.to_string_lossy().to_string());
 
                         let dbt_project: DbtProject = from_yaml_raw(
                             io,
