@@ -87,6 +87,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         dialect: Dialect,
         engine: Arc<SqlEngine>,
+        state: Option<&State>,
         conn: &'_ mut dyn Connection,
         query_ctx: &QueryCtx,
         _auto_begin: bool,
@@ -115,6 +116,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         for statement in statements {
             last_batch = Some(execute_query_with_retry(
                 engine.clone(),
+                state,
                 conn,
                 &query_ctx.with_sql(statement),
                 1,
@@ -141,8 +143,10 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     }
 
     /// Query execution implementation for a specific adapter.
+    #[allow(clippy::too_many_arguments)]
     fn execute(
         &self,
+        state: Option<&State>,
         conn: &'_ mut dyn Connection,
         query_ctx: &QueryCtx,
         auto_begin: bool,
@@ -160,6 +164,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     ) -> AdapterResult<AdapterResponse> {
         // default values are the same as in dispatch_adapter_calls()
         let (response, _) = self.execute(
+            None,       // empty state
             conn,       // connection
             query_ctx,  // sql string wrapper
             auto_begin, // auto_begin
@@ -178,6 +183,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         limit: Option<i64>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         self.execute(
+            None,      // state
             conn,      // connection
             query_ctx, // sql string wrapper
             false,     // auto_begin
@@ -196,7 +202,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         limit: Option<i64>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         let mut conn = self.new_connection(None)?;
-        self.execute(&mut *conn, query_ctx, auto_begin, fetch, limit, None)
+        self.execute(None, &mut *conn, query_ctx, auto_begin, fetch, limit, None)
     }
 
     /// Add a query to run.
@@ -708,6 +714,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// get_table_options
     fn get_table_options(
         &self,
+        _state: &State,
         _config: ModelConfig,
         _node: &CommonAttributes,
         _temporary: bool,
@@ -718,6 +725,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// get_view_options
     fn get_view_options(
         &self,
+        _state: &State,
         _config: ModelConfig,
         _node: &CommonAttributes,
     ) -> AdapterResult<BTreeMap<String, Value>> {

@@ -14,6 +14,7 @@ pub mod formatter;
 pub mod funcs;
 pub mod information_schema;
 pub mod need_quotes;
+pub mod query_comment;
 pub mod query_ctx;
 pub mod record_and_replay;
 pub mod render_constraint;

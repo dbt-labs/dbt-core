@@ -47,3 +47,8 @@ fn is_use_warehouse() -> bool {
 pub fn is_update_mode_with_warehouse() -> bool {
     is_update_golden_files_mode() && is_use_warehouse()
 }
+
+/// Return true if query comments should be stripped from recordings.
+pub fn should_strip_query_comments() -> bool {
+    std::env::var("STRIP_QUERY_COMMENTS").unwrap_or_else(|_| "0".to_string()) == "1"
+}

@@ -435,6 +435,7 @@ impl BaseAdapter for BridgeAdapter {
         let query_ctx =
             query_ctx_from_state_with_sql(state, sql)?.with_desc("execute adapter call");
         let (response, table) = self.typed_adapter.execute(
+            Some(state),
             conn.as_mut(),
             &query_ctx,
             auto_begin,
@@ -1094,8 +1095,8 @@ impl BaseAdapter for BridgeAdapter {
         Ok(result)
     }
 
-    #[tracing::instrument(skip(self, _state), level = "trace")]
-    fn get_table_options(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
+    #[tracing::instrument(skip(self, state), level = "trace")]
+    fn get_table_options(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         parser.check_num_args(current_function_name!(), 2, 3)?;
         let config = parser.get::<Value>("config")?;
@@ -1121,14 +1122,14 @@ impl BaseAdapter for BridgeAdapter {
             })?;
         let node = node_wrapper.as_internal_node();
 
-        let options = self
-            .typed_adapter
-            .get_table_options(config, node.common(), temporary)?;
+        let options =
+            self.typed_adapter
+                .get_table_options(state, config, node.common(), temporary)?;
         Ok(Value::from_serialize(options))
     }
 
-    #[tracing::instrument(skip(self, _state), level = "trace")]
-    fn get_view_options(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
+    #[tracing::instrument(skip(self, state), level = "trace")]
+    fn get_view_options(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
         parser.check_num_args(current_function_name!(), 2, 3)?;
 
@@ -1151,7 +1152,9 @@ impl BaseAdapter for BridgeAdapter {
             })?;
         let node = node_wrapper.as_internal_node();
 
-        let options = self.typed_adapter.get_view_options(config, node.common())?;
+        let options = self
+            .typed_adapter
+            .get_view_options(state, config, node.common())?;
         Ok(Value::from_serialize(options))
     }
 

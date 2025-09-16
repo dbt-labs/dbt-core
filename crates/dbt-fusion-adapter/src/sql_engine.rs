@@ -3,6 +3,7 @@ use crate::auth::Auth;
 use crate::base_adapter::{AdapterFactory, backend_of};
 use crate::config::AdapterConfig;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
+use crate::query_comment::{EMPTY_CONFIG, QueryCommentConfig};
 use crate::stmt_splitter::StmtSplitter;
 
 use adbc_core::options::{OptionStatement, OptionValue};
@@ -17,6 +18,7 @@ use dbt_frontend_common::dialect::Dialect;
 use dbt_xdbc::semaphore::Semaphore;
 use dbt_xdbc::{Backend, Connection, Database, QueryCtx, connection, database, driver};
 use log;
+use minijinja::State;
 use serde_json::json;
 use std::borrow::Cow;
 use tracy_client::span;
@@ -92,6 +94,8 @@ pub struct ActualEngine {
     adapter_factory: Arc<dyn AdapterFactory>,
     /// Statement splitter
     splitter: Arc<dyn StmtSplitter>,
+    /// Query comment config
+    query_comment: QueryCommentConfig,
     /// Global CLI cancellation token
     cancellation_token: CancellationToken,
 }
@@ -102,6 +106,7 @@ impl ActualEngine {
         config: AdapterConfig,
         adapter_factory: Arc<dyn AdapterFactory>,
         splitter: Arc<dyn StmtSplitter>,
+        query_comment: QueryCommentConfig,
         token: CancellationToken,
     ) -> Self {
         let threads = config
@@ -122,6 +127,7 @@ impl ActualEngine {
             semaphore: Arc::new(Semaphore::new(permits)),
             adapter_factory,
             splitter,
+            query_comment,
             cancellation_token: token,
         }
     }
@@ -209,9 +215,17 @@ impl SqlEngine {
         config: AdapterConfig,
         adapter_factory: Arc<dyn AdapterFactory>,
         stmt_splitter: Arc<dyn StmtSplitter>,
+        query_comment: QueryCommentConfig,
         token: CancellationToken,
     ) -> Arc<Self> {
-        let engine = ActualEngine::new(auth, config, adapter_factory, stmt_splitter, token);
+        let engine = ActualEngine::new(
+            auth,
+            config,
+            adapter_factory,
+            stmt_splitter,
+            query_comment,
+            token,
+        );
         Arc::new(SqlEngine::Warehouse(Arc::new(engine)))
     }
 
@@ -222,10 +236,18 @@ impl SqlEngine {
         config: AdapterConfig,
         adapter_factory: Arc<dyn AdapterFactory>,
         stmt_splitter: Arc<dyn StmtSplitter>,
+        query_comment: QueryCommentConfig,
         token: CancellationToken,
     ) -> Arc<Self> {
-        let engine =
-            ReplayEngine::new(backend, path, config, adapter_factory, stmt_splitter, token);
+        let engine = ReplayEngine::new(
+            backend,
+            path,
+            config,
+            adapter_factory,
+            stmt_splitter,
+            query_comment,
+            token,
+        );
         Arc::new(SqlEngine::Replay(engine))
     }
 
@@ -253,6 +275,16 @@ impl SqlEngine {
     /// shared drivers like Postgres/Redshift).
     pub fn split_statements(&self, sql: &str, dialect: Dialect) -> Vec<String> {
         self.splitter().split(sql, dialect)
+    }
+
+    /// Get the query comment config for this engine
+    pub fn query_comment(&self) -> &QueryCommentConfig {
+        match self {
+            SqlEngine::Warehouse(engine) => &engine.query_comment,
+            SqlEngine::Record(engine) => engine.query_comment(),
+            SqlEngine::Replay(engine) => engine.query_comment(),
+            SqlEngine::Mock(_) => &EMPTY_CONFIG,
+        }
     }
 
     /// Create a new connection to the warehouse.
@@ -304,21 +336,34 @@ impl SqlEngine {
     /// Execute the given SQL query or statement.
     pub fn execute(
         &self,
+        state: Option<&State>,
         conn: &'_ mut dyn Connection,
         query_ctx: &QueryCtx,
     ) -> AdapterResult<RecordBatch> {
-        self.execute_with_options(query_ctx, conn, Options::new(), true)
+        self.execute_with_options(state, query_ctx, conn, Options::new(), true)
     }
 
     /// Execute the given SQL query or statement.
     pub fn execute_with_options(
         &self,
+        state: Option<&State>,
         query_ctx: &QueryCtx,
         conn: &'_ mut dyn Connection,
         options: Options,
         fetch: bool,
     ) -> AdapterResult<RecordBatch> {
         assert!(query_ctx.sql().is_some() || !options.is_empty());
+
+        let query_ctx = if let Some(sql) = query_ctx.sql() {
+            if let Some(state) = state {
+                &query_ctx.with_sql(self.query_comment().add_comment(state, sql)?)
+            } else {
+                query_ctx
+            }
+        } else {
+            query_ctx
+        };
+
         Self::log_query_ctx_for_execution(query_ctx);
 
         let token = self.cancellation_token();
@@ -440,6 +485,7 @@ impl SqlEngine {
 /// https://github.com/dbt-labs/dbt-adapters/blob/996a302fa9107369eb30d733dadfaf307023f33d/dbt-adapters/src/dbt/adapters/sql/connections.py#L84
 pub fn execute_query_with_retry(
     engine: Arc<SqlEngine>,
+    state: Option<&State>,
     conn: &'_ mut dyn Connection,
     query_ctx: &QueryCtx,
     retry_limit: u32,
@@ -450,7 +496,7 @@ pub fn execute_query_with_retry(
     let mut last_error = None;
 
     while attempt < retry_limit {
-        match engine.execute_with_options(query_ctx, conn, options.clone(), fetch) {
+        match engine.execute_with_options(state, query_ctx, conn, options.clone(), fetch) {
             Ok(result) => return Ok(result),
             Err(err) => {
                 last_error = Some(err.clone());

@@ -28,6 +28,7 @@ use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, build_root_project_configs};
 use crate::resolve::resolve_groups::resolve_groups;
 use crate::resolve::resolve_operations::resolve_operations;
+use crate::resolve::resolve_query_comment::resolve_query_comment;
 use crate::utils::{self, clear_package_diagnostics};
 use dbt_schemas::schemas::telemetry::BuildPhaseInfo;
 use dbt_schemas::schemas::telemetry::TelemetryAttributes;
@@ -634,6 +635,10 @@ pub async fn resolve_inner(
 
     nodes.unit_tests.extend(unit_tests);
     disabled_nodes.unit_tests.extend(disabled_unit_tests);
+
+    if let Some(query_comment) = package.dbt_project.query_comment.as_ref() {
+        resolve_query_comment(query_comment, &jinja_env, &base_ctx)?;
+    }
 
     let (groups, disabled_groups) = resolve_groups(
         arg,

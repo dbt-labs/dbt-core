@@ -165,7 +165,11 @@ async fn extend_with_model_context<S: Serialize>(
         MinijinjaValue::from_object(node_config),
     );
 
-    base_context.insert("model".to_owned(), MinijinjaValue::from_object(model_map));
+    base_context.insert(
+        "model".to_owned(),
+        MinijinjaValue::from_object(model_map.clone()),
+    );
+    base_context.insert("node".to_owned(), MinijinjaValue::from_object(model_map));
 }
 
 /// Extend the base context with stateful functions

@@ -12,6 +12,7 @@ use dbt_common::io_args::ReplayMode;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::columns::{BigqueryColumnMode, StdColumn};
 use dbt_schemas::schemas::common::ResolvedQuoting;
+use dbt_schemas::schemas::project::QueryComment;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_xdbc::{Backend, Connection};
 use minijinja::arg_utils::ArgParser;
@@ -608,6 +609,7 @@ pub trait AdapterFactory: Send + Sync {
         flags: BTreeMap<String, Value>,
         db: Option<Arc<dyn SchemaRegistry>>,
         quoting: ResolvedQuoting,
+        query_comment: Option<QueryComment>,
         token: CancellationToken,
     ) -> FsResult<Arc<dyn BaseAdapter>>;
 

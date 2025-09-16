@@ -189,6 +189,7 @@ pub struct SedTask {
     pub from: String,
     pub to: String,
     pub dir: Option<PathBuf>,
+    pub strip_comments: bool,
 }
 
 #[async_trait]
@@ -286,6 +287,34 @@ impl Task for SedTask {
         if let Some(ref dir) = self.dir {
             iter_files_recursively(dir, &mut replace_timestamps).await?;
         }
+
+        let mut replace_query_comments = move |path: &Path| -> TestResult<()> {
+            if path.extension().map(|ext| ext == "sql").unwrap_or(false) {
+                let content = fs::read_to_string(path)?;
+                // A query comment only appears either at the beginning or the end of a query.
+                let mut new_content = content;
+                if new_content.starts_with("/*") {
+                    if let Some(comment_end) = new_content.find("*/") {
+                        new_content = new_content[(comment_end + "*/".len())..].to_string();
+                    }
+                } else if new_content.ends_with("*/") {
+                    if let Some(comment_start) = new_content.rfind("/*") {
+                        new_content = new_content[..comment_start].to_string();
+                    }
+                };
+
+                fs::write(path, new_content)?;
+            }
+            Ok(())
+        };
+
+        if self.strip_comments {
+            iter_files_recursively(&test_env.golden_dir, &mut replace_query_comments).await?;
+            if let Some(ref dir) = self.dir {
+                iter_files_recursively(dir, &mut replace_query_comments).await?;
+            }
+        }
+
         Ok(())
     }
 }

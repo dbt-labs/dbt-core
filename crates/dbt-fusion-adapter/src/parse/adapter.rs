@@ -6,6 +6,7 @@ use crate::funcs::{
 };
 use crate::metadata::MetadataAdapter;
 use crate::parse::relation::EmptyRelation;
+use crate::query_comment::QueryCommentConfig;
 use crate::relation_object::{RelationObject, create_relation};
 use crate::response::AdapterResponse;
 use crate::stmt_splitter::NaiveStmtSplitter;
@@ -22,6 +23,7 @@ use dbt_common::io_args::ReplayMode;
 use dbt_common::{FsError, FsResult, current_function_name};
 use dbt_schemas::schemas::columns::{BigqueryColumnMode, StdColumn, StdColumnType};
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
+use dbt_schemas::schemas::project::QueryComment;
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
 use dbt_xdbc::Connection;
 use minijinja::Value;
@@ -104,12 +106,14 @@ impl ParseAdapter {
         let adapter_config = AdapterConfig::new(config);
         let adapter_factory = Arc::new(AdapterFactoryForParse {});
         let stmt_splitter = Arc::new(NaiveStmtSplitter {});
+        let query_comment = QueryCommentConfig::from_query_comment(None, adapter_type, false);
 
         let engine = SqlEngine::new(
             auth,
             adapter_config,
             adapter_factory,
             stmt_splitter,
+            query_comment,
             token.clone(),
         );
 
@@ -805,6 +809,7 @@ impl AdapterFactory for AdapterFactoryForParse {
         _flags: BTreeMap<String, Value>,
         _db: Option<Arc<dyn SchemaRegistry>>,
         _quoting: ResolvedQuoting,
+        _query_comment: Option<QueryComment>,
         _token: CancellationToken,
     ) -> FsResult<Arc<dyn BaseAdapter>> {
         unreachable!("AdapterFactoryForParse should not be used to create more adapters")

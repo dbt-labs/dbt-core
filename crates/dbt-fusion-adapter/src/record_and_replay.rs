@@ -1,6 +1,7 @@
 use crate::base_adapter::AdapterFactory;
 use crate::config::AdapterConfig;
 use crate::errors::AdapterResult;
+use crate::query_comment::QueryCommentConfig;
 use crate::sql_engine::SqlEngine;
 use crate::stmt_splitter::StmtSplitter;
 
@@ -127,6 +128,10 @@ impl RecordEngine {
 
     pub fn splitter(&self) -> &dyn StmtSplitter {
         self.0.engine.splitter()
+    }
+
+    pub fn query_comment(&self) -> &QueryCommentConfig {
+        self.0.engine.query_comment()
     }
 
     pub fn cancellation_token(&self) -> CancellationToken {
@@ -362,6 +367,7 @@ struct ReplayEngineInner {
     config: AdapterConfig,
     adapter_factory: Arc<dyn AdapterFactory>,
     stmt_splitter: Arc<dyn StmtSplitter>,
+    query_comment: QueryCommentConfig,
     /// Global CLI cancellation token
     cancellation_token: CancellationToken,
 }
@@ -382,6 +388,7 @@ impl ReplayEngine {
         config: AdapterConfig,
         adapter_factory: Arc<dyn AdapterFactory>,
         stmt_splitter: Arc<dyn StmtSplitter>,
+        query_comment: QueryCommentConfig,
         token: CancellationToken,
     ) -> Self {
         let inner = ReplayEngineInner {
@@ -390,6 +397,7 @@ impl ReplayEngine {
             config,
             adapter_factory,
             stmt_splitter,
+            query_comment,
             cancellation_token: token,
         };
         ReplayEngine(Arc::new(inner))
@@ -414,6 +422,10 @@ impl ReplayEngine {
 
     pub fn splitter(&self) -> &dyn StmtSplitter {
         self.0.stmt_splitter.as_ref()
+    }
+
+    pub fn query_comment(&self) -> &QueryCommentConfig {
+        &self.0.query_comment
     }
 
     pub fn cancellation_token(&self) -> CancellationToken {

@@ -13,5 +13,6 @@ pub fn build_target_context_map(
         dbt_serde_yaml::from_value(target_context_val).unwrap();
     target_context_map.insert("profile_name".to_string(), MinijinjaValue::from(profile));
     target_context_map.insert("name".to_string(), MinijinjaValue::from(target));
+    target_context_map.insert("target_name".to_string(), MinijinjaValue::from(target));
     target_context_map
 }
