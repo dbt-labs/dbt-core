@@ -35,6 +35,11 @@ static IN_DURATION_PATTERN: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"\bin\s+\d+(?:\.\d+)?(?:ns|us|μs|µs|ms|s|m|h)(?:\s+\d+(?:\.\d+)?(?:ns|us|μs|µs|ms|s|m|h))*\b")
         .unwrap()
 });
+static LAST_UPDATED_DURATION_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    // Matches: "Last updated 1s ago", "Last updated 500ms ago", "Last updated 1s 298ms ago", "Last updated 2m 10s ago", etc.
+    Regex::new(r"\bLast updated\s+\d+(?:\.\d+)?(?:ns|us|μs|µs|ms|s|m|h)(?:\s+\d+(?:\.\d+)?(?:ns|us|μs|µs|ms|s|m|h))* ago\b")
+        .unwrap()
+});
 static MULTI_UNIT_DURATION_PATTERN: Lazy<Regex> = Lazy::new(|| {
     // Matches sequences of 2+ duration tokens (e.g., "32ms 101us", "4s 703ms 195us 939ns")
     Regex::new(r"\b\d+(?:\.\d+)?(?:ns|us|μs|µs|ms|s|m|h)(?:\s+\d+(?:\.\d+)?(?:ns|us|μs|µs|ms|s|m|h)){1,}\b").unwrap()
@@ -202,6 +207,11 @@ pub fn maybe_normalize_time(output: String) -> String {
     // Replace trailing "in ..." duration phrases with a stable token
     result = IN_DURATION_PATTERN
         .replace_all(&result, "in duration")
+        .to_string();
+
+    // Replace trailing "Last updated ... ago" duration phrases with a stable token
+    result = LAST_UPDATED_DURATION_PATTERN
+        .replace_all(&result, "Last updated Xs ago")
         .to_string();
 
     // Replace multi-unit duration sequences like "32ms 101us 694ns" with a stable token
