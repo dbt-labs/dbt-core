@@ -13,7 +13,11 @@ from dbt.artifacts.resources.v1.config import NodeConfig
 from dbt_common.contracts.config.base import MergeBehavior
 from dbt_common.contracts.constraints import ModelLevelConstraint
 from dbt_common.contracts.util import Mergeable
-from dbt_common.dataclass_schema import ExtensibleDbtClassMixin, dbtClassMixin
+from dbt_common.dataclass_schema import (
+    ExtensibleDbtClassMixin,
+    ValidationError,
+    dbtClassMixin,
+)
 
 
 class ModelFreshnessUpdatesOnOptions(enum.Enum):
@@ -23,9 +27,22 @@ class ModelFreshnessUpdatesOnOptions(enum.Enum):
 
 @dataclass
 class ModelBuildAfter(ExtensibleDbtClassMixin):
-    count: int
-    period: TimePeriod
+    count: Optional[int] = None
+    period: Optional[TimePeriod] = None
     updates_on: ModelFreshnessUpdatesOnOptions = ModelFreshnessUpdatesOnOptions.any
+
+    @classmethod
+    def validate(cls, data):
+        super().validate(data)
+
+        if data.get("period") and not data.get("count"):
+            raise ValidationError(
+                "`build_after` must have a value for `count` if a `period` is provided"
+            )
+        elif data.get("count") and not data.get("period"):
+            raise ValidationError(
+                "`build_after` must have a value for `period` if a `count` is provided"
+            )
 
 
 @dataclass
