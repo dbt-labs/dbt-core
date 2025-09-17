@@ -2,9 +2,12 @@ use crate::schemas::{
     CommonAttributes,
     common::{Dimension, NodeDependsOn},
     dbt_column::ColumnPropertiesEntityType,
-    manifest::common::SourceFileMetadata,
+    manifest::{
+        common::SourceFileMetadata,
+        metric::{MeasureAggregationParameters, NonAdditiveDimension},
+    },
     project::SemanticModelConfig,
-    properties::metrics_properties::{AggregationType, NonAdditiveDimension},
+    properties::metrics_properties::AggregationType,
     ref_and_source::DbtRef,
     semantic_layer::semantic_manifest::SemanticLayerElementConfig,
 };
@@ -93,11 +96,4 @@ pub struct SemanticMeasure {
     pub non_additive_dimension: Option<NonAdditiveDimension>,
     pub agg_time_dimension: Option<String>,
     pub config: Option<SemanticLayerElementConfig>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct MeasureAggregationParameters {
-    pub percentile: Option<f32>,
-    pub use_discrete_percentile: Option<bool>,
-    pub use_approximate_percentile: Option<bool>,
 }

@@ -58,7 +58,7 @@ pub mod schemas {
         #[allow(clippy::module_inception)]
         mod manifest;
         mod manifest_nodes;
-        pub(crate) mod metric;
+        pub mod metric;
         mod operation;
         pub mod postgres;
         pub mod saved_query;

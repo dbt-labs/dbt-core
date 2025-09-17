@@ -41,6 +41,7 @@ pub struct MinimalProperties {
     pub unit_tests: BTreeMap<String, MinimalPropertiesEntry>,
     pub tests: BTreeMap<String, MinimalPropertiesEntry>,
     pub exposures: BTreeMap<String, MinimalPropertiesEntry>,
+    pub metrics: BTreeMap<String, MinimalPropertiesEntry>,
     pub saved_queries: BTreeMap<String, MinimalPropertiesEntry>,
     pub groups: BTreeMap<String, MinimalPropertiesEntry>,
 }
@@ -261,6 +262,37 @@ impl MinimalProperties {
                         duplicate_paths: vec![],
                     },
                 );
+            }
+        }
+        if let Some(metrics) = other.metrics {
+            for metric_value in metrics {
+                let metric = into_typed_with_jinja::<MinimalSchemaValue, _>(
+                    io_args,
+                    metric_value.clone(),
+                    false,
+                    jinja_env,
+                    base_ctx,
+                    &[],
+                    dependency_package_name_from_ctx(jinja_env, base_ctx),
+                )?;
+                if let Some(existing_metric) = self.metrics.get_mut(&metric.name) {
+                    existing_metric
+                        .duplicate_paths
+                        .push(properties_path.to_path_buf());
+                } else {
+                    self.metrics.insert(
+                        metric.name.clone(),
+                        MinimalPropertiesEntry {
+                            name: validate_resource_name(&metric.name)?,
+                            name_span: Span::default(),
+                            relative_path: properties_path.to_path_buf(),
+                            schema_value: metric_value,
+                            table_value: None,
+                            version_info: None,
+                            duplicate_paths: vec![],
+                        },
+                    );
+                }
             }
         }
         if let Some(saved_queries) = other.saved_queries {

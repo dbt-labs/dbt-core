@@ -33,7 +33,12 @@ impl From<Nodes> for SemanticManifest {
             metrics: nodes
                 .metrics
                 .into_values()
-                .map(|m| (*m).clone().into())
+                .map(|m| {
+                    // don't hydrate input measures into semantic_manifest.json (only used for manifest.json)
+                    let mut semantic_manifest_metric: SemanticManifestMetric = (*m).clone().into();
+                    semantic_manifest_metric.type_params.input_measures = Some(vec![]);
+                    semantic_manifest_metric
+                })
                 .collect(),
             project_configuration: SemanticManifestProjectConfiguration {},
             saved_queries: nodes

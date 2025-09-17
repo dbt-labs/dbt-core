@@ -558,8 +558,6 @@ pub async fn resolve_inner(
     nodes.exposures.extend(exposures);
     disabled_nodes.exposures.extend(disabled_exposures);
 
-    // dbg!(&nodes.clone().models);
-
     let (semantic_models, disabled_semantic_models) = resolve_semantic_models(
         arg,
         package,
@@ -578,7 +576,15 @@ pub async fn resolve_inner(
         .extend(disabled_semantic_models);
 
     let (metrics, disabled_metrics) = resolve_metrics(
-        // TODO: pass in typed_models_properties
+        arg,
+        package,
+        root_project_configs,
+        &mut min_properties.models.clone(),
+        &mut min_properties.metrics.clone(),
+        &typed_models_properties,
+        package_name,
+        &jinja_env,
+        &base_ctx,
     )
     .await?;
     nodes.metrics.extend(metrics);

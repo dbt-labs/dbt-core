@@ -33,19 +33,6 @@ impl From<Vec<String>> for WhereFilterIntersection {
     }
 }
 
-impl From<StringOrArrayOfStrings> for WhereFilterIntersection {
-    fn from(source: StringOrArrayOfStrings) -> Self {
-        match source {
-            StringOrArrayOfStrings::String(s) => Self {
-                where_filters: vec![WhereFilter {
-                    where_sql_template: s,
-                }],
-            },
-            StringOrArrayOfStrings::ArrayOfStrings(arr) => arr.into(),
-        }
-    }
-}
-
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]

@@ -185,7 +185,12 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
             .iter()
             .map(|(id, semantic_model)| (id.clone(), (**semantic_model).clone().into()))
             .collect(),
-        metrics: BTreeMap::new(), // TODO: map from resolver_state.nodes
+        metrics: resolver_state
+            .nodes
+            .metrics
+            .iter()
+            .map(|(id, metric)| (id.clone(), (**metric).clone().into()))
+            .collect(),
         saved_queries: resolver_state
             .nodes
             .saved_queries
@@ -421,6 +426,24 @@ fn build_parent_and_child_maps(
 
     for (id, unit_test) in &nodes.unit_tests {
         all_nodes.push((id.clone(), unit_test.__base_attr__.depends_on.clone()));
+    }
+
+    for (id, semantic_model) in &nodes.semantic_models {
+        all_nodes.push((
+            id.clone(),
+            semantic_model.__semantic_model_attr__.depends_on.clone(),
+        ));
+    }
+
+    for (id, metric) in &nodes.metrics {
+        all_nodes.push((id.clone(), metric.__metric_attr__.depends_on.clone()));
+    }
+
+    for (id, saved_query) in &nodes.saved_queries {
+        all_nodes.push((
+            id.clone(),
+            saved_query.__saved_query_attr__.depends_on.clone(),
+        ));
     }
 
     // Process all collected nodes

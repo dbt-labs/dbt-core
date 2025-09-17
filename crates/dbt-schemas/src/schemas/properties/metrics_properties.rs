@@ -19,25 +19,25 @@ pub struct MetricsProperties {
     pub percentile: Option<f32>,
     pub percentile_type: Option<PercentileType>,
     pub join_to_timespine: Option<bool>,
-    pub fill_nulls_with: Option<f32>,
+    pub fill_nulls_with: Option<i32>,
     pub expr: Option<MetricExpr>,
     // TODO: can we add a macro to this field for it to be ignored during jinja transformation?
     pub filter: Option<String>,
     pub config: Option<MetricConfig>, // TODO -- does MetricConfig only allow meta? What about group, tags, etc.?
-    pub non_additive_dimension: Option<NonAdditiveDimension>,
+    pub non_additive_dimension: Option<MetricPropertiesNonAdditiveDimension>,
     pub agg_time_dimension: Option<String>,
     pub window: Option<String>,
     pub grain_to_date: Option<ColumnPropertiesGranularity>,
     pub period_agg: Option<PeriodAggregationType>,
-    pub input_metric: Option<StringOrMetricReference>,
-    pub numerator: Option<StringOrMetricReference>,
-    pub denominator: Option<StringOrMetricReference>,
-    pub metrics: Option<Vec<StringOrMetricReference>>,
-    pub metric_aliases: Option<Vec<MetricReference>>,
+    pub input_metric: Option<StringOrMetricPropertiesMetricInput>,
+    pub numerator: Option<StringOrMetricPropertiesMetricInput>,
+    pub denominator: Option<StringOrMetricPropertiesMetricInput>,
+    pub metrics: Option<Vec<StringOrMetricPropertiesMetricInput>>,
+    pub metric_aliases: Option<Vec<MetricPropertiesMetricInput>>,
     pub entity: Option<String>,
     pub calculation: Option<ConversionCalculationType>,
-    pub base_metric: Option<StringOrMetricReference>,
-    pub conversion_metric: Option<StringOrMetricReference>,
+    pub base_metric: Option<StringOrMetricPropertiesMetricInput>,
+    pub conversion_metric: Option<StringOrMetricPropertiesMetricInput>,
     pub constant_properties: Option<Vec<ConstantProperty>>,
 
     // Flattened field:
@@ -83,8 +83,17 @@ pub enum MetricExpr {
     Integer(i32),
 }
 
+impl From<MetricExpr> for String {
+    fn from(val: MetricExpr) -> Self {
+        match val {
+            MetricExpr::String(s) => s,
+            MetricExpr::Integer(i) => i.to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
-pub struct NonAdditiveDimension {
+pub struct MetricPropertiesNonAdditiveDimension {
     pub name: String,
     pub window_agg: WindowChoice,
     pub group_by: Option<Vec<String>>,
@@ -98,8 +107,8 @@ pub enum WindowChoice {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
-pub struct MetricReference {
-    pub metric: Option<String>,
+pub struct MetricPropertiesMetricInput {
+    pub name: String,
     pub filter: Option<String>,
     pub alias: Option<String>,
     pub offset_window: Option<String>,
@@ -107,15 +116,16 @@ pub struct MetricReference {
 
 #[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, JsonSchema)]
 #[serde(untagged)]
-pub enum StringOrMetricReference {
+pub enum StringOrMetricPropertiesMetricInput {
     String(String),
-    MetricReference(MetricReference),
+    MetricPropertiesMetricInput(MetricPropertiesMetricInput),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema, Default, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum ConversionCalculationType {
     conversions,
+    #[default]
     conversion_rate,
 }
 
@@ -125,7 +135,7 @@ pub struct ConstantProperty {
     pub conversion_property: String,
 }
 
-#[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum PeriodAggregationType {
     #[default]

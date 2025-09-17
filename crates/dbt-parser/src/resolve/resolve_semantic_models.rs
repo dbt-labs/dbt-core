@@ -9,15 +9,14 @@ use dbt_schemas::schemas::common::{DbtChecksum, Dimension, DimensionTypeParams, 
 use dbt_schemas::schemas::dbt_column::{
     ColumnPropertiesDimension, ColumnPropertiesDimensionConfig, Entity, EntityConfig,
 };
+use dbt_schemas::schemas::manifest::metric::{MeasureAggregationParameters, NonAdditiveDimension};
 use dbt_schemas::schemas::manifest::semantic_model::{
-    DbtSemanticModel, DbtSemanticModelAttr, MeasureAggregationParameters, NodeRelation,
-    SemanticEntity, SemanticMeasure, SemanticModelDefaults,
+    DbtSemanticModel, DbtSemanticModelAttr, NodeRelation, SemanticEntity, SemanticMeasure,
+    SemanticModelDefaults,
 };
 use dbt_schemas::schemas::project::{DefaultTo, ModelConfig, SemanticModelConfig};
 use dbt_schemas::schemas::properties::ModelProperties;
-use dbt_schemas::schemas::properties::metrics_properties::{
-    AggregationType, MetricExpr, PercentileType,
-};
+use dbt_schemas::schemas::properties::metrics_properties::{AggregationType, PercentileType};
 use dbt_schemas::schemas::ref_and_source::DbtRef;
 use dbt_schemas::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfig;
 use dbt_schemas::schemas::{CommonAttributes, DbtModel, InternalDbtNodeAttributes};
@@ -159,10 +158,7 @@ pub async fn resolve_semantic_models(
             .map(|metric| {
                 SemanticMeasure {
                     name: metric.name.clone(),
-                    expr: metric.expr.clone().map(|expr| match expr {
-                        MetricExpr::String(ref str) => str.clone(),
-                        MetricExpr::Integer(ref int) => int.to_string(),
-                    }),
+                    expr: metric.expr.clone().map(String::from),
                     description: metric.description.clone(),
                     label: metric.label.clone(),
                     config: metric.config.as_ref().map(|c| SemanticLayerElementConfig {
@@ -186,7 +182,10 @@ pub async fn resolve_semantic_models(
                     } else {
                         None
                     },
-                    non_additive_dimension: metric.non_additive_dimension.clone(),
+                    non_additive_dimension: metric
+                        .non_additive_dimension
+                        .clone()
+                        .map(NonAdditiveDimension::from),
                     agg_time_dimension: Some(
                         metric
                             .agg_time_dimension

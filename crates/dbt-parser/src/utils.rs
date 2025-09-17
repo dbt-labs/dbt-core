@@ -33,17 +33,17 @@ pub fn coalesce<T: Clone>(values: Vec<Option<T>>) -> Option<T> {
     None
 }
 
-/// generate the unique id for a model (can be made more extensible for each type of node)
+/// generate the unique id for a dbt resource (can be made more extensible for each type of node)
 pub fn get_unique_id(
-    model_name: &str,
+    resource_name: &str,
     package_name: &str,
     version: Option<String>,
     node_type: &str,
 ) -> String {
     if let Some(version) = version {
-        format!("{node_type}.{package_name}.{model_name}.v{version}")
+        format!("{node_type}.{package_name}.{resource_name}.v{version}")
     } else {
-        format!("{node_type}.{package_name}.{model_name}")
+        format!("{node_type}.{package_name}.{resource_name}")
     }
 }
 

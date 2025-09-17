@@ -14,12 +14,10 @@ use crate::schemas::{
     },
     dbt_column::DbtColumnRef,
     manifest::{
-        DbtOperation, DbtSavedQuery, DbtSemanticModel,
+        DbtMetric, DbtOperation, DbtSavedQuery, DbtSemanticModel,
         common::{DbtOwner, SourceFileMetadata, WhereFilterIntersection},
-        semantic_model::{
-            MeasureAggregationParameters, NodeRelation, SemanticEntity, SemanticMeasure,
-            SemanticModelDefaults,
-        },
+        metric::{MeasureAggregationParameters, MetricTypeParams, NonAdditiveDimension},
+        semantic_model::{NodeRelation, SemanticEntity, SemanticMeasure, SemanticModelDefaults},
     },
     nodes::TestMetadata,
     project::{
@@ -28,7 +26,7 @@ use crate::schemas::{
     },
     properties::{
         ModelConstraint, UnitTestOverrides,
-        metrics_properties::{AggregationType, NonAdditiveDimension, WindowChoice},
+        metrics_properties::{AggregationType, MetricType},
     },
     ref_and_source::{DbtRef, DbtSourceWrapper},
     semantic_layer::semantic_manifest::SemanticLayerElementConfig,
@@ -637,8 +635,8 @@ pub struct ManifestMetric {
     // Metric Specific Attributes
     pub label: String,
     #[serde(rename = "type")]
-    pub metric_type: crate::schemas::manifest::metric::MetricType,
-    pub type_params: crate::schemas::manifest::metric::MetricTypeParams,
+    pub metric_type: MetricType,
+    pub type_params: MetricTypeParams,
     pub filter: Option<WhereFilterIntersection>,
     pub metadata: Option<SourceFileMetadata>,
     pub time_granularity: Option<String>,
@@ -650,6 +648,41 @@ pub struct ManifestMetric {
     pub metrics: Vec<Vec<String>>,
 
     pub __other__: BTreeMap<String, YmlValue>,
+}
+
+impl From<DbtMetric> for ManifestMetric {
+    fn from(metric: DbtMetric) -> Self {
+        Self {
+            __common_attr__: ManifestCommonAttributes {
+                unique_id: metric.__common_attr__.unique_id,
+                name: metric.__common_attr__.name,
+                package_name: metric.__common_attr__.package_name,
+                fqn: metric.__common_attr__.fqn,
+                path: metric.__common_attr__.path,
+                original_file_path: metric.__common_attr__.original_file_path,
+                description: metric.__common_attr__.description,
+                tags: metric.__common_attr__.tags,
+                meta: metric.__common_attr__.meta,
+            },
+            __base_attr__: ManifestMetricNodeBaseAttributes {
+                depends_on: metric.__metric_attr__.depends_on,
+                refs: metric.__metric_attr__.refs,
+                sources: metric.__metric_attr__.sources,
+                unrendered_config: metric.__metric_attr__.unrendered_config,
+                created_at: metric.__metric_attr__.created_at,
+            },
+            label: metric.__metric_attr__.label.unwrap_or_default(),
+            metric_type: metric.__metric_attr__.metric_type,
+            type_params: metric.__metric_attr__.type_params,
+            filter: metric.__metric_attr__.filter,
+            metadata: metric.__metric_attr__.metadata,
+            time_granularity: metric.__metric_attr__.time_granularity.clone(),
+            group: metric.__metric_attr__.group.clone(),
+            config: metric.deprecated_config.into(),
+            __other__: metric.__other__,
+            metrics: vec![], // TODO: metric.__metric_attr__.metrics.clone(),
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -780,23 +813,6 @@ impl From<DbtSemanticModel> for ManifestSemanticModel {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ManifestNonAdditiveDimension {
-    pub name: String,
-    pub window_choice: WindowChoice,
-    pub window_groupings: Option<Vec<String>>,
-}
-
-impl From<NonAdditiveDimension> for ManifestNonAdditiveDimension {
-    fn from(dim: NonAdditiveDimension) -> Self {
-        Self {
-            name: dim.name,
-            window_choice: dim.window_agg,
-            window_groupings: dim.group_by,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManifestSemanticModelMeasure {
     pub name: String,
     pub agg: AggregationType,
@@ -805,7 +821,7 @@ pub struct ManifestSemanticModelMeasure {
     pub create_metric: Option<bool>,
     pub expr: Option<String>,
     pub agg_params: Option<MeasureAggregationParameters>,
-    pub non_additive_dimension: Option<ManifestNonAdditiveDimension>,
+    pub non_additive_dimension: Option<NonAdditiveDimension>,
     pub agg_time_dimension: Option<String>,
     pub config: Option<SemanticLayerElementConfig>,
 }
@@ -820,9 +836,7 @@ impl From<SemanticMeasure> for ManifestSemanticModelMeasure {
             create_metric: measure.create_metric,
             expr: measure.expr,
             agg_params: measure.agg_params,
-            non_additive_dimension: measure
-                .non_additive_dimension
-                .map(ManifestNonAdditiveDimension::from),
+            non_additive_dimension: measure.non_additive_dimension,
             agg_time_dimension: measure.agg_time_dimension,
             config: measure.config,
         }

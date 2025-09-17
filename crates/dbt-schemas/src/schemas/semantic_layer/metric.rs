@@ -2,10 +2,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::schemas::{
     manifest::{
-        DbtMetric, ManifestMetric,
+        DbtMetric,
         common::{SourceFileMetadata, WhereFilterIntersection},
-        metric::{MetricType, MetricTypeParams},
+        metric::MetricTypeParams,
     },
+    properties::metrics_properties::MetricType,
     semantic_layer::semantic_manifest::SemanticLayerElementConfig,
 };
 
@@ -27,6 +28,13 @@ pub struct SemanticManifestMetric {
 // since DbtManifest is going be legacy it's probably a good idea to map from DbtMetric
 impl From<DbtMetric> for SemanticManifestMetric {
     fn from(metric: DbtMetric) -> Self {
+        let mut config: Option<SemanticLayerElementConfig> = None;
+        if let Some(meta) = metric.deprecated_config.meta {
+            if !meta.is_empty() {
+                config = Some(SemanticLayerElementConfig { meta: Some(meta) });
+            }
+        }
+
         SemanticManifestMetric {
             name: metric.__common_attr__.name,
             description: metric.__common_attr__.description,
@@ -34,29 +42,9 @@ impl From<DbtMetric> for SemanticManifestMetric {
             type_params: metric.__metric_attr__.type_params,
             filter: metric.__metric_attr__.filter,
             metadata: metric.__metric_attr__.metadata,
-            label: Some(metric.__metric_attr__.label),
-            config: Some(SemanticLayerElementConfig {
-                meta: metric.deprecated_config.meta,
-            }),
+            label: metric.__metric_attr__.label,
+            config,
             time_granularity: metric.__metric_attr__.time_granularity,
-        }
-    }
-}
-
-impl From<ManifestMetric> for SemanticManifestMetric {
-    fn from(metric: ManifestMetric) -> Self {
-        SemanticManifestMetric {
-            name: metric.__common_attr__.name,
-            description: metric.__common_attr__.description,
-            type_: metric.metric_type,
-            type_params: metric.type_params,
-            filter: metric.filter,
-            metadata: metric.metadata,
-            label: Some(metric.label),
-            config: Some(SemanticLayerElementConfig {
-                meta: metric.config.meta,
-            }),
-            time_granularity: metric.time_granularity,
         }
     }
 }
