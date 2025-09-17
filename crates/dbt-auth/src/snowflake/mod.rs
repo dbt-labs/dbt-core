@@ -11,7 +11,15 @@ use std::fs;
 const APP_NAME: &str = "dbt";
 
 // WARNING: Still needs adjustment on what is considered must-have
-const REQUIRED_PARAMS: [&str; 5] = ["user", "password", "account", "role", "warehouse"];
+const REQUIRED_PARAMS: [&str; 7] = [
+    "user",
+    "password",
+    "account",
+    "role",
+    "warehouse",
+    "database",
+    "schema",
+];
 
 const DEFAULT_CONNECT_TIMEOUT: &str = "10s";
 
@@ -304,9 +312,7 @@ impl SnowflakeAuth {
                     "password" => Ok(builder.with_password(value)),
                     "account" => builder.with_named_option(snowflake::ACCOUNT, value),
                     "database" => builder.with_named_option(snowflake::DATABASE, value),
-                    // TODO: see if setting SCHEMA is necessary, connection cannot be established if schema doesn't exist
-                    // this is a common case if we need to execute statements like `CREATE SCHEMA`
-                    // "schema" => builder.with_named_option(snowflake::SCHEMA, value),
+                    "schema" => builder.with_named_option(snowflake::SCHEMA, value),
                     "role" => builder.with_named_option(snowflake::ROLE, value),
                     "warehouse" => builder.with_named_option(snowflake::WAREHOUSE, value),
                     "host" => builder.with_named_option(snowflake::HOST, value),
@@ -351,6 +357,8 @@ impl SnowflakeAuth {
             "user",
             "password",
             "account",
+            "database",
+            "schema",
             "role",
             "warehouse",
             "private_key_path",
@@ -372,10 +380,8 @@ impl SnowflakeAuth {
                     "user" => Ok(builder.with_username(value)),
                     "password" => Ok(builder.with_password(value)),
                     "account" => builder.with_named_option(snowflake::ACCOUNT, value),
-                    // TODO: see if setting SCHEMA is necessary, connection cannot be established if schema doesn't exist
-                    // this is a common case if we need to execute statements like `CREATE SCHEMA` or `CREATE DATABASE`
                     "database" => builder.with_named_option(snowflake::DATABASE, value),
-                    // "schema" => builder.with_named_option(snowflake::SCHEMA, value),
+                    "schema" => builder.with_named_option(snowflake::SCHEMA, value),
                     "role" => builder.with_named_option(snowflake::ROLE, value),
                     "warehouse" => builder.with_named_option(snowflake::WAREHOUSE, value),
                     "private_key_path" => {

@@ -289,63 +289,63 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "944b06f4348b924df96629950a17933bf479c180d7411d28cec8db1bb9d2c623",
     ),
     (
-        ("snowflake", "apple-darwin", "aarch64", "0.18.0+dbt0.0.10"),
-        "0ce8a9de9ce44e3066a40b8a19b03db06e5967c6aa24057693f8954ab89250f7",
-    ),
-    (
-        ("snowflake", "apple-darwin", "aarch64", "0.18.0+dbt0.0.11"),
-        "a9b88af6a8b15cb47c386b8700c55cdb861a8eb5746ef14c9296e236b16a355f",
-    ),
-    (
         ("snowflake", "apple-darwin", "aarch64", "0.18.0+dbt0.0.12"),
         "4902d80356258e886af07de17116b0396d7a90223c419a19a328b8704f10fb0a",
     ),
     (
-        ("snowflake", "apple-darwin", "x86_64", "0.18.0+dbt0.0.10"),
-        "494a7f5d3e12db02bcbc33ab6a28f00ee912d63cf60d7db940a8040aec078189",
+        ("snowflake", "apple-darwin", "aarch64", "0.18.0+dbt0.0.13"),
+        "96383629cb8aee83dac7a271eaea13c2fd69770f381ad038fc5966571b4b4b20",
     ),
     (
-        ("snowflake", "apple-darwin", "x86_64", "0.18.0+dbt0.0.11"),
-        "625bbd3b9d4f9e0a1af8d02ef75b4b20106b4ae05700ea5ce899972d03c579f2",
+        ("snowflake", "apple-darwin", "aarch64", "0.18.0+dbt0.0.14"),
+        "b5ce23a8899d48b20a81c81abc58b3c3501913c3a3f55ca7fd758fee7d459c42",
     ),
     (
         ("snowflake", "apple-darwin", "x86_64", "0.18.0+dbt0.0.12"),
         "50d045405336f07869122ab5f36738fedcff7d167dbfce1a3b91866a66f6cc55",
     ),
     (
-        ("snowflake", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.10"),
-        "7fea332ea4a951bcc9dcffc99d8307c2592832781b98492fb7ec2ecedb57a5ae",
+        ("snowflake", "apple-darwin", "x86_64", "0.18.0+dbt0.0.13"),
+        "8c3f5de7a79f512c3b63991367089b77518314249c9d9e6acc6429dd364123e4",
     ),
     (
-        ("snowflake", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.11"),
-        "2a90257858af2e4133b0274a34bb9431d2f846a8e80e67937df3c4ce36844904",
+        ("snowflake", "apple-darwin", "x86_64", "0.18.0+dbt0.0.14"),
+        "5e20f4b82e40144f95f30a6f6bd2d762962bb35a1248f5e3e7209a623f972a4a",
     ),
     (
         ("snowflake", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.12"),
         "3857599e4e64dfe5df710e6502ab8fe6ec469b022626385b16e0919faba91f0c",
     ),
     (
-        ("snowflake", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.10"),
-        "c2b4a32eefb112ed0af9b9704f2377cb538b25b5cd90539282987f556941b533",
+        ("snowflake", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.13"),
+        "5d07d710e6b2222654ae26c3e9d647644fc741064278ef946a0ff26e354561e6",
     ),
     (
-        ("snowflake", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.11"),
-        "a96cad78dd1e97dd4d7d31a1556014fc46c8733007f78751236a275e98e6d8b3",
+        ("snowflake", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.14"),
+        "a637f403c49faa5fc576075aedf89779bdb6cfead87ca869238115e3fea66066",
     ),
     (
         ("snowflake", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.12"),
         "5f5955646e5fcecb702cf1b6566510903d16d28c0689120844c1c153a18b21e1",
     ),
     (
-        ("snowflake", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.10"),
-        "e5f65f57625647a1da7f9cd46523c3076c557f6c77e7afadf9f92a20c1600aac",
+        ("snowflake", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.13"),
+        "8dcb699a885b412593422b4965984c5d99b6219a7e8a2797083de694dbb414db",
     ),
     (
-        ("snowflake", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.11"),
-        "81a761e1a94c4ffe2db5dbb07587c48635cdb1f3098ccd9f6edfe81d80f9ffdc",
+        ("snowflake", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.14"),
+        "fb63b52973bd926d1c48f8ddd93e8c97c21fb404b9a2341600018616dfda6240",
     ),
     (
         ("snowflake", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.12"),
         "e1b4e964d8d1f7047e4549e1a75fea08a1accbc029275698340760fc68eab237",
+    ),
+    (
+        ("snowflake", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.13"),
+        "1b5e0e064ef165613ac2d9e15569df82fe2847544de60e5184ead134964b0690",
+    ),
+    (
+        ("snowflake", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.14"),
+        "05e98a21a8aa4da26b2d34ee185003f11972bd59deaa00541faf86d0c6833a81",
     ),
 ];

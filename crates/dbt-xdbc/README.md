@@ -104,6 +104,7 @@ you want to work on.
 git clone git@github.com:dbt-labs/arrow-adbc.git
 cd arrow-adbc
 cd go/adbc/driver/bigquery  # source directory
+go build -v ./...           # build go
 cd go/adbc/pkg              # build directory for all Go drivers
 make clean || make libadbc_driver_bigquery.dylib
 ```
@@ -119,7 +120,7 @@ an environment variable that is checked by, and only by debug builds of `fs` and
 link to the local driver from the `lib/` folder at the root of the `fs` repo.
 
 ```bash
-export DISABLE_CDN_DRIVER_CACHE=
+export DISABLE_CDN_DRIVER_CACHE=true
 # assuming you keep all the repos in the ~/code folder:
 ln -s ~/code/arrow-adbc/go/adbc/pkg/libadbc_driver_bigquery.dylib ~/code/fs/lib/libadbc_driver_bigquery.dylib
 ```
