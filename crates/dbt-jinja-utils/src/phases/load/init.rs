@@ -8,7 +8,7 @@ use dbt_common::{
     ErrorCode, FsResult, adapter::AdapterType, cancellation::CancellationToken, fs_err,
     io_args::IoArgs,
 };
-use dbt_fusion_adapter::{BaseAdapter, ParseAdapter};
+use dbt_fusion_adapter::{BaseAdapter, ParseAdapter, sql_types::NaiveTypeFormatterImpl};
 use dbt_schemas::{
     dbt_utils::resolve_package_quoting,
     schemas::profiles::{DbConfig, TargetContext},
@@ -65,8 +65,15 @@ pub fn initialize_load_jinja_environment(
     })?;
 
     let package_quoting = resolve_package_quoting(None, adapter_type);
+    let type_formatter = Box::new(NaiveTypeFormatterImpl::new(adapter_type));
 
-    let adapter = ParseAdapter::new(adapter_type, adapter_config_mapping, package_quoting, token);
+    let adapter = ParseAdapter::new(
+        adapter_type,
+        adapter_config_mapping,
+        package_quoting,
+        type_formatter,
+        token,
+    );
     Ok(JinjaEnvBuilder::new()
         .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
         .with_root_package("dbt".to_string())

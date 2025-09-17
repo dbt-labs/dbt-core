@@ -500,7 +500,8 @@ impl BaseAdapter for BridgeAdapter {
     #[tracing::instrument(skip(self, state), level = "trace")]
     fn rename_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         self.cache_renamed(state, args)?;
-        if self.typed_adapter.is_replay() {
+        if self.typed_adapter.as_replay().is_some() {
+            // TODO: move this logic to the [ReplayAdapter]
             let iter = ArgsIter::new(
                 current_function_name!(),
                 &["from_relation", "to_relation"],
@@ -714,7 +715,8 @@ impl BaseAdapter for BridgeAdapter {
         identifier: &str,
     ) -> Result<Value, MinijinjaError> {
         // Skip cache in replay mode
-        if !self.typed_adapter.is_replay() {
+        let is_replay = self.typed_adapter.as_replay().is_some();
+        if !is_replay {
             let temp_relation = relation_object::create_relation(
                 self.typed_adapter.adapter_type(),
                 database.to_string(),
@@ -811,7 +813,8 @@ impl BaseAdapter for BridgeAdapter {
         let relation = parser.get::<Value>("relation")?;
         let relation = downcast_value_to_dyn_base_relation(&relation)?;
 
-        if self.typed_adapter.is_replay() {
+        if self.typed_adapter.as_replay().is_some() {
+            // TODO: move this logic to the [ReplayAdapter]
             return match self.typed_adapter.get_columns_in_relation(state, relation) {
                 Ok(result) => Ok(Value::from(result)),
                 Err(e) => Err(MinijinjaError::new(
@@ -899,7 +902,8 @@ impl BaseAdapter for BridgeAdapter {
         let schema = parser.get::<String>("schema")?;
 
         // Replay fast-path: consult trace-derived cache if available
-        if self.typed_adapter.is_replay() {
+        if self.typed_adapter.as_replay().is_some() {
+            // TODO: move this logic to the [ReplayAdapter]
             if let Some(exists) = self
                 .typed_adapter
                 .schema_exists_from_trace(&database, &schema)

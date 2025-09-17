@@ -4,6 +4,7 @@ use crate::base_adapter::{AdapterFactory, backend_of};
 use crate::config::AdapterConfig;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::query_comment::{EMPTY_CONFIG, QueryCommentConfig};
+use crate::sql_types::{NaiveTypeFormatterImpl, TypeFormatter};
 use crate::stmt_splitter::StmtSplitter;
 
 use adbc_core::options::{OptionStatement, OptionValue};
@@ -41,6 +42,13 @@ type Options = Vec<(String, OptionValue)>;
 /// TODO: remove when the full stmt splitter is available to this crate.
 static NAIVE_STMT_SPLITTER: LazyLock<Arc<dyn StmtSplitter>> =
     LazyLock::new(|| Arc::new(crate::stmt_splitter::NaiveStmtSplitter));
+
+/// Naive type formatter used in the MockAdapter
+///
+/// IMPORTANT: not suitable for production use. DEFAULTS TO SNOWFLAKE ALSO.
+/// TODO: remove when the full formatter is available to this crate.
+static NAIVE_TYPE_FORMATTER: LazyLock<Box<dyn TypeFormatter>> =
+    LazyLock::new(|| Box::new(NaiveTypeFormatterImpl::new(AdapterType::Snowflake)));
 
 #[derive(Default)]
 struct IdentityHasher {
@@ -96,6 +104,8 @@ pub struct ActualEngine {
     splitter: Arc<dyn StmtSplitter>,
     /// Query comment config
     query_comment: QueryCommentConfig,
+    /// Type formatter for the dilect this engine is for
+    pub type_formatter: Box<dyn TypeFormatter>,
     /// Global CLI cancellation token
     cancellation_token: CancellationToken,
 }
@@ -107,6 +117,7 @@ impl ActualEngine {
         adapter_factory: Arc<dyn AdapterFactory>,
         splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
+        type_formatter: Box<dyn TypeFormatter>,
         token: CancellationToken,
     ) -> Self {
         let threads = config
@@ -127,7 +138,9 @@ impl ActualEngine {
             semaphore: Arc::new(Semaphore::new(permits)),
             adapter_factory,
             splitter,
+            type_formatter,
             query_comment,
+
             cancellation_token: token,
         }
     }
@@ -216,6 +229,7 @@ impl SqlEngine {
         adapter_factory: Arc<dyn AdapterFactory>,
         stmt_splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
+        type_formatter: Box<dyn TypeFormatter>,
         token: CancellationToken,
     ) -> Arc<Self> {
         let engine = ActualEngine::new(
@@ -224,12 +238,14 @@ impl SqlEngine {
             adapter_factory,
             stmt_splitter,
             query_comment,
+            type_formatter,
             token,
         );
         Arc::new(SqlEngine::Warehouse(Arc::new(engine)))
     }
 
     /// Create a new [`SqlEngine::Replay`] based on the given path and adapter type.
+    #[allow(clippy::too_many_arguments)]
     pub fn new_for_replaying(
         backend: Backend,
         path: PathBuf,
@@ -237,6 +253,7 @@ impl SqlEngine {
         adapter_factory: Arc<dyn AdapterFactory>,
         stmt_splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
+        type_formatter: Box<dyn TypeFormatter>,
         token: CancellationToken,
     ) -> Arc<Self> {
         let engine = ReplayEngine::new(
@@ -246,6 +263,7 @@ impl SqlEngine {
             adapter_factory,
             stmt_splitter,
             query_comment,
+            type_formatter,
             token,
         );
         Arc::new(SqlEngine::Replay(engine))
@@ -264,6 +282,15 @@ impl SqlEngine {
             SqlEngine::Record(engine) => engine.splitter(),
             SqlEngine::Replay(engine) => engine.splitter(),
             SqlEngine::Mock(_) => NAIVE_STMT_SPLITTER.as_ref(),
+        }
+    }
+
+    pub fn type_formatter(&self) -> &dyn TypeFormatter {
+        match self {
+            SqlEngine::Warehouse(engine) => engine.type_formatter.as_ref(),
+            SqlEngine::Record(engine) => engine.type_formatter(),
+            SqlEngine::Replay(engine) => engine.type_formatter(),
+            SqlEngine::Mock(_adapter_type) => NAIVE_TYPE_FORMATTER.as_ref(),
         }
     }
 

@@ -490,6 +490,7 @@ mod tests {
     use dbt_common::adapter::AdapterType;
     use dbt_common::cancellation::never_cancels;
     use dbt_fusion_adapter::ParseAdapter;
+    use dbt_fusion_adapter::sql_types::NaiveTypeFormatterImpl;
     use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
     use minijinja::{
         constants::MACRO_DISPATCH_ORDER, context, dispatch_object::THREAD_LOCAL_DEPENDENCIES,
@@ -603,6 +604,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_serde_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
+            Box::new(NaiveTypeFormatterImpl::new(AdapterType::Postgres)),
             never_cancels(),
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
@@ -689,6 +691,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_serde_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
+            Box::new(NaiveTypeFormatterImpl::new(AdapterType::Postgres)),
             never_cancels(),
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
@@ -750,6 +753,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_serde_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
+            Box::new(NaiveTypeFormatterImpl::new(AdapterType::Postgres)),
             never_cancels(),
         );
         let env = JinjaEnvBuilder::new()
@@ -864,6 +868,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_serde_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
+            Box::new(NaiveTypeFormatterImpl::new(AdapterType::Postgres)),
             never_cancels(),
         );
 

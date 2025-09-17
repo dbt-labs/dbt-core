@@ -9,6 +9,7 @@ use crate::parse::relation::EmptyRelation;
 use crate::query_comment::QueryCommentConfig;
 use crate::relation_object::{RelationObject, create_relation};
 use crate::response::AdapterResponse;
+use crate::sql_types::TypeFormatter;
 use crate::stmt_splitter::NaiveStmtSplitter;
 use crate::typed_adapter::TypedBaseAdapter;
 use crate::{AdapterResult, SqlEngine};
@@ -98,6 +99,7 @@ impl ParseAdapter {
         adapter_type: AdapterType,
         config: dbt_serde_yaml::Mapping,
         package_quoting: DbtQuoting,
+        type_formatter: Box<dyn TypeFormatter>,
         token: CancellationToken,
     ) -> Self {
         let backend = backend_of(adapter_type);
@@ -114,6 +116,7 @@ impl ParseAdapter {
             adapter_factory,
             stmt_splitter,
             query_comment,
+            type_formatter,
             token.clone(),
         );
 

@@ -364,8 +364,6 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         }
     }
 
-    fn convert_type_inner(&self, _state: &State, data_type: &DataType) -> AdapterResult<String>;
-
     /// Convert type.
     fn convert_type(
         &self,
@@ -373,6 +371,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         table: Arc<AgateTable>,
         col_idx: i64,
     ) -> AdapterResult<String> {
+        // XXX: Core uses the flattened agate table types. Here we use the original arrow
+        // schema containing the original table types including nested types. This might
+        // be what Core developers expected to get from Python agate types as well. (?)
         let schema = table.original_record_batch().schema();
         let data_type = schema.field(col_idx as usize).data_type();
 
@@ -387,7 +388,16 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             data_type
         };
 
-        self.convert_type_inner(state, data_type)
+        if let Some(replay_adapter) = self.as_replay() {
+            // XXX: isn't the point of replay adapter to compare what it does against the actual code?
+            return replay_adapter.replay_convert_type(state, data_type);
+        }
+
+        let mut out = String::new();
+        self.engine()
+            .type_formatter()
+            .format_arrow_type_as_sql(data_type, &mut out)?;
+        Ok(out)
     }
 
     /// Expand the to_relation table's column types to match the schema of from_relation
@@ -948,9 +958,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         }
     }
 
-    /// Convenience to check if this [TypedBaseAdapter] implementer is used for replaying recordings
-    fn is_replay(&self) -> bool {
-        false
+    /// This adapter as the replay adapter if it is one, None otherwise.
+    fn as_replay(&self) -> Option<&dyn ReplayAdapter> {
+        None
     }
 
     /// Optional fast-path for replay adapters: return schema existence from the trace
@@ -958,4 +968,11 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn schema_exists_from_trace(&self, _database: &str, _schema: &str) -> Option<bool> {
         None
     }
+}
+
+/// Abstract interface for the concrete replay adapter implementation.
+///
+/// NOTE: this is a growing interface that is currently growing.
+pub trait ReplayAdapter: TypedBaseAdapter {
+    fn replay_convert_type(&self, state: &State, data_type: &DataType) -> AdapterResult<String>;
 }

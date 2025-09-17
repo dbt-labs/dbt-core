@@ -3,6 +3,7 @@ use crate::config::AdapterConfig;
 use crate::errors::AdapterResult;
 use crate::query_comment::QueryCommentConfig;
 use crate::sql_engine::SqlEngine;
+use crate::sql_types::TypeFormatter;
 use crate::stmt_splitter::StmtSplitter;
 
 use adbc_core::error::{Error as AdbcError, Result as AdbcResult, Status as AdbcStatus};
@@ -132,6 +133,10 @@ impl RecordEngine {
 
     pub fn query_comment(&self) -> &QueryCommentConfig {
         self.0.engine.query_comment()
+    }
+
+    pub(crate) fn type_formatter(&self) -> &dyn TypeFormatter {
+        self.0.engine.type_formatter()
     }
 
     pub fn cancellation_token(&self) -> CancellationToken {
@@ -368,6 +373,7 @@ struct ReplayEngineInner {
     adapter_factory: Arc<dyn AdapterFactory>,
     stmt_splitter: Arc<dyn StmtSplitter>,
     query_comment: QueryCommentConfig,
+    type_formatter: Box<dyn TypeFormatter>,
     /// Global CLI cancellation token
     cancellation_token: CancellationToken,
 }
@@ -382,6 +388,7 @@ impl ReplayEngineInner {
 pub struct ReplayEngine(Arc<ReplayEngineInner>);
 
 impl ReplayEngine {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         backend: Backend,
         path: PathBuf,
@@ -389,6 +396,7 @@ impl ReplayEngine {
         adapter_factory: Arc<dyn AdapterFactory>,
         stmt_splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
+        type_formatter: Box<dyn TypeFormatter>,
         token: CancellationToken,
     ) -> Self {
         let inner = ReplayEngineInner {
@@ -398,6 +406,7 @@ impl ReplayEngine {
             adapter_factory,
             stmt_splitter,
             query_comment,
+            type_formatter,
             cancellation_token: token,
         };
         ReplayEngine(Arc::new(inner))
@@ -426,6 +435,10 @@ impl ReplayEngine {
 
     pub fn query_comment(&self) -> &QueryCommentConfig {
         &self.0.query_comment
+    }
+
+    pub(crate) fn type_formatter(&self) -> &dyn TypeFormatter {
+        self.0.type_formatter.as_ref()
     }
 
     pub fn cancellation_token(&self) -> CancellationToken {

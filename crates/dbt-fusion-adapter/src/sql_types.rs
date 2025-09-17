@@ -1,8 +1,59 @@
 use std::borrow::Cow;
 
+use crate::AdapterResult;
+use crate::base_adapter::backend_of;
 use crate::errors::{AdapterError, AdapterErrorKind};
 use arrow_schema::DataType;
 use dbt_common::adapter::AdapterType;
+use dbt_xdbc::sql::types::SqlType;
+
+pub trait TypeFormatter: Send + Sync {
+    /// Picks a SQL type for a given Arrow DataType and renders it as SQL.
+    ///
+    /// The implementation is dialect-specific.
+    fn format_arrow_type_as_sql(&self, data_type: &DataType, out: &mut String)
+    -> AdapterResult<()>;
+
+    /// Renders a given SqlType as SQL.
+    ///
+    /// The implementation is dialect-specific.
+    fn format_sql_type(&self, sql_type: SqlType, out: &mut String) -> AdapterResult<()>;
+}
+
+pub struct NaiveTypeFormatterImpl(AdapterType, dbt_xdbc::Backend);
+
+impl NaiveTypeFormatterImpl {
+    pub fn new(adapter_type: AdapterType) -> Self {
+        let backend = backend_of(adapter_type);
+        Self(adapter_type, backend)
+    }
+}
+
+impl TypeFormatter for NaiveTypeFormatterImpl {
+    fn format_arrow_type_as_sql(
+        &self,
+        data_type: &DataType,
+        out: &mut String,
+    ) -> AdapterResult<()> {
+        let adapter_type = self.0;
+        let hint: SqlTypeHint = data_type.try_into()?;
+        // TODO: handle has_decimal_places correctly
+        let has_decimal_places = false;
+        let res = sql_type_hint_to_str(hint, has_decimal_places, adapter_type);
+        out.push_str(res.as_ref());
+        Ok(())
+    }
+
+    fn format_sql_type(&self, sql_type: SqlType, out: &mut String) -> AdapterResult<()> {
+        let backend = self.1;
+        sql_type.write(backend, out).map_err(|e| {
+            AdapterError::new(
+                AdapterErrorKind::NotSupported,
+                format!("Failed to convert SQL type {sql_type:?}. Error: {e}"),
+            )
+        })
+    }
+}
 
 pub enum SqlTypeHint {
     Integer,

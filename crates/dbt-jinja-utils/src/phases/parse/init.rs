@@ -12,7 +12,7 @@ use dbt_common::{
     ErrorCode, FsResult, adapter::AdapterType, cancellation::CancellationToken, fs_err,
     io_args::IoArgs,
 };
-use dbt_fusion_adapter::{BaseAdapter, ParseAdapter};
+use dbt_fusion_adapter::{BaseAdapter, ParseAdapter, sql_types::NaiveTypeFormatterImpl};
 use dbt_schemas::{
     schemas::{
         common::DbtQuoting,
@@ -117,8 +117,14 @@ pub fn initialize_parse_jinja_environment(
             "Unknown or unsupported adapter type '{adapter_type}'",
         )
     })?;
-
-    let adapter = ParseAdapter::new(adapter_type, adapter_config_mapping, package_quoting, token);
+    let type_formatter = Box::new(NaiveTypeFormatterImpl::new(adapter_type));
+    let adapter = ParseAdapter::new(
+        adapter_type,
+        adapter_config_mapping,
+        package_quoting,
+        type_formatter,
+        token,
+    );
 
     let env = JinjaEnvBuilder::new()
         .with_undefined_behavior(minijinja::UndefinedBehavior::AllowAll)
