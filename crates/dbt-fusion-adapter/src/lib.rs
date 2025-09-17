@@ -7,7 +7,6 @@ mod macros;
 pub mod base_adapter;
 pub mod bridge_adapter;
 pub mod cache;
-pub mod convert_type;
 pub mod errors;
 pub mod factory;
 pub mod formatter;
@@ -21,6 +20,7 @@ pub mod render_constraint;
 pub mod response;
 pub mod snapshots;
 pub mod sql_engine;
+pub mod sql_types;
 pub mod stmt_splitter;
 pub mod typed_adapter;
 
