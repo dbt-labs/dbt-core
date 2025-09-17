@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
 use dbt_common::{adapter::AdapterType, current_function_name};
+use dbt_schemas::schemas::dbt_column::DbtCoreBaseColumn;
+use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
+use minijinja;
 use minijinja::{
     Value,
     arg_utils::{ArgParser, ArgsIter, check_num_args},
@@ -8,7 +11,7 @@ use minijinja::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::schemas::{dbt_column::DbtColumn, serde::minijinja_value_to_typed_struct};
+use dbt_schemas::schemas::dbt_column::DbtColumn;
 
 /// A struct representing a column type for use with static methods
 #[derive(Clone, Debug)]
@@ -735,17 +738,4 @@ impl Into<Value> for StdColumn {
     fn into(self) -> Value {
         Value::from_object(self)
     }
-}
-
-/// The BaseColumn as implemented by dbt Core.
-///
-/// This is used to deserialize columns from Jinja that produces them, for example
-/// the public API macros for `get_columns_in_relation()`
-#[derive(Deserialize, Debug)]
-struct DbtCoreBaseColumn {
-    name: String,
-    dtype: String,
-    char_size: Option<u32>,
-    numeric_precision: Option<u64>,
-    numeric_scale: Option<u64>,
 }

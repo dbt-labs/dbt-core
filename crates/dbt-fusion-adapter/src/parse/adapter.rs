@@ -1,5 +1,6 @@
 use crate::base_adapter::{AdapterFactory, AdapterType, AdapterTyping, BaseAdapter, backend_of};
 use crate::cast_util::downcast_value_to_dyn_base_relation;
+use crate::columns::{BigqueryColumnMode, StdColumn, StdColumnType};
 use crate::funcs::{
     dispatch_adapter_calls, empty_map_value, empty_mutable_vec_value, empty_string_value,
     empty_vec_value, none_value,
@@ -22,7 +23,6 @@ use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::ReplayMode;
 use dbt_common::{FsError, FsResult, current_function_name};
-use dbt_schemas::schemas::columns::{BigqueryColumnMode, StdColumn, StdColumnType};
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::project::QueryComment;
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};

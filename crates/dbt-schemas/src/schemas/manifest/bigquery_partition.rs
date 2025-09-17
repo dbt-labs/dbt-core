@@ -1,4 +1,3 @@
-use dbt_common::adapter::AdapterType;
 use dbt_common::current_function_name;
 use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize};
 use minijinja::value::Enumerator;
@@ -10,8 +9,6 @@ use minijinja::{
 };
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumIter, EnumString, IntoEnumIterator};
-
-use crate::schemas::columns::StdColumn;
 
 use std::convert::AsRef;
 use std::{rc::Rc, sync::Arc};
@@ -167,15 +164,16 @@ impl BigqueryPartitionConfig {
         parser.check_num_args(current_function_name!(), 0, 1)?;
 
         let columns = parser.get::<MinijinjaValue>("columns")?;
-        if let Ok(columns) = StdColumn::vec_from_jinja_value(AdapterType::Bigquery, columns) {
-            let columns = columns
-                .into_iter()
-                .filter_map(|c| {
-                    if c.name.to_uppercase() == self.field.to_uppercase() {
-                        None
-                    } else {
-                        Some(MinijinjaValue::from_object(c))
-                    }
+        if let Ok(iter) = columns.try_iter() {
+            let columns = iter
+                .filter(|c| {
+                    let name = c
+                        .get_attr("name")
+                        .expect("column must have a name attribute");
+                    !name
+                        .as_str()
+                        .expect("name attribute must be a string")
+                        .eq_ignore_ascii_case(self.field.as_str())
                 })
                 .collect::<Vec<_>>();
             Ok(MinijinjaValue::from(columns))

@@ -14,6 +14,19 @@ use crate::schemas::{
 
 use super::{common::Constraint, data_tests::DataTests};
 
+/// The BaseColumn as implemented by dbt Core.
+///
+/// This is used to deserialize columns from Jinja that produces them, for example
+/// the public API macros for `get_columns_in_relation()`
+#[derive(Deserialize, Debug)]
+pub struct DbtCoreBaseColumn {
+    pub name: String,
+    pub dtype: String,
+    pub char_size: Option<u32>,
+    pub numeric_precision: Option<u64>,
+    pub numeric_scale: Option<u64>,
+}
+
 #[skip_serializing_none]
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Default, Clone)]
 #[serde(rename_all = "snake_case")]

@@ -8,7 +8,6 @@ pub mod state;
 pub mod stats;
 
 pub mod schemas {
-    pub mod columns;
     pub mod common;
     pub mod data_tests;
     pub mod dbt_column;

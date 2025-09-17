@@ -1,3 +1,4 @@
+use crate::columns::StdColumn;
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::funcs::{execute_macro, none_value};
 use crate::metadata::CatalogAndSchema;
@@ -15,7 +16,6 @@ use arrow_schema::{DataType, Schema};
 use dbt_common::FsResult;
 use dbt_common::behavior_flags::BehaviorFlag;
 use dbt_frontend_common::dialect::Dialect;
-use dbt_schemas::schemas::columns::StdColumn;
 use dbt_schemas::schemas::common::Constraint;
 use dbt_schemas::schemas::common::ConstraintSupport;
 use dbt_schemas::schemas::common::ConstraintType;

@@ -7,6 +7,7 @@ mod macros;
 pub mod base_adapter;
 pub mod bridge_adapter;
 pub mod cache;
+pub mod columns;
 pub mod errors;
 pub mod factory;
 pub mod formatter;

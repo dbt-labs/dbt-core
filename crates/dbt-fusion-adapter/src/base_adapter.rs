@@ -1,4 +1,5 @@
 use crate::cache::RelationCache;
+use crate::columns::{BigqueryColumnMode, StdColumn};
 use crate::metadata::{CatalogAndSchema, MetadataAdapter};
 use crate::sql_engine::SqlEngine;
 use crate::typed_adapter::TypedBaseAdapter;
@@ -10,7 +11,6 @@ use dbt_common::adapter::SchemaRegistry;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::ReplayMode;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
-use dbt_schemas::schemas::columns::{BigqueryColumnMode, StdColumn};
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::project::QueryComment;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};

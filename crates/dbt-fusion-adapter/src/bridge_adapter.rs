@@ -1,6 +1,7 @@
 use crate::base_adapter::{AdapterType, AdapterTyping};
 use crate::cache::RelationCache;
 use crate::cast_util::downcast_value_to_dyn_base_relation;
+use crate::columns::StdColumn;
 use crate::funcs::{
     dispatch_adapter_calls, dispatch_adapter_get_value, execute_macro, execute_macro_wrapper,
     none_value,
@@ -22,7 +23,6 @@ use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::{FsError, FsResult, current_function_name};
 use dbt_schemas::schemas::InternalDbtNodeWrapper;
-use dbt_schemas::schemas::columns::StdColumn;
 use dbt_schemas::schemas::common::{DbtIncrementalStrategy, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::{
