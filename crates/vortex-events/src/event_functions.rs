@@ -220,7 +220,7 @@ pub fn run_model_event(
         }
     }
 
-    let resource_type = node.resource_type().to_string();
+    let resource_type = node.resource_type().as_ref().to_string();
 
     let message = RunModel {
         // REQUIRED invocation_id - globally unique identifier

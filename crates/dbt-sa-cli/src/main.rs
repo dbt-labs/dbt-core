@@ -46,9 +46,9 @@ fn main() -> ExitCode {
     let arg = from_main(&cli);
 
     // Init tracing
-    let mut telemetry_handle = match init_tracing(FsTraceConfig::new(
-        cli.project_dir(),
-        cli.target_path(),
+    let mut telemetry_handle = match init_tracing(FsTraceConfig::new_from_io_args(
+        cli.project_dir().as_ref(),
+        cli.target_path().as_ref(),
         &arg.io,
         "dbt-sa",
     )) {

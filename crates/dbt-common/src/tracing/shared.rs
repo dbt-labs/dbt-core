@@ -1,4 +1,3 @@
-use serde::Serialize;
 use tracing::{Event, field::ValueSet, span::Record};
 
 pub(super) enum Recordable<'a> {
@@ -32,21 +31,5 @@ impl<'a> Recordable<'a> {
             Recordable::Record(record) => record.record(visitor),
             Recordable::Event(event) => event.record(visitor),
         }
-    }
-}
-
-/// Tracing does not allow implementing `Value` directly, so we use this trait
-/// to convert types to a `tracing::field::Value`.
-pub trait ToTracingValue {
-    fn to_tracing_value(self) -> impl tracing::field::Value + Send + Sync;
-}
-
-impl<T> ToTracingValue for T
-where
-    T: Serialize,
-{
-    fn to_tracing_value(self) -> impl tracing::field::Value + Send + Sync {
-        // Serialize the value to a string and return it as a tracing value.
-        serde_json::to_string(&self).expect("Failed to serialize value")
     }
 }

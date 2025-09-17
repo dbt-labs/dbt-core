@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use dbt_telemetry::{ProcessInfo, TelemetryAttributes};
+use dbt_telemetry::create_process_event_data;
 use tracing::{Subscriber, level_filters::LevelFilter, span};
 
 use tracing_subscriber::{
@@ -19,7 +19,7 @@ use super::{
     },
 };
 use crate::{
-    ErrorCode, FsError, FsResult, logging::LogFormat, stdfs::File,
+    ErrorCode, FsError, FsResult, logging::LogFormat,
     tracing::layers::progress_bar::ProgressBarLayer,
 };
 
@@ -148,7 +148,7 @@ where
         .map_err(|_| unexpected_fs_err!("Failed to set-up tracing"))?;
 
     // Create the process span and store it in the global PROCESS_SPAN
-    store_event_attributes(TelemetryAttributes::Process(ProcessInfo::new(package)));
+    store_event_attributes(create_process_event_data(package).into());
     let process_span = tracing::info_span!("Process");
 
     PROCESS_SPAN
@@ -205,13 +205,9 @@ where
         .add_directive("hyper=off".parse().expect("Must be ok"))
         .add_directive("h2=off".parse().expect("Must be ok"))
         .add_directive("reqwest=off".parse().expect("Must be ok"))
-        .add_directive("ureq=off".parse().expect("Must be ok"));
-
-    // TODO: If OTLP exporter is enabled, we need to shut off it's own logging
-    // as it currently breaks the global span logic (it fires before the first span
-    // and we panic without one)
-    let base_telemetry_filter =
-        base_telemetry_filter.add_directive("opentelemetry=off".parse().expect("Must be ok"));
+        .add_directive("ureq=off".parse().expect("Must be ok"))
+        // Shut off OTLP exporter's own logging
+        .add_directive("opentelemetry=off".parse().expect("Must be ok"));
 
     // Strip code location in non-debug builds
     let strip_code_location = !cfg!(debug_assertions);
@@ -221,7 +217,18 @@ where
 
     // Create jsonl writer layer if file path provided
     let jsonl_writer_layer = if let Some(file_path) = config.otm_file_path {
-        let file = File::create(file_path)?;
+        // Open file in append mode to avoid overwriting existing telemetry
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&file_path)
+            .map_err(|e| {
+                fs_err!(
+                    ErrorCode::IoError,
+                    "Failed to open telemetry jsonl file for append: {}",
+                    e
+                )
+            })?;
         let (writer, handle) = BackgroundWriter::new(file);
 
         // Keep a handle for shutdown
@@ -278,7 +285,7 @@ where
 
     // Create OTLP layer - if enabled and endpoint is set via env vars
     let maybe_otlp_layer = if config.export_to_otlp
-        && let Some(otlp_layer) = OTLPExporterLayer::new()
+        && let Some(otlp_layer) = OTLPExporterLayer::new_with_http_export()
     {
         shutdown_items.push(Box::new(otlp_layer.tracer_provider()));
         shutdown_items.push(Box::new(otlp_layer.logger_provider()));

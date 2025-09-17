@@ -1,72 +1,122 @@
-use dbt_serde_yaml::JsonSchema;
-#[cfg(test)]
-use fake::Dummy;
-use serde::{Deserialize, Serialize};
-#[cfg(test)]
-use strum::EnumIter;
-use strum::{EnumDiscriminants, IntoStaticStr};
+use crate::{
+    SpanStatus, StatusCode, TelemetryExportFlags,
+    attributes::{
+        ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryContext,
+        TelemetryEventRecType,
+    },
+    serialize::arrow::ArrowAttributes,
+};
+use prost::Name;
 
-#[cfg_attr(test, derive(Dummy))]
-#[derive(
-    Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, EnumDiscriminants, strum::Display,
-)]
-// The following derives a variant disciriminator enum for build phases,
-// used for type-safe (de)serialization and matching AND also as phase on `NodeInfo`.
-// TODO: this should ideally be unified or used as the sole enum for phases in the
-// scheduler and other places. Not just for telemetry data.
-#[strum_discriminants(
-    name(BuildPhase),
-    derive(
-        Serialize,
-        Deserialize,
-        JsonSchema,
-        strum::Display,
-        IntoStaticStr,
-        Hash
-    )
-)]
-#[cfg_attr(test, strum_discriminants(derive(EnumIter, Dummy)))]
-// This is used to discriminate the phase data within BuildPhase which is a single
-// event type in the telemetry schema.
-#[serde(tag = "phase")]
-pub enum BuildPhaseInfo {
-    /// # File Discovery
-    /// Analyzing dbt_project, profiles.yml and scanning files
-    Loading {},
+pub use proto_rust::v1::public::events::fusion::phase::{ExecutionPhase, PhaseExecuted};
+use serde_with::skip_serializing_none;
 
-    /// # Dependency Loading
-    /// Check that dependencies are met
-    DependencyLoading {},
+impl ProtoTelemetryEvent for PhaseExecuted {
+    const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
+    const EXPORT_FLAGS: TelemetryExportFlags = TelemetryExportFlags::EXPORT_ALL;
 
-    /// # Parsing
-    /// Parsing and macro name resolution of all dbt files
-    Parsing {},
+    fn display_name(&self) -> String {
+        // Get the all caps phase name without the "EXECUTION_PHASE_" prefix
+        let p = self
+            .phase()
+            .as_str_name()
+            .trim_start_matches("EXECUTION_PHASE_");
 
-    /// # Scheduling
-    /// Graph construction and graph slicing
-    Scheduling {},
+        match self.node_count_total {
+            Some(c) => format!("Phase: {p} (nodes: {c})"),
+            None => format!("Phase: {p}"),
+        }
+    }
 
-    /// # Freshness Analysis
-    /// Freshness analysis of sources and models
-    FreshnessAnalysis {},
+    fn get_span_status(&self) -> Option<SpanStatus> {
+        let Some(err_count) = self.node_count_error else {
+            // If we don't have node error count, we can't determine status
+            // based on event data alone.
+            return None;
+        };
 
-    /// # Lineage
-    /// Analysis of individual node lineages
-    Lineage {},
+        let status = if err_count > 0 {
+            SpanStatus {
+                code: StatusCode::Error,
+                message: Some(format!("{err_count} nodes errored")),
+            }
+        } else {
+            SpanStatus::succeeded()
+        };
 
-    /// # Compiling
-    /// Dbt compile (called render) and Sql analysis
-    Compiling { node_count: u64 },
+        Some(status)
+    }
 
-    /// # Hydrating
-    /// Hydration of models, seeds, snapshots and sources
-    Hydrating { node_count: u64 },
+    fn has_sensitive_data(&self) -> bool {
+        false
+    }
 
-    /// # Analyzing
-    /// Dbt compile (called render) and Sql analysis
-    Analyzing { node_count: u64 },
+    fn context(&self) -> Option<TelemetryContext> {
+        Some(TelemetryContext {
+            phase: Some(self.phase()),
+            unique_id: None,
+        })
+    }
+}
 
-    /// # Executing
-    /// Execution against the target database
-    Executing { node_count: u64 },
+/// Internal struct used for serializing/deserializing subset of
+/// PhaseExecuted fields as JSON payload in ArrowAttributes.
+#[skip_serializing_none]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Debug)]
+struct PhaseExecutedJsonPayload {
+    /// Optional count of total individual nodes within the phase (when applicable).
+    pub node_count_total: Option<u64>,
+    /// Optional count of skipped nodes within the phase (when applicable).
+    /// Skipped means `node_outcome` was set to `NODE_OUTCOME_SKIPPED`.
+    pub node_count_skipped: Option<u64>,
+    /// Optional count of errored nodes within the phase (when applicable).
+    /// Error means `node_outcome` was set to `NODE_OUTCOME_ERROR`.
+    pub node_count_error: Option<u64>,
+}
+
+impl ArrowSerializableTelemetryEvent for PhaseExecuted {
+    fn to_arrow_record(&self) -> ArrowAttributes {
+        ArrowAttributes {
+            json_payload: serde_json::to_string(&PhaseExecutedJsonPayload {
+                node_count_total: self.node_count_total,
+                node_count_skipped: self.node_count_skipped,
+                node_count_error: self.node_count_error,
+            })
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Failed to serialize counts of event type \"{}\" to JSON",
+                    Self::full_name()
+                )
+            })
+            .into(),
+            phase: self.phase().into(),
+            ..Default::default()
+        }
+    }
+
+    fn from_arrow_record(record: &ArrowAttributes) -> Result<Self, String> {
+        let json_payload: PhaseExecutedJsonPayload =
+            serde_json::from_str(record.json_payload.as_ref().ok_or_else(|| {
+                format!(
+                    "Missing json payload for event type \"{}\"",
+                    Self::full_name()
+                )
+            })?)
+            .map_err(|e| {
+                format!(
+                    "Failed to deserialize counts of event type \"{}\" from JSON payload: {}",
+                    Self::full_name(),
+                    e
+                )
+            })?;
+
+        Ok(Self {
+            phase: record.phase.map(|v| v as i32).ok_or_else(|| {
+                format!("Missing `phase` for event type \"{}\"", Self::full_name())
+            })?,
+            node_count_total: json_payload.node_count_total,
+            node_count_skipped: json_payload.node_count_skipped,
+            node_count_error: json_payload.node_count_error,
+        })
+    }
 }

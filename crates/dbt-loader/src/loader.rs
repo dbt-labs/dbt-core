@@ -12,8 +12,7 @@ use dbt_jinja_utils::phases::load::init::initialize_load_jinja_environment;
 use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
 use dbt_jinja_utils::serde::yaml_to_fs_error;
 use dbt_schemas::schemas::serde::StringOrInteger;
-use dbt_schemas::schemas::telemetry::BuildPhaseInfo;
-use dbt_schemas::schemas::telemetry::TelemetryAttributes;
+use dbt_schemas::schemas::telemetry::{ExecutionPhase, PhaseExecuted};
 use dbt_schemas::state::DbtProfile;
 use fs_deps::get_or_install_packages;
 use pathdiff::diff_paths;
@@ -52,12 +51,12 @@ use dbt_jinja_utils::phases::load::secret_renderer::secret_context_env_var;
 use dbt_jinja_utils::serde::{into_typed_with_jinja, value_from_file};
 use dbt_jinja_utils::var_fn;
 
-use dbt_common::tracing::ToTracingValue;
+use dbt_common::tracing::event_info::store_event_attributes;
 
 #[tracing::instrument(
     skip_all,
     fields(
-        __event = TelemetryAttributes::Phase(BuildPhaseInfo::Loading { }).to_tracing_value(),
+        _e = ?store_event_attributes(PhaseExecuted::start_general(ExecutionPhase::LoadProject).into()),
     )
 )]
 pub async fn load(

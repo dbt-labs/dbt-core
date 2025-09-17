@@ -1,0 +1,208 @@
+syntax = "proto3";
+package v1.public.events.fusion.node;
+
+option go_package = "github.com/dbt-labs/proto-golang/v1/public/events/fusion/node";
+
+import "dbtlabs/proto/public/v1/events/fusion/phase/phase.proto";
+
+// Node type, also known as "resource type" in dbt core.
+enum NodeType {
+  NODE_TYPE_UNSPECIFIED = 0;
+  NODE_TYPE_MODEL = 1;
+  NODE_TYPE_SEED = 2;
+  NODE_TYPE_SNAPSHOT = 11;
+  NODE_TYPE_SOURCE = 3;
+  NODE_TYPE_TEST = 4;
+  NODE_TYPE_UNIT_TEST = 5;
+  NODE_TYPE_MACRO = 6;
+  NODE_TYPE_DOCS_MACRO = 7;
+  NODE_TYPE_ANALYSIS = 8;
+  NODE_TYPE_OPERATION = 9;
+  NODE_TYPE_EXPOSURE = 10;
+  NODE_TYPE_METRIC = 12;
+  NODE_TYPE_SAVED_QUERY = 13;
+  NODE_TYPE_SEMANTIC_MODEL = 14;
+}
+
+// Core outcome for any node evaluation result within any phase.
+// Represents the aggregated result of all operations in the phase
+enum NodeOutcome {
+  // Default value. Should only be set on unfinished spans
+  NODE_OUTCOME_UNSPECIFIED = 0;
+
+  // Successfully completed all operations in the phase.
+  // Some node types also store a type specific outcome for successful completion.
+  NODE_OUTCOME_SUCCESS = 1;
+
+  // Failed with an aggregated error type (individual errors reported as separate events).
+  // If set, `node_error_type` with also be set to indicate the type of error.
+  NODE_OUTCOME_ERROR = 2;
+
+  // Operation was canceled (e.g. user-initiated cancellation).
+  // If set, `node_cancel_reason` will also be set to indicate the reason for the cancelation.
+  NODE_OUTCOME_CANCELED = 3;
+
+  // Skipped evaluation for a specific reason.
+  // If set, `node_skip_reason` will also be set to indicate the reason for the skip.
+  NODE_OUTCOME_SKIPPED = 4;
+}
+
+// Categorization of aggregated errors for debugging and retry logic.
+// Errors form a hierarchy: if any internal error occurred, the aggregated result is INTERNAL.
+// Otherwise if any external error occurred it is EXTERNAL. Otherwise it is USER.
+enum NodeErrorType {
+  // Internal dbt error (bug, panic, unexpected state) – not recoverable by retrying.
+  NODE_ERROR_TYPE_INTERNAL = 0;
+  // External system error (database down, network issue, etc.) – potentially recoverable by retrying.
+  NODE_ERROR_TYPE_EXTERNAL = 1;
+  // User code error (SQL syntax, compilation error, etc.) that must be fixed by the user.
+  NODE_ERROR_TYPE_USER = 2;
+}
+
+// Reasons why a node evaluation was cabceled.
+enum NodeCancelReason {
+  // User explicitly cancelled execution (e.g. ctrl-c).
+  NODE_CANCEL_REASON_USER_CANCELLED = 0;
+}
+
+// Reasons why a node may be skipped. Only applies to nodes selected for evaluation.
+enum NodeSkipReason {
+  NODE_SKIP_REASON_UNSPECIFIED = 0;
+  // Skipped because an upstream dependency prevents this node from running (for any reason).
+  NODE_SKIP_REASON_UPSTREAM = 1;
+  // Reused from cache
+  NODE_SKIP_REASON_CACHED = 2;
+  // Current evaluation phase disabled for this node by configuration / flags.
+  NODE_SKIP_REASON_PHASE_DISABLED = 3;
+  // Operation had no effect (e.g. ephemeral models).
+  NODE_SKIP_REASON_NO_OP = 4;
+}
+
+// Cache reuse classification when node_skip_reason == NODE_SKIP_REASON_CACHED.
+enum NodeCacheReason {
+  // Reused from cache - no code or data changes detected.
+  NODE_CACHE_REASON_NO_CHANGES = 0;
+  // Reused from cache - changes detected but still within freshness window.
+  NODE_CACHE_REASON_STILL_FRESH = 1;
+  // Reused from cache - changes detected but update criteria not met.
+  NODE_CACHE_REASON_UPDATE_CRITERIA_NOT_MET = 2;
+}
+
+enum NodeMaterialization {
+  NODE_MATERIALIZATION_UNKNOWN = 0;
+  NODE_MATERIALIZATION_SNAPSHOT = 1;
+  NODE_MATERIALIZATION_SEED = 2;
+  NODE_MATERIALIZATION_VIEW = 3;
+  NODE_MATERIALIZATION_TABLE = 4;
+  NODE_MATERIALIZATION_INCREMENTAL = 5;
+  NODE_MATERIALIZATION_MATERIALIZED_VIEW = 6;
+  NODE_MATERIALIZATION_EXTERNAL = 7;
+  NODE_MATERIALIZATION_TEST = 8;
+  NODE_MATERIALIZATION_EPHEMERAL = 9;
+  NODE_MATERIALIZATION_UNIT = 10;
+  NODE_MATERIALIZATION_ANALYSIS = 11;
+  // ONLY FOR DATABRICKS
+  NODE_MATERIALIZATION_STREAMING_TABLE = 12;
+  // ONLY FOR SNOWFLAKE
+  NODE_MATERIALIZATION_DYNAMIC_TABLE = 13;
+  NODE_MATERIALIZATION_CUSTOM = 100;
+}
+
+// Test-specific outcome details (only for TEST and UNITTEST node types).
+enum TestOutcome {
+  // No failures found or below warning threshold.
+  TEST_OUTCOME_PASSED = 0;
+  // Failures found between warning and error thresholds.
+  TEST_OUTCOME_WARNED = 1;
+  // Failures found above error threshold.
+  TEST_OUTCOME_FAILED = 2;
+}
+
+message TestEvaluationDetail {
+  TestOutcome test_outcome = 1;
+
+  // Number of failing rows for this test.
+  int32 failing_rows = 2;
+}
+
+// Freshness-specific outcome details (only for SOURCE nodes with freshness checks).
+enum SourceFreshnessOutcome {
+  // Freshness within acceptable (success) threshold.
+  SOURCE_FRESHNESS_OUTCOME_OUTCOME_PASSED = 0;
+  // Freshness exceeded warning threshold but below error threshold.
+  SOURCE_FRESHNESS_OUTCOME_OUTCOME_WARNED = 1;
+  // Freshness exceeded error threshold.
+  SOURCE_FRESHNESS_OUTCOME_OUTCOME_FAILED = 2;
+}
+
+message SourceFreshnessDetail {
+  SourceFreshnessOutcome node_freshness_outcome = 1;
+}
+
+message NodeCacheDetail {
+  NodeCacheReason node_cache_reason = 1;
+}
+
+message NodeEvaluated {
+  // unique_id is the globally unique identifier for this node.
+  string unique_id = 1;
+
+  // Node name.
+  string name = 2;
+
+  // Database where this node will be created if applicable.
+  optional string database = 3;
+
+  // Schema where this node will be created if applicable.
+  optional string schema = 4;
+
+  // Name of the relation (table, view, etc.) that will be created for this node if applicable.
+  optional string identifier = 5;
+
+  // How this node is materialized in the data warehouse.
+  optional NodeMaterialization materialization = 7;
+
+  // If materialization == NODE_MATERIALIZATION_CUSTOM, this field contains the custom materialization name.
+  optional string custom_materialization = 8;
+
+  // Type of node being evaluated. Known as `resource_type` in dbt core.
+  NodeType node_type = 9;
+
+  // Core outcome for this evaluation.
+  NodeOutcome node_outcome = 10;
+
+  // Execution phase during which this node was evaluated.
+  v1.public.events.fusion.phase.ExecutionPhase phase = 11;
+
+  // Granular reasons for unsuccessful outcomes (error, canceled, skipped).
+
+  // Categorization of aggregated errors for debugging and retry logic.
+  // Present when node_outcome == NODE_OUTCOME_ERROR.
+  optional NodeErrorType node_error_type = 20;
+
+  // Cancellation reason.
+  // Present when node_outcome == NODE_OUTCOME_CANCELED.
+  optional NodeCancelReason node_cancel_reason = 21;
+
+  // Detailed reason for skipping this node.
+  // Present when node_outcome == NODE_OUTCOME_SKIPPED.
+  optional NodeSkipReason node_skip_reason = 22;
+
+  // Node type specific details (e.g. test fail counts, cache use reasons).
+  oneof node_outcome_detail {
+    // Detailed reason why cache was used.
+    // Present when node_skip_reason == NODE_SKIP_REASON_CACHED.
+    NodeCacheDetail node_cache_detail = 30;
+
+    // Test specific outcome details.
+    // Present for test / unit test node types when node_outcome == NODE_OUTCOME_SUCCESS.
+    TestEvaluationDetail node_test_detail = 31;
+
+    // Source freshness specific outcome details.
+    // Present for source nodes with freshness checks when node_outcome == NODE_OUTCOME_SUCCESS.
+    SourceFreshnessDetail node_freshness_outcome = 32;
+  }
+
+  // Optional legacy dbt core event code (e.g. "Q018") if this event has a strict mapping to a dbt core event.
+  optional string dbt_core_event_code = 40;
+}

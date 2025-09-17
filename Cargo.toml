@@ -34,6 +34,7 @@ members = [
   "crates/vortex-client",
   "crates/vortex-events",
   "crates/proto-rust",
+  "crates/proto-rust-macros",
   "crates/dbt-env",
   "crates/dbt-test-utils",
 ]
@@ -178,6 +179,7 @@ dbt-test-containers = { path = "crates/dbt-test-containers" }
 dbt-test-primitives = { path = "crates/dbt-test-primitives" }
 dbt-test-utils = { path = "crates/dbt-test-utils" }
 proto-rust = { path = "crates/proto-rust" }
+proto-rust-macros = { path = "crates/proto-rust-macros" }
 vortex-client = { path = "crates/vortex-client" }
 vortex-events = { path = "crates/vortex-events" }
 
@@ -277,7 +279,7 @@ datafusion-physical-expr = { version = "48.0.1" }
 datafusion-physical-plan = { version = "48.0.1" }
 
 # uuid
-uuid = { version = "1.16.0", features = ["v4"] }
+uuid = { version = "1.16.0", features = ["v4", "serde"] }
 
 # networking & cache
 redis = { version = "0.31.0", features = [
@@ -386,6 +388,7 @@ rustyline = { version = "15.0.0", default-features = false, features = [
 # datatypes and algos
 base64 = "0.22.1"
 bigdecimal = "0.4.7"
+bitflags = "2.9.4"
 blake3 = "1.5.0"
 chrono = { version = "0.4.41", features = ["std", "clock", "serde"] }
 chrono-tz = { version = "0.10" }
@@ -461,7 +464,6 @@ log = { version = "0.4.27", features = ["kv_serde"] }
 
 # tracing (observability)
 tracing = "0.1.41"
-tracing-log = "0.2.0" # temporary until we migrate to tracing exclusively
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
 
 # OpenTelemetry (optional embedded OTLP exporter for traces, see dbt-common)

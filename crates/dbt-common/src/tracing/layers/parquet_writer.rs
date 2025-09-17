@@ -3,16 +3,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread::{self, JoinHandle};
 
-use arrow::datatypes::FieldRef;
 use dbt_telemetry::{
-    TelemetryRecord,
-    serialize::arrow::{create_arrow_schema, serialize_to_arrow},
+    TelemetryExportFlags, TelemetryRecord,
+    serialize::arrow::{get_telemetry_arrow_schema, serialize_to_arrow},
 };
 use parquet::{arrow::ArrowWriter, basic::Compression, file::properties::WriterProperties};
 use tracing::{Subscriber, span};
 use tracing_subscriber::{Layer, layer::Context};
 
-use super::super::{event_info::with_current_thread_event_data, init::TelemetryShutdown};
+use super::super::{event_info::with_current_thread_log_record, init::TelemetryShutdown};
 use crate::{ErrorCode, FsResult};
 
 /// Buffer size for parquet record batching. This is the buffer in our part of the code
@@ -28,23 +27,19 @@ where
     W: Write + Send + 'static,
 {
     fn new(writer: W) -> FsResult<Self> {
-        let arrow_schema = create_arrow_schema()
-            .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create Arrow schema: {}", e))?;
-
         let writer_properties = WriterProperties::builder()
             .set_compression(Compression::SNAPPY)
             .build();
 
         let parquet_writer = ArrowWriter::try_new(
             writer,
-            arrow::datatypes::Schema::new(arrow_schema.1.clone()).into(),
+            arrow::datatypes::Schema::new(get_telemetry_arrow_schema()).into(),
             Some(writer_properties),
         )
         .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create Parquet writer: {}", e))?;
 
         Ok(Self {
             buffer: Vec::with_capacity(PARQUET_WRITER_BUF_SIZE),
-            arrow_schema,
             parquet_writer: Some(parquet_writer),
         })
     }
@@ -67,9 +62,8 @@ where
         }
 
         // Serialize records to Arrow RecordBatch
-        let record_batch =
-            serialize_to_arrow(&self.buffer, &self.arrow_schema.0, &self.arrow_schema.1)
-                .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to serialize to Arrow: {}", e))?;
+        let record_batch = serialize_to_arrow(&self.buffer)
+            .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to serialize to Arrow: {}", e))?;
 
         // Write the batch
         let Some(ref mut writer) = self.parquet_writer else {
@@ -114,7 +108,7 @@ where
 ///
 /// This layer collects telemetry records in batches and writes them to Parquet
 /// format using Arrow serialization in a separate worker thread. It filters records to only include SpanEnd
-/// records and valid log records, skipping SpanStart, DevInternal, Unknown, and LegacyLog records.
+/// records and valid log records, skipping SpanStart, CallTrace, Unknown, and LegacyLog records.
 pub struct TelemetryParquetWriterLayer {
     sender: mpsc::Sender<ParquetMessage>,
     /// Flag used to avoid repeated error messages in case of early shutdown
@@ -134,7 +128,6 @@ where
     W: Write + Send + 'static,
 {
     buffer: Vec<TelemetryRecord>,
-    arrow_schema: (Vec<FieldRef>, Vec<FieldRef>),
     parquet_writer: Option<ArrowWriter<W>>,
 }
 
@@ -227,32 +220,14 @@ impl TelemetryParquetWriterLayer {
         match record {
             // Only include SpanEnd records, not SpanStart
             TelemetryRecord::SpanStart(_) => false,
-            // Theoretically we should skip DevInternal and Unknown spans,
-            // but this may cause some logs to have span_ids pointing to
-            // non-existing spans, in parquet. Implementing a proper
-            // drill up to the closest non-filtered span is chore, but
-            // would also cause the data to differ for parquet and other
-            // consumers, so we skip filtering here for now.
-            TelemetryRecord::SpanEnd(_) => true,
-            // TelemetryRecord::SpanEnd(span_end) => {
-            //     // Skip DevInternal and Unknown span types
-            //     !matches!(
-            //         span_end.attributes,
-            //         dbt_telemetry::TelemetryAttributes::DevInternal { .. }
-            //             | dbt_telemetry::TelemetryAttributes::Unknown { .. }
-            //     )
-            // }
-            TelemetryRecord::LogRecord(log_record) => {
-                // Skip LegacyLog records - they are temporary and should not be used
-                // by any downstream consumers
-                // Skip InlineCompiledCode - this is the first case of a potentially
-                // PII sensitive log that should not be stored, hence we skip it here.
-                !matches!(
-                    log_record.attributes,
-                    dbt_telemetry::TelemetryAttributes::LegacyLog(_)
-                        | dbt_telemetry::TelemetryAttributes::InlineCompiledCode(_)
-                )
-            }
+            TelemetryRecord::SpanEnd(span) => span
+                .attributes
+                .export_flags()
+                .contains(TelemetryExportFlags::EXPORT_PARQUET),
+            TelemetryRecord::LogRecord(log_record) => log_record
+                .attributes
+                .export_flags()
+                .contains(TelemetryExportFlags::EXPORT_PARQUET),
         }
     }
 }
@@ -281,7 +256,7 @@ where
     }
 
     fn on_event(&self, _event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
-        with_current_thread_event_data(|log_record| {
+        with_current_thread_log_record(|log_record| {
             let telemetry_record = TelemetryRecord::LogRecord(log_record.clone());
 
             // Filter
@@ -348,9 +323,9 @@ mod tests {
     use super::*;
     use arrow_schema::Schema;
     use dbt_telemetry::{
-        LogEventInfo, LogRecordInfo, RecordCodeLocation, SeverityNumber, SpanEndInfo,
-        TelemetryAttributes, TelemetryRecord, UnknownInfo,
-        serialize::arrow::deserialize_from_arrow,
+        LogMessage, LogRecordInfo, SeverityNumber, SpanEndInfo, TelemetryEventTypeRegistry,
+        TelemetryRecord, Unknown,
+        serialize::arrow::{deserialize_from_arrow, get_telemetry_arrow_schema},
     };
     use std::io::{self, Cursor, Write};
     use std::sync::{Arc, Mutex};
@@ -423,18 +398,23 @@ mod tests {
         TelemetryRecord::LogRecord(LogRecordInfo {
             trace_id: 12345,
             span_id: Some(i),
+            event_id: uuid::Uuid::new_v4(),
             span_name: Some(format!("test_span_{i}")),
             time_unix_nano: SystemTime::now(),
             body: format!("Test message {i}"),
             severity_number: SeverityNumber::Info,
             severity_text: "INFO".to_string(),
-            attributes: TelemetryAttributes::Log(LogEventInfo {
+            attributes: LogMessage {
                 code: Some(i as u32),
-                dbt_core_code: Some(format!("test_code_{i}")),
-                original_severity_number: SeverityNumber::Info,
+                dbt_core_event_code: Some(format!("test_code_{i}")),
+                original_severity_number: SeverityNumber::Info as i32,
                 original_severity_text: "INFO".to_string(),
-                location: RecordCodeLocation::none(),
-            }),
+                unique_id: Some(format!("unique_{i}")),
+                phase: None,
+                file: None,
+                line: None,
+            }
+            .into(),
         })
     }
 
@@ -443,8 +423,7 @@ mod tests {
         use parquet::arrow::arrow_reader::{ArrowReaderOptions, ParquetRecordBatchReaderBuilder};
 
         let bytes = Bytes::from_owner(buffer.to_vec());
-        let (serialisable_schema, schema_with_timestamps) = create_arrow_schema().unwrap();
-        let schema_ref = Arc::new(Schema::new(schema_with_timestamps));
+        let schema_ref = Arc::new(Schema::new(get_telemetry_arrow_schema()));
 
         let arrow_reader = ParquetRecordBatchReaderBuilder::try_new_with_options(
             bytes,
@@ -456,7 +435,10 @@ mod tests {
 
         let mut records = Vec::new();
         for batch in arrow_reader {
-            records.extend(deserialize_from_arrow(&batch.unwrap(), &serialisable_schema).unwrap());
+            records.extend(
+                deserialize_from_arrow(&batch.unwrap(), TelemetryEventTypeRegistry::public())
+                    .unwrap(),
+            );
         }
 
         records
@@ -589,14 +571,19 @@ mod tests {
         for record in &records {
             if let TelemetryRecord::SpanEnd(SpanEndInfo {
                 trace_id: deserialized_trace_id,
-                span_name: span_type,
+                span_name,
                 parent_span_id: parent_id,
-                attributes: TelemetryAttributes::Unknown(UnknownInfo { name, .. }),
+                attributes,
                 ..
             }) = record
             {
+                let name = attributes
+                    .downcast_ref::<Unknown>()
+                    .expect("Must be of Unknown type")
+                    .name
+                    .as_str();
                 assert_eq!(deserialized_trace_id, &trace_id);
-                assert_eq!(span_type, "Unknown");
+                assert!(span_name.starts_with("Unknown"));
 
                 if name == "child_span" {
                     // Child span should have root span as parent

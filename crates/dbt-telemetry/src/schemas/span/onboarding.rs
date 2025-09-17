@@ -1,11 +1,53 @@
-use dbt_serde_yaml::JsonSchema;
-#[cfg(test)]
-use fake::Dummy;
-use serde::{Deserialize, Serialize};
+use crate::{
+    TelemetryExportFlags,
+    attributes::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType},
+    serialize::arrow::ArrowAttributes,
+};
+use prost::Name;
 
-#[cfg_attr(test, derive(Dummy))]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
-pub struct OnboardingInfo {
-    /// Onboarding step identifier (e.g. "Welcome", "DbtParse")
-    pub step: String,
+pub use proto_rust::v1::public::events::fusion::onboarding::OnboardingScreenShown;
+
+impl ProtoTelemetryEvent for OnboardingScreenShown {
+    const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
+    const EXPORT_FLAGS: TelemetryExportFlags = TelemetryExportFlags::EXPORT_ALL;
+
+    fn display_name(&self) -> String {
+        format!("Onboarding screen shown: {}", self.screen().as_str_name())
+    }
+
+    fn has_sensitive_data(&self) -> bool {
+        false
+    }
+}
+
+impl ArrowSerializableTelemetryEvent for OnboardingScreenShown {
+    fn to_arrow_record(&self) -> ArrowAttributes {
+        ArrowAttributes {
+            json_payload: serde_json::to_string(self)
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Failed to serialize event type \"{}\" to JSON",
+                        Self::full_name()
+                    )
+                })
+                .into(),
+            ..Default::default()
+        }
+    }
+
+    fn from_arrow_record(record: &ArrowAttributes) -> Result<Self, String> {
+        serde_json::from_str(record.json_payload.as_ref().ok_or_else(|| {
+            format!(
+                "Missing json payload for event type \"{}\"",
+                Self::full_name()
+            )
+        })?)
+        .map_err(|e| {
+            format!(
+                "Failed to deserialize event type \"{}\" from JSON: {}",
+                Self::full_name(),
+                e
+            )
+        })
+    }
 }

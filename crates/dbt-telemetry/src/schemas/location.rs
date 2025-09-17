@@ -1,14 +1,9 @@
-use dbt_serde_yaml::JsonSchema;
-#[cfg(test)]
-use fake::Dummy;
-use serde::{Deserialize, Serialize};
-use serde_with::skip_serializing_none;
 use tracing::Metadata;
 
-#[skip_serializing_none]
-#[cfg_attr(test, derive(Dummy))]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
-#[serde(default)]
+/// Helper struct that provides universal code location information
+/// for telemetry traits and tracing layers.
+#[cfg_attr(test, derive(fake::Dummy))]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RecordCodeLocation {
     /// The file path
     pub file: Option<String>, // OTEL: CODE_FILE_PATH

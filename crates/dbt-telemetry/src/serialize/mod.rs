@@ -1,7 +1,6 @@
 //! Custom serialization and deserialization functions for telemetry records.
 
 pub mod arrow;
-pub mod serde_uuid;
 
 use serde::de::{self, Visitor};
 use serde::{Deserializer, Serializer};

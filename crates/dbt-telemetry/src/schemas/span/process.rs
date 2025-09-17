@@ -1,37 +1,66 @@
-use super::super::constants::{TELEMETRY_SCHEMA_URL, TELEMETRY_SCHEMA_VERSION};
+use crate::{
+    TelemetryExportFlags,
+    attributes::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType},
+    serialize::arrow::ArrowAttributes,
+};
+use prost::Name;
 
-use dbt_serde_yaml::JsonSchema;
-#[cfg(test)]
-use fake::Dummy;
-use serde::{Deserialize, Serialize};
+pub use proto_rust::v1::public::events::fusion::process::Process;
 
-#[cfg_attr(test, derive(Dummy))]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
-pub struct ProcessInfo {
-    /// Json Schema URL for the telemetry schema.
-    pub schema_url: String,
-    /// Schema version
-    pub schema_version: u16,
-    /// name of the package emitting the telemetry, e.g. `dbt` or `dbt-lsp`
-    pub package: String,
-    /// dbt fusion version, e.g. "1.2.3"
-    pub version: String,
-    /// The host operating system, e.g. "linux", "darwin", "windows"
-    pub host_os: String,
-    /// The host architecture, e.g. "x86_64", "aarch64"
-    pub host_arch: String,
+/// Creates a new instance of `Process` with the current process information.
+pub fn create_process_event_data(package: &str) -> Process {
+    Process {
+        package: package.to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        host_os: std::env::consts::OS.to_string(),
+        host_arch: std::env::consts::ARCH.to_string(),
+    }
 }
 
-impl ProcessInfo {
-    /// Creates a new instance of `ProcessInfo` with the current process information.
-    pub fn new(package: &str) -> Self {
-        Self {
-            schema_url: TELEMETRY_SCHEMA_URL.to_string(),
-            schema_version: TELEMETRY_SCHEMA_VERSION,
-            package: package.to_string(),
-            version: env!("CARGO_PKG_VERSION").to_string(),
-            host_os: std::env::consts::OS.to_string(),
-            host_arch: std::env::consts::ARCH.to_string(),
+impl ProtoTelemetryEvent for Process {
+    const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
+    const EXPORT_FLAGS: TelemetryExportFlags = TelemetryExportFlags::EXPORT_ALL;
+
+    fn display_name(&self) -> String {
+        format!(
+            "{} process ({}-{})",
+            self.package, self.host_arch, self.host_os
+        )
+    }
+
+    fn has_sensitive_data(&self) -> bool {
+        false
+    }
+}
+
+impl ArrowSerializableTelemetryEvent for Process {
+    fn to_arrow_record(&self) -> ArrowAttributes {
+        ArrowAttributes {
+            json_payload: serde_json::to_string(self)
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Failed to serialize event type \"{}\" to JSON",
+                        Self::full_name()
+                    )
+                })
+                .into(),
+            ..Default::default()
         }
+    }
+
+    fn from_arrow_record(record: &ArrowAttributes) -> Result<Self, String> {
+        serde_json::from_str(record.json_payload.as_ref().ok_or_else(|| {
+            format!(
+                "Missing json payload for event type \"{}\"",
+                Self::full_name()
+            )
+        })?)
+        .map_err(|e| {
+            format!(
+                "Failed to deserialize event type \"{}\" from JSON: {}",
+                Self::full_name(),
+                e
+            )
+        })
     }
 }

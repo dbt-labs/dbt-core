@@ -5,7 +5,7 @@ use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{DBT_GENERIC_TESTS_DIR_NAME, RESOLVING};
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
-use dbt_common::tracing::ToTracingValue;
+use dbt_common::tracing::event_info::store_event_attributes;
 use dbt_common::{ErrorCode, FsResult, err, fs_err, show_error, with_progress};
 use dbt_common::{show_warning, stdfs};
 use dbt_jinja_utils::invocation_args::InvocationArgs;
@@ -30,8 +30,7 @@ use crate::resolve::resolve_groups::resolve_groups;
 use crate::resolve::resolve_operations::resolve_operations;
 use crate::resolve::resolve_query_comment::resolve_query_comment;
 use crate::utils::{self, clear_package_diagnostics};
-use dbt_schemas::schemas::telemetry::BuildPhaseInfo;
-use dbt_schemas::schemas::telemetry::TelemetryAttributes;
+use dbt_schemas::schemas::telemetry::{ExecutionPhase, NodeType, PhaseExecuted};
 use dbt_schemas::state::DbtState;
 use dbt_schemas::state::ResolverState;
 use std::collections::{BTreeMap, HashMap};
@@ -67,7 +66,7 @@ type YmlValue = dbt_serde_yaml::Value;
 #[tracing::instrument(
     skip_all,
     fields(
-        __event = TelemetryAttributes::Phase(BuildPhaseInfo::Parsing { }).to_tracing_value(),
+        _e = ?store_event_attributes(PhaseExecuted::start_general(ExecutionPhase::Parse).into()),
     )
 )]
 pub async fn resolve(
@@ -676,7 +675,7 @@ pub fn check_relation_uniqueness(nodes: &Nodes) -> FsResult<()> {
 
     for (_, node) in nodes.iter() {
         // We only check models, seeds and snapshots
-        if !["model", "seed", "snapshot"].contains(&node.resource_type()) {
+        if ![NodeType::Model, NodeType::Seed, NodeType::Snapshot].contains(&node.resource_type()) {
             continue;
         }
         if let Some(node_relation_name) = node.base().relation_name.clone() {

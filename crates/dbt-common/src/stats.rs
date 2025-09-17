@@ -1,5 +1,11 @@
 use chrono::{DateTime, Local};
-use dbt_telemetry::NodeExecutionStatus;
+use dbt_telemetry::{
+    NodeCacheReason, NodeErrorType, NodeEvaluated, NodeOutcome, NodeSkipReason, NodeType,
+    TestEvaluationDetail, TestOutcome,
+};
+use proto_rust::impls::node::update_dbt_core_event_code_for_node_evaluation_end;
+use proto_rust::v1::public::events::fusion::node::NodeCacheDetail;
+use proto_rust::v1::public::events::fusion::node::node_evaluated::NodeOutcomeDetail;
 use std::fmt;
 use std::time::{Duration, SystemTime};
 use strum_macros::EnumString;
@@ -31,6 +37,92 @@ impl NodeStatus {
         }
     }
 }
+impl From<NodeStatus> for NodeOutcome {
+    fn from(status: NodeStatus) -> Self {
+        match status {
+            NodeStatus::Succeeded | NodeStatus::TestWarned | NodeStatus::TestPassed => {
+                NodeOutcome::Success
+            }
+            NodeStatus::Errored => NodeOutcome::Error,
+            NodeStatus::SkippedUpstreamFailed => NodeOutcome::Skipped,
+            NodeStatus::ReusedNoChanges(_) => NodeOutcome::Skipped,
+            NodeStatus::ReusedStillFresh(_) => NodeOutcome::Skipped,
+            NodeStatus::ReusedStillFreshNoChanges(_) => NodeOutcome::Skipped,
+            NodeStatus::NoOp => NodeOutcome::Skipped,
+        }
+    }
+}
+
+/// TODO: this is a temporary reverse mapping from legacy status to new outcome model.
+/// We should revert to using outcome directly in the task result and calculate status
+/// from that - since outcome is more expressive, and current implementation is lossy.
+pub fn update_node_outcome_from_legacy_status(event: &mut NodeEvaluated, status: NodeStatus) {
+    match status {
+        NodeStatus::Succeeded => {
+            event.set_node_outcome(NodeOutcome::Success);
+        }
+        NodeStatus::TestPassed => {
+            event.set_node_outcome(NodeOutcome::Success);
+
+            event.node_outcome_detail = Some(NodeOutcomeDetail::NodeTestDetail(
+                TestEvaluationDetail::new(TestOutcome::Passed, 0), // Todo - we need rows
+            ));
+        }
+        NodeStatus::TestWarned => {
+            event.set_node_outcome(NodeOutcome::Success);
+
+            event.node_outcome_detail = Some(NodeOutcomeDetail::NodeTestDetail(
+                TestEvaluationDetail::new(TestOutcome::Warned, 0), // Todo - we need rows
+            ));
+        }
+        NodeStatus::Errored => {
+            if event.node_type() == NodeType::Test || event.node_type() == NodeType::UnitTest {
+                event.set_node_outcome(NodeOutcome::Success);
+
+                event.node_outcome_detail = Some(NodeOutcomeDetail::NodeTestDetail(
+                    TestEvaluationDetail::new(TestOutcome::Failed, 0), // Todo - we need rows
+                ));
+            } else {
+                event.set_node_outcome(NodeOutcome::Error);
+                event.set_node_error_type(NodeErrorType::User); // TODO: probably not necessary
+            };
+        }
+        NodeStatus::SkippedUpstreamFailed => {
+            event.set_node_outcome(NodeOutcome::Skipped);
+            event.set_node_skip_reason(NodeSkipReason::Upstream);
+        }
+        NodeStatus::ReusedNoChanges(_) => {
+            event.set_node_outcome(NodeOutcome::Skipped);
+            event.set_node_skip_reason(NodeSkipReason::Cached);
+
+            event.node_outcome_detail = Some(NodeOutcomeDetail::NodeCacheDetail(
+                NodeCacheDetail::new(NodeCacheReason::NoChanges),
+            ));
+        }
+        NodeStatus::ReusedStillFresh(_) => {
+            event.set_node_outcome(NodeOutcome::Skipped);
+            event.set_node_skip_reason(NodeSkipReason::Cached);
+
+            event.node_outcome_detail = Some(NodeOutcomeDetail::NodeCacheDetail(
+                NodeCacheDetail::new(NodeCacheReason::StillFresh),
+            ));
+        }
+        NodeStatus::ReusedStillFreshNoChanges(_) => {
+            event.set_node_outcome(NodeOutcome::Skipped);
+            event.set_node_skip_reason(NodeSkipReason::Cached);
+
+            event.node_outcome_detail = Some(NodeOutcomeDetail::NodeCacheDetail(
+                NodeCacheDetail::new(NodeCacheReason::UpdateCriteriaNotMet),
+            ));
+        }
+        NodeStatus::NoOp => {
+            event.set_node_outcome(NodeOutcome::Skipped);
+            event.set_node_skip_reason(NodeSkipReason::NoOp);
+        }
+    };
+
+    update_dbt_core_event_code_for_node_evaluation_end(event);
+}
 
 impl fmt::Display for NodeStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -44,22 +136,6 @@ impl fmt::Display for NodeStatus {
             NodeStatus::NoOp => "noop",
         };
         write!(f, "{status_str}")
-    }
-}
-
-impl From<&NodeStatus> for NodeExecutionStatus {
-    fn from(val: &NodeStatus) -> Self {
-        match val {
-            NodeStatus::Succeeded | NodeStatus::TestPassed | NodeStatus::TestWarned => {
-                NodeExecutionStatus::Success
-            }
-            NodeStatus::Errored => NodeExecutionStatus::Error,
-            NodeStatus::SkippedUpstreamFailed => NodeExecutionStatus::Skipped,
-            NodeStatus::ReusedNoChanges(_) => NodeExecutionStatus::Reused,
-            NodeStatus::ReusedStillFresh(_) => NodeExecutionStatus::Reused,
-            NodeStatus::ReusedStillFreshNoChanges(_) => NodeExecutionStatus::Reused,
-            NodeStatus::NoOp => NodeExecutionStatus::Skipped,
-        }
     }
 }
 

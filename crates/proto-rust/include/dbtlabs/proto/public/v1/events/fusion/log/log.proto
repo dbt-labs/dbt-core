@@ -1,0 +1,33 @@
+syntax = "proto3";
+package v1.public.events.fusion.log;
+option go_package = "github.com/dbt-labs/proto-golang/v1/public/events/fusion/log";
+
+import "dbtlabs/proto/public/v1/events/fusion/compat/otlp.proto";
+import "dbtlabs/proto/public/v1/events/fusion/phase/phase.proto";
+
+// Generic event for log messages that do not cary special meaning
+// or additional metadata beyond the standard fields
+message LogMessage {
+  // Optional fusion error/warning code
+  optional uint32 code = 1;
+
+  // Optional legacy dbt-core code (e.g. "Z048") if this event has a strict mapping to a dbt core event.
+  optional string dbt_core_event_code = 2;
+
+  // Original severity before user up/down-grade configuration applied.
+  v1.public.events.fusion.compat.SeverityNumber original_severity_number = 3;
+  string original_severity_text = 4;
+
+  // If this log message is emitted in the context of a specific node,
+  // this field should be set to the node's unique FQN.
+  optional string unique_id = 5;
+
+  // File name where the span was created.
+  optional string file = 6;
+
+  // Line number in the file where the span was created.
+  optional uint32 line = 7;
+
+  // Execution phase context (if known) where this log was emitted.
+  optional v1.public.events.fusion.phase.ExecutionPhase phase = 8;
+}

@@ -1,12 +1,10 @@
 use std::collections::HashMap;
 
-use super::super::{TelemetryShutdown, event_info::with_current_thread_event_data};
+use super::super::{TelemetryShutdown, event_info::with_current_thread_log_record};
 use crate::constants::DBT_FUSION;
 use crate::{ErrorCode, FsResult};
 
-use dbt_telemetry::{
-    LogEventInfo, SeverityNumber, SpanEndInfo, SpanStatus, StatusCode, TelemetryAttributes,
-};
+use dbt_telemetry::{SeverityNumber, SpanEndInfo, SpanStatus, StatusCode, TelemetryExportFlags};
 use parquet::data_type::AsBytes;
 
 use opentelemetry::{
@@ -24,31 +22,22 @@ use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::logs::{SdkLogger, SdkLoggerProvider};
 use opentelemetry_sdk::resource::EnvResourceDetector;
 use opentelemetry_sdk::trace::{SdkTracer, SdkTracerProvider};
-use opentelemetry_semantic_conventions::attribute::{CODE_FILE_PATH, CODE_LINE_NUMBER};
+use opentelemetry_sdk::{logs as sdk_logs, trace as sdk_trace};
+// use opentelemetry_semantic_conventions::attribute::{CODE_FILE_PATH, CODE_LINE_NUMBER};
 use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION};
+use proto_rust::impls::compat::level_to_otel_severity_text;
 use tracing::{Subscriber, span};
 use tracing_subscriber::Layer;
 use tracing_subscriber::layer::Context;
 
 const fn level_to_otel_severity(severity_number: &SeverityNumber) -> OtelSeverity {
     match severity_number {
+        SeverityNumber::Unspecified => panic!("Do not use unspecified severity level!"),
         SeverityNumber::Trace => OtelSeverity::Trace,
         SeverityNumber::Debug => OtelSeverity::Debug,
         SeverityNumber::Info => OtelSeverity::Info,
         SeverityNumber::Warn => OtelSeverity::Warn,
         SeverityNumber::Error => OtelSeverity::Error,
-        SeverityNumber::Fatal => OtelSeverity::Fatal,
-    }
-}
-
-const fn level_to_otel_severity_text(severity_number: &SeverityNumber) -> &'static str {
-    match severity_number {
-        SeverityNumber::Trace => "TRACE",
-        SeverityNumber::Debug => "DEBUG",
-        SeverityNumber::Info => "INFO",
-        SeverityNumber::Warn => "WARN",
-        SeverityNumber::Error => "ERROR",
-        SeverityNumber::Fatal => "FATAL",
     }
 }
 
@@ -135,18 +124,11 @@ impl<S> OTLPExporterLayer<S>
 where
     S: Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
 {
-    /// Creates a new OTLPExporterLayer
-    ///
-    /// If endpoint is not reachable, it will return None.
-    ///
-    /// Reads the OTLP endpoint from either:
-    /// - the environment variable `OTEL_EXPORTER_OTLP_ENDPOINT` - works for logs & traces,
-    ///   and assumes default routes: `/v1/logs` for logs and `/v1/traces` for traces.
-    /// - the environment variable `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` - works
-    ///   can be used to specify a full endpoint for traces, with non-default routes.
-    /// - the environment variable `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` - works
-    ///   can be used to specify a full endpoint for logs, with non-default routes.
-    pub(crate) fn new() -> Option<Self> {
+    /// Creates a new OTLPExporterLayer from provided exporters
+    pub(crate) fn new(
+        trace_exporter: impl sdk_trace::SpanExporter + 'static,
+        log_exporter: impl sdk_logs::LogExporter + 'static,
+    ) -> Self {
         // Set up resource with service information
         let resource = Resource::builder()
             .with_detectors(&[Box::new(EnvResourceDetector::new())])
@@ -156,36 +138,16 @@ where
             ])
             .build();
 
-        // Add OTLP trace HTTP exporter
-        let tracing_http_exporter = match opentelemetry_otlp::SpanExporter::builder()
-            .with_http()
-            .with_protocol(opentelemetry_otlp::Protocol::HttpBinary)
-            .build()
-        {
-            Ok(http_exporter) => http_exporter,
-            Err(_) => return None,
-        };
-
         // Initialize a tracer provider.
         let tracer_provider = SdkTracerProvider::builder()
             .with_resource(resource.clone())
-            .with_batch_exporter(tracing_http_exporter)
+            .with_batch_exporter(trace_exporter)
             .build();
-
-        // Create OTLP logger exporter
-        let logger_http_export = match opentelemetry_otlp::LogExporterBuilder::new()
-            .with_http()
-            .with_protocol(opentelemetry_otlp::Protocol::HttpBinary)
-            .build()
-        {
-            Ok(http_exporter) => http_exporter,
-            Err(_) => return None,
-        };
 
         // Initialize a logger provider.
         let logger_provider = SdkLoggerProvider::builder()
             .with_resource(resource)
-            .with_batch_exporter(logger_http_export)
+            .with_batch_exporter(log_exporter)
             .build();
 
         // Set the global tracer provider. Clone is necessary but cheap, as it is a reference
@@ -198,13 +160,48 @@ where
         // Get root logger
         let logger = logger_provider.logger(DBT_FUSION);
 
-        Some(OTLPExporterLayer {
+        OTLPExporterLayer {
             tracer_provider,
             logger_provider,
             tracer,
             logger,
             __phantom: std::marker::PhantomData,
-        })
+        }
+    }
+
+    /// Creates a new OTLPExporterLayer with HTTP exporters (binary protocol)
+    ///
+    /// If endpoint is not reachable or exporters fail to build, it will return None.
+    ///
+    /// Reads the OTLP endpoint from either:
+    /// - the environment variable `OTEL_EXPORTER_OTLP_ENDPOINT` - works for logs & traces,
+    ///   and assumes default routes: `/v1/logs` for logs and `/v1/traces` for traces.
+    /// - the environment variable `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` - can
+    ///   be used to specify a full endpoint for traces, with non-default routes.
+    /// - the environment variable `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` - can
+    ///   be used to specify a full endpoint for logs, with non-default routes.
+    pub(crate) fn new_with_http_export() -> Option<Self> {
+        // Add OTLP trace HTTP exporter
+        let trace_exporter = match opentelemetry_otlp::SpanExporter::builder()
+            .with_http()
+            .with_protocol(opentelemetry_otlp::Protocol::HttpBinary)
+            .build()
+        {
+            Ok(http_exporter) => http_exporter,
+            Err(_) => return None,
+        };
+
+        // Create OTLP logger exporter
+        let log_exporter = match opentelemetry_otlp::LogExporterBuilder::new()
+            .with_http()
+            .with_protocol(opentelemetry_otlp::Protocol::HttpBinary)
+            .build()
+        {
+            Ok(http_exporter) => http_exporter,
+            Err(_) => return None,
+        };
+
+        Some(Self::new(trace_exporter, log_exporter))
     }
 
     pub(crate) fn tracer_provider(&self) -> SdkTracerProvider {
@@ -258,6 +255,15 @@ where
             unreachable!("Unexpectedly missing span end data!");
         };
 
+        // Honor export flags: only export if OTLP export is enabled
+        if !span_data
+            .attributes
+            .export_flags()
+            .contains(TelemetryExportFlags::EXPORT_OTLP)
+        {
+            return;
+        }
+
         let otel_trace_id = span_data.trace_id.into();
         let otel_span_id = span_data.span_id.into();
 
@@ -279,7 +285,7 @@ where
             .ok()
             .and_then(|val| {
                 // We are using external tag for attributes enum, so value is a map with 2
-                // keys: "attributes" and "eventName". We only care about the attributes.
+                // keys: "attributes" and "event_type". We only care about the attributes.
                 val.as_object().and_then(|top| {
                     top.get("attributes").and_then(|attrs| {
                         attrs.as_object().map(|pairs| {
@@ -327,7 +333,15 @@ where
 
     fn on_event(&self, _event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
         // Add log record as events
-        with_current_thread_event_data(|log_record| {
+        with_current_thread_log_record(|log_record| {
+            // Honor export flags: only export if OTLP export is enabled
+            if !log_record
+                .attributes
+                .export_flags()
+                .contains(TelemetryExportFlags::EXPORT_OTLP)
+            {
+                return;
+            }
             // Create a new log record
             let mut otel_log_record = self.logger.create_log_record();
 
@@ -345,30 +359,23 @@ where
             otel_log_record.set_timestamp(log_record.time_unix_nano);
             otel_log_record.set_observed_timestamp(log_record.time_unix_nano);
 
-            // Set source code attributes
-            if let TelemetryAttributes::Log(LogEventInfo { location, .. }) = &log_record.attributes
-            {
-                if let Some(file) = location.file.clone() {
-                    otel_log_record.add_attribute(
-                        opentelemetry::Key::new(CODE_FILE_PATH),
-                        AnyValue::from(file),
-                    );
-                }
+            // TODO: return code location info (needs a trait method)
+            // if let TelemetryAttributes::Log(LogEventInfo { location, .. }) = &log_record.attributes
+            // {
+            //     if let Some(file) = location.file.clone() {
+            //         otel_log_record.add_attribute(
+            //             opentelemetry::Key::new(CODE_FILE_PATH),
+            //             AnyValue::from(file),
+            //         );
+            //     }
 
-                if let Some(line) = location.line {
-                    otel_log_record.add_attribute(
-                        opentelemetry::Key::new(CODE_LINE_NUMBER),
-                        AnyValue::from(line),
-                    );
-                }
-
-                // if let Some(module) = location.module_path() {
-                //     otel_log_record.add_attribute(
-                //         opentelemetry::Key::new(CODE_FUNCTION_NAME),
-                //         AnyValue::from(module.to_string()),
-                //     );
-                // }
-            }
+            //     if let Some(line) = location.line {
+            //         otel_log_record.add_attribute(
+            //             opentelemetry::Key::new(CODE_LINE_NUMBER),
+            //             AnyValue::from(line),
+            //         );
+            //     }
+            // }
 
             let log_attrs = serde_json::to_value(&log_record.attributes)
                 .ok()
@@ -394,7 +401,7 @@ where
                 })
                 .unwrap_or_default();
 
-            otel_log_record.set_event_name((&log_record.attributes).into());
+            otel_log_record.set_event_name(log_record.attributes.event_type());
             otel_log_record.add_attributes(log_attrs);
 
             otel_log_record.set_trace_context(

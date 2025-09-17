@@ -1,11 +1,10 @@
 use super::super::{
     convert::tracing_level_to_severity,
-    event_info::{get_log_event_attrs, get_log_message, store_event_data, take_event_attributes},
+    event_info::{get_log_message, set_current_log_record, take_event_attributes},
     init::process_span,
-    span_info::{get_span_debug_extra_attrs, get_span_event_attrs},
+    span_info::get_span_debug_extra_attrs,
 };
 use rand::RngCore;
-use tracing_log::NormalizeEvent;
 
 use std::time::SystemTime;
 
@@ -13,8 +12,9 @@ use tracing::{Level, Subscriber, span};
 use tracing_subscriber::{Layer, layer::Context};
 
 use dbt_telemetry::{
-    DevInternalInfo, LegacyLogEventInfo, LogEventInfo, LogRecordInfo, RecordCodeLocation,
-    SpanEndInfo, SpanStartInfo, SpanStatus, TelemetryAttributes, UnknownInfo,
+    CallTrace, Invocation, LogMessage, LogRecordInfo, RecordCodeLocation, SpanEndInfo,
+    SpanStartInfo, SpanStatus, TelemetryAttributes, TelemetryContext, TelemetryEventRecType,
+    Unknown,
 };
 
 /// A tracing layer that creates structured telemetry data and stores it in span extensions.
@@ -81,44 +81,53 @@ where
         // Start by extracting event attributes if any. To avoid leakage, we extract internal metadata
         // such as location, name etc. only in debug builds
 
+        // Calculate code location once
+        let location = self.get_location(metadata);
+
         // Extract attributes in the following priority:
-        // - Pre-populated attributes (most efficient way, but requires the caller to use our custom emit APIs)
-        // - Attributes from the event itself (if any)
-        // - Fallback to default attributes based on metadata
-        let attributes = if let Some(attrs) = take_event_attributes() {
-            if attrs.has_empty_location() {
-                attrs.with_location(self.get_location(metadata))
-            } else {
-                attrs
+        // - Pre-populated attributes (the "normal" way for all non-trace level spans)
+        // - Fallback to default attributes based on metadata (shouldn't happen for properly instrumented spans)
+        let mut attributes = if let Some(mut attrs) = take_event_attributes() {
+            attrs.inner_mut().with_code_location(location);
+            attrs
+        } else if metadata.level() == &Level::TRACE {
+            // Trace spans without explicit attributes considered dev internal
+            CallTrace {
+                name: metadata.name().to_string(),
+                file: location.file.clone(),
+                line: location.line,
+                extra: get_span_debug_extra_attrs(attrs.values().into()),
             }
+            .into()
         } else {
-            get_span_event_attrs(attrs.values().into()).unwrap_or_else(|| {
-                if metadata.level() == &Level::TRACE {
-                    // Trace spans without explicit attributes considered dev internal
-                    TelemetryAttributes::DevInternal(DevInternalInfo {
-                        name: metadata.name().to_string(),
-                        location: self.get_location(metadata),
-                        extra: get_span_debug_extra_attrs(attrs.values().into()),
-                    })
-                } else {
-                    TelemetryAttributes::Unknown(UnknownInfo {
-                        name: metadata.name().to_string(),
-                        location: self.get_location(metadata),
-                    })
-                }
-            })
+            Unknown {
+                name: metadata.name().to_string(),
+                file: location
+                    .file
+                    .as_ref()
+                    .map_or("<unknown>", |v| v)
+                    .to_string(),
+                line: location.line.unwrap_or_default(),
+            }
+            .into()
         };
 
-        let (trace_id, global_parent_span_id) = span
+        // check that attributes are of expected record type
+        debug_assert_eq!(attributes.record_category(), TelemetryEventRecType::Span);
+
+        // Pull the trace ID, parent span ID & parent ctx from the parent span (if any)
+        let (trace_id, global_parent_span_id, parent_ctx) = span
             .parent()
             .and_then(|parent_span| {
-                parent_span
-                    .extensions()
+                let parent_span_ext = parent_span.extensions();
+                let parent_ctx = parent_span_ext.get::<TelemetryContext>();
+                parent_span_ext
                     .get::<SpanStartInfo>()
                     .map(|parent_span_record| {
                         (
                             parent_span_record.trace_id,
                             Some(parent_span_record.span_id),
+                            parent_ctx.cloned(),
                         )
                     })
             })
@@ -128,12 +137,30 @@ where
                 // 2. This is an invocation span and we calculate the trace ID from `invocation_id` of the span
                 // 3. This is a buggy tracing call missing proper invocation span tree in their context,
                 //  in which case we fallback to the fallback trace ID and no parent span ID
-                if let TelemetryAttributes::Invocation(boxed_info) = &attributes {
-                    (boxed_info.invocation_id.as_u128(), None)
+                if let Some(Invocation { invocation_id, .. }) =
+                    &attributes.downcast_ref::<Invocation>()
+                {
+                    (
+                        // We use proto's to define event structures, which doesn't allow
+                        // storing u128/uuid directly, so we store UUID string and convert it back here
+                        uuid::Uuid::parse_str(invocation_id)
+                            .expect("invocation_id Must be a valid UUID string")
+                            .as_u128(),
+                        None,
+                        None,
+                    )
                 } else {
-                    (self.fallback_trace_id, None)
+                    (self.fallback_trace_id, None, None)
                 }
             });
+
+        // First inject parent span context into the new span attributes (if any)
+        if let Some(ctx) = &parent_ctx {
+            attributes.inner_mut().with_context(ctx);
+        }
+
+        // Determine the context for this span: either this span provides it, or we inherit from parent
+        let this_ctx = attributes.inner().context().or(parent_ctx);
 
         let start_time = SystemTime::now();
         let (severity_number, severity_text) = tracing_level_to_severity(metadata.level());
@@ -143,6 +170,7 @@ where
             span_id: global_span_id,
             span_name: attributes.to_string(),
             parent_span_id: global_parent_span_id,
+            links: None, // TODO: implement links from `follows_from`
             start_time_unix_nano: start_time,
             severity_number,
             severity_text: severity_text.to_string(),
@@ -157,6 +185,11 @@ where
         // And store the attributes in the span extensions as well,
         // we use this to update them post creation and add to closing span record
         ext_mut.insert(attributes);
+
+        // Store computed context for this span (if any)
+        if let Some(ctx) = this_ctx {
+            ext_mut.insert(ctx);
+        }
     }
 
     fn on_close(&self, id: span::Id, ctx: Context<'_, S>) {
@@ -164,6 +197,9 @@ where
             .span(&id)
             .expect("Span must exist for id in the current context");
         let metadata = span.metadata();
+
+        // Acquire a read-only reference to span extensions
+        let span_ext = span.extensions();
 
         // Get the shared info from the stored SpanStart record
         let (
@@ -183,7 +219,7 @@ where
             severity_text,
             attributes,
             ..
-        }) = span.extensions().get::<SpanStartInfo>()
+        }) = span_ext.get::<SpanStartInfo>()
         {
             (
                 *trace_id,
@@ -196,6 +232,7 @@ where
             )
         } else {
             let (severity_number, severity_text) = tracing_level_to_severity(metadata.level());
+            let location = self.get_location(metadata);
 
             (
                 self.fallback_trace_id,
@@ -204,29 +241,46 @@ where
                 SystemTime::now(),
                 severity_number,
                 severity_text.to_string(),
-                TelemetryAttributes::Unknown(UnknownInfo {
+                Unknown {
                     name: metadata.name().to_string(),
-                    location: self.get_location(metadata),
-                }),
+                    file: location
+                        .file
+                        .as_ref()
+                        .map_or("<unknown>", |v| v)
+                        .to_string(),
+                    line: location.line.unwrap_or_default(),
+                }
+                .into(),
             ) // Fallback. Should not happen
         };
 
-        let status = span.extensions().get::<SpanStatus>().cloned();
+        let status = span_ext.get::<SpanStatus>().cloned();
 
-        let attributes = span
-            .extensions()
-            .get::<TelemetryAttributes>()
-            .cloned()
-            .unwrap_or({
-                // If no attributes were recorded, use the start attributes
-                start_attributes
-            });
+        // Pull the current span context (if any) to inject into closing attributes
+        let current_ctx = span_ext.get::<TelemetryContext>().cloned();
+
+        let mut attributes = span_ext.get::<TelemetryAttributes>().cloned().unwrap_or({
+            // If no attributes were recorded, use the start attributes
+            start_attributes
+        });
+
+        // check that attributes are of expected record type
+        debug_assert_eq!(attributes.record_category(), TelemetryEventRecType::Span);
+
+        // Apply current span context (if any) before finalizing
+        if let Some(ctx) = &current_ctx {
+            attributes.inner_mut().with_context(ctx);
+        }
+
+        // Drops the read-only reference to span extensions, necessary to acquire mutable reference later
+        drop(span_ext);
 
         let record = SpanEndInfo {
             trace_id,
             span_id,
             span_name: attributes.to_string(),
             parent_span_id,
+            links: None, // TODO: implement links from `follows_from`
             start_time_unix_nano,
             end_time_unix_nano: SystemTime::now(),
             severity_number,
@@ -241,31 +295,31 @@ where
 
     fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
         // Extract information about the current span
-        let (trace_id, span_id, span_name) = ctx
+        let (trace_id, span_id, span_name, parent_ctx) = ctx
             .event_span(event)
             .or_else(|| process_span(&ctx))
             // Get the parent span to extract span information
             .and_then(|current_span| {
-                current_span
-                    .extensions()
+                let current_span_ext = current_span.extensions();
+                let parent_ctx = current_span_ext.get::<TelemetryContext>();
+                current_span_ext
                     .get::<SpanStartInfo>()
                     .map(|parent_span_start_info| {
                         (
                             parent_span_start_info.trace_id,
                             Some(parent_span_start_info.span_id),
                             Some(parent_span_start_info.span_name.clone()),
+                            parent_ctx.cloned(),
                         )
                     })
             })
             .unwrap_or_default();
 
-        // Get event metadata. If the event is coming from `tracing-log` bridge,
-        // it will have normalized metadata, otherwise it will be None and we will use
-        // the event metadata directly.
-        let bridged_log_meta = event.normalized_metadata();
-        let metadata = bridged_log_meta
-            .as_ref()
-            .unwrap_or_else(|| event.metadata());
+        // Get event metadata
+        let metadata = event.metadata();
+
+        // Calculate code location
+        let location = self.get_location(metadata);
 
         // TODO: calculate modified severity based on user config when such feature is implemented
         let (severity_number, severity_text) = tracing_level_to_severity(metadata.level());
@@ -274,48 +328,42 @@ where
         let message = get_log_message(event);
 
         // Extract attributes in the following priority:
-        // - Pre-populated attributes (most efficient way, but requires the caller to use our custom emit APIs)
-        // - Legacy log metadata (if the event is coming from `tracing-log` bridge)
+        // - Pre-populated attributes (the "normal" way)
         // - Attributes from the event itself (if any, otherwise use default log attributes)
-        let attributes = if let Some(attrs) = take_event_attributes() {
-            if attrs.has_empty_location() {
-                attrs.with_location(self.get_location(metadata))
-            } else {
-                attrs
-            }
-        } else if event.is_log() {
-            // This means the event is coming from `tracing-log` bridge
-            TelemetryAttributes::LegacyLog(LegacyLogEventInfo {
-                original_severity_number: severity_number,
-                original_severity_text: severity_text.to_string(),
-                location: self.get_location(metadata),
-            })
+        let mut attributes = if let Some(mut attrs) = take_event_attributes() {
+            attrs.inner_mut().with_code_location(location);
+            attrs
         } else {
-            get_log_event_attrs(event.into())
-                // Auto-inject location if missing
-                .map(|attrs| {
-                    if attrs.has_empty_location() {
-                        attrs.with_location(self.get_location(metadata))
-                    } else {
-                        attrs
-                    }
-                })
-                .unwrap_or_else(|| {
-                    TelemetryAttributes::Log(LogEventInfo {
-                        code: None,
-                        dbt_core_code: None,
-                        original_severity_number: severity_number,
-                        original_severity_text: severity_text.to_string(),
-                        location: self.get_location(metadata),
-                    })
-                })
+            LogMessage {
+                code: None,
+                dbt_core_event_code: None,
+                original_severity_number: severity_number as i32,
+                original_severity_text: severity_text.to_string(),
+                unique_id: None,
+                phase: None,
+                file: location.file,
+                line: location.line,
+            }
+            .into()
         };
 
+        // check that attributes are of expected record type
+        debug_assert_eq!(attributes.record_category(), TelemetryEventRecType::Log);
+
+        // Inject parent span context into the log attributes (if any)
+        if let Some(ctx_val) = parent_ctx {
+            attributes.inner_mut().with_context(&ctx_val);
+        }
+
+        let time_unix_nano = SystemTime::now();
+        let event_id = uuid::Uuid::now_v7();
+
         let log_record = LogRecordInfo {
-            time_unix_nano: SystemTime::now(),
+            time_unix_nano,
             trace_id,
             span_id,
             span_name,
+            event_id,
             severity_number,
             severity_text: severity_text.to_string(),
             body: message,
@@ -323,6 +371,6 @@ where
         };
 
         // Set the data for this event
-        store_event_data(log_record);
+        set_current_log_record(log_record);
     }
 }

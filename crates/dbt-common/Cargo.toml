@@ -29,7 +29,7 @@ itertools = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
 unicode-segmentation = { version = "1.12" }
-uuid = { workspace = true }
+uuid = { workspace = true, features = ["v7"] }
 
 arrow = { workspace = true }
 arrow-schema = { workspace = true }
@@ -61,8 +61,8 @@ log = { workspace = true }
 rust-embed = { workspace = true }
 
 # Tracing
+proto-rust = { workspace = true }
 tracing = { workspace = true }
-tracing-log = { workspace = true } # temporary until we migrate to tracing exclusively
 tracing-subscriber = { workspace = true }
 
 # Embedded OTLP exporter for traces

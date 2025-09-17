@@ -369,7 +369,7 @@ macro_rules! show_completed {
                 .signed_duration_since($start_time)
                 .to_std()
                 .unwrap_or_default();
-            let resource_type = $task.resource_type();
+            let resource_type_str = $task.resource_type();
             let materialization = $task.base().materialized.to_string();
             let schema = $task.base().schema.clone();
             let alias = $task.base().alias.clone();
@@ -389,7 +389,7 @@ macro_rules! show_completed {
 
             if $io.should_show(ShowOptions::Completed) {
                 let schema_alias = format_schema_alias(&schema, &alias);
-                let resource_type_formatted = format_resource_type_fixed_width(resource_type);
+                let resource_type_formatted = format_resource_type_fixed_width(resource_type_str.as_ref());
                 let materialization_suffix = format_materialization_suffix(Some(&materialization), desc.as_deref());
                 let duration = format_duration_fixed_width(duration);
                 let output = format!(
@@ -787,24 +787,28 @@ macro_rules! show_warning {
         let err = $err;
 
         // New tracing based logic
-        use $crate::tracing::{ToTracingValue, log_level_to_severity};
+        use $crate::tracing::log_level_to_severity;
         use $crate::tracing::emit::_tracing::Level as TracingLevel;
         use $crate::tracing::metrics::{increment_metric, MetricKey};
-        use $crate::tracing::constants::TRACING_ATTR_FIELD;
-        use $crate::macros::_dbt_telemetry::{LogEventInfo, TelemetryAttributes, RecordCodeLocation};
+        use $crate::macros::_dbt_telemetry::LogMessage;
         increment_metric(MetricKey::TotalWarnings, 1);
 
         let (original_severity_number, original_severity_text) = log_level_to_severity(&$crate::macros::log_adapter::log::Level::Warn);
 
         $crate::emit_tracing_event!(
             level: TracingLevel::WARN,
-            TelemetryAttributes::Log(LogEventInfo {
+            LogMessage {
                 code: Some(err.code as u16 as u32),
-                dbt_core_code: None,
-                original_severity_number,
+                dbt_core_event_code: None,
+                original_severity_number: original_severity_number as i32,
                 original_severity_text: original_severity_text.to_string(),
-                location: RecordCodeLocation::none(), // Will be auto injected
-            }),
+                // The rest will be auto injected
+                phase: None,
+                unique_id: None,
+                file: None,
+                line: None,
+            }
+            .into(),
             "{}",
             err.pretty().as_str()
         );

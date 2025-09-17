@@ -1,5 +1,6 @@
 use clap::ValueEnum;
 use dbt_serde_yaml::{JsonSchema, Value};
+use dbt_telemetry::NodeType;
 use pathdiff::diff_paths;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -37,8 +38,8 @@ pub struct IoArgs {
     pub in_dir: PathBuf,
     pub out_dir: PathBuf,
     pub log_path: Option<PathBuf>,
-    pub otm_file_name: Option<String>,
-    pub otm_parquet_file_name: Option<String>,
+    pub otel_file_name: Option<String>,
+    pub otel_parquet_file_name: Option<String>,
     pub export_to_otlp: bool,
     pub log_format: LogFormat,
     pub log_level: Option<LevelFilter>,
@@ -75,7 +76,7 @@ impl fmt::Debug for IoArgs {
             .field("in_dir", &self.in_dir)
             .field("out_dir", &self.out_dir)
             .field("log_path", &self.log_path)
-            .field("otm_file_name", &self.otm_file_name)
+            .field("otel_file_name", &self.otel_file_name)
             .field("status_reporter", &self.status_reporter.is_some())
             .finish()
     }
@@ -111,8 +112,8 @@ impl IoArgs {
     /// This function takes an artifact path, which may either be a workspace
     /// resource, or some generated temp location, and returns a path to its
     /// corresponding location in the workspace
-    pub fn map_to_workspace_path(&self, path: &Path, resource_type: &str) -> PathBuf {
-        if resource_type == "unit_test" || resource_type == "snapshot" {
+    pub fn map_to_workspace_path(&self, path: &Path, resource_type: NodeType) -> PathBuf {
+        if resource_type == NodeType::UnitTest || resource_type == NodeType::Snapshot {
             let special_component_idx = path.components().position(|c| {
                 c.as_os_str() == DBT_GENERIC_TESTS_DIR_NAME
                     || c.as_os_str() == DBT_SNAPSHOTS_DIR_NAME
@@ -382,6 +383,19 @@ impl Display for ClapResourceType {
             ClapResourceType::UnitTest => "unit_test",
         };
         write!(f, "{s}")
+    }
+}
+
+impl From<&ClapResourceType> for NodeType {
+    fn from(value: &ClapResourceType) -> Self {
+        match value {
+            ClapResourceType::Model => NodeType::Model,
+            ClapResourceType::Source => NodeType::Source,
+            ClapResourceType::Seed => NodeType::Seed,
+            ClapResourceType::Snapshot => NodeType::Snapshot,
+            ClapResourceType::Test => NodeType::Test,
+            ClapResourceType::UnitTest => NodeType::UnitTest,
+        }
     }
 }
 

@@ -1,15 +1,15 @@
-mod constants;
 mod location;
 mod otlp;
 mod record;
-// Span record type attribute schemas
+// Trait implementations for span record type events
 mod span;
-// Event record type attribute schemas
-mod event;
+// Trait implementations for log record type events
+mod log;
 
-// Expose all schema directly for the outside world
-pub use event::*;
+// Re-export proto types for event attributes and top level envelope types directly
+// for the outside world
 pub use location::*;
+pub use log::*;
 pub use otlp::*;
 pub use record::*;
 pub use span::*;

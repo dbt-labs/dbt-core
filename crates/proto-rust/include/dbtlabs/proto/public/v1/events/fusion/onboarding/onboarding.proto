@@ -1,0 +1,12 @@
+syntax = "proto3";
+package v1.public.events.fusion.onboarding;
+
+option go_package = "github.com/dbt-labs/proto-golang/v1/public/events/fusion/onboarding";
+
+import "dbtlabs/proto/public/v1/events/fusion.proto";
+
+// Onboarding step event.
+message OnboardingScreenShown {
+  // Onboarding screen identifier
+  v1.public.events.fusion.OnboardingScreen screen = 1;
+}

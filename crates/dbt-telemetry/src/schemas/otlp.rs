@@ -39,27 +39,18 @@ pub struct SpanStatus {
     pub code: StatusCode,
 }
 
-/// Possible values for LogRecord.SeverityNumber.
-#[cfg_attr(test, derive(Dummy))]
-#[derive(
-    Serialize_repr,
-    Deserialize_repr,
-    Debug,
-    JsonSchema_repr,
-    Clone,
-    Copy,
-    Default,
-    PartialEq,
-    Eq,
-    FromRepr,
-)]
-#[repr(u8)]
-pub enum SeverityNumber {
-    #[default]
-    Trace = 1,
-    Debug = 5,
-    Info = 9,
-    Warn = 13,
-    Error = 17,
-    Fatal = 21,
+impl SpanStatus {
+    pub fn succeeded() -> Self {
+        Self {
+            message: None,
+            code: StatusCode::Ok,
+        }
+    }
+
+    pub fn failed(message: &str) -> Self {
+        Self {
+            message: Some(message.to_string()),
+            code: StatusCode::Error,
+        }
+    }
 }

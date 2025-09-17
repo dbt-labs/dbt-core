@@ -2,7 +2,8 @@ use dbt_telemetry::{SpanEndInfo, SpanStartInfo, TelemetryRecordRef};
 use tracing::{Subscriber, span};
 use tracing_subscriber::{Layer, layer::Context};
 
-use super::super::{event_info::with_current_thread_event_data, shared_writer::SharedWriter};
+use super::super::{event_info::with_current_thread_log_record, shared_writer::SharedWriter};
+use dbt_telemetry::TelemetryExportFlags;
 
 /// A tracing layer that reads telemetry data from extensions and writes it as JSON.
 ///
@@ -32,6 +33,14 @@ where
         // Get the TelemetryRecord from extensions. It must be there unless we messed
         // up data layer / layer order.
         if let Some(record) = span.extensions().get::<SpanStartInfo>() {
+            // Honor export flags: only write if JSONL export is enabled
+            if !record
+                .attributes
+                .export_flags()
+                .contains(TelemetryExportFlags::EXPORT_JSONL)
+            {
+                return;
+            }
             if let Ok(mut json) = serde_json::to_string(&TelemetryRecordRef::SpanStart(record)) {
                 json.push('\n');
                 // Currently we silently ignore write errors
@@ -50,6 +59,14 @@ where
         // Get the TelemetryRecord from extensions. It must be there unless we messed
         // up data layer / layer order.
         if let Some(record) = span.extensions().get::<SpanEndInfo>() {
+            // Honor export flags: only write if JSONL export is enabled
+            if !record
+                .attributes
+                .export_flags()
+                .contains(TelemetryExportFlags::EXPORT_JSONL)
+            {
+                return;
+            }
             if let Ok(mut json) = serde_json::to_string(&TelemetryRecordRef::SpanEnd(record)) {
                 json.push('\n');
                 // Currently we silently ignore write errors
@@ -61,7 +78,15 @@ where
     }
 
     fn on_event(&self, _event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
-        with_current_thread_event_data(|log_record| {
+        with_current_thread_log_record(|log_record| {
+            // Honor export flags: only write if JSONL export is enabled
+            if !log_record
+                .attributes
+                .export_flags()
+                .contains(TelemetryExportFlags::EXPORT_JSONL)
+            {
+                return;
+            }
             if let Ok(mut json) = serde_json::to_string(&TelemetryRecordRef::LogRecord(log_record))
             {
                 json.push('\n');

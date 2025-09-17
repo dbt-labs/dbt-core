@@ -5,7 +5,7 @@ use std::{any::Any, collections::BTreeMap, fmt::Display, path::PathBuf, sync::Ar
 use chrono::{DateTime, Utc};
 use dbt_common::adapter::AdapterType;
 use dbt_common::{ErrorCode, FsResult, err, io_args::StaticAnalysisKind};
-use dbt_telemetry::NodeIdentifier;
+use dbt_telemetry::{ExecutionPhase, NodeEvaluated, NodeType};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 type YmlValue = dbt_serde_yaml::Value;
@@ -156,14 +156,14 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     fn defined_at(&self) -> Option<&dbt_common::CodeLocation> {
         None
     }
-    fn resource_type(&self) -> &str;
+    fn resource_type(&self) -> NodeType;
     fn as_any(&self) -> &dyn Any;
     fn serialize(&self) -> YmlValue {
         let mut ret = self.serialize_inner();
         if let YmlValue::Mapping(ref mut map, _) = ret {
             map.insert(
                 YmlValue::string("resource_type".to_string()),
-                YmlValue::string(self.resource_type().to_string()),
+                YmlValue::string(self.resource_type().as_ref().to_string()),
             );
         }
         ret
@@ -179,7 +179,7 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     }
 
     fn is_test(&self) -> bool {
-        self.resource_type() == "test"
+        self.resource_type() == NodeType::Test
     }
 
     // Incremental strategy validation
@@ -223,6 +223,41 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
             },
         }
     }
+
+    fn get_node_evaluated_event(&self, phase: ExecutionPhase) -> NodeEvaluated {
+        node_evaluated_event_from_attrs(self.common(), self.base(), self.resource_type(), phase)
+    }
+}
+
+pub fn node_evaluated_event_from_attrs(
+    common: &CommonAttributes,
+    base: &NodeBaseAttributes,
+    node_type: NodeType,
+    phase: ExecutionPhase,
+) -> NodeEvaluated {
+    let (database, schema, identifier) = (
+        base.database.clone(),
+        base.schema.clone(),
+        Some(base.alias.clone()),
+    );
+
+    let custom_materialization = if let DbtMaterialization::Unknown(custom) = &base.materialized {
+        Some(custom.clone())
+    } else {
+        None
+    };
+
+    NodeEvaluated::start(
+        common.unique_id.clone(),
+        common.name.clone(),
+        Some(database),
+        Some(schema),
+        identifier,
+        Some((&base.materialized).into()),
+        custom_materialization,
+        node_type,
+        phase,
+    )
 }
 
 pub trait InternalDbtNodeAttributes: InternalDbtNode {
@@ -425,8 +460,8 @@ impl InternalDbtNode for DbtModel {
         self.__base_attr__.extended_model
     }
 
-    fn resource_type(&self) -> &str {
-        "model"
+    fn resource_type(&self) -> NodeType {
+        NodeType::Model
     }
 
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
@@ -695,8 +730,8 @@ fn quoting_equal(
 }
 
 impl InternalDbtNode for DbtSeed {
-    fn resource_type(&self) -> &str {
-        "seed"
+    fn resource_type(&self) -> NodeType {
+        NodeType::Seed
     }
 
     fn common(&self) -> &CommonAttributes {
@@ -794,8 +829,8 @@ impl InternalDbtNode for DbtTest {
         &self.__base_attr__
     }
 
-    fn resource_type(&self) -> &str {
-        "test"
+    fn resource_type(&self) -> NodeType {
+        NodeType::Test
     }
 
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
@@ -881,8 +916,8 @@ impl InternalDbtNode for DbtUnitTest {
         &self.__base_attr__
     }
 
-    fn resource_type(&self) -> &str {
-        "unit_test"
+    fn resource_type(&self) -> NodeType {
+        NodeType::UnitTest
     }
 
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
@@ -973,8 +1008,8 @@ impl InternalDbtNode for DbtSource {
         &self.__base_attr__
     }
 
-    fn resource_type(&self) -> &str {
-        "source"
+    fn resource_type(&self) -> NodeType {
+        NodeType::Source
     }
 
     fn event_time(&self) -> Option<String> {
@@ -1067,8 +1102,8 @@ impl InternalDbtNode for DbtSnapshot {
         &self.__base_attr__
     }
 
-    fn resource_type(&self) -> &str {
-        "snapshot"
+    fn resource_type(&self) -> NodeType {
+        NodeType::Snapshot
     }
 
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
@@ -1196,8 +1231,8 @@ impl InternalDbtNode for DbtSemanticModel {
         unimplemented!("semantic model common attributes mutation")
     }
 
-    fn resource_type(&self) -> &str {
-        "semantic_model"
+    fn resource_type(&self) -> NodeType {
+        NodeType::SemanticModel
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -1260,8 +1295,8 @@ impl InternalDbtNode for DbtExposure {
     fn common_mut(&mut self) -> &mut CommonAttributes {
         &mut self.__common_attr__
     }
-    fn resource_type(&self) -> &str {
-        "exposure"
+    fn resource_type(&self) -> NodeType {
+        NodeType::Exposure
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -1341,8 +1376,8 @@ impl InternalDbtNode for DbtSavedQuery {
     fn common_mut(&mut self) -> &mut CommonAttributes {
         unimplemented!("saved query common attributes mutation")
     }
-    fn resource_type(&self) -> &str {
-        "saved_query"
+    fn resource_type(&self) -> NodeType {
+        NodeType::SavedQuery
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -1398,8 +1433,8 @@ impl InternalDbtNode for DbtMetric {
         panic!("DbtMetric does not have base attributes - use common_mut() instead")
     }
 
-    fn resource_type(&self) -> &str {
-        "metric"
+    fn resource_type(&self) -> NodeType {
+        NodeType::Metric
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -1448,8 +1483,8 @@ impl InternalDbtNode for DbtMacro {
     fn common_mut(&mut self) -> &mut CommonAttributes {
         unimplemented!("macro common attributes mutation")
     }
-    fn resource_type(&self) -> &str {
-        "macro"
+    fn resource_type(&self) -> NodeType {
+        NodeType::Macro
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -1987,15 +2022,6 @@ pub struct CommonAttributes {
     // Tags and Meta
     pub tags: Vec<String>,
     pub meta: BTreeMap<String, YmlValue>,
-}
-
-impl From<&CommonAttributes> for NodeIdentifier {
-    fn from(value: &CommonAttributes) -> Self {
-        NodeIdentifier {
-            unique_id: value.unique_id.clone(),
-            fqn: value.fqn.join("."),
-        }
-    }
 }
 
 #[skip_serializing_none]

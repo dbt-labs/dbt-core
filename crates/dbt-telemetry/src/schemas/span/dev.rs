@@ -1,48 +1,141 @@
-use dbt_serde_yaml::JsonSchema;
-#[cfg(test)]
-use fake::Dummy;
-use serde::{Deserialize, Serialize};
-use serde_with::skip_serializing_none;
+use crate::{
+    AnyTelemetryEvent, TelemetryExportFlags,
+    attributes::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType},
+    schemas::RecordCodeLocation,
+    serialize::arrow::ArrowAttributes,
+};
+use prost::Name;
+pub use proto_rust::v1::public::events::fusion::dev::{CallTrace, DebugValue, Unknown};
 
-use super::super::location::RecordCodeLocation;
+impl ProtoTelemetryEvent for CallTrace {
+    const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
+    const EXPORT_FLAGS: TelemetryExportFlags = TelemetryExportFlags::EXPORT_ALL;
 
-#[cfg_attr(test, derive(Dummy))]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
-#[serde(untagged)]
-pub enum DebugValue {
-    Float64(f64),
-    Int64(i64),
-    UInt64(u64),
-    Bool(bool),
-    String(String),
-    Bytes(Vec<u8>),
-}
+    fn display_name(&self) -> String {
+        format!(
+            "Dev trace: {} ({}:{})",
+            self.name,
+            self.file.as_deref().unwrap_or("<unknown>"),
+            self.line.unwrap_or(0)
+        )
+    }
 
-#[skip_serializing_none]
-#[cfg_attr(test, derive(Dummy))]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Default)]
-pub struct DevInternalInfo {
-    /// Internal developer span name, often the function
-    pub name: String,
-    #[serde(flatten)]
-    pub location: RecordCodeLocation,
-    /// Arbitrary extra string for debugging purposes.
-    pub extra: Option<std::collections::BTreeMap<String, DebugValue>>,
-}
+    fn with_code_location(&mut self, location: RecordCodeLocation) {
+        // If we don't have a file yet, take it from the location.
+        if let (None, Some(f)) = (self.file.clone(), location.file) {
+            self.file = Some(f)
+        }
 
-// Custom display implementation is used to derive a readable/helpful span name.
-impl std::fmt::Display for DevInternalInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} | {}", self.name, self.location)
+        // If we don't have a line yet, take it from the location.
+        if let (None, Some(l)) = (self.line, location.line) {
+            self.line = Some(l)
+        }
+    }
+
+    fn has_sensitive_data(&self) -> bool {
+        true
+    }
+
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn AnyTelemetryEvent>> {
+        // CallTrace is considered sensitive as it may carry arbitrary data in
+        // the `extra` field. We strip it out here.
+        Some(Box::new(CallTrace {
+            name: self.name.clone(),
+            file: self.file.clone(),
+            line: self.line,
+            extra: Default::default(),
+        }))
     }
 }
 
-#[skip_serializing_none]
-#[cfg_attr(test, derive(Dummy))]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Default)]
-pub struct UnknownInfo {
-    /// Internal developer span name, often the function
-    pub name: String,
-    #[serde(flatten)]
-    pub location: RecordCodeLocation,
+impl ArrowSerializableTelemetryEvent for CallTrace {
+    fn to_arrow_record(&self) -> ArrowAttributes {
+        ArrowAttributes {
+            dev_name: Some(self.name.as_str()),
+            file: self.file.as_deref(),
+            line: self.line,
+            json_payload: serde_json::to_string(&self.extra)
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Failed to serialize `extra` field of event type \"{}\" to JSON",
+                        Self::full_name()
+                    )
+                })
+                .into(),
+            ..Default::default()
+        }
+    }
+
+    fn from_arrow_record(record: &ArrowAttributes) -> Result<Self, String> {
+        Ok(Self {
+            name: record.dev_name.map(str::to_string).ok_or_else(|| {
+                format!(
+                    "Missing `dev_name` for event type \"{}\"",
+                    Self::full_name()
+                )
+            })?,
+            file: record.file.map(str::to_string),
+            line: record.line,
+            extra: serde_json::from_str(record.json_payload.as_ref().ok_or_else(|| {
+                format!(
+                    "Missing json payload for event type \"{}\"",
+                    Self::full_name()
+                )
+            })?)
+            .map_err(|e| {
+                format!(
+                    "Failed to deserialize `extra` field of event type \"{}\" from JSON: {}",
+                    Self::full_name(),
+                    e
+                )
+            })?,
+        })
+    }
+}
+
+impl ProtoTelemetryEvent for Unknown {
+    const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
+    const EXPORT_FLAGS: TelemetryExportFlags = TelemetryExportFlags::EXPORT_ALL;
+
+    fn display_name(&self) -> String {
+        format!("Unknown span: {} ({}:{})", self.name, self.file, self.line)
+    }
+
+    fn with_code_location(&mut self, location: RecordCodeLocation) {
+        if let Some(file) = location.file {
+            self.file = file;
+        }
+
+        if let Some(line) = location.line {
+            self.line = line;
+        }
+    }
+
+    fn has_sensitive_data(&self) -> bool {
+        false
+    }
+}
+
+impl ArrowSerializableTelemetryEvent for Unknown {
+    fn to_arrow_record(&self) -> ArrowAttributes {
+        ArrowAttributes {
+            dev_name: Some(self.name.as_str()),
+            file: Some(self.file.as_str()),
+            line: Some(self.line),
+            ..Default::default()
+        }
+    }
+
+    fn from_arrow_record(record: &ArrowAttributes) -> Result<Self, String> {
+        Ok(Self {
+            name: record.dev_name.map(str::to_string).ok_or_else(|| {
+                format!(
+                    "Missing `dev_name` for event type \"{}\"",
+                    Self::full_name()
+                )
+            })?,
+            file: record.file.map(str::to_string).unwrap_or_default(),
+            line: record.line.unwrap_or_default(),
+        })
+    }
 }

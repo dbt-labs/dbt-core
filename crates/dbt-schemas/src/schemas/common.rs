@@ -7,6 +7,7 @@ use dbt_common::adapter::AdapterType;
 use dbt_common::{CodeLocation, ErrorCode, FsError, FsResult, err, fs_err};
 use dbt_frontend_common::Dialect;
 use dbt_serde_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize, Verbatim};
+use dbt_telemetry::NodeMaterialization;
 use hex;
 use serde::{Deserialize, Deserializer, Serialize};
 // Type alias for clarity
@@ -281,6 +282,27 @@ impl From<DbtMaterialization> for RelationType {
             DbtMaterialization::Unknown(_) => RelationType::External, // TODO Validate this
             DbtMaterialization::Snapshot => RelationType::Table,    // TODO Validate this
             DbtMaterialization::Seed => RelationType::Table,        // TODO Validate this
+        }
+    }
+}
+
+impl From<&DbtMaterialization> for NodeMaterialization {
+    fn from(value: &DbtMaterialization) -> Self {
+        match value {
+            DbtMaterialization::Table => Self::Table,
+            DbtMaterialization::View => Self::View,
+            DbtMaterialization::MaterializedView => Self::MaterializedView,
+            DbtMaterialization::Ephemeral => Self::Ephemeral,
+            DbtMaterialization::External => Self::External,
+            DbtMaterialization::Test => Self::Test,
+            DbtMaterialization::Incremental => Self::Incremental,
+            DbtMaterialization::Unit => Self::Unit,
+            DbtMaterialization::StreamingTable => Self::StreamingTable,
+            DbtMaterialization::DynamicTable => Self::DynamicTable,
+            DbtMaterialization::Analysis => Self::Analysis,
+            DbtMaterialization::Unknown(_) => Self::Custom,
+            DbtMaterialization::Snapshot => Self::Snapshot,
+            DbtMaterialization::Seed => Self::Seed,
         }
     }
 }

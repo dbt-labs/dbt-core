@@ -15,6 +15,7 @@ use dbt_schemas::{
         DbtSource, InternalDbtNodeAttributes, Nodes,
         common::DbtQuoting,
         ref_and_source::{DbtRef, DbtSourceWrapper},
+        telemetry::NodeType,
     },
     state::{ModelStatus, RefsAndSourcesTracker},
 };
@@ -113,7 +114,7 @@ impl RefsAndSourcesTracker for RefsAndSources {
         let package_name = &node.package_name();
         let model_name = node.name();
         let unique_id = node.unique_id();
-        let (maybe_version, maybe_latest_version) = if node.resource_type() == "model" {
+        let (maybe_version, maybe_latest_version) = if node.resource_type() == NodeType::Model {
             (node.version(), node.latest_version())
         } else {
             (None, None)

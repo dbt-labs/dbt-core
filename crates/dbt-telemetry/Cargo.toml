@@ -13,9 +13,13 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-arrow = { workspace = true }
+arrow = { workspace = true, features = ["canonical_extension_types"] }
+arrow-schema = { workspace = true, features = ["canonical_extension_types"] }
+bitflags = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-serde_yaml = { workspace = true }
+prost = { workspace = true }
+proto-rust = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_arrow = { workspace = true }
@@ -27,8 +31,19 @@ strum = { workspace = true, features = ["derive"] }
 tracing = { workspace = true }
 uuid = { workspace = true }
 
+# This is used for test API's in the registry. It needs to be defined as optional here
+# so we can expose it in the `test-utils` feature, so other crates using these API's
+# in tests can enable the feature without getting a compile error.
+fake = { workspace = true, optional = true }
+
 [dev-dependencies]
 fake = { workspace = true }
+# Enable test-only helpers from proto-rust to enumerate message types
+proto-rust = { workspace = true, features = ["test-utils"] }
+
+[features]
+# Test-only helpers in the registry - this allows tests in dbt-telemetry-private
+test-utils = ["fake", "proto-rust/test-utils"]
 
 [lib]
 name = "dbt_telemetry"

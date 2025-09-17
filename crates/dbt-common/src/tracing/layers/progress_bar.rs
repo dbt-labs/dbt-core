@@ -1,6 +1,6 @@
 use dbt_telemetry::{
-    BuildPhase, BuildPhaseInfo, NodeInfo, SpanEndInfo, SpanStartInfo, SpanStatus, StatusCode,
-    TelemetryAttributes,
+    ExecutionPhase, NodeEvaluated, PhaseExecuted, SpanEndInfo, SpanStartInfo, SpanStatus,
+    StatusCode, TelemetryAttributes,
 };
 use tracing::{Subscriber, span};
 use tracing_subscriber::{Layer, layer::Context};
@@ -27,37 +27,37 @@ fn format_progress_item(unique_id: &str) -> String {
 fn get_progress_params(
     attributes: &TelemetryAttributes,
 ) -> Option<(&'static str, u64, Option<&str>)> {
-    match attributes {
-        TelemetryAttributes::Phase(phase_info) => {
-            match phase_info {
-                BuildPhaseInfo::Compiling {
-                    node_count: total, ..
-                } => Some((RENDERING, *total, None)),
-                BuildPhaseInfo::Analyzing {
-                    node_count: total, ..
-                } => Some((ANALYZING, *total, None)),
-                BuildPhaseInfo::Executing {
-                    node_count: total, ..
-                } => Some((RUNNING, *total, None)),
-                _ => {
-                    // Not one of the phase we support currently
-                    None
-                }
+    // Check if this is a PhaseExecuted event
+    if let Some(phase) = attributes.downcast_ref::<PhaseExecuted>() {
+        let total = phase.node_count_total.unwrap_or_default();
+
+        return match phase.phase() {
+            ExecutionPhase::Render => Some((RENDERING, total, None)),
+            ExecutionPhase::Analyze => Some((ANALYZING, total, None)),
+            ExecutionPhase::Run => Some((RUNNING, total, None)),
+            _ => {
+                // Not one of the phase we support currently
+                None
             }
-        }
-        TelemetryAttributes::Node(NodeInfo { node_id, phase, .. }) => {
-            match phase {
-                BuildPhase::Compiling => Some((RENDERING, 0, Some(node_id.unique_id.as_str()))),
-                BuildPhase::Analyzing => Some((ANALYZING, 0, Some(node_id.unique_id.as_str()))),
-                BuildPhase::Executing => Some((RUNNING, 0, Some(node_id.unique_id.as_str()))),
-                _ => {
-                    // Not one of the phase we support currently
-                    None
-                }
-            }
-        }
-        _ => None,
+        };
     }
+
+    // Check if this is a NodeEvaluated event
+    if let Some(node) = attributes.downcast_ref::<NodeEvaluated>() {
+        let phase = node.phase();
+
+        return match phase {
+            ExecutionPhase::Render => Some((RENDERING, 0, Some(node.unique_id.as_str()))),
+            ExecutionPhase::Analyze => Some((ANALYZING, 0, Some(node.unique_id.as_str()))),
+            ExecutionPhase::Run => Some((RUNNING, 0, Some(node.unique_id.as_str()))),
+            _ => {
+                // Not one of the phase we support currently
+                None
+            }
+        };
+    }
+
+    None
 }
 
 impl<S> Layer<S> for ProgressBarLayer

@@ -35,17 +35,22 @@ The tracing infrastructure follows a layered architecture:
 ┌─────────────────────────▼───────────────────────────────────────┐
 │                 Writing Layers                                  │
 │  ┌─────────────────────┐ ┌─────────────────────────────────┐    │
-│  │ TelemetryWriterLayer│ │    OTLP Exporter Layer          │    │
-│  │   (File output)     │ │ (OpenTelemetry Protocol)        │    │
-│  │   - JSONL format    │ │   - Debug builds only           │    │
-│  │   - Production use  │ │   - Feature gated               │    │
+│  │ JSONL Writer Layer  │ │    OTLP Exporter Layer          │    │
+│  │  (File/Stdout)      │ │  (OpenTelemetry Protocol)       │    │
+│  │  - JSONL format     │ │  - Exports spans and logs       │    │
 │  └─────────────────────┘ └─────────────────────────────────┘    │
+│  ┌─────────────────────┐                                        │
+│  │ Parquet Writer      │                                        │
+│  │  (Arrow/Parquet)    │                                        │
+│  │  - Batch + flush    │                                        │
+│  └─────────────────────┘                                        │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │          CLI & User Logs Layer                          │    │
-│  │              [NOT IMPLEMENTED]                          │    │
+│  │              (TTY-friendly UX)                          │    │
 │  │   - Pretty formatting for terminal output               │    │
 │  │   - Progress bars and interactive elements              │    │
 │  │   - User-facing log messages                            │    │
+│  │   - Disabled when log-format is OTEL                    │    │
 │  └─────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -58,12 +63,20 @@ The tracing infrastructure follows a layered architecture:
   - Generates globally unique span IDs across the entire process
   - Correlates all data with a trace ID (derived from invocation UUID)
   - Extracts structured attributes from span/event fields
-  - Handles code location recording (stripped in release builds)
+  - Auto-injects code location (file, line, module, target)
   - Stores telemetry data in span extensions for writer layers
 
+#### Auto Context Injection
+
+The data layer enriches every span and log with execution context and location:
+- Context: currently phase and node `unique_id` (from surrounding evaluation spans). The context type is extensible and may include additional fields over time.
+- Code location: injected at the callsite for both spans and logs. In release builds location may be stripped unless explicitly enabled.
+
 ### Writing Layers
-- **File Writer** (`TelemetryWriterLayer`): Outputs telemetry to JSONL files for production use
-- **OTLP Exporter** (`OTLPExporterLayer`): Exports to OpenTelemetry Protocol endpoints (debug builds only)
+- JSONL Writer (`TelemetryJsonlWriterLayer`): Writes JSONL to file when configured; emits JSONL to stdout when `--log-format otel` is used.
+- Parquet Writer (`TelemetryParquetWriterLayer`): Writes Arrow/Parquet to `{target_path}/metadata/...` when configured.
+- OTLP Exporter (`OTLPExporterLayer`): Exports spans and logs to an OTLP backend (endpoint via OTEL env vars).
+- Progress Bar Layer: Provides interactive progress; enabled for default log format, disabled in OTEL mode.
 
 ### Telemetry Records
 All telemetry data follows structured schemas defined in `dbt-telemetry/src/schemas/record.rs`:
@@ -84,15 +97,14 @@ use tracing::{instrument, info_span};
 // using `#[instrument]` attribute.
 let session_span = tracing::info_span!(
     "Invocation",
-    { TRACING_ATTR_FIELD } = SpanAttributes::Invocation {
+    _e = ?store_event_attributes(SpanAttributes::Invocation {
         invocation_id: arg.io.invocation_id.to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         host_os: std::env::consts::OS.to_string(),
         host_arch: std::env::consts::ARCH.to_string(),
         target: arg.target.clone(),
         metrics: None,
-    }
-    .to_tracing_value(),
+    }),
 );
 
 // But be very careful with async boundaties. To see a complex Usage
@@ -137,13 +149,13 @@ any desired output format, including fancy colored tty logs & progress bars.
 
 ```rust
 tracing::warn!(
-    { TRACING_ATTR_FIELD } = LogAttributes::Log {
+    _e = ?store_event_attributes(LogAttributes::Log {
         code: Some(err.code as u16 as u32),
         dbt_core_code: None,
         original_severity_number,
         original_severity_text,
         location: RecordCodeLocation::none(), // Will be auto injected
-    }.to_tracing_value(),
+    }),
     "{}",
     err.pretty().as_str()
 );
@@ -221,9 +233,20 @@ info!("Legacy log message");
 error!("Legacy error message");
 ```
 
-## Configuration
+## Exporters and Configuration
 
-As of time of writing tracing will only be enabled if `otm_file_name` CLI argument is set. It will use the log path to write telemetry data to a JSONL file.
+Tracing output is controlled by configuration and event-level export flags:
+
+- JSONL file: enabled when an `otel_file_name` is configured, written under the resolved log path.
+- JSONL stdout: enabled automatically when `--log-format otel` is selected.
+- Parquet file: enabled when an `otel_parquet_file_name` is configured, written to `{target_path}/metadata/...`.
+- OTLP export: enabled via the CLI/export flag and standard OTEL env vars for endpoints.
+
+Each event carries export flags that determine destinations. Writers honor these flags:
+- `EXPORT_JSONL` → JSONL writers only
+- `EXPORT_PARQUET` → Parquet writer only
+- `EXPORT_OTLP` → OTLP exporter only
+- `EXPORT_ALL` and `EXPORT_JSONL_AND_OTLP` for convenience
 
 ## Best Practices
 

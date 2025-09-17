@@ -11,6 +11,7 @@ use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::common::{DbtMaterialization, ResolvedQuoting, normalize_quoting};
 use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::properties::ModelProperties;
+use dbt_schemas::schemas::telemetry::NodeType;
 use dbt_schemas::state::DbtPackage;
 use minijinja::ArgSpec;
 use minijinja::compiler::ast::{MacroKind, Stmt};
@@ -327,7 +328,7 @@ pub fn update_node_relation_components(
     adapter_type: AdapterType,
 ) -> FsResult<()> {
     // Source and unit test nodes do not have relation components
-    if ["source", "unit_test"].contains(&node.resource_type()) {
+    if [NodeType::Source, NodeType::UnitTest].contains(&node.resource_type()) {
         return Ok(());
     }
     let (database, schema, alias, relation_name, quoting) = generate_relation_components(
@@ -351,7 +352,7 @@ pub fn update_node_relation_components(
     // Only set relation_name for:
     // - Test nodes with store_failures=true
     // - Nodes that are relational and not ephemeral models
-    if node.resource_type() == "test" {
+    if node.resource_type() == NodeType::Test {
         if let Some(store_failures) = components.store_failures {
             if store_failures {
                 let base_attr = node.base_mut();
