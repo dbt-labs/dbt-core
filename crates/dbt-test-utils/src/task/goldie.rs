@@ -335,7 +335,7 @@ mod tests {
         let line = " Succeeded [ 44.65s] test  fusion_tests_schema__ga_analytics_regression__alex.source_unique_incident_io_severity_id";
         let postprocess_actual = postprocess_actual(line.to_string(), true);
         assert_eq!(
-            " Succeeded [000.00s] test  fusion_tests_schema__replaced.source_unique_incident_io_severity_id",
+            " Succeeded [duration] test  fusion_tests_schema__replaced.source_unique_incident_io_severity_id",
             postprocess_actual
         );
     }

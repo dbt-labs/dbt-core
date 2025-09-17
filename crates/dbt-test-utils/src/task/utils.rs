@@ -32,17 +32,20 @@ static BRACKETED_DURATION_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"\[\s*\d+(?:\.\d+)?s\s*\]").unwrap());
 static IN_DURATION_PATTERN: Lazy<Regex> = Lazy::new(|| {
     // Matches: "in 1s", "in 500ms", "in 1s 298ms", "in 2m 10s", etc.
-    Regex::new(r"\bin\s+\d+(?:\.\d+)?(?:ns|us|μs|µs|ms|s|m|h)(?:\s+\d+(?:\.\d+)?(?:ns|us|μs|µs|ms|s|m|h))*\b")
-        .unwrap()
+    Regex::new(
+        r"\bin\s+\d+(?:\.\d+)?(?:ns|us|μs|ms|s|m|h)(?:\s+\d+(?:\.\d+)?(?:ns|us|μs|ms|s|m|h))*\b",
+    )
+    .unwrap()
 });
 static LAST_UPDATED_DURATION_PATTERN: Lazy<Regex> = Lazy::new(|| {
     // Matches: "Last updated 1s ago", "Last updated 500ms ago", "Last updated 1s 298ms ago", "Last updated 2m 10s ago", etc.
-    Regex::new(r"\bLast updated\s+\d+(?:\.\d+)?(?:ns|us|μs|µs|ms|s|m|h)(?:\s+\d+(?:\.\d+)?(?:ns|us|μs|µs|ms|s|m|h))* ago\b")
+    Regex::new(r"\bLast updated\s+\d+(?:\.\d+)?(?:ns|us|μs|ms|s|m|h)(?:\s+\d+(?:\.\d+)?(?:ns|us|μs|ms|s|m|h))* ago\b")
         .unwrap()
 });
 static MULTI_UNIT_DURATION_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    // Matches sequences of 2+ duration tokens (e.g., "32ms 101us", "4s 703ms 195us 939ns")
-    Regex::new(r"\b\d+(?:\.\d+)?(?:ns|us|μs|µs|ms|s|m|h)(?:\s+\d+(?:\.\d+)?(?:ns|us|μs|µs|ms|s|m|h)){1,}\b").unwrap()
+    // Matches sequences of 1+ duration tokens (e.g., "939ns", "32ms 101us", "4s 703ms 195us 939ns")
+    Regex::new(r"\b\d+(?:\.\d+)?(?:ns|us|μs|ms|s|m|h)(?:\s+\d+(?:\.\d+)?(?:ns|us|μs|ms|s|m|h))*\b")
+        .unwrap()
 });
 static AGE_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\bage:\s*\d+").unwrap());
 
