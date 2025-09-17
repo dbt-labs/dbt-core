@@ -95,7 +95,7 @@ pub async fn resolve(
         let macro_files = package.macro_files.iter().chain(&package.snapshot_files);
         let resolved_macros = resolve_macros(&arg.io, macro_files.collect::<Vec<_>>().as_slice())?;
         macros.macros.extend(resolved_macros);
-        let docs_macros = resolve_docs_macros(&package.docs_files)?;
+        let docs_macros = resolve_docs_macros(&arg.io, &package.docs_files)?;
         macros.docs_macros.extend(docs_macros);
     }
 

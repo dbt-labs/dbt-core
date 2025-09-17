@@ -1,7 +1,8 @@
 use dbt_common::ErrorCode;
 use dbt_common::FsResult;
 use dbt_common::io_args::IoArgs;
-use dbt_common::{err, fs_err, stdfs};
+use dbt_common::stdfs::diff_paths;
+use dbt_common::{err, fs_err};
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_schemas::schemas::macros::DbtDocsMacro;
 use dbt_schemas::schemas::macros::DbtMacro;
@@ -16,6 +17,7 @@ use crate::utils::parse_macro_statements;
 
 /// Resolve docs macros from a list of docs macro files
 pub fn resolve_docs_macros(
+    io: &IoArgs,
     docs_macro_files: &[DbtAsset],
 ) -> FsResult<BTreeMap<String, DbtDocsMacro>> {
     let mut docs_map: BTreeMap<String, DbtDocsMacro> = BTreeMap::new();
@@ -26,7 +28,8 @@ pub fn resolve_docs_macros(
         package_name,
     } in docs_macro_files
     {
-        let docs_macro = fs::read_to_string(base_path.join(docs_file)).map_err(|e| {
+        let docs_file_path = base_path.join(docs_file);
+        let docs_macro = fs::read_to_string(&docs_file_path).map_err(|e| {
             fs_err!(
                 ErrorCode::IoError,
                 "Failed to read docs file '{}': {}",
@@ -35,7 +38,8 @@ pub fn resolve_docs_macros(
             )
         })?;
 
-        let resources = parse_macro_statements(&docs_macro, docs_file, &["docs"]);
+        let relative_docs_file_path = &diff_paths(&docs_file_path, &io.in_dir)?;
+        let resources = parse_macro_statements(&docs_macro, relative_docs_file_path, &["docs"]);
         match resources {
             Ok(resources) => {
                 if resources.is_empty() {
@@ -62,7 +66,7 @@ pub fn resolve_docs_macros(
                                     name: name.clone(),
                                     package_name: package_name.clone(),
                                     path: docs_file.clone(),
-                                    original_file_path: docs_file.clone(),
+                                    original_file_path: relative_docs_file_path.clone(),
                                     unique_id,
                                     block_contents: part.to_string(),
                                 },
@@ -109,7 +113,7 @@ pub fn resolve_macros(
                     "Failed to read macro file: {}", e
                 )
             })?;
-            let relative_macro_file_path = stdfs::diff_paths(&macro_file_path, &io.in_dir)?;
+            let relative_macro_file_path = diff_paths(&macro_file_path, &io.in_dir)?;
             let resources = parse_macro_statements(
                 &macro_sql,
                 &relative_macro_file_path,
