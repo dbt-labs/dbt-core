@@ -35,9 +35,9 @@ class BasicUDFSetup:
 class TestBasicSQLUDF(BasicUDFSetup):
     def test_basic_sql_udf_parsing(self, project):
         manifest = run_dbt(["parse"])
-        assert len(manifest.nodes) == 1
-        assert "function.test.area_of_circle" in manifest.nodes
-        function_node = manifest.nodes["function.test.area_of_circle"]
+        assert len(manifest.functions) == 1
+        assert "function.test.area_of_circle" in manifest.functions
+        function_node = manifest.functions["function.test.area_of_circle"]
         assert isinstance(function_node, FunctionNode)
         assert function_node.description == "Calculates the area of a circle for a given radius"
         assert len(function_node.arguments) == 1
