@@ -64,6 +64,9 @@ jobs:
       DBT_LOG_FORMAT: "json"
       # tell eventmgr to convert logging events into bytes
       DBT_TEST_BINARY_SERIALIZATION: "true"
+      # temp - test recording mode
+      DBT_RECORDER_MODE: "record"
+      DBT_RECORDER_TYPES: "Available"
       # Additional test users
       DBT_TEST_USER_1: dbt_test_user_1
       DBT_TEST_USER_2: dbt_test_user_2
