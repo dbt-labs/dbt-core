@@ -31,19 +31,6 @@ class ModelBuildAfter(ExtensibleDbtClassMixin):
     period: Optional[TimePeriod] = None
     updates_on: ModelFreshnessUpdatesOnOptions = ModelFreshnessUpdatesOnOptions.any
 
-    @classmethod
-    def validate(cls, data):
-        super().validate(data)
-
-        if data.get("period") and not data.get("count"):
-            raise ValidationError(
-                "`build_after` must have a value for `count` if a `period` is provided"
-            )
-        elif data.get("count") and not data.get("period"):
-            raise ValidationError(
-                "`build_after` must have a value for `period` if a `count` is provided"
-            )
-
 
 @dataclass
 class ModelFreshness(ExtensibleDbtClassMixin, Mergeable):
@@ -91,6 +78,25 @@ class ModelConfig(NodeConfig):
         metadata=MergeBehavior.Clobber.meta(),
     )
     freshness: Optional[ModelFreshness] = None
+
+    def __post_init__(self):
+        super().__post_init__()
+        if (
+            self.freshness
+            and self.freshness.build_after.period
+            and not self.freshness.build_after.count
+        ):
+            raise ValidationError(
+                "`freshness.build_after` must have a value for `count` if a `period` is provided"
+            )
+        elif (
+            self.freshness
+            and self.freshness.build_after.count
+            and not self.freshness.build_after.period
+        ):
+            raise ValidationError(
+                "`freshness.build_after` must have a value for `period` if a `count` is provided"
+            )
 
     @classmethod
     def __pre_deserialize__(cls, data):
