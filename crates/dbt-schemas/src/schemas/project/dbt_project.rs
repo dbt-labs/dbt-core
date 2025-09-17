@@ -50,6 +50,7 @@ pub struct ProjectDbtCloudConfig {
     pub api_key: Option<StringOrInteger>,
     pub application: Option<StringOrInteger>,
     pub environment: Option<StringOrInteger>,
+    pub tenant_hostname: Option<String>,
 }
 
 #[skip_serializing_none]
