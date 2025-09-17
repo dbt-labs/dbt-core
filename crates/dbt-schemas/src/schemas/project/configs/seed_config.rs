@@ -38,7 +38,7 @@ pub struct ProjectSeedConfig {
     pub column_types: Option<BTreeMap<String, String>>,
     #[serde(rename = "+copy_grants")]
     pub copy_grants: Option<bool>,
-    #[serde(rename = "+database", alias = "+project")]
+    #[serde(rename = "+database", alias = "+project", alias = "+data_space")]
     pub database: Option<String>,
     #[serde(rename = "+alias")]
     pub alias: Option<String>,

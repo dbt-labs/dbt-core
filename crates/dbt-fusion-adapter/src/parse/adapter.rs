@@ -592,7 +592,16 @@ impl BaseAdapter for ParseAdapter {
         Ok(none_value())
     }
 
-    fn load_dataframe(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn load_dataframe(
+        &self,
+        _state: &State,
+        _database: &str,
+        _schema: &str,
+        _table_name: &str,
+        _agate_table: Arc<AgateTable>,
+        _file_path: &str,
+        _field_delimiter: &str,
+    ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 

@@ -4,6 +4,7 @@ use crate::base_adapter::{AdapterFactory, backend_of};
 use crate::config::AdapterConfig;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::query_comment::{EMPTY_CONFIG, QueryCommentConfig};
+use crate::record_and_replay::{RecordEngine, ReplayEngine};
 use crate::sql_types::{NaiveTypeFormatterImpl, TypeFormatter};
 use crate::stmt_splitter::StmtSplitter;
 
@@ -31,8 +32,6 @@ use std::path::PathBuf;
 use std::sync::RwLock;
 use std::sync::{Arc, LazyLock};
 use std::{thread, time::Duration};
-
-use super::record_and_replay::{RecordEngine, ReplayEngine};
 
 type Options = Vec<(String, OptionValue)>;
 

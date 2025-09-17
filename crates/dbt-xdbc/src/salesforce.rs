@@ -25,6 +25,9 @@ pub const QUERY_TIMEOUT: &str = "adbc.salesforce.dc.query.timeout";
 /// QueryOptions: Row limit
 pub const QUERY_ROW_LIMIT: &str = "adbc.salesforce.dc.query.row_limit";
 
+/// Data Transform Run Timeout
+pub const DATA_TRANSFORM_RUN_TIMEOUT: &str = "adbc.salesforce.dc.data_transform_run_timeout";
+
 /// The authentication type to use for the connection
 pub const AUTH_TYPE: &str = "adbc.salesforce.dc.auth_type";
 /// Authentication types

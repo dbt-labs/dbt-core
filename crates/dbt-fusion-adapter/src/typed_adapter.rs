@@ -27,6 +27,7 @@ use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_schemas::schemas::relations::relation_configs::BaseRelationConfig;
 use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes};
+use dbt_xdbc::salesforce::DATA_TRANSFORM_RUN_TIMEOUT;
 use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::{State, Value, args};
 
@@ -106,11 +107,33 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         } else {
             engine.split_statements(&sql, dialect)
         };
-        let options = options
+
+        // Configure options
+        let mut options = options
             .unwrap_or_default()
             .into_iter()
             .map(|(key, value)| (key, OptionValue::String(value)))
             .collect::<Vec<_>>();
+
+        // Configure warehouse specific options
+        #[allow(clippy::single_match)]
+        match self.adapter_type() {
+            AdapterType::Salesforce => {
+                if let Some(timeout) = engine.config("data_transform_run_timeout") {
+                    let timeout = timeout.parse::<i64>().map_err(|e| {
+                        AdapterError::new(
+                            AdapterErrorKind::Configuration,
+                            format!("data_transform_run_timeout must be an integer string: {e}",),
+                        )
+                    })?;
+                    options.push((
+                        DATA_TRANSFORM_RUN_TIMEOUT.to_string(),
+                        OptionValue::Int(timeout),
+                    ));
+                }
+            }
+            _ => {}
+        }
 
         let mut last_batch = None;
         for statement in statements {
@@ -627,13 +650,19 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     }
 
     /// load dataframe only used by bigquery adapter
+    #[allow(clippy::too_many_arguments)]
     fn load_dataframe(
         &self,
         _query_ctx: &QueryCtx,
         _conn: &'_ mut dyn Connection,
-        _args: &[Value],
+        _database: &str,
+        _schema: &str,
+        _table_name: &str,
+        _agate_table: Arc<AgateTable>,
+        _file_path: &str,
+        _field_delimiter: &str,
     ) -> AdapterResult<Value> {
-        unimplemented!("only available with BigQuery adapter")
+        unimplemented!("only available with BigQuery or Salesforce adapter")
     }
 
     /// alter_table_add_columns

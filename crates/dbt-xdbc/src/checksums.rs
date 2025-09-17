@@ -249,44 +249,44 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "65761e237d7874452a527478f6139cd85a091fb0fedcda8999009114f5eff0f8",
     ),
     (
-        ("salesforce", "apple-darwin", "aarch64", "0.18.0+dbt0.0.1"),
-        "5df3c896502d16a734054560b654ffeb924ea51601de18320bfacfdbc97cac92",
-    ),
-    (
         ("salesforce", "apple-darwin", "aarch64", "0.18.0+dbt0.0.2"),
         "7905dcdca5f7d965357b4ddff28b41ad03ed7d106c08fe3878194af6c80edb40",
     ),
     (
-        ("salesforce", "apple-darwin", "x86_64", "0.18.0+dbt0.0.1"),
-        "db941ee4ee0211a99e29555b55df2eca79beecfcb22a95923cd359726f942c06",
+        ("salesforce", "apple-darwin", "aarch64", "0.18.0+dbt0.0.3"),
+        "5ec5adbf634fee917f4a9ffae49e5d1ff81de14e836d6418397f31af3cae2791",
     ),
     (
         ("salesforce", "apple-darwin", "x86_64", "0.18.0+dbt0.0.2"),
         "c4abe3bc717d381dd9328f00737d0ec6cfcc3d3233b1edc49626685594959901",
     ),
     (
-        ("salesforce", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.1"),
-        "54ed9eeac931bd4e8cab1f5398d6a66b219b805f180e06d6f1e69270b9140ede",
+        ("salesforce", "apple-darwin", "x86_64", "0.18.0+dbt0.0.3"),
+        "ac7e0aceeda89980a62e4899d6067ebd42b929c60eceb98b045945a9bcbc72c0",
     ),
     (
         ("salesforce", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.2"),
         "5c75a37b1a52d083005e7d6a055152b617332ad83ce83e79bd166e04297d8d12",
     ),
     (
-        ("salesforce", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.1"),
-        "ba1ec1559c34da9134570de94a43417f85bc79801480a3043208ec492f2cb7b9",
+        ("salesforce", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.3"),
+        "06ae9ce089fbb52d6501ff62fd8b22585c18e649d1c29b4fc28339f2bcd47762",
     ),
     (
         ("salesforce", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.2"),
         "cfd03128ea16639b075bdf0df7d9c8686f608102befeb9588f257234a93d5b17",
     ),
     (
-        ("salesforce", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.1"),
-        "9a780ce6bc8a134fafe037588a2c99f23cdd67690b0d05ec30e95b8c2de2c3d3",
+        ("salesforce", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.3"),
+        "3a88d8d6e2b8b46c9425f396b33ab84f370d5141fac67a69b6da1a22212bfcb3",
     ),
     (
         ("salesforce", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.2"),
         "944b06f4348b924df96629950a17933bf479c180d7411d28cec8db1bb9d2c623",
+    ),
+    (
+        ("salesforce", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.3"),
+        "015ccddb2d1b52d210aea7e483c49042a1dbce5c6ec154a61bdd1e6079d86499",
     ),
     (
         ("snowflake", "apple-darwin", "aarch64", "0.18.0+dbt0.0.12"),

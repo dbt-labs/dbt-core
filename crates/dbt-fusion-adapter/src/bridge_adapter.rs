@@ -1644,12 +1644,28 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn load_dataframe(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn load_dataframe(
+        &self,
+        state: &State,
+        database: &str,
+        schema: &str,
+        table_name: &str,
+        agate_table: Arc<AgateTable>,
+        file_path: &str,
+        field_delimiter: &str,
+    ) -> Result<Value, MinijinjaError> {
         let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
         let query_ctx = query_ctx_from_state(state)?.with_desc("load_dataframe");
-        let result = self
-            .typed_adapter
-            .load_dataframe(&query_ctx, conn.as_mut(), args)?;
+        let result = self.typed_adapter.load_dataframe(
+            &query_ctx,
+            conn.as_mut(),
+            database,
+            schema,
+            table_name,
+            agate_table,
+            file_path,
+            field_delimiter,
+        )?;
         Ok(result)
     }
 }

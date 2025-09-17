@@ -213,7 +213,7 @@ impl DbConfig {
             ],
             DbConfig::Databricks(_) => &["host", "http_path", "schema"],
             // TODO: Salesforce connection keys
-            DbConfig::Salesforce(_) => &[],
+            DbConfig::Salesforce(_) => &["login_url", "database", "data_transform_run_timeout"],
             // TODO: Trino and Datafusion connection keys
             DbConfig::Trino(_) => &[],
             DbConfig::Datafusion(_) => &[],
@@ -736,10 +736,16 @@ pub struct SalesforceDbConfig {
     pub private_key_path: Option<PathBuf>,
     pub login_url: Option<String>,
     pub username: Option<String>,
+    #[serde(default = "default_data_transform_run_timeout")]
+    pub data_transform_run_timeout: Option<i64>,
 }
 
 fn default_salesforce_database() -> Option<String> {
     Some("default".to_string())
+}
+
+fn default_data_transform_run_timeout() -> Option<i64> {
+    Some(180000) // 3 mins
 }
 
 #[derive(Serialize, JsonSchema)]

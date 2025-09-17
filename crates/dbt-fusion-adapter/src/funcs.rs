@@ -147,7 +147,45 @@ pub fn dispatch_adapter_calls(
         "update_columns" => adapter.update_columns(state, args),
         "update_table_description" => adapter.update_table_description(state, args),
         "alter_table_add_columns" => adapter.alter_table_add_columns(state, args),
-        "load_dataframe" => adapter.load_dataframe(state, args),
+        "load_dataframe" => {
+            let iter = ArgsIter::new(
+                name,
+                &[
+                    "database",
+                    "schema",
+                    "table_name",
+                    "field_path",
+                    "agate_table",
+                    "field_delimiter",
+                ],
+                args,
+            );
+            let database = iter.next_arg::<&str>()?;
+            let schema = iter.next_arg::<&str>()?;
+            let table_name = iter.next_arg::<&str>()?;
+            let file_path = iter.next_arg::<&str>()?;
+            let agate_table = iter
+                .next_arg::<&Value>()?
+                .downcast_object::<AgateTable>()
+                .ok_or_else(|| {
+                    MinijinjaError::new(
+                        MinijinjaErrorKind::InvalidOperation,
+                        "agate_table must be an agate.Table",
+                    )
+                })?;
+            let field_delimiter = iter.next_arg::<&str>()?;
+            iter.finish()?;
+
+            adapter.load_dataframe(
+                state,
+                database,
+                schema,
+                table_name,
+                agate_table,
+                file_path,
+                field_delimiter,
+            )
+        }
         "upload_file" => adapter.upload_file(state, args),
         "get_bq_table" => adapter.get_bq_table(state, args),
         "describe_relation" => adapter.describe_relation(state, args),

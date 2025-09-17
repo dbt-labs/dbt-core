@@ -423,9 +423,17 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     ) -> Result<Value, MinijinjaError>;
 
     /// load_dataframe
-    fn load_dataframe(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
-        unimplemented!("only available with BigQuery adapter")
-    }
+    #[allow(clippy::too_many_arguments)]
+    fn load_dataframe(
+        &self,
+        _state: &State,
+        _database: &str,
+        _schema: &str,
+        _table_name: &str,
+        _agate_table: Arc<AgateTable>,
+        _file_path: &str,
+        _field_delimiter: &str,
+    ) -> Result<Value, MinijinjaError>;
 
     /// upload_file
     fn upload_file(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
