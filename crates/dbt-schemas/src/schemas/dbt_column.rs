@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use dbt_common::FsResult;
 use dbt_serde_yaml::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_with::skip_serializing_none;
 
 // Type aliases for clarity
@@ -20,6 +20,8 @@ use super::{common::Constraint, data_tests::DataTests};
 pub struct DbtColumn {
     pub name: String,
     pub data_type: Option<String>,
+    #[serialize_always]
+    #[serde(serialize_with = "serialize_dbt_column_desc")]
     pub description: Option<String>,
     pub constraints: Vec<Constraint>,
     pub meta: BTreeMap<String, YmlValue>,
@@ -28,6 +30,13 @@ pub struct DbtColumn {
     pub quote: Option<bool>,
     #[serde(default, rename = "config")]
     pub deprecated_config: ColumnConfig,
+}
+
+fn serialize_dbt_column_desc<S>(description: &Option<String>, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    s.serialize_str(description.as_deref().unwrap_or(""))
 }
 
 pub type DbtColumnRef = Arc<DbtColumn>;
