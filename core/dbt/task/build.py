@@ -13,6 +13,7 @@ from dbt.runners import SavedQueryRunner as saved_query_runner
 from dbt.task.base import BaseRunner, resource_types_from_args
 from dbt.task.run import MicrobatchModelRunner
 
+from .function import FunctionRunner as function_runner
 from .run import ModelRunner as run_model_runner
 from .run import RunTask
 from .seed import SeedRunner as seed_runner
@@ -43,6 +44,7 @@ class BuildTask(RunTask):
         NodeType.Unit: test_runner,
         NodeType.SavedQuery: saved_query_runner,
         NodeType.Exposure: exposure_runner,
+        NodeType.Function: function_runner,
     }
     ALL_RESOURCE_VALUES = frozenset({x for x in RUNNER_MAP.keys()})
 
