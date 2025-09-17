@@ -151,8 +151,12 @@ class TestModelFreshnessConfigParseBuildPeriodRequiresCount:
         }
 
     def test_model_freshness_configs(self, project):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as excinfo:
             run_dbt(["parse"])
+        expected_msg = (
+            "`freshness.build_after` must have a value for `count` if a `period` is provided"
+        )
+        assert expected_msg in str(excinfo.value)
 
 
 class TestModelFreshnessConfigParseBuildCountRequiresPeriod:
@@ -164,5 +168,9 @@ class TestModelFreshnessConfigParseBuildCountRequiresPeriod:
         }
 
     def test_model_freshness_configs(self, project):
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as excinfo:
             run_dbt(["parse"])
+        expected_msg = (
+            "`freshness.build_after` must have a value for `period` if a `count` is provided"
+        )
+        assert expected_msg in str(excinfo.value)
