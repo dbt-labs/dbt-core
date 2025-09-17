@@ -262,6 +262,11 @@ class SourcePatcher:
         tags_sources = [target.source.tags, target.table.tags]
         if column is not None:
             tags_sources.append(column.tags)
+            if column_config_tags := column.config.get("tags", []):
+                if isinstance(column_config_tags, list):
+                    tags_sources.append(column_config_tags)
+                elif isinstance(column_config_tags, str):
+                    tags_sources.append([column_config_tags])
         tags = list(itertools.chain.from_iterable(tags_sources))
 
         generic_test_parser = self.get_generic_test_parser_for(target.package_name)

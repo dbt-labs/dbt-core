@@ -233,11 +233,14 @@ class GraphRunnableTask(ConfiguredTask):
                     node_info=runner.node.node_info,
                 )
             )
+
+            result = None
+            thread_exception: Optional[Union[KeyboardInterrupt, SystemExit, Exception]] = None
             try:
                 result = runner.run_with_hooks(self.manifest)
             except (KeyboardInterrupt, SystemExit) as exe:
                 result = None
-                thread_exception: Union[KeyboardInterrupt, SystemExit, Exception] = exe
+                thread_exception = exe
                 raise
             except Exception as e:
                 result = None
