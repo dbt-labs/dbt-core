@@ -297,15 +297,18 @@ pub fn get_method(args: &[Value], map: &BTreeMap<String, Value>) -> Result<Value
 /// Get catalog by relations for project
 pub fn get_catalog_by_relations(
     env: &JinjaEnv,
+    catalog_macro_name: &str,
     root_project_name: &str,
     current_project_name: &str,
     base_ctx: &BTreeMap<String, Value>,
     args: &[Value],
 ) -> FsResult<Value> {
-    // let macro_name = format!("get_catalog_relations");
-    let macro_name = "get_catalog_relations";
-    let template_name =
-        find_macro_template(env, macro_name, root_project_name, current_project_name)?;
+    let template_name = find_macro_template(
+        env,
+        catalog_macro_name,
+        root_project_name,
+        current_project_name,
+    )?;
 
     // Create a state object for rendering
     let template = env.get_template(&template_name)?;
@@ -315,7 +318,7 @@ pub fn get_catalog_by_relations(
 
     // Call the macro
     let result = new_state
-        .call_macro_raw(macro_name, args, &[])
+        .call_macro_raw(catalog_macro_name, args, &[])
         .map_err(|err| {
             Box::new(FsError::from_jinja_err(
                 err,

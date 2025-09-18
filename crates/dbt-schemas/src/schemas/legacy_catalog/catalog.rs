@@ -152,6 +152,26 @@ pub fn build_catalog(
                     None => None,
                 }
             }))
+            .chain(resolver_state.nodes.tests.iter().filter_map(|(id, node)| {
+                let fully_qualified_name = format!(
+                    "{}.{}.{}",
+                    node.__base_attr__.database.clone(),
+                    node.__base_attr__.schema.clone(),
+                    node.__base_attr__.alias.clone()
+                );
+                match node_stats_and_stuff.get(&fully_qualified_name) {
+                    Some(node) => {
+                        let mut result = node.to_owned();
+                        result.unique_id = Some(id.clone());
+                        result.columns = node_columns
+                            .get(&fully_qualified_name)
+                            .unwrap_or(&BTreeMap::new())
+                            .to_owned();
+                        Some((id.clone(), result))
+                    }
+                    None => None,
+                }
+            }))
             .collect(),
         sources: resolver_state
             .nodes
