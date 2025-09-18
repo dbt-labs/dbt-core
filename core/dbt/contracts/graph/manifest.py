@@ -1149,6 +1149,7 @@ class Manifest(MacroMethods, dbtClassMixin):
                 self.nodes.values(),
                 self.sources.values(),
                 self.exposures.values(),
+                self.functions.values(),
                 self.metrics.values(),
                 self.semantic_models.values(),
                 self.saved_queries.values(),
@@ -1291,6 +1292,8 @@ class Manifest(MacroMethods, dbtClassMixin):
             return self.sources[unique_id]
         elif unique_id in self.exposures:
             return self.exposures[unique_id]
+        elif unique_id in self.functions:
+            return self.functions[unique_id]
         elif unique_id in self.metrics:
             return self.metrics[unique_id]
         elif unique_id in self.semantic_models:
