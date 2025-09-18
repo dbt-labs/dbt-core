@@ -246,6 +246,7 @@ pub struct EvalArgs {
     pub static_analysis: StaticAnalysisKind,
     pub interactive: bool,
     pub check_conformance: bool,
+    pub validate_semantic_manifest: bool,
     pub task_cache_url: String,
     pub run_cache_mode: RunCacheMode,
     pub show_scans: bool,
