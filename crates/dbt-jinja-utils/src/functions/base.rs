@@ -273,9 +273,7 @@ pub fn env_var(
         }
         (Err(_), Some(default)) => {
             env_vars_guard.insert(var.to_string(), DEFAULT_ENV_PLACEHOLDER.to_string());
-            // coerce the default value to a string
-            let default_as_str = default.to_string();
-            Ok(Value::from(default_as_str))
+            Ok(default.clone())
         }
         _ => {
             let err = Error::new(
