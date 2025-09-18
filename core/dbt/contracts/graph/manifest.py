@@ -178,6 +178,39 @@ class SourceLookup(dbtClassMixin):
         return manifest.sources[unique_id]
 
 
+class FunctionLookup(dbtClassMixin):
+    def __init__(self, manifest: "Manifest") -> None:
+        self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
+        self.populate(manifest)
+
+    def get_unique_id(self, search_name, package: Optional[PackageName]):
+        return find_unique_id_for_package(self.storage, search_name, package)
+
+    def find(self, search_name, package: Optional[PackageName], manifest: "Manifest"):
+        unique_id = self.get_unique_id(search_name, package)
+        if unique_id is not None:
+            return self.perform_lookup(unique_id, manifest)
+        return None
+
+    def add_function(self, function: FunctionNode):
+        if function.search_name not in self.storage:
+            self.storage[function.search_name] = {}
+
+        self.storage[function.search_name][function.package_name] = function.unique_id
+
+    def populate(self, manifest):
+        for function in manifest.functions.values():
+            if hasattr(function, "name"):
+                self.add_function(function)
+
+    def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> FunctionNode:
+        if unique_id not in manifest.functions:
+            raise dbt_common.exceptions.DbtInternalError(
+                f"Function {unique_id} found in cache but not found in manifest"
+            )
+        return manifest.functions[unique_id]
+
+
 class RefableLookup(dbtClassMixin):
     # model, seed, snapshot, function
     _lookup_types: ClassVar[set] = set(REFABLE_NODE_TYPES)
@@ -926,6 +959,9 @@ class Manifest(MacroMethods, dbtClassMixin):
     _singular_test_lookup: Optional[SingularTestLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
+    _function_lookup: Optional[FunctionLookup] = field(
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
+    )
     _parsing_info: ParsingInfo = field(
         default_factory=ParsingInfo,
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
@@ -1333,6 +1369,12 @@ class Manifest(MacroMethods, dbtClassMixin):
         if self._singular_test_lookup is None:
             self._singular_test_lookup = SingularTestLookup(self)
         return self._singular_test_lookup
+
+    @property
+    def function_lookup(self) -> FunctionLookup:
+        if self._function_lookup is None:
+            self._function_lookup = FunctionLookup(self)
+        return self._function_lookup
 
     @property
     def external_node_unique_ids(self):
