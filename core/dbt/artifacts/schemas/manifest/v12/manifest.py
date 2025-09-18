@@ -163,6 +163,9 @@ class WritableManifest(ArtifactMixin):
             description="The unit tests defined in the project",
         )
     )
+    functions: Mapping[UniqueID, Function] = field(
+        metadata=dict(description=("The functions defined in the dbt project"))
+    )
 
     @classmethod
     def compatible_previous_versions(cls) -> Iterable[Tuple[str, int]]:

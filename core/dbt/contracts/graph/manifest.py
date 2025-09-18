@@ -53,6 +53,7 @@ from dbt.contracts.graph.nodes import (
     BaseNode,
     Documentation,
     Exposure,
+    FunctionNode,
     GenericTestNode,
     GraphMemberNode,
     Group,
@@ -882,6 +883,7 @@ class Manifest(MacroMethods, dbtClassMixin):
     macros: MutableMapping[str, Macro] = field(default_factory=dict)
     docs: MutableMapping[str, Documentation] = field(default_factory=dict)
     exposures: MutableMapping[str, Exposure] = field(default_factory=dict)
+    functions: MutableMapping[str, FunctionNode] = field(default_factory=dict)
     metrics: MutableMapping[str, Metric] = field(default_factory=dict)
     groups: MutableMapping[str, Group] = field(default_factory=dict)
     selectors: MutableMapping[str, Any] = field(default_factory=dict)
@@ -1053,6 +1055,7 @@ class Manifest(MacroMethods, dbtClassMixin):
         resource_fqns: Dict[str, Set[Tuple[str, ...]]] = {}
         all_resources = chain(
             self.exposures.values(),
+            self.functions.values(),
             self.nodes.values(),
             self.sources.values(),
             self.metrics.values(),
@@ -1086,6 +1089,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             macros={k: _deepcopy(v) for k, v in self.macros.items()},
             docs={k: _deepcopy(v) for k, v in self.docs.items()},
             exposures={k: _deepcopy(v) for k, v in self.exposures.items()},
+            functions={k: _deepcopy(v) for k, v in self.functions.items()},
             metrics={k: _deepcopy(v) for k, v in self.metrics.items()},
             groups={k: _deepcopy(v) for k, v in self.groups.items()},
             selectors={k: _deepcopy(v) for k, v in self.selectors.items()},
@@ -1162,6 +1166,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             macros=cls._map_resources_to_map_nodes(writable_manifest.macros),
             docs=cls._map_resources_to_map_nodes(writable_manifest.docs),
             exposures=cls._map_resources_to_map_nodes(writable_manifest.exposures),
+            functions=cls._map_resources_to_map_nodes(writable_manifest.functions),
             metrics=cls._map_resources_to_map_nodes(writable_manifest.metrics),
             groups=cls._map_resources_to_map_nodes(writable_manifest.groups),
             semantic_models=cls._map_resources_to_map_nodes(writable_manifest.semantic_models),
@@ -1219,6 +1224,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             macros=self._map_nodes_to_map_resources(self.macros),
             docs=self._map_nodes_to_map_resources(self.docs),
             exposures=self._map_nodes_to_map_resources(self.exposures),
+            functions=self._map_nodes_to_map_resources(self.functions),
             metrics=self._map_nodes_to_map_resources(self.metrics),
             groups=self._map_nodes_to_map_resources(self.groups),
             selectors=self.selectors,
@@ -1637,6 +1643,10 @@ class Manifest(MacroMethods, dbtClassMixin):
         self.exposures[exposure.unique_id] = exposure
         source_file.exposures.append(exposure.unique_id)
 
+    def add_function(self, function: FunctionNode):
+        _check_duplicates(function, self.functions)
+        self.functions[function.unique_id] = function
+
     def add_metric(
         self, source_file: SchemaSourceFile, metric: Metric, generated_from: Optional[str] = None
     ):
@@ -1673,6 +1683,8 @@ class Manifest(MacroMethods, dbtClassMixin):
                 source_file.semantic_models.append(node.unique_id)
             if isinstance(node, Exposure):
                 source_file.exposures.append(node.unique_id)
+            if isinstance(node, FunctionNode):
+                source_file.functions.append(node.unique_id)
             if isinstance(node, UnitTestDefinition):
                 source_file.unit_tests.append(node.unique_id)
         elif isinstance(source_file, FixtureSourceFile):
@@ -1739,6 +1751,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             self.macros,
             self.docs,
             self.exposures,
+            self.functions,
             self.metrics,
             self.groups,
             self.selectors,
