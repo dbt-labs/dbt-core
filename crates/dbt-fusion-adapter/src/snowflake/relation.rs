@@ -6,15 +6,13 @@ use crate::snowflake::relation_configs::dynamic_table::{
 
 use dbt_common::{ErrorCode, FsResult, current_function_name, fs_err};
 use dbt_schemas::dbt_types::RelationType;
-use dbt_schemas::schemas::common::{DbtMaterialization, ResolvedQuoting};
+use dbt_schemas::schemas::common::{DbtMaterialization, DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath, TableFormat,
 };
 use dbt_schemas::schemas::{InternalDbtNodeWrapper, RelationChangeSet};
-use minijinja::arg_utils::{ArgsIter, check_num_args};
-use minijinja::{
-    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value, arg_utils::ArgParser,
-};
+use minijinja::arg_utils::ArgsIter;
+use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
 use serde::Deserialize;
 
 use std::any::Any;
@@ -27,25 +25,56 @@ pub struct SnowflakeRelationType(pub ResolvedQuoting);
 impl StaticBaseRelation for SnowflakeRelationType {
     fn try_new(
         &self,
-        database: Option<String>,
-        schema: Option<String>,
-        identifier: Option<String>,
-        relation_type: Option<RelationType>,
-        custom_quoting: Option<ResolvedQuoting>,
+        _database: Option<String>,
+        _schema: Option<String>,
+        _identifier: Option<String>,
+        _relation_type: Option<RelationType>,
+        _custom_quoting: Option<ResolvedQuoting>,
     ) -> Result<Value, MinijinjaError> {
-        Ok(RelationObject::new(Arc::new(SnowflakeRelation::new(
-            database,
-            schema,
-            identifier,
-            relation_type,
-            TableFormat::Default,
-            custom_quoting.unwrap_or(self.0),
-        )))
-        .into_value())
+        Err(MinijinjaError::new(
+            MinijinjaErrorKind::InvalidOperation,
+            "Not for used for SnowflakeRelationType due to custom create logic, but kept for trait compliance",
+        ))
     }
 
     fn get_adapter_type(&self) -> String {
         "snowflake".to_string()
+    }
+
+    fn create(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+        let iter = ArgsIter::new(current_function_name!(), &[], args);
+        let database: Option<String> = iter.next_kwarg::<Option<String>>("database")?;
+        let schema: Option<String> = iter.next_kwarg::<Option<String>>("schema")?;
+        let identifier: Option<String> = iter.next_kwarg::<Option<String>>("identifier")?;
+        let relation_type: Option<String> = iter.next_kwarg::<Option<String>>("type")?;
+        let custom_quoting: Option<Value> = iter.next_kwarg::<Option<Value>>("quote_policy")?;
+        let table_format: Option<String> = iter.next_kwarg::<Option<String>>("table_format")?;
+        iter.finish()?;
+
+        let custom_quoting = custom_quoting
+            .and_then(|v| DbtQuoting::deserialize(v).ok())
+            .map(|v| ResolvedQuoting {
+                database: v.database.unwrap_or_default(),
+                identifier: v.identifier.unwrap_or_default(),
+                schema: v.schema.unwrap_or_default(),
+            })
+            .unwrap_or(self.0);
+
+        let table_format = if table_format.is_some_and(|s| s.eq_ignore_ascii_case("iceberg")) {
+            TableFormat::Iceberg
+        } else {
+            TableFormat::Default
+        };
+
+        let rel = RelationObject::new(Arc::new(SnowflakeRelation::new(
+            database,
+            schema,
+            identifier,
+            relation_type.map(|s| RelationType::from(s.as_str())),
+            table_format,
+            custom_quoting,
+        )));
+        Ok(Value::from_object(rel))
     }
 }
 
@@ -158,11 +187,11 @@ impl BaseRelation for SnowflakeRelation {
 
     /// Helper: is this relation renamable?
     fn can_be_renamed(&self) -> bool {
-        matches!(
-            self.relation_type(),
-            Some(RelationType::Table) | Some(RelationType::View)
-        )
-        // TODO: and also is not iceberg_format
+        !self.is_iceberg_format().is_true()
+            && matches!(
+                self.relation_type(),
+                Some(RelationType::Table) | Some(RelationType::View)
+            )
     }
 
     /// Helper: is this relation replaceable?
@@ -241,14 +270,24 @@ impl BaseRelation for SnowflakeRelation {
 
     // https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-snowflake/src/dbt/adapters/snowflake/relation.py#L223
     fn needs_to_drop(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        let value = parser.get::<Value>("old_relation").unwrap();
+        let iter = ArgsIter::new(current_function_name!(), &["old_relation"], args);
+        let value = iter.next_arg::<Value>()?;
+        iter.finish()?;
 
         if let Some(old_relation) = value.downcast_object_ref::<RelationObject>() {
             let old_relation = old_relation.inner();
-            if old_relation.is_table() {
-                // TODO: iceberg-related code
-                Ok(Value::from(false))
+            if old_relation.is_table() || old_relation.is_dynamic_table() {
+                // invoke drop for table -> Iceberg or Iceberg -> table
+                let old_relation_table_format = old_relation
+                    .as_any()
+                    .downcast_ref::<SnowflakeRelation>()
+                    .unwrap()
+                    .table_format;
+                if self.table_format == old_relation_table_format {
+                    Ok(Value::from(false))
+                } else {
+                    Ok(Value::from(true))
+                }
             } else {
                 // An existing view must be dropped for model to build into a table.
                 Ok(Value::from(true))
@@ -258,6 +297,12 @@ impl BaseRelation for SnowflakeRelation {
         }
     }
 
+    fn is_iceberg_format(&self) -> Value {
+        match self.table_format {
+            TableFormat::Iceberg => Value::from(true),
+            _ => Value::from(false),
+        }
+    }
     /// Returns the appropriate DDL prefix for creating a table
     ///
     /// # Arguments
@@ -268,32 +313,35 @@ impl BaseRelation for SnowflakeRelation {
     /// One of: "temporary", "iceberg", "transient", or "" (empty string)
     fn get_ddl_prefix_for_create(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
         // Temporary tables take precedence over other options
-        let mut arg_parser = ArgParser::new(args, None);
-        let config = arg_parser.get::<Value>("config").unwrap();
-        let temporary = arg_parser.get::<bool>("temporary").unwrap();
+        let iter = ArgsIter::new(
+            current_function_name!(),
+            &["model_config", "temporary"],
+            args,
+        );
+        let config = iter.next_arg::<Value>()?;
+        let temporary = iter.next_arg::<bool>()?;
+        iter.finish()?;
 
         if temporary {
             return Ok(Value::from("temporary"));
         }
 
-        // Extract configuration values
+        // Extract legacy Iceberg configuration values found in a model config.
+        // https://docs.getdbt.com/docs/mesh/iceberg/snowflake-iceberg-support#example-configuration
         let is_iceberg = config
-            .get_item(&Value::from("iceberg"))
-            .map(|v| v.is_true())
-            .unwrap_or(false);
+            .get_item(&Value::from("table_format"))
+            .is_ok_and(|v| v.as_str().is_some_and(|s| s == "iceberg"));
 
         let transient_explicitly_set_true = config
             .get_item(&Value::from("transient"))
             .map(|v| v.is_true())
             .unwrap_or(false);
 
-        // Check for Iceberg format
         if is_iceberg {
-            // Warning if transient is explicitly set to true
             if transient_explicitly_set_true {
                 eprintln!(
                     "Warning: Iceberg format relations cannot be transient. Please remove either \
-                            the transient or iceberg config options from {}.{}.{}. If left unmodified, \
+                            the transient=true or iceberg config options from {}.{}.{}. If left unmodified, \
                             dbt will ignore 'transient'.",
                     self.path.database.as_deref().unwrap_or(""),
                     self.path.schema.as_deref().unwrap_or(""),
@@ -303,16 +351,17 @@ impl BaseRelation for SnowflakeRelation {
             return Ok(Value::from("iceberg"));
         }
 
-        // Always supply transient unless explicitly set to false
-        let transient = config
+        let is_transient = config
             .get_item(&Value::from("transient"))
-            .map(|v| v.is_undefined() || v.is_true())
-            .unwrap_or(true); // Default to true if not set
+            .map(|v| v.is_true() || v.is_undefined())
+            .unwrap_or(true);
 
-        match transient {
-            true => Ok(Value::from("transient")),
-            false => Ok(Value::from("")),
-        }
+        let ddl_prefix = if is_transient {
+            "transient"
+        } else {
+            Default::default()
+        };
+        Ok(Value::from(ddl_prefix))
     }
 
     fn get_ddl_prefix_for_alter(&self) -> Result<Value, MinijinjaError> {
@@ -325,14 +374,13 @@ impl BaseRelation for SnowflakeRelation {
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-snowflake/src/dbt/adapters/snowflake/relation.py#L206
     fn get_iceberg_ddl_options(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-
-        let runtime_model_config = parser.get::<Value>("config")?;
+        let iter = ArgsIter::new(current_function_name!(), &["config"], args);
+        let runtime_model_config: Value = iter.next_arg::<Value>()?;
+        iter.finish()?;
 
         // If the base_location_root config is supplied, overwrite the default value ("_dbt/")
         let mut base_location = runtime_model_config
-            .get_attr("base_location")?
+            .get_attr("base_location_root")?
             .as_str()
             .unwrap_or("_dbt")
             .to_string();
@@ -397,7 +445,7 @@ impl BaseRelation for SnowflakeRelation {
             schema,
             identifier,
             relation_type,
-            TableFormat::Default,
+            self.table_format,
             custom_quoting,
         )))
     }
@@ -456,15 +504,17 @@ mod tests {
     use dbt_schemas::{dbt_types::RelationType, schemas::relations::DEFAULT_RESOLVED_QUOTING};
 
     #[test]
-    fn test_try_new_via_static_base_relation() {
+    fn test_snowflake_create_via_static_base_relation() {
+        let values = [
+            Value::from("d"),
+            Value::from("s"),
+            Value::from("i"),
+            Value::from("table"),
+            Value::from("{database: true, identifier: true, schema: true}"),
+        ];
+
         let relation = SnowflakeRelationType(DEFAULT_RESOLVED_QUOTING)
-            .try_new(
-                Some("d".to_string()),
-                Some("s".to_string()),
-                Some("i".to_string()),
-                Some(RelationType::Table),
-                Some(DEFAULT_RESOLVED_QUOTING),
-            )
+            .create(&values)
             .unwrap();
 
         let relation = relation.downcast_object::<RelationObject>().unwrap();

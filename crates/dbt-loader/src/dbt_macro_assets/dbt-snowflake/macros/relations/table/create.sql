@@ -1,10 +1,5 @@
 -- funcsign: (optional[string], relation, string, string) -> string
 {% macro snowflake__create_table_as(temporary, relation, compiled_code, language='sql') -%}
-
-  {%- if relation.is_iceberg_format and not adapter.behavior.enable_iceberg_materializations.no_warn %}
-    {% do exceptions.raise_compiler_error('Was unable to create model as Iceberg Table Format. Please set the `enable_iceberg_materializations` behavior flag to True in your dbt_project.yml. For more information, go to https://docs.getdbt.com/reference/resource-configs/snowflake-configs#iceberg-table-format') %}
-  {%- endif %}
-
   {%- set materialization_prefix = relation.get_ddl_prefix_for_create(config.model.config, temporary) -%}
   {%- set alter_prefix = relation.get_ddl_prefix_for_alter() -%}
 
@@ -27,7 +22,7 @@
     {{ sql_header if sql_header is not none }}
 
         create or replace {{ materialization_prefix }} table {{ relation }}
-        {%- if relation.is_iceberg_format %}
+        {%- if relation.is_iceberg_format() %}
           {#
             Valid DDL in CTAS statements. Plain create statements have a different order.
             https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table
@@ -59,7 +54,7 @@
       {%- endif -%}
 
   {%- elif language == 'python' -%}
-    {%- if relation.is_iceberg_format %}
+    {%- if relation.is_iceberg_format() %}
       {% do exceptions.raise_compiler_error('Iceberg is incompatible with Python models. Please use a SQL model for the iceberg format.') %}
     {%- endif %}
     {{ py_write_table(compiled_code=compiled_code, target_relation=relation, table_type=relation.get_ddl_prefix_for_create(config.model.config, temporary)) }}

@@ -101,6 +101,8 @@ impl Object for RelationObject {
             "get_iceberg_ddl_options" => self.get_iceberg_ddl_options(args),
             "dynamic_table_config_changeset" => self.dynamic_table_config_changeset(args),
             "from_config" => self.from_config(args),
+            // Below are available for Snowflake
+            "is_iceberg_format" => Ok(self.is_iceberg_format()),
             // Below are available for Databricks
             "is_hive_metastore" => Ok(self.is_hive_metastore()),
             // Below are available for BigQuery and Redshift

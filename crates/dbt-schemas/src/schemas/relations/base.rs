@@ -661,6 +661,11 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         )
     }
 
+    /// is_iceberg_format
+    fn is_iceberg_format(&self) -> Value {
+        unimplemented!("Available only for snowflake")
+    }
+
     /// get_ddl_prefix_for_create
     fn get_ddl_prefix_for_create(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
         jinja_err!(
