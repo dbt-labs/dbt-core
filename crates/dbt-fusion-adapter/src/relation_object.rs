@@ -2,18 +2,22 @@ use dbt_common::adapter::AdapterType;
 use dbt_common::{FsError, FsResult};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::filter::RunFilter;
-use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::relations::base::{
     BaseRelation, TableFormat, render_with_run_filter_as_str,
 };
-use minijinja::arg_utils::ArgParser;
+use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
+use dbt_schemas::schemas::{InternalDbtNodeAttributes, InternalDbtNodeWrapper};
+use minijinja::arg_utils::{ArgParser, ArgsIter};
 use minijinja::value::{Enumerator, Object, ValueKind};
-use minijinja::{Error as MinijinjaError, State};
+use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
 use minijinja::{Value, listener::RenderingEventListener};
 use serde::Deserialize;
 
 use crate::bigquery::relation::BigqueryRelation;
+use crate::bigquery::relation_config::{
+    BigqueryMaterializedViewConfig, BigqueryMaterializedViewConfigObject,
+};
 use crate::databricks::relation::DatabricksRelation;
 use crate::postgres::relation::PostgresRelation;
 use crate::redshift::relation::RedshiftRelation;
@@ -310,6 +314,54 @@ impl Object for StaticBaseRelationObject {
         match name {
             "create" => self.create(args),
             "scd_args" => self.scd_args(args),
+            // // The following is required by BigQuery materialized_views
+            "materialized_view_from_relation_config" => {
+                // TODO(serramatutu): find out how to use new AdapterType enum here
+                if self.0.get_adapter_type() == AdapterType::Bigquery.as_ref() {
+                    let iter = ArgsIter::new(
+                        "Relation.materialized_view_from_relation_config",
+                        &["relation_config"],
+                        args,
+                    );
+                    let relation_config_arg = iter.next_arg::<&Value>()?;
+                    iter.finish()?;
+
+                    let config_wrapper = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(relation_config_arg.clone())
+                        .map_err(|e| {
+                            MinijinjaError::new(
+                                MinijinjaErrorKind::SerdeDeserializeError,
+                                format!("get_table_options: Failed to deserialize InternalDbtNodeWrapper: {e}"),
+                            )
+                        })?;
+
+                    let model = match config_wrapper {
+                        InternalDbtNodeWrapper::Model(model) => model,
+                        _ => {
+                            return Err(MinijinjaError::new(
+                                MinijinjaErrorKind::InvalidOperation,
+                                "Expected a model node",
+                            ));
+                        }
+                    };
+
+                    let mv_config = BigqueryMaterializedViewConfigObject::new(
+                        <dyn BigqueryMaterializedViewConfig>::try_from_model(Arc::new(*model))
+                        .map_err(|e| {
+                            MinijinjaError::new(
+                                MinijinjaErrorKind::SerdeDeserializeError,
+                                format!("materialized_view_from_relation_config: Failed to deserialize BigqueryMaterializedViewConfig: {e}")
+                            )
+                        })?
+                    );
+
+                    Ok(Value::from_object(mv_config))
+                } else {
+                    Err(minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidOperation,
+                        "'materialized_view_from_relation_config' can only be invoked using the BigQuery adapter",
+                    ))
+                }
+            }
             _ => Err(minijinja::Error::new(
                 minijinja::ErrorKind::InvalidOperation,
                 format!("Unknown method on StaticBaseRelationObject: '{name}'"),

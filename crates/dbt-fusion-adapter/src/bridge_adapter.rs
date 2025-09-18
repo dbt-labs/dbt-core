@@ -1182,9 +1182,15 @@ impl BaseAdapter for BridgeAdapter {
                 )
             })?;
 
-        let result = self
-            .typed_adapter
-            .add_time_ingestion_partition_column(columns, partition_by.validate()?)?;
+        let result = self.typed_adapter.add_time_ingestion_partition_column(
+            columns,
+            partition_by.into_bigquery().ok_or_else(|| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::InvalidArgument,
+                    "Expect a BigqueryPartitionConfigStruct",
+                )
+            })?,
+        )?;
         Ok(result)
     }
 

@@ -27,6 +27,7 @@ arrow-schema = { workspace = true }
 parquet = { workspace = true }
 
 adbc-core = { workspace = true }
+chrono = { workspace = true }
 crossbeam-skiplist = { workspace = true }
 dashmap = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }

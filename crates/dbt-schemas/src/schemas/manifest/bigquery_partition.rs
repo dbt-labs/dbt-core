@@ -16,7 +16,7 @@ use std::{rc::Rc, sync::Arc};
 /// dbt-core allows either of the variants for the `partition_by` in the model config
 /// but the bigquery-adapter throws RunTime error
 /// the behaviors are tested from the latest dbt-core + bigquery-adapter as this is written
-/// we're conformant to this behavior via here and via the `validate` method
+/// we're conformant to this behavior via here and via the `into_bigquery()` method
 #[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, JsonSchema)]
 #[serde(untagged)]
 pub enum PartitionConfig {
@@ -89,14 +89,36 @@ pub enum BigqueryClusterConfig {
     List(Vec<String>),
 }
 
-impl PartitionConfig {
-    pub fn validate(self) -> Result<BigqueryPartitionConfig, MinijinjaError> {
+impl BigqueryClusterConfig {
+    /// Normalize the enum as a list of cluster_by fields
+    pub fn fields(&self) -> Vec<&str> {
         match self {
-            PartitionConfig::BigqueryPartitionConfig(config) => Ok(config),
-            _ => Err(MinijinjaError::new(
-                MinijinjaErrorKind::InvalidArgument,
-                "Expect a BigqueryPartitionConfigStruct",
-            )),
+            BigqueryClusterConfig::String(s) => vec![s.as_ref()],
+            BigqueryClusterConfig::List(l) => l.iter().map(|s| s.as_ref()).collect(),
+        }
+    }
+
+    /// Normalize the enum as a list of cluster_by fields
+    pub fn into_fields(self) -> Vec<String> {
+        match self {
+            BigqueryClusterConfig::String(s) => vec![s],
+            BigqueryClusterConfig::List(l) => l,
+        }
+    }
+}
+
+impl PartitionConfig {
+    pub fn into_bigquery(self) -> Option<BigqueryPartitionConfig> {
+        match self {
+            PartitionConfig::BigqueryPartitionConfig(bq) => Some(bq),
+            _ => None,
+        }
+    }
+
+    pub fn as_bigquery(&self) -> Option<&BigqueryPartitionConfig> {
+        match self {
+            PartitionConfig::BigqueryPartitionConfig(bq) => Some(bq),
+            _ => None,
         }
     }
 }

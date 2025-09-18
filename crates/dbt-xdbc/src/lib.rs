@@ -52,8 +52,7 @@ pub(crate) mod odbc_api;
 
 pub(crate) mod builder;
 pub(crate) mod checksums;
-#[allow(dead_code)]
-pub(crate) mod duration;
+pub mod duration;
 pub(crate) mod install;
 
 // Constants for different backends

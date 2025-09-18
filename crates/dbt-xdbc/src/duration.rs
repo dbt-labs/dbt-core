@@ -55,7 +55,7 @@ fn bad_input<T>() -> Result<T> {
 /// implementation does not support negative values i.e. it ignores sign
 /// symbols, because [`Duration`] does not support negative values, and the Go
 /// Snowflake driver uses absolute values for these durations.
-pub(crate) fn parse_duration(input: &str) -> Result<Duration> {
+pub fn parse_duration(input: &str) -> Result<Duration> {
     // Drop sign symbols.
     let input = input.replace(['+', '-'], "");
 

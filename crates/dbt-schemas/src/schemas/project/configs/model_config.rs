@@ -34,7 +34,9 @@ use crate::schemas::project::dbt_project::DefaultTo;
 use crate::schemas::project::dbt_project::IterChildren;
 use crate::schemas::properties::ModelFreshness;
 use crate::schemas::serde::StringOrArrayOfStrings;
-use crate::schemas::serde::{bool_or_string_bool, default_type, u64_or_string_u64};
+use crate::schemas::serde::{
+    bool_or_string_bool, default_type, f64_or_string_f64, u64_or_string_u64,
+};
 use dbt_serde_yaml::ShouldBe;
 
 #[skip_serializing_none]
@@ -243,9 +245,9 @@ pub struct ProjectModelConfig {
     #[serde(
         default,
         rename = "+refresh_interval_minutes",
-        deserialize_with = "u64_or_string_u64"
+        deserialize_with = "f64_or_string_f64"
     )]
-    pub refresh_interval_minutes: Option<u64>,
+    pub refresh_interval_minutes: Option<f64>,
     #[serde(
         default,
         rename = "+require_partition_filter",
@@ -322,7 +324,7 @@ pub struct ProjectModelConfig {
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectModelConfig>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
 #[serde(rename_all = "PascalCase")]
 /// See `category` from https://developer.salesforce.com/docs/data/connectapi/references/spec?meta=postDataLakeObject
 pub enum DataLakeObjectCategory {
@@ -340,7 +342,7 @@ impl IterChildren<ProjectModelConfig> for ProjectModelConfig {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, Eq, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, JsonSchema)]
 pub struct ModelConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,

@@ -29,7 +29,7 @@ use crate::schemas::project::configs::common::default_quoting;
 use crate::schemas::project::configs::common::default_to_grants;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::bool_or_string_bool;
-use crate::schemas::serde::u64_or_string_u64;
+use crate::schemas::serde::{f64_or_string_f64, u64_or_string_u64};
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
@@ -153,9 +153,9 @@ pub struct ProjectSeedConfig {
     #[serde(
         default,
         rename = "+refresh_interval_minutes",
-        deserialize_with = "u64_or_string_u64"
+        deserialize_with = "f64_or_string_f64"
     )]
-    pub refresh_interval_minutes: Option<u64>,
+    pub refresh_interval_minutes: Option<f64>,
     #[serde(rename = "+description")]
     pub description: Option<String>,
     #[serde(rename = "+max_staleness")]
@@ -267,7 +267,7 @@ impl IterChildren<ProjectSeedConfig> for ProjectSeedConfig {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Eq, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone, JsonSchema)]
 pub struct SeedConfig {
     pub column_types: Option<BTreeMap<String, String>>,
     pub database: Option<String>,

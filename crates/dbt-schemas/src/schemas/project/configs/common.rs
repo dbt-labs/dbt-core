@@ -17,7 +17,7 @@ use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
 use crate::schemas::project::configs::model_config::DataLakeObjectCategory;
 use crate::schemas::project::dbt_project::DefaultTo;
 use crate::schemas::serde::StringOrArrayOfStrings;
-use crate::schemas::serde::{bool_or_string_bool, u64_or_string_u64};
+use crate::schemas::serde::{bool_or_string_bool, f64_or_string_f64, u64_or_string_u64};
 
 /// Helper function to handle default_to logic for hooks (pre_hook/post_hook)
 /// Hooks should be extended, not replaced when merging configs
@@ -162,7 +162,7 @@ pub fn default_to_grants(
 /// This configuration is a superset of all warehouse specific configurations
 /// that users can set
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, JsonSchema)]
 pub struct WarehouseSpecificNodeConfig {
     // Shared
     pub partition_by: Option<PartitionConfig>,
@@ -183,8 +183,8 @@ pub struct WarehouseSpecificNodeConfig {
     pub partitions: Option<Vec<String>>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enable_refresh: Option<bool>,
-    #[serde(default, deserialize_with = "u64_or_string_u64")]
-    pub refresh_interval_minutes: Option<u64>,
+    #[serde(default, deserialize_with = "f64_or_string_f64")]
+    pub refresh_interval_minutes: Option<f64>,
     pub max_staleness: Option<String>,
 
     // Databricks

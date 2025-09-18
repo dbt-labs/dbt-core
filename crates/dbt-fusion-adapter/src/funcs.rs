@@ -3,6 +3,7 @@ use crate::base_adapter::BaseAdapter;
 use crate::databricks::relation::DEFAULT_DATABRICKS_DATABASE;
 use crate::errors::AdapterResult;
 use crate::errors::{AdapterError, AdapterErrorKind};
+use crate::factory::create_static_relation;
 use crate::formatter::SqlLiteralFormatter;
 use crate::response::ResultObject;
 
@@ -223,6 +224,9 @@ pub fn dispatch_adapter_calls(
 pub fn dispatch_adapter_get_value(adapter: &dyn BaseAdapter, key: &Value) -> Option<Value> {
     match key.as_str() {
         Some("behavior") => Some(adapter.behavior()),
+        // NOTE(serramatutu): BigQuery adapter calls `Relation` from `adapter.Relation`
+        // instead of `api.Relation` when executing materialized views
+        Some("Relation") => create_static_relation(adapter.adapter_type(), adapter.quoting()),
         _ => None,
     }
 }

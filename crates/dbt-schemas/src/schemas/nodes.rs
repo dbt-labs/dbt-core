@@ -2220,7 +2220,7 @@ pub struct BigQueryAttr {
     pub grant_access_to: Option<Vec<GrantAccessToTarget>>,
     pub partitions: Option<Vec<String>>,
     pub enable_refresh: Option<bool>,
-    pub refresh_interval_minutes: Option<u64>,
+    pub refresh_interval_minutes: Option<f64>,
     pub max_staleness: Option<String>,
 }
 
