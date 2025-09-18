@@ -10,6 +10,7 @@ use crate::{
 use prost::Name;
 pub use proto_rust::v1::public::events::fusion::compat::SeverityNumber;
 pub use proto_rust::v1::public::events::fusion::log::LogMessage;
+use std::borrow::Cow;
 
 impl ProtoTelemetryEvent for LogMessage {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Log;
@@ -54,12 +55,12 @@ impl ArrowSerializableTelemetryEvent for LogMessage {
     fn to_arrow_record(&self) -> ArrowAttributes {
         ArrowAttributes {
             code: self.code,
-            dbt_core_event_code: self.dbt_core_event_code.as_deref(),
+            dbt_core_event_code: self.dbt_core_event_code.as_deref().map(Cow::Borrowed),
             original_severity_number: Some(self.original_severity_number),
-            original_severity_text: Some(self.original_severity_text.as_ref()),
-            unique_id: self.unique_id.as_deref(),
+            original_severity_text: Some(Cow::Borrowed(self.original_severity_text.as_str())),
+            unique_id: self.unique_id.as_deref().map(Cow::Borrowed),
             phase: self.phase.map(|_| self.phase()),
-            file: self.file.as_deref(),
+            file: self.file.as_deref().map(Cow::Borrowed),
             line: self.line,
             ..Default::default()
         }
@@ -68,7 +69,7 @@ impl ArrowSerializableTelemetryEvent for LogMessage {
     fn from_arrow_record(record: &ArrowAttributes) -> Result<Self, String> {
         Ok(Self {
             code: record.code,
-            dbt_core_event_code: record.dbt_core_event_code.map(str::to_string),
+            dbt_core_event_code: record.dbt_core_event_code.as_deref().map(str::to_string),
             original_severity_number: record.original_severity_number.ok_or_else(|| {
                 format!(
                     "Missing severity number in event type \"{}\"",
@@ -77,6 +78,7 @@ impl ArrowSerializableTelemetryEvent for LogMessage {
             })?,
             original_severity_text: record
                 .original_severity_text
+                .as_deref()
                 .map(str::to_string)
                 .ok_or_else(|| {
                     format!(
@@ -84,9 +86,9 @@ impl ArrowSerializableTelemetryEvent for LogMessage {
                         Self::full_name()
                     )
                 })?,
-            unique_id: record.unique_id.map(str::to_string),
+            unique_id: record.unique_id.as_deref().map(str::to_string),
             phase: record.phase.map(|v| v as i32),
-            file: record.file.map(str::to_string),
+            file: record.file.as_deref().map(str::to_string),
             line: record.line,
         })
     }

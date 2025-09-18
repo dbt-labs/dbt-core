@@ -4,6 +4,7 @@ use crate::{
     serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
+use std::borrow::Cow;
 
 pub use proto_rust::v1::public::events::fusion::artifact::{ArtifactType, ArtifactWritten};
 
@@ -25,7 +26,7 @@ impl ProtoTelemetryEvent for ArtifactWritten {
 impl ArrowSerializableTelemetryEvent for ArtifactWritten {
     fn to_arrow_record(&self) -> ArrowAttributes {
         ArrowAttributes {
-            relative_path: Some(self.relative_path.as_str()),
+            relative_path: Some(Cow::from(self.relative_path.as_str())),
             artifact_type: Some(self.artifact_type()),
             ..Default::default()
         }
@@ -33,12 +34,16 @@ impl ArrowSerializableTelemetryEvent for ArtifactWritten {
 
     fn from_arrow_record(record: &ArrowAttributes) -> Result<Self, String> {
         Ok(Self {
-            relative_path: record.relative_path.map(str::to_string).ok_or_else(|| {
-                format!(
-                    "Missing `relative_path` for event type \"{}\"",
-                    Self::full_name()
-                )
-            })?,
+            relative_path: record
+                .relative_path
+                .as_deref()
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    format!(
+                        "Missing `relative_path` for event type \"{}\"",
+                        Self::full_name()
+                    )
+                })?,
             artifact_type: record.artifact_type.map(|v| v as i32).ok_or_else(|| {
                 format!(
                     "Missing `artifact_type` for event type \"{}\"",

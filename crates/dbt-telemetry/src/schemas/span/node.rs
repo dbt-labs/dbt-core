@@ -8,6 +8,7 @@ use crate::{
 };
 
 use prost::Name;
+use std::borrow::Cow;
 
 pub use proto_rust::v1::public::events::fusion::node::{
     NodeCacheReason, NodeCancelReason, NodeErrorType, NodeEvaluated, NodeMaterialization,
@@ -51,19 +52,19 @@ impl ArrowSerializableTelemetryEvent for NodeEvaluated {
         ArrowAttributes {
             // Well-known fields for easier querying
             phase: Some(self.phase()),
-            name: Some(self.name.as_str()),
-            database: self.database.as_deref(),
-            schema: self.schema.as_deref(),
-            identifier: self.identifier.as_deref(),
-            unique_id: Some(self.unique_id.as_str()),
+            name: Some(Cow::Borrowed(self.name.as_str())),
+            database: self.database.as_deref().map(Cow::Borrowed),
+            schema: self.schema.as_deref().map(Cow::Borrowed),
+            identifier: self.identifier.as_deref().map(Cow::Borrowed),
+            unique_id: Some(Cow::Borrowed(self.unique_id.as_str())),
             materialization: self.materialization.map(|_| self.materialization()),
-            custom_materialization: self.custom_materialization.as_deref(),
+            custom_materialization: self.custom_materialization.as_deref().map(Cow::Borrowed),
             node_type: Some(self.node_type()),
             node_outcome: Some(self.node_outcome()),
             node_error_type: self.node_error_type.map(|_| self.node_error_type()),
             node_cancel_reason: self.node_cancel_reason.map(|_| self.node_cancel_reason()),
             node_skip_reason: self.node_skip_reason.map(|_| self.node_skip_reason()),
-            dbt_core_event_code: self.dbt_core_event_code.as_deref(),
+            dbt_core_event_code: self.dbt_core_event_code.as_deref().map(Cow::Borrowed),
             // Serialize node_outcome_detail into JSON as it may grow with arbitrary data and less
             // likely to be queried directly
             json_payload: self.node_outcome_detail.map(|v| {
@@ -86,16 +87,17 @@ impl ArrowSerializableTelemetryEvent for NodeEvaluated {
                 )?,
                 name: record
                     .name
+                    .as_deref()
                     .map(str::to_string)
                     .ok_or_else(|| format!("Missing `name` for event type \"{}\"", Self::full_name()))?,
-                database: record.database.map(str::to_string),
-                schema: record.schema.map(str::to_string),
-                identifier: record.identifier.map(str::to_string),
-                unique_id: record.unique_id.map(str::to_string).ok_or_else(|| {
+                database: record.database.as_deref().map(str::to_string),
+                schema: record.schema.as_deref().map(str::to_string),
+                identifier: record.identifier.as_deref().map(str::to_string),
+                unique_id: record.unique_id.as_deref().map(str::to_string).ok_or_else(|| {
                     format!("Missing `unique_id` for event type \"{}\"", Self::full_name())
                 })?,
                 materialization: record.materialization.map(|v| v as i32),
-                custom_materialization: record.custom_materialization.map(str::to_string),
+                custom_materialization: record.custom_materialization.as_deref().map(str::to_string),
                 node_type: record.node_type.map(|v| v as i32).ok_or_else(|| {
                     format!("Missing `node_type` for event type \"{}\"", Self::full_name())
                 })?,
@@ -105,7 +107,7 @@ impl ArrowSerializableTelemetryEvent for NodeEvaluated {
                 node_error_type: record.node_error_type.map(|v| v as i32),
                 node_cancel_reason: record.node_cancel_reason.map(|v| v as i32),
                 node_skip_reason: record.node_skip_reason.map(|v| v as i32),
-                dbt_core_event_code: record.dbt_core_event_code.map(str::to_string),
+                dbt_core_event_code: record.dbt_core_event_code.as_deref().map(str::to_string),
                 node_outcome_detail: record.json_payload.as_ref().map(|v| serde_json::from_str(v).map_err(|e| {
                     format!(
                         "Failed to deserialize `node_outcome_detail` in event type \"{}\" from JSON: {}",

@@ -6,6 +6,7 @@ use crate::{
 };
 use prost::Name;
 pub use proto_rust::v1::public::events::fusion::dev::{CallTrace, DebugValue, Unknown};
+use std::borrow::Cow;
 
 impl ProtoTelemetryEvent for CallTrace {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
@@ -51,8 +52,8 @@ impl ProtoTelemetryEvent for CallTrace {
 impl ArrowSerializableTelemetryEvent for CallTrace {
     fn to_arrow_record(&self) -> ArrowAttributes {
         ArrowAttributes {
-            dev_name: Some(self.name.as_str()),
-            file: self.file.as_deref(),
+            dev_name: Some(Cow::Borrowed(self.name.as_str())),
+            file: self.file.as_deref().map(Cow::Borrowed),
             line: self.line,
             json_payload: serde_json::to_string(&self.extra)
                 .unwrap_or_else(|_| {
@@ -68,13 +69,17 @@ impl ArrowSerializableTelemetryEvent for CallTrace {
 
     fn from_arrow_record(record: &ArrowAttributes) -> Result<Self, String> {
         Ok(Self {
-            name: record.dev_name.map(str::to_string).ok_or_else(|| {
-                format!(
-                    "Missing `dev_name` for event type \"{}\"",
-                    Self::full_name()
-                )
-            })?,
-            file: record.file.map(str::to_string),
+            name: record
+                .dev_name
+                .as_deref()
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    format!(
+                        "Missing `dev_name` for event type \"{}\"",
+                        Self::full_name()
+                    )
+                })?,
+            file: record.file.as_deref().map(str::to_string),
             line: record.line,
             extra: serde_json::from_str(record.json_payload.as_ref().ok_or_else(|| {
                 format!(
@@ -119,8 +124,8 @@ impl ProtoTelemetryEvent for Unknown {
 impl ArrowSerializableTelemetryEvent for Unknown {
     fn to_arrow_record(&self) -> ArrowAttributes {
         ArrowAttributes {
-            dev_name: Some(self.name.as_str()),
-            file: Some(self.file.as_str()),
+            dev_name: Some(Cow::Borrowed(self.name.as_str())),
+            file: Some(Cow::Borrowed(self.file.as_str())),
             line: Some(self.line),
             ..Default::default()
         }
@@ -128,13 +133,21 @@ impl ArrowSerializableTelemetryEvent for Unknown {
 
     fn from_arrow_record(record: &ArrowAttributes) -> Result<Self, String> {
         Ok(Self {
-            name: record.dev_name.map(str::to_string).ok_or_else(|| {
-                format!(
-                    "Missing `dev_name` for event type \"{}\"",
-                    Self::full_name()
-                )
-            })?,
-            file: record.file.map(str::to_string).unwrap_or_default(),
+            name: record
+                .dev_name
+                .as_deref()
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    format!(
+                        "Missing `dev_name` for event type \"{}\"",
+                        Self::full_name()
+                    )
+                })?,
+            file: record
+                .file
+                .as_deref()
+                .map(str::to_string)
+                .unwrap_or_default(),
             line: record.line.unwrap_or_default(),
         })
     }

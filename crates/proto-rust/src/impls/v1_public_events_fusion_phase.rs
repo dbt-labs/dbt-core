@@ -21,7 +21,7 @@ impl Display for ExecutionPhase {
             Self::Lineage => "Lineage",
             Self::Debug => "Debug",
         };
-        write!(f, "{s}")
+        f.write_str(s)
     }
 }
 
