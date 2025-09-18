@@ -249,6 +249,7 @@ class CompiledResource(ParsedResource):
     refs: List[RefArgs] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
+    functions: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
     compiled_path: Optional[str] = None
     compiled: bool = False

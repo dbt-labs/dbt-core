@@ -720,6 +720,9 @@ class Disabled(Generic[D]):
     target: D
 
 
+MaybeFunctionNode = Optional[Union[FunctionNode, Disabled[FunctionNode]]]
+
+
 MaybeMetricNode = Optional[Union[Metric, Disabled[Metric]]]
 
 
@@ -1441,6 +1444,29 @@ class Manifest(MacroMethods, dbtClassMixin):
                     f"{target_source_name}.{target_table_name}", pkg
                 )
 
+        if disabled:
+            return Disabled(disabled[0])
+        return None
+
+    def resolve_function(
+        self,
+        target_function_name: str,
+        target_function_package: Optional[str],
+        current_project: str,
+        node_package: str,
+    ) -> MaybeFunctionNode:
+        package_candidates = _packages_to_search(
+            current_project, node_package, target_function_package
+        )
+        disabled: Optional[List[FunctionNode]] = None
+        for package in package_candidates:
+            function = self.function_lookup.find(target_function_name, package, self)
+            if function is not None and function.config.enabled:
+                return function
+
+            # it's possible that the function is disabled
+            if disabled is None:
+                disabled = self.disabled_lookup.find(f"{target_function_name}", package)
         if disabled:
             return Disabled(disabled[0])
         return None

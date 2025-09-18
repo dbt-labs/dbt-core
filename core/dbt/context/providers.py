@@ -459,6 +459,41 @@ class BaseMetricResolver(BaseResolver):
         return self.resolve(name, package)
 
 
+class BaseFunctionResolver(BaseResolver):
+    @abc.abstractmethod
+    def resolve(self, name: str, package: Optional[str] = None): ...
+
+    def _repack_args(self, name: str, package: Optional[str]) -> List[str]:
+        if package is None:
+            return [name]
+        else:
+            return [package, name]
+
+    def validate_args(self, name: str, package: Optional[str]):
+        if not isinstance(name, str):
+            raise CompilationError(
+                f"The name argument to function() must be a string, got {type(name)}"
+            )
+
+        if package is not None and not isinstance(package, str):
+            raise CompilationError(
+                f"The package argument to function() must be a string or None, got {type(package)}"
+            )
+
+    def __call__(self, *args: str):
+        name: str
+        package: Optional[str] = None
+
+        if len(args) == 1:
+            name = args[0]
+        elif len(args) == 2:
+            package, name = args
+        else:
+            raise RefArgsError(node=self.model, args=args)
+        self.validate_args(name, package)
+        return self.resolve(name, package)
+
+
 class Config(Protocol):
     def __init__(self, model, context_config: Optional[ContextConfig]): ...
 
@@ -913,6 +948,48 @@ class UnitTestVar(RuntimeVar):
         super().__init__(context, config_copy or config, node=node)
 
 
+# `function` implementations.
+class ParseFunctionResolver(BaseFunctionResolver):
+    def resolve(self, name: str, package: Optional[str] = None):
+        # When you call function(), this is what happens at parse time
+        self.model.functions.append([name, name])
+        return self.Relation.create_from(self.config, self.model)
+
+
+class RuntimeFunctionResolver(BaseFunctionResolver):
+    def resolve(self, name: str, package: Optional[str] = None):
+        target_function = self.manifest.resolve_function(
+            name,
+            package,
+            self.current_project,
+            self.model.package_name,
+        )
+
+        if target_function is None or isinstance(target_function, Disabled):
+            raise TargetNotFoundError(
+                node=self.model,
+                target_name=name,
+                target_kind="function",
+                disabled=(isinstance(target_function, Disabled)),
+            )
+
+        # Source quoting does _not_ respect global configs in dbt_project.yml, as documented here:
+        # https://docs.getdbt.com/reference/project-configs/quoting
+        # Use an object with an empty quoting field to bypass any settings in self.
+        class SourceQuotingBaseConfig:
+            quoting: Dict[str, Any] = {}
+
+        return self.Relation.create_from(
+            SourceQuotingBaseConfig(),
+            target_function,
+            limit=self.resolve_limit,
+            event_time_filter=self.resolve_event_time_filter(target_function),
+        )
+
+
+# TODO: Add RuntimeUnitTestFunctionResolver CT-12024
+
+
 # Providers
 class Provider(Protocol):
     execute: bool
@@ -922,6 +999,7 @@ class Provider(Protocol):
     ref: Type[BaseRefResolver]
     source: Type[BaseSourceResolver]
     metric: Type[BaseMetricResolver]
+    function: Type[BaseFunctionResolver]
 
 
 class ParseProvider(Provider):
@@ -932,6 +1010,7 @@ class ParseProvider(Provider):
     ref = ParseRefResolver
     source = ParseSourceResolver
     metric = ParseMetricResolver
+    function = ParseFunctionResolver
 
 
 class GenerateNameProvider(Provider):
@@ -942,6 +1021,7 @@ class GenerateNameProvider(Provider):
     ref = ParseRefResolver
     source = ParseSourceResolver
     metric = ParseMetricResolver
+    function = ParseFunctionResolver
 
 
 class RuntimeProvider(Provider):
@@ -952,6 +1032,7 @@ class RuntimeProvider(Provider):
     ref = RuntimeRefResolver
     source = RuntimeSourceResolver
     metric = RuntimeMetricResolver
+    function = RuntimeFunctionResolver
 
 
 class RuntimeUnitTestProvider(Provider):
@@ -962,6 +1043,7 @@ class RuntimeUnitTestProvider(Provider):
     ref = RuntimeUnitTestRefResolver
     source = RuntimeUnitTestSourceResolver
     metric = RuntimeMetricResolver
+    function = RuntimeFunctionResolver
 
 
 class OperationProvider(RuntimeProvider):
@@ -1203,6 +1285,10 @@ class ProviderContext(ManifestContext):
     @contextproperty()
     def metric(self) -> Callable:
         return self.provider.metric(self.db_wrapper, self.model, self.config, self.manifest)
+
+    @contextproperty()
+    def function(self) -> Callable:
+        return self.provider.function(self.db_wrapper, self.model, self.config, self.manifest)
 
     @contextproperty("config")
     def ctx_config(self) -> Config:

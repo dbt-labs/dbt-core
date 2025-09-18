@@ -156,6 +156,7 @@ class Metric(GraphResource):
     depends_on: DependsOn = field(default_factory=DependsOn)
     refs: List[RefArgs] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
+    functions: List[List[str]] = field(default_factory=list)
     created_at: float = field(default_factory=lambda: time.time())
     group: Optional[str] = None
 
