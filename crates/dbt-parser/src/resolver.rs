@@ -21,7 +21,7 @@ use dbt_schemas::schemas::properties::{MetricsProperties, ModelProperties};
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_schemas::state::{DbtPackage, GenericTestAsset, Macros, RenderResults};
+use dbt_schemas::state::{DbtAsset, DbtPackage, GenericTestAsset, Macros, RenderResults};
 use dbt_schemas::state::{DbtRuntimeConfig, Operations};
 
 use crate::args::ResolveArgs;
@@ -34,7 +34,9 @@ use dbt_schemas::schemas::telemetry::{ExecutionPhase, NodeType, PhaseExecuted};
 use dbt_schemas::state::DbtState;
 use dbt_schemas::state::ResolverState;
 use std::collections::{BTreeMap, HashMap};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tokio::fs as tokiofs;
 
 use crate::resolve::resolve_analyses::resolve_analyses;
 use crate::resolve::resolve_exposures::resolve_exposures;
@@ -72,13 +74,21 @@ type YmlValue = dbt_serde_yaml::Value;
 pub async fn resolve(
     arg: &ResolveArgs,
     invocation_args: &InvocationArgs,
-    dbt_state: Arc<DbtState>,
+    mut dbt_state: DbtState,
     macros: Macros,
     nodes: Nodes,
     listener_factory: Option<Arc<dyn dbt_jinja_utils::listener::RenderingEventListenerFactory>>,
     token: &CancellationToken,
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
     let _pb = with_progress!(arg.io, spinner => RESOLVING);
+
+    // Handle inline SQL if provided
+    if let Some(inline_sql) = &arg.inline_sql {
+        // We need to make dbt_state mutable for this one operation
+        let _ = prepare_inline_sql(inline_sql, &arg.io.out_dir, &mut dbt_state).await?;
+    }
+
+    let dbt_state = Arc::new(dbt_state);
 
     // Get the root project name
     let root_project_name = dbt_state.root_project_name();
@@ -924,4 +934,53 @@ async fn resolve_packages_parallel(
     }
 
     Ok((nodes, disabled_nodes, collector))
+}
+
+/// Prepares inline SQL for processing by writing it to a file and adding it to the DbtState.
+///
+/// This function:
+/// 1. Writes the inline SQL to target/inline_<uuid>.sql
+/// 2. Creates a DbtAsset for the file
+/// 3. Adds it to the root package's model_sql_files
+/// 4. Returns the generated model name for later reference
+///
+/// # Arguments
+/// * `inline_sql` - The SQL string provided via --inline flag
+/// * `out_dir` - The target directory where inline SQL will be written
+/// * `dbt_state` - The mutable DbtState to update with the inline asset
+async fn prepare_inline_sql(
+    inline_sql: &str,
+    out_dir: &Path,
+    dbt_state: &mut DbtState,
+) -> FsResult<String> {
+    // Generate unique model name using shortened UUID (first 8 chars)
+    let unique_id = uuid::Uuid::new_v4();
+    let short_id = &unique_id.to_string()[..8];
+    let model_name = format!("inline_{short_id}");
+    let filename = format!("{model_name}.sql");
+
+    // Write inline SQL to target directory
+    let inline_path = out_dir.join(&filename);
+    tokiofs::create_dir_all(out_dir).await?;
+    tokiofs::write(&inline_path, inline_sql).await?;
+
+    // Create DbtAsset for the inline SQL
+    let inline_asset = DbtAsset {
+        base_path: out_dir.to_path_buf(),
+        path: PathBuf::from(filename),
+        package_name: dbt_state.root_project_name().to_string(),
+    };
+
+    // Set inline_file in root package and add to model_sql_files
+    let root_project_name = dbt_state.root_project_name().to_string();
+    if let Some(root_package) = dbt_state
+        .packages
+        .iter_mut()
+        .find(|p| p.dbt_project.name == root_project_name)
+    {
+        root_package.inline_file = Some(inline_asset.clone());
+        root_package.model_sql_files.push(inline_asset);
+    }
+
+    Ok(model_name)
 }

@@ -79,6 +79,7 @@ mod tests {
             exclude: None,
             replay: None,
             sample_config: RunFilter::default(),
+            inline_sql: None,
         };
 
         // Create base context with minimal required values

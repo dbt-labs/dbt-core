@@ -5,7 +5,7 @@ use super::{
     task_seq::CommandFn,
     utils::{
         maybe_normalize_schema_name, maybe_normalize_slashes, maybe_normalize_time,
-        normalize_version,
+        normalize_inline_sql_files, normalize_version,
     },
 };
 use futures::FutureExt as _;
@@ -41,6 +41,7 @@ fn postprocess_actual(content: String, sort_output: bool) -> String {
         maybe_normalize_time,
         normalize_version,
         maybe_normalize_tmp_paths,
+        normalize_inline_sql_files,
     ]
     .iter()
     .fold(content, |acc, transform| transform(acc));
@@ -55,6 +56,7 @@ fn postprocess_golden(content: String, sort_output: bool) -> String {
         maybe_normalize_time,
         normalize_version,
         maybe_normalize_tmp_paths,
+        normalize_inline_sql_files,
     ]
     .iter()
     .fold(content, |acc, transform| transform(acc));
@@ -365,5 +367,15 @@ mod tests {
         let line = "32ms 101us 694ns";
         let postprocess_actual = postprocess_actual(line.to_string(), false);
         assert_eq!("duration", postprocess_actual);
+    }
+
+    #[test]
+    fn test_normalize_inline_sql_files() {
+        let line = "Compiling model inline_a1b2c3d4.sql to target/compiled/inline_a1b2c3d4.sql";
+        let postprocess_actual = postprocess_actual(line.to_string(), false);
+        assert_eq!(
+            "Compiling model inline_#randhash#.sql to target/compiled/inline_#randhash#.sql",
+            postprocess_actual
+        );
     }
 }

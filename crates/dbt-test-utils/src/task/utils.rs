@@ -48,6 +48,8 @@ static MULTI_UNIT_DURATION_PATTERN: Lazy<Regex> = Lazy::new(|| {
         .unwrap()
 });
 static AGE_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\bage:\s*\d+").unwrap());
+static INLINE_SQL_PATTERN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"inline_[a-f0-9]{8}\.sql").unwrap());
 
 /// Copies a directory and its contents, excluding .gitignored files.
 pub fn copy_dir_non_ignored(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> FsResult<()> {
@@ -235,6 +237,13 @@ pub fn normalize_version(output: String) -> String {
         format!("dbt-fusion {}", env!("CARGO_PKG_VERSION")).as_str(),
         "dbt-fusion ",
     )
+}
+
+pub fn normalize_inline_sql_files(output: String) -> String {
+    // Replace inline SQL file names like "inline_a1b2c3d4.sql" with "inline_#randhash#.sql"
+    INLINE_SQL_PATTERN
+        .replace_all(&output, "inline_#randhash#.sql")
+        .to_string()
 }
 
 /// Strips the full test name of the crate name and returns the test name.

@@ -1,5 +1,6 @@
 mod artifact_validation;
 mod assertions;
+mod check_compiled;
 mod dbt;
 mod env;
 mod io;
@@ -77,6 +78,7 @@ pub use task_seq::{CommandFn, TaskSeq, fs_cmd_vec};
 // Public tasks.
 pub use artifact_validation::ArtifactComparisonTask;
 pub use assertions::{AssertDirExistsTask, AssertFileContainsTask, AssertFileExistsTask};
+pub use check_compiled::CheckCompiledFiles;
 pub use dbt::DbtRecordTask;
 pub use io::{CpFromTargetTask, FileWriteTask, RmDirTask, RmTask, SedTask};
 pub use log_capture::ExecuteAndCaptureLogs;

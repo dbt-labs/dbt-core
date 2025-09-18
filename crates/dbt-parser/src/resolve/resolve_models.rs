@@ -181,8 +181,15 @@ pub async fn resolve_models(
         let ref_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
         // Is there a better way to handle this if the model doesn't have a config?
         let mut model_config = *sql_file_info.config;
+        // Default to View if no materialized is set
         if model_config.materialized.is_none() {
             model_config.materialized = Some(DbtMaterialization::View);
+        }
+        // Set to Inline if this is the inline file
+        if let Some(inline_file) = &package.inline_file {
+            if inline_file == &dbt_asset {
+                model_config.materialized = Some(DbtMaterialization::Inline);
+            }
         }
 
         let model_name = models_properties_sans_semantics

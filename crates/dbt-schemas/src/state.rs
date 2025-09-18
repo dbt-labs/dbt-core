@@ -180,6 +180,7 @@ pub struct DbtPackage {
     pub seed_files: Vec<DbtAsset>,
     pub docs_files: Vec<DbtAsset>,
     pub snapshot_files: Vec<DbtAsset>,
+    pub inline_file: Option<DbtAsset>,
     pub dependencies: BTreeSet<String>,
     pub all_paths: HashMap<ResourcePathKind, Vec<(PathBuf, SystemTime)>>,
 }

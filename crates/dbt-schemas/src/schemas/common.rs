@@ -213,6 +213,8 @@ pub enum DbtMaterialization {
     StreamingTable,
     /// only for snowflake
     DynamicTable,
+    /// for inline SQL compilation
+    Inline,
     #[serde(untagged)]
     Unknown(String),
 }
@@ -232,6 +234,7 @@ impl FromStr for DbtMaterialization {
             "analysis" => Ok(DbtMaterialization::Analysis),
             "streaming_table" => Ok(DbtMaterialization::StreamingTable),
             "dynamic_table" => Ok(DbtMaterialization::DynamicTable),
+            "inline" => Ok(DbtMaterialization::Inline),
             other => Ok(DbtMaterialization::Unknown(other.to_string())),
         }
     }
@@ -256,6 +259,7 @@ impl std::fmt::Display for DbtMaterialization {
             DbtMaterialization::StreamingTable => "streaming_table",
             DbtMaterialization::DynamicTable => "dynamic_table",
             DbtMaterialization::Analysis => "analysis",
+            DbtMaterialization::Inline => "inline",
             DbtMaterialization::Unknown(s) => s.as_str(),
             DbtMaterialization::Snapshot => "snapshot",
             DbtMaterialization::Seed => "seed",
@@ -279,9 +283,10 @@ impl From<DbtMaterialization> for RelationType {
             DbtMaterialization::StreamingTable => RelationType::StreamingTable,
             DbtMaterialization::DynamicTable => RelationType::DynamicTable,
             DbtMaterialization::Analysis => RelationType::External, // TODO Validate this
+            DbtMaterialization::Inline => RelationType::Ephemeral, // Inline models don't materialize in DB
             DbtMaterialization::Unknown(_) => RelationType::External, // TODO Validate this
-            DbtMaterialization::Snapshot => RelationType::Table,    // TODO Validate this
-            DbtMaterialization::Seed => RelationType::Table,        // TODO Validate this
+            DbtMaterialization::Snapshot => RelationType::Table,   // TODO Validate this
+            DbtMaterialization::Seed => RelationType::Table,       // TODO Validate this
         }
     }
 }
@@ -300,6 +305,7 @@ impl From<&DbtMaterialization> for NodeMaterialization {
             DbtMaterialization::StreamingTable => Self::StreamingTable,
             DbtMaterialization::DynamicTable => Self::DynamicTable,
             DbtMaterialization::Analysis => Self::Analysis,
+            DbtMaterialization::Inline => Self::Ephemeral, // Inline is similar to ephemeral
             DbtMaterialization::Unknown(_) => Self::Custom,
             DbtMaterialization::Snapshot => Self::Snapshot,
             DbtMaterialization::Seed => Self::Seed,

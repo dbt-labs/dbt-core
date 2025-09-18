@@ -302,6 +302,10 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
         self.common().meta.clone()
     }
     fn static_analysis(&self) -> StaticAnalysisKind;
+    fn static_analysis_enabled(&self) -> bool {
+        self.static_analysis() == StaticAnalysisKind::On
+            || self.static_analysis() == StaticAnalysisKind::Unsafe
+    }
     // Setters
     fn set_quoting(&mut self, quoting: ResolvedQuoting);
     fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind);

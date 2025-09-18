@@ -563,6 +563,7 @@ pub async fn load_inner(
         snapshot_files,
         dependencies,
         all_paths: all_files,
+        inline_file: None,
     })
 }
 
