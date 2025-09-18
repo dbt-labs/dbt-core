@@ -15,6 +15,8 @@ from dbt.cli import params as p
 from dbt.cli import requires
 from dbt.cli.exceptions import DbtInternalException, DbtUsageException
 from dbt.cli.requires import setup_manifest
+from dbt.cli.flags import command_params
+from dbt.cli.types import Command
 from dbt.contracts.graph.manifest import Manifest
 from dbt.mp_context import get_mp_context
 from dbt_common.events.base_types import EventMsg
@@ -52,17 +54,18 @@ class dbtRunner:
 
     def invoke(self, args: List[str], **kwargs) -> dbtRunnerResult:
         try:
-            dbt_ctx = cli.make_context(cli.name, args.copy())
+            # Combine args and kwargs into a single list of command line arguments
+            cli_params = command_params(command=Command.from_str(args[0]), args_dict=kwargs)
+            cli_params = [p for p in cli_params if p is not args[0]]  # command name is added by command_params() but already in args
+            full_args = args.copy() + cli_params
+
+            dbt_ctx = cli.make_context(cli.name, full_args)
             dbt_ctx.obj = {
                 "manifest": self.manifest,
                 "callbacks": self.callbacks,
-                "dbt_runner_command_args": args,
+                "dbt_runner_command_args": args.copy(),
             }
 
-            for key, value in kwargs.items():
-                dbt_ctx.params[key] = value
-                # Hack to set parameter source to custom string
-                dbt_ctx.set_parameter_source(key, "kwargs")  # type: ignore
 
             result, success = cli.invoke(dbt_ctx)
             return dbtRunnerResult(
