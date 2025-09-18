@@ -47,6 +47,8 @@ pub enum AdapterErrorKind {
     Replay,
     /// Not supported
     NotSupported,
+    /// Python models are not supported in replay mode
+    PythonModelsNotSupportedInReplay,
 }
 
 impl AdapterErrorKind {
@@ -67,6 +69,9 @@ impl AdapterErrorKind {
             Self::SerdeYAML => "YAML",
             Self::Replay => "Replay error",
             Self::NotSupported => "Not supported",
+            Self::PythonModelsNotSupportedInReplay => {
+                "Python models are not supported in replay mode"
+            }
         }
     }
 }
