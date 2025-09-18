@@ -121,6 +121,8 @@ pub fn build_compile_and_run_base_context(
         "load_result".to_owned(),
         MinijinjaValue::from_function(result_store.load_result()),
     );
+
+    ctx.insert("node".to_owned(), MinijinjaValue::NONE);
     ctx
 }
 
