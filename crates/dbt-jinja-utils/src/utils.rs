@@ -210,7 +210,9 @@ pub async fn inject_and_persist_ephemeral_models(
 
     // Wrap the current SQL in a subquery and prepend CTEs
     let ctes = all_ctes.join(", ");
-    final_sql = format!("with {ctes}\n\nselect * from (\n{final_sql}\n)");
+    final_sql = format!(
+        "with {ctes}\n--EPHEMERAL-SELECT-WRAPPER-START\nselect * from (\n{final_sql}\n--EPHEMERAL-SELECT-WRAPPER-END\n)"
+    );
     // Shift expanded macro spans down by number of added lines and added offet
     // for the "with ... select * from (" line, and the CTEs
     let added_lines = ctes.lines().count() + 2;
