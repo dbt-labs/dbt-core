@@ -164,7 +164,8 @@ class WritableManifest(ArtifactMixin):
         )
     )
     functions: Mapping[UniqueID, Function] = field(
-        metadata=dict(description=("The functions defined in the dbt project"))
+        default_factory=dict,
+        metadata=dict(description=("The functions defined in the dbt project")),
     )
 
     @classmethod
