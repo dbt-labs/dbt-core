@@ -79,7 +79,11 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     }
 
     /// Create a new connection
-    fn new_connection(&self, node_id: Option<String>) -> AdapterResult<Box<dyn Connection>>;
+    fn new_connection(
+        &self,
+        state: Option<&State>,
+        node_id: Option<String>,
+    ) -> AdapterResult<Box<dyn Connection>>;
 
     /// Helper method for execute
     #[allow(clippy::too_many_arguments)]
@@ -224,7 +228,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         fetch: bool,
         limit: Option<i64>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
-        let mut conn = self.new_connection(None)?;
+        let mut conn = self.new_connection(None, None)?;
         self.execute(None, &mut *conn, query_ctx, auto_begin, fetch, limit, None)
     }
 
@@ -840,6 +844,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn get_relation_config(
         &self,
         _state: &State,
+        _conn: &mut dyn Connection,
         _relation: Arc<dyn BaseRelation>,
     ) -> AdapterResult<Arc<dyn BaseRelationConfig>> {
         unimplemented!("only available with Databricks adapter")

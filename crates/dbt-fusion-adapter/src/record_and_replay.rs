@@ -123,6 +123,10 @@ impl RecordEngine {
         self.0.engine.config(key)
     }
 
+    pub fn get_config(&self) -> &AdapterConfig {
+        self.0.engine.get_config()
+    }
+
     pub(crate) fn adapter_factory(&self) -> &dyn AdapterFactory {
         self.0.engine.adapter_factory()
     }
@@ -423,6 +427,10 @@ impl ReplayEngine {
 
     pub fn config(&self, key: &str) -> Option<Cow<'_, str>> {
         self.0.config.get_string(key)
+    }
+
+    pub fn get_config(&self) -> &AdapterConfig {
+        &self.0.config
     }
 
     pub(crate) fn adapter_factory(&self) -> &dyn AdapterFactory {

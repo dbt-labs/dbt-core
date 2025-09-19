@@ -702,6 +702,11 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 .clone()
                                 .unwrap_or_default(),
                         },
+                        __adapter_attr__: AdapterAttr::from_config_and_dialect(
+                            &snapshot.config.__warehouse_specific_config__,
+                            AdapterType::from_str(&manifest.metadata.adapter_type)
+                                .expect("Unknown or unsupported adapter type"),
+                        ),
                         deprecated_config: snapshot.config,
                         compiled: snapshot.__base_attr__.compiled,
                         compiled_code: snapshot.__base_attr__.compiled_code,

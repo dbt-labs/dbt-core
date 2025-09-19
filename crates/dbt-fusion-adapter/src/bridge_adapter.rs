@@ -165,12 +165,13 @@ impl BridgeAdapter {
     /// normal.
     pub(crate) fn borrow_tlocal_connection(
         &self,
+        state: Option<&State>,
         node_id: Option<String>,
     ) -> Result<ConnectionGuard<'_>, MinijinjaError> {
         let _span = span!("BridgeAdapter::borrow_thread_local_connection");
         let mut conn = CONNECTION.with(|c| c.take());
         if conn.is_none() {
-            self.new_connection(node_id)
+            self.new_connection(state, node_id)
                 .map(|new_conn| conn.replace(new_conn))?;
         }
         let guard = ConnectionGuard::new(conn.unwrap());
@@ -220,10 +221,11 @@ impl BaseAdapter for BridgeAdapter {
 
     fn new_connection(
         &self,
+        state: Option<&State>,
         node_id: Option<String>,
     ) -> Result<Box<dyn Connection>, MinijinjaError> {
         let _span = span!("BrideAdapter::new_connection");
-        let conn = self.typed_adapter.new_connection(node_id)?;
+        let conn = self.typed_adapter.new_connection(state, node_id)?;
         Ok(conn)
     }
 
@@ -431,7 +433,7 @@ impl BaseAdapter for BridgeAdapter {
         limit: Option<i64>,
         options: Option<HashMap<String, String>>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
-        let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let query_ctx =
             query_ctx_from_state_with_sql(state, sql)?.with_desc("execute adapter call");
         let (response, table) = self.typed_adapter.execute(
@@ -462,7 +464,7 @@ impl BaseAdapter for BridgeAdapter {
             sql.to_string()
         };
 
-        let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let query_ctx = query_ctx_from_state_with_sql(state, formatted_sql)?
             .with_desc("add_query adapter call");
 
@@ -512,7 +514,7 @@ impl BaseAdapter for BridgeAdapter {
             let from_relation = from_relation_obj.inner();
             let to_relation = to_relation_obj.inner();
             iter.finish()?;
-            let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+            let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
             self.typed_adapter
                 .rename_relation(conn.as_mut(), from_relation, to_relation)?;
         }
@@ -738,7 +740,7 @@ impl BaseAdapter for BridgeAdapter {
                 return Ok(none_value());
             }
 
-            let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+            let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
             let db_schema = CatalogAndSchema::from(&temp_relation);
             let query_ctx =
                 query_ctx_from_state(state)?.with_desc("get_relation > list_relations call");
@@ -765,7 +767,7 @@ impl BaseAdapter for BridgeAdapter {
         // Move on to query against the remote when we have:
         // 1. A cache miss and we failed to execute list_relations
         // 2. The schema was not previously cached
-        let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let query_ctx = query_ctx_from_state(state)?.with_desc("get_relation adapter call");
         let relation = self.typed_adapter.get_relation(
             state,
@@ -975,7 +977,7 @@ impl BaseAdapter for BridgeAdapter {
 
         let query_ctx = query_ctx_from_state_with_sql(state, sql)?
             .with_desc("get_column_schema_from_query adapter call");
-        let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let result =
             self.typed_adapter
                 .get_column_schema_from_query(state, conn.as_mut(), &query_ctx)?;
@@ -1076,7 +1078,7 @@ impl BaseAdapter for BridgeAdapter {
             )
         };
 
-        let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let result =
             self.typed_adapter
                 .is_replaceable(conn.as_mut(), relation, partition_by, cluster_by)?;
@@ -1226,7 +1228,7 @@ impl BaseAdapter for BridgeAdapter {
                     .ok_or_else(|| invalid_argument_inner!("role must be a string"))?,
             )
         };
-        let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let relation = downcast_value_to_dyn_base_relation(&entity)?;
         let result = self.typed_adapter.grant_access_to(
             state,
@@ -1246,7 +1248,7 @@ impl BaseAdapter for BridgeAdapter {
         check_num_args(current_function_name!(), &parser, 1, 1)?;
 
         let relation = parser.get::<Value>("relation")?;
-        let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let result = self
             .typed_adapter
             .get_dataset_location(state, conn.as_mut(), relation)?;
@@ -1267,7 +1269,7 @@ impl BaseAdapter for BridgeAdapter {
         let identifier = parser.get::<String>("identifier")?;
         let description = parser.get::<String>("description")?;
 
-        let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let result = self.typed_adapter.update_table_description(
             state,
             conn.as_mut(),
@@ -1291,7 +1293,7 @@ impl BaseAdapter for BridgeAdapter {
         let relation = parser.get::<Value>("relation")?;
         let columns = parser.get::<Value>("columns")?;
 
-        let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let result =
             self.typed_adapter
                 .alter_table_add_columns(state, conn.as_mut(), relation, columns)?;
@@ -1310,7 +1312,7 @@ impl BaseAdapter for BridgeAdapter {
             MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
         })?;
 
-        let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let result = self.typed_adapter.update_columns_descriptions(
             state,
             conn.as_mut(),
@@ -1345,7 +1347,7 @@ impl BaseAdapter for BridgeAdapter {
 
         let query_ctx =
             query_ctx_from_state(state)?.with_desc("list_relations_without_caching adapter call");
-        let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let result = self.typed_adapter.list_relations(
             &query_ctx,
             conn.as_mut(),
@@ -1368,7 +1370,7 @@ impl BaseAdapter for BridgeAdapter {
         let major = parser.get::<i64>("major")?;
         let minor = parser.get::<i64>("minor")?;
 
-        let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let result = self
             .typed_adapter
             .compare_dbr_version(state, conn.as_mut(), major, minor)?;
@@ -1436,7 +1438,7 @@ impl BaseAdapter for BridgeAdapter {
             _ => BTreeMap::new(),
         };
 
-        let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         self.typed_adapter.update_tblproperties_for_iceberg(
             state,
             conn.as_mut(),
@@ -1461,7 +1463,7 @@ impl BaseAdapter for BridgeAdapter {
 
         self.relation_cache.insert_relation(dest.clone(), None);
 
-        let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         self.typed_adapter
             .copy_table(state, conn.as_mut(), source, dest, materialization)?;
 
@@ -1476,7 +1478,7 @@ impl BaseAdapter for BridgeAdapter {
         let relation = parser.get::<Value>("relation")?;
         let relation = downcast_value_to_dyn_base_relation(&relation)?;
 
-        let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let result = self
             .typed_adapter
             .describe_relation(conn.as_mut(), relation)?;
@@ -1568,9 +1570,10 @@ impl BaseAdapter for BridgeAdapter {
         let relation = parser.get::<Value>("relation")?;
         let relation = downcast_value_to_dyn_base_relation(&relation)?;
 
-        let config = self
-            .typed_adapter
-            .get_relation_config(state, relation.clone())?;
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+        let config =
+            self.typed_adapter
+                .get_relation_config(state, conn.as_mut(), relation.clone())?;
         let value = config.to_value();
         Ok(value)
     }
@@ -1632,7 +1635,7 @@ impl BaseAdapter for BridgeAdapter {
         }
 
         let mut conn = self
-            .borrow_tlocal_connection(Some(node_id.to_string()))
+            .borrow_tlocal_connection(None, Some(node_id.to_string()))
             .map_err(|e| FsError::from_jinja_err(e, "Failed to create a connection"))?;
         self.typed_adapter
             .use_warehouse(conn.as_mut(), warehouse.unwrap(), node_id)?;
@@ -1642,7 +1645,7 @@ impl BaseAdapter for BridgeAdapter {
     #[tracing::instrument(skip(self), level = "trace")]
     fn restore_warehouse(&self, node_id: &str) -> FsResult<()> {
         let mut conn = self
-            .borrow_tlocal_connection(Some(node_id.to_string()))
+            .borrow_tlocal_connection(None, Some(node_id.to_string()))
             .map_err(|e| FsError::from_jinja_err(e, "Failed to create a connection"))?;
         self.typed_adapter
             .restore_warehouse(conn.as_mut(), node_id)?;
@@ -1660,7 +1663,7 @@ impl BaseAdapter for BridgeAdapter {
         file_path: &str,
         field_delimiter: &str,
     ) -> Result<Value, MinijinjaError> {
-        let mut conn = self.borrow_tlocal_connection(node_id_from_state(state))?;
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let query_ctx = query_ctx_from_state(state)?.with_desc("load_dataframe");
         let result = self.typed_adapter.load_dataframe(
             &query_ctx,

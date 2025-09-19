@@ -495,6 +495,16 @@ impl SqlEngine {
         }
     }
 
+    // Get full config object
+    pub fn get_config(&self) -> &AdapterConfig {
+        match self {
+            Self::Warehouse(actual_engine) => &actual_engine.config,
+            Self::Record(record_engine) => record_engine.get_config(),
+            Self::Replay(replay_engine) => replay_engine.get_config(),
+            Self::Mock(_) => unreachable!("Mock engine does not support get_config"),
+        }
+    }
+
     pub fn cancellation_token(&self) -> CancellationToken {
         match self {
             Self::Warehouse(actual_engine) => actual_engine.cancellation_token(),

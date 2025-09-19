@@ -283,6 +283,7 @@ impl AdapterTyping for ParseAdapter {
 impl BaseAdapter for ParseAdapter {
     fn new_connection(
         &self,
+        _state: Option<&State>,
         _node_id: Option<String>,
     ) -> Result<Box<dyn Connection>, MinijinjaError> {
         unimplemented!("new_connection is not implemented for ParseAdapter")

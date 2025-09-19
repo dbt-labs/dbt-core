@@ -1,3 +1,11 @@
+use crate::args::ResolveArgs;
+use crate::dbt_project_config::{
+    RootProjectConfigs, init_project_config, strip_resource_paths_from_ref_path,
+};
+use crate::renderer::{
+    RenderCtx, RenderCtxInner, SqlFileRenderResult, render_unresolved_sql_files,
+};
+use crate::utils::{RelationComponents, get_node_fqn, update_node_relation_components};
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_SNAPSHOTS_DIR_NAME;
@@ -10,6 +18,7 @@ use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_schemas::schemas::common::{DbtMaterialization, DbtQuoting, NodeDependsOn};
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::macros::DbtMacro;
+use dbt_schemas::schemas::nodes::AdapterAttr;
 use dbt_schemas::schemas::project::{DbtProject, SnapshotConfig};
 use dbt_schemas::schemas::properties::SnapshotProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
@@ -22,15 +31,6 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-
-use crate::args::ResolveArgs;
-use crate::dbt_project_config::{
-    RootProjectConfigs, init_project_config, strip_resource_paths_from_ref_path,
-};
-use crate::renderer::{
-    RenderCtx, RenderCtxInner, SqlFileRenderResult, render_unresolved_sql_files,
-};
-use crate::utils::{RelationComponents, get_node_fqn, update_node_relation_components};
 
 use super::resolve_properties::MinimalPropertiesEntry;
 
@@ -332,6 +332,10 @@ pub async fn resolve_snapshots(
                         .clone()
                         .unwrap_or_default(),
                 },
+                __adapter_attr__: AdapterAttr::from_config_and_dialect(
+                    &final_config.__warehouse_specific_config__,
+                    adapter_type,
+                ),
                 deprecated_config: final_config.clone(),
                 compiled: None,
                 compiled_code: None,

@@ -1866,6 +1866,7 @@ pub struct DbtSnapshot {
     pub __common_attr__: CommonAttributes,
     pub __base_attr__: NodeBaseAttributes,
     pub __snapshot_attr__: DbtSnapshotAttr,
+    pub __adapter_attr__: AdapterAttr,
 
     /// To be deprecated
     #[serde(rename = "config")]

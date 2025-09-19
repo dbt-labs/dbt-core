@@ -289,7 +289,7 @@ pub fn create_schemas_if_not_exists(
     let adapter_clone = adapter.clone();
     let new_connection_f = move || {
         adapter_clone
-            .new_connection(None)
+            .new_connection(None, None)
             .map_err(Cancellable::Error)
     };
 

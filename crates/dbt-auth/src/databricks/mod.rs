@@ -1,4 +1,6 @@
 use crate::{AdapterConfig, Auth, AuthError};
+use dbt_serde_yaml::Value;
+use std::borrow::Cow;
 
 use dbt_xdbc::{Backend, database, databricks};
 
@@ -17,6 +19,8 @@ impl Auth for DatabricksAuth {
     }
 
     fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError> {
+        let http_path = resolve_http_path(config)?;
+
         let mut builder = database::Builder::new(self.backend());
 
         if self.backend() == Backend::DatabricksODBC {
@@ -27,7 +31,9 @@ impl Auth for DatabricksAuth {
                 if let Some(value) = config.get_string(key) {
                     match key {
                         "token" => builder.with_named_option(odbc::TOKEN_FIELD, value),
-                        "http_path" => builder.with_named_option(odbc::HTTP_PATH, value),
+                        "http_path" => {
+                            builder.with_named_option(odbc::HTTP_PATH, http_path.clone())
+                        }
                         "host" => builder.with_named_option(odbc::HOST, value),
                         "schema" => builder.with_named_option(odbc::SCHEMA, value),
                         "database" => builder.with_named_option(odbc::CATALOG, value),
@@ -56,7 +62,6 @@ impl Auth for DatabricksAuth {
             //  /sql/protocolv1/o/<instance>/<cluster-id>
             // we need to extract the warehouse-id or cluster-id from the http_path
             // warehouses and clusters are separate concepts and endpoints in Databricks
-            let http_path = config.require_string("http_path")?;
             if http_path.contains("warehouses") {
                 let warehouse_id = http_path.split("/warehouses/").nth(1).unwrap();
                 builder.with_named_option(databricks::WAREHOUSE, warehouse_id)?;
@@ -108,6 +113,40 @@ impl Auth for DatabricksAuth {
         }
         Ok(builder)
     }
+}
+
+fn resolve_http_path(config: &AdapterConfig) -> Result<Cow<str>, AuthError> {
+    let mut http_path = config.require_string("http_path")?;
+    let databricks_compute_config = config.get_string("databricks_compute");
+
+    if let Some(databricks_compute) = databricks_compute_config {
+        let compute = config.require("compute")?;
+
+        if let Value::Mapping(map, ..) = compute {
+            if let Some((_, Value::Mapping(compute_map, ..))) = map
+                .iter()
+                .find(|(k, _)| matches!(k, Value::String(s, _) if *s == databricks_compute))
+            {
+                if let Some(Value::String(path, _)) = compute_map.iter().find_map(|(k, v)| {
+                    if let Value::String(key, _) = k {
+                        if key == "http_path" {
+                            return Some(v);
+                        }
+                    }
+                    None
+                }) {
+                    http_path = Cow::from(path);
+                    return Ok(http_path);
+                }
+            }
+        }
+
+        return Err(AuthError::Config(format!(
+            "Compute resource '{databricks_compute}' does not exist or does not specify http_path"
+        )));
+    }
+
+    Ok(http_path)
 }
 
 fn validate_config(config: &AdapterConfig) -> Result<(), AuthError> {
@@ -420,6 +459,53 @@ mod tests {
         assert_eq!(
             result.unwrap_err().msg(),
             "The config 'azure_client_id' and 'azure_client_secret' must be both present or both absent"
+        );
+    }
+
+    #[test]
+    fn test_resolve_http_path_no_extra_params() {
+        let mapping = Mapping::from_iter([("http_path".into(), "/sql/extra/warehouse".into())]);
+        let config = AdapterConfig::new(mapping);
+
+        let path = resolve_http_path(&config).expect("expected to resolve http_path from config");
+
+        assert_eq!(path, "/sql/extra/warehouse");
+    }
+
+    #[test]
+    fn test_resolve_http_path_uses_databricks_compute() {
+        let compute1_config =
+            Mapping::from_iter([("http_path".into(), "/sql/warehouse/specific_compute".into())]);
+        let compute_config = Mapping::from_iter([("compute1".into(), compute1_config.into())]);
+        let mapping = Mapping::from_iter([
+            ("http_path".into(), "/sql/config/warehouse".into()),
+            ("compute".into(), compute_config.into()),
+            ("databricks_compute".into(), "compute1".into()),
+        ]);
+        let config = AdapterConfig::new(mapping);
+
+        let path = resolve_http_path(&config)
+            .expect("expected to resolve http_path from databricks compute config");
+
+        assert_eq!(path, "/sql/warehouse/specific_compute");
+    }
+
+    #[test]
+    fn test_resolve_http_config_missing_errors() {
+        let compute_config =
+            Mapping::from_iter([("compute1".into(), "/sql/warehouse/specific_compute".into())]);
+        let mapping = Mapping::from_iter([
+            ("http_path".into(), "/sql/config/warehouse".into()),
+            ("compute".into(), compute_config.into()),
+            ("databricks_compute".into(), "compute2".into()),
+        ]);
+        let config = AdapterConfig::new(mapping);
+
+        let result = resolve_http_path(&config);
+
+        assert!(
+            result.is_err(),
+            "expected an error when http_path is missing"
         );
     }
 }

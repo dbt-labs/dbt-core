@@ -94,6 +94,7 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     /// Create a new connection
     fn new_connection(
         &self,
+        state: Option<&State>,
         node_id: Option<String>,
     ) -> Result<Box<dyn Connection>, MinijinjaError>;
 
