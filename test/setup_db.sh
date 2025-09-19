@@ -37,6 +37,18 @@ export PGUSER
 PGPORT="${PGPORT:-5432}"
 export PGPORT
 PGHOST="${PGHOST:-localhost}"
+export PGHOST
+PGDATABASE="${PGDATABASE:-postgres}"
+export PGDATABASE
+: "${PGPASSWORD:=password}"
+export PGPASSWORD
+
+# Normalize localhost to IPv4 to avoid IPv6 (::1) surprises
+if [ "${PGHOST}" = "localhost" ]; then
+    PGHOST="127.0.0.1"
+    export PGHOST
+fi
+
 
 for i in {1..10}; do
 	if pg_isready -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}" ; then
