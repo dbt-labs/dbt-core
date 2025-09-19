@@ -278,7 +278,7 @@ pub fn model_props_to_semantic_entities(model_props: ModelProperties) -> Vec<Sem
 
     for column in model_props.columns.unwrap_or_default() {
         if let Some(column_entity) = column.entity {
-            let column_entity_config = match column_entity {
+            let mut column_entity_config = match column_entity {
                 Entity::EntityType(ref entity_type) => EntityConfig {
                     name: Some(column.name.clone()), // defaults to column.name if there is no column.entity.name
                     type_: entity_type.clone(),
@@ -288,11 +288,17 @@ pub fn model_props_to_semantic_entities(model_props: ModelProperties) -> Vec<Sem
                 },
                 Entity::EntityConfig(ref config) => config.clone(),
             };
+            if column_entity_config.name.is_none() {
+                column_entity_config.name = Some(column.name.clone());
+            }
+            if column_entity_config.description.is_none() {
+                column_entity_config.description = column.description.clone();
+            }
 
             let semantic_entity = SemanticEntity {
-                name: column_entity_config.name.unwrap(), // TODO: confirm this should not always be column.name
+                name: column_entity_config.name.unwrap_or_default(),
                 entity_type: column_entity_config.type_,
-                description: column.description,
+                description: column_entity_config.description,
                 expr: None, // only applicable for derived_semantics
                 label: column_entity_config.label,
                 config: column_entity_config.config,
@@ -332,7 +338,7 @@ pub fn model_props_to_dimensions(model_props: ModelProperties) -> Vec<Dimension>
 
     for column in model_props.columns.unwrap_or_default() {
         if let Some(column_dimension) = column.dimension {
-            let column_dimension_config = match column_dimension {
+            let mut column_dimension_config = match column_dimension {
                 ColumnPropertiesDimension::DimensionType(ref dimension_type) => {
                     ColumnPropertiesDimensionConfig {
                         type_: dimension_type.clone(),
@@ -341,21 +347,30 @@ pub fn model_props_to_dimensions(model_props: ModelProperties) -> Vec<Dimension>
                         description: column.description.clone(), // defaults to column.description if there is no column.dimension.description
                         label: None,
                         config: None,
+                        granularity: None,
                     }
                 }
                 ColumnPropertiesDimension::DimensionConfig(ref config) => config.clone(),
             };
+            if column_dimension_config.name.is_none() {
+                column_dimension_config.name = Some(column.name.clone());
+            }
+            if column_dimension_config.description.is_none() {
+                column_dimension_config.description = column.description.clone();
+            }
 
             let dimension = Dimension {
-                name: column.name,
+                name: column_dimension_config.name.unwrap_or_default(),
                 dimension_type: column_dimension_config.type_.clone(),
-                description: column.description,
-                expr: None, // is it only applicable for derived_semantics? can one provide a 'expr' for a primary dimension?
+                description: column_dimension_config.description,
+                expr: None, // only applicable for derived_semantics
                 label: column_dimension_config.label,
                 is_partition: column_dimension_config.is_partition.unwrap_or(false),
-                type_params: column.granularity.map(|granularity| DimensionTypeParams {
-                    time_granularity: Some(granularity),
-                    validity_params: None,
+                type_params: column_dimension_config.granularity.map(|granularity| {
+                    DimensionTypeParams {
+                        time_granularity: Some(granularity),
+                        validity_params: None,
+                    }
                 }),
                 config: column_dimension_config.config.clone(),
                 // fields below are always null (for now)

@@ -1,4 +1,4 @@
-use crate::schemas::dbt_column::ColumnPropertiesGranularity;
+use crate::schemas::dbt_column::Granularity;
 use crate::schemas::project::MetricConfig;
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::UntaggedEnumDeserialize;
@@ -23,11 +23,11 @@ pub struct MetricsProperties {
     pub expr: Option<MetricExpr>,
     // TODO: can we add a macro to this field for it to be ignored during jinja transformation?
     pub filter: Option<String>,
-    pub config: Option<MetricConfig>, // TODO -- does MetricConfig only allow meta? What about group, tags, etc.?
+    pub config: Option<MetricConfig>,
     pub non_additive_dimension: Option<MetricPropertiesNonAdditiveDimension>,
     pub agg_time_dimension: Option<String>,
     pub window: Option<String>,
-    pub grain_to_date: Option<ColumnPropertiesGranularity>,
+    pub grain_to_date: Option<Granularity>,
     pub period_agg: Option<PeriodAggregationType>,
     pub input_metric: Option<StringOrMetricPropertiesMetricInput>,
     pub numerator: Option<StringOrMetricPropertiesMetricInput>,
@@ -41,6 +41,9 @@ pub struct MetricsProperties {
     pub constant_properties: Option<Vec<ConstantProperty>>,
 
     // Flattened field:
+    // TODO: remove this if you want to show yaml errors such as unexpected keys
+    // or you can keep this __unused__ and choose not to report yaml errors when
+    // parsing metrics yaml
     pub __unused__: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
 }
 

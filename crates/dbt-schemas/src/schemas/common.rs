@@ -17,7 +17,7 @@ use sha2::{Digest, Sha256};
 use strum::{Display, EnumIter, EnumString};
 
 use crate::dbt_types::RelationType;
-use crate::schemas::dbt_column::{ColumnPropertiesDimensionType, ColumnPropertiesGranularity};
+use crate::schemas::dbt_column::{ColumnPropertiesDimensionType, Granularity};
 use crate::schemas::manifest::common::SourceFileMetadata;
 use crate::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfig;
 
@@ -851,7 +851,7 @@ fn default_false() -> bool {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct DimensionTypeParams {
-    pub time_granularity: Option<ColumnPropertiesGranularity>,
+    pub time_granularity: Option<Granularity>,
     pub validity_params: Option<DimensionValidityParams>,
 }
 

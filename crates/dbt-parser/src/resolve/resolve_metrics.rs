@@ -276,8 +276,14 @@ pub fn resolve_top_level_metrics(
         // exposure names to only contain letters, numbers, and underscores?
 
         // Parse the metric properties from YAML
-        let metric_props: MetricsProperties =
-            into_typed_with_error(&arg.io, mpe.schema_value.clone(), false, None, None)?;
+        let metric_props: MetricsProperties = into_typed_with_error(
+            &arg.io,
+            mpe.schema_value.clone(),
+            // TODO: set arg 'show_errors_or_warnings' to true after updating conformance tests to use new SL spec
+            false,
+            None,
+            None,
+        )?;
 
         let metric_fqn = get_node_fqn(
             package_name,

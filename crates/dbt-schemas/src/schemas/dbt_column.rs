@@ -63,7 +63,8 @@ pub struct ColumnProperties {
     pub constraints: Option<Vec<Constraint>>,
     pub tests: Option<Vec<DataTests>>,
     pub data_tests: Option<Vec<DataTests>>,
-    pub granularity: Option<ColumnPropertiesGranularity>,
+    // TODO: remove 'granularity' once we have updating conformance tests to use new SL spec, which does not allow column level granularity
+    pub granularity: Option<Granularity>,
     pub policy_tags: Option<Vec<String>>,
     pub quote: Option<bool>,
     pub config: Option<ColumnConfig>,
@@ -74,7 +75,7 @@ pub struct ColumnProperties {
 
 #[derive(Deserialize, Serialize, Debug, Clone, Default, JsonSchema, Eq, PartialEq)]
 #[allow(non_camel_case_types)]
-pub enum ColumnPropertiesGranularity {
+pub enum Granularity {
     #[default]
     nanosecond,
     microsecond,
@@ -235,6 +236,7 @@ pub struct ColumnPropertiesDimensionConfig {
     pub name: Option<String>,
     pub description: Option<String>,
     pub config: Option<SemanticLayerElementConfig>,
+    pub granularity: Option<Granularity>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]

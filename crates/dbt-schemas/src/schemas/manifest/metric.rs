@@ -8,7 +8,7 @@ type YmlValue = dbt_serde_yaml::Value;
 use crate::schemas::{
     CommonAttributes,
     common::NodeDependsOn,
-    dbt_column::ColumnPropertiesGranularity,
+    dbt_column::Granularity,
     manifest::common::{SourceFileMetadata, WhereFilter, WhereFilterIntersection},
     project::MetricConfig,
     properties::{
@@ -59,7 +59,7 @@ pub struct MetricTypeParams {
     pub denominator: Option<MetricInput>,
     pub expr: Option<String>,
     pub window: Option<MetricTimeWindow>,
-    pub grain_to_date: Option<ColumnPropertiesGranularity>,
+    pub grain_to_date: Option<Granularity>,
     pub metrics: Option<Vec<MetricInput>>,
     pub conversion_type_params: Option<ConversionTypeParams>,
     pub cumulative_type_params: Option<CumulativeTypeParams>,

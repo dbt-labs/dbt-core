@@ -6,7 +6,7 @@ use crate::schemas::data_tests::DataTests;
 use crate::schemas::dbt_column::ColumnProperties;
 use crate::schemas::dbt_column::ColumnPropertiesDimensionType;
 use crate::schemas::dbt_column::ColumnPropertiesEntityType;
-use crate::schemas::dbt_column::ColumnPropertiesGranularity;
+use crate::schemas::dbt_column::Granularity;
 use crate::schemas::project::DefaultTo;
 use crate::schemas::project::ModelConfig;
 use crate::schemas::project::SemanticModelConfig;
@@ -162,7 +162,7 @@ pub struct DerivedDimension {
     pub expr: String,
     #[serde(rename = "type")]
     pub type_: ColumnPropertiesDimensionType,
-    pub granularity: Option<ColumnPropertiesGranularity>,
+    pub granularity: Option<Granularity>,
     pub is_partition: Option<bool>,
     pub label: Option<String>,
     pub description: Option<String>,

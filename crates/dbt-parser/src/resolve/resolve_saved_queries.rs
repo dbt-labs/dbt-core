@@ -122,7 +122,19 @@ pub async fn resolve_saved_queries(
                     .clone()
                     .map(|where_clause| where_clause.into()),
                 order_by: vec![],
-                limit: None, // TODO: populate from saved_query_props when implementing full functionality
+                limit: None, // TODO? not sure where to source from
+            };
+
+            let unique_ids_of_nodes_depends_on: Vec<String> = query_params
+                .metrics
+                .iter()
+                .map(|name| get_unique_id(name, package_name, None, "metric"))
+                .collect();
+
+            let depends_on = NodeDependsOn {
+                macros: vec![],
+                nodes: unique_ids_of_nodes_depends_on,
+                nodes_with_ref_location: vec![],
             };
 
             let exports = saved_query_props
@@ -138,7 +150,7 @@ pub async fn resolve_saved_queries(
                             export_as: config.export_as.unwrap_or_default(),
                             schema_name: Some(config.schema.unwrap_or_else(|| schema.to_string())), // TODO: verify
                             alias: Some(config.alias.unwrap_or_else(|| export.name.clone())),
-                            database: Some(database.to_string()), // TODO: verify
+                            database: Some(database.to_string()),
                         },
                         unrendered_config: BTreeMap::new(), // TODO
                     }
@@ -177,11 +189,10 @@ pub async fn resolve_saved_queries(
                     query_params,
                     exports,
                     label: saved_query_props.label,
-                    metadata: None, // TODO: populate when implementing full functionality
+                    metadata: None,
                     unrendered_config: BTreeMap::new(),
-                    depends_on: NodeDependsOn::default(),
-                    // TODO: Set refs when implementing full functionality
-                    refs: vec![], // TODO
+                    depends_on,
+                    refs: vec![],
                     group: saved_query_config.group.clone(),
                     created_at: chrono::Utc::now().timestamp() as f64,
                 },
