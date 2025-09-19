@@ -475,6 +475,7 @@ def verify_manifest(project, expected_manifest, start_time, manifest_schema_path
         "docs",
         "disabled",
         "exposures",
+        "functions",
         "selectors",
         "semantic_models",
         "unit_tests",

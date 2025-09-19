@@ -293,6 +293,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "language": "sql",
                 "refs": [{"name": "seed", "package": None, "version": None}],
                 "sources": [],
+                "functions": [],
                 "depends_on": {"nodes": ["seed.test.seed"], "macros": []},
                 "deprecation_date": None,
                 "unique_id": "model.test.model",
@@ -403,6 +404,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "language": "sql",
                 "refs": [{"name": "seed", "package": None, "version": None}],
                 "sources": [],
+                "functions": [],
                 "depends_on": {"nodes": ["seed.test.seed"], "macros": []},
                 "deprecation_date": None,
                 "unique_id": "model.test.second_model",
@@ -599,6 +601,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "columns": {},
                 "config": test_config,
                 "sources": [],
+                "functions": [],
                 "group": None,
                 "depends_on": {
                     "macros": ["macro.dbt.test_not_null", "macro.dbt.get_where_subquery"],
@@ -683,6 +686,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "resource_type": "snapshot",
                 "schema": alternate_schema,
                 "sources": [],
+                "functions": [],
                 "tags": [],
                 "unique_id": "snapshot.test.snapshot_seed",
                 "unrendered_config": unrendered_snapshot_config,
@@ -702,6 +706,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "group": None,
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
                 "sources": [],
+                "functions": [],
                 "depends_on": {
                     "macros": ["macro.test.test_nothing", "macro.dbt.get_where_subquery"],
                     "nodes": ["model.test.model"],
@@ -755,6 +760,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "group": None,
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
                 "sources": [],
+                "functions": [],
                 "depends_on": {
                     "macros": ["macro.dbt.test_unique", "macro.dbt.get_where_subquery"],
                     "nodes": ["model.test.model"],
@@ -890,6 +896,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "maturity": "medium",
                 "meta": {"tool": "my_tool", "languages": ["python"]},
                 "metrics": [],
+                "functions": [],
                 "tags": ["my_department"],
                 "name": "notebook_exposure",
                 "original_file_path": os.path.join("models", "schema.yml"),
@@ -922,6 +929,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 },
                 "fqn": ["test", "simple_exposure"],
                 "metrics": [],
+                "functions": [],
                 "name": "simple_exposure",
                 "original_file_path": os.path.join("models", "schema.yml"),
                 "owner": {
@@ -992,6 +1000,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
         "semantic_models": {},
         "unit_tests": {},
         "saved_queries": {},
+        "functions": {},
     }
 
 
@@ -1439,6 +1448,7 @@ def expected_references_manifest(project):
                 "maturity": "medium",
                 "meta": {"tool": "my_tool", "languages": ["python"]},
                 "metrics": [],
+                "functions": [],
                 "tags": ["my_department"],
                 "name": "notebook_exposure",
                 "original_file_path": os.path.join("models", "schema.yml"),
@@ -1612,6 +1622,7 @@ def expected_references_manifest(project):
         "semantic_models": {},
         "unit_tests": {},
         "saved_queries": {},
+        "functions": {},
     }
 
 
@@ -2046,6 +2057,7 @@ def expected_versions_manifest(project):
                 "maturity": None,
                 "meta": {},
                 "metrics": [],
+                "functions": [],
                 "tags": [],
                 "name": "notebook_exposure",
                 "original_file_path": os.path.join("models", "schema.yml"),
@@ -2076,6 +2088,7 @@ def expected_versions_manifest(project):
             }
         },
         "sources": {},
+        "functions": {},
         "selectors": {},
         "docs": {},
         "child_map": {
