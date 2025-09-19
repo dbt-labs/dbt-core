@@ -481,6 +481,7 @@ class ManifestLoader:
             self.process_metrics(self.root_project)
             self.process_saved_queries(self.root_project)
             self.process_model_inferred_primary_keys()
+            self.process_functions(self.root_project.project_name)
             self.check_valid_group_config()
             self.check_valid_access_property()
             self.check_valid_snapshot_config()
@@ -1348,6 +1349,20 @@ class ManifestLoader:
                 self.manifest, current_project, unit_test, models_to_versions
             )
 
+    # Loops through all nodes, for each element in
+    # 'functions' array finds the node and updates the
+    # 'depends_on.nodes' array with the unique id
+    def process_functions(self, current_project: str):
+        for node in self.manifest.nodes.values():
+            if node.created_at < self.started_at:
+                continue
+            _process_functions_for_node(self.manifest, current_project, node)
+
+        for function in self.manifest.functions.values():
+            if function.created_at < self.started_at:
+                continue
+            _process_functions_for_node(self.manifest, current_project, function)
+
     def cleanup_disabled(self):
         # make sure the nodes are in the manifest.nodes or the disabled dict,
         # correctly now that the schema files are also parsed
@@ -2072,6 +2087,49 @@ def _process_sources_for_node(manifest: Manifest, current_project: str, node: Ma
             continue
         target_source_id = target_source.unique_id
         node.depends_on.add_node(target_source_id)
+
+
+def _process_functions_for_node(
+    manifest: Manifest, current_project: str, node: ManifestNode
+) -> None:
+    """Given a manifest and node in that manifest, process its functions"""
+
+    if isinstance(node, SeedNode):
+        return
+
+    for function_args in node.functions:
+        target_function_name: str
+        target_function_package: Optional[str] = None
+        if len(function_args) == 1:
+            target_function_name = function_args[0]
+        elif len(function_args) == 2:
+            target_function_package, target_function_name = function_args
+        else:
+            raise dbt.exceptions.DbtInternalError(
+                f"Functions should always be 1 or 2 arguments - got {len(function_args)}"
+            )
+
+        target_function = manifest.resolve_function(
+            target_function_name,
+            target_function_package,
+            current_project,
+            node.package_name,
+        )
+
+        if target_function is None or isinstance(target_function, Disabled):
+            node.config.enabled = False
+            invalid_target_fail_unless_test(
+                node=node,
+                target_name=target_function_name,
+                target_kind="function",
+                target_package=target_function_package,
+                disabled=(isinstance(target_function, Disabled)),
+                should_warn_if_disabled=False,
+            )
+
+            continue
+
+        node.depends_on.add_node(target_function.unique_id)
 
 
 # This is called in task.rpc.sql_commands when a "dynamic" node is
