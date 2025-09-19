@@ -1,7 +1,6 @@
 use chrono::{DateTime, Utc};
 use dbt_common::FsResult;
 use serde::{Deserialize, Serialize};
-use serde_json::Value as JsonValue;
 use serde_with::skip_serializing_none;
 use std::{collections::BTreeMap, path::Path, sync::Arc};
 
@@ -73,7 +72,7 @@ pub struct ContextRunResult {
     /// Total execution time for the node in seconds.
     pub execution_time: f64,
     /// Adapter-specific response information.
-    pub adapter_response: JsonValue,
+    pub adapter_response: BTreeMap<String, YmlValue>,
     /// Execution message (e.g., error message).
     pub message: Option<String>,
     /// Information about failures (often used for tests).
@@ -132,7 +131,7 @@ pub struct RunResultOutput {
     /// Total execution time for the node in seconds.
     pub execution_time: f64,
     /// Adapter-specific response information.
-    pub adapter_response: JsonValue,
+    pub adapter_response: BTreeMap<String, YmlValue>,
     /// Execution message (e.g., error message).
     pub message: Option<String>,
     /// Information about failures (often used for tests).

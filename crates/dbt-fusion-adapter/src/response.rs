@@ -6,13 +6,12 @@ use minijinja::Value;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Object};
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
-use serde::{Deserialize, Serialize};
 
 use std::rc::Rc;
 use std::sync::Arc;
 
 /// Response from adapter statement execution
-#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct AdapterResponse {
     /// Message from adapter
     pub message: String,

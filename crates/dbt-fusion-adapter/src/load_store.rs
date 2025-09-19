@@ -1,16 +1,16 @@
-use crate::funcs::none_value;
-use crate::response::{AdapterResponse, ResultObject};
-
-use dbt_agate::AgateTable;
 use minijinja::arg_utils::ArgsIter;
 use minijinja::value::Value;
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind};
-use serde_json::Value as JsonValue;
-
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+
+use crate::response::{AdapterResponse, ResultObject};
+use dbt_agate::AgateTable;
+
+use super::funcs::none_value;
+
 /// A store for DBT query results that provides callable functions to access the store
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default)]
 pub struct ResultStore {
     results: Arc<Mutex<HashMap<String, Value>>>,
 }
@@ -140,17 +140,5 @@ impl ResultStore {
             results.insert(name, value);
             Ok(Value::from(true))
         }
-    }
-
-    pub fn get_main_result_json(&self) -> Option<JsonValue> {
-        let results = self.results.lock().unwrap();
-        let main_results = results.get("main").cloned();
-
-        main_results.map(|result| {
-            let result_object = result
-                .downcast_object::<ResultObject>()
-                .expect("\"main\" result must be a ResultObject");
-            serde_json::to_value(result_object.response.clone()).unwrap()
-        })
     }
 }

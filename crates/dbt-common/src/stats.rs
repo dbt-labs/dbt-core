@@ -6,11 +6,9 @@ use dbt_telemetry::{
 use proto_rust::impls::node::update_dbt_core_event_code_for_node_evaluation_end;
 use proto_rust::v1::public::events::fusion::node::NodeCacheDetail;
 use proto_rust::v1::public::events::fusion::node::node_evaluated::NodeOutcomeDetail;
-use serde_json::Value as JsonValue;
-use strum_macros::EnumString;
-
 use std::fmt;
 use std::time::{Duration, SystemTime};
+use strum_macros::EnumString;
 
 // ------------------------------------------------------------------------------------------------
 // Trivial Stats, foundation for run-results
@@ -149,7 +147,6 @@ pub struct Stat {
     pub end_time: SystemTime,
     pub status: NodeStatus,
     pub thread_id: String,
-    pub adapter_response: Option<JsonValue>,
 }
 
 impl Stat {
@@ -158,7 +155,6 @@ impl Stat {
         start_time: SystemTime,
         num_rows: Option<usize>,
         status: NodeStatus,
-        adapter_response: Option<JsonValue>,
     ) -> Self {
         let end_time = SystemTime::now();
         Stat {
@@ -173,7 +169,6 @@ impl Stat {
                     .trim_start_matches("ThreadId(")
                     .trim_end_matches(")")
             ),
-            adapter_response,
         }
     }
 
