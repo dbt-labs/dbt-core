@@ -67,8 +67,8 @@ impl AnyTelemetryEvent for MockDynSpanEvent {
         Box::new(self.clone())
     }
 
-    fn to_json(&self) -> Result<dbt_serde_yaml::Value, String> {
-        dbt_serde_yaml::to_value(self).map_err(|e| format!("Failed to serialize: {e}"))
+    fn to_json(&self) -> Result<serde_json::Value, String> {
+        serde_json::to_value(self).map_err(|e| format!("Failed to serialize: {e}"))
     }
 }
 
@@ -131,7 +131,7 @@ impl AnyTelemetryEvent for MockDynLogEvent {
         Box::new(self.clone())
     }
 
-    fn to_json(&self) -> Result<dbt_serde_yaml::Value, String> {
-        dbt_serde_yaml::to_value(self).map_err(|e| format!("Failed to serialize: {e}"))
+    fn to_json(&self) -> Result<serde_json::Value, String> {
+        serde_json::to_value(self).map_err(|e| format!("Failed to serialize: {e}"))
     }
 }

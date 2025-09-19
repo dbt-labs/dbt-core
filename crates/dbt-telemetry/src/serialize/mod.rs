@@ -1,6 +1,7 @@
 //! Custom serialization and deserialization functions for telemetry records.
 
 pub mod arrow;
+pub mod otlp;
 
 use serde::de::{self, Visitor};
 use serde::{Deserializer, Serializer};

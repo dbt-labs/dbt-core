@@ -21,6 +21,14 @@ impl ProtoTelemetryEvent for CallTrace {
         )
     }
 
+    fn code_location(&self) -> Option<RecordCodeLocation> {
+        Some(RecordCodeLocation {
+            file: self.file.clone(),
+            line: self.line,
+            ..Default::default()
+        })
+    }
+
     fn with_code_location(&mut self, location: RecordCodeLocation) {
         // If we don't have a file yet, take it from the location.
         if let (None, Some(f)) = (self.file.clone(), location.file) {
@@ -104,6 +112,14 @@ impl ProtoTelemetryEvent for Unknown {
 
     fn display_name(&self) -> String {
         format!("Unknown span: {} ({}:{})", self.name, self.file, self.line)
+    }
+
+    fn code_location(&self) -> Option<RecordCodeLocation> {
+        Some(RecordCodeLocation {
+            file: Some(self.file.clone()),
+            line: Some(self.line),
+            ..Default::default()
+        })
     }
 
     fn with_code_location(&mut self, location: RecordCodeLocation) {

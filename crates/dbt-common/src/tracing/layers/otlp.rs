@@ -1,112 +1,21 @@
-use std::collections::HashMap;
-
 use super::super::{TelemetryShutdown, event_info::with_current_thread_log_record};
 use crate::constants::DBT_FUSION;
 use crate::{ErrorCode, FsResult};
 
-use dbt_telemetry::{SeverityNumber, SpanEndInfo, SpanStatus, StatusCode, TelemetryExportFlags};
-use parquet::data_type::AsBytes;
+use dbt_telemetry::serialize::otlp::{export_log, export_span};
+use dbt_telemetry::{SpanEndInfo, TelemetryExportFlags};
 
-use opentelemetry::{
-    KeyValue, SpanId, TraceFlags, Value as OtelValue,
-    context::Context as OtelContext,
-    global,
-    logs::{AnyValue, LogRecord, Logger, LoggerProvider, Severity as OtelSeverity},
-    trace::{
-        SamplingResult, Span as OtelSpanTrait, SpanContext, SpanKind, Status as OtelStatus,
-        TraceContextExt, TraceState, Tracer, TracerProvider,
-    },
-};
+use opentelemetry::{KeyValue, global, logs::LoggerProvider, trace::TracerProvider};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::logs::{SdkLogger, SdkLoggerProvider};
 use opentelemetry_sdk::resource::EnvResourceDetector;
 use opentelemetry_sdk::trace::{SdkTracer, SdkTracerProvider};
 use opentelemetry_sdk::{logs as sdk_logs, trace as sdk_trace};
-// use opentelemetry_semantic_conventions::attribute::{CODE_FILE_PATH, CODE_LINE_NUMBER};
 use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION};
-use proto_rust::impls::compat::level_to_otel_severity_text;
 use tracing::{Subscriber, span};
 use tracing_subscriber::Layer;
 use tracing_subscriber::layer::Context;
-
-const fn level_to_otel_severity(severity_number: &SeverityNumber) -> OtelSeverity {
-    match severity_number {
-        SeverityNumber::Unspecified => panic!("Do not use unspecified severity level!"),
-        SeverityNumber::Trace => OtelSeverity::Trace,
-        SeverityNumber::Debug => OtelSeverity::Debug,
-        SeverityNumber::Info => OtelSeverity::Info,
-        SeverityNumber::Warn => OtelSeverity::Warn,
-        SeverityNumber::Error => OtelSeverity::Error,
-    }
-}
-
-fn serde_json_value_to_otel(value: &serde_json::Value) -> OtelValue {
-    match value {
-        serde_json::Value::Bool(b) => OtelValue::from(*b),
-        serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                OtelValue::from(i)
-            } else if let Some(u) = n.as_u64() {
-                if u > i64::MAX as u64 {
-                    // If the number is too large for i64, we convert it to a string
-                    return OtelValue::from(u.to_string());
-                } else {
-                    // Otherwise, we can safely convert it to i64
-                    OtelValue::from(u as i64)
-                }
-            } else if let Some(f) = n.as_f64() {
-                OtelValue::from(f)
-            } else {
-                // Should not be reached
-                OtelValue::from(n.to_string())
-            }
-        }
-        serde_json::Value::String(s) => OtelValue::from(s.clone()),
-        _ => value.to_string().into(),
-    }
-}
-
-fn serde_json_value_to_otel_any_value(value: &serde_json::Value) -> AnyValue {
-    match value {
-        serde_json::Value::Bool(b) => AnyValue::from(*b),
-        serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                AnyValue::from(i)
-            } else if let Some(u) = n.as_u64() {
-                if u > i64::MAX as u64 {
-                    // If the number is too large for i64, we convert it to bytes
-                    return AnyValue::from(u.as_bytes());
-                } else {
-                    // Otherwise, we can safely convert it to i64
-                    AnyValue::from(u as i64)
-                }
-            } else if let Some(f) = n.as_f64() {
-                AnyValue::from(f)
-            } else {
-                // Should not be reached
-                AnyValue::from(n.to_string())
-            }
-        }
-        serde_json::Value::String(s) => AnyValue::from(s.clone()),
-        serde_json::Value::Array(arr) => AnyValue::ListAny(Box::new(
-            arr.iter()
-                .map(serde_json_value_to_otel_any_value)
-                .collect::<Vec<_>>(),
-        )),
-        serde_json::Value::Object(obj) => AnyValue::Map(Box::new(
-            obj.iter()
-                .map(|(k, v)| {
-                    (
-                        opentelemetry::Key::from(k.clone()),
-                        serde_json_value_to_otel_any_value(v),
-                    )
-                })
-                .collect::<HashMap<_, _>>(),
-        )),
-        _ => AnyValue::from(value.to_string()),
-    }
-}
 
 /// A tracing layer that reads telemetry data and sends it over HTTP to OTLP endpoint
 pub struct OTLPExporterLayer<S>
@@ -264,71 +173,7 @@ where
             return;
         }
 
-        let otel_trace_id = span_data.trace_id.into();
-        let otel_span_id = span_data.span_id.into();
-
-        // OTEL sdk doesn't allow "just" specifying the parent span id, so we
-        // use this faked remote context to achieve that...
-        let otel_parent_cx = if let Some(parent_span_id) = span_data.parent_span_id {
-            OtelContext::new().with_remote_span_context(SpanContext::new(
-                otel_trace_id,
-                parent_span_id.into(),
-                TraceFlags::SAMPLED,
-                false,
-                TraceState::NONE,
-            ))
-        } else {
-            OtelContext::new()
-        };
-
-        let span_attrs = serde_json::to_value(&span_data.attributes)
-            .ok()
-            .and_then(|val| {
-                // We are using external tag for attributes enum, so value is a map with 2
-                // keys: "attributes" and "event_type". We only care about the attributes.
-                val.as_object().and_then(|top| {
-                    top.get("attributes").and_then(|attrs| {
-                        attrs.as_object().map(|pairs| {
-                            pairs
-                                .iter()
-                                .map(|(k, v)| KeyValue::new(k.clone(), serde_json_value_to_otel(v)))
-                                .collect::<Vec<_>>()
-                        })
-                    })
-                })
-            })
-            .unwrap_or_default();
-
-        // Create OpenTelemetry span
-        let mut otel_span = self
-            .tracer
-            .span_builder(span_data.span_name.clone())
-            // This forces all spans to be exported
-            .with_sampling_result(SamplingResult {
-                attributes: Default::default(),
-                decision: opentelemetry::trace::SamplingDecision::RecordAndSample,
-                trace_state: Default::default(),
-            })
-            .with_kind(SpanKind::Internal)
-            .with_trace_id(otel_trace_id)
-            .with_span_id(otel_span_id)
-            .with_start_time(span_data.start_time_unix_nano)
-            .with_attributes(span_attrs)
-            .start_with_context(&self.tracer, &otel_parent_cx);
-
-        // Set span status as OK
-        if let Some(SpanStatus { code, message }) = &span_data.status {
-            match code {
-                StatusCode::Ok => otel_span.set_status(OtelStatus::Ok),
-                StatusCode::Error => otel_span.set_status(OtelStatus::Error {
-                    description: message.clone().unwrap_or_default().into(),
-                }),
-                _ => {}
-            }
-        };
-
-        // End the span
-        otel_span.end_with_timestamp(span_data.end_time_unix_nano);
+        export_span(&self.tracer, span_data);
     }
 
     fn on_event(&self, _event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
@@ -342,78 +187,7 @@ where
             {
                 return;
             }
-            // Create a new log record
-            let mut otel_log_record = self.logger.create_log_record();
-
-            // Set the log basic attributes
-            otel_log_record
-                .set_severity_number(level_to_otel_severity(&log_record.severity_number));
-
-            otel_log_record
-                .set_severity_text(level_to_otel_severity_text(&log_record.severity_number));
-
-            // Message
-            otel_log_record.set_body(AnyValue::from(log_record.body.clone()));
-
-            // Set timestamp ourselves, since sdk only sets the observed timestamp.
-            otel_log_record.set_timestamp(log_record.time_unix_nano);
-            otel_log_record.set_observed_timestamp(log_record.time_unix_nano);
-
-            // TODO: return code location info (needs a trait method)
-            // if let TelemetryAttributes::Log(LogEventInfo { location, .. }) = &log_record.attributes
-            // {
-            //     if let Some(file) = location.file.clone() {
-            //         otel_log_record.add_attribute(
-            //             opentelemetry::Key::new(CODE_FILE_PATH),
-            //             AnyValue::from(file),
-            //         );
-            //     }
-
-            //     if let Some(line) = location.line {
-            //         otel_log_record.add_attribute(
-            //             opentelemetry::Key::new(CODE_LINE_NUMBER),
-            //             AnyValue::from(line),
-            //         );
-            //     }
-            // }
-
-            let log_attrs = serde_json::to_value(&log_record.attributes)
-                .ok()
-                .and_then(|val| {
-                    // We are using external tag for attributes enum, so value is a map with 2
-                    // keys: "attributes" and "eventName". We only care about the attributes.
-                    val.as_object().and_then(|top| {
-                        top.get("attributes").and_then(|attrs| {
-                            attrs.as_object().map(|pairs| {
-                                pairs
-                                    .iter()
-                                    // TODO filter out duplicates from code location
-                                    .map(|(k, v)| {
-                                        (
-                                            opentelemetry::Key::from(k.clone()),
-                                            serde_json_value_to_otel_any_value(v),
-                                        )
-                                    })
-                                    .collect::<Vec<_>>()
-                            })
-                        })
-                    })
-                })
-                .unwrap_or_default();
-
-            otel_log_record.set_event_name(log_record.attributes.event_type());
-            otel_log_record.add_attributes(log_attrs);
-
-            otel_log_record.set_trace_context(
-                log_record.trace_id.into(),
-                log_record
-                    .span_id
-                    .map(|span_id| span_id.into())
-                    .unwrap_or(SpanId::INVALID),
-                Some(TraceFlags::SAMPLED),
-            );
-
-            self.logger.emit(otel_log_record);
+            export_log(&self.logger, log_record);
         });
     }
 }

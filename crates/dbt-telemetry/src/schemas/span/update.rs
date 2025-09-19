@@ -1,7 +1,7 @@
 use crate::{AnyTelemetryEvent, TelemetryExportFlags, attributes::TelemetryEventRecType};
-use dbt_serde_yaml::Value as JsonValue;
 use proto_rust::StaticName;
 pub use proto_rust::v1::public::events::fusion::update::PackageUpdate;
+use serde_json::Value as JsonValue;
 use std::any::Any;
 
 // Our shorthand `ProtoTelemetryEvent` trait requires arrow trait implementation,
@@ -63,6 +63,6 @@ impl AnyTelemetryEvent for PackageUpdate {
     }
 
     fn to_json(&self) -> Result<JsonValue, String> {
-        dbt_serde_yaml::to_value(self).map_err(|e| format!("Failed to serialize: {e}"))
+        serde_json::to_value(self).map_err(|e| format!("Failed to serialize: {e}"))
     }
 }

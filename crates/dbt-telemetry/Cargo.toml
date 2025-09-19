@@ -18,6 +18,10 @@ arrow-schema = { workspace = true, features = ["canonical_extension_types"] }
 bitflags = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-serde_yaml = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry-proto = { workspace = true }
+opentelemetry-semantic-conventions = { workspace = true }
+opentelemetry_sdk = { workspace = true }
 prost = { workspace = true }
 proto-rust = { workspace = true }
 schemars = { workspace = true }

@@ -1,7 +1,7 @@
 //! Core traits for the extensible telemetry event types and associated system.
 
-use dbt_serde_yaml::Value as JsonValue;
 use serde::Serialize;
+use serde_json::Value as JsonValue;
 use std::{any::Any, fmt::Debug};
 
 use crate::{
@@ -60,6 +60,13 @@ pub trait AnyTelemetryEvent: Debug + Send + Sync + Any {
 
     /// Equality check for trait objects. Used to implement PartialEq for boxed trait objects.
     fn event_eq(&self, other: &dyn AnyTelemetryEvent) -> bool;
+
+    /// Returns code location associated with this event, if any.
+    ///
+    /// Default implementation returns `None`.
+    fn code_location(&self) -> Option<RecordCodeLocation> {
+        None
+    }
 
     /// Called with code location based on emission call-site.
     /// If event stores code location - it can use the provided value to
@@ -205,6 +212,13 @@ pub(crate) trait ProtoTelemetryEvent:
         None
     }
 
+    /// Returns code location associated with this event, if any.
+    ///
+    /// Default implementation returns `None`.
+    fn code_location(&self) -> Option<RecordCodeLocation> {
+        None
+    }
+
     /// Called with code location based on emission call-site.
     /// If event stores code location - it can use the provided value to
     /// populate its location fields even if they were not set at construction time.
@@ -274,6 +288,10 @@ impl<T: ProtoTelemetryEvent> AnyTelemetryEvent for T {
         T::EXPORT_FLAGS
     }
 
+    fn code_location(&self) -> Option<RecordCodeLocation> {
+        ProtoTelemetryEvent::code_location(self)
+    }
+
     fn with_code_location(&mut self, location: RecordCodeLocation) {
         ProtoTelemetryEvent::with_code_location(self, location)
     }
@@ -310,7 +328,7 @@ impl<T: ProtoTelemetryEvent> AnyTelemetryEvent for T {
     }
 
     fn to_json(&self) -> Result<JsonValue, String> {
-        dbt_serde_yaml::to_value(self).map_err(|e| format!("Failed to serialize: {e}"))
+        serde_json::to_value(self).map_err(|e| format!("Failed to serialize: {e}"))
     }
 
     fn to_arrow(&self) -> Option<ArrowAttributes> {
