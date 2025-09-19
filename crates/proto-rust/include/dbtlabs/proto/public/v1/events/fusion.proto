@@ -361,6 +361,11 @@ message Onboarding {
   OnboardingScreen screen = 4;  // Which screen/step
   OnboardingAction action = 5;  // What happened on that screen
   bool success = 6;   // Only for RUN_FINISHED/STEP_COMPLETED; ignored otherwise
+
+    // user_id is the UUID generated to identify a unique user. We store a cookie
+  // or token in the user's local directory which we use to maintain user information
+  // across sessions. This is usually found in ~/.dbt/.user.yml.
+  string user_id = 7;
 }
 
 enum OnboardingScreen {

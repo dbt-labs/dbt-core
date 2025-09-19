@@ -73,3 +73,14 @@ enum CompileType {
     // Speculative compile
     SPECULATIVE = 1;
 }
+
+enum CompileCause {
+    // Compile was caused by a user saving a file
+    COMPILE_CAUSE_DID_SAVE = 0;
+
+    // Compile was caused by an expliict compile command sent to the LSP
+    COMPILE_CAUSE_COMPILE_LSP_COMMAND = 1;
+    
+    // Compile was caused by a request to refresh sources for a project
+    COMPILE_CAUSE_REFRESH_SOURCES = 2;
+}

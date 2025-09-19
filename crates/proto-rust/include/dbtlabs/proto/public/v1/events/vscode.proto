@@ -83,6 +83,9 @@ message ExtensionLspCompile {
 
     // True if the compile was triggered by a user action (ie. saving a file)
     bool user_initiated = 13;
+
+    // The event that triggered the compile
+    v1.public.fields.vscode_types.CompileCause compile_cause = 14;
 }
 
 message ExtensionUserStateChange {

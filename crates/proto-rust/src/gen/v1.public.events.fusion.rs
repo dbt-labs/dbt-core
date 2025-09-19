@@ -439,6 +439,11 @@ pub struct Onboarding {
     /// Only for RUN_FINISHED/STEP_COMPLETED; ignored otherwise
     #[prost(bool, tag = "6")]
     pub success: bool,
+    /// user_id is the UUID generated to identify a unique user. We store a cookie
+    /// or token in the user's local directory which we use to maintain user information
+    /// across sessions. This is usually found in ~/.dbt/.user.yml.
+    #[prost(string, tag = "7")]
+    pub user_id: ::prost::alloc::string::String,
 }
 impl ::prost::Name for Onboarding {
     const NAME: &'static str = "Onboarding";
