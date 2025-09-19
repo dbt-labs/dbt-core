@@ -111,6 +111,7 @@ impl ParseAdapter {
         let query_comment = QueryCommentConfig::from_query_comment(None, adapter_type, false);
 
         let engine = SqlEngine::new(
+            adapter_type,
             auth,
             adapter_config,
             adapter_factory,
@@ -260,6 +261,10 @@ impl AdapterTyping for ParseAdapter {
 
     fn as_typed_base_adapter(&self) -> &dyn TypedBaseAdapter {
         unimplemented!("as_typed_base_adapter")
+    }
+
+    fn is_parse(&self) -> bool {
+        true
     }
 
     fn column_type(&self) -> Option<Value> {

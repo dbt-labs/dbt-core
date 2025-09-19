@@ -1,6 +1,6 @@
 use crate::AdapterType;
-use crate::errors::AdapterResult;
-use crate::errors::{AdapterError, AsyncAdapterResult};
+use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
+use crate::metadata::*;
 use crate::relation_object::create_relation_internal;
 use crate::typed_adapter::TypedBaseAdapter;
 
@@ -18,96 +18,10 @@ use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 use minijinja::{Environment, State};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::fmt;
 use std::sync::Arc;
 
 /// Maximum number of connections
 pub const MAX_CONNECTIONS: usize = 128;
-
-/// The two ways of representing a relation in a pair.
-pub type RelationSchemaPair = (Arc<dyn BaseRelation>, Arc<Schema>);
-
-/// A collection of relations
-pub type RelationVec = Vec<Arc<dyn BaseRelation>>;
-/// A struct representing a catalog and a schema
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub struct CatalogAndSchema {
-    pub rendered_catalog: String,
-    pub rendered_schema: String,
-    pub resolved_catalog: String,
-    pub resolved_schema: String,
-}
-
-impl fmt::Display for CatalogAndSchema {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.rendered_catalog.is_empty() {
-            write!(f, "{}", self.rendered_schema)
-        } else if self.rendered_schema.is_empty() {
-            write!(f, "{}", self.rendered_catalog)
-        } else {
-            write!(f, "{}.{}", self.rendered_catalog, self.rendered_schema)
-        }
-    }
-}
-
-impl From<&Arc<dyn BaseRelation>> for CatalogAndSchema {
-    fn from(relation: &Arc<dyn BaseRelation>) -> Self {
-        let rendered_catalog =
-            relation.quoted(&relation.database_as_resolved_str().unwrap_or_default());
-        let rendered_schema =
-            relation.quoted(&relation.schema_as_resolved_str().unwrap_or_default());
-
-        let resolved_catalog = relation.database_as_resolved_str().unwrap_or_default();
-        let resolved_schema = relation.schema_as_resolved_str().unwrap_or_default();
-
-        assert!(
-            !(rendered_catalog.is_empty() && rendered_schema.is_empty()),
-            "Either rendered_catalog or rendered_schema must be present"
-        );
-
-        Self {
-            rendered_catalog,
-            rendered_schema,
-            resolved_catalog,
-            resolved_schema,
-        }
-    }
-}
-
-pub struct MetadataFreshness {
-    pub last_altered: i128,
-    pub is_view: bool,
-}
-
-/// Allows serializing record batches into maps and Arrow schemas
-pub trait MetadataProcessor {
-    // Implementers can choose the map key/value
-    type Key: Ord + Clone;
-    type Value: Clone;
-
-    fn into_metadata(self) -> BTreeMap<Self::Key, Self::Value>;
-    fn from_record_batch(batch: Arc<RecordBatch>) -> AdapterResult<Self>
-    where
-        Self: Sized;
-    fn to_arrow_schema(&self) -> AdapterResult<Arc<Schema>>;
-}
-
-/// This represents a UDF downloaded from a remote data warehouse
-#[derive(Debug, Clone)]
-pub struct UDF {
-    pub name: String,
-    pub description: String,
-    pub signature: String,
-    pub adapter_type: AdapterType,
-    pub kind: UDFKind,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum UDFKind {
-    Scalar,
-    Aggregate,
-    Table,
-}
 
 // XXX: we should unify relation representation as Arrow schemas across the codebase
 

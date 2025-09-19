@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
 use crate::AdapterResult;
 use crate::errors::{AdapterError, AdapterErrorKind};
 
 use arrow::array::{
-    Decimal128Array, Int8Array, Int16Array, Int32Array, Int64Array, UInt8Array, UInt16Array,
+    Array, Decimal128Array, Int8Array, Int16Array, Int32Array, Int64Array, UInt8Array, UInt16Array,
     UInt32Array, UInt64Array,
 };
 use arrow::datatypes::DataType;
@@ -52,20 +54,22 @@ pub fn extract_first_value_as_i64(batch: &RecordBatch) -> Option<i64> {
     }
 }
 
+pub fn column_by_name<'a>(batch: &'a RecordBatch, name: &str) -> AdapterResult<&'a Arc<dyn Array>> {
+    batch.column_by_name(name).ok_or_else(|| {
+        let schema = batch.schema();
+        let columns = schema.fields().iter().map(|f| f.name()).collect::<Vec<_>>();
+        AdapterError::new(
+            AdapterErrorKind::Internal,
+            format!("expected column {name} not found, available are: {columns:?}"),
+        )
+    })
+}
+
 pub fn get_column_values<T>(record_batch: &RecordBatch, column_name: &str) -> AdapterResult<T>
 where
     T: std::any::Any + Clone,
 {
-    Ok(record_batch
-        .column_by_name(column_name)
-        .ok_or_else(|| {
-            let schema = record_batch.schema();
-            let columns = schema.fields().iter().map(|f| f.name()).collect::<Vec<_>>();
-            AdapterError::new(
-                AdapterErrorKind::Internal,
-                format!("expected column {column_name} not found, available are: {columns:?}"),
-            )
-        })?
+    Ok(column_by_name(record_batch, column_name)?
         .as_any()
         .downcast_ref::<T>()
         .ok_or_else(|| {

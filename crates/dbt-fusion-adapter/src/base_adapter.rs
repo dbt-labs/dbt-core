@@ -1,8 +1,8 @@
 use crate::cache::RelationCache;
 use crate::columns::{BigqueryColumnMode, StdColumn};
-use crate::metadata::{CatalogAndSchema, MetadataAdapter};
+use crate::metadata::*;
 use crate::sql_engine::SqlEngine;
-use crate::typed_adapter::TypedBaseAdapter;
+use crate::typed_adapter::{ReplayAdapter, TypedBaseAdapter};
 use crate::{AdapterResponse, AdapterResult};
 
 use dbt_agate::AgateTable;
@@ -47,6 +47,16 @@ pub trait AdapterTyping {
 
     /// Get a reference to the typed base adapter if supported.
     fn as_typed_base_adapter(&self) -> &dyn TypedBaseAdapter;
+
+    /// True if called on the [ParseAdapter].
+    fn is_parse(&self) -> bool {
+        false
+    }
+
+    /// This adapter as the replay adapter if it is one, None otherwise.
+    fn as_replay(&self) -> Option<&dyn ReplayAdapter> {
+        None
+    }
 
     /// Get column type instance
     fn column_type(&self) -> Option<Value>;

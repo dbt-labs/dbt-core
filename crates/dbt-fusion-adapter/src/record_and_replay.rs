@@ -1,4 +1,5 @@
-use crate::base_adapter::AdapterFactory;
+use crate::AdapterType;
+use crate::base_adapter::{AdapterFactory, backend_of};
 use crate::config::AdapterConfig;
 use crate::errors::AdapterResult;
 use crate::query_comment::QueryCommentConfig;
@@ -13,6 +14,7 @@ use arrow_schema::{ArrowError, Field, Schema, SchemaBuilder};
 use dashmap::DashMap;
 use dbt_common::cancellation::CancellationToken;
 use dbt_xdbc::{Backend, Connection, QueryCtx, Statement};
+use minijinja::State;
 use once_cell::sync::Lazy;
 use parquet::arrow::ArrowWriter;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
@@ -109,8 +111,12 @@ impl RecordEngine {
         self.0.engine.backend()
     }
 
-    pub fn new_connection(&self, node_id: Option<String>) -> AdapterResult<Box<dyn Connection>> {
-        let actual_conn = self.0.engine.new_connection(None)?;
+    pub fn new_connection(
+        &self,
+        state: Option<&State>,
+        node_id: Option<String>,
+    ) -> AdapterResult<Box<dyn Connection>> {
+        let actual_conn = self.0.engine.new_connection(state, node_id.clone())?;
         let conn = RecordEngineConnection(self.0.clone(), actual_conn, node_id);
         Ok(Box::new(conn))
     }
@@ -368,7 +374,7 @@ impl Statement for RecordEngineStatement {
 }
 
 struct ReplayEngineInner {
-    /// The XDBC backend responsible for the recordings we are replaying
+    adapter_type: AdapterType,
     backend: Backend,
     /// Path to recordings
     path: PathBuf,
@@ -394,7 +400,7 @@ pub struct ReplayEngine(Arc<ReplayEngineInner>);
 impl ReplayEngine {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        backend: Backend,
+        adapter_type: AdapterType,
         path: PathBuf,
         config: AdapterConfig,
         adapter_factory: Arc<dyn AdapterFactory>,
@@ -404,7 +410,8 @@ impl ReplayEngine {
         token: CancellationToken,
     ) -> Self {
         let inner = ReplayEngineInner {
-            backend,
+            adapter_type,
+            backend: backend_of(adapter_type),
             path,
             config,
             adapter_factory,
@@ -416,9 +423,17 @@ impl ReplayEngine {
         ReplayEngine(Arc::new(inner))
     }
 
-    pub fn new_connection(&self, node_id: Option<String>) -> AdapterResult<Box<dyn Connection>> {
+    pub fn new_connection(
+        &self,
+        _state: Option<&State>,
+        node_id: Option<String>,
+    ) -> AdapterResult<Box<dyn Connection>> {
         let conn = ReplayEngineConnection(self.0.clone(), node_id);
         Ok(Box::new(conn))
+    }
+
+    pub fn adapter_type(&self) -> AdapterType {
+        self.0.adapter_type
     }
 
     pub fn backend(&self) -> Backend {

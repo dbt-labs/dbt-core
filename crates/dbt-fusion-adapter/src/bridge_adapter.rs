@@ -8,7 +8,7 @@ use crate::funcs::{
 };
 use crate::funcs::{execute_macro_wrapper_with_package, format_sql_with_bindings};
 use crate::information_schema::InformationSchema;
-use crate::metadata::{CatalogAndSchema, MetadataAdapter, RelationVec};
+use crate::metadata::*;
 use crate::query_ctx::{node_id_from_state, query_ctx_from_state, query_ctx_from_state_with_sql};
 use crate::record_batch_utils::extract_first_value_as_i64;
 use crate::relation_object::RelationObject;

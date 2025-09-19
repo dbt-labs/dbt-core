@@ -13,6 +13,7 @@ pub mod factory;
 pub mod formatter;
 pub mod funcs;
 pub mod information_schema;
+pub mod metadata;
 pub mod need_quotes;
 pub mod query_comment;
 pub mod query_ctx;
@@ -41,8 +42,6 @@ pub use statement::{StmtCancellationReport, TrackedStatement, cancel_all_tracked
 pub mod bigquery;
 /// Databricks adapter
 pub mod databricks;
-/// Metadata adapter
-pub mod metadata;
 /// Parse adapter
 pub mod parse;
 /// Postgres adapter

@@ -56,8 +56,8 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     }
 
     /// Get DB config by key
-    fn get_db_config(&self, _key: &str) -> Option<Cow<'_, str>> {
-        unimplemented!("typed adapter method implementation")
+    fn get_db_config(&self, key: &str) -> Option<Cow<'_, str>> {
+        self.engine().config(key)
     }
 
     /// The set of standard builtin strategies which this adapter supports out-of-the-box.
@@ -83,7 +83,13 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         state: Option<&State>,
         node_id: Option<String>,
-    ) -> AdapterResult<Box<dyn Connection>>;
+    ) -> AdapterResult<Box<dyn Connection>> {
+        if let Some(replay_adapter) = self.as_replay() {
+            replay_adapter.replay_new_connection(state, node_id)
+        } else {
+            self.engine().new_connection(state, node_id)
+        }
+    }
 
     /// Helper method for execute
     #[allow(clippy::too_many_arguments)]
@@ -243,8 +249,27 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// Quote
     fn quote(&self, state: &State, identifier: &str) -> AdapterResult<String>;
 
-    /// List schemas
-    fn list_schemas(&self, result: Arc<RecordBatch>) -> AdapterResult<Vec<String>>;
+    /// List schemas from a [RecordBatch] result of `show schemas` or equivalent.
+    fn list_schemas(&self, result_set: Arc<RecordBatch>) -> AdapterResult<Vec<String>> {
+        let schema_column_values = {
+            let col_name = match self.adapter_type() {
+                AdapterType::Snowflake => "name",
+                AdapterType::Databricks => "databaseName",
+                AdapterType::Bigquery => "schema_name",
+                AdapterType::Postgres | AdapterType::Redshift => "nspname",
+                AdapterType::Salesforce => "name",
+            };
+            get_column_values::<StringArray>(&result_set, col_name)?
+        };
+
+        let n = result_set.num_rows();
+        let mut schemas = Vec::<String>::with_capacity(n);
+        for i in 0..n {
+            let name: &str = schema_column_values.value(i);
+            schemas.push(name.to_string());
+        }
+        Ok(schemas)
+    }
 
     /// Get relation that represents (database, schema, identifier)
     /// tuple. This function checks that the warehouse has the
@@ -780,17 +805,34 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// Lists all relations in the provided [CatalogAndSchema]
     fn list_relations(
         &self,
-        _query_ctx: &QueryCtx,
-        _conn: &'_ mut dyn Connection,
-        _db_schema: &CatalogAndSchema,
+        query_ctx: &QueryCtx,
+        conn: &'_ mut dyn Connection,
+        db_schema: &CatalogAndSchema,
     ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
-        Err(AdapterError::new(
-            AdapterErrorKind::Internal,
-            format!(
-                "list_relations_without_caching is not implemented for this adapter: {}",
-                self.adapter_type()
-            ),
-        ))
+        use crate::metadata::*;
+        use dbt_common::adapter::AdapterType::*;
+
+        if let Some(replay_adapter) = self.as_replay() {
+            return replay_adapter.replay_list_relations(query_ctx, conn, db_schema);
+        }
+
+        let adapter = self.as_typed_base_adapter();
+        match self.adapter_type() {
+            Snowflake => snowflake::list_relations(adapter, query_ctx, conn, db_schema),
+            Bigquery => bigquery::list_relations(adapter, query_ctx, conn, db_schema),
+            Databricks => databricks::list_relations(adapter, query_ctx, conn, db_schema),
+            Redshift => redshift::list_relations(adapter, query_ctx, conn, db_schema),
+            Postgres | Salesforce => {
+                let err = AdapterError::new(
+                    AdapterErrorKind::Internal,
+                    format!(
+                        "list_relations_without_caching is not implemented for this adapter: {}",
+                        self.adapter_type()
+                    ),
+                );
+                Err(err)
+            }
+        }
     }
 
     /// Behavior (flags)
@@ -985,11 +1027,6 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         }
     }
 
-    /// This adapter as the replay adapter if it is one, None otherwise.
-    fn as_replay(&self) -> Option<&dyn ReplayAdapter> {
-        None
-    }
-
     /// Optional fast-path for replay adapters: return schema existence from the trace
     /// when available. Default is None for non-replay adapters.
     fn schema_exists_from_trace(&self, _database: &str, _schema: &str) -> Option<bool> {
@@ -1001,5 +1038,16 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
 ///
 /// NOTE: this is a growing interface that is currently growing.
 pub trait ReplayAdapter: TypedBaseAdapter {
+    fn replay_new_connection(
+        &self,
+        state: Option<&State>,
+        node_id: Option<String>,
+    ) -> AdapterResult<Box<dyn Connection>>;
     fn replay_convert_type(&self, state: &State, data_type: &DataType) -> AdapterResult<String>;
+    fn replay_list_relations(
+        &self,
+        query_ctx: &QueryCtx,
+        conn: &'_ mut dyn Connection,
+        db_schema: &CatalogAndSchema,
+    ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>>;
 }

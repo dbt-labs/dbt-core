@@ -2,6 +2,7 @@ use crate::TrackedStatement;
 use crate::auth::Auth;
 use crate::base_adapter::{AdapterFactory, backend_of};
 use crate::config::AdapterConfig;
+use crate::databricks::databricks_compute_from_state;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::query_comment::{EMPTY_CONFIG, QueryCommentConfig};
 use crate::record_and_replay::{RecordEngine, ReplayEngine};
@@ -18,7 +19,7 @@ use dbt_common::cancellation::{Cancellable, CancellationToken, never_cancels};
 use dbt_common::constants::EXECUTING;
 use dbt_frontend_common::dialect::Dialect;
 use dbt_xdbc::semaphore::Semaphore;
-use dbt_xdbc::{Backend, Connection, Database, QueryCtx, connection, database, driver};
+use dbt_xdbc::{Backend, Connection, Database, QueryCtx, Statement, connection, database, driver};
 use log;
 use minijinja::State;
 use serde_json::json;
@@ -88,7 +89,37 @@ pub struct DatabaseMap {
     inner: HashMap<database::Fingerprint, Box<dyn Database>, IdentityBuildHasher>,
 }
 
+pub struct NoopConnection;
+
+impl Connection for NoopConnection {
+    fn new_statement(&mut self) -> adbc_core::error::Result<Box<dyn Statement>> {
+        unimplemented!("ADBC statement creation in mock connection")
+    }
+
+    fn cancel(&mut self) -> adbc_core::error::Result<()> {
+        unimplemented!("ADBC connection cancellation in mock connection")
+    }
+
+    fn commit(&mut self) -> adbc_core::error::Result<()> {
+        unimplemented!("ADBC transaction commit in mock connection")
+    }
+
+    fn rollback(&mut self) -> adbc_core::error::Result<()> {
+        unimplemented!("ADBC transaction rollback in mock connection")
+    }
+
+    fn get_table_schema(
+        &self,
+        _catalog: Option<&str>,
+        _db_schema: Option<&str>,
+        _table_name: &str,
+    ) -> adbc_core::error::Result<Schema> {
+        unimplemented!("ADBC table schema retrieval in mock connection")
+    }
+}
+
 pub struct ActualEngine {
+    adapter_type: AdapterType,
     /// Auth configurator
     auth: Arc<dyn Auth>,
     /// Configuration
@@ -110,7 +141,9 @@ pub struct ActualEngine {
 }
 
 impl ActualEngine {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
+        adapter_type: AdapterType,
         auth: Arc<dyn Auth>,
         config: AdapterConfig,
         adapter_factory: Arc<dyn AdapterFactory>,
@@ -131,6 +164,7 @@ impl ActualEngine {
 
         let permits = if threads > 0 { threads } else { u32::MAX };
         Self {
+            adapter_type,
             auth,
             config,
             configured_databases: RwLock::new(DatabaseMap::default()),
@@ -142,6 +176,10 @@ impl ActualEngine {
 
             cancellation_token: token,
         }
+    }
+
+    fn adapter_type(&self) -> AdapterType {
+        self.adapter_type
     }
 
     fn load_driver_and_configure_database(
@@ -195,10 +233,30 @@ impl ActualEngine {
         Ok(conn)
     }
 
-    fn new_connection(&self, _node_id: Option<String>) -> AdapterResult<Box<dyn Connection>> {
-        // TODO(felipecrv): Make this codepath more efficient
-        // (no need to reconfigure the default database)
-        self.new_connection_with_config(&self.config)
+    fn new_connection(
+        &self,
+        state: Option<&State>,
+        _node_id: Option<String>,
+    ) -> AdapterResult<Box<dyn Connection>> {
+        match self.adapter_type() {
+            AdapterType::Databricks => {
+                if let Some(databricks_compute) = state.and_then(databricks_compute_from_state) {
+                    let augmented_config = {
+                        let mut mapping = self.config.repr().clone();
+                        mapping.insert("databricks_compute".into(), databricks_compute.into());
+                        AdapterConfig::new(mapping)
+                    };
+                    self.new_connection_with_config(&augmented_config)
+                } else {
+                    self.new_connection_with_config(&self.config)
+                }
+            }
+            _ => {
+                // TODO(felipecrv): Make this codepath more efficient
+                // (no need to reconfigure the default database)
+                self.new_connection_with_config(&self.config)
+            }
+        }
     }
 
     fn cancellation_token(&self) -> CancellationToken {
@@ -222,7 +280,9 @@ pub enum SqlEngine {
 
 impl SqlEngine {
     /// Create a new [`SqlEngine::Warehouse`] based on the given configuration.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
+        adapter_type: AdapterType,
         auth: Arc<dyn Auth>,
         config: AdapterConfig,
         adapter_factory: Arc<dyn AdapterFactory>,
@@ -232,6 +292,7 @@ impl SqlEngine {
         token: CancellationToken,
     ) -> Arc<Self> {
         let engine = ActualEngine::new(
+            adapter_type,
             auth,
             config,
             adapter_factory,
@@ -246,7 +307,7 @@ impl SqlEngine {
     /// Create a new [`SqlEngine::Replay`] based on the given path and adapter type.
     #[allow(clippy::too_many_arguments)]
     pub fn new_for_replaying(
-        backend: Backend,
+        adapter_type: AdapterType,
         path: PathBuf,
         config: AdapterConfig,
         adapter_factory: Arc<dyn AdapterFactory>,
@@ -256,7 +317,7 @@ impl SqlEngine {
         token: CancellationToken,
     ) -> Arc<Self> {
         let engine = ReplayEngine::new(
-            backend,
+            adapter_type,
             path,
             config,
             adapter_factory,
@@ -272,6 +333,10 @@ impl SqlEngine {
     pub fn new_for_recording(path: PathBuf, engine: Arc<SqlEngine>) -> Arc<Self> {
         let engine = RecordEngine::new(path, engine);
         Arc::new(SqlEngine::Record(engine))
+    }
+
+    pub fn is_mock(&self) -> bool {
+        matches!(self, SqlEngine::Mock(_))
     }
 
     /// Get the statement splitter for this engine
@@ -321,11 +386,11 @@ impl SqlEngine {
         let _span = span!("ActualEngine::new_connection");
         let conn = match &self {
             Self::Warehouse(actual_engine) => actual_engine.new_connection_with_config(config),
-            Self::Record(record_engine) => record_engine.new_connection(None),
-            Self::Replay(replay_engine) => replay_engine.new_connection(None),
-            Self::Mock(_) => {
-                unreachable!("Mock engine does not support new_connection_with_config")
-            }
+            // TODO: the record and replay engines should have a new_connection_with_config()
+            // method instead of a new_connection method
+            Self::Record(record_engine) => record_engine.new_connection(None, None),
+            Self::Replay(replay_engine) => replay_engine.new_connection(None, None),
+            Self::Mock(_) => Ok(Box::new(NoopConnection) as Box<dyn Connection>),
         }?;
         Ok(conn)
     }
@@ -350,12 +415,16 @@ impl SqlEngine {
     }
 
     /// Create a new connection to the warehouse.
-    pub fn new_connection(&self, node_id: Option<String>) -> AdapterResult<Box<dyn Connection>> {
+    pub fn new_connection(
+        &self,
+        state: Option<&State>,
+        node_id: Option<String>,
+    ) -> AdapterResult<Box<dyn Connection>> {
         match &self {
-            Self::Warehouse(actual_engine) => actual_engine.new_connection(node_id),
-            Self::Record(record_engine) => record_engine.new_connection(node_id),
-            Self::Replay(replay_engine) => replay_engine.new_connection(node_id),
-            Self::Mock(_) => unreachable!("Mock engine does not support new_connection"),
+            Self::Warehouse(actual_engine) => actual_engine.new_connection(state, node_id),
+            Self::Record(record_engine) => record_engine.new_connection(state, node_id),
+            Self::Replay(replay_engine) => replay_engine.new_connection(state, node_id),
+            Self::Mock(_) => Ok(Box::new(NoopConnection)),
         }
     }
 
