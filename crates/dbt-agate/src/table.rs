@@ -826,6 +826,15 @@ mod tests {
             country.get_item_by_index(2).unwrap().as_str().unwrap(),
             "Canada"
         );
+
+        // select 0 columns
+        let selected = select(&table, &[Value::from_iter([] as [Value; 0])])
+            .unwrap()
+            .downcast_object::<AgateTable>()
+            .unwrap();
+        // result has 0 columns and 3 rows
+        assert_eq!(selected.num_columns(), 0);
+        assert_eq!(selected.num_rows(), 3);
     }
 
     #[test]
