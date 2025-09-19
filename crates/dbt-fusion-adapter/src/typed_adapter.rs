@@ -8,11 +8,11 @@ use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
 use crate::sql_engine::{SqlEngine, execute_query_with_retry};
 use crate::{AdapterResult, AdapterType, AdapterTyping};
-use adbc_core::options::OptionValue;
-use dbt_agate::AgateTable;
 
+use adbc_core::options::OptionValue;
 use arrow::array::{RecordBatch, StringArray, TimestampMillisecondArray};
 use arrow_schema::{DataType, Schema};
+use dbt_agate::AgateTable;
 use dbt_common::FsResult;
 use dbt_common::behavior_flags::BehaviorFlag;
 use dbt_frontend_common::dialect::Dialect;
@@ -111,8 +111,10 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         } else {
             engine.split_statements(&sql, dialect)
         };
+        if statements.is_empty() {
+            return Ok((AdapterResponse::default(), AgateTable::default()));
+        }
 
-        // Configure options
         let mut options = options
             .unwrap_or_default()
             .into_iter()
@@ -152,19 +154,10 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             )?);
         }
 
-        let table = match last_batch {
-            Some(batch) => AgateTable::from_record_batch(Arc::new(batch)),
-            None => AgateTable::default(),
-        };
+        let last_batch = last_batch.expect("last_batch should never be None");
 
-        let response = AdapterResponse {
-            // TODO: This is hardcoded, should be derived from the sql statement?
-            message: format!("SELECT {}", table.num_rows()),
-            // TODO: This is hardcoded, should be derived from the sql statement?
-            code: "SELECT".to_string(),
-            rows_affected: table.num_rows() as i64,
-            query_id: None,
-        };
+        let response = AdapterResponse::new(&last_batch, self.adapter_type());
+        let table = AgateTable::from_record_batch(Arc::new(last_batch));
 
         Ok((response, table))
     }

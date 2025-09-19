@@ -1,0 +1,7 @@
+kind: Fixes
+body: populates AdapterResponse fields, for Snowflake pass query_id
+time: 2025-09-18T00:36:44.475887904-07:00
+custom:
+    author: xuliangs
+    issue: ""
+    project: dbt-fusion

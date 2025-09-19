@@ -1,18 +1,16 @@
-use minijinja::arg_utils::ArgParser;
+use crate::funcs::none_value;
+use crate::response::{AdapterResponse, ResultObject};
+
+use dbt_agate::AgateTable;
+use minijinja::arg_utils::ArgsIter;
 use minijinja::value::Value;
-use minijinja::{
-    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, missing_argument, too_many_arguments,
-};
+use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind};
+use serde_json::Value as JsonValue;
+
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-
-use crate::response::{AdapterResponse, ResultObject};
-use dbt_agate::AgateTable;
-
-use super::funcs::none_value;
-
 /// A store for DBT query results that provides callable functions to access the store
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct ResultStore {
     results: Arc<Mutex<HashMap<String, Value>>>,
 }
@@ -25,29 +23,20 @@ impl ResultStore {
     }
 
     /// Returns a callable function that stores results in the internal map
+    /// https://github.com/dbt-labs/dbt-core/blob/34bb3f94dde716a3f9c36481d2ead85c211075dd/core/dbt/context/providers.py#L1043
     pub fn store_result(
         &self,
     ) -> impl Fn(&[Value]) -> Result<Value, MinijinjaError> + Clone + use<> {
         let store = self.clone();
         move |args: &[Value]| {
-            let mut args = ArgParser::new(args, None);
-            let num_args = args.positional_len() + args.kwargs_len();
-            match num_args {
-                0..=2 => return missing_argument!("store_result requires at least two arguments"),
-                3 => {}
-                _ => return too_many_arguments!("store_result takes up to three arguments"),
-            };
+            // name: str,
+            // response: Any,
+            // agate_table: Optional["agate.Table"] = None
+            let iter = ArgsIter::new("store_result", &["name", "response"], args);
+            let name: String = iter.next_arg::<&str>()?.to_string();
+            let response = AdapterResponse::try_from(iter.next_arg::<Value>()?)?;
 
-            let name: String = args
-                .next_positional::<Value>()?
-                .as_str()
-                .unwrap()
-                .to_string();
-
-            let response = args.get::<Value>("response")?;
-            let response = AdapterResponse::try_from(response)?;
-
-            let table: Option<Value> = args.get_optional::<Value>("agate_table");
+            let table: Option<Value> = iter.next_kwarg::<Option<Value>>("agate_table")?;
             let table = if let Some(t) = table {
                 if !t.is_none() {
                     Some((*t.downcast_object::<AgateTable>().expect("agate_table")).clone())
@@ -57,8 +46,8 @@ impl ResultStore {
             } else {
                 Some(AgateTable::default())
             };
-
             let value = Value::from_object(ResultObject::new(response, table));
+            iter.finish()?;
 
             let mut results = store.results.lock().unwrap();
             results.insert(name, value);
@@ -68,26 +57,16 @@ impl ResultStore {
     }
 
     /// Returns a callable function that loads results from the internal map
+    /// https://github.com/dbt-labs/dbt-core/blob/34bb3f94dde716a3f9c36481d2ead85c211075dd/core/dbt/context/providers.py#L1022
     pub fn load_result(
         &self,
     ) -> impl Fn(&[Value]) -> Result<Value, MinijinjaError> + Clone + use<> {
         let store = self.clone();
         move |args: &[Value]| {
-            let mut args: ArgParser = ArgParser::new(args, None);
-
-            let num_args = args.positional_len() + args.kwargs_len();
-            let error_msg = "load_result requires one argument";
-            match num_args {
-                0 => return missing_argument!(error_msg),
-                1 => {}
-                _ => return too_many_arguments!(error_msg),
-            };
-
-            let name: String = args
-                .next_positional::<Value>()?
-                .as_str()
-                .unwrap()
-                .to_string();
+            // name: str,
+            let iter = ArgsIter::new("load_result", &["name"], args);
+            let name: String = iter.next_arg::<&str>()?.to_string();
+            iter.finish()?;
 
             let mut results = store.results.lock().unwrap();
 
@@ -113,31 +92,24 @@ impl ResultStore {
     }
 
     /// Returns a callable function that stores raw results in the internal map
+    /// https://github.com/dbt-labs/dbt-core/blob/34bb3f94dde716a3f9c36481d2ead85c211075dd/core/dbt/context/providers.py#L1043
     pub fn store_raw_result(
         &self,
     ) -> impl Fn(&[Value]) -> Result<Value, MinijinjaError> + Clone + use<> {
         let store = self.clone();
         move |args: &[Value]| {
-            let mut args = ArgParser::new(args, None);
-
-            let num_args = args.positional_len() + args.kwargs_len();
-            if num_args < 1 {
-                return missing_argument!("store_raw_result requires at least a name argument");
-            }
-
-            let name: String = args.get::<String>("name")?;
-
-            if name.is_empty() {
-                return Err(MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
-                    "name cannot be empty",
-                ));
-            }
-
-            let message: Option<String> = args.get_optional::<String>("message");
-            let code: Option<String> = args.get_optional::<String>("code");
-            let rows_affected: Option<String> = args.get_optional::<String>("rows_affected");
-            let agate_table: Option<Value> = args.get_optional::<Value>("agate_table");
+            // name: str,
+            // message=Optional[str],
+            // code=Optional[str],
+            // rows_affected=Optional[str],
+            // agate_table: Optional["agate.Table"] = None,
+            let iter = ArgsIter::new("store_raw_result", &[], args);
+            let name: String = iter.next_kwarg::<String>("name")?;
+            let message: Option<String> = iter.next_kwarg::<Option<String>>("message")?;
+            let code: Option<String> = iter.next_kwarg::<Option<String>>("code")?;
+            let rows_affected: Option<String> =
+                iter.next_kwarg::<Option<String>>("rows_affected")?;
+            let agate_table: Option<Value> = iter.next_kwarg::<Option<Value>>("agate_table")?;
 
             // Create adapter response
             let response = AdapterResponse {
@@ -168,5 +140,17 @@ impl ResultStore {
             results.insert(name, value);
             Ok(Value::from(true))
         }
+    }
+
+    pub fn get_main_result_json(&self) -> Option<JsonValue> {
+        let results = self.results.lock().unwrap();
+        let main_results = results.get("main").cloned();
+
+        main_results.map(|result| {
+            let result_object = result
+                .downcast_object::<ResultObject>()
+                .expect("\"main\" result must be a ResultObject");
+            serde_json::to_value(result_object.response.clone()).unwrap()
+        })
     }
 }

@@ -178,8 +178,8 @@ pub fn extend_base_context_stateful_fn(
     base_context: &mut BTreeMap<String, MinijinjaValue>,
     root_project_name: &str,
     packages: BTreeSet<String>,
+    result_store: ResultStore,
 ) {
-    let result_store = ResultStore::default();
     base_context.insert(
         "store_result".to_owned(),
         MinijinjaValue::from_function(result_store.store_result()),
@@ -220,10 +220,16 @@ pub async fn build_run_node_context<S: Serialize>(
     resource_type: NodeType,
     sql_header: Option<MinijinjaValue>,
     packages: BTreeSet<String>,
+    result_store: ResultStore,
 ) -> BTreeMap<String, MinijinjaValue> {
     // Build model-specific context
     let mut context = base_context.clone();
-    extend_base_context_stateful_fn(&mut context, &common_attr.package_name, packages);
+    extend_base_context_stateful_fn(
+        &mut context,
+        &common_attr.package_name,
+        packages,
+        result_store,
+    );
 
     extend_with_model_context(
         &mut context,

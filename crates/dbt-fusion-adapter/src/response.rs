@@ -1,14 +1,18 @@
+use crate::AdapterType;
+
+use arrow::array::RecordBatch;
+use dbt_agate::AgateTable;
 use minijinja::Value;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Object};
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
+use serde::{Deserialize, Serialize};
+
 use std::rc::Rc;
 use std::sync::Arc;
 
-use dbt_agate::AgateTable;
-
 /// Response from adapter statement execution
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AdapterResponse {
     /// Message from adapter
     pub message: String,
@@ -18,6 +22,42 @@ pub struct AdapterResponse {
     pub rows_affected: i64,
     /// Query ID of executed statement, if available
     pub query_id: Option<String>,
+}
+
+impl AdapterResponse {
+    //! TODO: find references via searching for keywords `def get_response` in the dbt-adapters repository.
+    //! These components all differ across adapters, implement as they're when necessary
+    pub fn new(batch: &RecordBatch, adapter_type: AdapterType) -> Self {
+        Self {
+            message: Self::message(batch, adapter_type),
+            code: Self::code(batch, adapter_type),
+            rows_affected: batch.num_rows() as i64,
+            query_id: Self::query_id(batch, adapter_type),
+        }
+    }
+
+    /// Get the message for the response from the batch.
+    fn message(batch: &RecordBatch, _adapter_type: AdapterType) -> String {
+        format!("{} {}", "SUCCESS", batch.num_rows())
+    }
+
+    /// Get the code for the response from the batch.
+    fn code(_batch: &RecordBatch, _adapter_type: AdapterType) -> String {
+        "SUCCESS".to_string()
+    }
+
+    /// Get the query ID for the response from the batch.
+    fn query_id(batch: &RecordBatch, adapter_type: AdapterType) -> Option<String> {
+        #[allow(clippy::single_match)]
+        match adapter_type {
+            AdapterType::Snowflake => batch
+                .schema()
+                .metadata()
+                .get("SNOWFLAKE_QUERY_ID")
+                .map(|query_id: &String| query_id.to_string()),
+            _ => None,
+        }
+    }
 }
 
 impl Object for AdapterResponse {

@@ -265,49 +265,69 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
     fn skip_generate_database_name_macro(&self) -> bool {
         false
     }
+
     fn database(&self) -> String {
         self.base().database.clone()
     }
+
     fn skip_generate_schema_name_macro(&self) -> bool {
         false
     }
+
     fn schema(&self) -> String {
         self.base().schema.clone()
     }
+
     fn unique_id(&self) -> String {
         self.common().unique_id.clone()
     }
+
     fn name(&self) -> String {
         self.common().name.clone()
     }
+
     fn alias(&self) -> String {
         self.base().alias.clone()
     }
+
     fn path(&self) -> PathBuf {
         self.common().path.clone()
     }
+
+    fn original_file_path(&self) -> PathBuf {
+        self.common().original_file_path.clone()
+    }
+
     fn package_name(&self) -> String {
         self.common().package_name.clone()
     }
+
     fn materialized(&self) -> DbtMaterialization {
         self.base().materialized.clone()
     }
+
     fn quoting(&self) -> ResolvedQuoting {
         self.base().quoting
     }
+
     fn tags(&self) -> Vec<String> {
         self.common().tags.clone()
     }
+
     fn meta(&self) -> BTreeMap<String, YmlValue> {
         self.common().meta.clone()
     }
+
     fn static_analysis(&self) -> StaticAnalysisKind;
+
     fn static_analysis_enabled(&self) -> bool {
         self.static_analysis() == StaticAnalysisKind::On
             || self.static_analysis() == StaticAnalysisKind::Unsafe
     }
     // Setters
+
     fn set_quoting(&mut self, quoting: ResolvedQuoting);
+
     fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind);
 
     // Optional Fields
