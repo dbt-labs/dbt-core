@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use dbt_common::{Span, adapter::AdapterType, io_args::StaticAnalysisKind};
 use dbt_serde_yaml::UntaggedEnumDeserialize;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, str::FromStr as _, sync::Arc};
+use std::{collections::BTreeMap, path::PathBuf, str::FromStr as _, sync::Arc};
 
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
@@ -12,7 +12,7 @@ use crate::{
     schemas::{
         CommonAttributes, DbtModel, DbtModelAttr, DbtSeed, DbtSnapshot, DbtSource, DbtTest,
         DbtUnitTest, DbtUnitTestAttr, IntrospectionKind, NodeBaseAttributes, Nodes,
-        common::{DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn},
+        common::{Access, DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn},
         manifest::{
             ManifestExposure, ManifestGroup, ManifestSavedQuery, ManifestUnitTest,
             manifest_nodes::{
@@ -125,7 +125,20 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
             .nodes
             .models
             .iter()
-            .map(|(id, node)| (id.clone(), DbtNode::Model((**node).clone().into())))
+            .map(|(id, node)| {
+                (id.clone(), {
+                    let mut model_node: ManifestModel = (**node).clone().into();
+                    // External public models should not have a path or original_file_path
+                    if model_node.access == Some(Access::Public)
+                        && resolver_state.root_project_name
+                            != model_node.__common_attr__.package_name
+                    {
+                        model_node.__common_attr__.path = PathBuf::new();
+                        model_node.__common_attr__.original_file_path = PathBuf::new();
+                    }
+                    DbtNode::Model(model_node)
+                })
+            })
             .chain(
                 resolver_state
                     .nodes

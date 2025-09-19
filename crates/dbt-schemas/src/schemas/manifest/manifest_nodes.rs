@@ -9,8 +9,8 @@ type YmlValue = dbt_serde_yaml::Value;
 use crate::schemas::{
     DbtExposure, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest,
     common::{
-        DbtChecksum, DbtContract, DbtQuoting, Expect, FreshnessDefinition, Given, IncludeExclude,
-        NodeDependsOn,
+        Access, DbtChecksum, DbtContract, DbtQuoting, Expect, FreshnessDefinition, Given,
+        IncludeExclude, NodeDependsOn,
     },
     dbt_column::DbtColumnRef,
     manifest::{
@@ -441,6 +441,7 @@ pub struct ManifestModel {
     pub __base_attr__: ManifestNodeBaseAttributes,
 
     // Model Specific Attributes
+    pub access: Option<Access>,
     pub config: ModelConfig,
     pub version: Option<StringOrInteger>,
     pub latest_version: Option<StringOrInteger>,
@@ -489,6 +490,7 @@ impl From<DbtModel> for ManifestModel {
                 build_path: Default::default(),
                 contract: Default::default(),
             },
+            access: Some(model.__model_attr__.access),
             config: model.deprecated_config,
             version: model.__model_attr__.version,
             latest_version: model.__model_attr__.latest_version,
