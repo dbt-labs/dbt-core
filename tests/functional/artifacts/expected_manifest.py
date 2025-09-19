@@ -1697,6 +1697,7 @@ def expected_versions_manifest(project):
                 ),
                 "constraints": [],
                 "sources": [],
+                "functions": [],
                 "depends_on": {"macros": [], "nodes": []},
                 "description": "A versioned model",
                 "primary_key": ["count", "first_name"],
@@ -1782,6 +1783,7 @@ def expected_versions_manifest(project):
                 "constraints": [],
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
                 "sources": [],
+                "functions": [],
                 "depends_on": {"macros": [], "nodes": []},
                 "description": "A versioned model",
                 "primary_key": ["first_name"],
@@ -1865,6 +1867,7 @@ def expected_versions_manifest(project):
                 "resource_type": "model",
                 "schema": my_schema_name,
                 "sources": [],
+                "functions": [],
                 "tags": [],
                 "meta": {},
                 "unique_id": "model.test.ref_versioned_model",
@@ -1894,6 +1897,7 @@ def expected_versions_manifest(project):
                 "group": "test_group",
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
                 "sources": [],
+                "functions": [],
                 "depends_on": {
                     "macros": ["macro.dbt.test_unique", "macro.dbt.get_where_subquery"],
                     "nodes": ["model.test.versioned_model.v1"],
@@ -1948,6 +1952,7 @@ def expected_versions_manifest(project):
                 "group": "test_group",
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
                 "sources": [],
+                "functions": [],
                 "depends_on": {
                     "macros": ["macro.dbt.test_unique", "macro.dbt.get_where_subquery"],
                     "nodes": ["model.test.versioned_model.v1"],
@@ -2002,6 +2007,7 @@ def expected_versions_manifest(project):
                 "group": "test_group",
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
                 "sources": [],
+                "functions": [],
                 "depends_on": {
                     "macros": ["macro.dbt.test_unique", "macro.dbt.get_where_subquery"],
                     "nodes": ["model.test.versioned_model.v2"],
