@@ -799,6 +799,8 @@ class StateSelectorMethod(SelectorMethod):
                 previous_node = UnitTestDefinition.from_resource(manifest.unit_tests[unique_id])
             elif unique_id in manifest.saved_queries:
                 previous_node = SavedQuery.from_resource(manifest.saved_queries[unique_id])
+            elif unique_id in manifest.functions:
+                previous_node = FunctionNode.from_resource(manifest.functions[unique_id])
 
             if checker.__name__ in [
                 "same_contract",
