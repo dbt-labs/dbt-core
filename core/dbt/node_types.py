@@ -25,7 +25,6 @@ REFABLE_NODE_TYPES: List["NodeType"] = [
     NodeType.Model,
     NodeType.Seed,
     NodeType.Snapshot,
-    NodeType.Function,
 ]
 
 TEST_NODE_TYPES: List["NodeType"] = [
