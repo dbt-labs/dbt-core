@@ -15,12 +15,13 @@ pub const DEFAULT_QUERY_COMMENT: &str = "
     profile_name=target.get('profile_name'),
     target_name=target.get('target_name'),
 ) -%}
-{# Deviation from Core: use truthiness of `node` since `none` != `undefined`. #}
-{%- if node -%}
+{%- if node is not none -%}
   {%- do comment_dict.update(
     node_id=node.unique_id,
   ) -%}
-{# Deviation from Core: `connection_name` is no longer used in Fusion. #}
+{% else %}
+  {# in the node context, the connection name is the node_id #}
+  {%- do comment_dict.update(connection_name=connection_name) -%}
 {%- endif -%}
 {{ return(tojson(comment_dict)) }}
 ";

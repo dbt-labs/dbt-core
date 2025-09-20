@@ -483,9 +483,9 @@ pub struct SnowflakeDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retry_on_database_errors: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub connect_retries: Option<StringOrInteger>,
+    pub connect_retries: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub connect_timeout: Option<StringOrInteger>,
+    pub connect_timeout: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reuse_connections: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -789,10 +789,26 @@ pub struct PostgresTargetEnv {
 
 #[derive(Serialize, JsonSchema)]
 pub struct SnowflakeTargetEnv {
-    pub warehouse: Option<String>,
-    pub user: String,
-    pub role: Option<String>,
     pub account: String,
+    pub user: String,
+    pub warehouse: Option<String>,
+    pub role: Option<String>,
+    pub authenticator: Option<String>,
+    pub oauth_client_id: Option<String>,
+    pub query_tag: Option<String>,
+    pub client_session_keep_alive: bool, // Default: false
+    pub host: Option<String>,
+    pub port: Option<String>,
+    pub protocol: Option<String>,
+    pub proxy_host: Option<String>,
+    pub proxy_port: Option<String>,
+    pub insecure_mode: bool,  // Default: false
+    pub connect_retries: i64, // Default: 1
+    pub connect_timeout: Option<i64>,
+    pub retry_on_database_errors: bool, // Default: false
+    pub retry_all: bool,                // Default: false
+    pub reuse_connections: Option<bool>,
+    pub s3_stage_vpce_dns_name: Option<String>,
     pub __common__: CommonTargetContext,
 }
 
@@ -835,16 +851,36 @@ pub struct CommonTargetContext {
 
 #[derive(Serialize, JsonSchema)]
 pub struct DatabricksTargetEnv {
+    pub host: Option<String>,
+    pub http_path: Option<String>,
+    pub catalog: Option<String>,
     pub __common__: CommonTargetContext,
 }
 
 #[derive(Serialize, JsonSchema)]
 pub struct RedshiftTargetEnv {
-    pub dbname: String,
     pub host: String,
     pub user: String,
     pub port: StringOrInteger,
+    pub method: Option<String>,
+    pub cluster_id: Option<String>,
+    pub iam_profile: Option<String>,
+    pub sslmode: Option<String>,
+    pub region: Option<String>,
+    pub autocreate: bool,
+    pub db_groups: Option<Vec<String>>,
+    pub ra3_node: Option<bool>,
+    pub connect_timeout: Option<i64>,
+    pub role: Option<String>,
+    pub retries: i64,
+    pub autocommit: Option<bool>,
+    pub dbname: String,
     pub __common__: CommonTargetContext,
+    pub retry_all: bool,
+    pub access_key_id: Option<String>,
+    pub is_serverless: Option<bool>,
+    pub serverless_work_group: Option<String>,
+    pub serverless_acct_id: Option<String>,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -868,10 +904,23 @@ impl TryFrom<DbConfig> for TargetContext {
             DbConfig::Snowflake(config) => {
                 let database = config.database.ok_or_else(|| missing("database"))?;
                 Ok(TargetContext::Snowflake(SnowflakeTargetEnv {
-                    warehouse: config.warehouse,
-                    user: config.user.ok_or_else(|| missing("user"))?,
-                    role: config.role.clone(),
                     account: config.account.ok_or_else(|| missing("account"))?,
+                    user: config.user.ok_or_else(|| missing("user"))?,
+                    warehouse: config.warehouse,
+                    role: config.role.clone(),
+                    authenticator: config.authenticator,
+                    oauth_client_id: config.oauth_client_id,
+                    query_tag: config.query_tag,
+                    client_session_keep_alive: config.client_session_keep_alive.unwrap_or(false),
+                    host: config.host,
+                    port: config.port,
+                    protocol: config.protocol,
+                    connect_retries: config.connect_retries.unwrap_or(1),
+                    connect_timeout: config.connect_timeout,
+                    retry_on_database_errors: config.retry_on_database_errors.unwrap_or(false),
+                    retry_all: config.retry_all.unwrap_or(false),
+                    reuse_connections: config.reuse_connections,
+                    s3_stage_vpce_dns_name: config.s3_stage_vpce_dns_name,
                     __common__: CommonTargetContext {
                         database,
                         schema: config.schema.ok_or_else(|| missing("schema"))?,
@@ -886,6 +935,9 @@ impl TryFrom<DbConfig> for TargetContext {
                             None => None,
                         },
                     },
+                    proxy_host: None,
+                    proxy_port: None,
+                    insecure_mode: false,
                 }))
             }
 
@@ -985,6 +1037,9 @@ impl TryFrom<DbConfig> for TargetContext {
                     .database
                     .unwrap_or_else(|| DEFAULT_DATABRICKS_DATABASE.to_string());
                 Ok(TargetContext::Databricks(DatabricksTargetEnv {
+                    host: config.host,
+                    http_path: config.http_path,
+                    catalog: Some(database.clone()),
                     __common__: CommonTargetContext {
                         database,
                         schema: config.schema.ok_or_else(|| missing("schema"))?,
@@ -999,16 +1054,33 @@ impl TryFrom<DbConfig> for TargetContext {
                     .database
                     .ok_or_else(|| missing("dbname or database"))?;
                 Ok(TargetContext::Redshift(RedshiftTargetEnv {
-                    dbname: database.clone(),
                     host: config.host.ok_or_else(|| missing("host"))?,
                     user: config.user.ok_or_else(|| missing("user"))?,
                     port: config.port.ok_or_else(|| missing("port"))?,
+                    method: config.method,
+                    cluster_id: config.cluster_id,
+                    iam_profile: config.iam_profile,
+                    sslmode: config.sslmode,
+                    region: config.region,
+                    autocreate: config.autocreate.unwrap_or(false),
+                    db_groups: config.db_groups,
+                    ra3_node: config.ra3_node,
+                    connect_timeout: config.connect_timeout,
+                    role: config.role,
+                    retries: config.retries.unwrap_or(1),
+                    autocommit: config.autocommit,
+                    dbname: database.clone(),
                     __common__: CommonTargetContext {
                         database,
                         schema: config.schema.ok_or_else(|| missing("schema"))?,
                         type_: adapter_type,
                         threads: None,
                     },
+                    retry_all: false,
+                    access_key_id: None,
+                    is_serverless: None,
+                    serverless_work_group: None,
+                    serverless_acct_id: None,
                 }))
             }
 

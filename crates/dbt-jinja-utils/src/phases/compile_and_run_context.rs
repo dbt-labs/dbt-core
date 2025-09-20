@@ -123,6 +123,7 @@ pub fn build_compile_and_run_base_context(
     );
 
     ctx.insert("node".to_owned(), MinijinjaValue::NONE);
+    ctx.insert("connection_name".to_owned(), MinijinjaValue::from(""));
     ctx
 }
 
