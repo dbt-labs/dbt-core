@@ -952,7 +952,7 @@ class UnitTestVar(RuntimeVar):
 class ParseFunctionResolver(BaseFunctionResolver):
     def resolve(self, name: str, package: Optional[str] = None):
         # When you call function(), this is what happens at parse time
-        self.model.functions.append([name, name])
+        self.model.functions.append(self._repack_args(name, package))
         return self.Relation.create_from(self.config, self.model)
 
 
