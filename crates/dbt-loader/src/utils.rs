@@ -215,6 +215,7 @@ pub fn read_profiles_and_extract_db_config<S: Serialize>(
         ctx,
         &[],
         None,
+        true,
     )?;
     let db_config = get_db_config(io_args, rendered_db_target, Some(rendered_target.clone()))?;
 

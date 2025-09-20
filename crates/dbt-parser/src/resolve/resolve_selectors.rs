@@ -68,6 +68,7 @@ pub fn resolve_final_selectors(
         &context,
         &[],
         None,
+        true,
     ) {
         Ok(yaml) => yaml,
         Err(e) => {

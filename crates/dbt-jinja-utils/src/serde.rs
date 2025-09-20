@@ -113,6 +113,7 @@ pub fn value_from_file(
 ///
 /// `dependency_package_name` is used to determine if the file is part of a dependency package,
 /// which affects how errors are reported.
+#[allow(clippy::too_many_arguments)]
 pub fn into_typed_with_jinja<T, S>(
     io_args: &IoArgs,
     value: Value,
@@ -121,6 +122,7 @@ pub fn into_typed_with_jinja<T, S>(
     ctx: &S,
     listeners: &[Rc<dyn RenderingEventListener>],
     dependency_package_name: Option<&str>,
+    show_errors_or_warnings: bool,
 ) -> FsResult<T>
 where
     T: DeserializeOwned,
@@ -129,15 +131,17 @@ where
     let (res, errors) =
         into_typed_with_jinja_error(value, should_render_secrets, env, ctx, listeners)?;
 
-    for error in errors {
-        if let Some(package_name) = dependency_package_name
-            && !io_args.show_all_deprecations
-        {
-            // If we are parsing a dependency package, we use a special macros
-            // that ensures at most one error is shown per package.
-            show_package_error!(io_args, package_name);
-        } else {
-            show_strict_error!(io_args, error, dependency_package_name);
+    if show_errors_or_warnings {
+        for error in errors {
+            if let Some(package_name) = dependency_package_name
+                && !io_args.show_all_deprecations
+            {
+                // If we are parsing a dependency package, we use a special macros
+                // that ensures at most one error is shown per package.
+                show_package_error!(io_args, package_name);
+            } else {
+                show_strict_error!(io_args, error, dependency_package_name);
+            }
         }
     }
 

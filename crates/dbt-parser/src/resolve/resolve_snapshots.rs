@@ -136,6 +136,7 @@ pub async fn resolve_snapshots(
                 base_ctx,
                 &[],
                 dependency_package_name,
+                true,
             )?;
 
             if let Some(relation) = &snapshot.relation {

@@ -78,6 +78,7 @@ pub fn resolve_sources(
             base_ctx,
             &[],
             dependency_package_name,
+            true,
         )?;
 
         let table: Tables = into_typed_with_jinja(
@@ -88,6 +89,7 @@ pub fn resolve_sources(
             base_ctx,
             &[],
             dependency_package_name,
+            true,
         )?;
         let database: String = source
             .database

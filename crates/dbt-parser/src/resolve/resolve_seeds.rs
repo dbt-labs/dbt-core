@@ -104,6 +104,7 @@ pub fn resolve_seeds(
                     base_ctx,
                     &[],
                     dependency_package_name,
+                    true,
                 )?,
                 Some(mpe.relative_path.clone()),
             )

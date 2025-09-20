@@ -44,6 +44,7 @@ pub async fn resolve_groups(
                 base_ctx,
                 &[],
                 dependency_package_name,
+                true,
             )?;
 
             let group_properties_config = if let Some(properties) = &group.config {

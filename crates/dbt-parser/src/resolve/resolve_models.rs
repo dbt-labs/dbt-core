@@ -137,11 +137,12 @@ pub async fn resolve_models(
         BTreeMap::new();
     models_properties.iter().for_each(|(model_key, v)| {
         let mut v = v.clone();
-        v.schema_value.as_mapping_mut().map(|m| {
+        if let Some(m) = v.schema_value.as_mapping_mut() {
+            // NOTE: do not remove derived_semantics not because it has jinja
+            // but because we want to report any yaml errors that we didn't
+            // show in resolve_inner's parsing of model yaml properties
             m.remove("metrics");
-            // derived semantics shouldn't have jinja, but also has no use in this function
-            m.remove("derived_semantics")
-        });
+        }
 
         models_properties_sans_semantics.insert(model_key.clone(), v);
     });

@@ -275,8 +275,16 @@ pub async fn load_simplified_project_and_profiles(
         ),
     ]);
 
-    let simplified_dbt_project: DbtProjectSimplified =
-        into_typed_with_jinja(&arg.io, raw_dbt_project_in_val, true, &env, &ctx, &[], None)?;
+    let simplified_dbt_project: DbtProjectSimplified = into_typed_with_jinja(
+        &arg.io,
+        raw_dbt_project_in_val,
+        true,
+        &env,
+        &ctx,
+        &[],
+        None,
+        true,
+    )?;
 
     if simplified_dbt_project.data_paths.is_some() {
         return err!(

@@ -93,6 +93,7 @@ pub async fn resolve_saved_queries(
                 base_ctx,
                 &[],
                 dependency_package_name,
+                true,
             )?;
 
             // Get combined config from project config and saved query config

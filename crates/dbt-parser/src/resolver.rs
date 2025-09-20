@@ -436,6 +436,9 @@ pub async fn resolve_inner(
             &base_ctx,
             &[],
             dependency_package_name,
+            // HACK: to avoid duplicate errors due to multiple parses of model yaml properties (once here and once in resolve_models)
+            // do not show_errors_or_warnings because that will be done by resolve_models
+            false,
         )?;
 
         // The caveat here is that any yaml errors will be reported with root path as `models.[$].metrics`
@@ -454,7 +457,6 @@ pub async fn resolve_inner(
                 None,
                 None,
             )?;
-
             typed_model_props.metrics = typed_model_metrics_props;
         }
 

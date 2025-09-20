@@ -92,8 +92,16 @@ impl ProjectStore {
         let env = initialize_load_profile_jinja_environment();
         let empty_context = HashMap::<String, String>::new();
 
-        let config: DbtCloudYml =
-            into_typed_with_jinja(&io_args, yaml_value, false, &env, &empty_context, &[], None)?;
+        let config: DbtCloudYml = into_typed_with_jinja(
+            &io_args,
+            yaml_value,
+            false,
+            &env,
+            &empty_context,
+            &[],
+            None,
+            true,
+        )?;
 
         Ok(Some(Self { config }))
     }

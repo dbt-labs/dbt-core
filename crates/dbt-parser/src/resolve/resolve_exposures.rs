@@ -95,6 +95,7 @@ pub async fn resolve_exposures(
                 base_ctx,
                 &[],
                 dependency_package_name,
+                true,
             )?;
 
             // Get combined properties

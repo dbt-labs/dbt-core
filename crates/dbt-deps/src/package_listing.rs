@@ -130,6 +130,7 @@ impl PackageListing {
                         &deps_context,
                         &[],
                         None,
+                        true,
                     )
                 }?;
                 if let Some(unpinned_package) = self.packages.get_mut(&hub_package.package) {
@@ -166,6 +167,7 @@ impl PackageListing {
                         &deps_context,
                         &[],
                         None,
+                        true,
                     )
                 }?;
                 let git_package_url: String = {
@@ -180,6 +182,7 @@ impl PackageListing {
                         &deps_context,
                         &[],
                         None,
+                        true,
                     )
                 }?;
 
@@ -220,6 +223,7 @@ impl PackageListing {
                         &deps_context,
                         &[],
                         None,
+                        true,
                     )
                 }?;
                 // Get absolute path of local package
@@ -281,6 +285,7 @@ impl PackageListing {
                         &deps_context,
                         &[],
                         None,
+                        true,
                     )
                 }?;
                 let private_package_private: String = {
@@ -296,6 +301,7 @@ impl PackageListing {
                         &deps_context,
                         &[],
                         None,
+                        true,
                     )
                 }?;
 
@@ -341,6 +347,7 @@ impl PackageListing {
                         &deps_context,
                         &[],
                         None,
+                        true,
                     )
                 }?;
                 let tarball_url: String = {
@@ -356,6 +363,7 @@ impl PackageListing {
                         &deps_context,
                         &[],
                         None,
+                        true,
                     )
                 }?;
 

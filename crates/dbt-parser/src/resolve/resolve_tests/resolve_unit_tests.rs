@@ -84,6 +84,7 @@ pub fn resolve_unit_tests(
             base_ctx,
             &[],
             dependency_package_name,
+            true,
         )?;
         // todo: Unit test should have a database and schema,
         //    derived from the underlying model, correct?

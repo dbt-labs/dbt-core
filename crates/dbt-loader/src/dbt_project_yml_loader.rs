@@ -35,6 +35,7 @@ pub fn load_project_yml(
         &context,
         &[],
         dependency_package_name,
+        true,
     )?;
 
     // Set default model paths if not specified

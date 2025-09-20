@@ -69,6 +69,7 @@ impl MinimalProperties {
                     base_ctx,
                     &[],
                     dependency_package_name_from_ctx(jinja_env, base_ctx),
+                    true,
                 )?;
                 for (key, maybe_version_info) in collect_model_version_info(&model).into_iter() {
                     if let Some(existing_model) = self.models.get_mut(&key) {
@@ -102,6 +103,7 @@ impl MinimalProperties {
                     base_ctx,
                     &[],
                     dependency_package_name_from_ctx(jinja_env, base_ctx),
+                    true,
                 )?;
 
                 if let Some(tables) = &*source.tables {
@@ -127,6 +129,7 @@ impl MinimalProperties {
                             base_ctx,
                             &[],
                             dependency_package_name_from_ctx(jinja_env, base_ctx),
+                            true,
                         )?;
                         let key = (
                             source.name.clone(),
@@ -187,6 +190,7 @@ impl MinimalProperties {
                     base_ctx,
                     &[],
                     dependency_package_name_from_ctx(jinja_env, base_ctx),
+                    true,
                 )?;
                 if let Some(existing_seed) = self.seeds.get_mut(&seed.name) {
                     existing_seed
@@ -218,6 +222,7 @@ impl MinimalProperties {
                     base_ctx,
                     &[],
                     dependency_package_name_from_ctx(jinja_env, base_ctx),
+                    true,
                 )?;
                 if let Some(existing_snapshot) = self.snapshots.get_mut(&snapshot.name) {
                     existing_snapshot
@@ -249,6 +254,7 @@ impl MinimalProperties {
                     base_ctx,
                     &[],
                     dependency_package_name_from_ctx(jinja_env, base_ctx),
+                    true,
                 )?;
                 self.exposures.insert(
                     exposure.name.clone(),
@@ -274,6 +280,7 @@ impl MinimalProperties {
                     base_ctx,
                     &[],
                     dependency_package_name_from_ctx(jinja_env, base_ctx),
+                    true,
                 )?;
                 if let Some(existing_metric) = self.metrics.get_mut(&metric.name) {
                     existing_metric
@@ -305,6 +312,7 @@ impl MinimalProperties {
                     base_ctx,
                     &[],
                     dependency_package_name_from_ctx(jinja_env, base_ctx),
+                    true,
                 )?;
                 if let Some(existing_saved_query) = self.saved_queries.get_mut(&saved_query.name) {
                     existing_saved_query
@@ -336,6 +344,7 @@ impl MinimalProperties {
                     base_ctx,
                     &[],
                     dependency_package_name_from_ctx(jinja_env, base_ctx),
+                    true,
                 )?;
                 if let Some(existing_unit_test) = self.unit_tests.get_mut(&unit_test.name) {
                     existing_unit_test
@@ -367,6 +376,7 @@ impl MinimalProperties {
                     base_ctx,
                     &[],
                     dependency_package_name_from_ctx(jinja_env, base_ctx),
+                    true,
                 )?;
                 if let Some(existing_test) = self.tests.get_mut(&test.name) {
                     existing_test
@@ -398,6 +408,7 @@ impl MinimalProperties {
                     base_ctx,
                     &[],
                     dependency_package_name_from_ctx(jinja_env, base_ctx),
+                    true,
                 )?;
                 if let Some(existing_test) = self.tests.get_mut(&test.name) {
                     existing_test
@@ -429,6 +440,7 @@ impl MinimalProperties {
                     base_ctx,
                     &[],
                     dependency_package_name_from_ctx(jinja_env, base_ctx),
+                    true,
                 )?;
                 if let Some(existing_group) = self.groups.get_mut(&group.name) {
                     existing_group
