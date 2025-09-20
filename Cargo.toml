@@ -37,6 +37,8 @@ members = [
   "crates/proto-rust-macros",
   "crates/dbt-env",
   "crates/dbt-test-utils",
+  "crates/dbt-sample",
+
 ]
 
 resolver = "2"
@@ -172,6 +174,7 @@ dbt-loader = { path = "crates/dbt-loader" }
 dbt-parser = { path = "crates/dbt-parser" }
 dbt-proc-macros = { path = "crates/dbt-proc-macros" }
 
+dbt-sample = { path = "crates/dbt-sample" }
 dbt-schemas = { path = "crates/dbt-schemas" }
 dbt-selector-parser = { path = "crates/dbt-selector-parser" }
 dbt-telemetry = { path = "crates/dbt-telemetry" }

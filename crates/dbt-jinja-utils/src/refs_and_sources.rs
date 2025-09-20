@@ -8,7 +8,9 @@ use dbt_common::{
     CodeLocation, ErrorCode, FsResult, adapter::AdapterType, err, fs_err, io_args::IoArgs,
     show_error, unexpected_err,
 };
-use dbt_fusion_adapter::relation_object::{RelationObject, create_relation_from_node};
+use dbt_fusion_adapter::relation_object::{
+    RelationObject, create_relation_from_node, create_relation_internal,
+};
 use dbt_schemas::{
     filter::RunFilter,
     schemas::{
@@ -21,7 +23,10 @@ use dbt_schemas::{
 };
 use minijinja::Value as MinijinjaValue;
 
-/// A wrapper around refs and sources with methods to get and insert refs and sources
+/// A wrapper around refs and sources with methods to get and insert refs and sources.
+///
+/// Carries optional `sample_plan` which, when present, remaps source relations to the
+/// sampled schema in remote runs (e.g., `<schema>_SAMPLE` or an explicit `remote.schema`).
 #[derive(Debug, Default, Clone)]
 pub struct RefsAndSources {
     /// Map of ref_name (either {project}.{ref_name}, {ref_name}) to (unique_id, relation, status)
@@ -35,6 +40,8 @@ pub struct RefsAndSources {
     pub mantle_quoting: Option<DbtQuoting>,
     /// Filters that will be applied to `run` or `build` (supports --empty or --sample)
     pub run_filter: RunFilter,
+    /// Optional remap plan for sources when sampling is enabled
+    pub renaming: BTreeMap<String, (String, String, String)>,
 }
 
 impl RefsAndSources {
@@ -45,11 +52,13 @@ impl RefsAndSources {
         root_package_name: String,
         mantle_quoting: Option<DbtQuoting>,
         run_filter: RunFilter,
+        renaming: BTreeMap<String, (String, String, String)>,
     ) -> FsResult<Self> {
         let mut refs_and_sources = RefsAndSources {
             root_package_name,
             mantle_quoting,
             run_filter,
+            renaming,
             ..Default::default()
         };
         for (_, node) in nodes.iter() {
@@ -212,8 +221,26 @@ impl RefsAndSourcesTracker for RefsAndSources {
         adapter_type: AdapterType,
         status: ModelStatus,
     ) -> FsResult<()> {
+        // Build base relation and apply sample remapping if configured
+        let mut database = source.base().database.clone();
+        let mut schema = source.base().schema.clone();
+        let mut identifier = source.base().alias.clone();
+        let mapper = &self.renaming;
+        if mapper.contains_key(&source.unique_id()) {
+            // When a plan is present, remap all sources.
+            (database, schema, identifier) = mapper[&source.unique_id()].clone();
+        }
+
+        let base_rel = create_relation_internal(
+            adapter_type,
+            database,
+            schema,
+            Some(identifier),
+            None,
+            source.quoting(),
+        )?;
         let relation = RelationObject::new_with_filter(
-            create_relation_from_node(adapter_type, source, Some(self.run_filter.clone()))?,
+            base_rel,
             self.run_filter.clone(),
             source.deprecated_config.event_time.clone(),
         )
@@ -222,21 +249,20 @@ impl RefsAndSourcesTracker for RefsAndSources {
         self.sources
             .entry(format!(
                 "{}.{}.{}",
-                package_name, source.__source_attr__.source_name, source.__common_attr__.name
+                package_name,
+                source.__source_attr__.source_name,
+                source.common().name
             ))
             .or_default()
-            .push((
-                source.__common_attr__.unique_id.clone(),
-                relation.clone(),
-                status,
-            ));
+            .push((source.common().unique_id.clone(), relation.clone(), status));
         self.sources
             .entry(format!(
                 "{}.{}",
-                source.__source_attr__.source_name, source.__common_attr__.name
+                source.__source_attr__.source_name,
+                source.common().name
             ))
             .or_default()
-            .push((source.__common_attr__.unique_id.clone(), relation, status));
+            .push((source.common().unique_id.clone(), relation, status));
         Ok(())
     }
 

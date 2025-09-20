@@ -1927,6 +1927,14 @@ pub struct DbtSource {
     // See: https://github.com/dbt-labs/dbt-external-tables
     pub __other__: BTreeMap<String, YmlValue>,
 }
+impl DbtSource {
+    pub fn base(&self) -> &NodeBaseAttributes {
+        &self.__base_attr__
+    }
+    pub fn common(&self) -> &CommonAttributes {
+        &self.__common_attr__
+    }
+}
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

@@ -96,7 +96,7 @@ pub fn determine_project_dir(inputs: &[String], project_file: &str) -> FsResult<
                 Err(_) => {
                     return err!(
                         ErrorCode::IoError,
-                        "Input directory '{input}' not found; make sure that it exists under the provided path"
+                        "Input dir '{input}' not found; make sure that it exists under the provided path"
                     );
                 }
             }
@@ -111,13 +111,13 @@ pub fn determine_project_dir(inputs: &[String], project_file: &str) -> FsResult<
                 if !inputs.is_empty() {
                     err!(
                         ErrorCode::IoError,
-                        "Invalid value '{}' for <TARGETS>: Please pass a path that points to or into a dbt project directory",
+                        "Invalid value '{}' for <TARGETS>: Please pass a path that points to or into a dbt project dir\nHint: pass a dbt project dir via `--project-dir <path>` or run `db init` to scaffold a project",
                         inputs[0]
                     )
                 } else {
                     err!(
                         ErrorCode::IoError,
-                        "The current directory is not a dbt project directory; cd into it or pass a <path> to it via --project-dir <path>"
+                        "The current dir is not a dbt project dir\nHint: `cd` into it; pass a <path> to it via `--project-dir <path>`; or run `db init` to scaffold a project"
                     )
                 }
             } else {
@@ -125,7 +125,7 @@ pub fn determine_project_dir(inputs: &[String], project_file: &str) -> FsResult<
                     diff_paths(search_start, env::current_dir()?).unwrap_or(env::current_dir()?);
                 err!(
                     ErrorCode::IoError,
-                    "Invalid value '{}' for <TARGETS>: Please pass a path that points to or into a dbt project directory",
+                    "Invalid value '{}' for <TARGETS>: Please pass a path that points to or into a dbt project dir\nHint: pass a dbt project dir via `--project-dir <path>` or run `db init` to scaffold a project",
                     relative_path.display()
                 )
             }

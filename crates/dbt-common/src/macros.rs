@@ -104,7 +104,8 @@ pub fn format_materialization_suffix(materialization: Option<&str>, desc: Option
     let truncated_mat = match materialization {
         Some("materialized_view") => Some("mat_view"),
         Some("streaming_table") => Some("streaming"),
-        Some("test") | Some("unit_test") | None => None,
+        // Hide materialization label for tests and unit tests
+        Some("test") | Some("unit_test") | Some("unit") | None => None,
         Some(other) => Some(other),
     };
     match (truncated_mat, desc) {
@@ -371,8 +372,14 @@ macro_rules! show_completed {
                 .unwrap_or_default();
             let resource_type_str = $task.resource_type();
             let materialization = $task.base().materialized.to_string();
-            let schema = $task.base().schema.clone();
-            let alias = $task.base().alias.clone();
+            // Default schema/alias
+            let mut schema = $task.base().schema.clone();
+            let mut alias = $task.base().alias.clone();
+            // For unit tests: display test schema + unit test name
+            if resource_type_str == NodeType::UnitTest {
+                schema = format!("{}_dbt_test__audit", schema);
+                alias = $task.common().name.clone();
+            }
 
             let desc = if matches!($node_status, NodeStatus::Succeeded) {
                 $with_cache.then_some("New changes detected".to_string())

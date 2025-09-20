@@ -270,6 +270,8 @@ pub struct EvalArgs {
     pub refresh_sources: bool,
     pub send_anonymous_usage_stats: bool,
     pub check_all: bool,
+    // todo: temporary, until Sampling is public, maps (source) unique_id to renamed (database, schema, table)
+    pub sample_renaming: BTreeMap<String, (String, String, String)>,
 }
 impl fmt::Debug for EvalArgs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -428,6 +430,7 @@ pub enum Phases {
     JinjaCheck, // dbt jinja-check
     Compile,    // dbt compile
     Show,       // dbt show
+    Sample,     // dbt sample
     Lineage,
     RunOperation,
     #[default]
@@ -607,6 +610,7 @@ pub enum ShowOptions {
     SourcedSchemas,
     Schema,
     Data,
+    Verdict,
     Stats,
     Lineage,
     All,
@@ -636,6 +640,7 @@ impl ShowOptions {
             | ShowOptions::ProgressAnalyze
             | ShowOptions::Schema
             | ShowOptions::Data
+            | ShowOptions::Verdict
             | ShowOptions::Lineage
             | ShowOptions::All
             | ShowOptions::RawLineage
@@ -643,6 +648,23 @@ impl ShowOptions {
             | ShowOptions::Completed
             | ShowOptions::None => "".to_string(),
         }
+    }
+}
+
+#[derive(ValueEnum, Clone, Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum PersistTarget {
+    #[default]
+    Warehouse,
+    Local,
+}
+impl Display for PersistTarget {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            PersistTarget::Warehouse => "warehouse",
+            PersistTarget::Local => "local",
+        };
+        write!(f, "{s}")
     }
 }
 // ----------------------------------------------------------------------------------------------

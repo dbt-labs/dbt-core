@@ -118,6 +118,7 @@ pub const FINISHED: &str = "  Finished";
 pub const PREVIEWING: &str = "Previewing";
 pub const INLINE_NODE: &str = "sql_operation.inline";
 pub const NOOP: &str = "noop";
+pub const SAMPLING: &str = "  Sampling";
 
 // log targets
 pub const EXECUTING: &str = " ExecutingSql";
