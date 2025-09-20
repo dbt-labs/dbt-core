@@ -1,5 +1,6 @@
 from typing import Dict
 
+import agate
 import pytest
 
 from dbt.artifacts.resources import FunctionReturnType
@@ -62,3 +63,34 @@ class TestCreationOfUDFs(BasicUDFSetup):
         assert argument.name == "value"
         assert argument.type == "float"
         assert results[0].node.return_type == FunctionReturnType(type="float")
+
+
+class TestCanInlineShowUDF(BasicUDFSetup):
+    def test_can_inline_show_udf(self, project):
+        run_dbt(["build"])
+
+        result = run_dbt(["show", "--inline", "select {{ function('double_it') }}(1)"])
+        assert len(result.results) == 1
+        agate_table = result.results[0].agate_table
+        assert isinstance(agate_table, agate.Table)
+        assert agate_table.column_names == ("double_it",)
+        assert agate_table.rows == [(2.0,)]
+
+
+class TestCanCallUDFInModel(BasicUDFSetup):
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "double_it_model.sql": "select {{ function('double_it') }}(1) as double_it",
+        }
+
+    def test_can_call_udf_in_model(self, project):
+        run_dbt(["build"])
+
+        result = run_dbt(["show", "--select", "double_it_model"])
+        assert len(result.results) == 1
+        agate_table = result.results[0].agate_table
+        assert isinstance(agate_table, agate.Table)
+        assert agate_table.column_names == ("double_it",)
+        assert agate_table.rows == [(2.0,)]
