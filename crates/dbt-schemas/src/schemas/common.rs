@@ -785,12 +785,14 @@ impl Hooks {
                 new_hooks.push(HookConfig {
                     sql: Some(s.clone()),
                     transaction: Some(true),
+                    index: None,
                 });
             }
             Hooks::ArrayOfStrings(v) => {
                 new_hooks.extend(v.iter().map(|s| HookConfig {
                     sql: Some(s.clone()),
                     transaction: Some(true),
+                    index: None,
                 }));
             }
             Hooks::HookConfig(hook_config) => {
@@ -805,12 +807,14 @@ impl Hooks {
                 new_hooks.push(HookConfig {
                     sql: Some(s.clone()),
                     transaction: Some(true),
+                    index: None,
                 });
             }
             Hooks::ArrayOfStrings(v) => {
                 new_hooks.extend(v.iter().map(|s| HookConfig {
                     sql: Some(s.clone()),
                     transaction: Some(true),
+                    index: None,
                 }));
             }
             Hooks::HookConfig(hook_config) => {
@@ -829,6 +833,7 @@ impl Hooks {
 pub struct HookConfig {
     pub sql: Option<String>,
     pub transaction: Option<bool>,
+    pub index: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]

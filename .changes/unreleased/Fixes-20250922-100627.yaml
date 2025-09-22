@@ -1,0 +1,7 @@
+kind: Fixes
+body: Enable fusion to read pre/post hook fields from dbt-mantle/dbt-core manifests.
+time: 2025-09-22T10:06:27.006700887-07:00
+custom:
+    author: lottaquestions
+    issue: ""
+    project: dbt-fusion

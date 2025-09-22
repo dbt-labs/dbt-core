@@ -324,7 +324,9 @@ pub struct SnapshotConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(alias = "pre-hook")]
     pub pre_hook: Verbatim<Option<Hooks>>,
+    #[serde(alias = "post-hook")]
     pub post_hook: Verbatim<Option<Hooks>>,
     pub persist_docs: Option<PersistDocsConfig>,
     pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
