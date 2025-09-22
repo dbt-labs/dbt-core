@@ -1,9 +1,9 @@
 use super::TestResult;
+use super::log_capture::JsonLogEvent;
 use clap::Parser;
 use dbt_common::{
     DiscreteEventEmitter,
     cancellation::{CancellationToken, never_cancels},
-    logging::dbt_compat_log::LogEntry,
 };
 use std::{
     fs::File,
@@ -446,12 +446,11 @@ pub fn relative_to_git_root(path: &Path) -> Option<PathBuf> {
     None
 }
 
-pub fn assert_str_in_log_messages(logs: &[LogEntry], search_str: &str) -> FsResult<()> {
+pub fn assert_str_in_log_messages(logs: &[JsonLogEvent], search_str: &str) -> FsResult<()> {
     if logs.iter().any(|log| {
-        log.info
-            .as_ref()
+        log.info()
             .map(|info| info.msg.as_str())
-            .unwrap_or("")
+            .unwrap_or_default()
             .contains(search_str)
     }) {
         Ok(())

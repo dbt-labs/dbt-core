@@ -57,6 +57,9 @@ pub mod v1 {
             pub mod adapter_types {
                 include!("gen/v1.public.fields.adapter_types.rs");
             }
+            pub mod core_types {
+                include!("gen/v1.public.fields.core_types.rs");
+            }
         }
     }
 }

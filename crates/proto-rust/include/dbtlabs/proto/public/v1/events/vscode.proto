@@ -44,6 +44,9 @@ message ExtensionActivated {
     // the version of dbt used in the project
     string dbt_version = 12;
 
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 13;
+
 }
 
 message ExtensionLspCompile {
@@ -86,6 +89,9 @@ message ExtensionLspCompile {
 
     // The event that triggered the compile
     v1.public.fields.vscode_types.CompileCause compile_cause = 14;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 15;
 }
 
 message ExtensionUserStateChange {
@@ -99,6 +105,9 @@ message ExtensionUserStateChange {
 
     // the state the user changed to
     v1.public.fields.vscode_types.UserState changed_to_state = 4;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 5;
 }
 
 message ExtensionCtePreview {
@@ -109,6 +118,9 @@ message ExtensionCtePreview {
 
     v1.public.fields.vscode_types.Editor editor = 2;
     v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
 }
 
 message ExtensionLineageTabClicked {
@@ -119,6 +131,9 @@ message ExtensionLineageTabClicked {
 
     v1.public.fields.vscode_types.Editor editor = 2;
     v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
 }
 
 message ExtensionColumnLineage {
@@ -129,6 +144,9 @@ message ExtensionColumnLineage {
 
     v1.public.fields.vscode_types.Editor editor = 2;
     v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
 }
 
 message ExtensionShowCompiledFile {
@@ -139,6 +157,9 @@ message ExtensionShowCompiledFile {
 
     v1.public.fields.vscode_types.Editor editor = 2;
     v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
 }
 
 message ExtensionModelRename {
@@ -149,6 +170,9 @@ message ExtensionModelRename {
 
     v1.public.fields.vscode_types.Editor editor = 2;
     v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
 }
 
 message ExtensionColumnRename {
@@ -159,6 +183,9 @@ message ExtensionColumnRename {
 
     v1.public.fields.vscode_types.Editor editor = 2;
     v1.public.fields.vscode_types.User user = 3;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 4;
 }
 
 message ExtensionUsedBuildMenu {
@@ -172,6 +199,9 @@ message ExtensionUsedBuildMenu {
 
     // the command that the user selected
     string selected_command = 4;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 5;
 }
 
 message ExtensionGetSupportPopupShown {
@@ -185,6 +215,9 @@ message ExtensionGetSupportPopupShown {
 
     // the type of support being offered
     string support_type = 4;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 5;
 }
 
 message ExtensionGetSupportClicked {
@@ -198,4 +231,7 @@ message ExtensionGetSupportClicked {
 
     // the type of support that was clicked
     string support_type = 4;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 5;
 }

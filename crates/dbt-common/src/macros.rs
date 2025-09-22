@@ -1161,7 +1161,7 @@ macro_rules! show_progress_exit {
         );
         if $arg.io.show.contains(&ShowOptions::Completed) || e_ct > 0 {
             let elapsed = $start_time.elapsed().unwrap().as_secs_f32();
-            let completed_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.6f").to_string();
+            let completed_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.6fZ").to_string();
             log::info!(elapsed = elapsed, name = "CommandCompleted", data:serde = json!({"completed_at": completed_at, "elapsed": elapsed, "success": e_ct == 0}); "{}", output);
         }
 

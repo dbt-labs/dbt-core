@@ -1969,6 +1969,22 @@ message LogBatchResultMsg {
     LogBatchResult data = 2;
 }
 
+// Q047
+message LogFunctionResult {
+    NodeInfo node_info = 1;
+    string description = 2;
+    string status = 3;
+    int32 index = 4;
+    int32 total = 5;
+    float execution_time = 6;
+    Group group = 7;
+}
+
+message LogFunctionResultMsg {
+    CoreEventInfo info = 1;
+    LogFunctionResult data = 2;
+}
+
 // W - Node testing
 
 // Skipped W001

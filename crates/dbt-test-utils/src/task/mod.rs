@@ -81,7 +81,7 @@ pub use assertions::{AssertDirExistsTask, AssertFileContainsTask, AssertFileExis
 pub use check_compiled::CheckCompiledFiles;
 pub use dbt::DbtRecordTask;
 pub use io::{CpFromTargetTask, FileWriteTask, RmDirTask, RmTask, SedTask};
-pub use log_capture::ExecuteAndCaptureLogs;
+pub use log_capture::{ExecuteAndCaptureLogs, JsonLogEvent};
 pub use manifest_capture::CaptureDbtManifest;
 pub use profiles::HydrateProfilesTask;
 pub use record_and_replay::RrTask;

@@ -35,6 +35,7 @@ minijinja = { workspace = true }
 once_cell = { workspace = true }
 parquet = { workspace = true }
 pretty_assertions = { version = "1.4.1" }
+proto-rust = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -42,6 +43,8 @@ tempfile = { workspace = true }
 tokio = { workspace = true }
 vortex-events = { workspace = true }
 
+[dev-dependencies]
+pbjson-types = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["fileapi"] }
