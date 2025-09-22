@@ -10,7 +10,7 @@ use crate::stmt_splitter::StmtSplitter;
 use adbc_core::error::{Error as AdbcError, Result as AdbcResult, Status as AdbcStatus};
 use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::{RecordBatch, RecordBatchIterator, RecordBatchReader};
-use arrow_schema::{ArrowError, Field, Schema, SchemaBuilder};
+use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaBuilder};
 use dashmap::DashMap;
 use dbt_common::cancellation::CancellationToken;
 use dbt_xdbc::{Backend, Connection, QueryCtx, Statement};
@@ -29,6 +29,7 @@ use std::fs::{self, File, create_dir_all, metadata};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tracing::warn;
 
 // The reason this is global is that we might have multiple adapters
 // (we do not limit the number of adapters people can instantiate) and
@@ -87,6 +88,61 @@ fn compute_file_name_from_node_id(id: &str) -> AdbcResult<String> {
     *entry += 1;
 
     Ok(file_name)
+}
+
+/// Fixes decimal types with invalid precision (0) by setting appropriate defaults
+/// This handles the case where BigQuery returns precision=0 for NUMERIC/BIGNUMERIC
+/// types without explicit precision, which is invalid for Parquet
+fn fix_decimal_precision_in_schema(schema: &Schema) -> Schema {
+    let fixed_fields: Vec<Field> = schema
+        .fields()
+        .iter()
+        .map(|field| fix_decimal_precision_in_field(field))
+        .collect();
+
+    Schema::new(fixed_fields).with_metadata(schema.metadata().clone())
+}
+
+// FIXME(jason): This looks to be more of a driver problem, let's prevent 0 precision
+// from coming back. Guard against it for now.
+fn fix_decimal_precision_in_field(field: &Field) -> Field {
+    let fixed_data_type = match field.data_type() {
+        DataType::Decimal128(precision, scale) if *precision == 0 => {
+            // BigQuery NUMERIC defaults: precision=38, scale=9
+            warn!(
+                "Found DECIMAL128 with invalid precision=0, using defaults (38, 9) for field '{}'",
+                field.name()
+            );
+            DataType::Decimal128(38, *scale)
+        }
+        DataType::Decimal256(precision, scale) if *precision == 0 => {
+            // BigQuery BIGNUMERIC defaults: precision=76, scale=38
+            warn!(
+                "Found DECIMAL256 with invalid precision=0, using defaults (76, 38) for field '{}'",
+                field.name()
+            );
+            DataType::Decimal256(76, *scale)
+        }
+        DataType::List(list_field) => {
+            let fixed_list_field = Arc::new(fix_decimal_precision_in_field(list_field));
+            DataType::List(fixed_list_field)
+        }
+        DataType::LargeList(list_field) => {
+            let fixed_list_field = Arc::new(fix_decimal_precision_in_field(list_field));
+            DataType::LargeList(fixed_list_field)
+        }
+        DataType::Struct(fields) => {
+            let fixed_fields: Vec<Arc<Field>> = fields
+                .iter()
+                .map(|f| Arc::new(fix_decimal_precision_in_field(f)))
+                .collect();
+            DataType::Struct(fixed_fields.into())
+        }
+        other => other.clone(),
+    };
+
+    Field::new(field.name(), fixed_data_type, field.is_nullable())
+        .with_metadata(field.metadata().clone())
 }
 
 pub struct RecordEngineInner {
@@ -205,8 +261,11 @@ impl Connection for RecordEngineConnection {
 
             match result {
                 Ok(schema) => {
-                    // create empty record batch with schema
-                    let schema_ref = Arc::new(schema.clone());
+                    // Fix decimal types with invalid precision=0 before writing to parquet
+                    let fixed_schema = fix_decimal_precision_in_schema(&schema);
+
+                    // create empty record batch with fixed schema
+                    let schema_ref = Arc::new(fixed_schema.clone());
                     let batch = RecordBatch::new_empty(schema_ref.clone());
 
                     let file = File::create(&parquet_path)
@@ -217,7 +276,7 @@ impl Connection for RecordEngineConnection {
                     writer.write(&batch).map_err(from_parquet_error)?;
                     writer.close().map_err(from_parquet_error)?;
 
-                    let metadata = schema.metadata();
+                    let metadata = fixed_schema.metadata();
                     let metadata_json = serde_json::to_string(&metadata)
                         .map_err(|e| from_serde_error(e, Some(&metadata_path)))?;
                     fs::write(&metadata_path, metadata_json)

@@ -210,13 +210,10 @@ impl DatabricksColumnTypeInfo {
             DatabricksColumnTypeInfo::Interval {
                 start_unit,
                 end_unit,
-            } => {
-                if let Some(end_unit) = end_unit {
-                    format!("INTERVAL {start_unit} TO {end_unit}")
-                } else {
-                    format!("INTERVAL {start_unit}")
-                }
-            }
+            } => match end_unit {
+                Some(end) if start_unit != end => format!("INTERVAL {start_unit} TO {end}"),
+                _ => format!("INTERVAL {start_unit}"),
+            },
             DatabricksColumnTypeInfo::Array {
                 element_type,
                 element_nullable: _,
@@ -327,6 +324,13 @@ mod tests {
         let year_interval = DatabricksColumnTypeInfo::Interval {
             start_unit: "year".to_string(),
             end_unit: None,
+        };
+        assert_eq!(year_interval.raw_type(), "INTERVAL year");
+
+        // Sometimes end and start are the same
+        let year_interval = DatabricksColumnTypeInfo::Interval {
+            start_unit: "year".to_string(),
+            end_unit: Some("year".to_string()),
         };
         assert_eq!(year_interval.raw_type(), "INTERVAL year");
 
