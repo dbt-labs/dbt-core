@@ -36,12 +36,19 @@ impl TypeFormatter for NaiveTypeFormatterImpl {
         out: &mut String,
     ) -> AdapterResult<()> {
         let adapter_type = self.0;
-        let hint: SqlTypeHint = data_type.try_into()?;
-        // TODO: handle has_decimal_places correctly
-        let has_decimal_places = false;
-        let res = sql_type_hint_to_str(hint, has_decimal_places, adapter_type);
-        out.push_str(res.as_ref());
-        Ok(())
+        match adapter_type {
+            AdapterType::Postgres | AdapterType::Salesforce => {
+                postgres::try_format_type(data_type, true, out)
+            }
+            _ => {
+                let hint: SqlTypeHint = data_type.try_into()?;
+                // TODO: handle has_decimal_places correctly
+                let has_decimal_places = false;
+                let res = sql_type_hint_to_str(hint, has_decimal_places, adapter_type);
+                out.push_str(res.as_ref());
+                Ok(())
+            }
+        }
     }
 
     fn format_sql_type(&self, sql_type: SqlType, out: &mut String) -> AdapterResult<()> {
@@ -156,6 +163,72 @@ pub fn sql_type_hint_to_str<'a>(
         (_, Text) => "text",
     };
     Cow::Borrowed(str)
+}
+
+pub mod postgres {
+    use arrow_schema::{DataType, TimeUnit};
+
+    use crate::AdapterResult;
+    use crate::errors::{AdapterError, AdapterErrorKind};
+
+    pub fn try_format_type(
+        datatype: &DataType,
+        nullable: bool,
+        out: &mut String,
+    ) -> AdapterResult<()> {
+        use std::fmt::Write as _;
+        match datatype {
+            DataType::Null => out.push_str("null"),
+            DataType::Boolean => out.push_str("boolean"),
+            DataType::Int8 => out.push_str("tinyint"),
+            DataType::Int16 => out.push_str("smallint"),
+            DataType::Int32 => out.push_str("integer"),
+            DataType::Int64 => out.push_str("bigint"),
+            DataType::UInt8 => out.push_str("tinyint"),
+            DataType::UInt16 => out.push_str("smallint"),
+            DataType::UInt32 => out.push_str("integer"),
+            DataType::UInt64 => out.push_str("bigint"),
+            DataType::Float32 => out.push_str("real"),
+            DataType::Float64 => out.push_str("double"),
+            DataType::Timestamp(TimeUnit::Second, _) => out.push_str("timestamp without time zone"),
+            DataType::Timestamp(TimeUnit::Millisecond, _) => {
+                out.push_str("timestamp without time zone")
+            }
+            DataType::Timestamp(TimeUnit::Microsecond, _) => {
+                out.push_str("timestamp without time zone")
+            }
+            DataType::Timestamp(TimeUnit::Nanosecond, _) => {
+                out.push_str("timestamp without time zone")
+            }
+            DataType::Date32 => out.push_str("date"),
+            DataType::Time32(TimeUnit::Second) => out.push_str("time without time zone"),
+            DataType::Time32(TimeUnit::Millisecond) => out.push_str("time without time zone"),
+            DataType::Time64(TimeUnit::Microsecond) => out.push_str("time without time zone"),
+            DataType::Time64(TimeUnit::Nanosecond) => out.push_str("time without time zone"),
+            DataType::Interval(_) => out.push_str("interval"),
+            DataType::Binary => out.push_str("binary"),
+            DataType::Utf8 | DataType::Utf8View => out.push_str("text"),
+            DataType::List(_) => out.push_str("array"),
+            DataType::Dictionary(key, value)
+                if key.as_ref() == &DataType::UInt16 && value.as_ref() == &DataType::Utf8 =>
+            {
+                out.push_str("text")
+            }
+            DataType::Decimal128(precision, scale) => {
+                write!(out, "decimal({precision}, {scale})").unwrap()
+            }
+            _ => {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::UnsupportedType,
+                    format!("{datatype} is not convertible to postgres type"),
+                ));
+            }
+        };
+        if !nullable {
+            out.push_str(" not null");
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
