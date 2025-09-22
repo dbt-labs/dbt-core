@@ -2,10 +2,12 @@ import inspect
 import typing as t
 
 import click
-from click import Context
-from click.parser import OptionParser, ParsingState
 
 from dbt.cli.option_types import ChoiceTuple
+
+if t.TYPE_CHECKING:
+    from click import Context
+    from click.parser import OptionParser, ParsingState
 
 
 # Implementation from: https://stackoverflow.com/a/48394004
@@ -33,8 +35,8 @@ class MultiOption(click.Option):
         else:
             assert isinstance(option_type, ChoiceTuple), msg
 
-    def add_to_parser(self, parser: OptionParser, ctx: Context):
-        def parser_process(value: str, state: ParsingState):
+    def add_to_parser(self, parser: "OptionParser", ctx: "Context"):
+        def parser_process(value: str, state: "ParsingState"):
             # method to hook to the parser.process
             done = False
             value_list = str.split(value, " ")
@@ -65,7 +67,7 @@ class MultiOption(click.Option):
                 break
         return retval
 
-    def type_cast_value(self, ctx: Context, value: t.Any) -> t.Any:
+    def type_cast_value(self, ctx: "Context", value: t.Any) -> t.Any:
         def flatten(data):
             if isinstance(data, tuple):
                 for x in data:

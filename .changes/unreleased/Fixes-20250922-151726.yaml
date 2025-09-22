@@ -1,0 +1,6 @@
+kind: Fixes
+body: Address Click 8.2+ deprecation warning
+time: 2025-09-22T15:17:26.983151-06:00
+custom:
+    Author: edgarrmondragon
+    Issue: "12038"
