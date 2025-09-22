@@ -223,12 +223,12 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
             .iter()
             .map(|(id, group)| (id.clone(), (**group).clone().into()))
             .collect(),
+        selectors: resolver_state.manifest_selectors.clone(),
         docs: resolver_state.macros.docs_macros.clone(),
         parent_map,
         child_map,
         group_map,
         disabled,
-        ..Default::default()
     }
 }
 

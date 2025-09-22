@@ -12,7 +12,7 @@ use crate::schemas::{
     DbtSource, InternalDbtNodeAttributes, Nodes,
     common::{DbtQuoting, ResolvedQuoting},
     macros::{DbtDocsMacro, DbtMacro},
-    manifest::DbtOperation,
+    manifest::{DbtOperation, DbtSelector},
     profiles::DbConfig,
     project::{
         DbtProject, ProjectDataTestConfig, ProjectModelConfig, ProjectSeedConfig,
@@ -378,6 +378,7 @@ pub struct ResolverState {
     pub patterned_dangling_sources: BTreeMap<String, Vec<RelationPattern>>,
     pub run_started_at: DateTime<Tz>,
     pub runtime_config: Arc<DbtRuntimeConfig>,
+    pub manifest_selectors: BTreeMap<String, DbtSelector>,
     pub resolved_selectors: ResolvedSelector,
     pub root_project_quoting: ResolvedQuoting,
     pub defer_nodes: Option<Nodes>,

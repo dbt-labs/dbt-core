@@ -53,7 +53,9 @@ use crate::resolve::resolve_sources::resolve_sources;
 use crate::resolve::resolve_tests::resolve_data_tests::resolve_data_tests;
 use crate::resolve::resolve_tests::resolve_unit_tests::resolve_unit_tests;
 
-use crate::resolve::resolve_selectors::resolve_final_selectors;
+use crate::resolve::resolve_selectors::{
+    resolve_final_selectors, resolve_manifest_selectors, resolve_selectors_from_yaml,
+};
 
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
@@ -158,8 +160,10 @@ pub async fn resolve(
         token.clone(),
     )?);
 
-    // Compute final selectors
-    let resolved_selectors = resolve_final_selectors(root_project_name, &jinja_env, arg)?;
+    // Load and resolve selectors
+    let resolved_selectors_map = resolve_selectors_from_yaml(arg, root_project_name, &jinja_env)?;
+    let manifest_selectors = resolve_manifest_selectors(resolved_selectors_map.clone())?;
+    let resolved_selectors = resolve_final_selectors(resolved_selectors_map, arg)?;
 
     // Create a map to store full runtime configs for ALL packages
     let mut all_runtime_configs: BTreeMap<String, Arc<DbtRuntimeConfig>> = BTreeMap::new();
@@ -274,6 +278,7 @@ pub async fn resolve(
             get_columns_in_relation_calls: call_get_columns_in_relation?,
             patterned_dangling_sources,
             runtime_config: root_runtime_config.clone(),
+            manifest_selectors,
             resolved_selectors,
             root_project_quoting: root_project_quoting.try_into()?,
             defer_nodes: None,
