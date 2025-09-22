@@ -9,7 +9,6 @@ use minijinja::{
     arg_utils::{ArgParser, ArgsIter, check_num_args},
     value::{Enumerator, Object},
 };
-use serde::{Deserialize, Serialize};
 
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 
@@ -160,14 +159,14 @@ impl StdColumnType {
         numeric_precision: Option<u64>,
         numeric_scale: Option<u64>,
     ) -> StdColumn {
-        StdColumn {
-            adapter_attr: AdapterSpecificColumnAttr::default_from_adapter_type(self.0),
+        StdColumn::new(
+            self.0,
             name,
             dtype,
             char_size,
             numeric_precision,
             numeric_scale,
-        }
+        )
     }
 
     pub fn quote(&self, s: &str) -> String {
@@ -235,7 +234,7 @@ impl StdColumnType {
         // It seems like it is used by other adapters as well... (tested with BigQuery)
         let mut col = StdColumn::try_from_snowflake_raw_data_type(name, raw_data_type)
             .map_err(|msg| minijinja::Error::new(minijinja::ErrorKind::InvalidArgument, msg))?;
-        col.adapter_attr = AdapterSpecificColumnAttr::default_from_adapter_type(self.0);
+        col._adapter_type = self.0;
         Ok(col)
     }
 
@@ -285,14 +284,24 @@ impl StdColumnType {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// NULLABLE, REQUIRED, REPEATED
 pub enum BigqueryColumnMode {
-    #[serde(rename = "NULLABLE")]
+    /// NULLABLE
     Nullable,
-    #[serde(rename = "REQUIRED")]
+    /// REQUIRED
     Required,
-    #[serde(rename = "REPEATED")]
+    /// REPEATED
     Repeated,
+}
+
+impl AsRef<str> for BigqueryColumnMode {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::Nullable => "NULLABLE",
+            Self::Required => "REQUIRED",
+            Self::Repeated => "REPEATED",
+        }
+    }
 }
 
 impl Default for BigqueryColumnMode {
@@ -301,67 +310,69 @@ impl Default for BigqueryColumnMode {
     }
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub struct BigqueryColumnAttr {
-    mode: BigqueryColumnMode,
-}
-
-/// Column-attributes that are specific to each adapter.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum AdapterSpecificColumnAttr {
-    Bigquery(BigqueryColumnAttr),
-    Snowflake,
-    Redshift,
-    Databricks,
-    Postgres,
-    Salesforce,
-}
-
-impl AdapterSpecificColumnAttr {
-    pub fn adapter_type(&self) -> AdapterType {
-        match self {
-            Self::Bigquery(_) => AdapterType::Bigquery,
-            Self::Snowflake => AdapterType::Snowflake,
-            Self::Redshift => AdapterType::Redshift,
-            Self::Databricks => AdapterType::Databricks,
-            Self::Postgres => AdapterType::Postgres,
-            Self::Salesforce => AdapterType::Salesforce,
-        }
-    }
-
-    pub fn default_from_adapter_type(at: AdapterType) -> Self {
-        match at {
-            AdapterType::Bigquery => Self::Bigquery(BigqueryColumnAttr::default()),
-            AdapterType::Snowflake => Self::Snowflake,
-            AdapterType::Redshift => Self::Redshift,
-            AdapterType::Databricks => Self::Databricks,
-            AdapterType::Postgres => Self::Postgres,
-            AdapterType::Salesforce => Self::Salesforce,
-        }
-    }
-}
-
-/// A struct representing a column
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct StdColumn {
-    pub adapter_attr: AdapterSpecificColumnAttr,
+    /// The adapter this column is associated with.
+    ///
+    /// Instead of using sub-typing and virtual-dispatch as in dbt-adapters, we
+    /// pattern-match against the adapter type for adapter-specific behavior.
+    ///
+    /// NOTE: Fields starting with _ are not exposed via the Jinja API of the object.
+    #[allow(clippy::used_underscore_binding)]
+    _adapter_type: AdapterType,
 
-    pub name: String,
-    pub dtype: String,
+    /// Whether this column is `NULLABLE` or `NOT NULL` (optional).
+    #[allow(clippy::used_underscore_binding)]
+    _nullable: Option<bool>,
+    /// Whether this column is an array/repeated field (optional).
+    ///
+    /// This is important for BigQuery, where a column can be `REPEATED`.
+    /// [StdColumn::mode] provides a unified way to derive the BigQuery mode
+    /// of a column. BigQuery adopts the Protobuf model of nullability where
+    /// repeated fields are always non-nullable because the null state is
+    /// represented by an empty array.
+    #[allow(clippy::used_underscore_binding)]
+    _repeated: Option<bool>,
+
+    /// Name of the column. Confusingly named `column` in dbt-adapters.
+    name: String,
+    dtype: String,
     /// The size of the column in characters (u32 is enough to hold) var char of max length
     /// Postgres is 65536 (2^16 - 1)
     /// Snowflake is 16777216 (2^24)
-    pub char_size: Option<u32>,
+    char_size: Option<u32>,
     // TODO no need for u64; this should use 32 as char size (for consistency) or less; in some database scale can be negative
-    pub numeric_precision: Option<u64>,
-    pub numeric_scale: Option<u64>,
+    numeric_precision: Option<u64>,
+    numeric_scale: Option<u64>,
 }
 
 impl StdColumn {
-    /// Construct based on a value parsed from dbt Core Jinja
-    fn from_dbt_core(adapter_attr: AdapterSpecificColumnAttr, col: DbtCoreBaseColumn) -> Self {
+    pub fn new(
+        adapter_type: AdapterType,
+        name: String,
+        dtype: String,
+        char_size: Option<u32>,
+        numeric_precision: Option<u64>,
+        numeric_scale: Option<u64>,
+    ) -> Self {
         Self {
-            adapter_attr,
+            _adapter_type: adapter_type,
+            _nullable: None,
+            _repeated: None,
+            name,
+            dtype,
+            char_size,
+            numeric_precision,
+            numeric_scale,
+        }
+    }
+
+    /// Construct based on a value parsed from dbt Core Jinja
+    fn from_dbt_core(adapter_type: AdapterType, col: DbtCoreBaseColumn) -> Self {
+        Self {
+            _adapter_type: adapter_type,
+            _nullable: None,
+            _repeated: None,
             name: col.name,
             dtype: col.dtype,
             char_size: col.char_size,
@@ -380,10 +391,7 @@ impl StdColumn {
                 minijinja::Error::new(minijinja::ErrorKind::SerdeDeserializeError, e.to_string())
             })?;
 
-        Ok(Self::from_dbt_core(
-            AdapterSpecificColumnAttr::default_from_adapter_type(adapter_type),
-            core_col,
-        ))
+        Ok(Self::from_dbt_core(adapter_type, core_col))
     }
 
     /// Get a vec of columns from a jinja value that returns columns in dbt Core format
@@ -397,20 +405,22 @@ impl StdColumn {
             })?
             .into_iter()
             // TODO(serramatutu): figure out a way to derive non-standard config here
-            .map(|col| {
-                Self::from_dbt_core(
-                    AdapterSpecificColumnAttr::default_from_adapter_type(adapter_type),
-                    col,
-                )
-            })
+            .map(|col| Self::from_dbt_core(adapter_type, col))
             .collect();
         Ok(result)
     }
 
     pub fn new_bigquery(name: String, dtype: String, mode: BigqueryColumnMode) -> Self {
+        use BigqueryColumnMode::*;
+        let (nullable, repeated) = match mode {
+            Nullable => (Some(true), None),
+            Required => (Some(false), None),
+            Repeated => (None, Some(true)),
+        };
         Self {
-            adapter_attr: AdapterSpecificColumnAttr::Bigquery(BigqueryColumnAttr { mode }),
-
+            _adapter_type: AdapterType::Bigquery,
+            _nullable: nullable,
+            _repeated: repeated,
             name,
             dtype,
             char_size: None,
@@ -421,8 +431,9 @@ impl StdColumn {
 
     pub fn new_databricks(name: String, dtype: String) -> Self {
         Self {
-            adapter_attr: AdapterSpecificColumnAttr::Databricks,
-
+            _adapter_type: AdapterType::Databricks,
+            _nullable: None,
+            _repeated: None,
             name,
             dtype,
             char_size: None,
@@ -432,7 +443,7 @@ impl StdColumn {
     }
 
     pub fn as_static(&self) -> StdColumnType {
-        StdColumnType::new(self.adapter_attr.adapter_type())
+        StdColumnType::new(self._adapter_type)
     }
 
     /// Parse a Snowflake raw data type into a tuple of (data_type, char_size, numeric_precision, numeric_scale)
@@ -491,14 +502,33 @@ impl StdColumn {
             }
         }
         Ok(Self {
-            adapter_attr: AdapterSpecificColumnAttr::Snowflake,
-
+            _adapter_type: AdapterType::Snowflake,
+            _nullable: None,
+            _repeated: None,
             name: name.to_string(),
             dtype: data_type,
             char_size,
             numeric_precision,
             numeric_scale,
         })
+    }
+
+    pub fn mode(&self) -> BigqueryColumnMode {
+        match (self._nullable, self._repeated) {
+            (_, Some(true)) => BigqueryColumnMode::Repeated,
+            (Some(true), _) => BigqueryColumnMode::Nullable,
+            (Some(false), _) => BigqueryColumnMode::Required,
+            (_, _) => BigqueryColumnMode::Nullable,
+        }
+    }
+
+    #[inline]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn into_name(self) -> String {
+        self.name
     }
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/column.py#L92-L93
@@ -509,8 +539,8 @@ impl StdColumn {
 
         // FIXME: why self.dtype == "text" instead of is_string()? This is probably a bug...
         if self.dtype == "text" || self.char_size.is_none() {
-            let size = match self.adapter_attr {
-                AdapterSpecificColumnAttr::Snowflake => 16777216,
+            let size = match self._adapter_type {
+                AdapterType::Snowflake => 16777216,
                 _ => 256,
             };
             Ok(size)
@@ -524,11 +554,11 @@ impl StdColumn {
     }
 
     fn is_numeric(&self) -> bool {
-        match self.adapter_attr {
-            AdapterSpecificColumnAttr::Bigquery(_) => {
+        match self._adapter_type {
+            AdapterType::Bigquery => {
                 matches!(self.dtype.to_lowercase().as_str(), "numeric")
             }
-            AdapterSpecificColumnAttr::Snowflake => {
+            AdapterType::Snowflake => {
                 matches!(
                     self.dtype.to_lowercase().as_str(),
                     "int"
@@ -549,11 +579,11 @@ impl StdColumn {
     }
 
     fn is_integer(&self) -> bool {
-        match self.adapter_attr {
-            AdapterSpecificColumnAttr::Bigquery(_) => {
+        match self._adapter_type {
+            AdapterType::Bigquery => {
                 matches!(self.dtype.to_lowercase().as_str(), "int64")
             }
-            AdapterSpecificColumnAttr::Snowflake => false,
+            AdapterType::Snowflake => false,
             _ => {
                 matches!(
                     self.dtype.to_lowercase().as_str(),
@@ -575,11 +605,11 @@ impl StdColumn {
     }
 
     fn is_float(&self) -> bool {
-        match self.adapter_attr {
-            AdapterSpecificColumnAttr::Bigquery(_) => {
+        match self._adapter_type {
+            AdapterType::Bigquery => {
                 matches!(self.dtype.to_lowercase().as_str(), "float64")
             }
-            AdapterSpecificColumnAttr::Snowflake => {
+            AdapterType::Snowflake => {
                 matches!(
                     self.dtype.to_lowercase().as_str(),
                     "float" | "float4" | "float8" | "double" | "double precision" | "real"
@@ -599,8 +629,8 @@ impl StdColumn {
     }
 
     fn is_string(&self) -> bool {
-        match self.adapter_attr {
-            AdapterSpecificColumnAttr::Bigquery(_) => {
+        match self._adapter_type {
+            AdapterType::Bigquery => {
                 matches!(self.dtype.to_lowercase().as_str(), "string")
             }
             _ => {
@@ -616,11 +646,15 @@ impl StdColumn {
         self.as_static().quote(&self.name)
     }
 
+    pub fn dtype(&self) -> &str {
+        &self.dtype
+    }
+
     // TODO: impl data_type - need to handle nested types
     // https://github.com/dbt-labs/dbt-adapters/blob/6f2aae13e39c5df1c93e5d514678914142d71768/dbt-bigquery/src/dbt/adapters/bigquery/column.py#L80
     fn data_type(&self) -> String {
-        match self.adapter_attr {
-            AdapterSpecificColumnAttr::Bigquery(_) => self.dtype.to_lowercase(),
+        match self._adapter_type {
+            AdapterType::Bigquery => self.dtype.to_lowercase(),
             _ => {
                 if self.is_string() {
                     self.as_static().string_type(Some(
@@ -641,6 +675,18 @@ impl StdColumn {
                 }
             }
         }
+    }
+
+    pub fn char_size(&self) -> Option<u32> {
+        self.char_size
+    }
+
+    pub fn numeric_precision(&self) -> Option<u64> {
+        self.numeric_precision
+    }
+
+    pub fn numeric_scale(&self) -> Option<u64> {
+        self.numeric_scale
     }
 
     /// Returns True if this column can be expanded to the size of the other column
@@ -683,8 +729,7 @@ impl Object for StdColumn {
                 let mut parser = ArgParser::new(args, None);
                 check_num_args(current_function_name!(), &parser, 1, 1)?;
                 let other_raw = parser.get::<Value>("other_column")?;
-                let other =
-                    StdColumn::from_jinja_value(self.adapter_attr.adapter_type(), other_raw)?;
+                let other = StdColumn::from_jinja_value(self._adapter_type, other_raw)?;
                 Ok(Value::from(self.can_expand_to(&other)?))
             }
             _ => Err(minijinja::Error::new(
@@ -696,20 +741,16 @@ impl Object for StdColumn {
 
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
         match key.as_str() {
+            // @property methods
             Some("name") | Some("column") => Some(Value::from(&self.name)),
             Some("quoted") => Some(Value::from(self.quoted())),
             Some("data_type") => Some(Value::from(self.data_type())),
+            // direct fields
             Some("dtype") => Some(Value::from(&self.dtype)),
             Some("char_size") => Some(Value::from(self.char_size)),
             Some("numeric_precision") => Some(Value::from(self.numeric_precision)),
             Some("numeric_scale") => Some(Value::from(self.numeric_scale)),
-            Some("mode") => {
-                if let AdapterSpecificColumnAttr::Bigquery(bq) = &self.adapter_attr {
-                    Some(Value::from_serialize(&bq.mode))
-                } else {
-                    None
-                }
-            }
+            Some("mode") => Some(Value::from(self.mode().as_ref())),
             _ => None,
         }
     }
@@ -725,7 +766,7 @@ impl Object for StdColumn {
             "numeric_scale",
         ];
 
-        if let AdapterSpecificColumnAttr::Bigquery(_bq) = &self.adapter_attr {
+        if matches!(self._adapter_type, AdapterType::Bigquery) {
             keys.push("mode");
         }
 

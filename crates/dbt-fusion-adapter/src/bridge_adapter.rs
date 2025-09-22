@@ -847,10 +847,10 @@ impl BaseAdapter for BridgeAdapter {
                                 .get_columns_in_relation(state, relation.clone())
                             {
                                 Ok(mut from_remote) => {
-                                    from_remote.sort_by(|a, b| a.name.cmp(&b.name));
+                                    from_remote.sort_by(|a, b| a.name().cmp(b.name()));
 
                                     let mut from_local = from_local.clone();
-                                    from_local.sort_by(|a, b| a.name.cmp(&b.name));
+                                    from_local.sort_by(|a, b| a.name().cmp(b.name()));
 
                                     println!("local  remote mismatches");
                                     if !from_remote.is_empty() {
@@ -858,8 +858,8 @@ impl BaseAdapter for BridgeAdapter {
                                         for (local, remote) in
                                             from_local.iter().zip(from_remote.iter())
                                         {
-                                            let mismatch = (local.dtype != remote.dtype)
-                                                || (local.name != remote.name);
+                                            let mismatch = (local.dtype() != remote.dtype())
+                                                || (local.name() != remote.name());
                                             if mismatch {
                                                 println!(
                                                     "adapter.get_columns_in_relation for {}",
@@ -867,10 +867,10 @@ impl BaseAdapter for BridgeAdapter {
                                                 );
                                                 println!(
                                                     "{}:{}  {}:{}",
-                                                    local.name,
-                                                    local.dtype,
-                                                    remote.name,
-                                                    remote.dtype
+                                                    local.name(),
+                                                    local.dtype(),
+                                                    remote.name(),
+                                                    remote.dtype()
                                                 );
                                             }
                                         }

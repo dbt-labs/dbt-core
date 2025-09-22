@@ -337,10 +337,10 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
 
         let source_cols_map: BTreeMap<_, _> = source_cols
             .into_iter()
-            .map(|col| (col.name.to_string(), col))
+            .map(|col| (col.name().to_string(), col))
             .collect();
         let target_cols_set: std::collections::HashSet<_> =
-            target_cols.into_iter().map(|col| col.name).collect();
+            target_cols.into_iter().map(|col| col.into_name()).collect();
 
         Ok(source_cols_map
             .into_iter()
@@ -458,12 +458,12 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         // Create HashMaps for efficient lookup
         let from_columns_map = from_columns
             .into_iter()
-            .map(|c| (c.name.to_string(), c))
+            .map(|c| (c.name().to_string(), c))
             .collect::<BTreeMap<_, _>>();
 
         let to_columns_map = to_columns
             .into_iter()
-            .map(|c| (c.name.to_string(), c))
+            .map(|c| (c.name().to_string(), c))
             .collect::<BTreeMap<_, _>>();
 
         for (column_name, reference_column) in from_columns_map {
@@ -940,7 +940,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     ) -> AdapterResult<()> {
         let columns = self.get_columns_in_relation(state, relation)?;
         let names_in_relation: Vec<String> =
-            columns.iter().map(|c| c.name.to_lowercase()).collect();
+            columns.iter().map(|c| c.name().to_lowercase()).collect();
 
         // missing columns
         let mut missing: Vec<String> = Vec::new();
