@@ -231,6 +231,79 @@ pub mod postgres {
     }
 }
 
+pub mod redshift {
+    use arrow_schema::DataType;
+
+    use crate::AdapterResult;
+    use crate::errors::{AdapterError, AdapterErrorKind};
+
+    const VARCHAR_DEFAULT: usize = 256;
+    const VARBYTE_DEFAULT: usize = 65535;
+
+    /// The size constraint for variable-size types (e.g. VARCHAR, VARBINARY).
+    pub fn var_size(data_type: &DataType) -> Option<usize> {
+        match data_type {
+            // Strings: Redshift wants a length; persist it in char_size
+            // TODO(jason): We need to report the correct size and not just a default
+            DataType::Utf8 | DataType::Utf8View => Some(VARCHAR_DEFAULT),
+            // Bytes
+            // TODO(jason): We need to report the correct size and not just a default
+            DataType::Binary => Some(VARBYTE_DEFAULT),
+
+            // Dictionary<UInt16, Utf8> - rendered as varchar which needs a length
+            DataType::Dictionary(key, value)
+                if key.as_ref() == &DataType::UInt16 && value.as_ref() == &DataType::Utf8 =>
+            {
+                Some(VARCHAR_DEFAULT)
+            }
+
+            _ => None,
+        }
+    }
+
+    pub fn numeric_precision_scale(
+        data_type: &DataType,
+    ) -> AdapterResult<Option<(u8, Option<i8>)>> {
+        let precision_scale = match data_type {
+            // For Decimal types, extract precision and scale; cap at 38
+            DataType::Decimal128(precision, scale) | DataType::Decimal256(precision, scale) => {
+                if *precision > 38 {
+                    return Err(AdapterError::new(
+                        AdapterErrorKind::NotSupported,
+                        format!("Decimal precision '{}' exceed 38 place limit", *precision),
+                    ));
+                }
+                Some((*precision, Some(*scale)))
+            }
+
+            // For integer types (i.e. non-scaled numbers)
+            DataType::Int16 => Some((5, None)),
+            DataType::Int32 => Some((10, None)),
+            DataType::Int64 => Some((19, None)),
+            DataType::UInt16 => Some((5, None)),
+            DataType::UInt32 => Some((10, None)),
+            DataType::UInt64 => Some((20, None)),
+
+            // For floating point types (i.e. arbitrarily scaled numbers)
+            DataType::Float32 => Some((24, None)),
+            DataType::Float64 => Some((53, None)),
+
+            DataType::Time64(_) | DataType::Time32(_) => {
+                // Redshift stores microseconds (6 fractional digits)
+                Some((6, None))
+            }
+            // Timestamps (with or without tz) – clamp to microseconds
+            // TODO: handle more complex timestamp/date/time types not in sdk front end
+            DataType::Timestamp(_, _) => Some((6, None)),
+
+            // Other types don't have specific precision/scale
+            _ => None,
+        };
+
+        Ok(precision_scale)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
