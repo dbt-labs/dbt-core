@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use crate::AdapterResult;
 use crate::base_adapter::backend_of;
 use crate::errors::{AdapterError, AdapterErrorKind};
-use arrow_schema::DataType;
+use arrow_schema::{DataType, TimeUnit};
 use dbt_common::adapter::AdapterType;
 use dbt_xdbc::sql::types::SqlType;
 
@@ -232,76 +232,267 @@ pub mod postgres {
 }
 
 pub mod redshift {
+    pub const VARCHAR_DEFAULT: usize = 256;
+    pub const VARBYTE_DEFAULT: usize = 65535;
+}
+
+pub mod snowflake {
     use arrow_schema::DataType;
 
-    use crate::AdapterResult;
-    use crate::errors::{AdapterError, AdapterErrorKind};
+    // TODO: move away from this when we move away from the FixedSizeList hack
+    // Additionally, it's a completely wrong assumption that drivers return types
+    // like this. Drivers can't return these types. We should be using proper
+    // SQL types and parsing them with [dbt_xdbc::sql::types] instead.
 
-    const VARCHAR_DEFAULT: usize = 256;
-    const VARBYTE_DEFAULT: usize = 65535;
+    #[derive(Clone, Copy)]
+    pub struct TimePrecision(u8);
 
-    /// The size constraint for variable-size types (e.g. VARCHAR, VARBINARY).
-    pub fn var_size(data_type: &DataType) -> Option<usize> {
-        match data_type {
-            // Strings: Redshift wants a length; persist it in char_size
-            // TODO(jason): We need to report the correct size and not just a default
-            DataType::Utf8 | DataType::Utf8View => Some(VARCHAR_DEFAULT),
-            // Bytes
-            // TODO(jason): We need to report the correct size and not just a default
-            DataType::Binary => Some(VARBYTE_DEFAULT),
-
-            // Dictionary<UInt16, Utf8> - rendered as varchar which needs a length
-            DataType::Dictionary(key, value)
-                if key.as_ref() == &DataType::UInt16 && value.as_ref() == &DataType::Utf8 =>
-            {
-                Some(VARCHAR_DEFAULT)
-            }
-
-            _ => None,
+    impl From<TimePrecision> for u8 {
+        fn from(val: TimePrecision) -> Self {
+            val.0
         }
     }
 
-    pub fn numeric_precision_scale(
-        data_type: &DataType,
-    ) -> AdapterResult<Option<(u8, Option<i8>)>> {
-        let precision_scale = match data_type {
-            // For Decimal types, extract precision and scale; cap at 38
-            DataType::Decimal128(precision, scale) | DataType::Decimal256(precision, scale) => {
-                if *precision > 38 {
-                    return Err(AdapterError::new(
-                        AdapterErrorKind::NotSupported,
-                        format!("Decimal precision '{}' exceed 38 place limit", *precision),
-                    ));
-                }
-                Some((*precision, Some(*scale)))
-            }
-
-            // For integer types (i.e. non-scaled numbers)
-            DataType::Int16 => Some((5, None)),
-            DataType::Int32 => Some((10, None)),
-            DataType::Int64 => Some((19, None)),
-            DataType::UInt16 => Some((5, None)),
-            DataType::UInt32 => Some((10, None)),
-            DataType::UInt64 => Some((20, None)),
-
-            // For floating point types (i.e. arbitrarily scaled numbers)
-            DataType::Float32 => Some((24, None)),
-            DataType::Float64 => Some((53, None)),
-
-            DataType::Time64(_) | DataType::Time32(_) => {
-                // Redshift stores microseconds (6 fractional digits)
-                Some((6, None))
-            }
-            // Timestamps (with or without tz) – clamp to microseconds
-            // TODO: handle more complex timestamp/date/time types not in sdk front end
-            DataType::Timestamp(_, _) => Some((6, None)),
-
-            // Other types don't have specific precision/scale
-            _ => None,
-        };
-
-        Ok(precision_scale)
+    impl TimePrecision {
+        /// PRE-CONDITION: valid_precision <= 9
+        pub const fn new(valid_precision: u8) -> Self {
+            TimePrecision(valid_precision)
+        }
     }
+
+    #[derive(Clone, Copy)]
+    pub enum IsTimestamp {
+        No,
+        Yes(TimePrecision),
+    }
+
+    impl IsTimestamp {
+        pub const fn is_yes(&self) -> bool {
+            matches!(self, IsTimestamp::Yes(_))
+        }
+
+        pub const fn precision(&self) -> Option<TimePrecision> {
+            match self {
+                IsTimestamp::No => None,
+                IsTimestamp::Yes(precision) => Some(*precision),
+            }
+        }
+
+        pub fn unwrap(self) -> TimePrecision {
+            match self {
+                IsTimestamp::No => panic!("Cannot unwrap IsTimestamp::No"),
+                IsTimestamp::Yes(precision) => precision,
+            }
+        }
+    }
+
+    pub fn is_time(data_type: &DataType) -> IsTimestamp {
+        match data_type {
+            DataType::FixedSizeList(field, 1) if field.name().starts_with("time:") => {
+                IsTimestamp::Yes(TimePrecision::new(
+                    field
+                        .name()
+                        .strip_prefix("time:")
+                        .expect("string prefix checked")
+                        .parse::<u8>()
+                        .expect("invalid serialized time precision"),
+                ))
+            }
+            _ => IsTimestamp::No,
+        }
+    }
+
+    pub fn is_timestamp_ntz(data_type: &DataType) -> IsTimestamp {
+        match data_type {
+            DataType::FixedSizeList(field, 1) if field.name().starts_with("timestamp_ntz:") => {
+                IsTimestamp::Yes(TimePrecision::new(
+                    field
+                        .name()
+                        .strip_prefix("timestamp_ntz:")
+                        .expect("string prefix checked")
+                        .parse::<u8>()
+                        .expect("invalid serialized timestamp precision"),
+                ))
+            }
+            _ => IsTimestamp::No,
+        }
+    }
+
+    pub fn is_timestamp_ltz(data_type: &DataType) -> IsTimestamp {
+        match data_type {
+            DataType::FixedSizeList(field, 1) if field.name().starts_with("timestamp_ltz:") => {
+                IsTimestamp::Yes(TimePrecision::new(
+                    field
+                        .name()
+                        .strip_prefix("timestamp_ltz:")
+                        .expect("string prefix checked")
+                        .parse::<u8>()
+                        .expect("invalid serialized timestamp precision"),
+                ))
+            }
+            _ => IsTimestamp::No,
+        }
+    }
+
+    pub fn is_timestamp_tz(data_type: &DataType) -> IsTimestamp {
+        match data_type {
+            DataType::FixedSizeList(field, 1) if field.name().starts_with("timestamp_tz:") => {
+                IsTimestamp::Yes(TimePrecision::new(
+                    field
+                        .name()
+                        .strip_prefix("timestamp_tz:")
+                        .expect("string prefix checked")
+                        .parse::<u8>()
+                        .expect("invalid serialized timestamp precision"),
+                ))
+            }
+            _ => IsTimestamp::No,
+        }
+    }
+}
+
+/// Returns the number of fractional digits for a given Arrow time unit.
+fn time_precision(unit: TimeUnit) -> u8 {
+    match unit {
+        TimeUnit::Second => 0,
+        TimeUnit::Millisecond => 3,
+        TimeUnit::Microsecond => 6,
+        TimeUnit::Nanosecond => 9,
+    }
+}
+
+/// The size constraint for variable-size types (e.g. VARCHAR, VARBINARY).
+pub fn var_size(adapter_type: AdapterType, data_type: &DataType) -> Option<usize> {
+    use AdapterType::*;
+    match (adapter_type, data_type) {
+        // Strings: Redshift wants a length; persist it in char_size
+        // TODO(jason): We need to report the correct size and not just a default
+        (Redshift, DataType::Utf8 | DataType::Utf8View) => Some(redshift::VARCHAR_DEFAULT),
+        // For VARCHAR types, no explicit size in Snowflake unless specified
+        (Snowflake, DataType::Utf8 | DataType::Utf8View) => None,
+        // XXX: need to think about the defaults for these adapters
+        (Postgres | Bigquery | Databricks | Salesforce, DataType::Utf8 | DataType::Utf8View) => {
+            None
+        }
+
+        // Bytes
+        // TODO(jason): We need to report the correct size and not just a default
+        (Redshift, DataType::Binary) => Some(redshift::VARBYTE_DEFAULT),
+        // XXX: need to think about the defaults for these adapters
+        (Snowflake | Postgres | Bigquery | Databricks | Salesforce, DataType::Binary) => None,
+
+        // Snowflake: For timestamp/date/time types, extract precision if available
+        (Snowflake, dt) if snowflake::is_time(dt).is_yes() => {
+            let char_size: u8 = snowflake::is_time(dt).unwrap().into();
+            Some(char_size as usize)
+        }
+        (Snowflake, dt)
+            if snowflake::is_timestamp_ntz(dt).is_yes()
+                || snowflake::is_timestamp_ltz(dt).is_yes()
+                || snowflake::is_timestamp_tz(dt).is_yes() =>
+        {
+            // For timestamp types, the precision is the fractional seconds precision
+            // For compatibility with dbt core column type rendering code, precision is stored as char_size
+            let time_precision = if snowflake::is_timestamp_ntz(dt).is_yes() {
+                snowflake::is_timestamp_ntz(dt).unwrap()
+            } else if snowflake::is_timestamp_ltz(dt).is_yes() {
+                snowflake::is_timestamp_ltz(dt).unwrap()
+            } else if snowflake::is_timestamp_tz(dt).is_yes() {
+                snowflake::is_timestamp_tz(dt).unwrap()
+            } else {
+                return None;
+            };
+            let char_size: u8 = time_precision.into();
+            Some(char_size as usize)
+        }
+
+        // Recurse for dictionary-encoded types
+        // XXX: the key type is irrelevant and should probably be removed from the match pattern
+        (_, DataType::Dictionary(key_ty, value_ty))
+            if key_ty.as_ref() == &DataType::UInt16 && value_ty.as_ref() == &DataType::Utf8 =>
+        {
+            var_size(adapter_type, value_ty)
+        }
+
+        _ => None,
+    }
+}
+
+pub fn numeric_precision_scale(
+    adapter_type: AdapterType,
+    data_type: &DataType,
+) -> AdapterResult<Option<(u8, Option<i8>)>> {
+    use AdapterType::*;
+    let precision_scale = match (adapter_type, data_type) {
+        (_, DataType::Decimal128(precision, scale) | DataType::Decimal256(precision, scale)) => {
+            // cap precision at 38 for Redshift
+            if adapter_type == Redshift && *precision > 38 {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::NotSupported,
+                    format!("Decimal precision '{}' exceed 38 place limit", *precision),
+                ));
+            }
+            Some((*precision, Some(*scale)))
+        }
+
+        // For integer types (i.e. non-scaled numbers)
+        (_, DataType::Int8) => Some((3, None)),
+        (_, DataType::Int16) => Some((5, None)),
+        (_, DataType::Int32) => Some((10, None)),
+        (_, DataType::Int64) => Some((19, None)),
+        (_, DataType::UInt8) => Some((3, None)),
+        (_, DataType::UInt16) => Some((5, None)),
+        (_, DataType::UInt32) => Some((10, None)),
+        (_, DataType::UInt64) => Some((20, None)),
+
+        // For floating point types (i.e. arbitrarily scaled numbers)
+        (_, DataType::Float32) => Some((24, None)),
+        (_, DataType::Float64) => Some((53, None)),
+
+        // For timestamp/date/time types, extract precision if available
+        (Snowflake, dt) if snowflake::is_time(dt).is_yes() => {
+            let precision = snowflake::is_time(dt).unwrap();
+            Some((precision.into(), None))
+        }
+        // XXX: maybe numeric_precision must be extract in this case too?
+        // (Snowflake, dt) if snowflake::is_timestamp_ntz(dt).is_yes()
+        //     || snowflake::is_timestamp_ltz(dt).is_yes()
+        //     || snowflake::is_timestamp_tz(dt).is_yes() =>
+        // {
+        //     // For timestamp types, the precision is the fractional seconds precision
+        //     // For compatibility with dbt core column type rendering code, precision is stored as char_size
+        //     let time_precision = if snowflake::is_timestamp_ntz(dt).is_yes() {
+        //         snowflake::is_timestamp_ntz(dt).unwrap()
+        //     } else if snowflake::is_timestamp_ltz(dt).is_yes() {
+        //         snowflake::is_timestamp_ltz(dt).unwrap()
+        //     } else if snowflake::is_timestamp_tz(dt).is_yes() {
+        //         snowflake::is_timestamp_tz(dt).unwrap()
+        //     } else {
+        //         return None;
+        //     };
+        //     let char_size: u8 = time_precision.into();
+        //     Some(char_size as usize)
+        // }
+
+        // Handle general timestamp types
+        (Snowflake, DataType::Timestamp(unit, _)) => {
+            let precision = time_precision(*unit);
+            Some((precision, None))
+        }
+
+        (_, DataType::Time64(_) | DataType::Time32(_)) => {
+            // Redshift stores microseconds (6 fractional digits)
+            Some((6, None))
+        }
+        // Timestamps (with or without tz) – clamp to microseconds
+        // TODO: handle more complex timestamp/date/time types not in sdk front end
+        (_, DataType::Timestamp(_, _)) => Some((6, None)),
+
+        // Other types don't have specific precision/scale
+        _ => None,
+    };
+
+    Ok(precision_scale)
 }
 
 #[cfg(test)]
