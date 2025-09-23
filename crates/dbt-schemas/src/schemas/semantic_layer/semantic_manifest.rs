@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::schemas::Nodes;
 use crate::schemas::semantic_layer::metric::SemanticManifestMetric;
+use crate::schemas::semantic_layer::project_configuration::SemanticManifestProjectConfiguration;
 use crate::schemas::semantic_layer::saved_query::SemanticManifestSavedQuery;
 use crate::schemas::semantic_layer::semantic_model::SemanticManifestSemanticModel;
 
@@ -19,14 +20,12 @@ pub struct SemanticManifest {
     pub saved_queries: Vec<SemanticManifestSavedQuery>,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
-pub struct SemanticManifestProjectConfiguration {}
-
 impl From<Nodes> for SemanticManifest {
     fn from(nodes: Nodes) -> Self {
         SemanticManifest {
             semantic_models: nodes
                 .semantic_models
+                .clone()
                 .into_values()
                 .map(|m| (*m).clone().into())
                 .collect(),
@@ -40,7 +39,18 @@ impl From<Nodes> for SemanticManifest {
                     semantic_manifest_metric
                 })
                 .collect(),
-            project_configuration: SemanticManifestProjectConfiguration {},
+            project_configuration: SemanticManifestProjectConfiguration {
+                dsi_package_version: Default::default(),
+                metadata: None,
+                time_spines: nodes
+                    .semantic_models
+                    .into_values()
+                    .filter(|m| m.__semantic_model_attr__.time_spine.is_some())
+                    .map(|m| (*m).clone().__semantic_model_attr__.time_spine.unwrap())
+                    .collect(),
+                // deprecated fields
+                time_spine_table_configurations: vec![],
+            },
             saved_queries: nodes
                 .saved_queries
                 .into_values()

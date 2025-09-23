@@ -14,6 +14,7 @@ use dbt_schemas::schemas::manifest::semantic_model::{
     DbtSemanticModel, DbtSemanticModelAttr, NodeRelation, SemanticEntity, SemanticMeasure,
     SemanticModelDefaults,
 };
+use dbt_schemas::schemas::manifest::semantic_model::{TimeSpine, TimeSpinePrimaryColumn};
 use dbt_schemas::schemas::project::{DefaultTo, ModelConfig, SemanticModelConfig};
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::properties::metrics_properties::{AggregationType, PercentileType};
@@ -197,6 +198,46 @@ pub async fn resolve_semantic_models(
             })
             .collect();
 
+        let dimensions = model_props_to_dimensions(model_props.clone());
+        let node_relation = NodeRelation {
+            database: Some(resolved_model.database()),
+            schema_name: resolved_model.schema(),
+            alias: resolved_model.alias(),
+            relation_name: resolved_model.__base_attr__.relation_name.clone(),
+        };
+
+        let mut time_spine: Option<TimeSpine> = None;
+        if let Some(props_time_spine) = model_props.time_spine.clone() {
+            let standard_granularity_column_dimension = dimensions
+                .clone()
+                .into_iter()
+                .find(|d| {
+                    d.column_name == Some(props_time_spine.standard_granularity_column.clone())
+                })
+                .unwrap_or_else(|| {
+                    // TODO: validation error should be shown without panicking
+                    panic!(
+                        "Cannot find dimension for standard granularity column '{}'",
+                        props_time_spine.standard_granularity_column
+                    )
+                });
+
+            let primary_column = TimeSpinePrimaryColumn {
+                name: props_time_spine.standard_granularity_column.clone(),
+                time_granularity: standard_granularity_column_dimension
+                    .type_params
+                    .unwrap_or_default()
+                    .time_granularity
+                    .unwrap_or_default(),
+            };
+
+            time_spine = Some(TimeSpine {
+                node_relation: node_relation.clone(),
+                primary_column,
+                custom_granularities: props_time_spine.custom_granularities.unwrap_or_default(),
+            });
+        }
+
         let dbt_semantic_model = DbtSemanticModel {
             __common_attr__: CommonAttributes {
                 name: semantic_model_name.clone(),
@@ -244,19 +285,15 @@ pub async fn resolve_semantic_models(
                 }],
                 label: None, // no semantic model level label (could maybe inherit from model?)
                 model: format!("ref('{model_name}')"),
-                node_relation: Some(NodeRelation {
-                    database: Some(resolved_model.database()),
-                    schema_name: resolved_model.schema(),
-                    alias: resolved_model.alias(),
-                    relation_name: resolved_model.__base_attr__.relation_name.clone(),
-                }),
+                node_relation: Some(node_relation),
                 defaults: Some(SemanticModelDefaults {
                     agg_time_dimension: model_props.agg_time_dimension.clone(),
                 }),
                 entities: model_props_to_semantic_entities(model_props.clone()),
                 measures,
-                dimensions: model_props_to_dimensions(model_props.clone()),
+                dimensions,
                 primary_entity: model_props.primary_entity.clone(),
+                time_spine,
             },
             deprecated_config: semantic_model_config.clone(),
             __other__: BTreeMap::new(),
@@ -360,6 +397,7 @@ pub fn model_props_to_dimensions(model_props: ModelProperties) -> Vec<Dimension>
 
             let dimension = Dimension {
                 name: column_dimension_config.name.unwrap_or_default(),
+                column_name: Some(column.name.clone()),
                 dimension_type: column_dimension_config.type_.clone(),
                 description: column_dimension_config.description,
                 expr: None, // only applicable for derived_semantics
@@ -386,6 +424,7 @@ pub fn model_props_to_dimensions(model_props: ModelProperties) -> Vec<Dimension>
         let dimension = Dimension {
             name: derived_dimension.name.clone(),
             expr: Some(derived_dimension.expr.clone()),
+            column_name: None,
             dimension_type: derived_dimension.type_.clone(),
             is_partition: derived_dimension.is_partition.unwrap_or(false),
             description: derived_dimension.description.clone(),

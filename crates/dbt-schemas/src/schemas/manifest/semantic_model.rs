@@ -1,13 +1,14 @@
 use crate::schemas::{
     CommonAttributes,
     common::{Dimension, NodeDependsOn},
-    dbt_column::ColumnPropertiesEntityType,
+    dbt_column::{ColumnPropertiesEntityType, Granularity},
     manifest::{
         common::SourceFileMetadata,
         metric::{MeasureAggregationParameters, NonAdditiveDimension},
     },
     project::SemanticModelConfig,
     properties::metrics_properties::AggregationType,
+    properties::model_properties::TimeSpineCustomGranularity,
     ref_and_source::DbtRef,
     semantic_layer::semantic_manifest::SemanticLayerElementConfig,
 };
@@ -42,6 +43,7 @@ pub struct DbtSemanticModelAttr {
     pub dimensions: Vec<Dimension>,
     pub metadata: Option<SourceFileMetadata>,
     pub primary_entity: Option<String>,
+    pub time_spine: Option<TimeSpine>,
 
     // measures is not a concept in the Fusion compatible Semantic Layer yaml spec
     // but it is still needed for manifest.json
@@ -58,7 +60,7 @@ pub struct DbtSemanticModelAttr {
     pub group: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct NodeRelation {
     pub alias: String,
     pub schema_name: String,
@@ -96,4 +98,17 @@ pub struct SemanticMeasure {
     pub non_additive_dimension: Option<NonAdditiveDimension>,
     pub agg_time_dimension: Option<String>,
     pub config: Option<SemanticLayerElementConfig>,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct TimeSpine {
+    pub node_relation: NodeRelation,
+    pub primary_column: TimeSpinePrimaryColumn,
+    pub custom_granularities: Vec<TimeSpineCustomGranularity>,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct TimeSpinePrimaryColumn {
+    pub name: String,
+    pub time_granularity: Granularity,
 }

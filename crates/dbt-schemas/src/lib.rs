@@ -98,6 +98,7 @@ pub mod schemas {
 
     pub mod semantic_layer {
         pub mod metric;
+        pub mod project_configuration;
         pub mod saved_query;
         pub mod semantic_manifest;
         pub mod semantic_model;
@@ -145,7 +146,7 @@ pub mod schemas {
         mod data_test_properties;
         mod exposure_properties;
         pub mod metrics_properties;
-        mod model_properties;
+        pub mod model_properties;
         #[allow(clippy::module_inception)]
         mod properties;
         mod saved_queries_properties;

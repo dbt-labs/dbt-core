@@ -920,12 +920,16 @@ pub struct Dimension {
     pub expr: Option<String>,
     pub metadata: Option<SourceFileMetadata>,
     pub config: Option<SemanticLayerElementConfig>,
+    // for internal use only, n/a for derived dimensions
+    #[serde(skip_serializing)]
+    pub column_name: Option<String>,
 }
+
 fn default_false() -> bool {
     false
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Default)]
 pub struct DimensionTypeParams {
     pub time_granularity: Option<Granularity>,
     pub validity_params: Option<DimensionValidityParams>,

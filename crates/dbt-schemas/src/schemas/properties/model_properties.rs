@@ -52,7 +52,7 @@ pub struct ModelProperties {
     pub latest_version: Option<FloatOrString>,
     pub name: String,
     pub tests: Option<Vec<DataTests>>,
-    pub time_spine: Option<ModelsTimeSpine>,
+    pub time_spine: Option<ModelPropertiesTimeSpine>,
     pub versions: Option<Vec<Versions>>,
 
     pub semantic_model: Option<ModelPropertiesSemanticModelConfig>,
@@ -122,14 +122,14 @@ impl GetConfig<ModelConfig> for ModelProperties {
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
-pub struct ModelsTimeSpine {
-    pub custom_granularities: Option<Vec<CustomGranularity>>,
+pub struct ModelPropertiesTimeSpine {
+    pub custom_granularities: Option<Vec<TimeSpineCustomGranularity>>,
     pub standard_granularity_column: String,
 }
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
-pub struct CustomGranularity {
+pub struct TimeSpineCustomGranularity {
     pub column_name: Option<String>,
     pub name: String,
 }
