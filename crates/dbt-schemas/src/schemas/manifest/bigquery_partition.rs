@@ -26,7 +26,7 @@ pub enum PartitionConfig {
 }
 
 /// reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/relation_configs/_partition.py#L12-L13
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, JsonSchema)]
 pub struct BigqueryPartitionConfig {
     pub field: String,
     #[serde(default = "BigqueryPartitionConfig::default_data_type")]
@@ -34,6 +34,46 @@ pub struct BigqueryPartitionConfig {
     pub __inner__: BigqueryPartitionConfigInner,
     #[serde(default)]
     pub copy_partitions: bool,
+}
+
+/// reference: https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L503
+impl PartialEq for BigqueryPartitionConfig {
+    fn eq(&self, other: &Self) -> bool {
+        // Both are partitioned, check details
+        match (&self.__inner__, &other.__inner__) {
+            (
+                BigqueryPartitionConfigInner::Time(self_time_part),
+                BigqueryPartitionConfigInner::Time(other_time_part),
+            ) => {
+                if self_time_part.granularity.to_lowercase()
+                    != other_time_part.granularity.to_lowercase()
+                {
+                    return false;
+                }
+
+                let self_field_str = &self.field;
+                let other_config_field_str = &other.field;
+
+                let bq_self_field_was_none = self_field_str.is_empty();
+                let part1 = if bq_self_field_was_none {
+                    false
+                } else {
+                    self_field_str.to_lowercase() == other_config_field_str.to_lowercase()
+                };
+                let part2 = other.time_ingestion_partitioning() && !bq_self_field_was_none;
+
+                part1 || part2
+            }
+            (
+                BigqueryPartitionConfigInner::Range(self_range_part),
+                BigqueryPartitionConfigInner::Range(other_range_part),
+            ) => {
+                self.field.to_lowercase() == other.field.to_lowercase()
+                    && self_range_part.range == other_range_part.range
+            }
+            _ => false, // Mismatch: one is Time, other is Range
+        }
+    }
 }
 
 /// Enum representing all field names in BigqueryPartitionConfig

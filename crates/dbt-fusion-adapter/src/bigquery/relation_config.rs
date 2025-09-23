@@ -1,14 +1,14 @@
 //! This module is based on the `func getTableSchemaWithFilter` from the following file:
 //! https://github.com/dbt-labs/arrow-adbc/blob/6a57518fead4fde556aafdd96d64a259727fa942/go/adbc/driver/bigquery/connection.go#L630
 
+use crate::sql_types::TypeFormatter;
 use arrow_schema::Schema;
 use chrono::{DateTime, TimeDelta, Utc};
 use dbt_schemas::schemas::{
     DbtModel, InternalDbtNode,
     common::DbtMaterialization,
     manifest::{
-        BigqueryClusterConfig, BigqueryPartitionConfig, BigqueryPartitionConfigInner, Range,
-        RangeConfig, TimeConfig,
+        BigqueryPartitionConfig, BigqueryPartitionConfigInner, Range, RangeConfig, TimeConfig,
     },
     nodes::BigQueryAttr,
 };
@@ -44,19 +44,33 @@ pub trait BigqueryPartitionConfigExt
 where
     Self: Sized,
 {
-    fn try_from_schema(schema: &Schema) -> Result<Option<Self>, String>;
+    fn try_from_schema(
+        schema: &Schema,
+        type_formatter: &dyn TypeFormatter,
+    ) -> Result<Option<Self>, String>;
 }
 
 impl BigqueryPartitionConfigExt for BigqueryPartitionConfig {
-    fn try_from_schema(schema: &Schema) -> Result<Option<BigqueryPartitionConfig>, String> {
+    fn try_from_schema(
+        schema: &Schema,
+        type_formatter: &dyn TypeFormatter,
+    ) -> Result<Option<BigqueryPartitionConfig>, String> {
         let metadata = &schema.metadata;
         let time_partition = if let Some(partition) = metadata.get("TimePartitioning.Field") {
-            let field = partition.parse::<String>().unwrap();
-            // TODO(serramatutu): figure out what to do here without sdf-frontend
-            let data_type = "__placeholder__".to_string();
+            let field_name = partition
+                .parse::<String>()
+                .map_err(|_e| "Could not parse TimePartitioning.Field as string".to_owned())?;
+
+            let (_, field) = schema.fields().find(&field_name).ok_or_else(|| {
+                format!("Field '{field_name}' does not exist in arrow schema returned by BigQuery.")
+            })?;
+            let mut data_type = String::new();
+            type_formatter
+                .format_arrow_type_as_sql(field.data_type(), &mut data_type)
+                .map_err(|_e| format!("Could not format arrow type for field '{field_name}'"))?;
 
             Some(Self {
-                field,
+                field: field_name,
                 data_type,
                 __inner__: BigqueryPartitionConfigInner::Time(TimeConfig {
                     granularity: metadata
@@ -108,20 +122,6 @@ impl BigqueryPartitionConfigExt for BigqueryPartitionConfig {
         };
 
         Ok(time_partition.or(range_partition))
-    }
-}
-
-pub trait BigqueryClusterConfigExt
-where
-    Self: Sized,
-{
-    fn try_from_schema(schema: &Schema) -> Result<Option<Self>, String>;
-}
-
-impl BigqueryClusterConfigExt for BigqueryClusterConfig {
-    fn try_from_schema(_schema: &Schema) -> Result<Option<Self>, String> {
-        // TODO: cluster from schema
-        Ok(None)
     }
 }
 
@@ -194,6 +194,7 @@ impl dyn BigqueryMaterializedViewConfig {
 
     pub fn try_from_schema(
         schema: &Schema,
+        type_formatter: &dyn TypeFormatter,
     ) -> Result<Arc<dyn BigqueryMaterializedViewConfig>, String> {
         let table_type = schema.metadata.get_or_err("Type")?;
         if table_type != "MATERIALIZED_VIEW" {
@@ -259,17 +260,47 @@ impl dyn BigqueryMaterializedViewConfig {
                 .get("Description")
                 .map(|s| s.to_owned())
                 .unwrap_or_else(|| "".to_owned()),
-            partition_by: BigqueryPartitionConfig::try_from_schema(schema)?,
+            partition_by: BigqueryPartitionConfig::try_from_schema(schema, type_formatter)?,
 
-            // TODO(serramatutu): dbt set this to None, do we want to change this behavior?
+            // NOTE: dbt set this to None, but the ADBC driver provides it under
+            // MaterializedView.MaxStaleness.
+            //
+            // This is a deviation from Core.
             // https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-bigquery/src/dbt/adapters/bigquery/relation_configs/_options.py#L142
-            max_staleness: "".to_owned(),
-            // TODO(serramatutu): All the following fields need to be plumbed through from
-            // gobigquery via ADBC. This will require a driver change.
-            expiration_timestamp_ns: 0,
-            kms_key_name: "".to_owned(),
-            cluster_by: Vec::new(),
-            tags: BTreeMap::new(),
+            max_staleness: schema
+                .metadata
+                .get("MaterializedView.MaxStaleness")
+                .map(|s| s.to_owned())
+                .unwrap_or_else(|| "".to_owned()),
+
+            expiration_timestamp_ns: schema
+                .metadata
+                .get("ExpirationTime")
+                .map(|s| {
+                    DateTime::parse_from_rfc3339(s)
+                        .map(|dt| dt.timestamp_nanos_opt().map(|v| v as u64).unwrap_or(0))
+                        .map_err(|_err| "Could not parse 'ExpirationTime' as DateTime".to_string())
+                })
+                .unwrap_or(Ok(0))?,
+            kms_key_name: schema
+                .metadata
+                .get("EncryptionConfig.KMSKeyName")
+                .map(|s| s.to_owned())
+                .unwrap_or_else(|| "".to_owned()),
+            cluster_by: cluster_by_from_schema(schema)?,
+            tags: schema
+                .metadata
+                .get("ResourceTags")
+                .map(|tags_json| {
+                    if tags_json.is_empty() {
+                        Ok(BTreeMap::new())
+                    } else {
+                        serde_json::from_str(tags_json).map_err(|_err| {
+                            "Could not parse 'ResourceTags' as valid JSON".to_string()
+                        })
+                    }
+                })
+                .unwrap_or_else(|| Ok(BTreeMap::new()))?,
         }))
     }
 }
@@ -328,7 +359,7 @@ impl BigqueryMaterializedViewConfigObject {
         if !self.0.kms_key_name().is_empty() {
             hm.insert(
                 "kms_key_name".to_string(),
-                MinijinjaValue::from(self.0.kms_key_name()),
+                MinijinjaValue::from(format!("'{}'", self.0.kms_key_name())),
             );
         }
         if !self.0.description().is_empty() {
@@ -342,7 +373,7 @@ impl BigqueryMaterializedViewConfigObject {
                     ),
                 )
             })?;
-            let escaped = format!("\"\"\"{jsonified}\"\"\"");
+            let escaped = format!("\"\"\"{}\"\"\"", &jsonified[1..jsonified.len() - 1]);
             hm.insert("description".to_string(), MinijinjaValue::from(escaped));
         }
 
@@ -360,13 +391,20 @@ impl Object for BigqueryMaterializedViewConfigObject {
                 .0
                 .partition_by()
                 .map(|pb| MinijinjaValue::from_object(pb.clone())),
-            "cluster" => Some(MinijinjaValue::from_object(
-                self.0
-                    .cluster_by()
-                    .into_iter()
-                    .map(|s| s.to_owned())
-                    .collect::<Vec<String>>(),
-            )),
+            "cluster" => {
+                if self.0.cluster_by().is_empty() {
+                    None
+                } else {
+                    Some(MinijinjaValue::from_serialize(BTreeMap::from([(
+                        "fields",
+                        self.0
+                            .cluster_by()
+                            .into_iter()
+                            .map(|s| s.to_owned())
+                            .collect::<Vec<String>>(),
+                    )])))
+                }
+            }
             _ => None,
         }
     }
@@ -616,25 +654,24 @@ impl BigqueryMaterializedViewConfigChangesetObject {
         old: &Arc<dyn BigqueryMaterializedViewConfig>,
         new: Arc<dyn BigqueryMaterializedViewConfig>,
     ) -> Self {
-        let partition_by = if old.partition_by() != new.partition_by() {
-            match new.partition_by() {
-                Some(v) => ConfigChange::Some(v.clone()),
-                None => ConfigChange::Drop,
+        let partition_by = match (old.partition_by(), new.partition_by()) {
+            (Some(old_pb), Some(new_pb)) => {
+                if old_pb != new_pb {
+                    ConfigChange::Some(new_pb.clone())
+                } else {
+                    ConfigChange::None
+                }
             }
-        } else {
-            ConfigChange::None
+            (None, Some(new_pb)) => ConfigChange::Some(new_pb.clone()),
+            (Some(_), None) => ConfigChange::Drop,
+            (None, None) => ConfigChange::None,
         };
 
-        // FIXME(serramatutu): this logic is the correct one, but it causes the materialization to
-        // DROP/CREATE every time since cluster by is not in the driver. For now, disabling
-        // cluster_by
-        //
-        // let cluster_by = if old.cluster_by() != new.cluster_by() {
-        //     Some(new.cluster_by().into_iter().map(|s| s.to_owned()).collect())
-        // } else {
-        //     None
-        // };
-        let cluster_by = None;
+        let cluster_by = if old.cluster_by() != new.cluster_by() {
+            Some(new.cluster_by().into_iter().map(|s| s.to_owned()).collect())
+        } else {
+            None
+        };
 
         let options = if !old.options_eq(&new) {
             Some(new)
@@ -687,82 +724,49 @@ pub fn partitions_match(
     remote: Option<BigqueryPartitionConfig>,
     local: Option<BigqueryPartitionConfig>,
 ) -> bool {
-    // TODO: move the logics to PartialEq impl for BigqueryPartitionConfig
-    // if we need to do do any comparison outside this struct
-    match (remote, local) {
-        (None, None) => true, // Both not partitioned
-
-        (Some(table_p), Some(conf_p)) => {
-            // Both are partitioned, check details
-            match (&table_p.__inner__, &conf_p.__inner__) {
-                (
-                    BigqueryPartitionConfigInner::Time(table_time_part),
-                    BigqueryPartitionConfigInner::Time(conf_time_part),
-                ) => {
-                    if table_time_part.granularity.to_lowercase()
-                        != conf_time_part.granularity.to_lowercase()
-                    {
-                        return false;
-                    }
-
-                    let table_p_field_str = &table_p.field;
-                    let conf_p_config_field_str = &conf_p.field;
-
-                    let bq_table_field_was_none = table_p_field_str.is_empty();
-                    let part1 = if bq_table_field_was_none {
-                        false
-                    } else {
-                        table_p_field_str.to_lowercase() == conf_p_config_field_str.to_lowercase()
-                    };
-
-                    let bq_table_field_is_not_none = !bq_table_field_was_none;
-                    let part2 = conf_p.time_ingestion_partitioning() && bq_table_field_is_not_none;
-
-                    part1 || part2
-                }
-                (
-                    BigqueryPartitionConfigInner::Range(table_range_part),
-                    BigqueryPartitionConfigInner::Range(conf_range_part),
-                ) => {
-                    table_p.field.to_lowercase() == conf_p.field.to_lowercase()
-                        && table_range_part.range == conf_range_part.range
-                }
-                _ => false, // Mismatch: one is Time, other is Range
-            }
-        }
-        _ => false, // One is partitioned, other is not
-    }
-}
-
-/// Check if the actual and configured clustering columns for a table
-/// are a match. BigQuery tables can be replaced if clustering columns
-/// match exactly.
-///
-/// https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L529
-pub fn clusters_match(
-    remote: Option<BigqueryClusterConfig>,
-    local: Option<BigqueryClusterConfig>,
-) -> bool {
-    let conf_fields = local.map(|c| c.into_fields());
-    let table_fields = remote.map(|c| c.into_fields());
-
-    match (conf_fields, table_fields) {
-        (Some(conf_fields), Some(table_fields)) => conf_fields == table_fields,
+    match (&remote, &local) {
+        (Some(remote), Some(local)) => remote == local,
         (None, None) => true,
         _ => false,
     }
 }
 
+/// Parse a vec of cluster_by fields from the returned schema of the BQ driver.
+pub fn cluster_by_from_schema(schema: &Schema) -> Result<Vec<String>, String> {
+    schema
+        .metadata
+        .get("Clustering.Fields")
+        .map(|value_json| {
+            if value_json.is_empty() {
+                Ok(Vec::new())
+            } else {
+                serde_json::from_str(value_json)
+                    .map_err(|_err| "Could not parse 'Clustering.Fields' as valid JSON".to_string())
+            }
+        })
+        .unwrap_or_else(|| Ok(Vec::new()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arrow_schema::Fields;
+    use crate::sql_types::NaiveTypeFormatterImpl;
+    use arrow::datatypes::DataType;
+    use arrow_schema::{Field, Fields, TimeUnit};
+    use dbt_common::adapter::AdapterType;
 
     /// Test that the arrow schema returned from the BigQuery driver
     /// can be parsed into a `BigqueryPartitionConfigRepr`
     #[test]
     fn test_materialized_view_from_schema() {
+        let tf =
+            Box::new(NaiveTypeFormatterImpl::new(AdapterType::Bigquery)) as Box<dyn TypeFormatter>;
         // Metadata reference: https://github.com/apache/arrow-adbc/blob/f5c0354ac80eaa829c1228e1e0dba7ddc7fd1787/go/adbc/driver/bigquery/connection.go#L703
+        let fields = Fields::from(vec![Field::new(
+            "my_field",
+            DataType::Timestamp(TimeUnit::Nanosecond, None),
+            false,
+        )]);
         let metadata = HashMap::from_iter(
             [
                 ("Name", "my_view"),
@@ -774,41 +778,52 @@ mod tests {
                 ),
                 ("FullID", "my_project:my_dataset.my_view"),
                 ("Type", "MATERIALIZED_VIEW"),
-                ("CreationTime", "2025-01-01:00:00.00000"),
-                ("LastModifiedTime", "2025-01-01:00:00.00000"),
+                ("CreationTime", "2025-01-01T00:00:00+00:00"),
+                ("LastModifiedTime", "2025-01-01T00:00:00+00:00"),
                 ("NumBytes", "1234"),
                 ("NumLongTermBytes", "12345"),
                 ("NumRows", "123"),
                 ("ETag", "sometag"),
                 ("DefaultCollation", ""),
+                ("ResourceTags", "{\"my_tag\":\"my_val\"}"),
+                ("EncryptionConfig.KMSKeyName", "my_key"),
+                ("ExpirationTime", "2025-01-01T00:00:00+00:00"),
                 (
                     "SnapshotDefinition.BaseTableReference",
                     "my_project:my-dataset.my_snapshot_base_table",
                 ),
-                ("SnapshotDefinition.SnapshotTime", "2025-01-01:00:00.00000"),
+                (
+                    "SnapshotDefinition.SnapshotTime",
+                    "2025-01-01T00:00:00+00:00",
+                ),
                 (
                     "CloneDefinition.BaseTableReference",
                     "my_project:my-dataset.my_clone_base_table",
                 ),
-                ("CloneDefinition.CloneTime", "2025-01-01:00:00.00000"),
+                ("CloneDefinition.CloneTime", "2025-01-01T00:00:00+00:00"),
                 ("MaterializedView.EnableRefresh", "true"),
-                ("MaterializedView.LastRefreshTime", "2025-01-01:00:00.00000"),
+                (
+                    "MaterializedView.LastRefreshTime",
+                    "2025-01-01T00:00:00+00:00",
+                ),
                 ("MaterializedView.Query", "SELECT 1"),
                 ("MaterializedView.RefreshInterval", "24h0m0s"),
                 ("MaterializedView.AllowNonIncrementalDefinition", "true"),
-                ("MaterializedView.MaxStaleness", "2025-01 01 00:00:00"),
+                ("MaterializedView.MaxStaleness", "2025-01-01T00:00:00+00:00"),
                 ("TimePartitioning.Type", "DAY"),
                 ("TimePartitioning.Expiration", "24h0m0s"),
                 ("TimePartitioning.Field", "my_field"),
+                ("Clustering.Fields", "[\"field_1\",\"field_2\"]"),
                 // tables can't be both time-partitioned and range-partitioned at the same time,
                 // so in this case RangePartitioning is unset
             ]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v.to_string())),
         );
-        let schema = Schema::new(Fields::empty()).with_metadata(metadata);
+        let schema = Schema::new(fields).with_metadata(metadata);
 
-        let mv = <dyn BigqueryMaterializedViewConfig>::try_from_schema(&schema).unwrap();
+        let mv =
+            <dyn BigqueryMaterializedViewConfig>::try_from_schema(&schema, tf.as_ref()).unwrap();
         assert_eq!(mv.table_id(), "my_view");
         assert_eq!(mv.dataset_id(), "my_dataset");
         assert_eq!(mv.project_id(), "my_project");
@@ -817,9 +832,24 @@ mod tests {
         assert_eq!(mv.labels().len(), 2);
         assert_eq!(mv.labels().get("label_1").unwrap(), "value_1");
         assert_eq!(mv.labels().get("label_2").unwrap(), "value_2");
+        assert_eq!(mv.kms_key_name(), "my_key");
 
         assert!(mv.enable_refresh());
         assert_eq!(mv.refresh_interval_minutes(), 24.0 * 60.0);
+
+        assert_eq!(
+            mv.tags(),
+            &BTreeMap::from([("my_tag".to_owned(), "my_val".to_owned())])
+        );
+        assert_eq!(
+            mv.expiration_timestamp_ns(),
+            DateTime::parse_from_rfc3339("2025-01-01T00:00:00+00:00")
+                .unwrap()
+                .timestamp_nanos_opt()
+                .unwrap() as u64
+        );
+
+        assert_eq!(mv.cluster_by(), &["field_1", "field_2"]);
 
         let partition_by = mv.partition_by().unwrap();
         assert_eq!(partition_by.field, "my_field");
@@ -827,19 +857,18 @@ mod tests {
             panic!("partition_by should be time");
         };
         assert_eq!(partition_time.granularity, "DAY");
-
-        // TODO(serramatutu): kms_key_name
-        // TODO(serramatutu): expiration_timestamp_ns
-        // TODO(serramatutu): cluster_by
     }
 
     /// Test that the arrow schema returned from the BigQuery driver
     /// can be parsed into a `PartitionConfig`
     #[test]
     fn test_empty_partition_config_from_schema() {
+        let tf =
+            Box::new(NaiveTypeFormatterImpl::new(AdapterType::Bigquery)) as Box<dyn TypeFormatter>;
+
         let schema = Schema::new(Fields::empty());
         assert!(
-            BigqueryPartitionConfig::try_from_schema(&schema)
+            BigqueryPartitionConfig::try_from_schema(&schema, tf.as_ref())
                 .unwrap()
                 .is_none()
         );
@@ -849,6 +878,8 @@ mod tests {
     /// can be parsed into a `PartitionConfig`
     #[test]
     fn test_partition_config_from_schema() {
+        let tf =
+            Box::new(NaiveTypeFormatterImpl::new(AdapterType::Bigquery)) as Box<dyn TypeFormatter>;
         // Metadata reference: https://github.com/apache/arrow-adbc/blob/f5c0354ac80eaa829c1228e1e0dba7ddc7fd1787/go/adbc/driver/bigquery/connection.go#L703
         let metadata = HashMap::from_iter(
             [
@@ -863,7 +894,7 @@ mod tests {
         );
         let schema = Schema::new(Fields::empty()).with_metadata(metadata);
 
-        let partition_by = BigqueryPartitionConfig::try_from_schema(&schema)
+        let partition_by = BigqueryPartitionConfig::try_from_schema(&schema, tf.as_ref())
             .unwrap()
             .unwrap();
         assert_eq!(partition_by.field, "my_field");
