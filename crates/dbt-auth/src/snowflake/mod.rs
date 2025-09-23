@@ -334,6 +334,10 @@ impl SnowflakeAuth {
             )?;
         }
 
+        if let Some(query_tag) = config.get_string(snowflake::QUERY_TAG_PARAM_KEY) {
+            builder.with_named_option(snowflake::QUERY_TAG_PARAM_KEY, query_tag)?;
+        }
+
         let connect_timeout_duration = config
             .get_string("connect_timeout")
             .as_deref()
@@ -369,6 +373,7 @@ impl SnowflakeAuth {
             "oauth_client_secret",
             "client_session_keep_alive",
             snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY,
+            snowflake::QUERY_TAG_PARAM_KEY,
             "host",
             "port",
             "protocol",
@@ -415,6 +420,9 @@ impl SnowflakeAuth {
                     }
                     snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY => builder
                         .with_named_option(snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY, value),
+                    snowflake::QUERY_TAG_PARAM_KEY => {
+                        builder.with_named_option(snowflake::QUERY_TAG_PARAM_KEY, value)
+                    }
                     "host" => builder.with_named_option(snowflake::HOST, value),
                     "port" => builder.with_named_option(snowflake::PORT, value),
                     "protocol" => builder.with_named_option(snowflake::PROTOCOL, value),
@@ -1110,6 +1118,50 @@ mod tests {
                 snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY,
                 "my-vpce-endpoint.s3.region.vpce.amazonaws.com",
             ),
+            (snowflake::LOG_TRACING, "fatal"),
+            (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+        ];
+        run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_query_tag() {
+        let mut config = base_config();
+        config.insert(
+            snowflake::QUERY_TAG_PARAM_KEY.into(),
+            "custom-query-tag".into(),
+        );
+        let expected = [
+            ("user", "U"),
+            ("password", "P"),
+            (snowflake::ACCOUNT, "A"),
+            (snowflake::ROLE, "role"),
+            (snowflake::WAREHOUSE, "warehouse"),
+            (snowflake::APPLICATION_NAME, "dbt"),
+            (snowflake::QUERY_TAG_PARAM_KEY, "custom-query-tag"),
+            (snowflake::LOG_TRACING, "fatal"),
+            (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+        ];
+        run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_query_tag_with_method() {
+        let mut config = base_config();
+        config.insert("method".into(), "warehouse".into());
+
+        config.insert(
+            snowflake::QUERY_TAG_PARAM_KEY.into(),
+            "custom-query-tag".into(),
+        );
+        let expected = [
+            ("user", "U"),
+            ("password", "P"),
+            (snowflake::ACCOUNT, "A"),
+            (snowflake::ROLE, "role"),
+            (snowflake::WAREHOUSE, "warehouse"),
+            (snowflake::APPLICATION_NAME, "dbt"),
+            (snowflake::QUERY_TAG_PARAM_KEY, "custom-query-tag"),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
         ];

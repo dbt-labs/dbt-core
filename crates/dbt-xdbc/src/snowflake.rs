@@ -45,6 +45,7 @@ pub const CLIENT_STORE_TEMP_CREDS: &str = "adbc.snowflake.sql.client_option.stor
 // Session Param Keys
 // https://docs.snowflake.com/en/sql-reference/parameters
 pub const S3_STAGE_VPCE_DNS_NAME_PARAM_KEY: &str = "s3_stage_vpce_dns_name";
+pub const QUERY_TAG_PARAM_KEY: &str = "query_tag";
 
 pub mod auth_type {
     /// General username password authentication
