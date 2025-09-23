@@ -826,6 +826,77 @@ impl Hooks {
         }
         *self = Hooks::HookConfigArray(new_hooks);
     }
+
+    /// Compare hooks where different variants can be equal if they contain the same SQL
+    /// These checks are needed so that we can conform to dbt-core/dbt-mantle
+    /// when comparing hooks.
+    pub fn hooks_equal(&self, other: &Self) -> bool {
+        // Helper to check if a Hooks value is effectively empty
+        let is_empty_hooks = |hooks: &Hooks| -> bool {
+            match hooks {
+                Hooks::ArrayOfStrings(vec) => vec.is_empty(),
+                _ => false,
+            }
+        };
+
+        // If both are the same variant and equal, return true
+        if self == other {
+            return true;
+        }
+
+        // Check if one is empty array and the other is something that should be considered equal
+        if is_empty_hooks(self) && is_empty_hooks(other) {
+            return true;
+        }
+
+        // Compare different variants by their SQL content
+        match (self, other) {
+            // String vs HookConfig: compare the string with the SQL field
+            (Hooks::String(s), Hooks::HookConfig(config))
+            | (Hooks::HookConfig(config), Hooks::String(s)) => config.sql.as_ref() == Some(s),
+
+            // ArrayOfStrings vs HookConfigArray: compare each string with corresponding SQL field
+            (Hooks::ArrayOfStrings(strings), Hooks::HookConfigArray(configs))
+            | (Hooks::HookConfigArray(configs), Hooks::ArrayOfStrings(strings)) => {
+                // Both must have the same length
+                if strings.len() != configs.len() {
+                    return false;
+                }
+
+                // Each string must match the corresponding config's SQL
+                strings
+                    .iter()
+                    .zip(configs.iter())
+                    .all(|(s, config)| config.sql.as_ref() == Some(s))
+            }
+
+            // String vs ArrayOfStrings with single element
+            (Hooks::String(s), Hooks::ArrayOfStrings(vec))
+            | (Hooks::ArrayOfStrings(vec), Hooks::String(s)) => {
+                vec.len() == 1 && vec.first() == Some(s)
+            }
+
+            // HookConfig vs HookConfigArray with single element
+            (Hooks::HookConfig(config), Hooks::HookConfigArray(vec))
+            | (Hooks::HookConfigArray(vec), Hooks::HookConfig(config)) => {
+                vec.len() == 1 && vec.first() == Some(config)
+            }
+
+            // String vs HookConfigArray with single element
+            (Hooks::String(s), Hooks::HookConfigArray(configs))
+            | (Hooks::HookConfigArray(configs), Hooks::String(s)) => {
+                configs.len() == 1 && configs.first().and_then(|c| c.sql.as_ref()) == Some(s)
+            }
+
+            // ArrayOfStrings vs HookConfig - only equal if array has one element
+            (Hooks::ArrayOfStrings(strings), Hooks::HookConfig(config))
+            | (Hooks::HookConfig(config), Hooks::ArrayOfStrings(strings)) => {
+                strings.len() == 1 && strings.first() == config.sql.as_ref()
+            }
+
+            _ => false,
+        }
+    }
 }
 
 #[skip_serializing_none]
@@ -1018,6 +1089,39 @@ pub fn merge_tags(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_hooks_equal_array_of_strings_vs_hook_config_array() {
+        let array_of_strings = Hooks::ArrayOfStrings(vec![
+            "{{ dbt_snow_mask.apply_masking_policy('snapshots') }}".to_string(),
+        ]);
+
+        let hook_config_array = Hooks::HookConfigArray(vec![HookConfig {
+            sql: Some("{{ dbt_snow_mask.apply_masking_policy('snapshots') }}".to_string()),
+            transaction: Some(true),
+            index: None,
+        }]);
+
+        // Test that they are equal
+        assert!(array_of_strings.hooks_equal(&hook_config_array));
+        assert!(hook_config_array.hooks_equal(&array_of_strings));
+    }
+
+    #[test]
+    fn test_hooks_equal_string_vs_hook_config() {
+        let hook_string =
+            Hooks::String("{{ dbt_snow_mask.apply_masking_policy('snapshots') }}".to_string());
+
+        let hook_config = Hooks::HookConfig(HookConfig {
+            sql: Some("{{ dbt_snow_mask.apply_masking_policy('snapshots') }}".to_string()),
+            transaction: Some(true),
+            index: None,
+        });
+
+        // Test that they are equal
+        assert!(hook_string.hooks_equal(&hook_config));
+        assert!(hook_config.hooks_equal(&hook_string));
+    }
 
     #[test]
     fn test_get_semantic_name_snowflake_simple() {
