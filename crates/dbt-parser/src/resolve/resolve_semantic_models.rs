@@ -347,7 +347,6 @@ pub fn model_props_to_dimensions(model_props: ModelProperties) -> Vec<Dimension>
                         description: column.description.clone(), // defaults to column.description if there is no column.dimension.description
                         label: None,
                         config: None,
-                        granularity: None,
                     }
                 }
                 ColumnPropertiesDimension::DimensionConfig(ref config) => config.clone(),
@@ -366,11 +365,9 @@ pub fn model_props_to_dimensions(model_props: ModelProperties) -> Vec<Dimension>
                 expr: None, // only applicable for derived_semantics
                 label: column_dimension_config.label,
                 is_partition: column_dimension_config.is_partition.unwrap_or(false),
-                type_params: column_dimension_config.granularity.map(|granularity| {
-                    DimensionTypeParams {
-                        time_granularity: Some(granularity),
-                        validity_params: None,
-                    }
+                type_params: column.granularity.map(|granularity| DimensionTypeParams {
+                    time_granularity: Some(granularity),
+                    validity_params: None,
                 }),
                 config: column_dimension_config.config.clone(),
                 // fields below are always null (for now)

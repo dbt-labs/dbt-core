@@ -63,7 +63,6 @@ pub struct ColumnProperties {
     pub constraints: Option<Vec<Constraint>>,
     pub tests: Option<Vec<DataTests>>,
     pub data_tests: Option<Vec<DataTests>>,
-    // TODO: remove 'granularity' once we have updating conformance tests to use new SL spec, which does not allow column level granularity
     pub granularity: Option<Granularity>,
     pub policy_tags: Option<Vec<String>>,
     pub quote: Option<bool>,
@@ -236,7 +235,6 @@ pub struct ColumnPropertiesDimensionConfig {
     pub name: Option<String>,
     pub description: Option<String>,
     pub config: Option<SemanticLayerElementConfig>,
-    pub granularity: Option<Granularity>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
