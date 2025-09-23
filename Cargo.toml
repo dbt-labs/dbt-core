@@ -237,8 +237,8 @@ parquet = { version = "=55.1.0" }
 serde_arrow = { version = "0.13.4", features = ["arrow-55"] }
 
 # xdbc
-adbc-core = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_core", version = "0.20.0", rev = "34c0a6f7cd039334683bc0b05b9bc3430e0b7e86" } # @ apache-arrow-adbc-20-rust
-adbc-driver-manager = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_driver_manager", version = "0.20.0", rev = "34c0a6f7cd039334683bc0b05b9bc3430e0b7e86", features = [
+adbc-core = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_core", version = "0.20.0", rev = "6aa8ce231ad9145733c8b6a844223ffff57bf1ea" } # @ apache-arrow-adbc-20-rust
+adbc-driver-manager = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_driver_manager", version = "0.20.0", rev = "6aa8ce231ad9145733c8b6a844223ffff57bf1ea", features = [
   "windows-sys",
   "windows-registry",
 ] } # @ apache-arrow-adbc-20-rust
