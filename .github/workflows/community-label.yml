@@ -25,15 +25,19 @@ permissions:
 
 jobs:
   open_issues:
-    # If this PR already has the community label, no need to relabel it
-    # If this PR is opened and not draft, determine if it needs to be labeled
-    # if the PR is converted out of draft, determine if it needs to be labeled
     if: |
-      (!contains(github.event.pull_request.labels.*.name, 'community') &&
-      (github.event.action == 'opened' && github.event.pull_request.draft == false ) ||
-       github.event.action == 'ready_for_review' )
+      (
+        !contains(github.event.pull_request.labels.*.name, 'community')
+        && (
+          (github.event.action == 'opened' && github.event.pull_request.draft == false)
+          || github.event.action == 'ready_for_review'
+        )
+        && github.event.pull_request.user.type != 'Bot'
+        && github.event.pull_request.user.login != 'dependabot[bot]'
+      )
     uses: dbt-labs/actions/.github/workflows/label-community.yml@main
     with:
-        github_team: 'core-group'
-        label: 'community'
+      github_team: 'core-group'
+      label: 'community'
     secrets: inherit
+
