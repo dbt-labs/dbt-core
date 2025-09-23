@@ -277,7 +277,10 @@ impl IterChildren<ProjectDataTestConfig> for ProjectDataTestConfig {
 #[derive(Deserialize, Serialize, Debug, Clone, Default, JsonSchema)]
 pub struct DataTestConfig {
     pub alias: Option<String>,
+    #[serde(alias = "project", alias = "data_space")]
     pub database: Option<String>,
+    #[serde(alias = "dataset")]
+    pub schema: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub error_if: Option<String>,
@@ -285,7 +288,6 @@ pub struct DataTestConfig {
     pub group: Option<String>,
     pub limit: Option<i32>,
     pub meta: Option<BTreeMap<String, YmlValue>>,
-    pub schema: Option<String>,
     pub severity: Option<Severity>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub store_failures: Option<bool>,

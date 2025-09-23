@@ -270,7 +270,9 @@ impl IterChildren<ProjectSeedConfig> for ProjectSeedConfig {
 #[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone, JsonSchema)]
 pub struct SeedConfig {
     pub column_types: Option<BTreeMap<String, String>>,
+    #[serde(alias = "project", alias = "data_space")]
     pub database: Option<String>,
+    #[serde(alias = "dataset")]
     pub schema: Option<String>,
     pub alias: Option<String>,
     pub docs: Option<DocsConfig>,

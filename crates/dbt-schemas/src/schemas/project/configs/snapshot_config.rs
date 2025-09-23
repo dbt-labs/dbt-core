@@ -36,9 +36,9 @@ use crate::schemas::serde::{f64_or_string_f64, u64_or_string_u64};
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ProjectSnapshotConfig {
     // Snapshot-specific Configuration
-    #[serde(rename = "+database")]
+    #[serde(rename = "+database", alias = "+project", alias = "+data_space")]
     pub database: Option<String>,
-    #[serde(rename = "+schema")]
+    #[serde(rename = "+schema", alias = "+dataset")]
     pub schema: Option<String>,
     #[serde(rename = "+alias")]
     pub alias: Option<String>,
@@ -305,7 +305,9 @@ impl IterChildren<ProjectSnapshotConfig> for ProjectSnapshotConfig {
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Default, PartialEq)]
 pub struct SnapshotConfig {
     // Snapshot-specific Configuration
+    #[serde(alias = "project", alias = "data_space")]
     pub database: Option<String>,
+    #[serde(alias = "dataset")]
     pub schema: Option<String>,
     pub alias: Option<String>,
     pub materialized: Option<DbtMaterialization>,

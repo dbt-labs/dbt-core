@@ -18,14 +18,15 @@ type YmlValue = dbt_serde_yaml::Value;
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct SourceProperties {
     pub config: Option<SourceConfig>,
+    #[serde(alias = "project", alias = "data_space")]
     pub database: Option<String>,
-    // TODO: support alias then we can remove this field and use #[serde[alias = "catalog"]] on database
+    #[serde(alias = "dataset")]
+    pub schema: Option<String>,
     pub catalog: Option<String>,
     pub description: Option<String>,
     pub loader: Option<String>,
     pub name: String,
     pub quoting: Option<DbtQuoting>,
-    pub schema: Option<String>,
     pub tables: Option<Vec<Tables>>,
 }
 

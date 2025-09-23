@@ -347,8 +347,10 @@ pub struct ModelConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub alias: Option<String>,
-    pub schema: Omissible<Option<String>>,
+    #[serde(alias = "project", alias = "data_space")]
     pub database: Omissible<Option<String>>,
+    #[serde(alias = "dataset")]
+    pub schema: Omissible<Option<String>>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub catalog_name: Option<String>,
     // need default to ensure None if field is not set
