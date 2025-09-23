@@ -10,6 +10,7 @@ use crate::{
 };
 use arrow::array::RecordBatch;
 use arrow_schema::{DataType, Field, Schema};
+use chrono::{DateTime, Utc};
 use dbt_common::FsResult;
 use dbt_schemas::schemas::{
     common::ResolvedQuoting,
@@ -86,9 +87,67 @@ impl From<&Arc<dyn BaseRelation>> for CatalogAndSchema {
     }
 }
 
+/// Stores freshness information for a source
 pub struct MetadataFreshness {
-    pub last_altered: i128,
+    pub last_altered: DateTime<Utc>,
     pub is_view: bool,
+}
+
+impl MetadataFreshness {
+    /// Create from seconds
+    pub fn from_secs(timestamp: i64, is_view: bool) -> AdapterResult<Self> {
+        let last_altered = DateTime::from_timestamp(timestamp, 0).ok_or_else(|| {
+            AdapterError::new(
+                AdapterErrorKind::UnexpectedResult,
+                format!("Invalid timestamp in seconds: {timestamp}"),
+            )
+        })?;
+
+        Ok(Self {
+            last_altered,
+            is_view,
+        })
+    }
+
+    /// Create from milliseconds
+    pub fn from_millis(timestamp: i64, is_view: bool) -> AdapterResult<Self> {
+        let last_altered = DateTime::from_timestamp_millis(timestamp).ok_or_else(|| {
+            AdapterError::new(
+                AdapterErrorKind::UnexpectedResult,
+                format!("Invalid timestamp in milliseconds: {timestamp}"),
+            )
+        })?;
+
+        Ok(Self {
+            last_altered,
+            is_view,
+        })
+    }
+
+    /// Create from microseconds
+    pub fn from_micros(timestamp: i64, is_view: bool) -> AdapterResult<Self> {
+        let last_altered = DateTime::from_timestamp_micros(timestamp).ok_or_else(|| {
+            AdapterError::new(
+                AdapterErrorKind::UnexpectedResult,
+                format!("Invalid timestamp in microseconds: {timestamp}"),
+            )
+        })?;
+
+        Ok(Self {
+            last_altered,
+            is_view,
+        })
+    }
+
+    /// Create from nanoseconds
+    pub fn from_nanos(timestamp: i64, is_view: bool) -> AdapterResult<Self> {
+        let last_altered = DateTime::from_timestamp_nanos(timestamp);
+
+        Ok(Self {
+            last_altered,
+            is_view,
+        })
+    }
 }
 
 /// Allows serializing record batches into maps and Arrow schemas
