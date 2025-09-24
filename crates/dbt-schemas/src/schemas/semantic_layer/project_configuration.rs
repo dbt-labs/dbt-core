@@ -22,17 +22,17 @@ pub struct TimeSpineTableConfiguration {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SemanticVersion {
-    pub major: String,
-    pub minor: String,
-    pub patch: Option<String>,
+    pub major_version: String,
+    pub minor_version: String,
+    pub patch_version: Option<String>,
 }
 
 impl Default for SemanticVersion {
     fn default() -> Self {
         Self {
-            major: "0".to_string(),
-            minor: "0".to_string(),
-            patch: Some("0".to_string()),
+            major_version: "0".to_string(),
+            minor_version: "0".to_string(),
+            patch_version: Some("0".to_string()),
         }
     }
 }
