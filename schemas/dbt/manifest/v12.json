@@ -13,7 +13,7 @@
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.10.0b3"
+          "default": "1.11.0a1"
         },
         "generated_at": {
           "type": "string"
@@ -166,6 +166,18 @@
               "type": "null"
             }
           ]
+        },
+        "run_started_at": {
+          "description": "The timestamp when the run started",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false
@@ -3997,30 +4009,47 @@
                             "type": "object",
                             "title": "ModelBuildAfter",
                             "properties": {
+                              "count": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              },
+                              "period": {
+                                "anyOf": [
+                                  {
+                                    "enum": [
+                                      "minute",
+                                      "hour",
+                                      "day"
+                                    ]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              },
                               "updates_on": {
                                 "enum": [
                                   "all",
                                   "any"
                                 ],
                                 "default": "any"
-                              },
-                              "count": {
-                                "type": "integer",
-                                "default": 0
-                              },
-                              "period": {
-                                "enum": [
-                                  "minute",
-                                  "hour",
-                                  "day"
-                                ],
-                                "default": "hour"
                               }
                             },
                             "additionalProperties": true
                           }
                         },
-                        "additionalProperties": true
+                        "additionalProperties": true,
+                        "required": [
+                          "build_after"
+                        ]
                       },
                       {
                         "type": "null"
@@ -5066,47 +5095,6 @@
                     "required": [
                       "standard_granularity_column"
                     ]
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "default": null
-              },
-              "freshness": {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "title": "ModelFreshness",
-                    "properties": {
-                      "build_after": {
-                        "type": "object",
-                        "title": "ModelBuildAfter",
-                        "properties": {
-                          "updates_on": {
-                            "enum": [
-                              "all",
-                              "any"
-                            ],
-                            "default": "any"
-                          },
-                          "count": {
-                            "type": "integer",
-                            "default": 0
-                          },
-                          "period": {
-                            "enum": [
-                              "minute",
-                              "hour",
-                              "day"
-                            ],
-                            "default": "hour"
-                          }
-                        },
-                        "additionalProperties": true
-                      }
-                    },
-                    "additionalProperties": true
                   },
                   {
                     "type": "null"
@@ -8758,8 +8746,41 @@
                   {
                     "type": "null"
                   }
+                ]
+              },
+              "loaded_at_field": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
                 ],
                 "default": null
+              },
+              "loaded_at_query": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "meta": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             },
             "additionalProperties": true
@@ -10161,9 +10182,244 @@
                           "average"
                         ],
                         "default": "first"
+                      },
+                      "metric": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "title": "MetricInput",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "filter": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "title": "WhereFilterIntersection",
+                                    "properties": {
+                                      "where_filters": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "title": "WhereFilter",
+                                          "properties": {
+                                            "where_sql_template": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "additionalProperties": false,
+                                          "required": [
+                                            "where_sql_template"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "where_filters"
+                                    ]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              },
+                              "alias": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              },
+                              "offset_window": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "title": "MetricTimeWindow",
+                                    "properties": {
+                                      "count": {
+                                        "type": "integer"
+                                      },
+                                      "granularity": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "count",
+                                      "granularity"
+                                    ]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              },
+                              "offset_to_grain": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                              "name"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
                       }
                     },
                     "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "metric_aggregation_params": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "title": "MetricAggregationParams",
+                    "properties": {
+                      "semantic_model": {
+                        "type": "string"
+                      },
+                      "agg": {
+                        "enum": [
+                          "sum",
+                          "min",
+                          "max",
+                          "count_distinct",
+                          "sum_boolean",
+                          "average",
+                          "percentile",
+                          "median",
+                          "count"
+                        ]
+                      },
+                      "agg_params": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "title": "MeasureAggregationParameters",
+                            "properties": {
+                              "percentile": {
+                                "anyOf": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
+                              },
+                              "use_discrete_percentile": {
+                                "type": "boolean",
+                                "default": false
+                              },
+                              "use_approximate_percentile": {
+                                "type": "boolean",
+                                "default": false
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      },
+                      "agg_time_dimension": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      },
+                      "non_additive_dimension": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "title": "NonAdditiveDimension",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "window_choice": {
+                                "enum": [
+                                  "sum",
+                                  "min",
+                                  "max",
+                                  "count_distinct",
+                                  "sum_boolean",
+                                  "average",
+                                  "percentile",
+                                  "median",
+                                  "count"
+                                ]
+                              },
+                              "window_groupings": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": false,
+                            "required": [
+                              "name",
+                              "window_choice",
+                              "window_groupings"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      },
+                      "expr": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "semantic_model",
+                      "agg"
+                    ]
                   },
                   {
                     "type": "null"
@@ -14380,30 +14636,47 @@
                                   "type": "object",
                                   "title": "ModelBuildAfter",
                                   "properties": {
+                                    "count": {
+                                      "anyOf": [
+                                        {
+                                          "type": "integer"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "default": null
+                                    },
+                                    "period": {
+                                      "anyOf": [
+                                        {
+                                          "enum": [
+                                            "minute",
+                                            "hour",
+                                            "day"
+                                          ]
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "default": null
+                                    },
                                     "updates_on": {
                                       "enum": [
                                         "all",
                                         "any"
                                       ],
                                       "default": "any"
-                                    },
-                                    "count": {
-                                      "type": "integer",
-                                      "default": 0
-                                    },
-                                    "period": {
-                                      "enum": [
-                                        "minute",
-                                        "hour",
-                                        "day"
-                                      ],
-                                      "default": "hour"
                                     }
                                   },
                                   "additionalProperties": true
                                 }
                               },
-                              "additionalProperties": true
+                              "additionalProperties": true,
+                              "required": [
+                                "build_after"
+                              ]
                             },
                             {
                               "type": "null"
@@ -15449,47 +15722,6 @@
                           "required": [
                             "standard_granularity_column"
                           ]
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "default": null
-                    },
-                    "freshness": {
-                      "anyOf": [
-                        {
-                          "type": "object",
-                          "title": "ModelFreshness",
-                          "properties": {
-                            "build_after": {
-                              "type": "object",
-                              "title": "ModelBuildAfter",
-                              "properties": {
-                                "updates_on": {
-                                  "enum": [
-                                    "all",
-                                    "any"
-                                  ],
-                                  "default": "any"
-                                },
-                                "count": {
-                                  "type": "integer",
-                                  "default": 0
-                                },
-                                "period": {
-                                  "enum": [
-                                    "minute",
-                                    "hour",
-                                    "day"
-                                  ],
-                                  "default": "hour"
-                                }
-                              },
-                              "additionalProperties": true
-                            }
-                          },
-                          "additionalProperties": true
                         },
                         {
                           "type": "null"
@@ -19132,8 +19364,41 @@
                             {
                               "type": "null"
                             }
+                          ]
+                        },
+                        "loaded_at_field": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
                           ],
                           "default": null
+                        },
+                        "loaded_at_query": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "meta": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
                         }
                       },
                       "additionalProperties": true
@@ -20326,9 +20591,244 @@
                                     "average"
                                   ],
                                   "default": "first"
+                                },
+                                "metric": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "title": "MetricInput",
+                                      "properties": {
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "filter": {
+                                          "anyOf": [
+                                            {
+                                              "type": "object",
+                                              "title": "WhereFilterIntersection",
+                                              "properties": {
+                                                "where_filters": {
+                                                  "type": "array",
+                                                  "items": {
+                                                    "type": "object",
+                                                    "title": "WhereFilter",
+                                                    "properties": {
+                                                      "where_sql_template": {
+                                                        "type": "string"
+                                                      }
+                                                    },
+                                                    "additionalProperties": false,
+                                                    "required": [
+                                                      "where_sql_template"
+                                                    ]
+                                                  }
+                                                }
+                                              },
+                                              "additionalProperties": false,
+                                              "required": [
+                                                "where_filters"
+                                              ]
+                                            },
+                                            {
+                                              "type": "null"
+                                            }
+                                          ],
+                                          "default": null
+                                        },
+                                        "alias": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string"
+                                            },
+                                            {
+                                              "type": "null"
+                                            }
+                                          ],
+                                          "default": null
+                                        },
+                                        "offset_window": {
+                                          "anyOf": [
+                                            {
+                                              "type": "object",
+                                              "title": "MetricTimeWindow",
+                                              "properties": {
+                                                "count": {
+                                                  "type": "integer"
+                                                },
+                                                "granularity": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "additionalProperties": false,
+                                              "required": [
+                                                "count",
+                                                "granularity"
+                                              ]
+                                            },
+                                            {
+                                              "type": "null"
+                                            }
+                                          ],
+                                          "default": null
+                                        },
+                                        "offset_to_grain": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string"
+                                            },
+                                            {
+                                              "type": "null"
+                                            }
+                                          ],
+                                          "default": null
+                                        }
+                                      },
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "name"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
                                 }
                               },
                               "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        },
+                        "metric_aggregation_params": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "title": "MetricAggregationParams",
+                              "properties": {
+                                "semantic_model": {
+                                  "type": "string"
+                                },
+                                "agg": {
+                                  "enum": [
+                                    "sum",
+                                    "min",
+                                    "max",
+                                    "count_distinct",
+                                    "sum_boolean",
+                                    "average",
+                                    "percentile",
+                                    "median",
+                                    "count"
+                                  ]
+                                },
+                                "agg_params": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "title": "MeasureAggregationParameters",
+                                      "properties": {
+                                        "percentile": {
+                                          "anyOf": [
+                                            {
+                                              "type": "number"
+                                            },
+                                            {
+                                              "type": "null"
+                                            }
+                                          ],
+                                          "default": null
+                                        },
+                                        "use_discrete_percentile": {
+                                          "type": "boolean",
+                                          "default": false
+                                        },
+                                        "use_approximate_percentile": {
+                                          "type": "boolean",
+                                          "default": false
+                                        }
+                                      },
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                },
+                                "agg_time_dimension": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                },
+                                "non_additive_dimension": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "title": "NonAdditiveDimension",
+                                      "properties": {
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "window_choice": {
+                                          "enum": [
+                                            "sum",
+                                            "min",
+                                            "max",
+                                            "count_distinct",
+                                            "sum_boolean",
+                                            "average",
+                                            "percentile",
+                                            "median",
+                                            "count"
+                                          ]
+                                        },
+                                        "window_groupings": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        }
+                                      },
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "name",
+                                        "window_choice",
+                                        "window_groupings"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                },
+                                "expr": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null
+                                }
+                              },
+                              "additionalProperties": false,
+                              "required": [
+                                "semantic_model",
+                                "agg"
+                              ]
                             },
                             {
                               "type": "null"
