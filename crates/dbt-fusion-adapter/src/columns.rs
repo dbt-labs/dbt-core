@@ -451,6 +451,24 @@ impl StdColumn {
         name: &str,
         raw_data_type: &str,
     ) -> Result<StdColumn, String> {
+        // We want to pass through numeric parsing for composite types
+        let raw_data_type_trimmed = raw_data_type.trim().to_lowercase();
+        if raw_data_type_trimmed.starts_with("array")
+            || raw_data_type_trimmed.starts_with("object")
+            || raw_data_type_trimmed.starts_with("map")
+            || raw_data_type_trimmed.starts_with("vector")
+        {
+            return Ok(StdColumn {
+                _adapter_type: AdapterType::Snowflake,
+                _nullable: None,
+                _repeated: None,
+                name: name.to_string(),
+                dtype: raw_data_type.to_string(),
+                char_size: None,
+                numeric_precision: None,
+                numeric_scale: None,
+            });
+        }
         // Parse data type using regex pattern ([^(]+)(\([^)]+\))?
         let re = regex::Regex::new(r"([^(]+)(\([^)]+\))?").expect("A valid regex");
         let captures = re
@@ -778,5 +796,55 @@ impl Object for StdColumn {
 impl Into<Value> for StdColumn {
     fn into(self) -> Value {
         Value::from_object(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_try_from_snowflake_raw_data_type_object() {
+        let result = StdColumn::try_from_snowflake_raw_data_type(
+            "test_col",
+            "OBJECT(name VARCHAR, age NUMBER)",
+        );
+        assert!(result.is_ok());
+
+        let column = result.unwrap();
+        assert_eq!(column.name, "test_col");
+        assert_eq!(column.dtype, "OBJECT(name VARCHAR, age NUMBER)");
+        assert_eq!(column._adapter_type, AdapterType::Snowflake);
+        assert_eq!(column.char_size, None);
+        assert_eq!(column.numeric_precision, None);
+        assert_eq!(column.numeric_scale, None);
+    }
+
+    #[test]
+    fn test_try_from_snowflake_raw_data_type_numeric() {
+        let result = StdColumn::try_from_snowflake_raw_data_type("test_col", "NUMERIC(10,2)");
+        assert!(result.is_ok());
+
+        let column = result.unwrap();
+        assert_eq!(column.name, "test_col");
+        assert_eq!(column.dtype, "NUMERIC");
+        assert_eq!(column._adapter_type, AdapterType::Snowflake);
+        assert_eq!(column.char_size, None);
+        assert_eq!(column.numeric_precision, Some(10));
+        assert_eq!(column.numeric_scale, Some(2));
+    }
+
+    #[test]
+    fn test_try_from_snowflake_raw_data_type_numeric_precision_only() {
+        let result = StdColumn::try_from_snowflake_raw_data_type("test_col", "NUMERIC(18)");
+        assert!(result.is_ok());
+
+        let column = result.unwrap();
+        assert_eq!(column.name, "test_col");
+        assert_eq!(column.dtype, "NUMERIC");
+        assert_eq!(column._adapter_type, AdapterType::Snowflake);
+        assert_eq!(column.char_size, Some(18));
+        assert_eq!(column.numeric_precision, None);
+        assert_eq!(column.numeric_scale, None);
     }
 }
