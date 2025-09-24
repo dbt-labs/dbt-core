@@ -212,10 +212,9 @@ pub fn new_arrow_field_with_metadata(
     nullable: bool,
     original_type_text: Option<String>,
     comment: Option<String>,
-    additional_metadata: Option<HashMap<String, String>>,
 ) -> Field {
     let field = Field::new(col_name, data_type, nullable);
-    let mut field_metadata = additional_metadata.unwrap_or_default();
+    let mut field_metadata = HashMap::new();
 
     if let Some(original_type_text) = original_type_text {
         field_metadata.insert(
