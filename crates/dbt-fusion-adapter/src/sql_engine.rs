@@ -364,8 +364,12 @@ impl SqlEngine {
     /// The dialect must be provided by the caller since the mapping from Backend to
     /// AdapterType/Dialect is not always deterministic (e.g., Generic backend,
     /// shared drivers like Postgres/Redshift).
-    pub fn split_statements(&self, sql: &str, dialect: Dialect) -> Vec<String> {
-        self.splitter().split(sql, dialect)
+    pub fn split_and_filter_statements(&self, sql: &str, dialect: Dialect) -> Vec<String> {
+        self.splitter()
+            .split(sql, dialect)
+            .into_iter()
+            .filter(|statement| !self.splitter().is_empty(statement, dialect))
+            .collect()
     }
 
     /// Get the query comment config for this engine
