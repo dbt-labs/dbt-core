@@ -453,7 +453,9 @@ fn extract_sql_resources_from_ast<T: DefaultTo<T>>(
                     sql_resources.push(SqlResource::Test(macro_name.to_string(), span));
                 }
                 MacroKind::Doc => {
-                    sql_resources.push(SqlResource::Doc(macro_name.to_string(), span));
+                    if let Some(Stmt::EmitRaw(emit_raw)) = macro_node.body.first() {
+                        sql_resources.push(SqlResource::Doc(macro_name.to_string(), emit_raw.span));
+                    }
                 }
                 MacroKind::Snapshot => {
                     sql_resources.push(SqlResource::Snapshot(macro_name.to_string(), span));
