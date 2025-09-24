@@ -3,12 +3,12 @@
 use super::to_nanos;
 use crate::{
     ArtifactType, ExecutionPhase, LogRecordInfo, NodeCancelReason, NodeErrorType,
-    NodeMaterialization, NodeOutcome, NodeSkipReason, NodeType, SeverityNumber, SpanEndInfo,
-    SpanLinkInfo, SpanStartInfo, SpanStatus, StatusCode, TelemetryAttributes,
-    TelemetryEventTypeRegistry, TelemetryExportFlags, TelemetryRecord, TelemetryRecordType,
+    NodeMaterialization, NodeOutcome, NodeSkipReason, NodeType, QueryOutcome, SeverityNumber,
+    SpanEndInfo, SpanLinkInfo, SpanStartInfo, SpanStatus, StatusCode, TelemetryAttributes,
+    TelemetryEventTypeRegistry, TelemetryOutputFlags, TelemetryRecord, TelemetryRecordType,
 };
 use arrow::{
-    array::{Array, ArrayRef, ListArray, StructArray},
+    array::{Array, ArrayRef, ListArray, StructArray, new_null_array},
     compute::{CastOptions, cast_with_options},
     datatypes::{DataType, Field, FieldRef, Fields, Schema, TimeUnit},
     record_batch::RecordBatch,
@@ -118,6 +118,13 @@ pub struct ArrowAttributes<'a> {
     // Artifact paths
     pub relative_path: Option<Cow<'a, str>>,
     pub artifact_type: Option<ArtifactType>,
+    // Query fields
+    pub query_id: Option<Cow<'a, str>>,
+    pub query_outcome: Option<QueryOutcome>,
+    pub adapter_type: Option<Cow<'a, str>>,
+    pub query_error_vendor_code: Option<i32>,
+    /// Associated content hash (e.g. can be CAS hash for artifacts stored in CAS).
+    pub content_hash: Option<Cow<'a, str>>,
 }
 
 #[inline]
@@ -418,6 +425,13 @@ fn create_arrow_schema() -> (Vec<FieldRef>, Vec<FieldRef>) {
         // Artifact paths
         large_utf8_field("relative_path", true),
         dict_utf8_field("artifact_type", true),
+        // Query fields
+        large_utf8_field("query_id", true),
+        dict_utf8_field("query_outcome", true),
+        dict_utf8_field("adapter_type", true),
+        Field::new("query_error_vendor_code", DataType::Int32, true),
+        // Content hash (e.g. CAS hash for artifacts stored in CAS)
+        large_utf8_field("content_hash", true),
     ]);
 
     // Top-level fields for ArrowTelemetryRecord
@@ -520,8 +534,8 @@ pub fn serialize_to_arrow(
         .filter(|r| {
             // Only include records with serializable attributes
             r.attributes()
-                .export_flags()
-                .contains(TelemetryExportFlags::EXPORT_PARQUET)
+                .output_flags()
+                .contains(TelemetryOutputFlags::EXPORT_PARQUET)
         })
         .filter_map(|r| {
             ArrowTelemetryRecord::try_from(r)
@@ -627,11 +641,14 @@ pub fn deserialize_from_arrow(
 /// Normalizes incoming `RecordBatch` to make it compatible with the
 /// serde_arrow schema used by telemetry deserialization.
 ///
-/// Columns are matched by name. Missing required columns and incompatible type
-/// conversions are accumulated and reported together. Extra columns present in
-/// the input batch are ignored. String-like columns (plain or dictionary) are
-/// accepted without casting so long as both sides are string compatible; other
-/// mismatches are cast to the expected type when possible.
+/// * Columns are matched by name.
+/// * Missing required columns and incompatible type conversions are accumulated
+///   and reported together.
+/// * Missing nullable columns are filled with nulls.
+/// * Extra columns present in the input batch are ignored.
+/// * String-like columns (plain or dictionary) are accepted without casting
+///   so long as both sides are string compatible.
+/// * other mismatches are cast to the expected type when possible.
 fn normalize_batch(batch: &RecordBatch) -> Result<RecordBatch, Box<dyn std::error::Error>> {
     let serialisable_schema = get_serialisable_schema();
     let batch_schema = batch.schema();
@@ -644,8 +661,17 @@ fn normalize_batch(batch: &RecordBatch) -> Result<RecordBatch, Box<dyn std::erro
         let expected_field = expected_field.as_ref();
         let Some((index, actual_field)) = batch_schema.column_with_name(expected_field.name())
         else {
-            missing_columns.push(expected_field.name().to_string());
-            normalized_columns.push(None);
+            if expected_field.is_nullable() {
+                let array = new_null_array(expected_field.data_type(), batch.num_rows());
+                normalized_columns.push(Some(NormalizedColumn {
+                    field: Arc::new(expected_field.clone()),
+                    array,
+                    metadata_changed: true,
+                }));
+            } else {
+                missing_columns.push(expected_field.name().to_string());
+                normalized_columns.push(None);
+            }
             continue;
         };
 
@@ -770,7 +796,16 @@ fn normalize_struct_column(
             .enumerate()
             .find(|(_, actual_child)| actual_child.name() == expected_child.name())
         else {
-            errors.push(format!("field {child_path}: missing required field"));
+            if expected_child.is_nullable() {
+                child_arrays.push(new_null_array(
+                    expected_child.data_type(),
+                    struct_array.len(),
+                ));
+                child_fields.push(expected_child.clone());
+                needs_rebuild = true;
+            } else {
+                errors.push(format!("field {child_path}: missing required field"));
+            }
             continue;
         };
 
@@ -959,13 +994,21 @@ mod tests {
     use fake::rand::SeedableRng;
     use fake::rand::rngs::StdRng;
     use fake::{Fake, Faker};
+    use parquet::{
+        arrow::{ArrowWriter, arrow_reader::ParquetRecordBatchReaderBuilder},
+        basic::Compression,
+        file::properties::WriterProperties,
+    };
 
     use crate::TelemetryEventRecType;
 
     use super::*;
-    use std::collections::{HashMap, hash_map::DefaultHasher};
     use std::hash::{Hash, Hasher};
     use std::sync::Arc;
+    use std::{
+        collections::{HashMap, HashSet, hash_map::DefaultHasher},
+        rc::Rc,
+    };
 
     // Generate pseudo-random but deterministic values for testing
     fn hash_seed(seed: &str) -> u64 {
@@ -989,8 +1032,8 @@ mod tests {
 
             // Skip variants that are known to not be serialized
             if !attrs
-                .export_flags()
-                .contains(TelemetryExportFlags::EXPORT_PARQUET)
+                .output_flags()
+                .contains(TelemetryOutputFlags::EXPORT_PARQUET)
             {
                 continue;
             }
@@ -1013,7 +1056,7 @@ mod tests {
             span_id,
             parent_span_id: Some(parent_span_id),
             links: None,
-            span_name: attributes.to_string(),
+            span_name: attributes.event_display_name(),
             start_time_unix_nano: SystemTime::UNIX_EPOCH
                 + std::time::Duration::from_nanos(start_time),
             attributes,
@@ -1065,7 +1108,7 @@ mod tests {
             trace_id,
             span_id: Some(span_id),
             event_id: Faker.fake_with_rng(&mut rng),
-            span_name: Some(attributes.to_string()),
+            span_name: Some(attributes.event_display_name()),
             severity_number: Faker.fake_with_rng(&mut rng),
             severity_text: ["ERROR", "WARN", "INFO", "DEBUG"][(hashed_seed % 4) as usize]
                 .to_string(),
@@ -1338,6 +1381,10 @@ mod tests {
                 "attributes_json_payload_non_nullable",
                 batch_with_non_nullable_json_payload(&base_batch),
             ),
+            (
+                "missing_nullable_column",
+                batch_missing_column(&base_batch, "links"),
+            ),
         ];
 
         for (name, variant) in variations {
@@ -1378,7 +1425,7 @@ mod tests {
             });
 
         let batch = serialize_to_arrow(&original_records).unwrap();
-        let deserialized =
+        let mut deserialized =
             deserialize_from_arrow(&batch, TelemetryEventTypeRegistry::public()).unwrap();
 
         // Use PartialEq to compare entire records
@@ -1386,6 +1433,50 @@ mod tests {
             assert_eq!(
                 original, deserialized,
                 "Record roundtrip failed for: {original:?}"
+            );
+        }
+
+        // Now through parquet
+        let mut buffer = Rc::new(Vec::new());
+        {
+            let cursor = std::io::Cursor::new(Rc::get_mut(&mut buffer).unwrap());
+
+            let mut parquet_writer = ArrowWriter::try_new(
+                cursor,
+                arrow::datatypes::Schema::new(get_telemetry_arrow_schema()).into(),
+                Some(
+                    WriterProperties::builder()
+                        .set_compression(Compression::SNAPPY)
+                        .build(),
+                ),
+            )
+            .expect("Failed to create Parquet writer");
+            parquet_writer.write(&batch).expect("Failed to write batch");
+            parquet_writer.close().expect("Failed to close writer");
+        }
+
+        let parquet_reader = ParquetRecordBatchReaderBuilder::try_new(bytes::Bytes::from_owner(
+            Rc::into_inner(buffer).unwrap(),
+        ))
+        .unwrap()
+        .build()
+        .unwrap();
+
+        deserialized.clear();
+        for batch_result in parquet_reader {
+            let records = deserialize_from_arrow(
+                &batch_result.unwrap(),
+                TelemetryEventTypeRegistry::public(),
+            )
+            .unwrap();
+            deserialized.extend(records);
+        }
+
+        // Use PartialEq to compare entire records
+        for (original, deserialized) in original_records.iter().zip(deserialized.iter()) {
+            assert_eq!(
+                original, deserialized,
+                "Record roundtrip via parquet failed for: {original:?}"
             );
         }
     }
@@ -1450,5 +1541,48 @@ mod tests {
                 );
             }
         });
+
+        // Test attributes struct schema has all keys from ArrowAttributes
+        let attributes_field = serialisable_schema
+            .iter()
+            .find(|f| f.name() == "attributes")
+            .expect("Missing attributes field");
+        let DataType::Struct(attribute_fields) = attributes_field.data_type() else {
+            panic!("Attributes field should be a Struct");
+        };
+        let attribute_field_names: HashSet<&str> =
+            attribute_fields.iter().map(|f| f.name().as_str()).collect();
+
+        let fake_attrs = serde_json::to_value(ArrowAttributes::default())
+            .expect("Failed to serialize ArrowAttributes");
+        let expected_field_names = fake_attrs
+            .as_object()
+            .expect("ArrowAttributes should serialize to a JSON object")
+            .keys()
+            .map(|s| s.as_str())
+            .collect::<HashSet<&str>>();
+
+        let missing_fields: Vec<&str> = expected_field_names
+            .difference(&attribute_field_names)
+            .copied()
+            .collect();
+
+        let extra_fields: Vec<&str> = attribute_field_names
+            .difference(&expected_field_names)
+            .copied()
+            .collect();
+
+        let mut err_msg = String::new();
+        if !missing_fields.is_empty() {
+            err_msg.push_str(&format!("Missing fields: {}.\n", missing_fields.join(", ")));
+        }
+        if !extra_fields.is_empty() {
+            err_msg.push_str(&format!("Extra fields: {}.", extra_fields.join(", ")));
+        }
+
+        assert!(
+            err_msg.is_empty(),
+            "Attribute schema vs. struct fields mismatch: {err_msg}"
+        );
     }
 }

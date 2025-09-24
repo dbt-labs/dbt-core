@@ -4,6 +4,8 @@ mod convert;
 pub mod emit;
 mod background_writer;
 pub mod event_info;
+pub mod filter;
+pub mod formatters;
 mod init;
 mod invocation;
 mod layers;

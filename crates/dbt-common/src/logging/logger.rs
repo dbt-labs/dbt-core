@@ -12,7 +12,6 @@ use std::io::{IsTerminal as _, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-const QUERY_LOG_SQL: &str = "query_log.sql";
 const CACHE_LOG_FILE: &str = "beta_cache.log";
 
 /// Predicate to check if a key in a log [Record] is an internal logging key.
@@ -536,35 +535,6 @@ pub fn init_logger(log_config: FsLogConfig) -> FsResult<()> {
     ) as Box<dyn Write + Send>));
     builder = builder.add_logger("file", file, file_config);
 
-    // Add logger of sql queries executed through adapters
-    let query_file_config = LoggerConfig {
-        level_filter: LevelFilter::Debug,
-        format: LogFormat::Text,
-        min_level: None,
-        max_level: None,
-        includes: Some(vec![EXECUTING.to_string()]),
-        excludes: None,
-    };
-    let query_log_path = log_config
-        .file_log_path
-        .parent()
-        .unwrap_or_else(|| {
-            panic!(
-                "Failed to obtain parent from {:?}, invalid log file path specified",
-                log_config.file_log_path
-            )
-        })
-        .join(QUERY_LOG_SQL);
-    let file = Arc::new(Mutex::new(Box::new(
-        std::fs::OpenOptions::new()
-            .create(true)
-            .truncate(true)
-            .write(true)
-            .open(&query_log_path)
-            .unwrap_or_else(|_| panic!("Failed to open log file {query_log_path:?}, do you have sufficient disk space or permissions?")),
-    ) as Box<dyn Write + Send>));
-    builder = builder.add_logger("queries", file, query_file_config);
-
     // Add logger for caching (relation cache)
     let cache_log_config = LoggerConfig {
         level_filter: LevelFilter::Debug,
@@ -631,7 +601,7 @@ mod tests {
             format: LogFormat::Text,
             min_level: None,
             max_level: None,
-            includes: Some(vec![EXECUTING.to_string()]),
+            includes: Some(vec!["fake_target".to_string()]),
             excludes: None,
         };
 
@@ -652,7 +622,7 @@ mod tests {
             format: LogFormat::Text,
             min_level: None,
             max_level: None,
-            includes: Some(vec![EXECUTING.to_string()]),
+            includes: Some(vec!["test_target".to_string()]),
             excludes: None,
         };
 
@@ -664,7 +634,7 @@ mod tests {
         );
         let metadata: Metadata<'_> = MetadataBuilder::new()
             .level(Level::Info)
-            .target(EXECUTING)
+            .target("test_target")
             .build();
         assert!(logger.enabled(&metadata));
     }
@@ -701,7 +671,7 @@ mod tests {
             min_level: None,
             max_level: None,
             includes: None,
-            excludes: Some(vec![EXECUTING.to_string()]),
+            excludes: Some(vec!["test_target".to_string()]),
         };
 
         let logger = Logger::new(
@@ -712,7 +682,7 @@ mod tests {
         );
         let metadata = MetadataBuilder::new()
             .level(Level::Info)
-            .target(EXECUTING)
+            .target("test_target")
             .build();
         assert!(!logger.enabled(&metadata));
     }

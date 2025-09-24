@@ -29,6 +29,9 @@ pub struct FsTraceConfig {
     ///
     /// If Some(), enables corresponding output layer.
     pub(super) otm_parquet_file_path: Option<PathBuf>,
+    /// Fully resolved path to the directory where log-related files
+    /// (e.g. dbt.log, query log) should be written.
+    pub(super) log_path: PathBuf,
     /// Invocation ID. Currently used as trace ID for correlation
     pub(super) invocation_id: uuid::Uuid,
     /// If True, traces will be forwarded to OTLP endpoints, if any
@@ -39,6 +42,8 @@ pub struct FsTraceConfig {
     /// The log format being used. As of today (while old logging infra exists) - this is used to
     /// enable jsonl output on stdout if needed.
     pub(super) log_format: LogFormat,
+    /// If True, enables separate query log file output
+    pub(super) enable_query_log: bool,
 }
 
 impl Default for FsTraceConfig {
@@ -48,10 +53,12 @@ impl Default for FsTraceConfig {
             max_log_verbosity: LevelFilter::INFO,
             otm_file_path: None,
             otm_parquet_file_path: None,
+            log_path: PathBuf::new(),
             invocation_id: uuid::Uuid::new_v4(),
             enable_progress: false,
             export_to_otlp: false,
             log_format: LogFormat::Default,
+            enable_query_log: false,
         }
     }
 }
@@ -104,6 +111,7 @@ impl FsTraceConfig {
     /// * `enable_progress` - If true, enables the progress bar layer (console only)
     /// * `log_format` - The log format being used. As of today (while old logging infra exists) - this is used to
     ///   enable jsonl output on stdout if needed.
+    /// * `enable_query_log` - If true, enables writing a separate query log file
     ///
     /// # Path Resolution
     ///
@@ -131,6 +139,8 @@ impl FsTraceConfig {
     ///     Uuid::new_v4(),
     ///     false, // Don't export to OTLP
     ///     true,  // Enable progress bar
+    ///     LogFormat::Default, // Use default log format
+    ///     true,  // Enable query log
     /// );
     /// ```
     #[allow(clippy::too_many_arguments)]
@@ -146,31 +156,34 @@ impl FsTraceConfig {
         export_to_otlp: bool,
         enable_progress: bool,
         log_format: LogFormat,
+        enable_query_log: bool,
     ) -> Self {
         let (in_dir, out_dir) = calculate_trace_dirs(project_dir, target_path);
+
+        // Resolve log directory path (base directory for auxiliary log files)
+        let log_dir_path = log_path.map_or_else(
+            || in_dir.join(DBT_LOG_DIR_NAME),
+            |log_path| {
+                if log_path.is_relative() {
+                    in_dir.join(log_path)
+                } else {
+                    log_path.clone()
+                }
+            },
+        );
 
         Self {
             package,
             max_log_verbosity,
-            otm_file_path: otm_file_name.map(|file_name| {
-                log_path.map_or_else(
-                    || in_dir.join(DBT_LOG_DIR_NAME).join(file_name),
-                    |log_path| {
-                        if log_path.is_relative() {
-                            // If the path is relative, join it with the current working directory
-                            in_dir.join(log_path).join(file_name)
-                        } else {
-                            log_path.join(file_name)
-                        }
-                    },
-                )
-            }),
+            otm_file_path: otm_file_name.map(|file_name| log_dir_path.join(file_name)),
             otm_parquet_file_path: otm_parquet_file_name
                 .map(|file_name| out_dir.join(DBT_METADATA_DIR_NAME).join(file_name)),
+            log_path: log_dir_path,
             invocation_id,
             enable_progress,
             export_to_otlp,
             log_format,
+            enable_query_log,
         }
     }
 
@@ -205,6 +218,7 @@ impl FsTraceConfig {
             io_args.export_to_otlp,
             io_args.log_format == LogFormat::Default,
             io_args.log_format,
+            true, // Always enable query log for now
         )
     }
 }

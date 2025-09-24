@@ -104,7 +104,7 @@ impl BackgroundWriter {
     }
 
     /// Send data to be written
-    pub fn write_bytes(&self, data: &[u8]) -> FsResult<()> {
+    pub fn write_bytes(&self, data: &[u8], append_newline: bool) -> FsResult<()> {
         if self.shutdown_flag.load(Ordering::Acquire) {
             // Writer thread has shut down
             return err!(
@@ -113,8 +113,13 @@ impl BackgroundWriter {
             );
         }
 
+        let mut data = data.to_vec();
+        if append_newline {
+            data.push(b'\n');
+        }
+
         self.sender
-            .send(TelemetryMessage::Write(data.to_vec()))
+            .send(TelemetryMessage::Write(data))
             .map_err(|_| {
                 // Channel is disconnected, mark as shut down
                 self.shutdown_flag.store(true, Ordering::Release);
@@ -128,7 +133,12 @@ impl BackgroundWriter {
 
 impl SharedWriter for BackgroundWriter {
     fn write(&self, data: &str) -> io::Result<()> {
-        self.write_bytes(data.as_bytes())
+        self.write_bytes(data.as_bytes(), false)
+            .map_err(|e| io::Error::other(e.to_string()))
+    }
+
+    fn writeln(&self, data: &str) -> io::Result<()> {
+        self.write_bytes(data.as_bytes(), true)
             .map_err(|e| io::Error::other(e.to_string()))
     }
 }
@@ -270,8 +280,8 @@ mod tests {
         let (writer, mut handle) = BackgroundWriter::new(Box::new(mock));
 
         // Write two messages
-        assert!(writer.write_bytes(b"message1\n").is_ok());
-        assert!(writer.write_bytes(b"message2\n").is_ok());
+        assert!(writer.write_bytes(b"message1", true).is_ok());
+        assert!(writer.write_bytes(b"message2\n", false).is_ok());
 
         // Shutdown and verify exact buffer contents
         handle.shutdown().unwrap();
@@ -290,9 +300,9 @@ mod tests {
         let (writer, mut handle) = BackgroundWriter::new(Box::new(mock));
 
         // First message should succeed
-        assert!(writer.write_bytes(b"message1\n").is_ok());
+        assert!(writer.write_bytes(b"message1\n", false).is_ok());
         // Second a second message. Write will succeed, but writer thread should fail
-        assert!(writer.write_bytes(b"message2\n").is_ok());
+        assert!(writer.write_bytes(b"message2\n", false).is_ok());
 
         // Lock until we reach count of 1
         {
@@ -316,7 +326,7 @@ mod tests {
         };
 
         // The next write should fail
-        assert!(writer.write_bytes(b"message3\n").is_err());
+        assert!(writer.write_bytes(b"message3\n", false).is_err());
 
         // Shutdown - should return error due to write failure
         let Err(error) = handle.shutdown() else {
@@ -339,7 +349,7 @@ mod tests {
         let (writer, mut handle) = BackgroundWriter::new(Box::new(mock));
 
         // Write will succeed but flush will fail
-        assert!(writer.write_bytes(b"message1\n").is_ok());
+        assert!(writer.write_bytes(b"message1\n", false).is_ok());
 
         // Shutdown - should return error due to write failure
         let Err(error) = handle.shutdown() else {
@@ -350,7 +360,7 @@ mod tests {
         assert!(error.to_string().contains("Mock flush error"));
 
         // After shutdown, writes should fail
-        assert!(writer.write_bytes(b"message2\n").is_err());
+        assert!(writer.write_bytes(b"message2\n", false).is_err());
 
         // First message was written to buffer (before flush failed)
         let buffer_contents = buffer.lock().unwrap();
@@ -363,7 +373,7 @@ mod tests {
         let mock = MockWriter::new();
         let (writer, mut handle) = BackgroundWriter::new(Box::new(mock));
 
-        assert!(writer.write_bytes(b"message1\n").is_ok());
+        assert!(writer.write_bytes(b"message1\n", false).is_ok());
 
         // Multiple shutdowns should be safe
         assert!(handle.shutdown().is_ok());
@@ -377,12 +387,12 @@ mod tests {
         let buffer = mock.buffer.clone();
         let (writer, mut handle) = BackgroundWriter::new(Box::new(mock));
 
-        assert!(writer.write_bytes(b"message1\n").is_ok());
+        assert!(writer.write_bytes(b"message1\n", false).is_ok());
 
         handle.shutdown().unwrap();
 
         // Writes after shutdown should return error
-        assert!(writer.write_bytes(b"after_shutdown\n").is_err());
+        assert!(writer.write_bytes(b"after_shutdown\n", false).is_err());
 
         let buffer_contents = buffer.lock().unwrap();
         let output = String::from_utf8_lossy(&buffer_contents);

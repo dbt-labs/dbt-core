@@ -1,4 +1,3 @@
-use crate::TrackedStatement;
 use crate::auth::Auth;
 use crate::base_adapter::{AdapterFactory, backend_of};
 use crate::config::AdapterConfig;
@@ -8,6 +7,7 @@ use crate::query_comment::{EMPTY_CONFIG, QueryCommentConfig};
 use crate::record_and_replay::{RecordEngine, ReplayEngine};
 use crate::sql_types::{NaiveTypeFormatterImpl, TypeFormatter};
 use crate::stmt_splitter::StmtSplitter;
+use crate::{AdapterResponse, TrackedStatement};
 
 use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::RecordBatch;
@@ -17,7 +17,11 @@ use core::result::Result;
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::{Cancellable, CancellationToken, never_cancels};
 use dbt_common::constants::EXECUTING;
+use dbt_common::create_debug_span;
+use dbt_common::hashing::code_hash;
+use dbt_common::tracing::span_info::record_current_span_status_from_attrs;
 use dbt_frontend_common::dialect::Dialect;
+use dbt_schemas::schemas::telemetry::{QueryExecuted, QueryOutcome};
 use dbt_xdbc::semaphore::Semaphore;
 use dbt_xdbc::{Backend, Connection, Database, QueryCtx, Statement, connection, database, driver};
 use log;
@@ -399,6 +403,16 @@ impl SqlEngine {
         Ok(conn)
     }
 
+    /// Get the adapter type for this engine
+    pub fn adapter_type(&self) -> AdapterType {
+        match self {
+            SqlEngine::Warehouse(actual_engine) => actual_engine.adapter_type(),
+            SqlEngine::Record(record_engine) => record_engine.adapter_type(),
+            SqlEngine::Replay(replay_engine) => replay_engine.adapter_type(),
+            SqlEngine::Mock(adapter_type) => *adapter_type,
+        }
+    }
+
     pub fn backend(&self) -> Backend {
         match self {
             SqlEngine::Warehouse(actual_engine) => actual_engine.auth.backend(),
@@ -502,6 +516,22 @@ impl SqlEngine {
             Ok((schema, batches))
         };
         let _span = span!("SqlEngine::execute");
+
+        let sql = query_ctx.sql().unwrap_or_default();
+        let sql_hash = code_hash(sql.as_ref());
+        let adapter_type = self.adapter_type();
+        let _query_span_guard = create_debug_span!(
+            QueryExecuted::start(
+                sql,
+                sql_hash,
+                adapter_type.as_ref().to_owned(),
+                query_ctx.node_id(),
+                query_ctx.desc()
+            )
+            .into()
+        )
+        .entered();
+
         let (schema, batches) = match do_execute(conn) {
             Ok(res) => res,
             Err(Cancellable::Cancelled) => {
@@ -509,14 +539,49 @@ impl SqlEngine {
                     AdapterErrorKind::Cancelled,
                     "SQL statement execution was cancelled",
                 );
+
+                // TODO: wouldn't it be possible to salvage query_id if at least one batch was produced?
+                record_current_span_status_from_attrs(|attrs| {
+                    if let Some(attrs) = attrs.downcast_mut::<QueryExecuted>() {
+                        // dbt core had different event codes for start and end of a query
+                        attrs.dbt_core_event_code = "E017".to_string();
+                        attrs.set_query_outcome(QueryOutcome::Canceled);
+                    }
+                });
+
                 return Err(e);
             }
-            Err(Cancellable::Error(e)) => return Err(e.into()),
+            Err(Cancellable::Error(e)) => {
+                // TODO: wouldn't it be possible to salvage query_id if at least one batch was produced?
+                record_current_span_status_from_attrs(|attrs| {
+                    if let Some(attrs) = attrs.downcast_mut::<QueryExecuted>() {
+                        // dbt core had different event codes for start and end of a query
+                        attrs.dbt_core_event_code = "E017".to_string();
+                        attrs.set_query_outcome(QueryOutcome::Error);
+                        attrs.query_error_adapter_message =
+                            Some(format!("{:?}: {}", e.status, e.message));
+                        attrs.query_error_vendor_code = Some(e.vendor_code);
+                    }
+                });
+
+                return Err(e.into());
+            }
         };
         let total_batch = concat_batches(&schema, &batches)?;
+
+        record_current_span_status_from_attrs(|attrs| {
+            if let Some(attrs) = attrs.downcast_mut::<QueryExecuted>() {
+                // dbt core had different event codes for start and end of a query
+                attrs.dbt_core_event_code = "E017".to_string();
+                attrs.set_query_outcome(QueryOutcome::Success);
+                attrs.query_id = AdapterResponse::query_id(&total_batch, adapter_type)
+            }
+        });
+
         Ok(total_batch)
     }
 
+    // TODO: kill this when telemtry starts writing dbt.log
     /// Format query context as we want to see it in a log file and log it in query_log
     pub fn log_query_ctx_for_execution(ctx: &QueryCtx) {
         let mut buf = String::new();

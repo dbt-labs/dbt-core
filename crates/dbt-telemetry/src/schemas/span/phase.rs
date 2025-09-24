@@ -1,5 +1,5 @@
 use crate::{
-    SpanStatus, StatusCode, TelemetryExportFlags,
+    SpanStatus, StatusCode, TelemetryOutputFlags,
     attributes::{
         ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryContext,
         TelemetryEventRecType,
@@ -13,9 +13,9 @@ use serde_with::skip_serializing_none;
 
 impl ProtoTelemetryEvent for PhaseExecuted {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
-    const EXPORT_FLAGS: TelemetryExportFlags = TelemetryExportFlags::EXPORT_ALL;
+    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::EXPORT_ALL;
 
-    fn display_name(&self) -> String {
+    fn event_display_name(&self) -> String {
         // Get the all caps phase name without the "EXECUTION_PHASE_" prefix
         let p = self
             .phase()

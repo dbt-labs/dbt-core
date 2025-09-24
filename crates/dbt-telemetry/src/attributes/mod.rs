@@ -11,7 +11,7 @@ mod traits;
 mod wrapper;
 
 pub use context::TelemetryContext;
-pub use export::TelemetryExportFlags;
+pub use export::TelemetryOutputFlags;
 pub use registry::TelemetryEventTypeRegistry;
 pub use traits::{AnyTelemetryEvent, TelemetryEventRecType};
 pub(crate) use traits::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent};

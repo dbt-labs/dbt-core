@@ -46,7 +46,7 @@ impl AdapterResponse {
     }
 
     /// Get the query ID for the response from the batch.
-    fn query_id(batch: &RecordBatch, adapter_type: AdapterType) -> Option<String> {
+    pub(crate) fn query_id(batch: &RecordBatch, adapter_type: AdapterType) -> Option<String> {
         #[allow(clippy::single_match)]
         match adapter_type {
             AdapterType::Snowflake => batch

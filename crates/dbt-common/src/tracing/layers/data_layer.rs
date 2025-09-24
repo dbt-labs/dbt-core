@@ -168,7 +168,7 @@ where
         let record = SpanStartInfo {
             trace_id,
             span_id: global_span_id,
-            span_name: attributes.to_string(),
+            span_name: attributes.event_display_name(),
             parent_span_id: global_parent_span_id,
             links: None, // TODO: implement links from `follows_from`
             start_time_unix_nano: start_time,
@@ -278,7 +278,7 @@ where
         let record = SpanEndInfo {
             trace_id,
             span_id,
-            span_name: attributes.to_string(),
+            span_name: attributes.event_display_name(),
             parent_span_id,
             links: None, // TODO: implement links from `follows_from`
             start_time_unix_nano,

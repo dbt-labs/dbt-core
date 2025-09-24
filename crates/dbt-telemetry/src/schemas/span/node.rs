@@ -1,5 +1,5 @@
 use crate::{
-    SpanStatus, TelemetryExportFlags,
+    SpanStatus, TelemetryOutputFlags,
     attributes::{
         ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryContext,
         TelemetryEventRecType,
@@ -18,9 +18,9 @@ pub use proto_rust::v1::public::events::fusion::node::{
 
 impl ProtoTelemetryEvent for NodeEvaluated {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
-    const EXPORT_FLAGS: TelemetryExportFlags = TelemetryExportFlags::EXPORT_ALL;
+    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
-    fn display_name(&self) -> String {
+    fn event_display_name(&self) -> String {
         format!("Node evaluated ({})", self.unique_id)
     }
 

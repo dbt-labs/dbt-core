@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::thread::{self, JoinHandle};
 
 use dbt_telemetry::{
-    TelemetryExportFlags, TelemetryRecord,
+    TelemetryOutputFlags, TelemetryRecord,
     serialize::arrow::{get_telemetry_arrow_schema, serialize_to_arrow},
 };
 use parquet::{arrow::ArrowWriter, basic::Compression, file::properties::WriterProperties};
@@ -222,12 +222,12 @@ impl TelemetryParquetWriterLayer {
             TelemetryRecord::SpanStart(_) => false,
             TelemetryRecord::SpanEnd(span) => span
                 .attributes
-                .export_flags()
-                .contains(TelemetryExportFlags::EXPORT_PARQUET),
+                .output_flags()
+                .contains(TelemetryOutputFlags::EXPORT_PARQUET),
             TelemetryRecord::LogRecord(log_record) => log_record
                 .attributes
-                .export_flags()
-                .contains(TelemetryExportFlags::EXPORT_PARQUET),
+                .output_flags()
+                .contains(TelemetryOutputFlags::EXPORT_PARQUET),
         }
     }
 }

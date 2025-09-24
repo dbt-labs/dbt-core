@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use dbt_telemetry::create_process_event_data;
+use dbt_telemetry::{QueryExecuted, TelemetryRecordRef, create_process_event_data};
 use tracing::{Subscriber, level_filters::LevelFilter, span};
 
 use tracing_subscriber::{
@@ -13,14 +13,16 @@ use super::{
     background_writer::BackgroundWriter,
     config::FsTraceConfig,
     event_info::store_event_attributes,
+    formatters::query_log::format_query_log_event,
     layers::{
         data_layer::TelemetryDataLayer, jsonl_writer::TelemetryJsonlWriterLayer,
         otlp::OTLPExporterLayer, parquet_writer::TelemetryParquetWriterLayer,
+        pretty_writer::TelemetryPrettyWriterLayer, progress_bar::ProgressBarLayer,
     },
 };
 use crate::{
-    ErrorCode, FsError, FsResult, logging::LogFormat,
-    tracing::layers::progress_bar::ProgressBarLayer,
+    ErrorCode, FsError, FsResult, constants::DBT_DEAFULT_QUERY_LOG_FILE_NAME, logging::LogFormat,
+    tracing::filter::WithOutputFilter,
 };
 
 // We use a global to store a special "process" span Id, that
@@ -283,6 +285,33 @@ where
         None
     };
 
+    // Create query log writer layer (always enabled; internal-only event sink)
+    let query_log_writer_layer = if config.enable_query_log {
+        // Ensure log directory exists
+        crate::stdfs::create_dir_all(&config.log_path)?;
+
+        let file_path = config.log_path.join(DBT_DEAFULT_QUERY_LOG_FILE_NAME);
+
+        // Create or truncate existing file
+        let file = crate::stdfs::File::create(&file_path)?;
+
+        let (writer, handle) = BackgroundWriter::new(file);
+        shutdown_items.push(Box::new(handle));
+        Some(
+            TelemetryPrettyWriterLayer::new(writer, format_query_log_event).with_output_filter(
+                |record, _| match record {
+                    TelemetryRecordRef::SpanEnd(span_end) => span_end
+                        .attributes
+                        .downcast_ref::<QueryExecuted>()
+                        .is_some(),
+                    _ => false,
+                },
+            ),
+        )
+    } else {
+        None
+    };
+
     // Create OTLP layer - if enabled and endpoint is set via env vars
     let maybe_otlp_layer = if config.export_to_otlp
         && let Some(otlp_layer) = OTLPExporterLayer::new_with_http_export()
@@ -302,6 +331,7 @@ where
         .and_then(jsonl_stdout_writer_layer)
         .and_then(parquet_writer_layer)
         .and_then(progress_bar_layer)
+        .and_then(query_log_writer_layer)
         .and_then(maybe_otlp_layer)
         .and_then(extra_layer);
 

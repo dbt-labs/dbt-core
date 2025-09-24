@@ -47,6 +47,9 @@ pub mod v1 {
                 pub mod process {
                     include!("gen/v1.public.events.fusion.process.rs");
                 }
+                pub mod query {
+                    include!("gen/v1.public.events.fusion.query.rs");
+                }
                 pub mod update {
                     include!("gen/v1.public.events.fusion.update.rs");
                 }

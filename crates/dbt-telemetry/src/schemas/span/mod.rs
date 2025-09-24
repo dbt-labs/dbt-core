@@ -6,6 +6,7 @@ pub(crate) mod node;
 pub(crate) mod onboarding;
 pub(crate) mod phase;
 pub(crate) mod process;
+pub(crate) mod query;
 pub(crate) mod update;
 
 // Re-export all schemas from proto_rust directly for the outside world
@@ -16,4 +17,5 @@ pub use node::*;
 pub use onboarding::*;
 pub use phase::*;
 pub use process::*;
+pub use query::*;
 pub use update::*;

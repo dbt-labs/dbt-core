@@ -1,5 +1,5 @@
 use crate::{
-    TelemetryExportFlags,
+    TelemetryOutputFlags,
     attributes::{
         ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryContext,
         TelemetryEventRecType,
@@ -14,9 +14,9 @@ use std::borrow::Cow;
 
 impl ProtoTelemetryEvent for LogMessage {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Log;
-    const EXPORT_FLAGS: TelemetryExportFlags = TelemetryExportFlags::EXPORT_ALL;
+    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
-    fn display_name(&self) -> String {
+    fn event_display_name(&self) -> String {
         format!("LogMessage ({})", self.code())
     }
 

@@ -3,7 +3,7 @@ use tracing::{Subscriber, span};
 use tracing_subscriber::{Layer, layer::Context};
 
 use super::super::{event_info::with_current_thread_log_record, shared_writer::SharedWriter};
-use dbt_telemetry::TelemetryExportFlags;
+use dbt_telemetry::TelemetryOutputFlags;
 
 /// A tracing layer that reads telemetry data from extensions and writes it as JSON.
 ///
@@ -36,8 +36,8 @@ where
             // Honor export flags: only write if JSONL export is enabled
             if !record
                 .attributes
-                .export_flags()
-                .contains(TelemetryExportFlags::EXPORT_JSONL)
+                .output_flags()
+                .contains(TelemetryOutputFlags::EXPORT_JSONL)
             {
                 return;
             }
@@ -62,14 +62,16 @@ where
             // Honor export flags: only write if JSONL export is enabled
             if !record
                 .attributes
-                .export_flags()
-                .contains(TelemetryExportFlags::EXPORT_JSONL)
+                .output_flags()
+                .contains(TelemetryOutputFlags::EXPORT_JSONL)
             {
                 return;
             }
             if let Ok(mut json) = serde_json::to_string(&TelemetryRecordRef::SpanEnd(record)) {
                 json.push('\n');
-                // Currently we silently ignore write errors
+                // Currently we silently ignore write errors. We expect writers to be
+                // smart enough to avoid trying to write after fatal errors and report
+                // them during shutdown.
                 let _ = self.writer.write(json.as_str());
             }
         } else {
@@ -82,15 +84,17 @@ where
             // Honor export flags: only write if JSONL export is enabled
             if !log_record
                 .attributes
-                .export_flags()
-                .contains(TelemetryExportFlags::EXPORT_JSONL)
+                .output_flags()
+                .contains(TelemetryOutputFlags::EXPORT_JSONL)
             {
                 return;
             }
             if let Ok(mut json) = serde_json::to_string(&TelemetryRecordRef::LogRecord(log_record))
             {
                 json.push('\n');
-                // Currently we silently ignore write errors
+                // Currently we silently ignore write errors. We expect writers to be
+                // smart enough to avoid trying to write after fatal errors and report
+                // them during shutdown.
                 let _ = self.writer.write(json.as_str());
             }
         });

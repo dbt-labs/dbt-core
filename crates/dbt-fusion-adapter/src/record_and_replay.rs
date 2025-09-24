@@ -189,6 +189,10 @@ impl RecordEngine {
         self.0.engine.get_config()
     }
 
+    pub(crate) fn adapter_type(&self) -> dbt_common::adapter::AdapterType {
+        self.0.engine.adapter_type()
+    }
+
     pub(crate) fn adapter_factory(&self) -> &dyn AdapterFactory {
         self.0.engine.adapter_factory()
     }

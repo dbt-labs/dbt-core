@@ -8,3 +8,5 @@ pub mod dev;
 pub mod node;
 #[path = "v1_public_events_fusion_phase.rs"]
 pub mod phase;
+#[path = "v1_public_events_fusion_query.rs"]
+pub mod query;

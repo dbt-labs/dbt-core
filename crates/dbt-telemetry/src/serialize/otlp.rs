@@ -18,7 +18,7 @@ use crate::{
 
 /// Exports a [`SpanEndInfo`] telemetry record using the provided OpenTelemetry tracer.
 ///
-/// This function assumes the caller has already checked [`TelemetryExportFlags`] and only
+/// This function assumes the caller has already checked [`TelemetryOutputFlags`] and only
 /// invokes it for records that should be sent to OTLP.
 pub fn export_span(tracer: &SdkTracer, span_record: &SpanEndInfo) {
     let otel_trace_id = span_record.trace_id.into();
@@ -68,7 +68,7 @@ pub fn export_span(tracer: &SdkTracer, span_record: &SpanEndInfo) {
 
 /// Exports a [`LogRecordInfo`] telemetry record using the provided OpenTelemetry logger.
 ///
-/// This function assumes the caller has already checked [`TelemetryExportFlags`] and only
+/// This function assumes the caller has already checked [`TelemetryOutputFlags`] and only
 /// invokes it for records that should be sent to OTLP.
 pub fn export_log(logger: &SdkLogger, log_record: &LogRecordInfo) {
     // Create a new log record and populate it with data from LogRecordInfo
@@ -256,7 +256,7 @@ mod tests {
     use super::*;
     use crate::{
         AnyTelemetryEvent, LogRecordInfo, RecordCodeLocation, SeverityNumber, SpanStatus,
-        TelemetryAttributes, TelemetryEventRecType, TelemetryExportFlags,
+        TelemetryAttributes, TelemetryEventRecType, TelemetryOutputFlags,
     };
 
     #[derive(Debug, Clone)]
@@ -267,7 +267,7 @@ mod tests {
             "v1.internal.events.fusion.test.DummySpan"
         }
 
-        fn display_name(&self) -> String {
+        fn event_display_name(&self) -> String {
             "dummy span".to_string()
         }
 
@@ -275,8 +275,8 @@ mod tests {
             TelemetryEventRecType::Span
         }
 
-        fn export_flags(&self) -> TelemetryExportFlags {
-            TelemetryExportFlags::EXPORT_OTLP
+        fn output_flags(&self) -> TelemetryOutputFlags {
+            TelemetryOutputFlags::EXPORT_OTLP
         }
 
         fn event_eq(&self, other: &dyn AnyTelemetryEvent) -> bool {
@@ -325,7 +325,7 @@ mod tests {
             "v1.internal.events.fusion.test.DummyLog"
         }
 
-        fn display_name(&self) -> String {
+        fn event_display_name(&self) -> String {
             "dummy log".to_string()
         }
 
@@ -333,8 +333,8 @@ mod tests {
             TelemetryEventRecType::Log
         }
 
-        fn export_flags(&self) -> TelemetryExportFlags {
-            TelemetryExportFlags::EXPORT_OTLP
+        fn output_flags(&self) -> TelemetryOutputFlags {
+            TelemetryOutputFlags::EXPORT_OTLP
         }
 
         fn event_eq(&self, other: &dyn AnyTelemetryEvent) -> bool {

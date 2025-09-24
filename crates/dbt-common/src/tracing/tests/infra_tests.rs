@@ -10,11 +10,12 @@ use dbt_telemetry::{
 };
 use std::collections::BTreeMap;
 use std::panic::Location;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tracing::Subscriber;
 use tracing_subscriber::{Layer, layer::Context};
 
-use super::infra::TestLayer;
+use super::mocks::TestLayer;
 
 #[test]
 fn test_emit_event() {
@@ -37,6 +38,8 @@ fn test_emit_event() {
             enable_progress: false,
             export_to_otlp: false,
             log_format: LogFormat::Default,
+            log_path: PathBuf::new(),
+            enable_query_log: false,
         },
         test_layer,
     )
@@ -147,6 +150,8 @@ fn test_tracing_with_custom_layer() {
             enable_progress: false,
             export_to_otlp: false,
             log_format: LogFormat::Default,
+            log_path: PathBuf::new(),
+            enable_query_log: false,
         },
         test_layer,
     )
@@ -382,6 +387,8 @@ fn test_tracing_log_record_poisoning() {
             enable_progress: false,
             export_to_otlp: false,
             log_format: LogFormat::Default,
+            log_path: PathBuf::new(),
+            enable_query_log: false,
         },
         test_layer,
     )
@@ -451,6 +458,8 @@ fn test_emit_macros() {
             enable_progress: false,
             export_to_otlp: false,
             log_format: LogFormat::Default,
+            log_path: PathBuf::new(),
+            enable_query_log: false,
         },
         test_layer,
     )

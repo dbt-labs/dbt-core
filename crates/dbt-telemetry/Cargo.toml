@@ -42,6 +42,9 @@ fake = { workspace = true, optional = true }
 
 [dev-dependencies]
 fake = { workspace = true }
+# Used for round-trip testing of serialization
+bytes = { workspace = true }
+parquet = { workspace = true }
 # Enable test-only helpers from proto-rust to enumerate message types
 proto-rust = { workspace = true, features = ["test-utils"] }
 

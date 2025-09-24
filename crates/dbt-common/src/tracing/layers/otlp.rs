@@ -3,7 +3,7 @@ use crate::constants::DBT_FUSION;
 use crate::{ErrorCode, FsResult};
 
 use dbt_telemetry::serialize::otlp::{export_log, export_span};
-use dbt_telemetry::{SpanEndInfo, TelemetryExportFlags};
+use dbt_telemetry::{SpanEndInfo, TelemetryOutputFlags};
 
 use opentelemetry::{KeyValue, global, logs::LoggerProvider, trace::TracerProvider};
 use opentelemetry_otlp::WithExportConfig;
@@ -167,8 +167,8 @@ where
         // Honor export flags: only export if OTLP export is enabled
         if !span_data
             .attributes
-            .export_flags()
-            .contains(TelemetryExportFlags::EXPORT_OTLP)
+            .output_flags()
+            .contains(TelemetryOutputFlags::EXPORT_OTLP)
         {
             return;
         }
@@ -182,8 +182,8 @@ where
             // Honor export flags: only export if OTLP export is enabled
             if !log_record
                 .attributes
-                .export_flags()
-                .contains(TelemetryExportFlags::EXPORT_OTLP)
+                .output_flags()
+                .contains(TelemetryOutputFlags::EXPORT_OTLP)
             {
                 return;
             }

@@ -6,13 +6,10 @@ use schemars::{
     schema::{InstanceType, ObjectValidation, Schema, SchemaObject},
 };
 use serde::Serialize;
-use std::{
-    borrow::Cow,
-    fmt::{self, Debug, Display},
-};
+use std::{borrow::Cow, fmt::Debug};
 
 use super::traits::{AnyTelemetryEvent, TelemetryEventRecType};
-use crate::{SpanStatus, TelemetryExportFlags};
+use crate::{SpanStatus, TelemetryOutputFlags};
 
 /// Wrapper type that holds a boxed trait object for telemetry event data.
 ///
@@ -53,8 +50,8 @@ impl TelemetryAttributes {
     ///
     /// This is used for span naming and display purposes and may use
     /// instance data to generate a more descriptive name.
-    pub fn display_name(&self) -> String {
-        self.inner.display_name()
+    pub fn event_display_name(&self) -> String {
+        self.inner.event_display_name()
     }
 
     /// Returns the status that should be associated with a span created for this event,
@@ -75,9 +72,9 @@ impl TelemetryAttributes {
         self.inner.record_category()
     }
 
-    /// Returns export flags for this event indicating where it should be exported.
-    pub fn export_flags(&self) -> TelemetryExportFlags {
-        self.inner.export_flags()
+    /// Returns flags that determine where a telemetry event should be exported and/or output.
+    pub fn output_flags(&self) -> TelemetryOutputFlags {
+        self.inner.output_flags()
     }
 
     /// Returns true if this event MAY contain sensitive data that should be scrubbed
@@ -105,12 +102,6 @@ impl TelemetryAttributes {
     /// Attempt to downcast the inner attribute to a concrete type (mutable).
     pub fn downcast_mut<T: AnyTelemetryEvent + 'static>(&mut self) -> Option<&mut T> {
         self.inner.as_any_mut().downcast_mut::<T>()
-    }
-}
-
-impl Display for TelemetryAttributes {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.inner.display_name())
     }
 }
 

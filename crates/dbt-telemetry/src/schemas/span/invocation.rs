@@ -1,5 +1,5 @@
 use crate::{
-    TelemetryExportFlags,
+    TelemetryOutputFlags,
     attributes::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType},
     serialize::arrow::ArrowAttributes,
 };
@@ -10,9 +10,9 @@ pub use proto_rust::v1::public::events::fusion::process::Process;
 
 impl ProtoTelemetryEvent for Invocation {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
-    const EXPORT_FLAGS: TelemetryExportFlags = TelemetryExportFlags::EXPORT_ALL;
+    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::EXPORT_ALL;
 
-    fn display_name(&self) -> String {
+    fn event_display_name(&self) -> String {
         format!(
             "{} invocation ({})",
             self.process_info

@@ -6,8 +6,8 @@ use crate::tracing::{
     init::{TelemetryHandle, create_tracing_subcriber_with_layer},
 };
 
-use super::events::{MockDynLogEvent, MockDynSpanEvent};
-use dbt_telemetry::TelemetryExportFlags;
+use super::mocks::{MockDynLogEvent, MockDynSpanEvent};
+use dbt_telemetry::TelemetryOutputFlags;
 use tracing_subscriber::{EnvFilter, Layer, Registry, layer::Layered};
 
 #[test]
@@ -32,6 +32,8 @@ fn test_tracing_jsonl() {
             enable_progress: false,
             export_to_otlp: false,
             log_format: LogFormat::Default,
+            log_path: temp_dir,
+            enable_query_log: false,
         },
         None::<Box<dyn Layer<Layered<EnvFilter, Registry>> + Send + Sync>>,
     )
@@ -188,7 +190,7 @@ fn test_tracing_jsonl() {
 }
 
 #[test]
-fn test_jsonl_dynamic_export_flags_filtering() {
+fn test_jsonl_dynamic_output_flags_filtering() {
     let invocation_id = uuid::Uuid::new_v4();
     let temp_dir = std::env::temp_dir();
     let temp_file_path = temp_dir.join("test_jsonl_dyn_filtering.jsonl");
@@ -203,6 +205,8 @@ fn test_jsonl_dynamic_export_flags_filtering() {
             enable_progress: false,
             export_to_otlp: false,
             log_format: LogFormat::Default,
+            log_path: temp_dir,
+            enable_query_log: false,
         },
         None::<Box<dyn Layer<Layered<EnvFilter, Registry>> + Send + Sync>>,
     )
@@ -215,7 +219,7 @@ fn test_jsonl_dynamic_export_flags_filtering() {
         let exportable_span = create_root_info_span!(
             MockDynSpanEvent {
                 name: "exportable".to_string(),
-                flags: TelemetryExportFlags::EXPORT_JSONL,
+                flags: TelemetryOutputFlags::EXPORT_JSONL,
                 ..Default::default()
             }
             .into()
@@ -224,7 +228,7 @@ fn test_jsonl_dynamic_export_flags_filtering() {
             emit_tracing_event!(
                 MockDynLogEvent {
                     code: 1,
-                    flags: TelemetryExportFlags::EXPORT_JSONL,
+                    flags: TelemetryOutputFlags::EXPORT_JSONL,
                     ..Default::default()
                 }
                 .into(),
@@ -233,7 +237,7 @@ fn test_jsonl_dynamic_export_flags_filtering() {
             emit_tracing_event!(
                 MockDynLogEvent {
                     code: 2,
-                    flags: TelemetryExportFlags::EXPORT_PARQUET,
+                    flags: TelemetryOutputFlags::EXPORT_PARQUET,
                     ..Default::default()
                 }
                 .into(),
@@ -244,7 +248,7 @@ fn test_jsonl_dynamic_export_flags_filtering() {
         let _non_exportable_span = create_root_info_span!(
             MockDynSpanEvent {
                 name: "non_exportable".to_string(),
-                flags: TelemetryExportFlags::EXPORT_PARQUET,
+                flags: TelemetryOutputFlags::EXPORT_PARQUET,
                 ..Default::default()
             }
             .into()

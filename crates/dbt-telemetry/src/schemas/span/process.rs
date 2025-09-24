@@ -1,5 +1,5 @@
 use crate::{
-    TelemetryExportFlags,
+    TelemetryOutputFlags,
     attributes::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType},
     serialize::arrow::ArrowAttributes,
 };
@@ -19,9 +19,9 @@ pub fn create_process_event_data(package: &str) -> Process {
 
 impl ProtoTelemetryEvent for Process {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
-    const EXPORT_FLAGS: TelemetryExportFlags = TelemetryExportFlags::EXPORT_ALL;
+    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::EXPORT_ALL;
 
-    fn display_name(&self) -> String {
+    fn event_display_name(&self) -> String {
         format!(
             "{} process ({}-{})",
             self.package, self.host_arch, self.host_os

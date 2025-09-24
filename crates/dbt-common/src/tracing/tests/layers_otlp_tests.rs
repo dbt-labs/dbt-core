@@ -7,8 +7,8 @@ use crate::tracing::{
     layers::otlp::OTLPExporterLayer,
 };
 
-use super::events::{MockDynLogEvent, MockDynSpanEvent};
-use dbt_telemetry::TelemetryExportFlags;
+use super::mocks::{MockDynLogEvent, MockDynSpanEvent};
+use dbt_telemetry::TelemetryOutputFlags;
 use opentelemetry::Value as OtelValue;
 use opentelemetry_sdk as sdk;
 use tracing_subscriber::{EnvFilter, Registry, layer::Layered};
@@ -103,6 +103,8 @@ fn test_otlp_layer_exports_only_marked_records() {
             enable_progress: false,
             export_to_otlp: false,
             log_format: LogFormat::Default,
+            log_path: Default::default(),
+            enable_query_log: false,
         },
         otlp_layer,
     )
@@ -119,7 +121,7 @@ fn test_otlp_layer_exports_only_marked_records() {
         let exportable_span = create_root_info_span!(
             MockDynSpanEvent {
                 name: "exportable".to_string(),
-                flags: TelemetryExportFlags::EXPORT_OTLP,
+                flags: TelemetryOutputFlags::EXPORT_OTLP,
                 ..Default::default()
             }
             .into()
@@ -129,7 +131,7 @@ fn test_otlp_layer_exports_only_marked_records() {
             emit_tracing_event!(
                 MockDynLogEvent {
                     code: 1,
-                    flags: TelemetryExportFlags::EXPORT_OTLP,
+                    flags: TelemetryOutputFlags::EXPORT_OTLP,
                     ..Default::default()
                 }
                 .into(),
@@ -138,7 +140,7 @@ fn test_otlp_layer_exports_only_marked_records() {
             emit_tracing_event!(
                 MockDynLogEvent {
                     code: 2,
-                    flags: TelemetryExportFlags::EXPORT_JSONL, // Not OTLP-exportable
+                    flags: TelemetryOutputFlags::EXPORT_JSONL, // Not OTLP-exportable
                     ..Default::default()
                 }
                 .into(),
@@ -150,7 +152,7 @@ fn test_otlp_layer_exports_only_marked_records() {
         let _non_exportable_span = create_root_info_span!(
             MockDynSpanEvent {
                 name: "non_exportable".to_string(),
-                flags: TelemetryExportFlags::EXPORT_JSONL, // Not OTLP-exportable
+                flags: TelemetryOutputFlags::EXPORT_JSONL, // Not OTLP-exportable
                 ..Default::default()
             }
             .into()

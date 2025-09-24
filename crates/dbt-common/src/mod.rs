@@ -6,6 +6,7 @@ pub mod atomic;
 pub mod cancellation;
 pub mod constants;
 pub mod error_counter;
+pub mod hashing;
 pub mod io_utils;
 pub mod node_selector;
 pub mod pretty_string;

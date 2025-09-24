@@ -35,6 +35,8 @@ fn test_tracing_parquet_filtering() {
             enable_progress: false,
             export_to_otlp: false,
             log_format: LogFormat::Default,
+            log_path: temp_dir,
+            enable_query_log: false,
         },
         None::<Box<dyn Layer<Layered<EnvFilter, Registry>> + Send + Sync>>,
     )

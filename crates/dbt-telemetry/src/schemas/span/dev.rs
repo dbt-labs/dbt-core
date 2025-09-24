@@ -1,5 +1,5 @@
 use crate::{
-    AnyTelemetryEvent, TelemetryExportFlags,
+    AnyTelemetryEvent, TelemetryOutputFlags,
     attributes::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType},
     schemas::RecordCodeLocation,
     serialize::arrow::ArrowAttributes,
@@ -10,15 +10,18 @@ use std::borrow::Cow;
 
 impl ProtoTelemetryEvent for CallTrace {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
-    const EXPORT_FLAGS: TelemetryExportFlags = TelemetryExportFlags::EXPORT_ALL;
+    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::EXPORT_ALL;
 
-    fn display_name(&self) -> String {
-        format!(
-            "Dev trace: {} ({}:{})",
-            self.name,
-            self.file.as_deref().unwrap_or("<unknown>"),
-            self.line.unwrap_or(0)
-        )
+    fn event_display_name(&self) -> String {
+        if let Some(file) = &self.file {
+            return format!(
+                "Dev trace: {} ({}:{})",
+                self.name,
+                file,
+                self.line.unwrap_or(0)
+            );
+        }
+        format!("Dev trace: {}", self.name)
     }
 
     fn code_location(&self) -> Option<RecordCodeLocation> {
@@ -108,9 +111,9 @@ impl ArrowSerializableTelemetryEvent for CallTrace {
 
 impl ProtoTelemetryEvent for Unknown {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
-    const EXPORT_FLAGS: TelemetryExportFlags = TelemetryExportFlags::EXPORT_ALL;
+    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::EXPORT_ALL;
 
-    fn display_name(&self) -> String {
+    fn event_display_name(&self) -> String {
         format!("Unknown span: {} ({}:{})", self.name, self.file, self.line)
     }
 

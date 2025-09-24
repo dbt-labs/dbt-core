@@ -5,7 +5,7 @@ use serde_json::Value as JsonValue;
 use std::{any::Any, fmt::Debug};
 
 use crate::{
-    SpanStatus, TelemetryExportFlags, attributes::TelemetryContext, schemas::RecordCodeLocation,
+    SpanStatus, TelemetryOutputFlags, attributes::TelemetryContext, schemas::RecordCodeLocation,
     serialize::arrow::ArrowAttributes,
 };
 
@@ -35,7 +35,7 @@ pub trait AnyTelemetryEvent: Debug + Send + Sync + Any {
     ///
     /// This is used for span naming and display purposes and may use
     /// instance data to generate a more descriptive name.
-    fn display_name(&self) -> String;
+    fn event_display_name(&self) -> String;
 
     /// Returns the status that should be associated with a span created for this event,
     /// if it can be determined from the event data.
@@ -55,8 +55,8 @@ pub trait AnyTelemetryEvent: Debug + Send + Sync + Any {
     /// Returns the category of record (envelope) this event should be recorded in.
     fn record_category(&self) -> TelemetryEventRecType;
 
-    /// Returns export flags for this event indicating where it should be exported.
-    fn export_flags(&self) -> TelemetryExportFlags;
+    /// Returns flags that determine where a telemetry event should be exported and/or output.
+    fn output_flags(&self) -> TelemetryOutputFlags;
 
     /// Equality check for trait objects. Used to implement PartialEq for boxed trait objects.
     fn event_eq(&self, other: &dyn AnyTelemetryEvent) -> bool;
@@ -136,13 +136,13 @@ pub trait AnyTelemetryEvent: Debug + Send + Sync + Any {
     /// Convert this event to Arrow attributes if supported.
     ///
     /// Default behavior:
-    /// - If `EXPORT_PARQUET` flag is NOT set in `export_flags()`, returns `None` (not exported to Arrow/Parquet).
+    /// - If `EXPORT_PARQUET` flag is NOT set in `output_flags()`, returns `None` (not exported to Arrow/Parquet).
     /// - If `EXPORT_PARQUET` flag IS set but the event does not override this method, this panics.
     ///   Types that are exported to Parquet MUST override and provide a concrete implementation.
     fn to_arrow(&self) -> Option<ArrowAttributes> {
         if self
-            .export_flags()
-            .contains(TelemetryExportFlags::EXPORT_PARQUET)
+            .output_flags()
+            .contains(TelemetryOutputFlags::EXPORT_PARQUET)
         {
             panic!(
                 "Missing Arrow serializer for event type \"{}\" (EXPORT_PARQUET set)",
@@ -188,14 +188,14 @@ pub(crate) trait ProtoTelemetryEvent:
     /// Category of record (envelope) this event should be recorded in.
     const RECORD_CATEGORY: TelemetryEventRecType;
 
-    /// Export flags for this event indicating where it should be exported.
-    const EXPORT_FLAGS: TelemetryExportFlags;
+    /// Flags that determine where a telemetry event should be exported and/or output.
+    const OUTPUT_FLAGS: TelemetryOutputFlags;
 
     /// Returns a human-readable name/description for this event.
     ///
     /// This is used for span naming and display purposes and may use
     /// instance data to generate a more descriptive name.
-    fn display_name(&self) -> String;
+    fn event_display_name(&self) -> String;
 
     /// Returns the status that should be associated with a span created for this event,
     /// if it can be determined from the event data.
@@ -272,8 +272,8 @@ impl<T: ProtoTelemetryEvent> AnyTelemetryEvent for T {
                 .is_some_and(|other| self == other)
     }
 
-    fn display_name(&self) -> String {
-        ProtoTelemetryEvent::display_name(self)
+    fn event_display_name(&self) -> String {
+        ProtoTelemetryEvent::event_display_name(self)
     }
 
     fn get_span_status(&self) -> Option<SpanStatus> {
@@ -284,8 +284,8 @@ impl<T: ProtoTelemetryEvent> AnyTelemetryEvent for T {
         T::RECORD_CATEGORY
     }
 
-    fn export_flags(&self) -> TelemetryExportFlags {
-        T::EXPORT_FLAGS
+    fn output_flags(&self) -> TelemetryOutputFlags {
+        T::OUTPUT_FLAGS
     }
 
     fn code_location(&self) -> Option<RecordCodeLocation> {

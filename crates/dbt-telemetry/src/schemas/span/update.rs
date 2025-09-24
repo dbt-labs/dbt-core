@@ -1,4 +1,4 @@
-use crate::{AnyTelemetryEvent, TelemetryExportFlags, attributes::TelemetryEventRecType};
+use crate::{AnyTelemetryEvent, TelemetryOutputFlags, attributes::TelemetryEventRecType};
 use proto_rust::StaticName;
 pub use proto_rust::v1::public::events::fusion::update::PackageUpdate;
 use serde_json::Value as JsonValue;
@@ -21,7 +21,7 @@ impl AnyTelemetryEvent for PackageUpdate {
                 .is_some_and(|other| self == other)
     }
 
-    fn display_name(&self) -> String {
+    fn event_display_name(&self) -> String {
         format!("Update: {} -> {}", self.package, self.version)
     }
 
@@ -29,8 +29,8 @@ impl AnyTelemetryEvent for PackageUpdate {
         TelemetryEventRecType::Span
     }
 
-    fn export_flags(&self) -> TelemetryExportFlags {
-        TelemetryExportFlags::EXPORT_JSONL_AND_OTLP
+    fn output_flags(&self) -> TelemetryOutputFlags {
+        TelemetryOutputFlags::EXPORT_JSONL_AND_OTLP
     }
 
     fn has_sensitive_data(&self) -> bool {
