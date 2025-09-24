@@ -577,9 +577,16 @@ pub async fn load_inner(
 
 /// outputs the timestamp that this run started
 fn run_started_at() -> DateTime<Tz> {
-    let utc_now = Utc::now();
-    let tz_now: DateTime<Tz> = utc_now.with_timezone(&Tz::UTC);
-    tz_now
+    // check if we have env var DBT_RUN_STARTED_AT
+    if let Ok(run_started_at) = std::env::var("DBT_RUN_STARTED_AT") {
+        DateTime::parse_from_rfc3339(&run_started_at)
+            .unwrap()
+            .with_timezone(&Tz::UTC)
+    } else {
+        let utc_now = Utc::now();
+        let tz_now: DateTime<Tz> = utc_now.with_timezone(&Tz::UTC);
+        tz_now
+    }
 }
 
 fn should_exclude_path(kind: &ResourcePathKind, path: &Path) -> bool {
