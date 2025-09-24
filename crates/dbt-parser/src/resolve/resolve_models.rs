@@ -187,16 +187,24 @@ pub async fn resolve_models(
             model_config.materialized = Some(DbtMaterialization::View);
         }
         // Set to Inline if this is the inline file
-        if let Some(inline_file) = &package.inline_file {
-            if inline_file == &dbt_asset {
-                model_config.materialized = Some(DbtMaterialization::Inline);
-            }
+        let is_inline_file = package
+            .inline_file
+            .as_ref()
+            .map(|inline_file| inline_file == &dbt_asset)
+            .unwrap_or(false);
+        if is_inline_file {
+            model_config.materialized = Some(DbtMaterialization::Inline);
         }
 
-        let model_name = models_properties_sans_semantics
+        let mut model_name = models_properties_sans_semantics
             .get(ref_name)
             .map(|mpe| mpe.name.clone())
             .unwrap_or_else(|| ref_name.to_owned());
+
+        if is_inline_file {
+            // Inline nodes should present a stable name for logging and manifest output
+            model_name = "inline".to_owned();
+        }
 
         let maybe_version = models_properties_sans_semantics
             .get(ref_name)
