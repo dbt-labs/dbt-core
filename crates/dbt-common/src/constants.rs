@@ -6,6 +6,10 @@ pub const DBT_SA_CLI: &str = "dbt-sa-cli";
 // ----------------------------------------------------------------------------------------------
 // dbt inputs
 pub const DBT_MIN_SUPPORTED_VERSION: &str = "1.8.0";
+// (versusfacit): Load state from catalogs.yml. We only permit a single
+// catalogs.yml. A possible future direction will be to move this to
+// ~/.dbt directory. This depends on read catalog and Xplat decisions.
+pub const DBT_CATALOGS_YML: &str = "catalogs.yml";
 pub const DBT_PROJECT_YML: &str = "dbt_project.yml";
 pub const DBT_PROFILES_YML: &str = "profiles.yml";
 

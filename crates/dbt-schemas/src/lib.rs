@@ -10,7 +10,14 @@ pub mod stats;
 pub mod schemas {
     pub mod common;
     pub mod data_tests;
+    pub mod dbt_catalogs;
     pub mod dbt_column;
+
+    pub use dbt_catalogs::{
+        AdapterPropsView, BuiltInPropsView, CatalogSpecView, CatalogType, DbtCatalogsView,
+        RestPropsView, SerializationPolicy, TableFormat, TargetFileSize, WriteIntegrationView,
+        validate_catalogs,
+    };
     pub mod macros;
     pub mod packages;
     mod prev_state;

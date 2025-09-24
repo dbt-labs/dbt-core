@@ -1,9 +1,9 @@
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::constants::DBT_DEPENDENCIES_YML;
-use dbt_common::constants::DBT_PACKAGES_LOCK_FILE;
-use dbt_common::constants::DBT_PACKAGES_YML;
+use dbt_common::constants::{
+    DBT_CATALOGS_YML, DBT_DEPENDENCIES_YML, DBT_PACKAGES_LOCK_FILE, DBT_PACKAGES_YML,
+};
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::show_warning;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
@@ -20,10 +20,10 @@ use serde::Deserialize;
 use std::collections::BTreeSet;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsStr;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use std::time::SystemTime;
+use std::{fs, io};
 
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
 
@@ -42,6 +42,7 @@ use dbt_schemas::state::{DbtAsset, DbtPackage, DbtState, DbtVars, ResourcePathKi
 use crate::args::LoadArgs;
 use crate::dbt_project_yml_loader::load_project_yml;
 use crate::download_publication::download_publication_artifacts;
+use crate::load_catalogs;
 use crate::utils::{collect_file_info, identify_package_dependencies};
 use crate::{
     load_internal_packages, load_packages, load_profiles, load_vars, persist_internal_packages,
@@ -82,6 +83,18 @@ pub async fn load(
             fs::write(&gitignore_path, updated_content)?;
         }
     }
+
+    // initialize loader into a crate accessible static location
+    let catalogs_yml_path = arg.io.in_dir.join(DBT_CATALOGS_YML);
+    match fs::read_to_string(&catalogs_yml_path) {
+        Ok(text) => load_catalogs(&text, &catalogs_yml_path),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(fs_err!(
+            code => ErrorCode::InvalidConfig,
+            loc  => PathBuf::from(&catalogs_yml_path),
+            "Failed to read '{}': {}", DBT_CATALOGS_YML, e
+        )),
+    }?;
 
     let final_threads = if iarg.num_threads.is_none() {
         if let Some(threads) = dbt_profile.db_config.get_threads() {
@@ -803,6 +816,7 @@ pub fn get_session_relative_file_paths() -> Vec<String> {
         DBT_DEPENDENCIES_YML.into(),
         DBT_PACKAGES_YML.into(),
         DBT_PACKAGES_LOCK_FILE.into(),
+        DBT_CATALOGS_YML.into(),
     ]
 }
 

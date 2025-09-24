@@ -26,6 +26,7 @@ flate2 = { workspace = true }
 ignore = { workspace = true }
 log = { workspace = true }
 minijinja = { workspace = true }
+once_cell = { workspace = true }
 pathdiff = { workspace = true }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }
