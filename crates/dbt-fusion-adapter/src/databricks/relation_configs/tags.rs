@@ -1,44 +1,39 @@
 use crate::databricks::relation_configs::base::{
     DatabricksComponentConfig, DatabricksComponentProcessor,
-    DatabricksComponentProcessorProperties, DatabricksRelationResults, get_config_value,
+    DatabricksComponentProcessorProperties, DatabricksRelationMetadataKey,
+    DatabricksRelationResults,
 };
 
 use crate::{
     AdapterResult,
     errors::{AdapterError, AdapterErrorKind},
 };
+use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
-use dbt_schemas::schemas::serde::yml_value_to_string;
+use dbt_serde_yaml::Value as YmlValue;
+use minijinja::Value;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct TagsConfig {
     pub set_tags: BTreeMap<String, String>,
-    pub unset_tags: Vec<String>,
 }
 
 impl TagsConfig {
-    pub fn new(set_tags: BTreeMap<String, String>, unset_tags: Vec<String>) -> Self {
-        Self {
-            set_tags,
-            unset_tags,
-        }
+    // Tags are now set only - in accordance with core behavior
+    // https://github.com/databricks/dbt-databricks/issues/1069
+    pub fn new(set_tags: BTreeMap<String, String>) -> Self {
+        Self { set_tags }
     }
 
     pub fn get_diff(&self, other: &Self) -> Option<Self> {
-        let mut to_unset = Vec::new();
-        for k in other.set_tags.keys() {
-            if !self.set_tags.contains_key(k) {
-                to_unset.push(k.clone());
+        for (k, v) in &self.set_tags {
+            if other.set_tags.get(k) != Some(v) {
+                return Some(Self::new(self.set_tags.clone()));
             }
         }
-
-        if self.set_tags != other.set_tags || !to_unset.is_empty() {
-            Some(Self::new(self.set_tags.clone(), to_unset))
-        } else {
-            None
-        }
+        None
     }
 }
 
@@ -55,50 +50,101 @@ impl DatabricksComponentProcessorProperties for TagsProcessor {
 impl DatabricksComponentProcessor for TagsProcessor {
     fn from_relation_results(
         &self,
-        _row: &DatabricksRelationResults,
+        results: &DatabricksRelationResults,
     ) -> Option<DatabricksComponentConfig> {
-        // TODO: implement
-        None
+        let tags_table = results.get(&DatabricksRelationMetadataKey::InfoSchemaTags)?;
+
+        let mut set_tags = BTreeMap::new();
+
+        for row in tags_table.rows() {
+            if let (Ok(tag_name_val), Ok(tag_value_val)) =
+                (row.get_item(&Value::from(0)), row.get_item(&Value::from(1)))
+            {
+                if let (Some(tag_name), Some(tag_value)) =
+                    (tag_name_val.as_str(), tag_value_val.as_str())
+                {
+                    set_tags.insert(tag_name.to_string(), tag_value.to_string());
+                }
+            }
+        }
+        Some(DatabricksComponentConfig::Tags(TagsConfig::new(set_tags)))
     }
 
     fn from_relation_config(
         &self,
         relation_config: &dyn InternalDbtNodeAttributes,
     ) -> AdapterResult<Option<DatabricksComponentConfig>> {
-        // todo: databricks_tags vs dbt tags
-        let tags = get_config_value(relation_config, "databricks_tags");
-        if tags.is_none() {
-            return Ok(Some(DatabricksComponentConfig::Tags(TagsConfig::default())));
+        let mut databricks_tags = BTreeMap::new();
+        if let Some(model) = relation_config.as_any().downcast_ref::<DbtModel>() {
+            if let Some(databricks_attr) = &model.__adapter_attr__.databricks_attr {
+                if let Some(tags_map) = &databricks_attr.databricks_tags {
+                    for (key, value) in tags_map {
+                        if let YmlValue::String(value_str, _) = value {
+                            databricks_tags.insert(key.clone(), value_str.clone());
+                        }
+                    }
+                }
+            }
+        } else {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "Tags are only supported for DbtModel",
+            ));
         }
 
-        let tags = tags
-            .unwrap()
-            .as_mapping()
-            .ok_or_else(|| {
-                AdapterError::new(
-                    AdapterErrorKind::Configuration,
-                    "databricks_tags must be an object".to_string(),
-                )
-            })?
-            .iter()
-            .map(|(k, v)| {
-                let key = yml_value_to_string(k).ok_or_else(|| {
-                    AdapterError::new(
-                        AdapterErrorKind::Configuration,
-                        format!("databricks_tags keys must be strings, got {k:?}"),
-                    )
-                })?;
-                let value = yml_value_to_string(v).ok_or_else(|| {
-                    AdapterError::new(
-                        AdapterErrorKind::Configuration,
-                        format!("databricks_tags values must be strings, numbers, or booleans, got {v:?}"),
-                    )
-                })?;
-                Ok((key, value))
-            })
-            .collect::<AdapterResult<BTreeMap<String, String>>>()?;
+        Ok(Some(DatabricksComponentConfig::Tags(TagsConfig::new(
+            databricks_tags,
+        ))))
+    }
+}
 
-        let tags_config = TagsConfig::new(tags, Vec::new());
-        Ok(Some(DatabricksComponentConfig::Tags(tags_config)))
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn test_processor_name() {
+        let processor = TagsProcessor;
+        assert_eq!(processor.name(), "tags");
+    }
+
+    #[test]
+    fn test_get_diff_add_or_update() {
+        let mut old_tags = BTreeMap::new();
+        old_tags.insert("a".to_string(), "1".to_string());
+        old_tags.insert("b".to_string(), "2".to_string());
+
+        let mut new_tags = BTreeMap::new();
+        new_tags.insert("b".to_string(), "3".to_string());
+        new_tags.insert("c".to_string(), "4".to_string());
+
+        let old_config = TagsConfig::new(old_tags);
+        let new_config = TagsConfig::new(new_tags.clone());
+
+        let diff = new_config.get_diff(&old_config);
+        assert!(diff.is_some());
+
+        assert_eq!(
+            diff.as_ref().unwrap().set_tags.get("b"),
+            Some(&"3".to_string())
+        );
+        assert_eq!(
+            diff.as_ref().unwrap().set_tags.get("c"),
+            Some(&"4".to_string())
+        );
+    }
+
+    #[test]
+    fn test_get_diff_no_change() {
+        let mut tags = BTreeMap::new();
+        tags.insert("a".to_string(), "1".to_string());
+        tags.insert("b".to_string(), "2".to_string());
+
+        let config1 = TagsConfig::new(tags.clone());
+        let config2 = TagsConfig::new(tags);
+
+        let diff = config1.get_diff(&config2);
+        assert!(diff.is_none());
     }
 }

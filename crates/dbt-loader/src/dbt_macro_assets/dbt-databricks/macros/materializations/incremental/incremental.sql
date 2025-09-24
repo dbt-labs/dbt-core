@@ -158,7 +158,7 @@
         Also, why does not either drop_relation or adapter.drop_relation work here?!
         --#}
       {%- endif -%}
-      {% if _configuration_changes is not none %} 
+      {% if _configuration_changes is not none %}
         {% set tags = _configuration_changes.changes.get("tags", None) %}
         {% set tblproperties = _configuration_changes.changes.get("tblproperties", None) %}
         {% set liquid_clustering = _configuration_changes.changes.get("liquid_clustering") %}
