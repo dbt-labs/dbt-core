@@ -2,10 +2,10 @@ use crate::AdapterType;
 use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
 use crate::metadata::*;
 use crate::relation_object::create_relation_internal;
+use crate::sql_types::SdfSchema;
 use crate::typed_adapter::TypedBaseAdapter;
 
 use arrow::array::RecordBatch;
-use arrow_schema::Schema;
 use dbt_common::cancellation::{Cancellable, CancellationToken};
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::{
@@ -55,7 +55,7 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
         &self,
         unique_id: Option<String>,
         relations: &[Arc<dyn BaseRelation>],
-    ) -> AsyncAdapterResult<HashMap<String, AdapterResult<Arc<Schema>>>>;
+    ) -> AsyncAdapterResult<HashMap<String, AdapterResult<SdfSchema>>>;
 
     /// List relations and their schemas by patterns
     #[allow(clippy::type_complexity)]

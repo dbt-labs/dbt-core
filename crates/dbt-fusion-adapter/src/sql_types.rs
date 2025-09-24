@@ -1,11 +1,25 @@
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use crate::AdapterResult;
 use crate::base_adapter::backend_of;
 use crate::errors::{AdapterError, AdapterErrorKind};
-use arrow_schema::{DataType, TimeUnit};
+use arrow_schema::{DataType, Schema, TimeUnit};
 use dbt_common::adapter::AdapterType;
 use dbt_xdbc::sql::types::SqlType;
+
+/// An Arrow schema containing SDF types
+pub struct SdfSchema(Arc<Schema>);
+
+impl SdfSchema {
+    pub fn new(schema: Arc<Schema>) -> Self {
+        SdfSchema(schema)
+    }
+
+    pub fn inner(&self) -> &Arc<Schema> {
+        &self.0
+    }
+}
 
 pub trait TypeFormatter: Send + Sync {
     /// Picks a SQL type for a given Arrow DataType and renders it as SQL.
