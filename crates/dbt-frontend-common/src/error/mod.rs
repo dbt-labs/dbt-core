@@ -879,10 +879,10 @@ pub trait LiftableResult<T>: private::Sealed {
     where
         Self: Sized,
     {
-        self.lift(|_err| ErrContext {
+        self.lift(|err| ErrContext {
             code: ErrorCode::Unexpected,
             location: CodeLocation::default(),
-            context: "An unexpected error occurred".to_string(),
+            context: format!("An unexpected error occurred: {err}"),
         })
     }
 }
