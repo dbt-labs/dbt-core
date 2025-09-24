@@ -13,7 +13,11 @@ from dbt.artifacts.resources.v1.config import NodeConfig
 from dbt_common.contracts.config.base import MergeBehavior
 from dbt_common.contracts.constraints import ModelLevelConstraint
 from dbt_common.contracts.util import Mergeable
-from dbt_common.dataclass_schema import ExtensibleDbtClassMixin, dbtClassMixin
+from dbt_common.dataclass_schema import (
+    ExtensibleDbtClassMixin,
+    ValidationError,
+    dbtClassMixin,
+)
 
 
 class ModelFreshnessUpdatesOnOptions(enum.Enum):
@@ -23,8 +27,8 @@ class ModelFreshnessUpdatesOnOptions(enum.Enum):
 
 @dataclass
 class ModelBuildAfter(ExtensibleDbtClassMixin):
-    count: int
-    period: TimePeriod
+    count: Optional[int] = None
+    period: Optional[TimePeriod] = None
     updates_on: ModelFreshnessUpdatesOnOptions = ModelFreshnessUpdatesOnOptions.any
 
 
@@ -74,6 +78,25 @@ class ModelConfig(NodeConfig):
         metadata=MergeBehavior.Clobber.meta(),
     )
     freshness: Optional[ModelFreshness] = None
+
+    def __post_init__(self):
+        super().__post_init__()
+        if (
+            self.freshness
+            and self.freshness.build_after.period
+            and not self.freshness.build_after.count
+        ):
+            raise ValidationError(
+                "`freshness.build_after` must have a value for `count` if a `period` is provided"
+            )
+        elif (
+            self.freshness
+            and self.freshness.build_after.count
+            and not self.freshness.build_after.period
+        ):
+            raise ValidationError(
+                "`freshness.build_after` must have a value for `period` if a `count` is provided"
+            )
 
     @classmethod
     def __pre_deserialize__(cls, data):

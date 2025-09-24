@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fixes a bug in the logic for legacy time spine deprecation warnings.
+time: 2025-09-15T15:22:27.791819-07:00
+custom:
+  Author: courtneyholcomb
+  Issue: "11690"
