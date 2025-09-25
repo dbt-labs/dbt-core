@@ -193,6 +193,7 @@ class SchemaSourceFile(BaseSourceFile):
     data_tests: Dict[str, Any] = field(default_factory=dict)
     sources: List[str] = field(default_factory=list)
     exposures: List[str] = field(default_factory=list)
+    functions: List[str] = field(default_factory=list)
     metrics: List[str] = field(default_factory=list)
     snapshots: List[str] = field(default_factory=list)
     # The following field will no longer be used. Leaving

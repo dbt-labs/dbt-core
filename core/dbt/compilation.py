@@ -181,6 +181,8 @@ class Linker:
                 self.dependency(node.unique_id, (manifest.metrics[dependency].unique_id))
             elif dependency in manifest.semantic_models:
                 self.dependency(node.unique_id, (manifest.semantic_models[dependency].unique_id))
+            elif dependency in manifest.functions:
+                self.dependency(node.unique_id, (manifest.functions[dependency].unique_id))
             else:
                 raise GraphDependencyNotFoundError(node, dependency)
 
@@ -193,6 +195,8 @@ class Linker:
             self.link_node(semantic_model, manifest)
         for exposure in manifest.exposures.values():
             self.link_node(exposure, manifest)
+        for function in manifest.functions.values():
+            self.link_node(function, manifest)
         for metric in manifest.metrics.values():
             self.link_node(metric, manifest)
         for unit_test in manifest.unit_tests.values():

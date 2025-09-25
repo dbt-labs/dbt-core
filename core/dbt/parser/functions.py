@@ -1,5 +1,5 @@
 from dbt.artifacts.resources.types import NodeType
-from dbt.contracts.graph.nodes import FunctionNode
+from dbt.contracts.graph.nodes import FunctionNode, ManifestNode
 from dbt.parser.base import SimpleSQLParser
 from dbt.parser.search import FileBlock
 
@@ -17,3 +17,11 @@ class FunctionParser(SimpleSQLParser[FunctionNode]):
     @classmethod
     def get_compiled_path(cls, block: FileBlock):
         return block.path.relative_path
+
+    # overrides SimpleSQLParser.add_result_node
+    def add_result_node(self, block: FileBlock, node: ManifestNode):
+        assert isinstance(node, FunctionNode), "Got non FunctionNode in FunctionParser"
+        if node.config.enabled:
+            self.manifest.add_function(node)
+        else:
+            self.manifest.add_disabled(block.file, node)

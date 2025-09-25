@@ -53,6 +53,7 @@ from dbt.contracts.graph.nodes import (
     BaseNode,
     Documentation,
     Exposure,
+    FunctionNode,
     GenericTestNode,
     GraphMemberNode,
     Group,
@@ -175,6 +176,39 @@ class SourceLookup(dbtClassMixin):
                 f"Source {unique_id} found in cache but not found in manifest"
             )
         return manifest.sources[unique_id]
+
+
+class FunctionLookup(dbtClassMixin):
+    def __init__(self, manifest: "Manifest") -> None:
+        self.storage: Dict[str, Dict[PackageName, UniqueID]] = {}
+        self.populate(manifest)
+
+    def get_unique_id(self, search_name, package: Optional[PackageName]):
+        return find_unique_id_for_package(self.storage, search_name, package)
+
+    def find(self, search_name, package: Optional[PackageName], manifest: "Manifest"):
+        unique_id = self.get_unique_id(search_name, package)
+        if unique_id is not None:
+            return self.perform_lookup(unique_id, manifest)
+        return None
+
+    def add_function(self, function: FunctionNode):
+        if function.search_name not in self.storage:
+            self.storage[function.search_name] = {}
+
+        self.storage[function.search_name][function.package_name] = function.unique_id
+
+    def populate(self, manifest):
+        for function in manifest.functions.values():
+            if hasattr(function, "name"):
+                self.add_function(function)
+
+    def perform_lookup(self, unique_id: UniqueID, manifest: "Manifest") -> FunctionNode:
+        if unique_id not in manifest.functions:
+            raise dbt_common.exceptions.DbtInternalError(
+                f"Function {unique_id} found in cache but not found in manifest"
+            )
+        return manifest.functions[unique_id]
 
 
 class RefableLookup(dbtClassMixin):
@@ -686,6 +720,9 @@ class Disabled(Generic[D]):
     target: D
 
 
+MaybeFunctionNode = Optional[Union[FunctionNode, Disabled[FunctionNode]]]
+
+
 MaybeMetricNode = Optional[Union[Metric, Disabled[Metric]]]
 
 
@@ -882,6 +919,7 @@ class Manifest(MacroMethods, dbtClassMixin):
     macros: MutableMapping[str, Macro] = field(default_factory=dict)
     docs: MutableMapping[str, Documentation] = field(default_factory=dict)
     exposures: MutableMapping[str, Exposure] = field(default_factory=dict)
+    functions: MutableMapping[str, FunctionNode] = field(default_factory=dict)
     metrics: MutableMapping[str, Metric] = field(default_factory=dict)
     groups: MutableMapping[str, Group] = field(default_factory=dict)
     selectors: MutableMapping[str, Any] = field(default_factory=dict)
@@ -922,6 +960,9 @@ class Manifest(MacroMethods, dbtClassMixin):
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     _singular_test_lookup: Optional[SingularTestLookup] = field(
+        default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
+    )
+    _function_lookup: Optional[FunctionLookup] = field(
         default=None, metadata={"serialize": lambda x: None, "deserialize": lambda x: None}
     )
     _parsing_info: ParsingInfo = field(
@@ -1053,6 +1094,7 @@ class Manifest(MacroMethods, dbtClassMixin):
         resource_fqns: Dict[str, Set[Tuple[str, ...]]] = {}
         all_resources = chain(
             self.exposures.values(),
+            self.functions.values(),
             self.nodes.values(),
             self.sources.values(),
             self.metrics.values(),
@@ -1086,6 +1128,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             macros={k: _deepcopy(v) for k, v in self.macros.items()},
             docs={k: _deepcopy(v) for k, v in self.docs.items()},
             exposures={k: _deepcopy(v) for k, v in self.exposures.items()},
+            functions={k: _deepcopy(v) for k, v in self.functions.items()},
             metrics={k: _deepcopy(v) for k, v in self.metrics.items()},
             groups={k: _deepcopy(v) for k, v in self.groups.items()},
             selectors={k: _deepcopy(v) for k, v in self.selectors.items()},
@@ -1106,6 +1149,7 @@ class Manifest(MacroMethods, dbtClassMixin):
                 self.nodes.values(),
                 self.sources.values(),
                 self.exposures.values(),
+                self.functions.values(),
                 self.metrics.values(),
                 self.semantic_models.values(),
                 self.saved_queries.values(),
@@ -1162,6 +1206,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             macros=cls._map_resources_to_map_nodes(writable_manifest.macros),
             docs=cls._map_resources_to_map_nodes(writable_manifest.docs),
             exposures=cls._map_resources_to_map_nodes(writable_manifest.exposures),
+            functions=cls._map_resources_to_map_nodes(writable_manifest.functions),
             metrics=cls._map_resources_to_map_nodes(writable_manifest.metrics),
             groups=cls._map_resources_to_map_nodes(writable_manifest.groups),
             semantic_models=cls._map_resources_to_map_nodes(writable_manifest.semantic_models),
@@ -1219,6 +1264,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             macros=self._map_nodes_to_map_resources(self.macros),
             docs=self._map_nodes_to_map_resources(self.docs),
             exposures=self._map_nodes_to_map_resources(self.exposures),
+            functions=self._map_nodes_to_map_resources(self.functions),
             metrics=self._map_nodes_to_map_resources(self.metrics),
             groups=self._map_nodes_to_map_resources(self.groups),
             selectors=self.selectors,
@@ -1246,6 +1292,8 @@ class Manifest(MacroMethods, dbtClassMixin):
             return self.sources[unique_id]
         elif unique_id in self.exposures:
             return self.exposures[unique_id]
+        elif unique_id in self.functions:
+            return self.functions[unique_id]
         elif unique_id in self.metrics:
             return self.metrics[unique_id]
         elif unique_id in self.semantic_models:
@@ -1329,6 +1377,12 @@ class Manifest(MacroMethods, dbtClassMixin):
         return self._singular_test_lookup
 
     @property
+    def function_lookup(self) -> FunctionLookup:
+        if self._function_lookup is None:
+            self._function_lookup = FunctionLookup(self)
+        return self._function_lookup
+
+    @property
     def external_node_unique_ids(self):
         return [node.unique_id for node in self.nodes.values() if node.is_external_node]
 
@@ -1393,6 +1447,29 @@ class Manifest(MacroMethods, dbtClassMixin):
                     f"{target_source_name}.{target_table_name}", pkg
                 )
 
+        if disabled:
+            return Disabled(disabled[0])
+        return None
+
+    def resolve_function(
+        self,
+        target_function_name: str,
+        target_function_package: Optional[str],
+        current_project: str,
+        node_package: str,
+    ) -> MaybeFunctionNode:
+        package_candidates = _packages_to_search(
+            current_project, node_package, target_function_package
+        )
+        disabled: Optional[List[FunctionNode]] = None
+        for package in package_candidates:
+            function = self.function_lookup.find(target_function_name, package, self)
+            if function is not None and function.config.enabled:
+                return function
+
+            # it's possible that the function is disabled
+            if disabled is None:
+                disabled = self.disabled_lookup.find(target_function_name, package)
         if disabled:
             return Disabled(disabled[0])
         return None
@@ -1637,6 +1714,10 @@ class Manifest(MacroMethods, dbtClassMixin):
         self.exposures[exposure.unique_id] = exposure
         source_file.exposures.append(exposure.unique_id)
 
+    def add_function(self, function: FunctionNode):
+        _check_duplicates(function, self.functions)
+        self.functions[function.unique_id] = function
+
     def add_metric(
         self, source_file: SchemaSourceFile, metric: Metric, generated_from: Optional[str] = None
     ):
@@ -1673,6 +1754,8 @@ class Manifest(MacroMethods, dbtClassMixin):
                 source_file.semantic_models.append(node.unique_id)
             if isinstance(node, Exposure):
                 source_file.exposures.append(node.unique_id)
+            if isinstance(node, FunctionNode):
+                source_file.functions.append(node.unique_id)
             if isinstance(node, UnitTestDefinition):
                 source_file.unit_tests.append(node.unique_id)
         elif isinstance(source_file, FixtureSourceFile):
@@ -1739,6 +1822,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             self.macros,
             self.docs,
             self.exposures,
+            self.functions,
             self.metrics,
             self.groups,
             self.selectors,

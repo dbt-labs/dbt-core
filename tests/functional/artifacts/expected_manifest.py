@@ -293,6 +293,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "language": "sql",
                 "refs": [{"name": "seed", "package": None, "version": None}],
                 "sources": [],
+                "functions": [],
                 "depends_on": {"nodes": ["seed.test.seed"], "macros": []},
                 "deprecation_date": None,
                 "unique_id": "model.test.model",
@@ -403,6 +404,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "language": "sql",
                 "refs": [{"name": "seed", "package": None, "version": None}],
                 "sources": [],
+                "functions": [],
                 "depends_on": {"nodes": ["seed.test.seed"], "macros": []},
                 "deprecation_date": None,
                 "unique_id": "model.test.second_model",
@@ -599,6 +601,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "columns": {},
                 "config": test_config,
                 "sources": [],
+                "functions": [],
                 "group": None,
                 "depends_on": {
                     "macros": ["macro.dbt.test_not_null", "macro.dbt.get_where_subquery"],
@@ -683,6 +686,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "resource_type": "snapshot",
                 "schema": alternate_schema,
                 "sources": [],
+                "functions": [],
                 "tags": [],
                 "unique_id": "snapshot.test.snapshot_seed",
                 "unrendered_config": unrendered_snapshot_config,
@@ -702,6 +706,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "group": None,
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
                 "sources": [],
+                "functions": [],
                 "depends_on": {
                     "macros": ["macro.test.test_nothing", "macro.dbt.get_where_subquery"],
                     "nodes": ["model.test.model"],
@@ -755,6 +760,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                 "group": None,
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
                 "sources": [],
+                "functions": [],
                 "depends_on": {
                     "macros": ["macro.dbt.test_unique", "macro.dbt.get_where_subquery"],
                     "nodes": ["model.test.model"],
@@ -992,6 +998,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
         "semantic_models": {},
         "unit_tests": {},
         "saved_queries": {},
+        "functions": {},
     }
 
 
@@ -1035,6 +1042,7 @@ def expected_references_manifest(project):
                 "fqn": ["test", "ephemeral_copy"],
                 "group": None,
                 "metrics": [],
+                "functions": [],
                 "name": "ephemeral_copy",
                 "original_file_path": ephemeral_copy_path,
                 "package_name": "test",
@@ -1098,6 +1106,7 @@ def expected_references_manifest(project):
                 "config": get_rendered_model_config(materialized="table", group="test_group"),
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
                 "sources": [],
+                "functions": [],
                 "depends_on": {
                     "macros": [],
                     "nodes": ["model.test.ephemeral_copy"],
@@ -1198,6 +1207,7 @@ def expected_references_manifest(project):
                 "resource_type": "model",
                 "schema": my_schema_name,
                 "sources": [],
+                "functions": [],
                 "tags": [],
                 "meta": {},
                 "unique_id": "model.test.view_summary",
@@ -1324,6 +1334,7 @@ def expected_references_manifest(project):
                 "fqn": ["test", "snapshot_seed", "snapshot_seed"],
                 "group": None,
                 "metrics": [],
+                "functions": [],
                 "meta": {},
                 "name": "snapshot_seed",
                 "original_file_path": snapshot_path,
@@ -1612,6 +1623,7 @@ def expected_references_manifest(project):
         "semantic_models": {},
         "unit_tests": {},
         "saved_queries": {},
+        "functions": {},
     }
 
 
@@ -1682,6 +1694,7 @@ def expected_versions_manifest(project):
                 ),
                 "constraints": [],
                 "sources": [],
+                "functions": [],
                 "depends_on": {"macros": [], "nodes": []},
                 "description": "A versioned model",
                 "primary_key": ["count", "first_name"],
@@ -1767,6 +1780,7 @@ def expected_versions_manifest(project):
                 "constraints": [],
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
                 "sources": [],
+                "functions": [],
                 "depends_on": {"macros": [], "nodes": []},
                 "description": "A versioned model",
                 "primary_key": ["first_name"],
@@ -1850,6 +1864,7 @@ def expected_versions_manifest(project):
                 "resource_type": "model",
                 "schema": my_schema_name,
                 "sources": [],
+                "functions": [],
                 "tags": [],
                 "meta": {},
                 "unique_id": "model.test.ref_versioned_model",
@@ -1879,6 +1894,7 @@ def expected_versions_manifest(project):
                 "group": "test_group",
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
                 "sources": [],
+                "functions": [],
                 "depends_on": {
                     "macros": ["macro.dbt.test_unique", "macro.dbt.get_where_subquery"],
                     "nodes": ["model.test.versioned_model.v1"],
@@ -1933,6 +1949,7 @@ def expected_versions_manifest(project):
                 "group": "test_group",
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
                 "sources": [],
+                "functions": [],
                 "depends_on": {
                     "macros": ["macro.dbt.test_unique", "macro.dbt.get_where_subquery"],
                     "nodes": ["model.test.versioned_model.v1"],
@@ -1987,6 +2004,7 @@ def expected_versions_manifest(project):
                 "group": "test_group",
                 "contract": {"checksum": None, "enforced": False, "alias_types": True},
                 "sources": [],
+                "functions": [],
                 "depends_on": {
                     "macros": ["macro.dbt.test_unique", "macro.dbt.get_where_subquery"],
                     "nodes": ["model.test.versioned_model.v2"],
@@ -2076,6 +2094,7 @@ def expected_versions_manifest(project):
             }
         },
         "sources": {},
+        "functions": {},
         "selectors": {},
         "docs": {},
         "child_map": {

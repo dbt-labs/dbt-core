@@ -821,7 +821,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         source_file: SchemaSourceFile = self.yaml.file
 
         # TODO: I'd like to refactor this out but the early return makes doing so a bit messy
-        if patch.yaml_key in ["models", "seeds", "snapshots", "functions"]:
+        if patch.yaml_key in ["models", "seeds", "snapshots"]:
             unique_id = self.manifest.ref_lookup.get_unique_id(
                 patch.name, self.project.project_name, None
             ) or self.manifest.ref_lookup.get_unique_id(patch.name, None, None)
@@ -839,7 +839,8 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                         )
                     )
                     return
-
+        elif patch.yaml_key == "functions":
+            unique_id = self.manifest.function_lookup.get_unique_id(patch.name, None)
         elif patch.yaml_key == "analyses":
             unique_id = self.manifest.analysis_lookup.get_unique_id(patch.name, None, None)
         else:
@@ -888,9 +889,13 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                 )
                 return  # we only return early if no disabled early nodes are found. Why don't we return after patching the disabled nodes?
 
-        # patches can't be overwritten
-        node = self.manifest.nodes.get(unique_id)
+        if patch.yaml_key == "functions":
+            node = self.manifest.functions.get(unique_id)
+        else:
+            node = self.manifest.nodes.get(unique_id)
+
         if node:
+            # patches can't be overwritten
             if node.patch_path:
                 package_name, existing_file_path = node.patch_path.split("://")
                 raise DuplicatePatchPathError(patch, existing_file_path)
