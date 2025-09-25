@@ -10247,15 +10247,6 @@
               }
             }
           },
-          "functions": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          },
           "created_at": {
             "type": "number"
           }
@@ -11592,15 +11583,6 @@
             }
           },
           "metrics": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          },
-          "functions": {
             "type": "array",
             "items": {
               "type": "array",
@@ -21632,15 +21614,6 @@
                         }
                       }
                     },
-                    "functions": {
-                      "type": "array",
-                      "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      }
-                    },
                     "created_at": {
                       "type": "number"
                     }
@@ -22970,15 +22943,6 @@
                       }
                     },
                     "metrics": {
-                      "type": "array",
-                      "items": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    "functions": {
                       "type": "array",
                       "items": {
                         "type": "array",
@@ -27148,8 +27112,7 @@
     "group_map",
     "saved_queries",
     "semantic_models",
-    "unit_tests",
-    "functions"
+    "unit_tests"
   ],
   "$id": "https://schemas.getdbt.com/dbt/manifest/v12.json"
 }
