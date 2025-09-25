@@ -1469,7 +1469,7 @@ class Manifest(MacroMethods, dbtClassMixin):
 
             # it's possible that the function is disabled
             if disabled is None:
-                disabled = self.disabled_lookup.find(f"{target_function_name}", package)
+                disabled = self.disabled_lookup.find(target_function_name, package)
         if disabled:
             return Disabled(disabled[0])
         return None
