@@ -692,14 +692,26 @@ pub fn try_or_compiler_error_fn()
     move |state: &State<'_, '_>, args: &[Value], kwargs: Kwargs| -> Result<Value, Error> {
         let mut args = ArgParser::new(args, Some(kwargs));
         let message_if_exception = args.get::<String>("message_if_exception")?;
-        let func = args.get::<Value>("func")?;
+        let location_of_func = args.get::<Value>("loc")?;
+        let func_name = args.get::<String>("func")?;
         // Get remaining args and kwargs
         let mut remaining_args = args.get_args_as_vec_of_values();
         let drained_kwargs = args.drain_kwargs();
         let remaining_kwargs = Kwargs::from_iter(drained_kwargs);
         remaining_args.push(remaining_kwargs.into());
-        // Call the function
-        match func.call(state, &remaining_args, &[]) {
+
+        let result = if location_of_func.is_none() {
+            let func = state.lookup(&func_name).ok_or_else(|| {
+                Error::new(
+                    ErrorKind::InvalidOperation,
+                    format!("Unknown function {func_name}"),
+                )
+            })?;
+            func.call(state, &remaining_args, &[])
+        } else {
+            location_of_func.call_method(state, &func_name, &remaining_args, &[])
+        };
+        match result {
             Ok(result) => Ok(result),
             // TODO: we need to raise CompilationError(message_if_exception, self.model)
             Err(_) => Err(Error::new(

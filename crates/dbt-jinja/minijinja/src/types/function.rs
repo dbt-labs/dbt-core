@@ -373,23 +373,31 @@ impl FunctionType for TryOrCompilerErrorFunctionType {
         args: &[Type],
         listener: Rc<dyn TypecheckingEventListener>,
     ) -> Result<Type, crate::Error> {
-        if args.len() <= 2 {
-            listener.warn("Expected at least 2 arguments for try_or_compiler_error function");
+        if args.len() <= 3 {
+            listener.warn("Expected at least 3 arguments for try_or_compiler_error function");
             return Ok(Type::Any { hard: false });
         }
         if !args[0].is_subtype_of(&Type::String(None)) {
             listener.warn("Expected a string argument for try_or_compiler_error function");
             return Ok(Type::Any { hard: false });
         }
-        if let Type::Object(_func) = &args[1] {
+        if let Type::Object(_loc) = &args[1] {
+            // It is not possible to resolve the module here.
+        } else if !&args[1].is_none() {
+            listener.warn(&format!(
+                "Expected a optional argument argument for try_or_compiler_error function, got {:?}",
+                args[1]
+            ));
+            return Ok(Type::Any { hard: false });
+        }
+        if !args[2].is_subtype_of(&Type::String(None)) {
             // It is not possible to resolve the arguments of the function,
             // because the function args are not known.
             // let rest_args = args[2..].to_vec();
             // func.resolve_arguments(&rest_args)
-        } else {
             listener.warn(&format!(
-                "Expected a function argument for try_or_compiler_error function, got {:?}",
-                args[1]
+                "Expected a string argument for try_or_compiler_error function, got {:?}",
+                args[2]
             ));
             return Ok(Type::Any { hard: false });
         }
@@ -399,6 +407,7 @@ impl FunctionType for TryOrCompilerErrorFunctionType {
     fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![
             ArgSpec::new("message_if_exception", false),
+            ArgSpec::new("loc", false),
             ArgSpec::new("func", false),
             ArgSpec::new("args", false), // TODO: arg number depends on the function
         ]

@@ -5,7 +5,10 @@
       The provided partition date '{{ date_str }}' does not match the expected format '{{ date_fmt }}'
   {%- endset %}
 
-  {% set res = try_or_compiler_error(error_msg, modules.datetime.datetime.strptime, date_str.strip(), date_fmt) %}
+  {# Deviation from Core: `try_or_compiler_error` now takes in the function to call in two arguments:
+   # the (optional) package containing the function, and the name of the function as a string.
+   #}
+  {% set res = try_or_compiler_error(error_msg, modules.datetime.datetime, "strptime", date_str.strip(), date_fmt) %}
   {{ return(res) }}
 
 {% endmacro %}
