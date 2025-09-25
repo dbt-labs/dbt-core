@@ -245,9 +245,23 @@ pub mod postgres {
     }
 }
 
-pub mod redshift {
-    pub const VARCHAR_DEFAULT: usize = 256;
-    pub const VARBYTE_DEFAULT: usize = 65535;
+pub const fn max_varchar_size(adapter_type: AdapterType) -> Option<usize> {
+    use AdapterType::*;
+    match adapter_type {
+        Snowflake => Some(16_777_216),
+        Redshift => Some(256),
+        Postgres | Bigquery | Databricks | Salesforce => None,
+    }
+}
+
+pub const fn max_varbinary_size(adapter_type: AdapterType) -> Option<usize> {
+    use AdapterType::*;
+    match adapter_type {
+        Snowflake => Some(16_777_216),
+        Redshift => Some(65_535),
+        // TODO: define limits for more systems
+        Postgres | Bigquery | Databricks | Salesforce => None,
+    }
 }
 
 pub mod snowflake {
@@ -381,7 +395,7 @@ pub fn var_size(adapter_type: AdapterType, data_type: &DataType) -> Option<usize
     match (adapter_type, data_type) {
         // Strings: Redshift wants a length; persist it in char_size
         // TODO(jason): We need to report the correct size and not just a default
-        (Redshift, DataType::Utf8 | DataType::Utf8View) => Some(redshift::VARCHAR_DEFAULT),
+        (Redshift, DataType::Utf8 | DataType::Utf8View) => max_varchar_size(Redshift),
         // For VARCHAR types, no explicit size in Snowflake unless specified
         (Snowflake, DataType::Utf8 | DataType::Utf8View) => None,
         // XXX: need to think about the defaults for these adapters
@@ -391,7 +405,7 @@ pub fn var_size(adapter_type: AdapterType, data_type: &DataType) -> Option<usize
 
         // Bytes
         // TODO(jason): We need to report the correct size and not just a default
-        (Redshift, DataType::Binary) => Some(redshift::VARBYTE_DEFAULT),
+        (Redshift, DataType::Binary) => max_varbinary_size(Redshift),
         // XXX: need to think about the defaults for these adapters
         (Snowflake | Postgres | Bigquery | Databricks | Salesforce, DataType::Binary) => None,
 

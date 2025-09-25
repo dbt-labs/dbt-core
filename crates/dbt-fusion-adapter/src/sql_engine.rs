@@ -1,5 +1,5 @@
 use crate::auth::Auth;
-use crate::base_adapter::{AdapterFactory, backend_of};
+use crate::base_adapter::backend_of;
 use crate::config::AdapterConfig;
 use crate::databricks::databricks_compute_from_state;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
@@ -132,8 +132,6 @@ pub struct ActualEngine {
     configured_databases: RwLock<DatabaseMap>,
     /// Semaphore for limiting the number of concurrent connections
     semaphore: Arc<Semaphore>,
-    /// Adapter factory for creating relations and columns
-    adapter_factory: Arc<dyn AdapterFactory>,
     /// Statement splitter
     splitter: Arc<dyn StmtSplitter>,
     /// Query comment config
@@ -150,7 +148,6 @@ impl ActualEngine {
         adapter_type: AdapterType,
         auth: Arc<dyn Auth>,
         config: AdapterConfig,
-        adapter_factory: Arc<dyn AdapterFactory>,
         splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
         type_formatter: Box<dyn TypeFormatter>,
@@ -173,7 +170,6 @@ impl ActualEngine {
             config,
             configured_databases: RwLock::new(DatabaseMap::default()),
             semaphore: Arc::new(Semaphore::new(permits)),
-            adapter_factory,
             splitter,
             type_formatter,
             query_comment,
@@ -289,7 +285,6 @@ impl SqlEngine {
         adapter_type: AdapterType,
         auth: Arc<dyn Auth>,
         config: AdapterConfig,
-        adapter_factory: Arc<dyn AdapterFactory>,
         stmt_splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
         type_formatter: Box<dyn TypeFormatter>,
@@ -299,7 +294,6 @@ impl SqlEngine {
             adapter_type,
             auth,
             config,
-            adapter_factory,
             stmt_splitter,
             query_comment,
             type_formatter,
@@ -314,7 +308,6 @@ impl SqlEngine {
         adapter_type: AdapterType,
         path: PathBuf,
         config: AdapterConfig,
-        adapter_factory: Arc<dyn AdapterFactory>,
         stmt_splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
         type_formatter: Box<dyn TypeFormatter>,
@@ -324,7 +317,6 @@ impl SqlEngine {
             adapter_type,
             path,
             config,
-            adapter_factory,
             stmt_splitter,
             query_comment,
             type_formatter,
@@ -419,16 +411,6 @@ impl SqlEngine {
             SqlEngine::Record(record_engine) => record_engine.backend(),
             SqlEngine::Replay(replay_engine) => replay_engine.backend(),
             SqlEngine::Mock(adapter_type) => backend_of(*adapter_type),
-        }
-    }
-
-    /// Used to create columns after the adapter that owns this engine is created.
-    pub fn adapter_factory(&self) -> &dyn AdapterFactory {
-        match self {
-            SqlEngine::Warehouse(actual_engine) => actual_engine.adapter_factory.as_ref(),
-            SqlEngine::Record(record_engine) => record_engine.adapter_factory(),
-            SqlEngine::Replay(replay_engine) => replay_engine.adapter_factory(),
-            SqlEngine::Mock(_) => unreachable!("Mock engine does not support adapter_factory"),
         }
     }
 

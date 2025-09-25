@@ -13,7 +13,7 @@ use minijinja::{
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 
 /// A struct representing a column type for use with static methods
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct StdColumnType(AdapterType);
 
 impl Object for StdColumnType {
@@ -410,6 +410,9 @@ impl StdColumn {
         Ok(result)
     }
 
+    /// Create a new BigQuery column
+    ///
+    /// `mode` ias a field is seen in BQ (https://cloud.google.com/bigquery/docs/schemas#modes)
     pub fn new_bigquery(name: String, dtype: String, mode: BigqueryColumnMode) -> Self {
         use BigqueryColumnMode::*;
         let (nullable, repeated) = match mode {
@@ -421,19 +424,6 @@ impl StdColumn {
             _adapter_type: AdapterType::Bigquery,
             _nullable: nullable,
             _repeated: repeated,
-            name,
-            dtype,
-            char_size: None,
-            numeric_precision: None,
-            numeric_scale: None,
-        }
-    }
-
-    pub fn new_databricks(name: String, dtype: String) -> Self {
-        Self {
-            _adapter_type: AdapterType::Databricks,
-            _nullable: None,
-            _repeated: None,
             name,
             dtype,
             char_size: None,

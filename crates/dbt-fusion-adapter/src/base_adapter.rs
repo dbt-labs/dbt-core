@@ -1,5 +1,5 @@
 use crate::cache::RelationCache;
-use crate::columns::{BigqueryColumnMode, StdColumn};
+use crate::columns::StdColumnType;
 use crate::metadata::*;
 use crate::sql_engine::SqlEngine;
 use crate::typed_adapter::{ReplayAdapter, TypedBaseAdapter};
@@ -40,7 +40,9 @@ pub fn backend_of(adapter_type: AdapterType) -> Backend {
 /// Type queries to be implemented for every [BaseAdapter]
 pub trait AdapterTyping {
     /// Get name/type of this adapter
-    fn adapter_type(&self) -> AdapterType;
+    fn adapter_type(&self) -> AdapterType {
+        self.engine().adapter_type()
+    }
 
     /// Get a reference to the metadata adapter if supported.
     fn as_metadata_adapter(&self) -> Option<&dyn MetadataAdapter>;
@@ -59,14 +61,13 @@ pub trait AdapterTyping {
     }
 
     /// Get column type instance
-    fn column_type(&self) -> Option<Value>;
+    fn column_type(&self) -> Option<Value> {
+        let value = Value::from_object(StdColumnType::new(self.adapter_type()));
+        Some(value)
+    }
 
     /// Get the [SqlEngine]
     fn engine(&self) -> &Arc<SqlEngine>;
-
-    fn adapter_factory(&self) -> &dyn AdapterFactory {
-        self.engine().adapter_factory()
-    }
 
     /// Get the [ResolvedQuoting]
     fn quoting(&self) -> ResolvedQuoting;
@@ -91,7 +92,9 @@ pub trait AdapterTyping {
         }
     }
 
-    fn cancellation_token(&self) -> CancellationToken;
+    fn cancellation_token(&self) -> CancellationToken {
+        self.engine().cancellation_token()
+    }
 }
 
 /// Base adapter
@@ -639,23 +642,8 @@ pub trait AdapterFactory: Send + Sync {
         adapter_type: AdapterType,
     ) -> Result<Arc<dyn BaseRelation>, minijinja::Error>;
 
-    /// Creates a column based on the adapter type
-    #[allow(clippy::too_many_arguments)]
-    fn create_column(
-        &self,
-        adapter_type: AdapterType,
-        name: String,
-        dtype: String,
-        char_size: Option<u32>,
-        numeric_precision: Option<u64>,
-        numeric_scale: Option<u64>,
-        mode: Option<BigqueryColumnMode>,
-    ) -> Result<StdColumn, minijinja::Error>;
-
     /// Return a new instance of the factory with a different relation cache.
     fn with_relation_cache(&self, relation_cache: Arc<RelationCache>) -> Arc<dyn AdapterFactory>;
-
-    fn to_owned(&self) -> Arc<dyn AdapterFactory>;
 }
 
 /// Check if the adapter type is supported

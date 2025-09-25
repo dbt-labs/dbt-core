@@ -1,5 +1,4 @@
-use crate::AdapterType;
-use crate::base_adapter::{AdapterFactory, backend_of};
+use crate::base_adapter::backend_of;
 use crate::config::AdapterConfig;
 use crate::errors::AdapterResult;
 use crate::query_comment::QueryCommentConfig;
@@ -12,6 +11,7 @@ use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::{RecordBatch, RecordBatchIterator, RecordBatchReader};
 use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaBuilder};
 use dashmap::DashMap;
+use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_xdbc::{Backend, Connection, QueryCtx, Statement};
 use minijinja::State;
@@ -189,12 +189,8 @@ impl RecordEngine {
         self.0.engine.get_config()
     }
 
-    pub(crate) fn adapter_type(&self) -> dbt_common::adapter::AdapterType {
+    pub fn adapter_type(&self) -> AdapterType {
         self.0.engine.adapter_type()
-    }
-
-    pub(crate) fn adapter_factory(&self) -> &dyn AdapterFactory {
-        self.0.engine.adapter_factory()
     }
 
     pub fn splitter(&self) -> &dyn StmtSplitter {
@@ -443,7 +439,6 @@ struct ReplayEngineInner {
     path: PathBuf,
     /// Adapter config
     config: AdapterConfig,
-    adapter_factory: Arc<dyn AdapterFactory>,
     stmt_splitter: Arc<dyn StmtSplitter>,
     query_comment: QueryCommentConfig,
     type_formatter: Box<dyn TypeFormatter>,
@@ -466,7 +461,6 @@ impl ReplayEngine {
         adapter_type: AdapterType,
         path: PathBuf,
         config: AdapterConfig,
-        adapter_factory: Arc<dyn AdapterFactory>,
         stmt_splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
         type_formatter: Box<dyn TypeFormatter>,
@@ -477,7 +471,6 @@ impl ReplayEngine {
             backend: backend_of(adapter_type),
             path,
             config,
-            adapter_factory,
             stmt_splitter,
             query_comment,
             type_formatter,
@@ -509,10 +502,6 @@ impl ReplayEngine {
 
     pub fn get_config(&self) -> &AdapterConfig {
         &self.0.config
-    }
-
-    pub(crate) fn adapter_factory(&self) -> &dyn AdapterFactory {
-        self.0.adapter_factory.as_ref()
     }
 
     pub fn splitter(&self) -> &dyn StmtSplitter {

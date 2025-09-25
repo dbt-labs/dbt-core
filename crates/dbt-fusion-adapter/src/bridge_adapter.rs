@@ -836,8 +836,8 @@ impl BaseAdapter for BridgeAdapter {
                 && !state.is_run_incremental()
             {
                 let schema = db.get_schema(&relation.get_fqn().unwrap_or_default());
-                if let Some(schema) = schema {
-                    let from_local = self.typed_adapter.arrow_schema_to_dbt_columns(schema)?;
+                if let Some(schema) = &schema {
+                    let from_local = self.typed_adapter.schema_to_columns(schema)?;
 
                     #[cfg(debug_assertions)]
                     {

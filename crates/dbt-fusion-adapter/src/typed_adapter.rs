@@ -1,3 +1,4 @@
+use crate::column::ColumnBuilder;
 use crate::columns::StdColumn;
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::funcs::{execute_macro, none_value};
@@ -364,9 +365,6 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         state: &State,
         relation: Arc<dyn BaseRelation>,
     ) -> AdapterResult<Vec<StdColumn>>;
-
-    /// Convert a Schema of Arrow to be represented via StdColumn
-    fn arrow_schema_to_dbt_columns(&self, schema: Arc<Schema>) -> AdapterResult<Vec<StdColumn>>;
 
     /// Truncate relation
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L147
@@ -738,13 +736,42 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         Ok(result)
     }
 
+    /// Convert an Arrow [Schema] to a [Vec] of [StdColumn]s.
+    ///
+    /// This is not part of the Jinja adapter API.
+    ///
+    /// NOTE(jason): This schema might come directly out of the driver and is not
+    /// a sdf frontend schema - this function might not format types perfectly yet
+    ///
+    /// NOTE(felipecrv): we are working on making it easy to not confuse
+    /// driver-generated schemas versus canonicalized sdf frontend schemas
+    fn schema_to_columns(&self, schema: &Arc<Schema>) -> AdapterResult<Vec<StdColumn>> {
+        let engine = self.engine();
+        let type_formatter = engine.type_formatter();
+        let builder = ColumnBuilder::new(self.adapter_type());
+
+        let fields = schema.fields();
+        let mut columns = Vec::<StdColumn>::with_capacity(fields.len());
+        for field in fields {
+            let column = builder.build(field, type_formatter)?;
+            columns.push(column);
+        }
+        Ok(columns)
+    }
+
     /// Get column schema from query
     fn get_column_schema_from_query(
         &self,
-        _state: &State,
+        state: &State,
         conn: &mut dyn Connection,
         query_ctx: &QueryCtx,
-    ) -> AdapterResult<Vec<StdColumn>>;
+    ) -> AdapterResult<Vec<StdColumn>> {
+        if let Some(replay_adapter) = self.as_replay() {
+            return replay_adapter.replay_get_column_schema_from_query(state, conn, query_ctx);
+        }
+        let batch = self.engine().execute(Some(state), conn, query_ctx)?;
+        self.schema_to_columns(&batch.schema())
+    }
 
     /// Get columns in select sql
     fn get_columns_in_select_sql(
@@ -1047,11 +1074,20 @@ pub trait ReplayAdapter: TypedBaseAdapter {
         state: Option<&State>,
         node_id: Option<String>,
     ) -> AdapterResult<Box<dyn Connection>>;
+
     fn replay_convert_type(&self, state: &State, data_type: &DataType) -> AdapterResult<String>;
+
     fn replay_list_relations(
         &self,
         query_ctx: &QueryCtx,
         conn: &'_ mut dyn Connection,
         db_schema: &CatalogAndSchema,
     ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>>;
+
+    fn replay_get_column_schema_from_query(
+        &self,
+        state: &State,
+        _conn: &mut dyn Connection,
+        _query_ctx: &QueryCtx,
+    ) -> AdapterResult<Vec<StdColumn>>;
 }
