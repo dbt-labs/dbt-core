@@ -1,6 +1,0 @@
-kind: Fixes
-body: Propagate column meta/tags from config to tests
-time: 2025-09-10T16:39:05.129379-04:00
-custom:
-    Author: michelleark
-    Issue: "11984"
