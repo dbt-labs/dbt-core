@@ -260,8 +260,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        split-group: ${{ fromJson(needs.integration-metadata.outputs.split-groups) }}
-        # this include is where we add the mac and windows os
+        # already includes split group and runs mac + windows
         include: ${{ fromJson(needs.integration-metadata.outputs.include) }}
     env:
       TOXENV: integration
