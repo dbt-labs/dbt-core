@@ -152,13 +152,12 @@ impl JinjaEnvBuilder {
 
             // For non-internal packages, copy the entry from macro_namespace_registry
             // contains root and non-internal packages
-            if !is_internal {
-                if let Some(macro_names) =
+            if !is_internal
+                && let Some(macro_names) =
                     macro_namespace_registry.get(&Value::from(package_name.clone()))
-                {
-                    non_internal_packages
-                        .insert(Value::from(package_name.clone()), macro_names.clone());
-                }
+            {
+                non_internal_packages
+                    .insert(Value::from(package_name.clone()), macro_names.clone());
             }
 
             for macro_unit in macro_units {

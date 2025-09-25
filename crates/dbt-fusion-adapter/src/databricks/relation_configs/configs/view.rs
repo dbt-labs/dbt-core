@@ -57,13 +57,13 @@ impl DatabricksRelationConfigBase for ViewConfig {
     fn get_changeset(&self, existing: MiniJinjaValue) -> Option<Arc<dyn RelationChangeSet>> {
         let mut changeset = self.get_changeset_default(existing);
 
-        if let Some(changeset) = &mut changeset {
-            if changeset.changes().contains_key("comment") {
-                // We can't modify the requires_full_refresh field directly since it's a method
-                // Instead, we'll create a new changeset with the updated flag
-                let changes = changeset.changes().clone();
-                return Some(Arc::new(DatabricksRelationChangeSet::new(changes, true)));
-            }
+        if let Some(changeset) = &mut changeset
+            && changeset.changes().contains_key("comment")
+        {
+            // We can't modify the requires_full_refresh field directly since it's a method
+            // Instead, we'll create a new changeset with the updated flag
+            let changes = changeset.changes().clone();
+            return Some(Arc::new(DatabricksRelationChangeSet::new(changes, true)));
         }
         changeset
     }

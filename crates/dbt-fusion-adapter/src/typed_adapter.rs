@@ -470,26 +470,26 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
 
         for (column_name, reference_column) in from_columns_map {
             let to_relation_cloned = to_relation.clone();
-            if let Some(target_column) = to_columns_map.get(&column_name) {
-                if target_column.can_expand_to(&reference_column)? {
-                    let col_string_size = reference_column.string_size().map_err(|msg| {
-                        AdapterError::new(AdapterErrorKind::UnexpectedResult, msg)
-                    })?;
-                    let new_type = reference_column
-                        .as_static()
-                        .string_type(Some(col_string_size as usize));
+            if let Some(target_column) = to_columns_map.get(&column_name)
+                && target_column.can_expand_to(&reference_column)?
+            {
+                let col_string_size = reference_column
+                    .string_size()
+                    .map_err(|msg| AdapterError::new(AdapterErrorKind::UnexpectedResult, msg))?;
+                let new_type = reference_column
+                    .as_static()
+                    .string_type(Some(col_string_size as usize));
 
-                    // Create args for macro execution
-                    execute_macro(
-                        state,
-                        args!(
-                            relation => RelationObject::new(to_relation_cloned).as_value(),
-                            column_name => column_name,
-                            new_column_type => Value::from(new_type),
-                        ),
-                        "alter_column_type",
-                    )?;
-                }
+                // Create args for macro execution
+                execute_macro(
+                    state,
+                    args!(
+                        relation => RelationObject::new(to_relation_cloned).as_value(),
+                        column_name => column_name,
+                        new_column_type => Value::from(new_type),
+                    ),
+                    "alter_column_type",
+                )?;
             }
         }
         Ok(none_value())
@@ -980,10 +980,10 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         // here because they aren't always present.
         let mut hardcoded_columns = vec!["dbt_scd_id", "dbt_valid_from", "dbt_valid_to"];
 
-        if let Some(ref s) = strategy.hard_deletes {
-            if s == "new_record" {
-                hardcoded_columns.push("dbt_is_deleted");
-            }
+        if let Some(ref s) = strategy.hard_deletes
+            && s == "new_record"
+        {
+            hardcoded_columns.push("dbt_is_deleted");
         }
 
         for column in hardcoded_columns {

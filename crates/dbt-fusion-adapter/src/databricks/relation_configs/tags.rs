@@ -59,12 +59,10 @@ impl DatabricksComponentProcessor for TagsProcessor {
         for row in tags_table.rows() {
             if let (Ok(tag_name_val), Ok(tag_value_val)) =
                 (row.get_item(&Value::from(0)), row.get_item(&Value::from(1)))
-            {
-                if let (Some(tag_name), Some(tag_value)) =
+                && let (Some(tag_name), Some(tag_value)) =
                     (tag_name_val.as_str(), tag_value_val.as_str())
-                {
-                    set_tags.insert(tag_name.to_string(), tag_value.to_string());
-                }
+            {
+                set_tags.insert(tag_name.to_string(), tag_value.to_string());
             }
         }
         Some(DatabricksComponentConfig::Tags(TagsConfig::new(set_tags)))
@@ -76,12 +74,12 @@ impl DatabricksComponentProcessor for TagsProcessor {
     ) -> AdapterResult<Option<DatabricksComponentConfig>> {
         let mut databricks_tags = BTreeMap::new();
         if let Some(model) = relation_config.as_any().downcast_ref::<DbtModel>() {
-            if let Some(databricks_attr) = &model.__adapter_attr__.databricks_attr {
-                if let Some(tags_map) = &databricks_attr.databricks_tags {
-                    for (key, value) in tags_map {
-                        if let YmlValue::String(value_str, _) = value {
-                            databricks_tags.insert(key.clone(), value_str.clone());
-                        }
+            if let Some(databricks_attr) = &model.__adapter_attr__.databricks_attr
+                && let Some(tags_map) = &databricks_attr.databricks_tags
+            {
+                for (key, value) in tags_map {
+                    if let YmlValue::String(value_str, _) = value {
+                        databricks_tags.insert(key.clone(), value_str.clone());
                     }
                 }
             }

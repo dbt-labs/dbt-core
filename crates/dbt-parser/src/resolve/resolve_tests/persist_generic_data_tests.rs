@@ -787,10 +787,9 @@ fn collect_versioned_model_tests(
             .__additional_properties__
             .get("tests")
             .or_else(|| version.__additional_properties__.get("data_tests"))
+            && let Ok(version_tests) = dbt_serde_yaml::from_value::<Vec<DataTests>>(tests.clone())
         {
-            if let Ok(version_tests) = dbt_serde_yaml::from_value::<Vec<DataTests>>(tests.clone()) {
-                version_config.model_tests = Some(version_tests);
-            }
+            version_config.model_tests = Some(version_tests);
         }
 
         // Handle version-specific column tests and inheritance
@@ -900,7 +899,7 @@ pub trait TestableNodeTrait {
         None
     }
 
-    fn as_testable(&self) -> TestableNode<Self>
+    fn as_testable(&self) -> TestableNode<'_, Self>
     where
         Self: Sized,
     {

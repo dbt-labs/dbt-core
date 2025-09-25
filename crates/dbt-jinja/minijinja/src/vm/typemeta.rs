@@ -10,7 +10,7 @@ use crate::types::function::{LambdaType, UserDefinedFunctionType};
 use crate::types::list::ListType;
 use crate::types::struct_::StructType;
 use crate::types::tuple::TupleType;
-use crate::types::utils::{infer_type_from_const_value, instr_name, CodeLocation};
+use crate::types::utils::{infer_type_from_const_value, instr_name};
 use crate::types::DynObject;
 use crate::types::Type;
 use crate::value::ValueMap;
@@ -396,7 +396,7 @@ impl TypecheckStack {
         self.0.last()
     }
 
-    pub fn drain<R>(&mut self, range: R) -> std::vec::Drain<TypeWithConstraint>
+    pub fn drain<R>(&mut self, range: R) -> std::vec::Drain<'_, TypeWithConstraint>
     where
         R: RangeBounds<usize>,
     {
@@ -483,26 +483,6 @@ impl TypecheckState {
                 BTreeMap::new(),
             )
         }
-    }
-}
-
-/// Represents a type error
-/// We current only use the 'message', 'line_num' and 'col_num' are saved for future uses
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct TypeError {
-    pub message: String,
-    pub location: CodeLocation,
-}
-
-impl std::fmt::Display for TypeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "TypeError: {}", self.message)
-    }
-}
-
-impl std::fmt::Debug for TypeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "TypeError: {}", self.message)
     }
 }
 

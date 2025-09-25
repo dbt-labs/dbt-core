@@ -271,7 +271,7 @@ macro_rules! default_to {
 }
 
 pub trait IterChildren<T> {
-    fn iter_children(&self) -> Iter<String, ShouldBe<T>>;
+    fn iter_children(&self) -> Iter<'_, String, ShouldBe<T>>;
 }
 
 #[cfg(test)]

@@ -23,10 +23,10 @@ impl Object for Flags {
     }
 
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        if let Some(s) = key.as_str() {
-            if self.flags.contains_key(s) {
-                return Some(self.flags[s].clone());
-            }
+        if let Some(s) = key.as_str()
+            && self.flags.contains_key(s)
+        {
+            return Some(self.flags[s].clone());
         }
         None
     }

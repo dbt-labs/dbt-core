@@ -89,15 +89,15 @@ impl IoArgs {
         let in_dir = &self.in_dir;
         let out_dir = &self.out_dir;
 
-        if path.starts_with(in_dir) {
-            if let Some(relative_path) = diff_paths(path, in_dir) {
-                return relative_path.to_string_lossy().to_string();
-            }
+        if path.starts_with(in_dir)
+            && let Some(relative_path) = diff_paths(path, in_dir)
+        {
+            return relative_path.to_string_lossy().to_string();
         }
-        if path.starts_with(out_dir) {
-            if let Some(relative_path) = diff_paths(path, out_dir) {
-                return relative_path.to_string_lossy().to_string();
-            }
+        if path.starts_with(out_dir)
+            && let Some(relative_path) = diff_paths(path, out_dir)
+        {
+            return relative_path.to_string_lossy().to_string();
         }
         if path.is_relative() {
             let target_path = in_dir.join("target").join(path);

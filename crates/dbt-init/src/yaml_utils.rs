@@ -112,10 +112,10 @@ pub fn read_yaml_as_value<T: serde::de::DeserializeOwned>(path: &Path) -> FsResu
 
 /// Parse YAML content and check if a top-level key exists using serde.
 pub fn has_top_level_key_parsed_str(content: &str, key: &str) -> bool {
-    if let Ok(val) = dbt_serde_yaml::from_str::<dbt_serde_yaml::Value>(content) {
-        if let Some(mapping) = val.as_mapping() {
-            return mapping.iter().any(|(k, _)| k.as_str() == Some(key));
-        }
+    if let Ok(val) = dbt_serde_yaml::from_str::<dbt_serde_yaml::Value>(content)
+        && let Some(mapping) = val.as_mapping()
+    {
+        return mapping.iter().any(|(k, _)| k.as_str() == Some(key));
     }
     false
 }

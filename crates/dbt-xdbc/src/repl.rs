@@ -1,4 +1,5 @@
-use std::{env, sync::Arc};
+use std::sync::Arc;
+use std::{env, slice};
 
 use adbc_core::{
     error::{Error, Result},
@@ -349,7 +350,7 @@ pub async fn run_repl(backend_str: &str) -> Result<()> {
                         "Query Results",
                         "",
                         &column_names,
-                        &[batch.clone()],
+                        slice::from_ref(&batch),
                         &DisplayFormat::Table,
                         Some(10),
                         true,

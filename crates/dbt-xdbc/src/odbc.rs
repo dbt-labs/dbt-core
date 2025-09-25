@@ -43,12 +43,12 @@ fn error_with_diagnostics(error: Error, handle_type: HandleType, handle: Handle)
     ];
     for record_number in interesting_records {
         let diagnostic = sql_get_diag_rec(handle_type, handle, record_number);
-        if let Ok(Some(diagnostic)) = diagnostic {
-            if !diagnostic.message.is_empty() {
-                augmented_error
-                    .message
-                    .push_str(&format!("\n  {}", diagnostic.message));
-            }
+        if let Ok(Some(diagnostic)) = diagnostic
+            && !diagnostic.message.is_empty()
+        {
+            augmented_error
+                .message
+                .push_str(&format!("\n  {}", diagnostic.message));
         }
     }
     augmented_error

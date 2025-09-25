@@ -29,10 +29,10 @@ pub struct SemanticManifestMetric {
 impl From<DbtMetric> for SemanticManifestMetric {
     fn from(metric: DbtMetric) -> Self {
         let mut config: Option<SemanticLayerElementConfig> = None;
-        if let Some(meta) = metric.deprecated_config.meta {
-            if !meta.is_empty() {
-                config = Some(SemanticLayerElementConfig { meta: Some(meta) });
-            }
+        if let Some(meta) = metric.deprecated_config.meta
+            && !meta.is_empty()
+        {
+            config = Some(SemanticLayerElementConfig { meta: Some(meta) });
         }
 
         SemanticManifestMetric {

@@ -437,10 +437,11 @@ fn set_user_cookie(profiles_dir: &Path, cookie_path: &Path) -> String {
     let user_id = uuid::Uuid::new_v4().to_string();
     let profiles_file = profiles_dir.join("profiles.yml");
     // Check if profiles_dir is empty (current directory) or exists
-    if (profiles_dir.as_os_str().is_empty() || profiles_dir.exists()) && profiles_file.exists() {
-        if let Ok(yaml) = dbt_serde_yaml::to_string(&user_id) {
-            let _ = fs::write(cookie_path, yaml);
-        }
+    if (profiles_dir.as_os_str().is_empty() || profiles_dir.exists())
+        && profiles_file.exists()
+        && let Ok(yaml) = dbt_serde_yaml::to_string(&user_id)
+    {
+        let _ = fs::write(cookie_path, yaml);
     }
     // even if we weren't able to store the user_id in the .user.yml file, return it anyway
     user_id

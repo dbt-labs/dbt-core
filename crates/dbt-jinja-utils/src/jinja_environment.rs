@@ -179,7 +179,7 @@ impl JinjaEnv {
     }
 
     /// Get a template from the environment.
-    pub fn get_template(&self, name: &str) -> FsResult<JinjaTemplate> {
+    pub fn get_template(&self, name: &str) -> FsResult<JinjaTemplate<'_, '_>> {
         if !self.has_template(name) {
             return Err(fs_err!(
                 ErrorCode::JinjaError,

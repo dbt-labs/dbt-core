@@ -115,30 +115,28 @@ impl Auth for DatabricksAuth {
     }
 }
 
-fn resolve_http_path(config: &AdapterConfig) -> Result<Cow<str>, AuthError> {
+fn resolve_http_path(config: &AdapterConfig) -> Result<Cow<'_, str>, AuthError> {
     let mut http_path = config.require_string("http_path")?;
     let databricks_compute_config = config.get_string("databricks_compute");
 
     if let Some(databricks_compute) = databricks_compute_config {
         let compute = config.require("compute")?;
 
-        if let Value::Mapping(map, ..) = compute {
-            if let Some((_, Value::Mapping(compute_map, ..))) = map
+        if let Value::Mapping(map, ..) = compute
+            && let Some((_, Value::Mapping(compute_map, ..))) = map
                 .iter()
                 .find(|(k, _)| matches!(k, Value::String(s, _) if *s == databricks_compute))
-            {
-                if let Some(Value::String(path, _)) = compute_map.iter().find_map(|(k, v)| {
-                    if let Value::String(key, _) = k {
-                        if key == "http_path" {
-                            return Some(v);
-                        }
-                    }
-                    None
-                }) {
-                    http_path = Cow::from(path);
-                    return Ok(http_path);
+            && let Some(Value::String(path, _)) = compute_map.iter().find_map(|(k, v)| {
+                if let Value::String(key, _) = k
+                    && key == "http_path"
+                {
+                    return Some(v);
                 }
-            }
+                None
+            })
+        {
+            http_path = Cow::from(path);
+            return Ok(http_path);
         }
 
         return Err(AuthError::Config(format!(

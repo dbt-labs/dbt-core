@@ -6,10 +6,10 @@ use crate::{ErrorCode, FsError, FsResult};
 
 /// Extracts a substring enclosed in the given regex pattern
 pub fn find_enclosed_substring(msg: &str, re: &Regex) -> Option<String> {
-    if let Some(captures) = re.captures(msg) {
-        if let Some(substring) = captures.get(1) {
-            return Some(substring.as_str().to_string());
-        }
+    if let Some(captures) = re.captures(msg)
+        && let Some(substring) = captures.get(1)
+    {
+        return Some(substring.as_str().to_string());
     }
     None
 }

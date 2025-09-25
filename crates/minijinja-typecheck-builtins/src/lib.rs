@@ -14,8 +14,7 @@ use serde::{Deserialize, Serialize};
 fn load_definitions() -> Vec<Definition> {
     let filename = "builtins.sdf.yml".to_string();
     let asset = assets::Asset::get(filename.as_str());
-    if asset.is_some() {
-        let asset = asset.unwrap();
+    if let Some(asset) = asset {
         let input = std::str::from_utf8(&asset.data)
             .unwrap_or_else(|_| panic!("{filename}:: corrupted asset: non UTF-8"));
 

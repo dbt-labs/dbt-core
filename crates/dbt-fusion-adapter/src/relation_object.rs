@@ -165,15 +165,15 @@ impl Object for RelationObject {
     where
         Self: Sized + 'static,
     {
-        if let Some(run_filter) = &self.run_filter {
-            if run_filter.enabled() {
-                let rendered = self.render_self_as_str();
-                return write!(
-                    f,
-                    "{}",
-                    render_with_run_filter_as_str(rendered, run_filter, &self.event_time)
-                );
-            }
+        if let Some(run_filter) = &self.run_filter
+            && run_filter.enabled()
+        {
+            let rendered = self.render_self_as_str();
+            return write!(
+                f,
+                "{}",
+                render_with_run_filter_as_str(rendered, run_filter, &self.event_time)
+            );
         }
 
         write!(f, "{}", self.render_self().expect("could not render self"))

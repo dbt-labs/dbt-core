@@ -384,16 +384,13 @@ impl TryFrom<DescribeMaterializedViewResults> for RedshiftMaterializedViewConfig
 
             // sort_columns = [row for row in columns.rows if row.get("sort_key_position", 0) > 0]
             for row in columns_table.rows().into_iter() {
-                if let Ok(sort_pos_value) = row.get_attr("sort_key_position") {
-                    if let Some(sort_pos) = sort_pos_value.as_i64() {
-                        if sort_pos > 0 {
-                            if let Ok(col_name_value) = row.get_attr("column_name") {
-                                if let Some(col_name) = col_name_value.as_str() {
-                                    sort_columns.push((sort_pos as usize, col_name.to_string()));
-                                }
-                            }
-                        }
-                    }
+                if let Ok(sort_pos_value) = row.get_attr("sort_key_position")
+                    && let Some(sort_pos) = sort_pos_value.as_i64()
+                    && sort_pos > 0
+                    && let Ok(col_name_value) = row.get_attr("column_name")
+                    && let Some(col_name) = col_name_value.as_str()
+                {
+                    sort_columns.push((sort_pos as usize, col_name.to_string()));
                 }
             }
 

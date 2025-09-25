@@ -232,14 +232,14 @@ mod tests {
                 };
 
                 // Fail after writing N messages
-                if let Some(fail_after) = self.fail_after_message_count {
-                    if count > fail_after {
-                        // Don't write to buffer on failure
-                        return Err(io::Error::new(
-                            io::ErrorKind::BrokenPipe,
-                            "Mock write error",
-                        ));
-                    }
+                if let Some(fail_after) = self.fail_after_message_count
+                    && count > fail_after
+                {
+                    // Don't write to buffer on failure
+                    return Err(io::Error::new(
+                        io::ErrorKind::BrokenPipe,
+                        "Mock write error",
+                    ));
                 }
 
                 let mut full_msg = self.msg_buffer.lock().unwrap();
@@ -311,10 +311,10 @@ mod tests {
 
             // Wait until the writer thread has processed at least 2 messages
             loop {
-                if let Ok(c) = counter.try_lock() {
-                    if *c > 1 {
-                        break;
-                    }
+                if let Ok(c) = counter.try_lock()
+                    && *c > 1
+                {
+                    break;
                 }
 
                 if start.elapsed() > timeout {

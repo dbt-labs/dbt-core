@@ -26,7 +26,7 @@ pub struct ProjectSemanticModelConfig {
 }
 
 impl IterChildren<ProjectSemanticModelConfig> for ProjectSemanticModelConfig {
-    fn iter_children(&self) -> Iter<String, ShouldBe<Self>> {
+    fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }
 }

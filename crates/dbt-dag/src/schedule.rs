@@ -83,18 +83,18 @@ impl Schedule<String> {
             .expect("Failed to convert node to map, should not happen");
 
         // Handle depends_on field specially (remove nodes_with_ref_location)
-        if keys_to_use.contains(&"depends_on".to_string()) {
-            if let Some(depends_on_value) = node_map.get("depends_on") {
-                if let Some(depends_on_obj) = depends_on_value.as_object() {
-                    let mut cleaned_depends_on = depends_on_obj.clone();
-                    cleaned_depends_on.remove("nodes_with_ref_location");
-                    json_map.insert(
-                        "depends_on".to_string(),
-                        JsonValue::Object(cleaned_depends_on),
-                    );
-                } else {
-                    json_map.insert("depends_on".to_string(), depends_on_value.clone());
-                }
+        if keys_to_use.contains(&"depends_on".to_string())
+            && let Some(depends_on_value) = node_map.get("depends_on")
+        {
+            if let Some(depends_on_obj) = depends_on_value.as_object() {
+                let mut cleaned_depends_on = depends_on_obj.clone();
+                cleaned_depends_on.remove("nodes_with_ref_location");
+                json_map.insert(
+                    "depends_on".to_string(),
+                    JsonValue::Object(cleaned_depends_on),
+                );
+            } else {
+                json_map.insert("depends_on".to_string(), depends_on_value.clone());
             }
         }
 

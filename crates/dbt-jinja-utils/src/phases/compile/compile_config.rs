@@ -1,6 +1,6 @@
 //! Module for the parse config object to be used during parsing
 
-use std::{collections::BTreeMap, rc::Rc, sync::Arc};
+use std::{collections::BTreeMap, rc::Rc, slice, sync::Arc};
 
 use dashmap::DashMap;
 use minijinja::{
@@ -74,7 +74,7 @@ impl Object for CompileConfig {
                 let validator = args.get_optional::<Value>("validator");
                 if let Some(validator) = validator {
                     // Pass the actual value to the validator
-                    let result = validator.call(state, &[result.clone()], listeners);
+                    let result = validator.call(state, slice::from_ref(&result), listeners);
                     result?;
                 }
 

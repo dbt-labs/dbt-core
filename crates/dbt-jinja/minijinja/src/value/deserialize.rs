@@ -403,7 +403,7 @@ impl de::Error for Error {
     }
 }
 
-fn value_to_unexpected(value: &Value) -> Unexpected {
+fn value_to_unexpected(value: &Value) -> Unexpected<'_> {
     match value.0 {
         ValueRepr::Undefined | ValueRepr::None => Unexpected::Unit,
         ValueRepr::Bool(val) => Unexpected::Bool(val),

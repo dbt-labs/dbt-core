@@ -146,10 +146,10 @@ fn strip_internal_components(mut qualifier: Vec<String>) -> Vec<Identifier> {
     });
 
     // Strip the first component if it matches the internal name regex
-    if let Some(first) = qualifier.first() {
-        if INTERNAL_QUALIFIER_REGEX.is_match(first) {
-            qualifier.remove(0);
-        }
+    if let Some(first) = qualifier.first()
+        && INTERNAL_QUALIFIER_REGEX.is_match(first)
+    {
+        qualifier.remove(0);
     }
     qualifier.into_iter().map(|s| s.into()).collect::<Vec<_>>()
 }

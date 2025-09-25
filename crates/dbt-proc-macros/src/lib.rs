@@ -38,23 +38,23 @@ pub fn include_frontend_error_codes(
                 .variants
                 .into_iter()
                 .filter_map(|variant| {
-                    if let Some((eq, syn::Expr::Lit(lit))) = &variant.discriminant {
-                        if let syn::Lit::Int(int) = &lit.lit {
-                            let code = int.base10_parse::<u16>().expect("Invalid error code");
-                            if code < 900 {
-                                // Regular errors just map to the same code
-                                return Some(variant);
-                            } else {
-                                // Internal errors map to the 9k range
-                                return Some(Variant {
-                                    ident: Ident::new(
-                                        &format!("Frontend{}", variant.ident),
-                                        variant.ident.span(),
-                                    ),
-                                    discriminant: Some((*eq, syn::parse_quote!(#code + 9000))),
-                                    ..variant
-                                });
-                            }
+                    if let Some((eq, syn::Expr::Lit(lit))) = &variant.discriminant
+                        && let syn::Lit::Int(int) = &lit.lit
+                    {
+                        let code = int.base10_parse::<u16>().expect("Invalid error code");
+                        if code < 900 {
+                            // Regular errors just map to the same code
+                            return Some(variant);
+                        } else {
+                            // Internal errors map to the 9k range
+                            return Some(Variant {
+                                ident: Ident::new(
+                                    &format!("Frontend{}", variant.ident),
+                                    variant.ident.span(),
+                                ),
+                                discriminant: Some((*eq, syn::parse_quote!(#code + 9000))),
+                                ..variant
+                            });
                         }
                     };
                     None

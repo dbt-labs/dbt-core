@@ -87,10 +87,10 @@ impl PyDateTimeClass {
                     tzinfo: Some(tz.clone()),
                 })
             } else {
-                return Err(Error::new(
+                Err(Error::new(
                     ErrorKind::InvalidArgument,
                     "tzinfo must be a pytz timezone or None",
-                ));
+                ))
             }
         } else {
             // no tzinfo => naive
@@ -112,6 +112,7 @@ impl PyDateTimeClass {
 
         let local_now = chrono::Local::now(); // DateTime<Local>
 
+        #[expect(clippy::unnecessary_unwrap)] // TODO fix this
         if tz_val.is_none() || (tz_val.is_some() && tz_val.as_ref().unwrap().is_none()) {
             // tz is None, fall through to default case
             let local_tz = iana_time_zone::get_timezone().expect("Could not determine timezone.");
@@ -218,10 +219,10 @@ impl PyDateTimeClass {
                 };
                 Ok(py_dt)
             } else {
-                return Err(Error::new(
+                Err(Error::new(
                     ErrorKind::InvalidArgument,
                     "tz must be a pytz timezone or None",
-                ));
+                ))
             }
         } else {
             // no tz => naive local

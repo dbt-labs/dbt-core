@@ -1,5 +1,5 @@
+use std::fmt;
 use std::ptr::addr_of_mut;
-use std::{fmt, io};
 
 use serde::{Deserialize, Serialize};
 
@@ -128,31 +128,6 @@ impl fmt::Write for NullWriter {
     #[inline]
     fn write_char(&mut self, _c: char) -> fmt::Result {
         Ok(())
-    }
-}
-
-pub struct WriteWrapper<W> {
-    pub w: W,
-    pub err: Option<io::Error>,
-}
-
-impl<W: io::Write> fmt::Write for WriteWrapper<W> {
-    #[inline]
-    fn write_str(&mut self, s: &str) -> fmt::Result {
-        self.w.write_all(s.as_bytes()).map_err(|e| {
-            self.err = Some(e);
-            fmt::Error
-        })
-    }
-
-    #[inline]
-    fn write_char(&mut self, c: char) -> fmt::Result {
-        self.w
-            .write_all(c.encode_utf8(&mut [0; 4]).as_bytes())
-            .map_err(|e| {
-                self.err = Some(e);
-                fmt::Error
-            })
     }
 }
 

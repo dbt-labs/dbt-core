@@ -586,17 +586,15 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()
 
                     // REST: blank catalog_namespace invalid if field listed
                     if let Some(AdapterPropsView::Rest(rp)) = &write_integration.adapter_properties
+                        && let Some(ns) = rp.catalog_namespace
+                        && is_blank(ns)
                     {
-                        if let Some(ns) = rp.catalog_namespace {
-                            if is_blank(ns) {
-                                return err!(
-                                    code => ErrorCode::InvalidConfig,
-                                    loc  => err_loc(),
-                                    "Catalog '{}' integration '{}': 'catalog_namespace' cannot be blank",
-                                    catalog.catalog_name, write_integration.integration_name
-                                );
-                            }
-                        }
+                        return err!(
+                            code => ErrorCode::InvalidConfig,
+                            loc  => err_loc(),
+                            "Catalog '{}' integration '{}': 'catalog_namespace' cannot be blank",
+                            catalog.catalog_name, write_integration.integration_name
+                        );
                     }
 
                     let write_properties_set = match &write_integration.adapter_properties {

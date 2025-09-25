@@ -122,29 +122,29 @@ pub fn resolve_seeds(
         };
 
         // XXX: normalize column_types to uppercase if it is snowflake
-        if matches!(adapter_type, AdapterType::Snowflake) {
-            if let Some(column_types) = &properties_config.column_types {
-                let column_types = column_types
-                    .iter()
-                    .map(|(k, v)| {
-                        Ok((
-                            Dialect::Snowflake
-                                .parse_identifier(k)
-                                .map_err(|e| {
-                                    fs_err!(
-                                        ErrorCode::InvalidColumnReference,
-                                        "Invalid identifier: {}",
-                                        e
-                                    )
-                                })?
-                                .to_value(),
-                            v.to_owned(),
-                        ))
-                    })
-                    .collect::<FsResult<_>>()?;
+        if matches!(adapter_type, AdapterType::Snowflake)
+            && let Some(column_types) = &properties_config.column_types
+        {
+            let column_types = column_types
+                .iter()
+                .map(|(k, v)| {
+                    Ok((
+                        Dialect::Snowflake
+                            .parse_identifier(k)
+                            .map_err(|e| {
+                                fs_err!(
+                                    ErrorCode::InvalidColumnReference,
+                                    "Invalid identifier: {}",
+                                    e
+                                )
+                            })?
+                            .to_value(),
+                        v.to_owned(),
+                    ))
+                })
+                .collect::<FsResult<_>>()?;
 
-                properties_config.column_types = Some(column_types);
-            }
+            properties_config.column_types = Some(column_types);
         }
 
         if package_name != root_project.name {

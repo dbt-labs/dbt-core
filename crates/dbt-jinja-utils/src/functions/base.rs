@@ -364,18 +364,18 @@ pub fn tojson(_state: &State, args: &[Value]) -> Result<Value, Error> {
         Ok(mut json_str) => {
             if sort_keys {
                 // Parse the JSON string back to a Value to sort keys
-                if let Ok(mut json_value) = serde_json::from_str::<serde_json::Value>(&json_str) {
-                    if let Some(obj) = json_value.as_object_mut() {
-                        let sorted: serde_json::Map<String, serde_json::Value> = obj
-                            .iter()
-                            .collect::<BTreeMap<_, _>>()
-                            .into_iter()
-                            .map(|(k, v)| (k.clone(), v.clone()))
-                            .collect();
-                        json_value = serde_json::Value::Object(sorted);
-                        json_str =
-                            serde_json::to_string(&json_value).unwrap_or_else(|_| "{}".to_string());
-                    }
+                if let Ok(mut json_value) = serde_json::from_str::<serde_json::Value>(&json_str)
+                    && let Some(obj) = json_value.as_object_mut()
+                {
+                    let sorted: serde_json::Map<String, serde_json::Value> = obj
+                        .iter()
+                        .collect::<BTreeMap<_, _>>()
+                        .into_iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect();
+                    json_value = serde_json::Value::Object(sorted);
+                    json_str =
+                        serde_json::to_string(&json_value).unwrap_or_else(|_| "{}".to_string());
                 }
             }
             Ok(Value::from_safe_string(json_str))
@@ -486,12 +486,9 @@ pub fn toyaml(_state: &State, args: &[Value]) -> Result<Value, Error> {
     };
 
     // Sort keys if requested
-    if sort_keys {
-        if let Some(obj) = json_value.as_object_mut() {
-            let sorted_map: BTreeMap<_, _> =
-                obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-            *obj = sorted_map.into_iter().collect();
-        }
+    if sort_keys && let Some(obj) = json_value.as_object_mut() {
+        let sorted_map: BTreeMap<_, _> = obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        *obj = sorted_map.into_iter().collect();
     }
 
     match dbt_serde_yaml::to_string(&json_value) {

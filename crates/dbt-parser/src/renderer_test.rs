@@ -122,7 +122,7 @@ mod tests {
         let mut node_properties = BTreeMap::new();
         let seq_results = render_unresolved_sql_files::<ModelConfig, ModelProperties>(
             &render_ctx,
-            &[test_asset.clone()],
+            &[test_asset],
             &mut node_properties,
             &token,
         )

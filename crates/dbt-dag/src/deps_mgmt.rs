@@ -346,10 +346,10 @@ pub fn get_sinks<T, U>(
             }
         }
     }
-    if sinks.is_empty() {
-        if let Some(k) = deps.keys().next() {
-            sinks.insert(k.to_owned());
-        }
+    if sinks.is_empty()
+        && let Some(k) = deps.keys().next()
+    {
+        sinks.insert(k.to_owned());
     }
 }
 

@@ -22,13 +22,13 @@ pub async fn await_build_progress(
     while let Some(build_image_result) = build_image_stream.next().await {
         match build_image_result {
             Ok(BuildInfo { stream, .. }) => {
-                if let Some(stream) = stream {
-                    if stream.contains(STEP_COUNTER_STR) {
-                        if progress_length > current_progress {
-                            current_progress += 1;
-                        } else if let Some(parsed_len) = get_progress_length(&stream) {
-                            progress_length = parsed_len as usize;
-                        }
+                if let Some(stream) = stream
+                    && stream.contains(STEP_COUNTER_STR)
+                {
+                    if progress_length > current_progress {
+                        current_progress += 1;
+                    } else if let Some(parsed_len) = get_progress_length(&stream) {
+                        progress_length = parsed_len as usize;
                     }
                 }
             }
@@ -41,10 +41,10 @@ pub async fn await_build_progress(
 /// Checks a docker output message for a r'Step' indicator, returning the total number of steps
 pub fn get_progress_length(msg: &str) -> Option<u64> {
     let re = Regex::new(r"Step (\d+)/(\d+)").unwrap();
-    if let Some(captures) = re.captures(msg) {
-        if let Some(m) = captures.get(2) {
-            return Some(m.as_str().parse::<u64>().unwrap());
-        }
+    if let Some(captures) = re.captures(msg)
+        && let Some(m) = captures.get(2)
+    {
+        return Some(m.as_str().parse::<u64>().unwrap());
     }
     None
 }
@@ -108,17 +108,17 @@ pub async fn get_docker() -> Result<bollard::Docker, ContainerError> {
     if let Ok(docker_version) = docker.version().await {
         if let Some(platform) = &docker_version.platform {
             let re = Regex::new(r"Docker Desktop (\d+\.\d+\.\d+)").unwrap();
-            if let Some(captures) = re.captures(&platform.name) {
-                if let Some(m) = captures.get(1) {
-                    match compare_versions(m.as_str(), MIN_DOCKER_DESKTOP_VERSION) {
-                        std::cmp::Ordering::Greater | std::cmp::Ordering::Equal => {}
-                        std::cmp::Ordering::Less => {
-                            let target: &str = &format!(
-                                "Docker Desktop version is less than the minimum supported version. Consider upgrading to at least '{MIN_DOCKER_DESKTOP_VERSION}'"
-                            );
-                            println!("{target}");
-                            return Ok(docker);
-                        }
+            if let Some(captures) = re.captures(&platform.name)
+                && let Some(m) = captures.get(1)
+            {
+                match compare_versions(m.as_str(), MIN_DOCKER_DESKTOP_VERSION) {
+                    std::cmp::Ordering::Greater | std::cmp::Ordering::Equal => {}
+                    std::cmp::Ordering::Less => {
+                        let target: &str = &format!(
+                            "Docker Desktop version is less than the minimum supported version. Consider upgrading to at least '{MIN_DOCKER_DESKTOP_VERSION}'"
+                        );
+                        println!("{target}");
+                        return Ok(docker);
                     }
                 }
             }

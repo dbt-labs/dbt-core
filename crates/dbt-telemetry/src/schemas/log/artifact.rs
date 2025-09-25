@@ -28,7 +28,7 @@ impl ProtoTelemetryEvent for CompiledCodeInline {
 }
 
 impl ArrowSerializableTelemetryEvent for CompiledCodeInline {
-    fn to_arrow_record(&self) -> ArrowAttributes {
+    fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             json_payload: serde_json::to_string(self)
                 .expect("Failed to serialize CompiledCodeInline to JSON")

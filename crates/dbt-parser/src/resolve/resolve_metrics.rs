@@ -135,10 +135,10 @@ pub fn resolve_nested_model_metrics(
             .unwrap_or_else(|| panic!("ModelPropertiesEntry must exist for model '{model_name}'"));
 
         let mut semantic_model_name = model_props.name.clone();
-        if let Some(semantic_model) = &model_props.semantic_model {
-            if let Some(name) = &semantic_model.name {
-                semantic_model_name = name.clone();
-            }
+        if let Some(semantic_model) = &model_props.semantic_model
+            && let Some(name) = &semantic_model.name
+        {
+            semantic_model_name = name.clone();
         }
         let semantic_model_unique_id =
             get_unique_id(&semantic_model_name, package_name, None, "semantic_model");

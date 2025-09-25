@@ -65,11 +65,10 @@ impl DatabricksRelationConfigBase for MaterializedViewConfig {
             let key = component.name();
             if let (Some(value), Some(existing_value)) =
                 (self.get_config(key), existing.get_component(key))
+                && let Some(diff) = value.get_diff(&existing_value)
             {
-                if let Some(diff) = value.get_diff(&existing_value) {
-                    requires_refresh = requires_refresh || key != "refresh";
-                    changes.insert(key.to_string(), diff);
-                }
+                requires_refresh = requires_refresh || key != "refresh";
+                changes.insert(key.to_string(), diff);
             }
         }
 

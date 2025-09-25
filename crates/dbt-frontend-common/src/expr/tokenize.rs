@@ -262,10 +262,10 @@ mod tests {
         );
     }
 
-    fn tokens(s: &str) -> Vec<Token> {
+    fn tokens(s: &str) -> Vec<Token<'_>> {
         try_tokens(s).unwrap()
     }
-    fn try_tokens(s: &str) -> Result<Vec<Token>, String> {
+    fn try_tokens(s: &str) -> Result<Vec<Token<'_>>, String> {
         tokenize(s).collect::<Result<_, _>>()
     }
 }

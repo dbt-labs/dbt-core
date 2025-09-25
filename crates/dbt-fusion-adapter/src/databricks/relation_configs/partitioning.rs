@@ -45,20 +45,20 @@ impl DatabricksComponentProcessor for PartitionedByProcessor {
 
         // Find partition information section in describe_extended output
         for row in describe_extended.rows() {
-            if let Ok(first_col) = row.get_item(&Value::from(0)) {
-                if let Some(first_str) = first_col.as_str() {
-                    if first_str == "# Partition Information" {
-                        found_partition_section = true;
-                        continue;
-                    }
+            if let Ok(first_col) = row.get_item(&Value::from(0))
+                && let Some(first_str) = first_col.as_str()
+            {
+                if first_str == "# Partition Information" {
+                    found_partition_section = true;
+                    continue;
+                }
 
-                    if found_partition_section {
-                        if first_str.is_empty() {
-                            break; // End of partition section
-                        }
-                        if !first_str.starts_with("# ") {
-                            partition_cols.push(first_str.to_string());
-                        }
+                if found_partition_section {
+                    if first_str.is_empty() {
+                        break; // End of partition section
+                    }
+                    if !first_str.starts_with("# ") {
+                        partition_cols.push(first_str.to_string());
                     }
                 }
             }

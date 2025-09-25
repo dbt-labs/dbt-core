@@ -48,7 +48,7 @@ impl ProtoTelemetryEvent for NodeEvaluated {
 }
 
 impl ArrowSerializableTelemetryEvent for NodeEvaluated {
-    fn to_arrow_record(&self) -> ArrowAttributes {
+    fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             // Well-known fields for easier querying
             phase: Some(self.phase()),

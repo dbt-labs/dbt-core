@@ -225,10 +225,10 @@ pub struct FrontendError {
 impl std::fmt::Display for FrontendError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.context)?;
-        if self.code == ErrorCode::Unknown {
-            if let Some(cause) = self.cause.as_ref() {
-                write!(f, ": {cause:?}")?;
-            }
+        if self.code == ErrorCode::Unknown
+            && let Some(cause) = self.cause.as_ref()
+        {
+            write!(f, ": {cause:?}")?;
         }
         Ok(())
     }

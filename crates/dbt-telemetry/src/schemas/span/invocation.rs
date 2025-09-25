@@ -41,7 +41,7 @@ impl ProtoTelemetryEvent for Invocation {
 }
 
 impl ArrowSerializableTelemetryEvent for Invocation {
-    fn to_arrow_record(&self) -> ArrowAttributes {
+    fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             json_payload: serde_json::to_string(self)
                 .unwrap_or_else(|_| {

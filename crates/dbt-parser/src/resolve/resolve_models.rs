@@ -517,40 +517,37 @@ fn process_versioned_columns(
     columns: BTreeMap<String, DbtColumnRef>,
 ) -> Result<BTreeMap<String, DbtColumnRef>, Box<dbt_common::FsError>> {
     for version in versions.iter() {
-        if maybe_version.is_some_and(|v| Some(v) == version.get_version().as_ref()) {
-            if let Some(column_props) = version.__additional_properties__.get("columns") {
-                let column_map: Vec<ColumnProperties> = column_props
-                    .as_sequence()
-                    .map(|cols| {
-                        cols.iter()
-                            .filter_map(|col| col.as_mapping())
-                            .filter(|map| {
-                                !(map.contains_key("include") || map.contains_key("exclude"))
-                            })
-                            .filter_map(|map| {
-                                dbt_serde_yaml::from_value::<ColumnProperties>(map.clone().into())
-                                    .ok()
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default();
+        if maybe_version.is_some_and(|v| Some(v) == version.get_version().as_ref())
+            && let Some(column_props) = version.__additional_properties__.get("columns")
+        {
+            let column_map: Vec<ColumnProperties> = column_props
+                .as_sequence()
+                .map(|cols| {
+                    cols.iter()
+                        .filter_map(|col| col.as_mapping())
+                        .filter(|map| !(map.contains_key("include") || map.contains_key("exclude")))
+                        .filter_map(|map| {
+                            dbt_serde_yaml::from_value::<ColumnProperties>(map.clone().into()).ok()
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
 
-                let mut versioned_columns = process_columns(
-                    Some(&column_map),
-                    model_config.meta.clone(),
-                    model_config.tags.clone().map(|tags| tags.into()),
-                )?;
+            let mut versioned_columns = process_columns(
+                Some(&column_map),
+                model_config.meta.clone(),
+                model_config.tags.clone().map(|tags| tags.into()),
+            )?;
 
-                if let Some(rules) = ColumnInheritanceRules::from_version_columns(column_props) {
-                    columns
-                        .iter()
-                        .filter(|(name, _)| rules.should_include_column(name))
-                        .for_each(|(name, col)| {
-                            versioned_columns.insert(name.clone(), col.clone());
-                        });
-                }
-                return Ok(versioned_columns);
+            if let Some(rules) = ColumnInheritanceRules::from_version_columns(column_props) {
+                columns
+                    .iter()
+                    .filter(|(name, _)| rules.should_include_column(name))
+                    .for_each(|(name, col)| {
+                        versioned_columns.insert(name.clone(), col.clone());
+                    });
             }
+            return Ok(versioned_columns);
         }
     }
 

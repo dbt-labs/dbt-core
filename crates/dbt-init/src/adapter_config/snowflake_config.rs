@@ -72,10 +72,10 @@ impl InteractiveSetup for SnowflakeDbConfig {
                 }
             }
             "role" => {
-                if let FieldValue::String(s) = value {
-                    if !s.is_empty() {
-                        self.role = Some(s);
-                    }
+                if let FieldValue::String(s) = value
+                    && !s.is_empty()
+                {
+                    self.role = Some(s);
                 }
             }
             "password" => {

@@ -341,10 +341,10 @@ pub fn find_macro_template(
     let cache_key = (current_project_name.to_string(), macro_name.to_string());
 
     // Check cache first - return early if found
-    if let Ok(cache) = TEMPLATE_CACHE.lock() {
-        if let Some(template) = cache.get(&cache_key) {
-            return Ok(template.clone());
-        }
+    if let Ok(cache) = TEMPLATE_CACHE.lock()
+        && let Some(template) = cache.get(&cache_key)
+    {
+        return Ok(template.clone());
     }
     // First try - check the current project
     let template_name = format!("{current_project_name}.{macro_name}");

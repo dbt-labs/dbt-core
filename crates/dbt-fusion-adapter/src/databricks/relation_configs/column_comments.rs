@@ -77,26 +77,26 @@ impl DatabricksComponentProcessor for ColumnCommentsProcessor {
         // Iterate through rows looking for column information
         for row in table.rows().into_iter() {
             // Get col_name - if it starts with #, we've reached the end of columns
-            if let Ok(col_name_value) = row.get_attr("col_name") {
-                if let Some(col_name_str) = col_name_value.as_str() {
-                    if col_name_str.starts_with('#') {
-                        break;
-                    }
-
-                    // Skip empty column names (metadata rows)
-                    if col_name_str.trim().is_empty() {
-                        continue;
-                    }
-
-                    // Get the comment for this column (default to empty string if None)
-                    let comment = if let Ok(comment_value) = row.get_attr("comment") {
-                        comment_value.as_str().unwrap_or("").to_string()
-                    } else {
-                        String::new()
-                    };
-
-                    comments.insert(col_name_str.to_lowercase(), comment);
+            if let Ok(col_name_value) = row.get_attr("col_name")
+                && let Some(col_name_str) = col_name_value.as_str()
+            {
+                if col_name_str.starts_with('#') {
+                    break;
                 }
+
+                // Skip empty column names (metadata rows)
+                if col_name_str.trim().is_empty() {
+                    continue;
+                }
+
+                // Get the comment for this column (default to empty string if None)
+                let comment = if let Ok(comment_value) = row.get_attr("comment") {
+                    comment_value.as_str().unwrap_or("").to_string()
+                } else {
+                    String::new()
+                };
+
+                comments.insert(col_name_str.to_lowercase(), comment);
             }
         }
 

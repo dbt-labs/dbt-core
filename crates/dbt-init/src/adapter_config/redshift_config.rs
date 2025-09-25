@@ -54,13 +54,13 @@ impl InteractiveSetup for RedshiftDbConfig {
                 }
             }
             "port" => {
-                if let FieldValue::String(s) = value {
-                    if !s.is_empty() {
-                        if let Ok(n) = s.parse::<i64>() {
-                            self.port = Some(StringOrInteger::Integer(n));
-                        } else {
-                            self.port = Some(StringOrInteger::String(s));
-                        }
+                if let FieldValue::String(s) = value
+                    && !s.is_empty()
+                {
+                    if let Ok(n) = s.parse::<i64>() {
+                        self.port = Some(StringOrInteger::Integer(n));
+                    } else {
+                        self.port = Some(StringOrInteger::String(s));
                     }
                 }
             }

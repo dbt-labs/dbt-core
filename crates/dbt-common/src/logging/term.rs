@@ -124,11 +124,11 @@ impl FancyLogger {
                 };
 
                 let shut_down_flag = cvar.wait_timeout(lock, Duration::from_millis(80));
-                if let Ok((flag, _)) = shut_down_flag {
-                    if *flag {
-                        // Shutdown requested
-                        break;
-                    }
+                if let Ok((flag, _)) = shut_down_flag
+                    && *flag
+                {
+                    // Shutdown requested
+                    break;
                 }
 
                 spinners.iter().for_each(|item| {
@@ -524,13 +524,13 @@ impl ContextualProgressBar {
         }
 
         // Add in-progress last
-        if let Ok(items) = self.items.read() {
-            if !items.is_empty() {
-                let part = DIM
-                    .apply_to(format!("{} in-progress", items.len()))
-                    .to_string();
-                formatted_parts.push(part);
-            }
+        if let Ok(items) = self.items.read()
+            && !items.is_empty()
+        {
+            let part = DIM
+                .apply_to(format!("{} in-progress", items.len()))
+                .to_string();
+            formatted_parts.push(part);
         }
 
         // Join all parts with " | "

@@ -49,19 +49,17 @@ impl DatabricksComponentProcessor for CommentProcessor {
         for row in describe_extended.rows() {
             if let (Ok(key_val), Ok(value_val)) =
                 (row.get_item(&Value::from(0)), row.get_item(&Value::from(1)))
+                && let (Some(key_str), Some(value_str)) = (key_val.as_str(), value_val.as_str())
+                && key_str == "Comment"
             {
-                if let (Some(key_str), Some(value_str)) = (key_val.as_str(), value_val.as_str()) {
-                    if key_str == "Comment" {
-                        let comment = if !value_str.is_empty() {
-                            Some(value_str.to_string())
-                        } else {
-                            None
-                        };
-                        return Some(DatabricksComponentConfig::Comment(CommentConfig::new(
-                            comment, false,
-                        )));
-                    }
-                }
+                let comment = if !value_str.is_empty() {
+                    Some(value_str.to_string())
+                } else {
+                    None
+                };
+                return Some(DatabricksComponentConfig::Comment(CommentConfig::new(
+                    comment, false,
+                )));
             }
         }
 

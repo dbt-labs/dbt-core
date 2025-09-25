@@ -39,10 +39,10 @@ impl InteractiveSetup for BigqueryDbConfig {
                 }
             }
             "location" => {
-                if let FieldValue::String(s) = value {
-                    if !s.is_empty() {
-                        self.location = Some(s);
-                    }
+                if let FieldValue::String(s) = value
+                    && !s.is_empty()
+                {
+                    self.location = Some(s);
                 }
             }
             "keyfile" => {

@@ -498,20 +498,18 @@ pub fn sample_renaming_map(plan: &SamplerPlan) -> BTreeMap<String, (String, Stri
             entry.unique_id.as_ref(),
             entry.read.as_ref(),
             entry.write.as_ref(),
-        ) {
-            if read.database != write.database
-                || read.schema != write.schema
-                || read.identifier != write.identifier
-            {
-                map.insert(
-                    eid.clone(),
-                    (
-                        write.database.clone(),
-                        write.schema.clone(),
-                        write.identifier.clone(),
-                    ),
-                );
-            }
+        ) && (read.database != write.database
+            || read.schema != write.schema
+            || read.identifier != write.identifier)
+        {
+            map.insert(
+                eid.clone(),
+                (
+                    write.database.clone(),
+                    write.schema.clone(),
+                    write.identifier.clone(),
+                ),
+            );
         }
     }
     map

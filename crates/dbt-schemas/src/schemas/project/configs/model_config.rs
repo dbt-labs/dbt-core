@@ -337,7 +337,7 @@ pub enum DataLakeObjectCategory {
 }
 
 impl IterChildren<ProjectModelConfig> for ProjectModelConfig {
-    fn iter_children(&self) -> Iter<String, ShouldBe<Self>> {
+    fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }
 }

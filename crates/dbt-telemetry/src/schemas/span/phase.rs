@@ -75,7 +75,7 @@ struct PhaseExecutedJsonPayload {
 }
 
 impl ArrowSerializableTelemetryEvent for PhaseExecuted {
-    fn to_arrow_record(&self) -> ArrowAttributes {
+    fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             json_payload: serde_json::to_string(&PhaseExecutedJsonPayload {
                 node_count_total: self.node_count_total,

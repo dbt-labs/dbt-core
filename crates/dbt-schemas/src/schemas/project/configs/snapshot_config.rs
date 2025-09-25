@@ -296,7 +296,7 @@ pub struct ProjectSnapshotConfig {
 }
 
 impl IterChildren<ProjectSnapshotConfig> for ProjectSnapshotConfig {
-    fn iter_children(&self) -> Iter<String, ShouldBe<Self>> {
+    fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }
 }

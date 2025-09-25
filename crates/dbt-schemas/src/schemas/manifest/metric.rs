@@ -302,30 +302,25 @@ impl From<MetricsProperties> for MetricTypeParams {
 
         let input_measures = match metric_type {
             // For ratio metrics, create input measures from numerator and denominator
-            MetricType::Ratio => {
-                if numerator.is_none() || denominator.is_none() {
-                    Some(vec![])
-                } else {
-                    let num = numerator.expect("Numerator is required for ratio metrics");
-                    let den = denominator.expect("Denominator is required for ratio metrics");
-                    Some(vec![
-                        MetricInputMeasure {
-                            name: num.name.clone(),
-                            filter: num.filter.clone(),
-                            alias: num.alias,
-                            join_to_timespine: Some(false),
-                            fill_nulls_with: None,
-                        },
-                        MetricInputMeasure {
-                            name: den.name.clone(),
-                            filter: den.filter.clone(),
-                            alias: den.alias,
-                            join_to_timespine: Some(false),
-                            fill_nulls_with: None,
-                        },
-                    ])
-                }
-            }
+            MetricType::Ratio => match (numerator, denominator) {
+                (None, _) | (_, None) => Some(vec![]),
+                (Some(num), Some(den)) => Some(vec![
+                    MetricInputMeasure {
+                        name: num.name.clone(),
+                        filter: num.filter.clone(),
+                        alias: num.alias,
+                        join_to_timespine: Some(false),
+                        fill_nulls_with: None,
+                    },
+                    MetricInputMeasure {
+                        name: den.name.clone(),
+                        filter: den.filter.clone(),
+                        alias: den.alias,
+                        join_to_timespine: Some(false),
+                        fill_nulls_with: None,
+                    },
+                ]),
+            },
 
             // If we have metrics, convert them to input measures
             MetricType::Derived => Some(

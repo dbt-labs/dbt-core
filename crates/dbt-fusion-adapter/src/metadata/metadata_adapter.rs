@@ -45,7 +45,7 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
     fn list_user_defined_functions(
         &self,
         _catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
-    ) -> AsyncAdapterResult<Vec<UDF>> {
+    ) -> AsyncAdapterResult<'_, Vec<UDF>> {
         let future = async move { Ok(vec![]) };
         Box::pin(future)
     }
@@ -55,27 +55,27 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
         &self,
         unique_id: Option<String>,
         relations: &[Arc<dyn BaseRelation>],
-    ) -> AsyncAdapterResult<HashMap<String, AdapterResult<SdfSchema>>>;
+    ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<SdfSchema>>>;
 
     /// List relations and their schemas by patterns
     #[allow(clippy::type_complexity)]
     fn list_relations_schemas_by_patterns(
         &self,
         patterns: &[RelationPattern],
-    ) -> AsyncAdapterResult<Vec<(String, AdapterResult<RelationSchemaPair>)>>;
+    ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>>;
 
     /// Create schemas if they don't exist
     #[allow(clippy::type_complexity)]
     fn create_schemas_if_not_exists(
         &self,
         catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
-    ) -> AsyncAdapterResult<Vec<(String, String, AdapterResult<()>)>>;
+    ) -> AsyncAdapterResult<'_, Vec<(String, String, AdapterResult<()>)>>;
 
     /// Get freshness of relations
     fn freshness(
         &self,
         relations: &[Arc<dyn BaseRelation>],
-    ) -> AsyncAdapterResult<BTreeMap<String, MetadataFreshness>>;
+    ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>>;
 
     /// List relations in the specified [CatalogAndSchema] in parallel
     ///
@@ -85,7 +85,7 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
     fn list_relations_in_parallel(
         &self,
         _db_schemas: &[CatalogAndSchema],
-    ) -> AsyncAdapterResult<BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>>;
+    ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>>;
 
     fn create_relations_from_executed_nodes(
         &self,

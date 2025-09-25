@@ -87,13 +87,13 @@ impl DatabricksRelationConfigBase for StreamingTableConfig {
                     .or_else(|| Some(Arc::new(value.clone()) as Arc<dyn ComponentConfig>));
 
                 // Only add to changes if it's not a RefreshConfig
-                if let Some(diff) = diff {
-                    if !matches!(
+                if let Some(diff) = diff
+                    && !matches!(
                         diff.as_any().downcast_ref::<DatabricksComponentConfig>(),
                         Some(DatabricksComponentConfig::Refresh(_))
-                    ) {
-                        changes.insert(key.to_string(), diff);
-                    }
+                    )
+                {
+                    changes.insert(key.to_string(), diff);
                 }
             }
         }

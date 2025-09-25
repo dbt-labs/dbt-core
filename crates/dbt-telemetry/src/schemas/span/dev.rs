@@ -61,7 +61,7 @@ impl ProtoTelemetryEvent for CallTrace {
 }
 
 impl ArrowSerializableTelemetryEvent for CallTrace {
-    fn to_arrow_record(&self) -> ArrowAttributes {
+    fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             dev_name: Some(Cow::Borrowed(self.name.as_str())),
             file: self.file.as_deref().map(Cow::Borrowed),
@@ -141,7 +141,7 @@ impl ProtoTelemetryEvent for Unknown {
 }
 
 impl ArrowSerializableTelemetryEvent for Unknown {
-    fn to_arrow_record(&self) -> ArrowAttributes {
+    fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             dev_name: Some(Cow::Borrowed(self.name.as_str())),
             file: Some(Cow::Borrowed(self.file.as_str())),

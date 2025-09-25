@@ -41,12 +41,12 @@ pub(crate) async fn download_publication_artifacts(
 
         if artifact_path.exists() && info_path.exists() {
             // Read the timestamp from info file
-            if let Ok(timestamp_str) = std::fs::read_to_string(&info_path) {
-                if let Ok(last_download_time) = timestamp_str.trim().parse::<u64>() {
-                    // If less than an hour has passed, continue to next artifact
-                    if now - last_download_time <= DOWNLOAD_INTERVAL {
-                        continue;
-                    }
+            if let Ok(timestamp_str) = std::fs::read_to_string(&info_path)
+                && let Ok(last_download_time) = timestamp_str.trim().parse::<u64>()
+            {
+                // If less than an hour has passed, continue to next artifact
+                if now - last_download_time <= DOWNLOAD_INTERVAL {
+                    continue;
                 }
             }
         }
@@ -207,18 +207,17 @@ pub(crate) async fn download_publication_artifacts(
         })?;
 
         // Set all public_node_dependencies to empty lists, if we don't do this, extend is very slow
-        if let Some(data) = response_json.get_mut("data") {
-            if let Some(public_models) = data.get_mut("public_models") {
-                if let Some(models_obj) = public_models.as_object_mut() {
-                    for (_, model) in models_obj.iter_mut() {
-                        if let Some(model_obj) = model.as_object_mut() {
-                            // Replace public_node_dependencies with an empty array
-                            model_obj.insert(
-                                "public_node_dependencies".to_string(),
-                                serde_json::Value::Array(vec![]),
-                            );
-                        }
-                    }
+        if let Some(data) = response_json.get_mut("data")
+            && let Some(public_models) = data.get_mut("public_models")
+            && let Some(models_obj) = public_models.as_object_mut()
+        {
+            for (_, model) in models_obj.iter_mut() {
+                if let Some(model_obj) = model.as_object_mut() {
+                    // Replace public_node_dependencies with an empty array
+                    model_obj.insert(
+                        "public_node_dependencies".to_string(),
+                        serde_json::Value::Array(vec![]),
+                    );
                 }
             }
         }

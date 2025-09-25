@@ -77,29 +77,27 @@ impl DatabricksComponentProcessor for RefreshProcessor {
         for row in describe_extended.rows() {
             if let (Ok(key_val), Ok(value_val)) =
                 (row.get_item(&Value::from(0)), row.get_item(&Value::from(1)))
+                && let (Some(key_str), Some(value_str)) = (key_val.as_str(), value_val.as_str())
+                && key_str == "Refresh Schedule"
             {
-                if let (Some(key_str), Some(value_str)) = (key_val.as_str(), value_val.as_str()) {
-                    if key_str == "Refresh Schedule" {
-                        if value_str == "MANUAL" {
-                            return Some(DatabricksComponentConfig::Refresh(RefreshConfig::new(
-                                None, None, false,
-                            )));
-                        }
-
-                        if let Some(captures) = schedule_regex.captures(value_str) {
-                            let cron = captures.get(1).map(|m| m.as_str().to_string());
-                            let time_zone_value = captures.get(2).map(|m| m.as_str().to_string());
-
-                            return Some(DatabricksComponentConfig::Refresh(RefreshConfig::new(
-                                cron,
-                                time_zone_value,
-                                false,
-                            )));
-                        }
-
-                        return None; // Unparseable schedule format
-                    }
+                if value_str == "MANUAL" {
+                    return Some(DatabricksComponentConfig::Refresh(RefreshConfig::new(
+                        None, None, false,
+                    )));
                 }
+
+                if let Some(captures) = schedule_regex.captures(value_str) {
+                    let cron = captures.get(1).map(|m| m.as_str().to_string());
+                    let time_zone_value = captures.get(2).map(|m| m.as_str().to_string());
+
+                    return Some(DatabricksComponentConfig::Refresh(RefreshConfig::new(
+                        cron,
+                        time_zone_value,
+                        false,
+                    )));
+                }
+
+                return None; // Unparseable schedule format
             }
         }
 

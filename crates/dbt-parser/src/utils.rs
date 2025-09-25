@@ -353,11 +353,11 @@ pub fn update_node_relation_components(
     // - Test nodes with store_failures=true
     // - Nodes that are relational and not ephemeral models
     if node.resource_type() == NodeType::Test {
-        if let Some(store_failures) = components.store_failures {
-            if store_failures {
-                let base_attr = node.base_mut();
-                base_attr.relation_name = Some(relation_name);
-            }
+        if let Some(store_failures) = components.store_failures
+            && store_failures
+        {
+            let base_attr = node.base_mut();
+            base_attr.relation_name = Some(relation_name);
         }
     } else {
         // Check if node is relational and not ephemeral

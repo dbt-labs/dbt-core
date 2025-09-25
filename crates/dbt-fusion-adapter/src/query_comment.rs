@@ -112,25 +112,25 @@ impl QueryCommentConfig {
     pub fn get_labels_from_query_comment(&self, state: &State) -> Vec<Value> {
         let mut labels = Vec::new();
 
-        if let Ok(resolved_comment) = self.resolve_comment(state) {
-            if self.job_label {
-                match serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(
-                    &resolved_comment,
-                ) {
-                    Ok(json) => {
-                        for (key, value) in json.into_iter() {
-                            labels.push(Value::from_iter(vec![
-                                Value::from(sanitize_label(key)),
-                                Value::from(sanitize_label(value.to_string())),
-                            ]));
-                        }
-                    }
-                    Err(_) => {
+        if let Ok(resolved_comment) = self.resolve_comment(state)
+            && self.job_label
+        {
+            match serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(
+                &resolved_comment,
+            ) {
+                Ok(json) => {
+                    for (key, value) in json.into_iter() {
                         labels.push(Value::from_iter(vec![
-                            Value::from("query_comment"),
-                            Value::from(sanitize_label(resolved_comment)),
+                            Value::from(sanitize_label(key)),
+                            Value::from(sanitize_label(value.to_string())),
                         ]));
                     }
+                }
+                Err(_) => {
+                    labels.push(Value::from_iter(vec![
+                        Value::from("query_comment"),
+                        Value::from(sanitize_label(resolved_comment)),
+                    ]));
                 }
             }
         }

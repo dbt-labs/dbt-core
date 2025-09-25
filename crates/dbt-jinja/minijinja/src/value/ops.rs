@@ -1,5 +1,6 @@
 use sprintf::parser::ConversionType;
 use sprintf::{vsprintf, ConversionSpecifier, Printf, PrintfError};
+use std::slice;
 
 use crate::error::{Error, ErrorKind};
 use crate::value::{DynObject, ObjectRepr, Value, ValueKind, ValueRepr};
@@ -497,7 +498,7 @@ pub fn rem(lhs: &Value, rhs: &Value) -> Result<Value, Error> {
                     .collect::<Vec<_>>();
                 format_string(lhs.as_str().unwrap(), &seq)
             }
-            _ => format_string(lhs.as_str().unwrap(), &[rhs.clone()]),
+            _ => format_string(lhs.as_str().unwrap(), slice::from_ref(rhs)),
         }
     } else {
         math_rem(lhs, rhs)

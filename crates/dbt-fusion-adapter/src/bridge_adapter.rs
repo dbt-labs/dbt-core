@@ -689,18 +689,18 @@ impl BaseAdapter for BridgeAdapter {
             .ok();
 
         let mut config = BTreeMap::<String, Value>::new();
-        if let Some(hard_deletes) = hard_deletes {
-            if !hard_deletes.is_undefined() {
-                config.insert("hard_deletes".to_string(), hard_deletes);
-            }
+        if let Some(hard_deletes) = hard_deletes
+            && !hard_deletes.is_undefined()
+        {
+            config.insert("hard_deletes".to_string(), hard_deletes);
         }
-        if let Some(invalidate_hard_deletes) = invalidate_hard_deletes {
-            if !invalidate_hard_deletes.is_undefined() {
-                config.insert(
-                    "invalidate_hard_deletes".to_string(),
-                    invalidate_hard_deletes,
-                );
-            }
+        if let Some(invalidate_hard_deletes) = invalidate_hard_deletes
+            && !invalidate_hard_deletes.is_undefined()
+        {
+            config.insert(
+                "invalidate_hard_deletes".to_string(),
+                invalidate_hard_deletes,
+            );
         }
 
         Ok(Value::from(

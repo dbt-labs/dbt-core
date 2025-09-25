@@ -225,13 +225,13 @@ fn select_expression_to_yaml(expr: &SelectExpression) -> YmlValue {
                     YmlValue::Bool(true, Default::default()),
                 );
                 // include the depth value if it's not unlimited
-                if let Some(depth) = criteria.parents_depth {
-                    if depth != u32::MAX {
-                        map.insert(
-                            YmlValue::String("parents_depth".to_string(), Default::default()),
-                            YmlValue::String(depth.to_string(), Default::default()),
-                        );
-                    }
+                if let Some(depth) = criteria.parents_depth
+                    && depth != u32::MAX
+                {
+                    map.insert(
+                        YmlValue::String("parents_depth".to_string(), Default::default()),
+                        YmlValue::String(depth.to_string(), Default::default()),
+                    );
                 }
             }
             if criteria.children_depth.is_some() {
@@ -240,13 +240,13 @@ fn select_expression_to_yaml(expr: &SelectExpression) -> YmlValue {
                     YmlValue::Bool(true, Default::default()),
                 );
                 // include the depth value if it's not unlimited
-                if let Some(depth) = criteria.children_depth {
-                    if depth != u32::MAX {
-                        map.insert(
-                            YmlValue::String("children_depth".to_string(), Default::default()),
-                            YmlValue::String(depth.to_string(), Default::default()),
-                        );
-                    }
+                if let Some(depth) = criteria.children_depth
+                    && depth != u32::MAX
+                {
+                    map.insert(
+                        YmlValue::String("children_depth".to_string(), Default::default()),
+                        YmlValue::String(depth.to_string(), Default::default()),
+                    );
                 }
             }
             if criteria.childrens_parents {

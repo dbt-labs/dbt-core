@@ -41,10 +41,10 @@ impl InteractiveSetup for DatabricksDbConfig {
                 }
             }
             "catalog" => {
-                if let FieldValue::String(s) = value {
-                    if !s.is_empty() {
-                        self.database = Some(s);
-                    }
+                if let FieldValue::String(s) = value
+                    && !s.is_empty()
+                {
+                    self.database = Some(s);
                 }
             }
             "token" => {

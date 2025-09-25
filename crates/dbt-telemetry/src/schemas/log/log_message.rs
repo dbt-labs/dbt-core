@@ -51,16 +51,16 @@ impl ProtoTelemetryEvent for LogMessage {
         }
 
         // Inject phase if not set and provided by context
-        if self.phase.is_none() {
-            if let Some(p) = context.phase {
-                self.phase = Some(p as i32);
-            }
+        if self.phase.is_none()
+            && let Some(p) = context.phase
+        {
+            self.phase = Some(p as i32);
         }
     }
 }
 
 impl ArrowSerializableTelemetryEvent for LogMessage {
-    fn to_arrow_record(&self) -> ArrowAttributes {
+    fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             code: self.code,
             dbt_core_event_code: self.dbt_core_event_code.as_deref().map(Cow::Borrowed),

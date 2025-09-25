@@ -123,15 +123,14 @@ impl ProjectStore {
     }
 
     pub fn get_base_url(&self, project_id: Option<&str>) -> String {
-        if let Some(project_id) = project_id {
-            if let Some(project) = self
+        if let Some(project_id) = project_id
+            && let Some(project) = self
                 .config
                 .projects
                 .iter()
                 .find(|p| p.project_id == project_id)
-            {
-                return format!("https://{}", project.account_host);
-            }
+        {
+            return format!("https://{}", project.account_host);
         }
 
         format!("https://{}", self.config.context.active_host)

@@ -146,10 +146,10 @@ pub fn get_profile_name_from_project() -> FsResult<String> {
     let project: serde_json::Value = dbt_serde_yaml::from_str(&content)
         .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to parse dbt_project.yml: {}", e))?;
 
-    if let Some(profile_value) = project.get("profile") {
-        if let Some(profile_str) = profile_value.as_str() {
-            return Ok(profile_str.to_string());
-        }
+    if let Some(profile_value) = project.get("profile")
+        && let Some(profile_str) = profile_value.as_str()
+    {
+        return Ok(profile_str.to_string());
     }
 
     // No profile found in dbt_project.yml, ask user to provide one
@@ -304,14 +304,14 @@ pub async fn run_init_workflow(
         }
 
         // Validate profile if specified
-        if let Some(ref profile_name) = existing_profile {
-            if !check_if_profile_exists(profile_name, &profiles_dir)? {
-                return Err(fs_err!(
-                    ErrorCode::InvalidArgument,
-                    "Could not find profile named '{}'",
-                    profile_name
-                ));
-            }
+        if let Some(ref profile_name) = existing_profile
+            && !check_if_profile_exists(profile_name, &profiles_dir)?
+        {
+            return Err(fs_err!(
+                ErrorCode::InvalidArgument,
+                "Could not find profile named '{}'",
+                profile_name
+            ));
         }
 
         // Create the project

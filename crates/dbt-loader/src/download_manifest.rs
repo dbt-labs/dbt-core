@@ -75,12 +75,12 @@ pub async fn hydrate_or_download_manifest_from_cloud(
 
     if manifest_path.exists() && info_path.exists() {
         // Read the timestamp from info file
-        if let Ok(timestamp_str) = std::fs::read_to_string(&info_path) {
-            if let Ok(last_download_time) = timestamp_str.trim().parse::<u64>() {
-                // If less than an hour has passed, use existing manifest
-                if now - last_download_time <= DOWNLOAD_INTERVAL {
-                    return Ok(Some(default_dir));
-                }
+        if let Ok(timestamp_str) = std::fs::read_to_string(&info_path)
+            && let Ok(last_download_time) = timestamp_str.trim().parse::<u64>()
+        {
+            // If less than an hour has passed, use existing manifest
+            if now - last_download_time <= DOWNLOAD_INTERVAL {
+                return Ok(Some(default_dir));
             }
         }
     }

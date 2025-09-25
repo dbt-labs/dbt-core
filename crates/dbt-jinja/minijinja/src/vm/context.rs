@@ -377,7 +377,7 @@ impl<'env> Context<'env> {
 
     /// Pops the topmost layer.
     #[track_caller]
-    pub fn pop_frame(&mut self) -> Frame {
+    pub fn pop_frame(&mut self) -> Frame<'_> {
         self.stack.pop().unwrap()
     }
 

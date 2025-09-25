@@ -144,12 +144,12 @@ impl<'source> Tokenizer<'source> {
             if b == quote {
                 // SQL is weird: two consecutive quotes inside a quoted
                 // identifier escape the quote character, so we need to peek.
-                if let Some(next) = self._peek_byte() {
-                    if next == quote {
-                        // Consume the escaped quote and continue.
-                        self.position += 1;
-                        continue;
-                    }
+                if let Some(next) = self._peek_byte()
+                    && next == quote
+                {
+                    // Consume the escaped quote and continue.
+                    self.position += 1;
+                    continue;
                 }
                 // TODO: handle \{quote} escape sequences
                 // This is the closing quote, because it's not escaped.
@@ -219,10 +219,10 @@ impl<'source> Tokenizer<'source> {
     /// Consumes the next token if and only if it matches the provided token.
     pub fn match_(&mut self, pred: impl FnOnce(Token<'source>) -> bool) -> bool {
         let old_pos = self.position;
-        if let Some(tok) = self.next() {
-            if pred(tok) {
-                return true;
-            }
+        if let Some(tok) = self.next()
+            && pred(tok)
+        {
+            return true;
         }
         self.position = old_pos;
         false

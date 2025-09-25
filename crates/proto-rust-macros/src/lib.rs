@@ -124,10 +124,10 @@ fn find_prost_enumeration_attr(attrs: &[Attribute]) -> syn::Result<Option<Path>>
         if !attr.path().is_ident("prost") {
             continue;
         }
-        if let Meta::List(list) = &attr.meta {
-            if let Some(path) = scan_enumeration_in_tokens(&list.tokens)? {
-                return Ok(Some(path));
-            }
+        if let Meta::List(list) = &attr.meta
+            && let Some(path) = scan_enumeration_in_tokens(&list.tokens)?
+        {
+            return Ok(Some(path));
         }
     }
     Ok(None)
@@ -164,17 +164,15 @@ fn scan_enumeration_in_tokens(tokens: &TokenStream2) -> syn::Result<Option<Path>
 fn extract_field_doc(attrs: &[Attribute]) -> Option<String> {
     let mut docs = Vec::new();
     for attr in attrs {
-        if attr.path().is_ident("doc") {
-            if let Meta::NameValue(nv) = &attr.meta {
-                if let Expr::Lit(ExprLit {
-                    lit: Lit::Str(s), ..
-                }) = &nv.value
-                {
-                    let text = s.value().trim().to_string();
-                    if !text.is_empty() {
-                        docs.push(text);
-                    }
-                }
+        if attr.path().is_ident("doc")
+            && let Meta::NameValue(nv) = &attr.meta
+            && let Expr::Lit(ExprLit {
+                lit: Lit::Str(s), ..
+            }) = &nv.value
+        {
+            let text = s.value().trim().to_string();
+            if !text.is_empty() {
+                docs.push(text);
             }
         }
     }
@@ -200,12 +198,12 @@ fn map_enum_param_and_init(
     }
 
     // Option<i32>
-    if let Some(inner) = extract_generic(field_ty, "Option") {
-        if is_i32(inner) {
-            let param_ty = quote! { ::core::option::Option<#enum_path> };
-            let init = quote! { #param_ident.map(|v| v as i32) };
-            return Ok((param_ty, init));
-        }
+    if let Some(inner) = extract_generic(field_ty, "Option")
+        && is_i32(inner)
+    {
+        let param_ty = quote! { ::core::option::Option<#enum_path> };
+        let init = quote! { #param_ident.map(|v| v as i32) };
+        return Ok((param_ty, init));
     }
 
     // Vec<i32> and ::prost::alloc::vec::Vec<i32>
@@ -236,33 +234,26 @@ fn is_i32(ty: &Type) -> bool {
 }
 
 fn extract_generic<'a>(ty: &'a Type, name: &str) -> Option<&'a Type> {
-    if let Type::Path(tp) = ty {
-        if let Some(seg) = tp.path.segments.last() {
-            if seg.ident == name {
-                if let PathArguments::AngleBracketed(ab) = &seg.arguments {
-                    if ab.args.len() == 1 {
-                        if let syn::GenericArgument::Type(inner) = &ab.args[0] {
-                            return Some(inner);
-                        }
-                    }
-                }
-            }
-        }
+    if let Type::Path(tp) = ty
+        && let Some(seg) = tp.path.segments.last()
+        && seg.ident == name
+        && let PathArguments::AngleBracketed(ab) = &seg.arguments
+        && ab.args.len() == 1
+        && let syn::GenericArgument::Type(inner) = &ab.args[0]
+    {
+        return Some(inner);
     }
     None
 }
 
 fn is_vec_of_i32(ty: &Type) -> bool {
-    if let Type::Path(tp) = ty {
-        if let Some(seg) = tp.path.segments.last() {
-            if seg.ident == "Vec" {
-                if let PathArguments::AngleBracketed(ab) = &seg.arguments {
-                    if let Some(syn::GenericArgument::Type(inner)) = ab.args.first() {
-                        return is_i32(inner);
-                    }
-                }
-            }
-        }
+    if let Type::Path(tp) = ty
+        && let Some(seg) = tp.path.segments.last()
+        && seg.ident == "Vec"
+        && let PathArguments::AngleBracketed(ab) = &seg.arguments
+        && let Some(syn::GenericArgument::Type(inner)) = ab.args.first()
+    {
+        return is_i32(inner);
     }
     false
 }
@@ -271,11 +262,11 @@ fn vec_path_for(ty: &Type) -> proc_macro2::TokenStream {
     // Preserve the original vector path (Vec or ::prost::alloc::vec::Vec)
     if let Type::Path(tp) = ty {
         let segments = tp.path.segments.clone();
-        if let Some(last) = segments.last() {
-            if last.ident == "Vec" {
-                let path = &tp.path;
-                return quote! { #path };
-            }
+        if let Some(last) = segments.last()
+            && last.ident == "Vec"
+        {
+            let path = &tp.path;
+            return quote! { #path };
         }
     }
     quote! { ::prost::alloc::vec::Vec }
@@ -383,16 +374,15 @@ fn impl_proto_enum_serde(input: &DeriveInput) -> syn::Result<proc_macro2::TokenS
 
 fn has_repr_i32(input: &DeriveInput) -> bool {
     for attr in &input.attrs {
-        if attr.path().is_ident("repr") {
-            if let Ok(nested) =
+        if attr.path().is_ident("repr")
+            && let Ok(nested) =
                 attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
-            {
-                for meta in nested {
-                    if let Meta::Path(p) = meta {
-                        if p.is_ident("i32") {
-                            return true;
-                        }
-                    }
+        {
+            for meta in nested {
+                if let Meta::Path(p) = meta
+                    && p.is_ident("i32")
+                {
+                    return true;
                 }
             }
         }

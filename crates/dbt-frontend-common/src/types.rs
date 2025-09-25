@@ -95,14 +95,14 @@ pub fn fusion_type_repr(dt: &DataType) -> String {
 
         dt @ DataType::Map(inner, _) => {
             let mut to_string = None;
-            if let DataType::Struct(fields) = inner.data_type() {
-                if let [key, value] = &**fields {
-                    to_string = Some(format!(
-                        "Map({}, {})",
-                        fusion_type_repr(key.data_type()),
-                        fusion_type_repr(value.data_type())
-                    ));
-                }
+            if let DataType::Struct(fields) = inner.data_type()
+                && let [key, value] = &**fields
+            {
+                to_string = Some(format!(
+                    "Map({}, {})",
+                    fusion_type_repr(key.data_type()),
+                    fusion_type_repr(value.data_type())
+                ));
             }
             to_string.unwrap_or_else(|| dt.to_string())
         }

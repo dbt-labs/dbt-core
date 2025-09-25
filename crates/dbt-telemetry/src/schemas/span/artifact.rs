@@ -24,7 +24,7 @@ impl ProtoTelemetryEvent for ArtifactWritten {
 }
 
 impl ArrowSerializableTelemetryEvent for ArtifactWritten {
-    fn to_arrow_record(&self) -> ArrowAttributes {
+    fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             relative_path: Some(Cow::from(self.relative_path.as_str())),
             artifact_type: Some(self.artifact_type()),

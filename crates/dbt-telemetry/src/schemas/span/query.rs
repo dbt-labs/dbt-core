@@ -52,10 +52,10 @@ impl ProtoTelemetryEvent for QueryExecuted {
         // }
 
         // Inject phase if not set and provided by context
-        if self.phase.is_none() {
-            if let Some(p) = context.phase {
-                self.phase = Some(p as i32);
-            }
+        if self.phase.is_none()
+            && let Some(p) = context.phase
+        {
+            self.phase = Some(p as i32);
         }
     }
 }
@@ -71,7 +71,7 @@ struct QueryExecutedJsonPayload {
 }
 
 impl ArrowSerializableTelemetryEvent for QueryExecuted {
-    fn to_arrow_record(&self) -> ArrowAttributes {
+    fn to_arrow_record(&self) -> ArrowAttributes<'_> {
         ArrowAttributes {
             // Well-known fields for easier querying
             content_hash: Some(Cow::from(self.sql_hash.as_str())),

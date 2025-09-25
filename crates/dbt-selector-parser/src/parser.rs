@@ -3,7 +3,7 @@
 //! scheduler understands.
 //
 
-use std::{collections::BTreeMap, str::FromStr};
+use std::{collections::BTreeMap, slice, str::FromStr};
 
 use dbt_common::{
     ErrorCode, FsResult, err, fs_err,
@@ -40,7 +40,7 @@ impl<'a> SelectorParser<'a> {
 
     pub fn parse_definition(&self, def: &SelectorDefinitionValue) -> FsResult<SelectExpression> {
         match def {
-            SelectorDefinitionValue::String(s) => Ok(parse_model_specifiers(&[s.clone()])?),
+            SelectorDefinitionValue::String(s) => Ok(parse_model_specifiers(slice::from_ref(s))?),
             SelectorDefinitionValue::Full(expr) => self.parse_expr(expr),
         }
     }

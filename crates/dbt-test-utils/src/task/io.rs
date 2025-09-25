@@ -297,10 +297,10 @@ impl Task for SedTask {
                     if let Some(comment_end) = new_content.find("*/") {
                         new_content = new_content[(comment_end + "*/".len())..].to_string();
                     }
-                } else if new_content.ends_with("*/") {
-                    if let Some(comment_start) = new_content.rfind("/*") {
-                        new_content = new_content[..comment_start].to_string();
-                    }
+                } else if new_content.ends_with("*/")
+                    && let Some(comment_start) = new_content.rfind("/*")
+                {
+                    new_content = new_content[..comment_start].to_string();
                 };
 
                 fs::write(path, new_content)?;

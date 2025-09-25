@@ -139,7 +139,7 @@ pub trait AnyTelemetryEvent: Debug + Send + Sync + Any {
     /// - If `EXPORT_PARQUET` flag is NOT set in `output_flags()`, returns `None` (not exported to Arrow/Parquet).
     /// - If `EXPORT_PARQUET` flag IS set but the event does not override this method, this panics.
     ///   Types that are exported to Parquet MUST override and provide a concrete implementation.
-    fn to_arrow(&self) -> Option<ArrowAttributes> {
+    fn to_arrow(&self) -> Option<ArrowAttributes<'_>> {
         if self
             .output_flags()
             .contains(TelemetryOutputFlags::EXPORT_PARQUET)
@@ -160,7 +160,7 @@ pub trait AnyTelemetryEvent: Debug + Send + Sync + Any {
 /// and the source of deserialization in the registry.
 pub(crate) trait ArrowSerializableTelemetryEvent {
     /// Serialize the event data to Arrow compatible record (used in arrow serialization)
-    fn to_arrow_record(&self) -> ArrowAttributes;
+    fn to_arrow_record(&self) -> ArrowAttributes<'_>;
 
     /// Deserialize from Arrow compatible record into a boxed trait object.
     /// This is a non-dispatchable method called on concrete types.
@@ -331,7 +331,7 @@ impl<T: ProtoTelemetryEvent> AnyTelemetryEvent for T {
         serde_json::to_value(self).map_err(|e| format!("Failed to serialize: {e}"))
     }
 
-    fn to_arrow(&self) -> Option<ArrowAttributes> {
+    fn to_arrow(&self) -> Option<ArrowAttributes<'_>> {
         Some(self.to_arrow_record())
     }
 }

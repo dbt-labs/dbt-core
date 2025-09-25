@@ -378,10 +378,9 @@ pub trait DatabricksRelationConfigBase: BaseRelationConfig + Send + Sync + Debug
             let key = component.name();
             if let (Some(value), Some(existing_value)) =
                 (self.get_component(key), existing.get_component(key))
+                && let Some(diff) = value.get_diff(&existing_value)
             {
-                if let Some(diff) = value.get_diff(&existing_value) {
-                    changes.insert(key.to_string(), diff);
-                }
+                changes.insert(key.to_string(), diff);
             }
         }
 

@@ -563,17 +563,17 @@ pub fn serialize_to_arrow(
     // this is zero-copy, just metadata change.
     let schema_with_timestamps = get_telemetry_arrow_schema();
     for (i, field) in schema_with_timestamps.iter().enumerate() {
-        if let DataType::Timestamp(TimeUnit::Nanosecond, None) = field.data_type() {
-            if let Some(column) = columns.get(i) {
-                columns[i] = cast_with_options(
-                    column,
-                    &DataType::Timestamp(TimeUnit::Nanosecond, None),
-                    &CastOptions {
-                        safe: false,
-                        format_options: FormatOptions::new().with_display_error(false),
-                    },
-                )?
-            }
+        if let DataType::Timestamp(TimeUnit::Nanosecond, None) = field.data_type()
+            && let Some(column) = columns.get(i)
+        {
+            columns[i] = cast_with_options(
+                column,
+                &DataType::Timestamp(TimeUnit::Nanosecond, None),
+                &CastOptions {
+                    safe: false,
+                    format_options: FormatOptions::new().with_display_error(false),
+                },
+            )?
         }
     }
 

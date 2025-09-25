@@ -59,10 +59,10 @@ pub fn filter_out_duplicate_packages(
 ) -> PackagesYaml {
     packages_yml.packages.retain(|pkg_entry| {
         for val in pkg_entry.values() {
-            if let Some(val_str) = val.as_str() {
-                if val_str.contains(&args.add_package.name) {
-                    return false; // Remove this package
-                }
+            if let Some(val_str) = val.as_str()
+                && val_str.contains(&args.add_package.name)
+            {
+                return false; // Remove this package
             }
         }
         true // Keep this package
@@ -93,20 +93,21 @@ fn create_packages_yml_entry(
     );
 
     // For local packages, version is not applicable
-    if source != "local" && source != "tarball" {
-        if let Some(ver) = version {
-            if ver.contains(',') {
-                let versions: Vec<String> = ver.split(',').map(|v| v.trim().to_string()).collect();
-                packages_yml_entry.insert(
-                    version_key.to_string(),
-                    dbt_serde_yaml::to_value(versions).unwrap(),
-                );
-            } else {
-                packages_yml_entry.insert(
-                    version_key.to_string(),
-                    dbt_serde_yaml::to_value(ver).unwrap(),
-                );
-            }
+    if source != "local"
+        && source != "tarball"
+        && let Some(ver) = version
+    {
+        if ver.contains(',') {
+            let versions: Vec<String> = ver.split(',').map(|v| v.trim().to_string()).collect();
+            packages_yml_entry.insert(
+                version_key.to_string(),
+                dbt_serde_yaml::to_value(versions).unwrap(),
+            );
+        } else {
+            packages_yml_entry.insert(
+                version_key.to_string(),
+                dbt_serde_yaml::to_value(ver).unwrap(),
+            );
         }
     }
 

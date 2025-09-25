@@ -104,11 +104,11 @@ impl RunFilter {
             }
 
             // For date-only formats, try parsing as NaiveDate and convert to datetime
-            if format == "%Y-%m-%d" {
-                if let Ok(naive_date) = chrono::NaiveDate::parse_from_str(datetime_str, format) {
-                    let naive_dt = naive_date.and_hms_opt(0, 0, 0).unwrap();
-                    return Ok(DateTime::<Utc>::from_naive_utc_and_offset(naive_dt, Utc));
-                }
+            if format == "%Y-%m-%d"
+                && let Ok(naive_date) = chrono::NaiveDate::parse_from_str(datetime_str, format)
+            {
+                let naive_dt = naive_date.and_hms_opt(0, 0, 0).unwrap();
+                return Ok(DateTime::<Utc>::from_naive_utc_and_offset(naive_dt, Utc));
             }
         }
 

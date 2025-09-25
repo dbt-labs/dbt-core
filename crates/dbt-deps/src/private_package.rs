@@ -31,10 +31,10 @@ impl ProviderDetail {
         provider: Option<&str>,
     ) -> bool {
         // Check if provider matches (if specified)
-        if let Some(requested_provider) = provider {
-            if self.provider.as_deref() != Some(requested_provider) {
-                return false;
-            }
+        if let Some(requested_provider) = provider
+            && self.provider.as_deref() != Some(requested_provider)
+        {
+            return false;
         }
 
         // Use appropriate GitURL type based on provider

@@ -225,10 +225,10 @@ impl MaterializationResolver {
         &self,
         materialization_name: &str,
     ) -> FsResult<String> {
-        if let Ok(cache) = self.cache.lock() {
-            if let Some(cached) = cache.get(materialization_name) {
-                return Ok(cached.clone());
-            }
+        if let Ok(cache) = self.cache.lock()
+            && let Some(cached) = cache.get(materialization_name)
+        {
+            return Ok(cached.clone());
         }
 
         // Standard resolution path for non-dot notation names
@@ -242,24 +242,24 @@ impl MaterializationResolver {
         // otherwise it's handled by the non-builtin path below.
         if is_builtin && has_core_candidates {
             let mut temp = candidates.clone();
-            if let Some(best) = temp.best_candidate() {
-                if best.locality == MacroLocality::Imported {
-                    let mut filtered = MaterializationCandidateList::new();
-                    for c in &candidates.candidates {
-                        if matches!(c.locality, MacroLocality::Root | MacroLocality::Core) {
-                            filtered.add(c.clone());
-                        }
+            if let Some(best) = temp.best_candidate()
+                && best.locality == MacroLocality::Imported
+            {
+                let mut filtered = MaterializationCandidateList::new();
+                for c in &candidates.candidates {
+                    if matches!(c.locality, MacroLocality::Root | MacroLocality::Core) {
+                        filtered.add(c.clone());
                     }
-                    if let Some(best_filtered) = filtered.best_candidate() {
-                        let result = format!(
-                            "{}.{}",
-                            best_filtered.package_name, best_filtered.macro_name
-                        );
-                        if let Ok(mut cache) = self.cache.lock() {
-                            cache.insert(materialization_name.to_string(), result.clone());
-                        }
-                        return Ok(result);
+                }
+                if let Some(best_filtered) = filtered.best_candidate() {
+                    let result = format!(
+                        "{}.{}",
+                        best_filtered.package_name, best_filtered.macro_name
+                    );
+                    if let Ok(mut cache) = self.cache.lock() {
+                        cache.insert(materialization_name.to_string(), result.clone());
                     }
+                    return Ok(result);
                 }
             }
         }

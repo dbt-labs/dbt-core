@@ -268,10 +268,10 @@ where
 
 fn detect_yaml_indentation(input: &str) -> Option<usize> {
     for line in input.lines() {
-        if let Some((indentation, _)) = line.char_indices().find(|&(_, c)| !c.is_whitespace()) {
-            if indentation == 2 || indentation == 4 {
-                return Some(indentation);
-            }
+        if let Some((indentation, _)) = line.char_indices().find(|&(_, c)| !c.is_whitespace())
+            && (indentation == 2 || indentation == 4)
+        {
+            return Some(indentation);
         }
     }
 
@@ -499,11 +499,11 @@ pub fn yaml_to_fs_error(err: dbt_serde_yaml::Error, filename: Option<&Path>) -> 
         location
     };
 
-    if let Some(err) = err.into_external() {
-        if let Ok(err) = err.downcast::<FsError>() {
-            // These are errors raised from our own callbacks:
-            return err;
-        }
+    if let Some(err) = err.into_external()
+        && let Ok(err) = err.downcast::<FsError>()
+    {
+        // These are errors raised from our own callbacks:
+        return err;
     }
     FsError::new(ErrorCode::SerializationError, format!("YAML error: {msg}"))
         .with_location(location)

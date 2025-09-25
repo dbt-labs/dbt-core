@@ -28,10 +28,10 @@ pub struct SemanticManifestSemanticModel {
 impl From<DbtSemanticModel> for SemanticManifestSemanticModel {
     fn from(model: DbtSemanticModel) -> Self {
         let mut config: Option<SemanticLayerElementConfig> = None;
-        if let Some(meta) = model.deprecated_config.meta {
-            if !meta.is_empty() {
-                config = Some(SemanticLayerElementConfig { meta: Some(meta) });
-            }
+        if let Some(meta) = model.deprecated_config.meta
+            && !meta.is_empty()
+        {
+            config = Some(SemanticLayerElementConfig { meta: Some(meta) });
         }
 
         SemanticManifestSemanticModel {

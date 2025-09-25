@@ -432,15 +432,14 @@ fn write_file(
     };
 
     // Create parent directories if needed
-    if let Some(parent) = full_path.parent() {
-        if !parent.exists() {
-            if let Err(e) = fs::create_dir_all(parent) {
-                return Err(Error::new(
-                    ErrorKind::InvalidOperation,
-                    format!("Failed to create directory {}: {}", parent.display(), e),
-                ));
-            }
-        }
+    if let Some(parent) = full_path.parent()
+        && !parent.exists()
+        && let Err(e) = fs::create_dir_all(parent)
+    {
+        return Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("Failed to create directory {}: {}", parent.display(), e),
+        ));
     }
 
     match fs::write(&full_path, payload) {

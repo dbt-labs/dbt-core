@@ -347,9 +347,11 @@ impl FsError {
                 None
             };
 
-            if token.is_some() && in_dir.join(file).exists() {
+            if let Some(token) = token
+                && in_dir.join(file).exists()
+            {
                 // patch up trying to find the line/column of the token
-                match crate::utils::find_locations(&token.unwrap(), Path::new(&in_dir.join(file))) {
+                match crate::utils::find_locations(&token, Path::new(&in_dir.join(file))) {
                     Ok(Some((line, col, index))) => {
                         super::CodeLocation::new(line, col, index, file)
                     }

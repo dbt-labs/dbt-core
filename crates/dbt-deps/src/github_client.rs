@@ -110,10 +110,10 @@ pub fn clone(
     }
 
     // Only add branch if we have a non-commit revision
-    if let Some(revision) = revision {
-        if !is_commit(revision) {
-            clone_cmd.arg("--branch").arg(revision);
-        }
+    if let Some(revision) = revision
+        && !is_commit(revision)
+    {
+        clone_cmd.arg("--branch").arg(revision);
     }
 
     clone_cmd.arg(repo);

@@ -164,15 +164,15 @@ impl Logger {
             return false;
         }
         // Counter intuitively, the lower the level, the more verbose the logging
-        if let Some(min_level) = self.config.min_level {
-            if current_level < min_level {
-                return false;
-            }
+        if let Some(min_level) = self.config.min_level
+            && current_level < min_level
+        {
+            return false;
         }
-        if let Some(max_level) = self.config.max_level {
-            if current_level > max_level {
-                return false;
-            }
+        if let Some(max_level) = self.config.max_level
+            && current_level > max_level
+        {
+            return false;
         }
 
         // filter based on target
@@ -181,16 +181,16 @@ impl Logger {
         }
 
         // Reject if not in includes (when set)
-        if let Some(ref includes) = self.config.includes {
-            if !includes.contains(&metadata.target().to_string()) {
-                return false;
-            }
+        if let Some(ref includes) = self.config.includes
+            && !includes.contains(&metadata.target().to_string())
+        {
+            return false;
         }
         // Reject if in excludes (when set)
-        if let Some(ref excludes) = self.config.excludes {
-            if excludes.contains(&metadata.target().to_string()) {
-                return false;
-            }
+        if let Some(ref excludes) = self.config.excludes
+            && excludes.contains(&metadata.target().to_string())
+        {
+            return false;
         }
         true
     }
@@ -235,15 +235,13 @@ impl Logger {
             }
         }
         let mut data = json!({ "log_version": 3, "version": env!("CARGO_PKG_VERSION")});
-        if let Some(data_str) = kvs.get("data") {
-            if let Ok(serde_json::Value::Object(ref data_obj)) =
+        if let Some(data_str) = kvs.get("data")
+            && let Ok(serde_json::Value::Object(ref data_obj)) =
                 serde_json::from_str::<serde_json::Value>(data_str)
-            {
-                if let serde_json::Value::Object(ref mut map) = data {
-                    for (key, value) in data_obj {
-                        map.insert(key.clone(), value.clone());
-                    }
-                }
+            && let serde_json::Value::Object(ref mut map) = data
+        {
+            for (key, value) in data_obj {
+                map.insert(key.clone(), value.clone());
             }
         }
         json!({ "info": info_json, "data": data}).to_string()
@@ -258,27 +256,27 @@ impl log::Log for Logger {
             return false;
         }
         // Counter intuitively, the lower the level, the more verbose the logging
-        if let Some(min_level) = self.config.min_level {
-            if current_level < min_level {
-                return false;
-            }
+        if let Some(min_level) = self.config.min_level
+            && current_level < min_level
+        {
+            return false;
         }
-        if let Some(max_level) = self.config.max_level {
-            if current_level > max_level {
-                return false;
-            }
+        if let Some(max_level) = self.config.max_level
+            && current_level > max_level
+        {
+            return false;
         }
         // Reject if not in includes (when set)
-        if let Some(ref includes) = self.config.includes {
-            if !includes.contains(&metadata.target().to_string()) {
-                return false;
-            }
+        if let Some(ref includes) = self.config.includes
+            && !includes.contains(&metadata.target().to_string())
+        {
+            return false;
         }
         // Reject if in excludes (when set)
-        if let Some(ref excludes) = self.config.excludes {
-            if excludes.contains(&metadata.target().to_string()) {
-                return false;
-            }
+        if let Some(ref excludes) = self.config.excludes
+            && excludes.contains(&metadata.target().to_string())
+        {
+            return false;
         }
         true
     }

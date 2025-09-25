@@ -125,10 +125,10 @@ impl TryFrom<&str> for TargetLag {
                     .and_then(|interval_str| TargetLagInterval::try_from(interval_str).ok())
                     .map(|interval| Self::TimeBased(num, interval))
             });
-        if let Some(target_lag) = opt {
-            if parts.next().is_none() {
-                return Ok(target_lag);
-            }
+        if let Some(target_lag) = opt
+            && parts.next().is_none()
+        {
+            return Ok(target_lag);
         }
         Err(format!("Unsupported target lag: {value}"))
     }
