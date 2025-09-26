@@ -157,6 +157,9 @@ class TestNewVersionedSchemaFile:
         }
 
     def test_schema_file_order_new_versions(self, project):
+        # This tests that when a model referring to an existing model
+        # which has had a version added in a yaml file has been re-parsed
+        # in order to fix the depends_on to the correct versioned model
 
         # initial run
         results = run_dbt(["compile"])

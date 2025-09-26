@@ -37,6 +37,7 @@ key_to_prefix = {
     "seeds": "seed",
     "snapshots": "snapshot",
     "analyses": "analysis",
+    "sources": "source",
 }
 
 
@@ -248,6 +249,10 @@ class PartialParsing:
                 # be properly patched
                 if "overrides" in source:
                     self.remove_source_override_target(source)
+        if "models" in source_file.pp_dict:
+            for model in source_file.pp_dict["models"]:
+                if "versions" in model:
+                    self.versioned_model_delete_schema_mssa_links(source_file, "models", model)
 
     def delete_disabled(self, unique_id, file_id):
         # This node/metric/exposure is disabled. Find it and remove it from disabled dictionary.
@@ -680,6 +685,8 @@ class PartialParsing:
                     self.delete_schema_mssa_links(schema_file, dict_key, elem)
             if key_diff["added"]:
                 for elem in key_diff["added"]:
+                    if dict_key == "models" and "versions" in elem:
+                        self.versioned_model_delete_schema_mssa_links(schema_file, dict_key, elem)
                     self.merge_patch(schema_file, dict_key, elem, True)
             # Handle schema file updates due to env_var changes
             if dict_key in env_var_changes and dict_key in new_yaml_dict:
@@ -842,7 +849,19 @@ class PartialParsing:
             elem_name = parts[2]
             if elem_name == elem["name"]:
                 elem_unique_ids.append(unique_id)
+        self._delete_schema_mssa_links(schema_file, dict_key, elem, elem_unique_ids)
 
+    def versioned_model_delete_schema_mssa_links(self, schema_file, dict_key, elem) -> None:
+        elem_unique_ids = []
+        # We need to look up possible existing models that this new or modified patch applies to
+        unique_id = f"model.{schema_file.project_name}.{elem['name']}"
+        if unique_id in self.saved_manifest.nodes:
+            elem_unique_ids.append(unique_id)
+        if not elem_unique_ids:
+            return
+        self._delete_schema_mssa_links(schema_file, dict_key, elem, elem_unique_ids)
+
+    def _delete_schema_mssa_links(self, schema_file, dict_key, elem, elem_unique_ids):
         # remove elem node and remove unique_id from node_patches
         for elem_unique_id in elem_unique_ids:
             # might have been already removed
@@ -891,6 +910,17 @@ class PartialParsing:
             if test_unique_id in self.saved_manifest.nodes:
                 self.saved_manifest.nodes.pop(test_unique_id)
         schema_file.remove_tests(dict_key, name)
+        # We also need to remove tests in other schema files that
+        # reference this node.
+        unique_id = f"{key_to_prefix[dict_key]}.{schema_file.project_name}.{name}"
+        if unique_id in self.saved_manifest.child_map:
+            for child_id in self.saved_manifest.child_map[unique_id]:
+                if child_id.startswith("test") and child_id in self.saved_manifest.nodes:
+                    child_test = self.saved_manifest.nodes[child_id]
+                    if child_test.attached_node:
+                        if child_test.attached_node in self.saved_manifest.nodes:
+                            attached_node = self.saved_manifest.nodes[child_test.attached_node]
+                            self.update_in_saved(attached_node.file_id)
 
     def delete_yaml_snapshot(self, schema_file, snapshot_dict):
         snapshot_name = snapshot_dict["name"]
