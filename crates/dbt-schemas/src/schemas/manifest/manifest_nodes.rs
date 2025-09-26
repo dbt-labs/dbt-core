@@ -488,7 +488,7 @@ impl From<DbtModel> for ManifestModel {
                 created_at: Default::default(),
                 compiled_path: Default::default(),
                 build_path: Default::default(),
-                contract: Default::default(),
+                contract: model.__model_attr__.contract.unwrap_or_default(),
             },
             access: Some(model.__model_attr__.access),
             config: model.deprecated_config,

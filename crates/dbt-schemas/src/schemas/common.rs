@@ -504,7 +504,7 @@ pub enum DbtBatchSize {
     Year,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 pub struct DbtContract {
     #[serde(default = "default_alias_types")]
     pub alias_types: bool,
@@ -516,6 +516,17 @@ pub struct DbtContract {
 
 fn default_alias_types() -> bool {
     true
+}
+
+// DO NOT REMOVE. Somehow, `#[derive(Default)]` does not respect `#[serde(default = "default_alias_types")]`, so we need to implement it manually.
+impl Default for DbtContract {
+    fn default() -> Self {
+        Self {
+            alias_types: default_alias_types(),
+            enforced: false,
+            checksum: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumString, Display, JsonSchema)]
