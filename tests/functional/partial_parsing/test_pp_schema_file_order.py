@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from dbt.tests.util import get_manifest, run_dbt, write_file
+from dbt.tests.util import get_manifest, rm_file, run_dbt, write_file
 
 os.environ["DBT_PP_TEST"] = "true"
 
@@ -91,3 +91,102 @@ class TestSchemaFileOrder:
         assert model.name == "another_ref"
         # The description here would be '' without the bug fix
         assert model.description == "model with reference to another ref"
+
+
+foo_sql = """
+select 1 c
+"""
+
+bar_sql = """
+select 1 c
+"""
+
+bar_with_ref_sql = """
+select * from {{ ref('foo') }}
+"""
+
+foo_v2_sql = """
+select 1 c
+"""
+
+schema_yml = """
+# models/schema.yml
+models:
+  - name: foo
+    latest_version: 1
+    versions:
+      - v: 1
+      - v: 2
+"""
+
+foo_yml = """
+# models/foo.yml
+models:
+  - name: foo
+"""
+
+bar_yml = """
+# models/bar.yml
+models:
+  - name: bar
+    columns:
+      - name: c
+        tests:
+          - relationships:
+              to: ref('foo')
+              field: c
+"""
+
+foo_alt_yml = """
+# models/foo.yml
+models:
+  - name: foo
+    latest_version: 1
+    versions:
+      - v: 1
+      - v: 2
+"""
+
+
+class TestNewVersionedSchemaFile:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "foo.sql": foo_sql,
+            "bar.sql": bar_with_ref_sql,
+        }
+
+    def test_schema_file_order_new_versions(self, project):
+
+        # initial run
+        results = run_dbt(["compile"])
+        assert len(results) == 2
+
+        write_file(foo_v2_sql, project.project_root, "models", "foo_v2.sql")
+        write_file(schema_yml, project.project_root, "models", "schema.yml")
+
+        results = run_dbt(["compile"])
+
+
+class TestMoreNewVersionedSchemaFile:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "foo.sql": foo_sql,
+            "bar.sql": bar_sql,
+            "foo.yml": foo_yml,
+            "bar.yml": bar_yml,
+        }
+
+    def test_more_schema_file_new_versions(self, project):
+
+        # initial run
+        results = run_dbt(["compile"])
+        assert len(results) == 3
+
+        rm_file(project.project_root, "models", "foo.sql")
+        write_file(foo_sql, project.project_root, "models", "foo_v1.sql")
+        write_file(foo_sql, project.project_root, "models", "foo_v2.sql")
+        write_file(foo_alt_yml, project.project_root, "models", "foo.yml")
+
+        results = run_dbt(["compile"])
