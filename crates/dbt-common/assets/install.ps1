@@ -1,3 +1,11 @@
+# Process script parameters
+param(
+    [switch]$Update,
+    [string]$Version,
+    [string]$Target,
+    [string]$To = "$env:USERPROFILE\.local\bin"
+)
+
 <#
 .SYNOPSIS
 Install the dbt CLI Binary for Windows.
@@ -24,20 +32,23 @@ Location to install the binary. Default is $env:USERPROFILE\.local\bin.
 .\install.ps1 -Version "1.2.3" -Target "Windows" -To "C:\MyFolder"
 #>
 
-param(
-    [switch]$Update,
-    [string]$Version,
-    [string]$Target,
-    [string]$To = "$env:USERPROFILE\.local\bin"
-)
+# Define constants
+# this HOSTNAME is used for CI testing
+$script:HOSTNAME = if ($env:_FS_HOSTNAME) { $env:_FS_HOSTNAME } else { 'public.cdn.getdbt.com' }
+$script:versionsUrl = "https://$script:HOSTNAME/fs/versions.json"
+
+# Global variables to track state
+$script:TempDirs = @()
+$script:UpdateScheduled = $false
+$script:PathUpdated = $false
 
 # Color support
-$Host.UI.RawUI.WindowTitle = "dbt Installer"
+$Host.UI.RawUI.WindowTitle = 'dbt Installer'
 
-# Function to write logs
+#region Logging Functions
 function Write-Log {
     param($Message)
-    Write-Host ("install.ps1: " + $Message.Replace("\\", "\"))
+    Write-Host ('install.ps1: ' + $Message.Replace("\\", "\"))
     [Console]::Out.Flush()
 }
 
@@ -45,173 +56,41 @@ function Write-GrayLog {
     param($Message)
     $prevColor = $Host.UI.RawUI.ForegroundColor
     $Host.UI.RawUI.ForegroundColor = "DarkGray"
-    [Console]::Error.WriteLine("install.ps1: " + $Message.Replace("\\", "\"))
+    [Console]::Error.WriteLine('install.ps1: ' + $Message.Replace("\\", "\"))
     $Host.UI.RawUI.ForegroundColor = $prevColor
-}
-
-function Write-ErrorLog {
-    param($Message)
-    Write-GrayLog ("ERROR " + $Message.Replace("\\", "\"))
-    if ($td -and (Test-Path $td)) {
-        Remove-Item -Path $td -Recurse -Force -ErrorAction SilentlyContinue
-    }
-    exit 1
 }
 
 function Write-Debug {
     param($Message)
-    Write-GrayLog ("DEBUG " + $Message)
+    Write-GrayLog ('DEBUG ' + $Message)
 }
 
-# Check for required commands
-function Test-Need {
-    param($Command)
-    if (-not (Get-Command $Command -ErrorAction SilentlyContinue)) {
-        Write-ErrorLog "need $Command (command not found)"
-        exit 1
-    }
-}
-
-# Process arguments
-if ($PSBoundParameters.ContainsKey('Help')) {
-    Get-Help $MyInvocation.MyCommand.Name
-    exit 0
-}
-
-# Main script logic starts here
-
-# Set strict error handling
-$ErrorActionPreference = 'Stop'
-
-# Check PowerShell version
-$requiredVersion = [Version]"5.1"
-$currentVersion = $PSVersionTable.PSVersion
-if ($currentVersion -lt $requiredVersion) {
-    Write-ErrorLog "PowerShell version $requiredVersion or higher is required. Current version: $currentVersion"
-    exit 1
-}
-
-# Function to check required commands
-function Test-Requirement {
+#region Error Handling Functions
+function Write-ErrorAndExit {
     param(
-        [string]$Command,
-        [string]$ModuleName = "",
-        [string]$MinimumVersion = ""
+        [string]$ErrorMessage,
+        [string]$AdditionalInfo = ''
     )
-    
-    $cmdlet = Get-Command $Command -ErrorAction SilentlyContinue
-    if (-not $cmdlet) {
-        if ($ModuleName) {
-            Write-ErrorLog "Required command '$Command' not found. You may need to install the $ModuleName module"
-        } else {
-            Write-ErrorLog "Required command '$Command' not found"
-        }
-        return $false
+
+    # Clear any active progress bars
+    Write-Progress -Activity '*' -Status 'Failed' -Completed
+
+    # Log additional info if provided
+    if ($AdditionalInfo) {
+        Write-GrayLog $AdditionalInfo
     }
 
-    if ($MinimumVersion -and $cmdlet.Version -lt [Version]$MinimumVersion) {
-        Write-ErrorLog "Command '$Command' version $MinimumVersion or higher is required. Current version: $($cmdlet.Version)"
-        return $false
-    }
-
-    return $true
-}
-
-# Function to check and install Visual C++ Redistributable
-function Test-VCRedist {
-    $registryPath = "HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64"
-    if (-not (Test-Path $registryPath)) {
-        Write-GrayLog "Microsoft Visual C++ Redistributable not found. Installing..."
-        $url = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
-        $outpath = Join-Path ([System.IO.Path]::GetTempPath()) "vc_redist.x64.exe"
-
-        try {
-            Invoke-WebRequest -Uri $url -OutFile $outpath -ErrorAction Stop
-            $process = Start-Process -FilePath $outpath -ArgumentList "/install", "/quiet", "/norestart" -Wait -PassThru
-            if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 3010) {  # 3010 means success but requires restart
-                throw "Installation failed with exit code $($process.ExitCode)"
-            }
-            Remove-Item $outpath -ErrorAction SilentlyContinue
-            Write-GrayLog "Microsoft Visual C++ Redistributable installed successfully"
-        } catch {
-            Write-GrayLog "Failed to install Microsoft Visual C++ Redistributable"
-            Write-GrayLog "Please install it manually from: https://aka.ms/vs/17/release/vc_redist.x64.exe"
-            Write-GrayLog ("Error: " + $_.Exception.Message)
-            return $false
-        }
-    }
-    return $true
-}
-
-# Check required commands
-$requirements = @(
-    @{Command="Invoke-WebRequest"; ModuleName="Microsoft.PowerShell.Utility"},
-    @{Command="Expand-Archive"; ModuleName="Microsoft.PowerShell.Archive"},
-    @{Command="Get-WmiObject"; ModuleName="Microsoft.PowerShell.Management"},
-    @{Command="ConvertTo-Json"; ModuleName="Microsoft.PowerShell.Utility"}
-)
-
-foreach ($req in $requirements) {
-    if (-not (Test-Requirement @req)) {
-        exit 1
-    }
-}
-
-# Check for Visual C++ Redistributable
-if (-not (Test-VCRedist)) {
-    exit 1
-}
-
-# Check write permissions to destination
-function Test-WritePermission {
-    param([string]$Path)
-    
-    try {
-        # Try to create a test file
-        $testFile = Join-Path $Path "test_write_permission"
-        $null = New-Item -ItemType File -Path $testFile -Force -ErrorAction Stop
-        Remove-Item -Path $testFile -Force -ErrorAction Stop
-        return $true
-    } catch {
-        Write-ErrorLog "No write permission to $Path. You may need to run this script with elevated privileges"
-        return $false
-    }
-}
-
-# Function to show PATH update instructions
-function Show-PathInstructions {
-    param([string]$InstallPath)
-    
-    Write-GrayLog ""
-    Write-GrayLog ("NOTE: " + $InstallPath + " may not be in your PATH.")
-    Write-GrayLog "To add it permanently, you can:"
-    Write-GrayLog "  1. Run in PowerShell as Administrator:"
-    Write-GrayLog ("     [Environment]::SetEnvironmentVariable('Path', `$env:Path + ';$InstallPath', [EnvironmentVariableTarget]::User)")
-    Write-GrayLog "  2. Or manually add to Path in System Properties -> Environment Variables"
-    Write-GrayLog ""
-    Write-GrayLog "To use dbt in this session immediately, run:"
-    Write-GrayLog ("    `$env:Path += ';$InstallPath'")
-    Write-GrayLog ""
-    Write-GrayLog "Then restart your terminal for permanent changes to take effect"
-}
-
-# Register cleanup for script termination
-trap {
+    # Clean up any temp directories
     Remove-TempDirs
-    exit 1
+
+    # Log the error in red (PowerShell standard for errors)
+    Write-Host 'install.ps1: ERROR ' -ForegroundColor Red -NoNewline
+    Write-Host ($ErrorMessage.Replace("\\", "\")) -ForegroundColor Red
+
+    # Stop script execution
+    throw
 }
 
-# Define constants
-# use an environment variable to allow for testing
-$HOSTNAME = if ($env:_FS_HOSTNAME) { $env:_FS_HOSTNAME } else { "public.cdn.getdbt.com" }
-$versionsUrl = "https://$HOSTNAME/fs/versions.json"
-
-# Global variables to track state
-$script:TempDirs = @()
-$script:UpdateScheduled = $false
-$script:PathUpdated = $false
-
-# Function to clean up temp directories
 function Remove-TempDirs {
     foreach ($td in $script:TempDirs) {
         if ($td -and (Test-Path $td)) {
@@ -225,353 +104,386 @@ function Remove-TempDirs {
     $script:TempDirs = @()
 }
 
-# Function to create and track temp directory
 function New-TrackedTempDir {
     $td = New-Item -ItemType Directory -Force -Path ([System.IO.Path]::GetTempPath() + [System.Guid]::NewGuid().ToString())
     $script:TempDirs += $td.FullName
     return $td.FullName
 }
+#endregion
 
-# Function to handle errors and exit
-function Handle-Error {
+#region System Check Functions
+function Test-Need {
+    [CmdletBinding()]
     param(
-        [string]$ErrorMessage,
-        [string]$AdditionalInfo = "",
-        [switch]$NoExit
+        [Parameter(Mandatory=$true)]
+        [string]$Command
     )
 
-    # Clear any active progress bars
-    Write-Progress -Activity "*" -Status "Failed" -Completed
-
-    # Log additional info if provided
-    if ($AdditionalInfo) {
-        Write-GrayLog $AdditionalInfo
-    }
-
-    # Clean up any temp directories
-    Remove-TempDirs
-
-    # Log the error
-    Write-ErrorLog $ErrorMessage
-
-    # Exit if requested
-    if (-not $NoExit) {
-        exit 1
+    if (-not (Get-Command $Command -ErrorAction SilentlyContinue)) {
+        Write-ErrorAndExit "Required command '$Command' not found"
     }
 }
 
-# Function to get installed version
-function Get-InstalledVersion {
+function Test-RequiredCommands {
+    $commands = @(
+        'Invoke-WebRequest',
+        'Expand-Archive',
+        'Get-WmiObject',
+        'ConvertTo-Json'
+    )
+
+    foreach ($command in $commands) {
+        Test-Need -Command $command
+    }
+}
+
+function Test-VCRedist {
+    $registryPath = "HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64"
+    if (-not (Test-Path $registryPath)) {
+        Write-GrayLog 'Microsoft Visual C++ Redistributable not found. Installing...'
+        $url = 'https://aka.ms/vs/17/release/vc_redist.x64.exe'
+        $outpath = Join-Path ([System.IO.Path]::GetTempPath()) 'vc_redist.x64.exe'
+
+        try {
+            Invoke-WebRequest -Uri $url -OutFile $outpath -ErrorAction Stop
+            $process = Start-Process -FilePath $outpath -ArgumentList '/install', '/quiet', '/norestart' -Wait -PassThru
+            if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 3010) {  # 3010 means success but requires restart
+                Write-ErrorAndExit 'Failed to install Microsoft Visual C++ Redistributable' -AdditionalInfo "Installation failed with exit code: $($process.ExitCode)"
+            }
+            Remove-Item $outpath -ErrorAction SilentlyContinue
+            Write-GrayLog 'Microsoft Visual C++ Redistributable installed successfully'
+        } catch {
+            Write-ErrorAndExit 'Failed to install Microsoft Visual C++ Redistributable' -AdditionalInfo "Please install it manually from: https://aka.ms/vs/17/release/vc_redist.x64.exe`nError: $($_.Exception.Message)"
+        }
+    }
+}
+
+function Test-WritePermission {
+    [CmdletBinding()]
     param(
+        [Parameter(Mandatory=$true)]
+        [string]$Path
+    )
+
+    $testFile = Join-Path $Path 'test_write_permission'
+    $null = New-Item -ItemType File -Path $testFile -Force -ErrorAction Stop
+    Remove-Item -Path $testFile -Force -ErrorAction Stop
+}
+#endregion
+
+#region Version Management Functions
+
+function Test-VersionExists {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Version,
+        [Parameter(Mandatory=$true)]
+        [string]$Target
+    )
+
+    $url = "https://$script:HOSTNAME/fs/cli/fs-v$Version-$Target.zip"
+    try {
+        Invoke-WebRequest -Uri $url -Method Head -UseBasicParsing -ErrorAction Stop
+        return $true
+    } catch {
+        if ($_.Exception.Response.StatusCode -eq 404) {
+            Write-ErrorAndExit "Version $Version does not exist" -AdditionalInfo "URL checked: $url"
+        } else {
+            Write-ErrorAndExit 'Failed to check version availability' -AdditionalInfo "Error: $($_.Exception.Message)`nURL: $url"
+        }
+    }
+}
+function Get-InstalledVersion {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [ValidateScript({
+            if(-not (Test-Path -Path $_ -IsValid)) {
+                throw "Path '$_' contains invalid characters"
+            }
+            return $true
+        })]
         [string]$BinaryPath
     )
 
-    if (Test-Path $BinaryPath) {
+    try {
+        if (-not (Test-Path $BinaryPath)) {
+            Write-GrayLog "No existing installation found at $BinaryPath"
+            return $null
+        }
+
         try {
-            $versionOutput = & $BinaryPath --version 2>$null
+            $versionOutput = & $BinaryPath --version 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-ErrorAndExit 'Failed to get version' -AdditionalInfo "Exit code: $LASTEXITCODE"
+            }
+
             # Split on space and take second part (e.g. "dbt 2.0.0-beta.63" -> "2.0.0-beta.63")
             $version = ($versionOutput -split ' ')[1]
+            if (-not $version) {
+                Write-ErrorAndExit 'Failed to get version' -AdditionalInfo 'Unexpected output format from --version command'
+            }
+
             # Remove 'v' prefix if present
             $version = $version -replace '^v', ''
-            if ($version) {
-                Write-Log ("Current installed version: " + $version)
-                return $version
-            }
+            Write-Log ('Current installed version: ' + $version)
+            return $version
         } catch {
-            if ($_.Exception.Message -match "0x[0-9a-fA-F]+") {
-                Write-GrayLog "Exit code indicates possible missing dependencies. Try running 'dbt --version' directly to see the error."
+            $errorMsg = switch -Wildcard ($_.Exception.Message) {
+                "*0x8007045A*" { "The binary appears to be corrupted or is missing dependencies" }
+                "*0xC0000135*" { "Missing required DLL dependencies. Try installing Visual C++ Redistributable" }
+                "*Command exited with code*" { "Failed to get version. Try running 'dbt --version' directly to see the error" }
+                "*Unexpected version output*" { "Version command output was in unexpected format" }
+                default { "Error checking version: $($_.Exception.Message)" }
             }
+            Write-GrayLog $errorMsg
+            return $null
         }
+    } catch {
+        Write-GrayLog "Error accessing binary at $BinaryPath`: $($_.Exception.Message)"
+        return $null
     }
-    return $null
 }
 
-# Check for current installed version
-$currentVersion = Get-InstalledVersion -BinaryPath (Join-Path -Path $To -ChildPath "dbt.exe") -PackageName "dbt"
-
-# Function to get version information from versions.json
 function Get-VersionInfo {
-    Write-GrayLog ("Attempting to fetch version information from " + $versionsUrl)
+    [CmdletBinding()]
+    param()
+
+    Write-GrayLog ('Attempting to fetch version information from ' + $versionsUrl)
 
     try {
         $versionInfo = Invoke-RestMethod -Uri $versionsUrl -ErrorAction Stop
+
+        # Validate version info structure
+        if (-not $versionInfo -or $versionInfo -isnot [PSObject]) {
+            Write-ErrorAndExit 'Invalid version information received from server'
+        }
+
+        # Validate latest version exists
+        if (-not ($versionInfo.PSObject.Properties.Name -contains 'latest')) {
+            Write-ErrorAndExit 'No latest version information available'
+        }
+
         return $versionInfo
     } catch {
-        Handle-Error ("Failed to fetch version information. Error: " + $_)
+        $errorMsg = switch -Wildcard ($_.Exception.Message) {
+            "*404*" { "Version information not found at $versionsUrl" }
+            "*Could not establish trust relationship*" { "SSL/TLS connection failed. Check your internet security settings" }
+            "*Unable to connect*" { "Connection failed. Check your internet connection" }
+            "*Invalid version information*" { "Invalid version information received from server" }
+            "*No latest version*" { "No latest version information available" }
+            default { "Failed to fetch version information: $($_.Exception.Message)" }
+        }
+        Write-ErrorAndExit $errorMsg -AdditionalInfo "URL: $versionsUrl"
     }
 }
 
-# Function to determine target version
 function Get-TargetVersion {
+    [CmdletBinding()]
     param(
+        [Parameter()]
+        [AllowNull()]
+        [AllowEmptyString()]
         [string]$SpecificVersion,
+
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNull()]
         [PSCustomObject]$VersionInfo
     )
 
-    if ([string]::IsNullOrEmpty($SpecificVersion)) {
-        Write-GrayLog "Checking for latest version"
-        # Convert VersionInfo to hashtable to use .ContainsKey()
-        $versionHash = @{}
-        $VersionInfo.PSObject.Properties | ForEach-Object { $versionHash[$_.Name] = $_.Value }
+    try {
+        if ([string]::IsNullOrEmpty($SpecificVersion)) {
+            Write-GrayLog 'Checking for latest version'
 
-        if (-not $versionHash.ContainsKey('latest')) {
-            Handle-Error "No latest version found in versions.json" ("Response received: " + ($VersionInfo | ConvertTo-Json))
-        }
+            if (-not $VersionInfo.PSObject.Properties['latest']) {
+                Write-ErrorAndExit 'No latest version found in versions.json'
+            }
 
-        if (-not $VersionInfo.latest.PSObject.Properties['tag']) {
-            Handle-Error "No tag field found in latest version" ("Response received: " + ($VersionInfo | ConvertTo-Json))
-        }
+            if (-not $VersionInfo.latest.PSObject.Properties['tag']) {
+                Write-ErrorAndExit 'No tag field found in latest version'
+            }
 
-        $version = $VersionInfo.latest.tag -replace '^v', ''
-        Write-Log ("Latest version: " + $version)
-        return $version
-    } else {
-        Write-GrayLog ("Checking for " + $SpecificVersion + " version")
+            $script:version = $VersionInfo.latest.tag -replace '^v', ''
+            if (-not $version) {
+                Write-ErrorAndExit 'Empty version tag in latest version'
+            }
 
-        # Check if version exists in versions.json
-        # Convert VersionInfo to hashtable to use .ContainsKey()
-        $versionHash = @{}
-        $VersionInfo.PSObject.Properties | ForEach-Object { $versionHash[$_.Name] = $_.Value }
-        
-        if ($versionHash.ContainsKey($SpecificVersion)) {
-            # Version exists in versions.json
-            $version = $VersionInfo.$SpecificVersion.tag -replace '^v', ''
-            Write-GrayLog ($SpecificVersion + " available version: " + $version)
+            Write-Log ('Latest version: ' + $version)
             return $version
         } else {
-            # Version not found in versions.json, use as-is
-            Write-GrayLog ("Requested version: " + $SpecificVersion)
-            return $SpecificVersion
+            Write-GrayLog ("Checking for " + $SpecificVersion + " version")
+
+            # Check if version is a known tag in versions.json
+            if (-not $VersionInfo.PSObject.Properties[$SpecificVersion]) {
+                # If not a known tag, validate semantic version format
+                if ($SpecificVersion -notmatch '^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$') {
+                    Write-ErrorAndExit "Invalid version format: '$SpecificVersion'. Must be a semantic version (e.g., 1.2.3, 1.2.3-beta.1) or a known tag (e.g., latest, canary)" -AdditionalInfo "Available tags: $($VersionInfo.PSObject.Properties.Name -join ', ')"
+                }
+
+                # For direct version input, verify it exists on CDN
+                $script:target = Get-Architecture
+                $null = Test-VersionExists -Version $SpecificVersion -Target $target
+            }
+
+            if ($VersionInfo.PSObject.Properties[$SpecificVersion]) {
+                if (-not $VersionInfo.$SpecificVersion.PSObject.Properties['tag']) {
+                    Write-ErrorAndExit "No tag field found for version $SpecificVersion"
+                }
+
+                $version = $VersionInfo.$SpecificVersion.tag -replace '^v', ''
+                if (-not $version) {
+                    Write-ErrorAndExit "Empty version tag for version $SpecificVersion"
+                }
+
+                Write-GrayLog ($SpecificVersion + " available version: " + $version)
+                return $version
+            } else {
+                Write-GrayLog ("Version $SpecificVersion not found in versions.json, using as-is")
+                return $SpecificVersion
+            }
         }
+    } catch {
+        Write-ErrorAndExit 'Failed to determine target version' -AdditionalInfo $_.Exception.Message
     }
 }
 
-# Function to compare versions
 function Compare-Versions {
+    [CmdletBinding()]
     param(
+        [Parameter()]
+        [AllowNull()]
+        [AllowEmptyString()]
         [string]$CurrentVersion,
+
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
         [string]$TargetVersion,
+
+        [Parameter()]
         [bool]$IsLatest = $false
     )
 
-    if ([string]::IsNullOrEmpty($CurrentVersion) -or [string]::IsNullOrEmpty($TargetVersion)) {
-        return $false
+    if ($CurrentVersion -eq $TargetVersion) {
+        $message = if ($IsLatest) { 'Latest' } else { 'Version' }
+        Write-ErrorAndExit "$message version $TargetVersion is already installed at $dest\dbt.exe"
+    }
+    return $true
+}
+#endregion
+
+#region Installation Helper Functions
+function Get-Architecture {
+    # We only support x64 Windows with MSVC
+    $arch = (Get-WmiObject Win32_Processor).Architecture
+    if ($arch -ne 9) { # 9 = x64
+        Write-ErrorAndExit 'Only x64 architecture is supported'
     }
 
-    if ($CurrentVersion -eq $TargetVersion) {
-        if ($IsLatest) {
-            Write-Log ("Latest version " + $TargetVersion + " is already installed at " + $dest + "\dbt.exe")
-        } else {
-            Write-Log ("Version " + $TargetVersion + " is already installed at " + $dest + "\dbt.exe")
-        }
-        return $true
+    if (-not [string]::IsNullOrEmpty($Target)) {
+        return $Target
     }
-    return $false
+
+    $script:target = 'x86_64-pc-windows-msvc'
+    Write-GrayLog "Target: $target"
+    return $target
 }
 
-# Function to update PATH
-function Update-Path {
-    param([string]$Path)
-    
+function Set-InstallationDestination {
+    # Setting the default installation destination if not specified
+    if ([string]::IsNullOrEmpty($To)) {
+        # Install to user's AppData folder which doesn't require admin privileges
+        $script:dest = Join-Path -Path $env:USERPROFILE -ChildPath ".local\bin"
+    } else {
+        $script:dest = $To
+    }
+
+    # Check write permissions to destination
+    try {
+        Test-WritePermission -Path $dest
+    } catch {
+        Write-ErrorAndExit "Cannot write to $dest" -AdditionalInfo 'You may need to run this script with elevated privileges'
+    }
+    return $dest
+}
+#endregion
+
+#region Path and Alias Functions
+function Update-InstallPath {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Path
+    )
+
+    # Try to add to PATH, but don't fail if we can't
     $userPath = [Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::User)
     if (-not ($userPath -split ';' -contains $Path)) {
         try {
             $newUserPath = $userPath + ';' + $Path
             [Environment]::SetEnvironmentVariable('Path', $newUserPath, [EnvironmentVariableTarget]::User)
-            return $true
+            Write-Log "Added $Path to user PATH"
+            $script:PathUpdated = $true
         } catch {
             Show-PathInstructions -InstallPath $Path
-            return $false
         }
+    } else {
+        Write-Log "$Path already in PATH"
     }
-    return $false
 }
 
-# Function to install dbt
-function Install-Dbt {
+function Set-DbtAlias {
+    [CmdletBinding()]
     param(
-        [string]$Version,
-        [string]$Target,
-        [string]$Destination,
-        [switch]$Update
+        [Parameter(Mandatory=$true)]
+        [string]$InstallPath
     )
 
-    $td = New-TrackedTempDir
-
     try {
-        $url = "https://public.cdn.getdbt.com/fs/cli/fs-v" + $Version + "-" + $Target + ".zip"
+        $null = New-Item -ItemType File -Path $PROFILE -Force -ErrorAction SilentlyContinue
+        $aliasCommand = "Set-Alias -Name dbtf -Value '$InstallPath\dbt.exe'"
 
-        Write-Log ("Installing dbt to: " + ($Destination -replace "\\\\", "\"))
-        Write-Log ("Downloading: " + $url)
-
-        try {
-            Invoke-WebRequest -Uri $url -OutFile "$td\fs.zip" -ErrorAction Stop
+        if (-not (Select-String -Path $PROFILE -Pattern "Set-Alias.*dbtf.*dbt\.exe" -Quiet)) {
+            Add-Content -Path $PROFILE -Value "`n# dbt CLI alias`n$aliasCommand" -Force
         }
-        catch {
-            Write-ErrorLog ("Failed to download package from " + $url + ". Verify you are requesting a valid version on a supported platform.")
-            return $false
-        }
-
-        # Extract files
-        try {
-            Expand-Archive -Path "$td\fs.zip" -DestinationPath $td -Force
-        }
-        catch {
-            Write-ErrorLog ("Failed to extract files: " + $_.Exception.Message)
-            return $false
-        }
-
-        # Find the executable
-        $sourceFile = $null
-        Get-ChildItem -Path $td -File -Recurse | ForEach-Object {
-            if ($_.Extension -eq ".exe") {
-                $sourceFile = $_.FullName
-            }
-        }
-
-        if (-not $sourceFile) {
-            Write-ErrorLog "No executable found in package"
-            return $false
-        }
-
-        if (-not (Test-Path -Path $Destination)) {
-            New-Item -Path $Destination -ItemType Directory -Force | Out-Null
-        }
-
-        $destFilePath = Join-Path -Path $Destination -ChildPath "dbt.exe"
-
-        if (Test-Path $destFilePath) {
-            if (-not $Update) {
-                Write-ErrorLog ("dbt already exists in " + ($Destination -replace "\\\\", "\") + ", use the --update flag to reinstall")
-                return $false
-            }
-
-            # Get the parent process that launched us
-            try {
-                $parentProcess = Get-Process -Id (Get-CimInstance Win32_Process -Filter "ProcessId = $PID").ParentProcessId -ErrorAction SilentlyContinue
-
-                if ($parentProcess -and $parentProcess.ProcessName.StartsWith("dbt")) {
-                    # Wait for parent dbt process to exit
-                    $parentProcess.WaitForExit()
-                }
-
-                # Now we can safely replace the file
-                Move-Item -Path $sourceFile -Destination $destFilePath -Force
-            }
-            catch {
-                Write-ErrorLog ("Failed to update dbt: " + $_.Exception.Message)
-                return $false
-            }
-        }
-        else {
-            # For new installations, just copy the file
-            try {
-                Copy-Item -Path $sourceFile -Destination $destFilePath -Force
-            }
-            catch {
-                Write-ErrorLog ("Failed to install dbt: " + $_.Exception.Message)
-                return $false
-            }
-        }
-
-        $script:PathUpdated = Update-Path -Path $Destination
-
-        Write-Log ("Successfully installed dbt v" + $Version + " to " + ($destFilePath -replace "\\\\", "\"))
-        return $true
-    }
-    finally {
-        Remove-TempDirs
-    }
-}
-
-# Clean version format
-if (-not [string]::IsNullOrEmpty($Version)) {
-    $Version = $Version -replace '^v', ''
-}
-
-# Get version information
-$versionInfo = Get-VersionInfo
-
-# Determine target version
-$version = Get-TargetVersion -SpecificVersion $Version -VersionInfo $versionInfo
-
-# Determine CPU architecture and operating system
-$cpuArchTarget = switch -Wildcard ((Get-WmiObject Win32_Processor).Architecture) {
-    0 { "x86" }
-    9 { "x64" }
-    # Add more cases if needed for different architectures
-    Default { "unknown" }
-}
-
-$operatingSystem = "windows" # Since this script is intended for Windows
-
-# Set target based on architecture
-if ([string]::IsNullOrEmpty($Target)) {
-    # Check CPU architecture and set target for supported architecture
-    if ($cpuArchTarget -eq "x64") {
-        $target = "x86_64-pc-windows-msvc"
-    } else {
-        Write-ErrorLog "Unsupported CPU Architecture: $cpuArchTarget"
-        exit 1
-    }
-}
-
-# System info logs
-Write-Log "CPU Architecture: $cpuArchTarget"
-Write-Log "Operating System: $operatingSystem"
-Write-GrayLog "Target: $target"
-
-# Log the information
-
-# Setting the default installation destination if not specified
-if ([string]::IsNullOrEmpty($To)) {
-    # Install to user's AppData folder which doesn't require admin privileges
-    $dest = Join-Path -Path $env:USERPROFILE -ChildPath ".local\bin"
-} else {
-    $dest = $To
-}
-
-# Check write permissions to destination
-if (-not (Test-WritePermission -Path $dest)) {
-    exit 1
-}
-
-# Install dbt
-if (-not (Install-Dbt -Version $version -Target $target -Destination $dest -Update:$Update)) {
-    exit 1
-}
-
-# Try to add to PATH, but don't fail if we can't
-$userPath = [Environment]::GetEnvironmentVariable('Path', [EnvironmentVariableTarget]::User)
-if (-not ($userPath -split ';' -contains $dest)) {
-    try {
-        $newUserPath = $userPath + ';' + $dest
-        [Environment]::SetEnvironmentVariable('Path', $newUserPath, [EnvironmentVariableTarget]::User)
-        Write-Log "Added $dest to user PATH"
-        $script:PathUpdated = $true
     } catch {
-        Show-PathInstructions -InstallPath $dest
+        Write-ErrorAndExit "Failed to set dbt alias in $PROFILE"
     }
-} else {
-    Write-Log "$dest already in PATH"
 }
 
-# Create a persistent alias for dbt
-$psProfilePath = $PROFILE
-if (-not (Test-Path -Path $psProfilePath)) {
-    New-Item -ItemType File -Path $psProfilePath -Force
-}
+function Show-PathInstructions {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$InstallPath
+    )
 
-# Update alias handling to be silent
-$aliasCommand = "Set-Alias -Name dbtf -Value '$dest\dbt.exe'"
-if (-not (Select-String -Path $psProfilePath -Pattern "Set-Alias.*dbtf.*dbt\.exe" -Quiet)) {
-    Add-Content -Path $psProfilePath -Value "`n# dbt CLI alias" -Force
-    Add-Content -Path $psProfilePath -Value $aliasCommand -Force
+    Write-GrayLog ('NOTE: ' + $InstallPath + ' may not be in your PATH.')
+    Write-GrayLog 'To add it permanently, you can:'
+    Write-GrayLog '  1. Run in PowerShell as Administrator:'
+    Write-GrayLog ("     [Environment]::SetEnvironmentVariable('Path', `$env:Path + ';$InstallPath', [EnvironmentVariableTarget]::User)")
+    Write-GrayLog '  2. Or manually add to Path in System Properties -> Environment Variables'
+    Write-GrayLog ''
+    Write-GrayLog 'To use dbt in this session immediately, run:'
+    Write-GrayLog ("    `$env:Path += ';$InstallPath'")
+    Write-GrayLog ''
+    Write-GrayLog 'Then restart your terminal for permanent changes to take effect'
 }
+#endregion
 
-# Display ASCII art without install.ps1 prefix
-# This differs from the original install.sh because windows doesn't support ANSI escape codes
-Write-Host @"
+#region UI Functions
+function Show-AsciiArt {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Version
+    )
+    # Display ASCII art without install.ps1 prefix
+    # This differs from the original install.sh because windows doesn't support ANSI escape codes
+    Write-Host @"
 
  =====              =====    DBT  
 =========        =========  FUSION
@@ -588,19 +500,209 @@ Write-Host @"
  =====             =====    
 
 "@
+}
+#endregion
 
-if ($Update -and $currentVersion) {
-    Write-GrayLog "Successfully updated dbt from $currentVersion to $Version"
+#region Main Installation Functions
+function Install-Dbt {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Version,
+
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [ValidatePattern('^[a-z0-9_]+-[a-z]+-[a-z0-9]+-[a-z]+$')]
+        [string]$Target,
+
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [ValidateScript({
+            if(-not (Test-Path -Path $_ -IsValid)) {
+                throw "Path '$_' contains invalid characters"
+            }
+            return $true
+        })]
+        [string]$Destination,
+
+        [switch]$Update
+    )
+
+    $td = New-TrackedTempDir
+
+    try {
+        $url = "https://$script:HOSTNAME/fs/cli/fs-v" + $Version + "-" + $Target + ".zip"
+
+        Write-Log ('Installing dbt to: ' + ($Destination -replace "\\\\", "\"))
+        Write-Log ('Downloading: ' + $url)
+
+        try {
+            Invoke-WebRequest -Uri $url -OutFile "$td\fs.zip" -ErrorAction Stop
+        }
+        catch {
+            Write-ErrorAndExit "Failed to download package from $url. Verify you are requesting a valid version on a supported platform."
+        }
+
+        # Extract files
+        try {
+            Expand-Archive -Path "$td\fs.zip" -DestinationPath $td -Force
+        }
+        catch {
+            Write-ErrorAndExit 'Failed to extract files' -AdditionalInfo $_.Exception.Message
+        }
+
+        # Find the executable
+        $sourceFile = $null
+        Get-ChildItem -Path $td -File -Recurse | ForEach-Object {
+            if ($_.Extension -eq '.exe') {
+                $sourceFile = $_.FullName
+            }
+        }
+
+        if (-not $sourceFile) {
+            Write-ErrorAndExit 'No executable found in package' -AdditionalInfo 'The downloaded package appears to be corrupted or empty'
+        }
+
+        if (-not (Test-Path -Path $Destination)) {
+            New-Item -Path $Destination -ItemType Directory -Force | Out-Null
+        }
+
+        $destFilePath = Join-Path -Path $Destination -ChildPath 'dbt.exe'
+
+        if (Test-Path $destFilePath) {
+            if (-not $Update) {
+                Write-ErrorAndExit "dbt already exists in $($Destination -replace '\\', ''). Use the -Update flag to reinstall"
+            }
+
+            # Get the parent process that launched us
+            try {
+                $parentProcess = Get-Process -Id (Get-CimInstance Win32_Process -Filter "ProcessId = $PID").ParentProcessId -ErrorAction SilentlyContinue
+
+                if ($parentProcess -and $parentProcess.ProcessName.StartsWith('dbt')) {
+                    # Wait for parent dbt process to exit
+                    $parentProcess.WaitForExit()
+                }
+
+                # Now we can safely replace the file
+                Move-Item -Path $sourceFile -Destination $destFilePath -Force
+            }
+            catch {
+                Write-ErrorAndExit 'Failed to update dbt' -AdditionalInfo $_.Exception.Message
+            }
+        }
+        else {
+            # For new installations, just copy the file
+            try {
+                Copy-Item -Path $sourceFile -Destination $destFilePath -Force
+            }
+            catch {
+                Write-ErrorAndExit 'Failed to install dbt' -AdditionalInfo $_.Exception.Message
+            }
+        }
+
+        $script:PathUpdated = Update-InstallPath -Path $Destination
+
+        Write-Log ('Successfully installed dbt v' + $Version + ' to ' + ($destFilePath -replace "\\\\", "\"))
+    }
+    finally {
+        Remove-TempDirs
+    }
 }
 
-# Show appropriate final messages
-if ($script:PathUpdated) {
-    Write-Log "Note: You may need to restart your terminal to use dbt from any directory"
+function main {
+    # Set strict error handling
+    $ErrorActionPreference = 'Stop'
+
+    # Check PowerShell version
+    $requiredVersion = [Version]'5.1'
+    $currentVersion = $PSVersionTable.PSVersion
+    if ($currentVersion -lt $requiredVersion) {
+        Write-ErrorAndExit "PowerShell version $requiredVersion or higher is required. Current version: $currentVersion"
+    }
+
+    # Check required commands
+    Test-RequiredCommands
+
+    # Check for Visual C++ Redistributable
+    Test-VCRedist
+
+    # Check for current installed version
+    $currentVersion = Get-InstalledVersion -BinaryPath (Join-Path -Path $To -ChildPath 'dbt.exe')
+
+    # Clean version format
+    if (-not [string]::IsNullOrEmpty($Version)) {
+        $Version = $Version -replace '^v', ''
+    }
+
+    # Get version information
+    $versionInfo = Get-VersionInfo
+
+    # Determine target version
+    $version = Get-TargetVersion -SpecificVersion $Version -VersionInfo $versionInfo
+
+    # Check if dbt is already installed
+    $dbtPath = Join-Path -Path $To -ChildPath 'dbt.exe'
+    if (Test-Path $dbtPath) {
+        if (-not $Update) {
+            Write-ErrorAndExit "dbt already exists in $To, use the -Update flag to reinstall"
+        }
+        # Compare versions and exit if no update needed
+        if ($currentVersion -eq $version) {
+            Write-Log "dbt version $version is already installed"
+            return
+        }
+    }
+
+    # Determine target architecture
+    $script:target = Get-Architecture
+
+    # Set installation destination
+    $script:dest = Set-InstallationDestination
+
+    # Install dbt
+    Install-Dbt -Version $version -Target $target -Destination $dest -Update:$Update
+
+    # Update PATH
+    Update-InstallPath -Path $dest
+
+    # Update alias
+    Set-DbtAlias -InstallPath $dest
+
+    # Display ASCII art
+    Show-AsciiArt -Version $version
+
+    if ($Update -and $currentVersion) {
+        Write-GrayLog "Successfully updated dbt from $currentVersion to $Version"
+    }
+
+    # Show appropriate final messages
+    if ($script:PathUpdated) {
+        Write-Log 'Note: You may need to restart your terminal to use dbt from any directory'
+    }
+    Write-Log "Run 'dbt --help' to get started"
+
+    # Clean up
+    Remove-TempDirs
+
+    return
 }
-Write-Log "Run 'dbt --help' to get started"
+#endregion
 
-# Clean up
-Remove-TempDirs
+# Handle Ctrl+C
+trap {
+    Write-GrayLog 'Cancelling installation...'
+    Remove-TempDirs
+    return
+}
 
-# Exit
-exit 0
+try {
+    main
+} catch {
+    # If this is a Write-ErrorAndExit error, it's already been logged
+    if (-not $_.Exception.Message.StartsWith('ERROR ')) {
+        Write-GrayLog 'Cancelling installation...'
+        Write-GrayLog $_.Exception.Message
+    }
+    Remove-TempDirs
+}
