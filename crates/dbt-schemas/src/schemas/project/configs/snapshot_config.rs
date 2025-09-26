@@ -347,50 +347,101 @@ pub struct SnapshotConfig {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq, Default)]
 pub struct SnapshotMetaColumnNames {
-    #[serde(default = "default_dbt_scd_id")]
-    pub dbt_scd_id: Option<String>,
-    #[serde(default = "default_dbt_updated_at")]
-    pub dbt_updated_at: Option<String>,
-    #[serde(default = "default_dbt_valid_from")]
-    pub dbt_valid_from: Option<String>,
-    #[serde(default = "default_dbt_valid_to")]
-    pub dbt_valid_to: Option<String>,
-    #[serde(default = "default_dbt_is_deleted")]
-    pub dbt_is_deleted: Option<String>,
+    dbt_scd_id: Option<String>,
+    dbt_updated_at: Option<String>,
+    dbt_valid_from: Option<String>,
+    dbt_valid_to: Option<String>,
+    dbt_is_deleted: Option<String>,
 }
 
-impl Default for SnapshotMetaColumnNames {
-    fn default() -> Self {
+impl SnapshotMetaColumnNames {
+    pub fn new(
+        dbt_scd_id: Option<String>,
+        dbt_updated_at: Option<String>,
+        dbt_valid_from: Option<String>,
+        dbt_valid_to: Option<String>,
+        dbt_is_deleted: Option<String>,
+    ) -> Self {
         Self {
-            dbt_scd_id: default_dbt_scd_id(),
-            dbt_updated_at: default_dbt_updated_at(),
-            dbt_valid_from: default_dbt_valid_from(),
-            dbt_valid_to: default_dbt_valid_to(),
-            dbt_is_deleted: default_dbt_is_deleted(),
+            dbt_scd_id,
+            dbt_updated_at,
+            dbt_valid_from,
+            dbt_valid_to,
+            dbt_is_deleted,
         }
     }
-}
 
-fn default_dbt_scd_id() -> Option<String> {
-    Some("DBT_SCD_ID".to_string())
-}
+    pub fn get_dbt_scd_id(&self, adapter_type: &str) -> String {
+        if adapter_type == "snowflake" {
+            self.dbt_scd_id
+                .clone()
+                .unwrap_or_else(|| "DBT_SCD_ID".to_string())
+                .to_uppercase()
+        } else {
+            self.dbt_scd_id
+                .clone()
+                .unwrap_or_else(|| "dbt_scd_id".to_string())
+                .to_lowercase()
+        }
+    }
 
-fn default_dbt_updated_at() -> Option<String> {
-    Some("DBT_UPDATED_AT".to_string())
-}
+    pub fn get_dbt_updated_at(&self, adapter_type: &str) -> String {
+        if adapter_type == "snowflake" {
+            self.dbt_updated_at
+                .clone()
+                .unwrap_or_else(|| "DBT_UPDATED_AT".to_string())
+                .to_uppercase()
+        } else {
+            self.dbt_updated_at
+                .clone()
+                .unwrap_or_else(|| "dbt_updated_at".to_string())
+                .to_lowercase()
+        }
+    }
 
-fn default_dbt_valid_from() -> Option<String> {
-    Some("DBT_VALID_FROM".to_string())
-}
+    pub fn get_dbt_valid_from(&self, adapter_type: &str) -> String {
+        if adapter_type == "snowflake" {
+            self.dbt_valid_from
+                .clone()
+                .unwrap_or_else(|| "DBT_VALID_FROM".to_string())
+                .to_uppercase()
+        } else {
+            self.dbt_valid_from
+                .clone()
+                .unwrap_or_else(|| "dbt_valid_from".to_string())
+                .to_lowercase()
+        }
+    }
 
-fn default_dbt_valid_to() -> Option<String> {
-    Some("DBT_VALID_TO".to_string())
-}
+    pub fn get_dbt_valid_to(&self, adapter_type: &str) -> String {
+        if adapter_type == "snowflake" {
+            self.dbt_valid_to
+                .clone()
+                .unwrap_or_else(|| "DBT_VALID_TO".to_string())
+                .to_uppercase()
+        } else {
+            self.dbt_valid_to
+                .clone()
+                .unwrap_or_else(|| "dbt_valid_to".to_string())
+                .to_lowercase()
+        }
+    }
 
-fn default_dbt_is_deleted() -> Option<String> {
-    Some("DBT_IS_DELETED".to_string())
+    pub fn get_dbt_is_deleted(&self, adapter_type: &str) -> String {
+        if adapter_type == "snowflake" {
+            self.dbt_is_deleted
+                .clone()
+                .unwrap_or_else(|| "DBT_IS_DELETED".to_string())
+                .to_uppercase()
+        } else {
+            self.dbt_is_deleted
+                .clone()
+                .unwrap_or_else(|| "dbt_is_deleted".to_string())
+                .to_lowercase()
+        }
+    }
 }
 
 impl From<ProjectSnapshotConfig> for SnapshotConfig {
