@@ -628,6 +628,7 @@ class PartialParsing:
         new_schema_file = deepcopy(self.new_files[file_id])
         saved_yaml_dict = saved_schema_file.dict_from_yaml
         new_yaml_dict = new_schema_file.dict_from_yaml
+        print(f"--- in change_schema_file. pp_dict: {saved_schema_file.pp_dict}")
         saved_schema_file.pp_dict = {}
         self.handle_schema_file_changes(saved_schema_file, saved_yaml_dict, new_yaml_dict)
 
