@@ -4,6 +4,7 @@ import agate
 import pytest
 
 from dbt.artifacts.resources import FunctionReturnType
+from dbt.artifacts.resources.types import FunctionType
 from dbt.contracts.graph.nodes import FunctionNode
 from dbt.tests.util import run_dbt
 
@@ -40,6 +41,7 @@ class TestBasicSQLUDF(BasicUDFSetup):
         assert "function.test.double_it" in manifest.functions
         function_node = manifest.functions["function.test.double_it"]
         assert isinstance(function_node, FunctionNode)
+        assert function_node.type == FunctionType.Scalar
         assert function_node.description == "Doubles whatever number is passed in"
         assert len(function_node.arguments) == 1
         argument = function_node.arguments[0]
