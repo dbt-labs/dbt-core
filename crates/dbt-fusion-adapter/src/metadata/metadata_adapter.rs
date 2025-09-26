@@ -55,7 +55,31 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
         &self,
         unique_id: Option<String>,
         relations: &[Arc<dyn BaseRelation>],
-    ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<SdfSchema>>>;
+    ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>>;
+
+    /// Convert Arrow schema to SDF schema. See [dbt_adapter::arrow_schema_to_sdf_schema].
+    fn arrow_schema_to_sdf_schema(&self, schema: Arc<Schema>) -> AdapterResult<SdfSchema>;
+
+    fn list_relations_sdf_schemas<'a>(
+        &'a self,
+        unique_id: Option<String>,
+        relations: &'a [Arc<dyn BaseRelation>],
+    ) -> AsyncAdapterResult<'a, HashMap<String, AdapterResult<SdfSchema>>> {
+        let future = async move {
+            self.list_relations_schemas(unique_id, relations)
+                .await
+                .map(|map| {
+                    map.into_iter()
+                        .map(|(k, v)| {
+                            // TODO: make this a direct call when we move `arrow_schema_to_sdf_schema` to `fs/sa`
+                            let v = v.and_then(|schema| self.arrow_schema_to_sdf_schema(schema));
+                            (k, v)
+                        })
+                        .collect()
+                })
+        };
+        Box::pin(future)
+    }
 
     /// List relations and their schemas by patterns
     #[allow(clippy::type_complexity)]

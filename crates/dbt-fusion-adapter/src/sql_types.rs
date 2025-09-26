@@ -12,12 +12,22 @@ use dbt_xdbc::sql::types::SqlType;
 pub struct SdfSchema(Arc<Schema>);
 
 impl SdfSchema {
-    pub fn new(schema: Arc<Schema>) -> Self {
+    /// Creates a new SdfSchema from a transformed Arrow schema.
+    ///
+    /// PRE-CONDITION: the schema must have been transformed to use SDF types.
+    /// All types have been converted to types that static analysis expects
+    /// and all the canonicalization steps have been applied (e.g. the
+    /// `FixedSizeList` hack for Snowflake timestamps)
+    pub fn from_sdf_arrow_schema(schema: Arc<Schema>) -> Self {
         SdfSchema(schema)
     }
 
     pub fn inner(&self) -> &Arc<Schema> {
         &self.0
+    }
+
+    pub fn into_inner(self) -> Arc<Schema> {
+        self.0
     }
 }
 
