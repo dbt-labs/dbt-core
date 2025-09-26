@@ -186,6 +186,7 @@ impl Drop for BackgroundWriterShutdownHandle {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dbt_test_primitives::assert_contains;
     use std::io::{self, Write};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
@@ -334,7 +335,7 @@ mod tests {
         };
 
         assert_eq!(error.code, ErrorCode::IoError);
-        assert!(error.to_string().contains("Mock write error"));
+        assert_contains!(error.to_string(), "Mock write error");
 
         // Verify only first message was written (writer failed after 1)
         let buffer_contents = buffer.lock().unwrap();
@@ -357,7 +358,7 @@ mod tests {
         };
 
         assert_eq!(error.code, ErrorCode::IoError);
-        assert!(error.to_string().contains("Mock flush error"));
+        assert_contains!(error.to_string(), "Mock flush error");
 
         // After shutdown, writes should fail
         assert!(writer.write_bytes(b"message2\n", false).is_err());

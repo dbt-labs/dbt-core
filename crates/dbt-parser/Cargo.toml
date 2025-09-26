@@ -39,6 +39,7 @@ dbt-fusion-workspace-hack = { version = "0.1" }
 tracing = { workspace = true }
 
 [dev-dependencies]
+dbt-test-primitives = { workspace = true }
 serde = { workspace = true }
 tempfile = { workspace = true }
 

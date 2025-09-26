@@ -497,7 +497,9 @@ mod tests {
     };
 
     use super::*;
+    use dbt_test_primitives::assert_contains;
     use insta::assert_snapshot;
+
     fn create_macro_unit(name: &str, sql: &str) -> MacroUnit {
         MacroUnit {
             info: MacroInfo {
@@ -797,8 +799,8 @@ all okay!");
         let rv = env.render_str("{{macro_b()}}", context! {}, &[]).unwrap();
 
         // The first print should show the macro object, second print shows the macro output
-        // assert!(rv.contains("<macro 'some_macro'>"));
-        assert!(rv.contains("hello"));
+        // assert_contains!(rv, "<macro 'some_macro'>");
+        assert_contains!(rv, "hello");
     }
     #[test]
     fn test_date_format() {
@@ -811,8 +813,8 @@ all okay!");
             )
             .unwrap()
             ;
-        assert!(rv.contains("UTC"));
-        assert!(rv.contains("+00:00"));
+        assert_contains!(rv, "UTC");
+        assert_contains!(rv, "+00:00");
     }
     #[test]
     fn test_datetime_strftime_with_timedelta() {

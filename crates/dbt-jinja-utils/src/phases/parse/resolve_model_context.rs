@@ -664,9 +664,9 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
 
 #[cfg(test)]
 mod test {
-    use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
-
     use super::*;
+    use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
+    use dbt_test_primitives::assert_contains;
     #[test]
     fn test_resolve_source_function_rendering() {
         let sql_resources = Arc::new(Mutex::new(Vec::new()));
@@ -692,8 +692,8 @@ mod test {
         // Render the template
         let result = template.render(minijinja::context!(), &[]).unwrap();
 
-        assert!(result.contains("test_db"));
-        assert!(result.contains("test_schema"));
-        assert!(result.contains("my_table"));
+        assert_contains!(result, "test_db");
+        assert_contains!(result, "test_schema");
+        assert_contains!(result, "my_table");
     }
 }

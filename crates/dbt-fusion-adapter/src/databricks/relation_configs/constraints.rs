@@ -417,6 +417,7 @@ mod tests {
         properties::ModelConstraint,
         relations::relation_configs::{ComponentConfig, RelationChangeSet},
     };
+    use dbt_test_primitives::assert_contains;
     use std::collections::{BTreeMap, BTreeSet};
     use std::io;
     use std::sync::Arc;
@@ -606,7 +607,7 @@ fk_composite,parent_type,main,default,parents,type
         assert!(diff.is_some());
 
         let diff_config = diff.unwrap();
-        assert!(diff_config.set_non_nulls.contains("name"));
+        assert_contains!(diff_config.set_non_nulls, "name");
         assert_eq!(diff_config.set_constraints.len(), 2);
         assert_eq!(diff_config.unset_constraints.len(), 1);
     }
@@ -625,8 +626,8 @@ fk_composite,parent_type,main,default,parents,type
 
         if let Some(DatabricksComponentConfig::Constraints(config)) = component {
             assert_eq!(config.set_non_nulls.len(), 2);
-            assert!(config.set_non_nulls.contains("id"));
-            assert!(config.set_non_nulls.contains("name"));
+            assert_contains!(config.set_non_nulls, "id");
+            assert_contains!(config.set_non_nulls, "name");
             assert!(config.set_constraints.is_empty());
         } else {
             panic!("Expected Constraints config");
@@ -810,8 +811,8 @@ fk_composite,parent_type,main,default,parents,type
 
         if let Some(DatabricksComponentConfig::Constraints(config)) = component {
             assert_eq!(config.set_non_nulls.len(), 2);
-            assert!(config.set_non_nulls.contains("id"));
-            assert!(config.set_non_nulls.contains("name"));
+            assert_contains!(config.set_non_nulls, "id");
+            assert_contains!(config.set_non_nulls, "name");
             // Only not-null constraints from columns (model constraints would also be processed here)
             assert!(config.set_constraints.is_empty());
         } else {
@@ -889,7 +890,7 @@ fk_composite,parent_type,main,default,parents,type
             parse_constraints(&columns, &model_constraints).unwrap();
 
         assert_eq!(non_nulls.len(), 1);
-        assert!(non_nulls.contains("id"));
+        assert_contains!(non_nulls, "id");
 
         assert_eq!(other_constraints.len(), 2);
         assert!(other_constraints.iter().any(|c| match c {

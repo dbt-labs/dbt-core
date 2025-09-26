@@ -31,6 +31,8 @@ serde_json = { workspace = true }
 shellexpand = { workspace = true }
 tokio = { workspace = true }
 
+[dev-dependencies]
+dbt-test-primitives = { workspace = true }
 
 [lib]
 name = "dbt_auth"

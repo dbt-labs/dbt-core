@@ -476,9 +476,9 @@ fn parse_constraint_from_column(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use super::*;
+    use dbt_test_primitives::assert_contains;
+    use std::sync::Arc;
 
     #[test]
     fn test_typed_constraint_validation() {
@@ -746,10 +746,9 @@ mod tests {
 
         let result = TypedConstraint::try_from(&invalid_constraint);
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .contains("Check constraint missing required field: 'expression'")
+        assert_contains!(
+            result.unwrap_err(),
+            "Check constraint missing required field: 'expression'"
         );
     }
 
@@ -770,10 +769,9 @@ mod tests {
 
         let result = TypedConstraint::try_from(&constraint_with_empty_expression);
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .contains("check constraint is missing required field: 'expression'")
+        assert_contains!(
+            result.unwrap_err(),
+            "check constraint is missing required field: 'expression'"
         );
     }
 }

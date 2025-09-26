@@ -131,6 +131,7 @@ pub fn write_db_config_to_test_profile(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dbt_test_primitives::assert_contains;
     use std::fs;
     use tempfile::tempdir;
 
@@ -145,9 +146,9 @@ mod tests {
 
         assert!(profile_path.exists());
         let profile_contents = fs::read_to_string(&profile_path)?;
-        assert!(profile_contents.contains("test_schema"));
-        assert!(profile_contents.contains("postgres"));
-        assert!(profile_contents.contains("test:"));
+        assert_contains!(profile_contents, "test_schema");
+        assert_contains!(profile_contents, "postgres");
+        assert_contains!(profile_contents, "test:");
         assert!(!profile_contents.is_empty());
 
         // Clean up

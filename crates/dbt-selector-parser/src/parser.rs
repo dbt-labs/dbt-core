@@ -289,9 +289,9 @@ impl<'a> SelectorParser<'a> {
 
 #[cfg(test)]
 mod tests {
-    use dbt_schemas::schemas::selectors::ExcludeAtomExpr;
-
     use super::*;
+    use dbt_schemas::schemas::selectors::ExcludeAtomExpr;
+    use dbt_test_primitives::assert_contains;
 
     #[test]
     fn test_string_selector() -> FsResult<()> {
@@ -351,9 +351,9 @@ mod tests {
         assert!(result.is_err());
         if let Err(e) = result {
             assert_eq!(e.code, ErrorCode::SelectorError);
-            assert!(
-                e.to_string()
-                    .contains("MethodKey must have exactly one key-value pair")
+            assert_contains!(
+                e.to_string(),
+                "MethodKey must have exactly one key-value pair"
             );
         }
     }
@@ -457,9 +457,9 @@ mod tests {
         assert!(result.is_err());
         if let Err(e) = result {
             assert_eq!(e.code, ErrorCode::SelectorError);
-            assert!(
-                e.to_string()
-                    .contains("Top level exclude not allowed in YAML selectors")
+            assert_contains!(
+                e.to_string(),
+                "Top level exclude not allowed in YAML selectors"
             );
         }
     }
@@ -742,7 +742,7 @@ mod tests {
         assert!(result.is_err());
         if let Err(e) = result {
             assert_eq!(e.code, ErrorCode::SelectorError);
-            assert!(e.to_string().contains("Unknown selector"));
+            assert_contains!(e.to_string(), "Unknown selector");
         }
 
         // Test unknown selector in inheritance

@@ -9,6 +9,11 @@ license.workspace = true
 keywords.workspace = true
 edition.workspace = true
 
+[lib]
+name = "dbt_jinja_utils"
+path = "src/lib.rs"
+doctest = false
+
 [lints]
 workspace = true
 
@@ -40,11 +45,6 @@ uuid = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 tracing = { workspace = true }
 
-
-[lib]
-name = "dbt_jinja_utils"
-path = "src/lib.rs"
-doctest = false
-
 [dev-dependencies]
+dbt-test-primitives = { workspace = true }
 insta = { version = "1.38.0", features = ["glob", "serde"] }

@@ -27,6 +27,7 @@ mod tests {
     use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
     use dbt_schemas::schemas::serde::StringOrInteger;
     use dbt_schemas::state::DbtRuntimeConfig;
+    use dbt_test_primitives::assert_contains;
     use minijinja::constants::TARGET_PACKAGE_NAME;
     use minijinja::machinery::Span;
     use minijinja::{AutoEscape, Error};
@@ -449,8 +450,8 @@ mod tests {
         .unwrap();
 
         let trimmed = rendered.trim().replace('\n', " ").replace('\r', "");
-        assert!(trimmed.contains("abc: 123"));
-        assert!(trimmed.contains("def: 456"));
+        assert_contains!(trimmed, "abc: 123");
+        assert_contains!(trimmed, "def: 456");
     }
 
     #[tokio::test]

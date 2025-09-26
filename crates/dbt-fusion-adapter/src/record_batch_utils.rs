@@ -91,6 +91,7 @@ mod tests {
     use super::*;
     use arrow::array::{Float64Array, Int32Array, StringArray};
     use arrow::datatypes::{DataType, Field, Schema};
+    use dbt_test_primitives::assert_contains;
     use std::sync::{Arc, LazyLock};
 
     static TEST_DATA: LazyLock<RecordBatch> = LazyLock::new(|| {
@@ -122,14 +123,10 @@ mod tests {
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert_eq!(error.kind(), AdapterErrorKind::Internal);
-        assert!(
-            error
-                .message()
-                .contains("expected column nonexistent not found")
-        );
-        assert!(error.message().contains("available are"));
-        assert!(error.message().contains("name"));
-        assert!(error.message().contains("score"));
+        assert_contains!(error.message(), "expected column nonexistent not found");
+        assert_contains!(error.message(), "available are");
+        assert_contains!(error.message(), "name");
+        assert_contains!(error.message(), "score");
     }
 
     #[test]
@@ -140,7 +137,7 @@ mod tests {
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert_eq!(error.kind(), AdapterErrorKind::Internal);
-        assert!(error.message().contains("expected column of type"));
+        assert_contains!(error.message(), "expected column of type");
         assert!(error.message().contains(
             "arrow_array::array::primitive_array::PrimitiveArray<arrow_array::types::Int32Type>"
         ));

@@ -473,6 +473,7 @@ impl BaseRelation for MockBaseRelation {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dbt_test_primitives::assert_contains;
 
     #[test]
     fn test_build_relation_clauses() {
@@ -526,12 +527,7 @@ mod tests {
 
         let result = build_relation_clauses(&relations);
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Invalid table name format")
-        );
+        assert_contains!(result.unwrap_err().to_string(), "Invalid table name format");
     }
 
     #[test]

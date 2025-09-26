@@ -211,6 +211,7 @@ pub fn normalize_key(input: &str) -> Result<String, AuthError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dbt_test_primitives::assert_contains;
     use pkcs8::{EncodePrivateKey, LineEnding};
     use rsa::{RsaPrivateKey, pkcs1::EncodeRsaPrivateKey, rand_core::OsRng};
 
@@ -267,7 +268,7 @@ mod tests {
         let b64_pkcs1 = to_pkcs1_der_b64(&rsa);
         let err = normalize_key(&b64_pkcs1).unwrap_err();
         let msg = format!("{err:?}");
-        assert!(msg.contains("PKCS#1"));
+        assert_contains!(msg, "PKCS#1");
     }
 
     #[test]

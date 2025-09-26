@@ -15,6 +15,7 @@ mod tests {
     use dbt_schemas::schemas::profiles::PostgresDbConfig;
     use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
     use dbt_schemas::schemas::serde::StringOrInteger;
+    use dbt_test_primitives::assert_contains;
     use minijinja::Value;
     use std::collections::{BTreeMap, BTreeSet};
     use std::path::PathBuf;
@@ -93,9 +94,9 @@ mod tests {
         let macro_calls = listener_factory.drain_macro_calls(&test_path);
 
         // Verify all macros are tracked
-        assert!(macro_calls.contains("config"));
-        assert!(macro_calls.contains("ref"));
-        assert!(macro_calls.contains("custom_macro"));
+        assert_contains!(macro_calls, "config");
+        assert_contains!(macro_calls, "ref");
+        assert_contains!(macro_calls, "custom_macro");
         assert_eq!(macro_calls.len(), 3);
     }
 

@@ -331,11 +331,11 @@ impl<T> From<Option<T>> for Omissible<T> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use dbt_serde_yaml::JsonSchema;
+    use dbt_test_primitives::assert_contains;
     use indoc::indoc;
     use schemars::schema_for;
-
-    use super::*;
 
     #[test]
     fn test_omissible() {
@@ -365,18 +365,18 @@ mod tests {
             field: 
         "#;
         let err = dbt_serde_yaml::from_str::<TestStruct>(yaml).unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("invalid type: unit value, expected a string")
+        assert_contains!(
+            err.to_string(),
+            "invalid type: unit value, expected a string"
         );
 
         let yaml = r#"
             field: null
         "#;
         let err = dbt_serde_yaml::from_str::<TestStruct>(yaml).unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("invalid type: unit value, expected a string")
+        assert_contains!(
+            err.to_string(),
+            "invalid type: unit value, expected a string"
         );
     }
 

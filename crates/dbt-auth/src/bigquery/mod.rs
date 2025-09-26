@@ -221,6 +221,7 @@ mod tests {
     use super::*;
     use adbc_core::options::{OptionDatabase, OptionValue};
     use dbt_serde_yaml::Mapping;
+    use dbt_test_primitives::assert_contains;
 
     fn base_config_oauth() -> Mapping {
         Mapping::from_iter([
@@ -289,9 +290,9 @@ mod tests {
     fn test_auth_config_from_adapter_config_keyfile() {
         let config = base_config_keyfile();
         let err = try_configure(config).unwrap_err();
-        assert!(
-            err.msg()
-                .contains("Keyfile 'akeyfilethatdoesnotexist.json' does not exist")
+        assert_contains!(
+            err.msg(),
+            "Keyfile 'akeyfilethatdoesnotexist.json' does not exist"
         );
     }
 
@@ -307,8 +308,8 @@ mod tests {
                 let keyfile_json =
                     other_option_value(&builder, bigquery::AUTH_CREDENTIALS).unwrap();
                 assert!(keyfile_json.contains(r#""type":"service_account""#));
-                assert!(keyfile_json.contains("BEGIN PRIVATE KEY"));
-                assert!(keyfile_json.contains("END PRIVATE KEY"));
+                assert_contains!(keyfile_json, "BEGIN PRIVATE KEY");
+                assert_contains!(keyfile_json, "END PRIVATE KEY");
             }
             Err(err) => {
                 panic!("Auth config mapping failed with error: {err:?}")
@@ -346,8 +347,8 @@ location: my_location
                 OptionDatabase::Other(o) => match o.as_str() {
                     bigquery::AUTH_CREDENTIALS => {
                         assert!(value.contains(r#""type":"service_account""#));
-                        assert!(value.contains("BEGIN PRIVATE KEY"));
-                        assert!(value.contains("END PRIVATE KEY"));
+                        assert_contains!(value, "BEGIN PRIVATE KEY");
+                        assert_contains!(value, "END PRIVATE KEY");
                     }
                     bigquery::PROJECT_ID => {
                         assert_eq!(value, "my_db".to_string())

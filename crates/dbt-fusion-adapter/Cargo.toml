@@ -44,6 +44,8 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracy-client = { workspace = true }
 
+[dev-dependencies]
+dbt-test-primitives = { workspace = true }
 
 [lib]
 name = "dbt_fusion_adapter"
