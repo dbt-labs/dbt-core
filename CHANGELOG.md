@@ -195,10 +195,6 @@ All notable changes to this project will be documented in this file.
 
 ## 2.0.0-preview.21 - September 18, 2025
 
-### Features
-
-- [dbt-fusion] Allow for --write-catalog for dbt parse
-
 ### Fixes
 
 - [dbt-extension] improved logic for identifying a dbt project
