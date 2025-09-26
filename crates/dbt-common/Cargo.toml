@@ -19,14 +19,11 @@ dbt-telemetry = { workspace = true }
 # leaf dependencies (depend on little more than std lib)
 blake3 = { workspace = true }
 dbt-cancel = { workspace = true }
-dbt-proc-macros = { workspace = true }
 hex = { workspace = true }
 md5 = { workspace = true }
 
 clap = { workspace = true, features = ["derive", "env"] }
 counter = { workspace = true }
-dialoguer = { workspace = true }
-int-enum = { workspace = true }
 itertools = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
@@ -43,7 +40,6 @@ dbt-serde_yaml = { workspace = true }
 humantime = { workspace = true }
 minijinja = { workspace = true }
 parquet = { workspace = true }
-prost = { workspace = true }
 
 schemars = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -71,7 +67,6 @@ tracing-subscriber = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 opentelemetry = { workspace = true }
 opentelemetry-otlp = { workspace = true }
-opentelemetry-proto = { workspace = true }
 opentelemetry-semantic-conventions = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 

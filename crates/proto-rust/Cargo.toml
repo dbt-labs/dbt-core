@@ -16,7 +16,6 @@ workspace = true
 bytes = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 fake = { workspace = true, optional = true }
-pbjson = { workspace = true }
 pbjson-types = { workspace = true }
 prost = { workspace = true }
 prost-types = { workspace = true }

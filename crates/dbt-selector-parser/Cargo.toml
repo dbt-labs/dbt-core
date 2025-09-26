@@ -13,7 +13,6 @@ edition.workspace = true
 dbt-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-schemas = { workspace = true }
-tracing = { workspace = true }
 
 [dev-dependencies]
 dbt-test-primitives = { workspace = true }

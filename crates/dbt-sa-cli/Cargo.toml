@@ -40,7 +40,6 @@ vortex-events = { workspace = true }
 
 
 [dev-dependencies]
-tempfile = { workspace = true }
 
 [[bin]]
 doctest = false

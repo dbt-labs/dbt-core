@@ -13,7 +13,6 @@ workspace = true
 [dependencies]
 arrow = { workspace = true }
 async-trait = { workspace = true }
-chrono-tz = { workspace = true }
 clap = { workspace = true }
 dbt-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
@@ -31,7 +30,6 @@ ignore = { version = "0.4" }
 itertools = { workspace = true }
 libc = "0.2.170"
 merge = { workspace = true }
-minijinja = { workspace = true }
 once_cell = { workspace = true }
 parquet = { workspace = true }
 pretty_assertions = { version = "1.4.1" }
