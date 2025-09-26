@@ -8,7 +8,7 @@ use std::{
 use dashmap::DashMap;
 use dbt_common::{adapter::AdapterType, serde_utils::convert_yml_to_dash_map};
 use dbt_fusion_adapter::{load_store::ResultStore, relation_object::create_relation};
-use dbt_schemas::schemas::{CommonAttributes, NodeBaseAttributes, relations::base::BaseRelation};
+use dbt_schemas::schemas::{CommonAttributes, NodeBaseAttributes};
 use dbt_schemas::state::{DbtRuntimeConfig, RefsAndSourcesTracker};
 use minijinja::{
     Value as MinijinjaValue,
@@ -40,7 +40,6 @@ pub fn build_compile_node_context(
     skip_ref_validation: bool,
 ) -> (
     BTreeMap<String, MinijinjaValue>,
-    Arc<dyn BaseRelation>,
     Arc<DashMap<String, MinijinjaValue>>,
 ) {
     let mut base_builtins = if let Some(builtins) = base_context.get("builtins") {
@@ -56,17 +55,53 @@ pub fn build_compile_node_context(
     let mut ctx = base_context.clone();
 
     // Create a relation for 'this' using config values
-    let this_relation = create_relation(
-        adapter_type,
-        base_attr.database.clone(),
-        base_attr.schema.clone(),
-        Some(base_attr.alias.clone()),
-        None,
-        base_attr.quoting,
-    )
-    .unwrap();
-
-    ctx.insert("this".to_owned(), this_relation.as_value());
+    let dyn_object = model.as_object().expect("Model must be an object");
+    let this_relation = match dyn_object
+        .get_value(&MinijinjaValue::from("resource_type"))
+        .and_then(|v| v.as_str().map(|v| v.to_string()))
+    {
+        Some(value) => match value.as_str() {
+            "unit_test" => {
+                // Get the model name from the dependencies
+                let this_relation_name = base_attr
+                    .refs
+                    .first()
+                    .cloned()
+                    .map(|r| r.name)
+                    .expect("Unit test must have a dependency");
+                let (_, this_relation, _) = refs_and_sources
+                    .lookup_ref(
+                        &Some(common_attr.package_name.clone()),
+                        &this_relation_name,
+                        &None,
+                        &None,
+                    )
+                    .expect("Ref must exist");
+                this_relation
+            }
+            _ => create_relation(
+                adapter_type,
+                base_attr.database.clone(),
+                base_attr.schema.clone(),
+                Some(base_attr.alias.clone()),
+                None,
+                base_attr.quoting,
+            )
+            .unwrap()
+            .as_value(),
+        },
+        None => create_relation(
+            adapter_type,
+            base_attr.database.clone(),
+            base_attr.schema.clone(),
+            Some(base_attr.alias.clone()),
+            None,
+            base_attr.quoting,
+        )
+        .unwrap()
+        .as_value(),
+    };
+    ctx.insert("this".to_owned(), this_relation);
     ctx.insert(
         "database".to_owned(),
         MinijinjaValue::from(base_attr.database.to_string()),
@@ -160,5 +195,5 @@ pub fn build_compile_node_context(
         MinijinjaValue::from_serialize(Span::default()),
     );
 
-    (ctx, this_relation, config_map)
+    (ctx, config_map)
 }

@@ -868,7 +868,7 @@ async fn process_model_chunk_for_unsafe_detection(
             MinijinjaValue::from(model.common().unique_id.clone()),
         );
 
-        let (mut render_resolved_context, _, _) = build_compile_node_context(
+        let (mut render_resolved_context, _) = build_compile_node_context(
             &MinijinjaValue::from_serialize(model.serialize()),
             model.common(),
             model.base(),
