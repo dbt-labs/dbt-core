@@ -9007,6 +9007,14 @@
                     "type"
                   ]
                 }
+              },
+              "type": {
+                "enum": [
+                  "scalar",
+                  "aggregate",
+                  "table"
+                ],
+                "default": "scalar"
               }
             },
             "additionalProperties": false,
@@ -20597,6 +20605,14 @@
                           "type"
                         ]
                       }
+                    },
+                    "type": {
+                      "enum": [
+                        "scalar",
+                        "aggregate",
+                        "table"
+                      ],
+                      "default": "scalar"
                     }
                   },
                   "additionalProperties": false,
@@ -27107,6 +27123,14 @@
                 "type"
               ]
             }
+          },
+          "type": {
+            "enum": [
+              "scalar",
+              "aggregate",
+              "table"
+            ],
+            "default": "scalar"
           }
         },
         "additionalProperties": false,
