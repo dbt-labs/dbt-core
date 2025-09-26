@@ -304,6 +304,9 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                 identifier=self.quoting.get("identifier", None),
                 column=self.quoting.get("column", None),
             ),
+            run_started_at=(
+                tracking.active_user.run_started_at if tracking.active_user is not None else None
+            ),
         )
 
     def _get_v2_config_paths(

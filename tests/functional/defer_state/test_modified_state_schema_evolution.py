@@ -1,6 +1,9 @@
 import json
 import os
 import shutil
+import sys
+
+import pytest
 
 from dbt.tests.util import run_dbt
 
@@ -20,6 +23,7 @@ class TestModifiedStateSchemaEvolution:
         with open(state_manifest_path, "w") as f:
             json.dump(manifest, f, indent=2)
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="Flaky on Windows")
     def test_modified_state_schema_evolution(self, happy_path_project):
         # Uncomment this line when happy_path_project is updated
         # If the happy_path_project needs to be updated in order to

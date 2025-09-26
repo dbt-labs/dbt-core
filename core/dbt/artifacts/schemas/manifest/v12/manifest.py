@@ -1,7 +1,9 @@
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
 from uuid import UUID
 
+from dbt import tracking
 from dbt.artifacts.resources import (
     Analysis,
     Documentation,
@@ -91,6 +93,10 @@ class ManifestMetadata(BaseArtifactMetadata):
     quoting: Optional[Quoting] = field(
         default_factory=Quoting,
         metadata=dict(description="The quoting configuration for the project"),
+    )
+    run_started_at: Optional[datetime] = field(
+        default=tracking.active_user.run_started_at if tracking.active_user is not None else None,
+        metadata=dict(description="The timestamp when the run started"),
     )
 
     @classmethod

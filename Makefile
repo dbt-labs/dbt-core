@@ -97,8 +97,8 @@ interop: clean
 .PHONY: setup-db
 setup-db: ## Setup Postgres database with docker-compose for system testing.
 	@\
-	docker-compose up -d database && \
-	PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres bash test/setup_db.sh
+	docker compose up -d database && \
+	PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres SKIP_HOMEBREW=true bash test/setup_db.sh
 
 # This rule creates a file named .env that is used by docker-compose for passing
 # the USER_ID and GROUP_ID arguments to the Docker image.

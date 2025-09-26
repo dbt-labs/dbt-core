@@ -1,6 +1,7 @@
 import pytest
 
 from dbt.tests.util import run_dbt
+from dbt_common.dataclass_schema import ValidationError
 
 # Seed data for source tables
 seeds__source_table_csv = """id,_loaded_at
@@ -77,6 +78,39 @@ select * from {{ source('my_source', 'source_table') }}
 """
 
 
+models__model_freshness_schema_yml_build_after_only = """
+models:
+  - name: model_a
+    description: Model with only model freshness defined
+    config:
+      freshness:
+        build_after:
+          updates_on: all
+"""
+
+
+models__model_freshness_schema_yml_build_period_requires_count = """
+models:
+  - name: model_a
+    description: Model with only model freshness defined
+    config:
+      freshness:
+        build_after:
+          period: day
+"""
+
+
+models__model_freshness_schema_yml_build_count_requires_period = """
+models:
+  - name: model_a
+    description: Model with only model freshness defined
+    config:
+      freshness:
+        build_after:
+          count: 1
+"""
+
+
 class TestModelFreshnessConfig:
 
     @pytest.fixture(scope="class")
@@ -94,3 +128,49 @@ class TestModelFreshnessConfig:
         run_dbt(["parse"])
         compile_results = run_dbt(["compile"])
         assert len(compile_results) == 5  # All 4 models compiled successfully
+
+
+class TestModelFreshnessConfigParseBuildAfterOnly:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": models__model_freshness_schema_yml_build_after_only,
+            "model_a.sql": models__no_freshness_sql,
+        }
+
+    def test_model_freshness_configs(self, project):
+        run_dbt(["parse"])
+
+
+class TestModelFreshnessConfigParseBuildPeriodRequiresCount:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": models__model_freshness_schema_yml_build_period_requires_count,
+            "model_a.sql": models__no_freshness_sql,
+        }
+
+    def test_model_freshness_configs(self, project):
+        with pytest.raises(ValidationError) as excinfo:
+            run_dbt(["parse"])
+        expected_msg = (
+            "`freshness.build_after` must have a value for `count` if a `period` is provided"
+        )
+        assert expected_msg in str(excinfo.value)
+
+
+class TestModelFreshnessConfigParseBuildCountRequiresPeriod:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": models__model_freshness_schema_yml_build_count_requires_period,
+            "model_a.sql": models__no_freshness_sql,
+        }
+
+    def test_model_freshness_configs(self, project):
+        with pytest.raises(ValidationError) as excinfo:
+            run_dbt(["parse"])
+        expected_msg = (
+            "`freshness.build_after` must have a value for `period` if a `count` is provided"
+        )
+        assert expected_msg in str(excinfo.value)

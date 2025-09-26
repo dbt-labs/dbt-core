@@ -166,6 +166,18 @@
               "type": "null"
             }
           ]
+        },
+        "run_started_at": {
+          "description": "The timestamp when the run started",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false
@@ -4026,14 +4038,30 @@
                             "title": "ModelBuildAfter",
                             "properties": {
                               "count": {
-                                "type": "integer"
+                                "anyOf": [
+                                  {
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
                               },
                               "period": {
-                                "enum": [
-                                  "minute",
-                                  "hour",
-                                  "day"
-                                ]
+                                "anyOf": [
+                                  {
+                                    "enum": [
+                                      "minute",
+                                      "hour",
+                                      "day"
+                                    ]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null
                               },
                               "updates_on": {
                                 "enum": [
@@ -4043,11 +4071,7 @@
                                 "default": "any"
                               }
                             },
-                            "additionalProperties": true,
-                            "required": [
-                              "count",
-                              "period"
-                            ]
+                            "additionalProperties": true
                           }
                         },
                         "additionalProperties": true,
@@ -15604,14 +15628,30 @@
                                   "title": "ModelBuildAfter",
                                   "properties": {
                                     "count": {
-                                      "type": "integer"
+                                      "anyOf": [
+                                        {
+                                          "type": "integer"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "default": null
                                     },
                                     "period": {
-                                      "enum": [
-                                        "minute",
-                                        "hour",
-                                        "day"
-                                      ]
+                                      "anyOf": [
+                                        {
+                                          "enum": [
+                                            "minute",
+                                            "hour",
+                                            "day"
+                                          ]
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "default": null
                                     },
                                     "updates_on": {
                                       "enum": [
@@ -15621,11 +15661,7 @@
                                       "default": "any"
                                     }
                                   },
-                                  "additionalProperties": true,
-                                  "required": [
-                                    "count",
-                                    "period"
-                                  ]
+                                  "additionalProperties": true
                                 }
                               },
                               "additionalProperties": true,
