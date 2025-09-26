@@ -32,3 +32,5 @@ reason = "Did you forget to comment out `set_var(\"GOLDIE_UPDATE\", \"1\")`? Thi
 [[disallowed-methods]]
 path = "serde::__private::de::FlatMapDeserializer"
 reason = "This struct/enum contains a field tagged with the `#[serde(flatten)]` attribute -- `#[serde(flatten)]` conflicts with our Yaml-Jinja infra, please replace it with a dunder field instead (see https://github.com/dbt-labs/dbt-core/blob/737e1c55a4680fd306a58f89e14324a77987bd51/crates/dbt-jinja-utils/src/serde.rs#L48-L56 for details)"
+# This is not always in scope
+allow-invalid = true
