@@ -362,6 +362,10 @@ pub struct Operations {
     pub on_run_end: Vec<Spanned<DbtOperation>>,
 }
 
+pub type GetRelationCalls = BTreeMap<String, Vec<Arc<dyn BaseRelation>>>;
+pub type GetColumnsInRelationCalls = BTreeMap<String, Vec<Arc<dyn BaseRelation>>>;
+pub type PatternedDanglingSources = BTreeMap<String, Vec<RelationPattern>>;
+
 #[derive(Debug, Clone)]
 pub struct ResolverState {
     pub root_project_name: String,
@@ -373,9 +377,9 @@ pub struct ResolverState {
     pub dbt_profile: DbtProfile,
     pub render_results: RenderResults,
     pub refs_and_sources: Arc<dyn RefsAndSourcesTracker>,
-    pub get_relation_calls: BTreeMap<String, Vec<Arc<dyn BaseRelation>>>,
-    pub get_columns_in_relation_calls: BTreeMap<String, Vec<Arc<dyn BaseRelation>>>,
-    pub patterned_dangling_sources: BTreeMap<String, Vec<RelationPattern>>,
+    pub get_relation_calls: GetRelationCalls,
+    pub get_columns_in_relation_calls: GetColumnsInRelationCalls,
+    pub patterned_dangling_sources: PatternedDanglingSources,
     pub run_started_at: DateTime<Tz>,
     pub runtime_config: Arc<DbtRuntimeConfig>,
     pub manifest_selectors: BTreeMap<String, DbtSelector>,
@@ -384,6 +388,22 @@ pub struct ResolverState {
     pub defer_nodes: Option<Nodes>,
     /// Nodes that had resolution errors (e.g., unresolved refs/sources)
     pub nodes_with_resolution_errors: HashSet<String>,
+}
+
+impl ResolverState {
+    // Build reverse dependency map (who depends on whom)
+    pub fn create_reverse_deps(&self) -> BTreeMap<String, BTreeSet<String>> {
+        let mut reverse_deps: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        for (unique_id, node) in self.nodes.iter() {
+            for (dep, _) in node.base().depends_on.nodes_with_ref_location.iter() {
+                reverse_deps
+                    .entry(dep.clone())
+                    .or_default()
+                    .insert(unique_id.clone());
+            }
+        }
+        reverse_deps
+    }
 }
 
 impl fmt::Display for ResolverState {

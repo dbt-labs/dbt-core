@@ -9,6 +9,7 @@ use dbt_common::adapter::AdapterType;
 use dbt_xdbc::sql::types::SqlType;
 
 /// An Arrow schema containing SDF types
+#[derive(Clone)]
 pub struct SdfSchema(Arc<Schema>);
 
 impl SdfSchema {

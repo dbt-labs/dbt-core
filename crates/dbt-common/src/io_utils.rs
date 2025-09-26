@@ -9,20 +9,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// Represents the different phases of node processing
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ProcessingPhase {
-    Render,
-    Analyze,
-}
-
-/// Represents the status of a completed phase
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum PhaseStatus {
-    Succeeded,
-    Failed,
-}
-
 /// A trait for reporting status messages and errors that occur during execution.
 /// This is primarily used in LSP mode to report errors and progress to the client.
 pub trait StatusReporter: Any + Send + Sync {
@@ -31,14 +17,6 @@ pub trait StatusReporter: Any + Send + Sync {
     fn collect_warning(&self, warning: &FsError);
     /// Called to show progress in the UI
     fn show_progress(&self, action: &str, target: &str, description: Option<&str>);
-    /// Combined async operation to clear diagnostics and optionally mark phase completion.
-    fn record_node(
-        &self,
-        file_path: &Path,
-        unique_id: Option<&str>,
-        phase: Option<ProcessingPhase>,
-        status: Option<PhaseStatus>,
-    );
     fn bulk_publish_empty(&self, file_paths: Vec<PathBuf>);
 }
 

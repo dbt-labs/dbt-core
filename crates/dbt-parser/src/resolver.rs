@@ -4,6 +4,7 @@ use dbt_common::FsError;
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{DBT_GENERIC_TESTS_DIR_NAME, RESOLVING};
+use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::tracing::event_info::store_event_attributes;
 use dbt_common::{ErrorCode, FsResult, err, fs_err, show_error, with_progress};
@@ -78,11 +79,19 @@ pub async fn resolve(
     invocation_args: &InvocationArgs,
     mut dbt_state: DbtState,
     macros: Macros,
-    nodes: Nodes,
+    mut nodes: Nodes,
     listener_factory: Option<Arc<dyn dbt_jinja_utils::listener::RenderingEventListenerFactory>>,
     token: &CancellationToken,
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
     let _pb = with_progress!(arg.io, spinner => RESOLVING);
+
+    // For nodes, reset static analysis to "on" as they were disabled after
+    // the last resolve.
+    for node in nodes.iter_values_mut() {
+        if node.static_analysis() == StaticAnalysisKind::Off {
+            node.set_static_analysis(StaticAnalysisKind::On);
+        }
+    }
 
     // Handle inline SQL if provided
     if let Some(inline_sql) = &arg.inline_sql {
@@ -247,8 +256,9 @@ pub async fn resolve(
     let parse_adapter = jinja_env
         .get_parse_adapter()
         .expect("parse adapter must be initialized");
-    let (call_get_relation, call_get_columns_in_relation, patterned_dangling_sources) =
+    let (get_relation_calls, get_columns_in_relation_calls, patterned_dangling_sources) =
         parse_adapter.relations_to_fetch();
+
     let root_runtime_config = all_runtime_configs
         .get(dbt_state.root_project_name())
         .unwrap();
@@ -274,8 +284,8 @@ pub async fn resolve(
             run_started_at: dbt_state.run_started_at,
             nodes_with_resolution_errors,
             refs_and_sources: Arc::new(refs_and_sources),
-            get_relation_calls: call_get_relation?,
-            get_columns_in_relation_calls: call_get_columns_in_relation?,
+            get_relation_calls: get_relation_calls?,
+            get_columns_in_relation_calls: get_columns_in_relation_calls?,
             patterned_dangling_sources,
             runtime_config: root_runtime_config.clone(),
             manifest_selectors,
