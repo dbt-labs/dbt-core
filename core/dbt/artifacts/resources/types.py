@@ -79,3 +79,9 @@ class BatchSize(StrEnum):
 
     def plural(self) -> str:
         return str(self) + "s"
+
+
+class FunctionType(StrEnum):
+    Scalar = "scalar"
+    Aggregate = "aggregate"
+    Table = "table"
