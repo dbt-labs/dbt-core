@@ -463,10 +463,14 @@ class ConfiguredParser(
         self._mangle_hooks(config_dict)
         return config_dict
 
-    def render_update(self, node: FinalNode, config: ContextConfig) -> None:
+    def render_update(
+        self, node: FinalNode, config: ContextConfig, validate_config_call_dict: bool = False
+    ) -> None:
         try:
             context = self.render_with_context(node, config)
-            self.update_parsed_node_config(node, config, context=context)
+            self.update_parsed_node_config(
+                node, config, context=context, validate_config_call_dict=validate_config_call_dict
+            )
         except ValidationError as exc:
             # we got a ValidationError - probably bad types in config()
             raise ConfigUpdateError(exc, node=node) from exc
