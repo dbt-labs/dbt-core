@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Sequence, Union
 
-# trigger the PathEncoder
 import dbt_common.helper_types  # noqa:F401
 from dbt import deprecations
 from dbt.artifacts.resources import (
@@ -31,6 +30,9 @@ from dbt.artifacts.resources import (
     list_str,
     metas,
 )
+
+# trigger the PathEncoder
+from dbt.artifacts.resources.types import FunctionType
 from dbt.exceptions import ParsingError
 from dbt.node_types import NodeType
 from dbt_common.contracts.config.base import CompareBehavior, MergeBehavior
@@ -672,6 +674,7 @@ class UnparsedFunctionUpdate(
 ):
     access: Optional[str] = None
     arguments: List[FunctionArgument] = field(default_factory=list)
+    type: FunctionType = FunctionType.Scalar
 
 
 #

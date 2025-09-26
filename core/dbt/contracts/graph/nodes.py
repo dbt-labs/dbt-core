@@ -63,6 +63,7 @@ from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
 from dbt.artifacts.resources import SqlOperation as SqlOperationResource
 from dbt.artifacts.resources import TimeSpine
 from dbt.artifacts.resources import UnitTestDefinition as UnitTestDefinitionResource
+from dbt.artifacts.resources.types import FunctionType
 from dbt.artifacts.schemas.batch_results import BatchResults
 from dbt.clients.jinja_static import statically_extract_has_name_this
 from dbt.contracts.graph.model_config import UnitTestNodeConfig
@@ -1722,18 +1723,19 @@ class ParsedNodePatch(ParsedPatch):
     freshness: Optional[ModelFreshness] = None
 
 
-# TODO: Maybe this shouldn't be a subclass of ParsedNodePatch, but ParsedPatch instead
-# Currently, `functions` have the fields like `columns`, `access`, `version`, and etc,
-# but they don't actually do anything. If we remove those properties from FunctionNode,
-# we can remove this class and use ParsedPatch instead.
 @dataclass
 class ParsedFunctionPatchRequired:
     return_type: FunctionReturnType
 
 
+# TODO: Maybe this shouldn't be a subclass of ParsedNodePatch, but ParsedPatch instead
+# Currently, `functions` have the fields like `columns`, `access`, `version`, and etc,
+# but they don't actually do anything. If we remove those properties from FunctionNode,
+# we can remove this class and use ParsedPatch instead.
 @dataclass
 class ParsedFunctionPatch(ParsedNodePatch, ParsedFunctionPatchRequired):
     arguments: List[FunctionArgument] = field(default_factory=list)
+    type: FunctionType = FunctionType.Scalar
 
 
 @dataclass
