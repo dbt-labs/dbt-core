@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Literal, Optional
 
-from dbt.artifacts.resources.types import NodeType
+from dbt.artifacts.resources.types import FunctionType, NodeType
 from dbt.artifacts.resources.v1.components import CompiledResource
 from dbt.artifacts.resources.v1.config import NodeConfig
 from dbt_common.dataclass_schema import dbtClassMixin
@@ -46,3 +46,4 @@ class Function(CompiledResource, FunctionMandatory):
     resource_type: Literal[NodeType.Function]
     config: FunctionConfig
     arguments: List[FunctionArgument] = field(default_factory=list)
+    type: FunctionType = FunctionType.Scalar
