@@ -1,21 +1,18 @@
-use crate::AdapterType;
 use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
+use crate::funcs::execute_macro;
 use crate::metadata::*;
-use crate::relation_object::create_relation_internal;
+use crate::relation_object::{create_relation, create_relation_internal};
 use crate::sql_types::SdfSchema;
 use crate::typed_adapter::TypedBaseAdapter;
 
 use arrow::array::RecordBatch;
-use dbt_common::cancellation::{Cancellable, CancellationToken};
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::{
     legacy_catalog::{CatalogTable, ColumnMetadata},
-    relations::base::{BaseRelation, ComponentName, RelationPattern},
+    relations::base::{BaseRelation, RelationPattern},
 };
 use dbt_schemas::state::ResolverState;
 use dbt_schemas::stats::Stats;
-use dbt_xdbc::{Connection, MapReduce, QueryCtx};
-use minijinja::{Environment, State};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
@@ -92,8 +89,9 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
     #[allow(clippy::type_complexity)]
     fn create_schemas_if_not_exists(
         &self,
+        state: &State<'_, '_>,
         catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
-    ) -> AsyncAdapterResult<'_, Vec<(String, String, AdapterResult<()>)>>;
+    ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>>;
 
     /// Get freshness of relations
     fn freshness(
@@ -219,59 +217,39 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
 #[allow(clippy::type_complexity)]
 pub fn create_schemas_if_not_exists(
     adapter: Arc<dyn MetadataAdapter>,
+    state: &State,
     catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
-    token: CancellationToken,
-) -> AsyncAdapterResult<'static, Vec<(String, String, AdapterResult<()>)>> {
-    type Acc = Vec<(String, String, AdapterResult<()>)>;
+) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
     let catalog_schemas = flatten_catalog_schemas(catalog_schemas);
-    let adapter_clone = adapter.clone();
-    let new_connection_f = move || {
-        adapter_clone
-            .new_connection(None, None)
-            .map_err(Cancellable::Error)
-    };
 
-    let map_f = move |conn: &'_ mut dyn Connection,
-                      (catalog, schema): &(String, String)|
-          -> AdapterResult<AdapterResult<()>> {
-        let env = Environment::new();
-        let state = State::new_for_env(&env); // TODO: Only when DbtReplayAdapter is the adapter we need the state, so we set an empty state and let DbtReplayAdapter panic
-        let sql = create_schema_sql(&state, &adapter, catalog, schema)?;
-        let query_ctx = QueryCtx::new(adapter.adapter_type().to_string())
-            .with_sql(sql)
-            .with_desc("Ensure catalogs and schemas exist");
-        // TODO: see if we can execute this DDL only when we can be certain that the database doesn't exist, only then emit a info log
-        // use SHOW DATABASES but this query doesn't return the databases a user doesn't have access to
-        // https://github.com/dbt-labs/fs/issues/2789
-        let adapter_clone = adapter.clone();
-        match adapter_clone.exec_stmt(conn, &query_ctx, false) {
-            Ok(_) => Ok(Ok(())),
+    let map_f = |(catalog, schema): (String, String)| -> AdapterResult<(String, String, AdapterResult<()>)> {
+        let mock_relation = create_relation(
+            adapter.adapter_type(),
+            catalog.clone(),
+            schema.clone(),
+            None,
+            None,
+            adapter.get_resolved_quoting(),
+        )?;
+        let res =
+        match execute_macro(state, &[mock_relation.as_value()], "create_schema") {
+            Ok(_) => Ok(()),
             Err(e) => {
                 if adapter.is_permission_error(&e) {
-                    Ok(Ok(()))
-                } else {
+                    Ok(())
+                } else if adapter.adapter_type() == AdapterType::Bigquery {
                     Err(e)
+                } else {
+                    return Err(e);
                 }
             }
-        }
+        };
+        Ok((catalog, schema, res))
     };
 
-    let reduce_f = move |acc: &mut Acc,
-                         (catalog, schema): (String, String),
-                         batch_res: AdapterResult<AdapterResult<()>>|
-          -> Result<(), Cancellable<AdapterError>> {
-        let batch = batch_res?;
-        acc.push((catalog, schema, batch));
-        Ok(())
-    };
-    let map_reduce = MapReduce::new(
-        Box::new(new_connection_f),
-        Box::new(map_f),
-        Box::new(reduce_f),
-        MAX_CONNECTIONS,
-    );
-    map_reduce.run(Arc::new(catalog_schemas), token)
+    catalog_schemas.into_iter().map(map_f).collect()
 }
+
 pub fn flatten_catalog_schemas(
     catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
 ) -> Vec<(String, String)> {
@@ -284,27 +262,4 @@ pub fn flatten_catalog_schemas(
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>()
-}
-
-/// Returns a SQL that creates a schema
-///
-/// catalog here refers to database entity - that'll be dataset for BigQuery, schema for Databricks, database for Snowflake etc
-/// TODO: revisit this to reuse an existing macro
-fn create_schema_sql(
-    state: &State,
-    adapter: &Arc<dyn MetadataAdapter>,
-    catalog: &str,
-    schema: &str,
-) -> AdapterResult<String> {
-    let catalog = adapter.quote_component(state, catalog, ComponentName::Database)?;
-    let schema = adapter.quote_component(state, schema, ComponentName::Schema)?;
-    let adapter_type = adapter.adapter_type();
-    match adapter_type {
-        AdapterType::Snowflake | AdapterType::Databricks => {
-            Ok(format!("CREATE SCHEMA IF NOT EXISTS {catalog}.{schema}"))
-        }
-        // Redshift connetions are always to a specific database
-        AdapterType::Redshift => Ok(format!("CREATE SCHEMA IF NOT EXISTS {schema}")),
-        _ => unimplemented!("create_schema_sql for adapter type: {}", adapter_type),
-    }
 }
