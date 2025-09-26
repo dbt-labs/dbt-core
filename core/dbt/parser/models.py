@@ -233,7 +233,9 @@ class ModelParser(SimpleSQLParser[ModelNode]):
                 config_keys_defaults=config_keys_defaults,
             )
 
-    def render_update(self, node: ModelNode, config: ContextConfig) -> None:
+    def render_update(
+        self, node: ModelNode, config: ContextConfig, validate_config_call_dict: bool = False
+    ) -> None:
         self.manifest._parsing_info.static_analysis_path_count += 1
         flags = get_flags()
         if node.language == ModelLanguage.python:
@@ -348,7 +350,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
         # if the static parser didn't succeed, fall back to jinja
         else:
             # jinja rendering
-            super().render_update(node, config)
+            super().render_update(node, config, validate_config_call_dict=True)
 
             # if sampling, add the correct messages for tracking
             if exp_sample and isinstance(experimental_sample, str):
