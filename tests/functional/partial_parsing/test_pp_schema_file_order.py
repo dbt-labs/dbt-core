@@ -1,10 +1,8 @@
 import os
-from pathlib import Path
 
 import pytest
 
-from dbt.exceptions import ParsingError
-from dbt.tests.util import get_manifest, run_dbt, run_dbt_and_capture, write_file
+from dbt.tests.util import get_manifest, run_dbt, write_file
 
 os.environ["DBT_PP_TEST"] = "true"
 
@@ -36,6 +34,8 @@ models:
     description: "a list of colors"
   - name: another
     description: "YET another model"
+    versions:
+      - v: 1
 """
 
 foo_model_sql = """
@@ -57,6 +57,7 @@ models:
   - name: foo_model
     description: "some random other model"
 """
+
 
 class TestSchemaFileOrder:
     @pytest.fixture(scope="class")
@@ -87,4 +88,6 @@ class TestSchemaFileOrder:
         assert len(results) == 4
         manifest = get_manifest(project.project_root)
         model = manifest.nodes.get(model_id)
+        assert model.name == "another_ref"
+        # The description here would be '' without the bug fix
         assert model.description == "model with reference to another ref"

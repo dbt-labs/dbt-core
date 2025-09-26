@@ -178,6 +178,10 @@ class PartialParsing:
             self.add_to_saved(file_id)
         # Need to process schema files next, because the dictionaries
         # need to be in place for handling SQL file changes
+        # The reverse sort here is just to ensure that the schema file
+        # processing order test case works, because otherwise the order
+        # of processing the schema files is not guaranteed.
+        self.file_diff["changed_schema_files"].sort(reverse=True)
         for file_id in self.file_diff["changed_schema_files"]:
             self.processing_file = file_id
             self.change_schema_file(file_id)
@@ -628,8 +632,8 @@ class PartialParsing:
         new_schema_file = deepcopy(self.new_files[file_id])
         saved_yaml_dict = saved_schema_file.dict_from_yaml
         new_yaml_dict = new_schema_file.dict_from_yaml
-        print(f"--- in change_schema_file. pp_dict: {saved_schema_file.pp_dict}")
-        saved_schema_file.pp_dict = {}
+        if saved_schema_file.pp_dict is None:
+            saved_schema_file.pp_dict = {}
         self.handle_schema_file_changes(saved_schema_file, saved_yaml_dict, new_yaml_dict)
 
         # copy from new schema_file to saved_schema_file to preserve references
