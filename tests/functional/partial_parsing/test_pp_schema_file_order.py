@@ -193,3 +193,78 @@ class TestMoreNewVersionedSchemaFile:
         write_file(foo_alt_yml, project.project_root, "models", "foo.yml")
 
         results = run_dbt(["compile"])
+
+
+sources_yml = """
+sources:
+  - name: top_source
+    tables:
+      - name: abcd
+      - name: efgh
+      - name: ijkl
+"""
+
+abcd_sql = """
+select * from {{ source("top_source", "abcd") }}
+"""
+
+efgh_sql = """
+select * from {{ source("top_source", "efgh") }}
+"""
+
+ijkl_sql = """
+select * from {{ source("top_source", "ijkl") }}
+"""
+
+models_yml = """
+models:
+  - name: abcd
+    description: "abcd model"
+  - name: efgh
+    description: "efgh model"
+  - name: ijkl
+    description: "ijkl model"
+"""
+
+append_sources_yml = """
+      - name: mnop
+"""
+
+append_models_yml = """
+  - name: mnop
+    description: "mnop model"
+"""
+
+mnop_sql = """
+select * from {{ source("top_source", "mnop") }}
+"""
+
+
+class TestSourcesAndSchemaFiles:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "sources.yml": sources_yml,
+            "abcd.sql": abcd_sql,
+            "efgh.sql": efgh_sql,
+            "ijkl.sql": ijkl_sql,
+            "_models.yml": models_yml,
+        }
+
+    def test_schema_file_order_new_versions(self, project):
+
+        # initial run
+        manifest = run_dbt(["parse"])
+        assert len(manifest.nodes) == 3
+
+        write_file(models_yml + append_models_yml, project.project_root, "models", "_models.yml")
+        write_file(mnop_sql, project.project_root, "models", "mnop.sql")
+        write_file(sources_yml + append_sources_yml, project.project_root, "models", "sources.yml")
+
+        manifest = run_dbt(["parse"])
+        assert len(manifest.nodes) == 4
+
+        # Without the fix the three original nodes will all be missing the
+        # the patch updates, including description, so description will be ""
+        for node in manifest.nodes.values():
+            assert node.description == f"{node.name} model"
