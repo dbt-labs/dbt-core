@@ -20,6 +20,7 @@ use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use dbt_common::error::AbstractLocation;
 use dbt_common::fs_err;
 use dbt_common::io_args::StaticAnalysisKind;
+use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_common::io_utils::try_read_yml_to_str;
 use dbt_common::stdfs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -229,6 +230,10 @@ pub async fn resolve_data_tests(
         // Errored models can be enabled, so enabled is set to the opposite of disabled
         test_config.enabled = Some(!(*status == ModelStatus::Disabled));
 
+        let static_analysis = test_config
+            .static_analysis
+            .unwrap_or(StaticAnalysisKind::On);
+
         let mut dbt_test = DbtTest {
             defined_at: test_path_to_test_asset
                 .get(&dbt_asset.path)
@@ -265,9 +270,9 @@ pub async fn resolve_data_tests(
                 schema: schema.to_owned(),
                 alias: "will_be_updated_below".to_owned(),
                 relation_name: None,
-                static_analysis: test_config
-                    .static_analysis
-                    .unwrap_or(StaticAnalysisKind::On),
+                static_analysis_off_reason: matches!(static_analysis, StaticAnalysisKind::Off)
+                    .then(|| StaticAnalysisOffReason::ConfiguredOff),
+                static_analysis,
                 quoting: test_config
                     .quoting
                     .expect("quoting is required")

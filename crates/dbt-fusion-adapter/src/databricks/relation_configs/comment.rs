@@ -153,6 +153,7 @@ mod tests {
                 quoting_ignore_case: false,
                 materialized: DbtMaterialization::StreamingTable,
                 static_analysis: dbt_common::io_args::StaticAnalysisKind::On,
+                static_analysis_off_reason: None,
                 enabled: true,
                 extended_model: false,
                 persist_docs: None,

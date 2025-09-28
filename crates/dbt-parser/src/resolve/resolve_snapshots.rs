@@ -10,7 +10,7 @@ use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_SNAPSHOTS_DIR_NAME;
 use dbt_common::error::AbstractLocation;
-use dbt_common::io_args::StaticAnalysisKind;
+use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::{ErrorCode, FsResult, fs_err, show_error, show_warning, stdfs, unexpected_fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
@@ -257,6 +257,9 @@ pub async fn resolve_snapshots(
                     .unwrap_or(&vec![]),
             );
 
+            let static_analysis = final_config
+                .static_analysis
+                .unwrap_or(StaticAnalysisKind::On);
             // Create initial snapshot with default values
             let mut dbt_snapshot = DbtSnapshot {
                 __common_attr__: CommonAttributes {
@@ -304,9 +307,9 @@ pub async fn resolve_snapshots(
                         .unwrap_or_default()
                         .snowflake_ignore_case
                         .unwrap_or(false),
-                    static_analysis: final_config
-                        .static_analysis
-                        .unwrap_or(StaticAnalysisKind::On),
+                    static_analysis_off_reason: matches!(static_analysis, StaticAnalysisKind::Off)
+                        .then(|| StaticAnalysisOffReason::ConfiguredOff),
+                    static_analysis,
                     refs: sql_file_info
                         .refs
                         .iter()

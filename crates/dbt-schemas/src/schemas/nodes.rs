@@ -4,6 +4,7 @@ use std::{any::Any, collections::BTreeMap, fmt::Display, path::PathBuf, sync::Ar
 
 use chrono::{DateTime, Utc};
 use dbt_common::adapter::AdapterType;
+use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_common::{ErrorCode, FsResult, err, io_args::StaticAnalysisKind};
 use dbt_telemetry::{ExecutionPhase, NodeEvaluated, NodeType};
 use serde::{Deserialize, Serialize};
@@ -318,17 +319,34 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
         self.common().meta.clone()
     }
 
-    fn static_analysis(&self) -> StaticAnalysisKind;
+    fn static_analysis(&self) -> StaticAnalysisKind {
+        self.base().static_analysis
+    }
 
     fn static_analysis_enabled(&self) -> bool {
         self.static_analysis() == StaticAnalysisKind::On
             || self.static_analysis() == StaticAnalysisKind::Unsafe
     }
+
+    fn static_analysis_off_reason(&self) -> Option<StaticAnalysisOffReason> {
+        self.base().static_analysis_off_reason
+    }
     // Setters
 
-    fn set_quoting(&mut self, quoting: ResolvedQuoting);
+    fn set_quoting(&mut self, quoting: ResolvedQuoting) {
+        self.base_mut().quoting = quoting;
+    }
 
-    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind);
+    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
+        self.base_mut().static_analysis = static_analysis;
+    }
+
+    fn set_static_analysis_off_reason(
+        &mut self,
+        static_analysis_off_reason: Option<StaticAnalysisOffReason>,
+    ) {
+        self.base_mut().static_analysis_off_reason = static_analysis_off_reason;
+    }
 
     // Optional Fields
     fn get_access(&self) -> Option<Access> {
@@ -449,18 +467,6 @@ impl InternalDbtNode for DbtModel {
 }
 
 impl InternalDbtNodeAttributes for DbtModel {
-    fn static_analysis(&self) -> StaticAnalysisKind {
-        self.__base_attr__.static_analysis
-    }
-
-    fn set_quoting(&mut self, quoting: ResolvedQuoting) {
-        self.__base_attr__.quoting = quoting;
-    }
-
-    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
-        self.__base_attr__.static_analysis = static_analysis;
-    }
-
     fn get_access(&self) -> Option<Access> {
         Some(self.__model_attr__.access.clone())
     }
@@ -537,14 +543,6 @@ impl InternalDbtNode for DbtSeed {
 }
 
 impl InternalDbtNodeAttributes for DbtSeed {
-    fn static_analysis(&self) -> StaticAnalysisKind {
-        self.__base_attr__.static_analysis
-    }
-
-    fn set_quoting(&mut self, quoting: ResolvedQuoting) {
-        self.__base_attr__.quoting = quoting;
-    }
-
     fn set_static_analysis(&mut self, _static_analysis: StaticAnalysisKind) {
         unimplemented!("static analysis metadata setting for schema nodes")
     }
@@ -621,18 +619,6 @@ impl InternalDbtNode for DbtTest {
 }
 
 impl InternalDbtNodeAttributes for DbtTest {
-    fn static_analysis(&self) -> StaticAnalysisKind {
-        self.__base_attr__.static_analysis
-    }
-
-    fn set_quoting(&mut self, quoting: ResolvedQuoting) {
-        self.__base_attr__.quoting = quoting;
-    }
-
-    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
-        self.__base_attr__.static_analysis = static_analysis;
-    }
-
     fn search_name(&self) -> String {
         self.__common_attr__.name.clone()
     }
@@ -704,18 +690,6 @@ impl InternalDbtNode for DbtUnitTest {
 }
 
 impl InternalDbtNodeAttributes for DbtUnitTest {
-    fn static_analysis(&self) -> StaticAnalysisKind {
-        self.__base_attr__.static_analysis
-    }
-
-    fn set_quoting(&mut self, quoting: ResolvedQuoting) {
-        self.__base_attr__.quoting = quoting;
-    }
-
-    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
-        self.__base_attr__.static_analysis = static_analysis;
-    }
-
     fn search_name(&self) -> String {
         // Based on Python implementation, unit tests can have a versioned name
         if let Some(version) = &self.__unit_test_attr__.version {
@@ -798,18 +772,6 @@ impl InternalDbtNode for DbtSource {
 }
 
 impl InternalDbtNodeAttributes for DbtSource {
-    fn static_analysis(&self) -> StaticAnalysisKind {
-        self.__base_attr__.static_analysis
-    }
-
-    fn set_quoting(&mut self, quoting: ResolvedQuoting) {
-        self.__base_attr__.quoting = quoting;
-    }
-
-    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
-        self.__base_attr__.static_analysis = static_analysis;
-    }
-
     fn search_name(&self) -> String {
         format!(
             "{}.{}",
@@ -906,18 +868,6 @@ impl InternalDbtNodeAttributes for DbtSnapshot {
             .target_database
             .clone()
             .unwrap_or_else(|| self.base().database.clone())
-    }
-
-    fn static_analysis(&self) -> StaticAnalysisKind {
-        self.__base_attr__.static_analysis
-    }
-
-    fn set_quoting(&mut self, quoting: ResolvedQuoting) {
-        self.__base_attr__.quoting = quoting;
-    }
-
-    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
-        self.__base_attr__.static_analysis = static_analysis;
     }
 
     fn tags(&self) -> Vec<String> {
@@ -1032,21 +982,11 @@ impl InternalDbtNode for DbtExposure {
 }
 
 impl InternalDbtNodeAttributes for DbtExposure {
-    fn static_analysis(&self) -> StaticAnalysisKind {
-        self.__base_attr__.static_analysis
-    }
-
     fn materialized(&self) -> DbtMaterialization {
         self.__base_attr__.materialized.clone()
     }
     fn quoting(&self) -> ResolvedQuoting {
         self.__base_attr__.quoting
-    }
-    fn set_quoting(&mut self, quoting: ResolvedQuoting) {
-        self.__base_attr__.quoting = quoting;
-    }
-    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
-        self.__base_attr__.static_analysis = static_analysis;
     }
     fn tags(&self) -> Vec<String> {
         self.__common_attr__.tags.clone()
@@ -1716,6 +1656,8 @@ pub struct NodeBaseAttributes {
     pub quoting_ignore_case: bool,
     pub materialized: DbtMaterialization,
     pub static_analysis: StaticAnalysisKind,
+    #[serde(skip_serializing, default)]
+    pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
     pub enabled: bool,
     #[serde(skip_serializing, default = "default_false")]
     pub extended_model: bool,

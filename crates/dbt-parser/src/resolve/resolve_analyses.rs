@@ -200,6 +200,7 @@ pub async fn resolve_analyses(
                 quoting: ResolvedQuoting::trues(),
                 quoting_ignore_case: false,
                 static_analysis: StaticAnalysisKind::On,
+                static_analysis_off_reason: None,
                 columns,
                 depends_on: NodeDependsOn {
                     macros: convert_macro_names_to_unique_ids(&macro_calls),

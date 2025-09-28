@@ -543,6 +543,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 .clone()
                                 .unwrap_or(DbtMaterialization::View),
                             static_analysis: StaticAnalysisKind::On,
+                            static_analysis_off_reason: None,
                             enabled: model.config.enabled.unwrap_or(true),
                             extended_model: false,
                             quoting: model
@@ -621,6 +622,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             relation_name: test.__base_attr__.relation_name,
                             materialized: DbtMaterialization::Test,
                             static_analysis: StaticAnalysisKind::On,
+                            static_analysis_off_reason: None,
                             enabled: test.config.enabled.unwrap_or(true),
                             extended_model: false,
                             quoting: test
@@ -690,6 +692,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 .clone()
                                 .unwrap_or(DbtMaterialization::Table),
                             static_analysis: StaticAnalysisKind::On,
+                            static_analysis_off_reason: None,
                             quoting: snapshot
                                 .config
                                 .quoting
@@ -759,6 +762,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             relation_name: seed.__base_attr__.relation_name,
                             materialized: DbtMaterialization::Table,
                             static_analysis: StaticAnalysisKind::On,
+                            static_analysis_off_reason: None,
                             enabled: seed.config.enabled.unwrap_or(true),
                             quoting: seed
                                 .config
@@ -827,6 +831,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 .clone()
                                 .unwrap_or(DbtMaterialization::View),
                             static_analysis: StaticAnalysisKind::On,
+                            static_analysis_off_reason: None,
                             enabled: analysis.config.enabled.unwrap_or(true),
                             extended_model: false,
                             quoting: analysis
@@ -906,6 +911,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     relation_name: source.relation_name,
                     materialized: DbtMaterialization::Table,
                     static_analysis: StaticAnalysisKind::On,
+                    static_analysis_off_reason: None,
                     enabled: source.config.enabled.unwrap_or(true),
                     extended_model: false,
                     quoting: source
@@ -967,6 +973,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     quoting: Default::default(),
                     materialized: Default::default(),
                     static_analysis: Default::default(),
+                    static_analysis_off_reason: None,
                     enabled: true,
                     extended_model: false,
                     persist_docs: None,
@@ -1022,6 +1029,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     relation_name: unit_test.__base_attr__.relation_name,
                     materialized: DbtMaterialization::Table,
                     static_analysis: StaticAnalysisKind::On,
+                    static_analysis_off_reason: None,
                     quoting: dbt_quoting.try_into().expect("DbtQuoting should be set"),
                     quoting_ignore_case: false,
                     enabled: unit_test.config.enabled.unwrap_or(true),
@@ -1120,6 +1128,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     quoting: Default::default(),
                     materialized: Default::default(),
                     static_analysis: Default::default(),
+                    static_analysis_off_reason: None,
                     enabled: true,
                     extended_model: false,
                     persist_docs: None,

@@ -1,5 +1,6 @@
 use crate::stdfs::File;
 use crate::{ErrorCode, FsError, FsResult, err, fs_err, stdfs::canonicalize};
+use dbt_telemetry::{ExecutionPhase, NodeOutcome, NodeSkipReason};
 use pathdiff::diff_paths;
 use std::{
     any::Any,
@@ -15,6 +16,14 @@ pub trait StatusReporter: Any + Send + Sync {
     /// Called when an error occurs to collect it for later processing
     fn collect_error(&self, error: &FsError);
     fn collect_warning(&self, warning: &FsError);
+    fn collect_node_evaluation(
+        &self,
+        file_path: PathBuf,
+        execution_phase: ExecutionPhase,
+        node_outcome: NodeOutcome,
+        node_skip_reason: Option<NodeSkipReason>,
+        node_skip_reason_upstream: Option<(String, String, bool)>,
+    );
     /// Called to show progress in the UI
     fn show_progress(&self, action: &str, target: &str, description: Option<&str>);
     fn bulk_publish_empty(&self, file_paths: Vec<PathBuf>);

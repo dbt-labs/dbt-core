@@ -12,6 +12,7 @@ use dbt_common::error::AbstractLocation;
 use dbt_common::fs_err;
 use dbt_common::io_args::IoArgs;
 use dbt_common::io_args::StaticAnalysisKind;
+use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::parse::build_resolve_model_context;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
@@ -204,6 +205,10 @@ pub fn resolve_unit_tests(
             }
         };
 
+        let static_analysis = properties_config
+            .static_analysis
+            .unwrap_or(StaticAnalysisKind::On);
+
         let base_unit_test = DbtUnitTest {
             __common_attr__: CommonAttributes {
                 name: unit_test_name.to_owned(),
@@ -239,9 +244,9 @@ pub fn resolve_unit_tests(
                 quoting: package_quoting.try_into()?,
                 quoting_ignore_case: package_quoting.snowflake_ignore_case.unwrap_or(false),
                 materialized: DbtMaterialization::Unit,
-                static_analysis: properties_config
-                    .static_analysis
-                    .unwrap_or(StaticAnalysisKind::On),
+                static_analysis_off_reason: matches!(static_analysis, StaticAnalysisKind::Off)
+                    .then(|| StaticAnalysisOffReason::ConfiguredOff),
+                static_analysis,
                 columns: BTreeMap::new(),
                 metrics: vec![],
             },

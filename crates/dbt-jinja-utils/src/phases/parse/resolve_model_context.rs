@@ -217,6 +217,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
             relation_name: None,
             materialized: DbtMaterialization::View,
             static_analysis: StaticAnalysisKind::On,
+            static_analysis_off_reason: None,
             enabled: true,
             extended_model: false,
             persist_docs: None,

@@ -86,7 +86,7 @@ pub async fn resolve(
     let _pb = with_progress!(arg.io, spinner => RESOLVING);
 
     // For nodes, reset static analysis to "on" as they were disabled after
-    // the last resolve.
+    // the last resolve. (This is for the LSP - for CLI, nodes is always default (i.e. empty))
     for node in nodes.iter_values_mut() {
         if node.static_analysis() == StaticAnalysisKind::Off {
             node.set_static_analysis(StaticAnalysisKind::On);

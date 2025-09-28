@@ -535,6 +535,27 @@ pub enum StaticAnalysisKind {
     On,
 }
 
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    ValueEnum,
+    Display,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
+#[clap(rename_all = "lowercase")]
+pub enum StaticAnalysisOffReason {
+    ConfiguredOff,
+    UnableToFetchSchema,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum BuildCacheMode {

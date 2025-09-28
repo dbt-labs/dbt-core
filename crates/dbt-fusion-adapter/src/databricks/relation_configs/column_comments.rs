@@ -207,6 +207,7 @@ email,string,\n\
             quoting_ignore_case: false,
             materialized: DbtMaterialization::Table,
             static_analysis: dbt_common::io_args::StaticAnalysisKind::On,
+            static_analysis_off_reason: None,
             enabled: true,
             extended_model: false,
             persist_docs,

@@ -4,7 +4,7 @@ use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
 use crate::utils::get_node_fqn;
 
 use dbt_common::adapter::AdapterType;
-use dbt_common::io_args::StaticAnalysisKind;
+use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::{ErrorCode, FsResult, err, show_error};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
@@ -232,6 +232,10 @@ pub fn resolve_sources(
             Some(external) => BTreeMap::from([("external".to_owned(), external.clone())]),
         };
 
+        let static_analysis = source_properties_config
+            .static_analysis
+            .unwrap_or(StaticAnalysisKind::On);
+
         let dbt_source = DbtSource {
             __common_attr__: CommonAttributes {
                 name: table_name.to_owned(),
@@ -266,9 +270,9 @@ pub fn resolve_sources(
                 extended_model: false,
                 persist_docs: None,
                 materialized: DbtMaterialization::External,
-                static_analysis: source_properties_config
-                    .static_analysis
-                    .unwrap_or(StaticAnalysisKind::On),
+                static_analysis_off_reason: matches!(static_analysis, StaticAnalysisKind::Off)
+                    .then(|| StaticAnalysisOffReason::ConfiguredOff),
+                static_analysis,
                 columns,
                 refs: vec![],
                 sources: vec![],

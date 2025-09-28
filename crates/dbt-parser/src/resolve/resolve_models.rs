@@ -20,6 +20,7 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_common::error::AbstractLocation;
 use dbt_common::fs_err;
 use dbt_common::io_args::StaticAnalysisKind;
+use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_common::show_error;
 use dbt_common::show_warning;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -296,6 +297,9 @@ pub async fn resolve_models(
             ModelFreshnessRules::validate(freshness.build_after.as_ref())?;
         }
 
+        let static_analysis = model_config
+            .static_analysis
+            .unwrap_or(StaticAnalysisKind::On);
         // Create the DbtModel with all properties already set
         let mut dbt_model = DbtModel {
             __common_attr__: CommonAttributes {
@@ -368,9 +372,9 @@ pub async fn resolve_models(
                     .unwrap_or_default()
                     .snowflake_ignore_case
                     .unwrap_or(false),
-                static_analysis: model_config
-                    .static_analysis
-                    .unwrap_or(StaticAnalysisKind::On),
+                static_analysis_off_reason: matches!(static_analysis, StaticAnalysisKind::Off)
+                    .then(|| StaticAnalysisOffReason::ConfiguredOff),
+                static_analysis,
             },
             __model_attr__: DbtModelAttr {
                 introspection: IntrospectionKind::None,
