@@ -11,6 +11,22 @@ pub const PEM_UNENCRYPTED_END: &str = "-----END PRIVATE KEY-----";
 pub const PEM_ENCRYPTED_START: &str = "-----BEGIN ENCRYPTED PRIVATE KEY-----";
 pub const PEM_ENCRYPTED_END: &str = "-----END ENCRYPTED PRIVATE KEY-----";
 
+const PEM_PKCS1_START: &str = "-----BEGIN RSA PRIVATE KEY-----";
+const PEM_PKCS1_END: &str = "-----END RSA PRIVATE KEY-----";
+const PKCS1_UNSUPPORTED_ERROR: &str = "\
+Key is PKCS#1 (RSA private key). Snowflake requires PKCS#8 \
+(-----BEGIN PRIVATE KEY----- or -----BEGIN ENCRYPTED PRIVATE KEY-----).\n\
+\n\
+Possible causes:\n\
+• You ran 'openssl pkcs8 -inform pem -outform der ...' without -topk8\n\
+• You wrapped a PKCS#1 DER with PKCS#8 headers\n\
+• You base64-encoded PEM text and treated it as DER\n\
+\n\
+>   Generate a PKCS#8 key and update your user public key:\n\
+https://docs.snowflake.com/en/user-guide/key-pair-auth\n\
+While Snowflake recommends 3DES encryption, Fusion recommends using a modern algorithm such as AES-256:\n\
+>   $ openssl genrsa 2048 | openssl pkcs8 -topk8 -v2 aes-256-cbc -inform PEM -out rsa_key.p8";
+
 enum BodyKind {
     Pkcs8Unencrypted,
     Pkcs8Encrypted,
@@ -142,6 +158,10 @@ fn looks_like_pem_text_after_decode(bytes: &[u8]) -> bool {
     head.windows(NEEDLE.len()).any(|w| w == NEEDLE)
 }
 
+fn has_pkcs1_pem_pair(s: &str) -> bool {
+    s.contains(PEM_PKCS1_START) && s.contains(PEM_PKCS1_END)
+}
+
 /// Main entry:
 /// A base64 DER is the body of a PEM
 /// - If BOTH headers present -> return as-is.
@@ -153,11 +173,16 @@ fn looks_like_pem_text_after_decode(bytes: &[u8]) -> bool {
 pub fn normalize_key(input: &str) -> Result<String, AuthError> {
     let trimmed_input = input.trim();
     match detect_pem_state(trimmed_input) {
-        PemHeaderAndFooterState::Present => has_single_valid_pem_pair(trimmed_input)
-            .then(|| input.to_string())
-            .ok_or_else(|| {
-                AuthError::config("malformed key: missing or mismatched BEGIN/END header pair")
-            }),
+        PemHeaderAndFooterState::Present => {
+            if has_pkcs1_pem_pair(trimmed_input) {
+                return Err(AuthError::Config(PKCS1_UNSUPPORTED_ERROR.to_string()));
+            }
+            has_single_valid_pem_pair(trimmed_input)
+                .then(|| input.to_string())
+                .ok_or_else(|| {
+                    AuthError::config("malformed key: missing or mismatched BEGIN/END header pair")
+                })
+        }
         // headerless input - may be DER with hidden headers or PEM body
         PemHeaderAndFooterState::Missing => {
             // strip all internal whitespace so strict base64 decode succeeds.
@@ -190,15 +215,7 @@ pub fn normalize_key(input: &str) -> Result<String, AuthError> {
                     PEM_ENCRYPTED_START,
                     PEM_ENCRYPTED_END,
                 )),
-                BodyKind::Pkcs1Rsa => Err(AuthError::config(
-                    "key is PKCS#1 (rsa private key). snowflake requires PKCS#8 \
-                    (-----begin private key----- or -----begin encrypted private key-----).\n\
-                    \n\
-                    possible causes:\n\
-                      • you ran 'openssl pkcs8 -inform pem -outform der ...' without -topk8\n\
-                      • you wrapped a PKCS#1 DER with PKCS#8 headers\n\
-                      • you base64-encoded pem text and treated it as DER\n",
-                )),
+                BodyKind::Pkcs1Rsa => Err(AuthError::config(PKCS1_UNSUPPORTED_ERROR.to_string())),
                 BodyKind::UnknownMalformed => Err(AuthError::config("key body is not PKCS#8 DER.")),
             }
         }
@@ -305,9 +322,9 @@ mod tests {
         let pkcs1_pem = rsa.to_pkcs1_pem(LineEnding::LF).unwrap().to_string();
         let err = normalize_key(&pkcs1_pem).unwrap_err();
         assert!(
-            format!("{err:?}").contains("malformed key"),
+            format!("{err:?}").contains("PKCS#1"),
             "PKCS#1 PEM must not be accepted as PKCS#8 PEM"
-        );
+        )
     }
 
     #[test]

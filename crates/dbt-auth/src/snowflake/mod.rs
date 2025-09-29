@@ -397,7 +397,7 @@ impl SnowflakeAuth {
                         let key_contents = fs::read_to_string(value.to_string())?;
                         builder.with_named_option(
                             snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
-                            &key_contents,
+                            key_format::normalize_key(&key_contents)?,
                         )
                     }
                     "private_key" => {
