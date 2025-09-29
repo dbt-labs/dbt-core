@@ -1,5 +1,8 @@
+use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 
+use dbt_common::tracing::layer::{ConsumerLayer, MiddlewareLayer};
+use dbt_common::tracing::{BaseSubscriber, reload::TelemetryReloadHandle};
 use dbt_common::{FsResult, stdfs};
 use tempfile::TempDir;
 
@@ -177,22 +180,86 @@ impl ProjectEnv {
         Ok(TestEnv {
             golden_dir,
             temp_dir,
+            tracing_handle: TracingReloadHandle::noop(),
         })
+    }
+}
+
+/// A thin wrapper over tracing lib reload handle allowing test tasks to
+/// dynamically re-configure tracing. If testing environment doesn't have
+/// tracing set up at all (like lsp tests), this is just no-op
+#[derive(Clone, Default)]
+pub struct TracingReloadHandle {
+    tracing_handle: Option<TelemetryReloadHandle<BaseSubscriber>>,
+}
+
+impl TracingReloadHandle {
+    pub fn new(tracing_handle: TelemetryReloadHandle<BaseSubscriber>) -> Self {
+        Self {
+            tracing_handle: Some(tracing_handle),
+        }
+    }
+
+    pub fn noop() -> Self {
+        Self::default()
+    }
+
+    pub fn with_tracing_consumer(
+        &self,
+        middlewares: Vec<MiddlewareLayer>,
+        consumer_layers: Vec<ConsumerLayer>,
+    ) {
+        if let Some(handle) = &self.tracing_handle {
+            handle
+                .reload_telemetry(middlewares, consumer_layers)
+                .expect("Failed to reload tracing layer");
+        };
+    }
+
+    fn take(&mut self) -> Option<TelemetryReloadHandle<BaseSubscriber>> {
+        self.tracing_handle.take()
     }
 }
 
 // ------------------------------------------------------------------------------------------------
 /// Environment in which test is run.
-#[derive(Debug)]
 pub struct TestEnv {
-    // golden directory for the test
+    /// golden directory for the test
     pub golden_dir: PathBuf,
-    // temporary directory that contains sdftarget
+    /// temporary directory that contains sdftarget
     pub temp_dir: PathBuf,
+    /// Optional tracing handle that can be used to set tracing consumer layers during the test.
+    /// The handle is thread-safe internally, so we do not need to wrap it ourselves
+    tracing_handle: TracingReloadHandle,
+}
+
+impl TestEnv {
+    pub fn get_tracing_handle(&self) -> TracingReloadHandle {
+        self.tracing_handle.clone()
+    }
+
+    pub fn with_tracing_handle(mut self, handle: TelemetryReloadHandle<BaseSubscriber>) -> Self {
+        self.tracing_handle = TracingReloadHandle::new(handle);
+        self
+    }
+}
+
+impl Debug for TestEnv {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TestEnv")
+            .field("golden_dir", &self.golden_dir)
+            .field("temp_dir", &self.temp_dir)
+            .finish()
+    }
 }
 
 impl Drop for TestEnv {
     fn drop(&mut self) {
         let _ = stdfs::remove_dir_all(self.temp_dir.as_path());
+
+        // If we have a tracing handle, reset it to empty layers on drop
+        if let Some(handle) = self.tracing_handle.take() {
+            let _ = handle.reload_telemetry(vec![], vec![]);
+        }
     }
 }

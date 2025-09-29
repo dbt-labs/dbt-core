@@ -7,8 +7,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use arrow::array::StringArray;
-use arrow::datatypes::DataType;
+use arrow::array::{
+    Array, DictionaryArray, LargeStringArray, StringArray, StringViewArray, StructArray,
+};
+use arrow::datatypes::{
+    DataType, Int8Type, Int16Type, Int32Type, Int64Type, UInt8Type, UInt16Type, UInt32Type,
+    UInt64Type,
+};
 use arrow::record_batch::RecordBatch;
 use async_trait::async_trait;
 use dbt_common::{
@@ -182,6 +187,92 @@ impl Task for RmDirTask {
     }
 }
 
+// Helper: recursively rebuild string-like arrays (Utf8, LargeUtf8, Utf8View, and dictionary-encoded variants)
+// inside any nesting of Struct (and dictionary) arrays. Non string-like arrays are returned as-is.
+pub fn rebuild_string_like_arrays(
+    array: &Arc<dyn Array>,
+    replace_fn: &dyn Fn(&str) -> String,
+) -> Arc<dyn Array> {
+    match array.data_type() {
+        DataType::Utf8 => {
+            let a = array.as_any().downcast_ref::<StringArray>().unwrap();
+            let new_vals: Vec<Option<String>> = a.iter().map(|o| o.map(replace_fn)).collect();
+            Arc::new(StringArray::from(new_vals))
+        }
+        DataType::LargeUtf8 => {
+            let a = array.as_any().downcast_ref::<LargeStringArray>().unwrap();
+            let new_vals: Vec<Option<String>> = a.iter().map(|o| o.map(replace_fn)).collect();
+            Arc::new(LargeStringArray::from(new_vals))
+        }
+        DataType::Utf8View => {
+            let a = array.as_any().downcast_ref::<StringViewArray>().unwrap();
+            let new_vals: Vec<Option<String>> = a.iter().map(|o| o.map(replace_fn)).collect();
+            Arc::new(StringArray::from(new_vals))
+        }
+        DataType::Struct(fields) => {
+            let struct_array = array.as_any().downcast_ref::<StructArray>().unwrap();
+            let mut rebuilt_children = Vec::with_capacity(struct_array.num_columns());
+            let mut needs_rebuild = false;
+            for child in struct_array.columns() {
+                let new_child = rebuild_string_like_arrays(child, replace_fn);
+                if !Arc::ptr_eq(child, &new_child) {
+                    needs_rebuild = true;
+                }
+                rebuilt_children.push(new_child);
+            }
+            if needs_rebuild {
+                Arc::new(StructArray::new(
+                    fields.clone(),
+                    rebuilt_children,
+                    struct_array.logical_nulls(),
+                ))
+            } else {
+                array.clone()
+            }
+        }
+        DataType::Dictionary(key_type, value_type) => {
+            // Handle dictionary arrays whose values are string-like (Utf8, LargeUtf8, Utf8View)
+            match value_type.as_ref() {
+                DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View => {
+                    // Rebuild underlying values if needed; preserve keys
+                    macro_rules! rebuild_dict {
+                        ($kt:ty) => {
+                            if let Some(d) = array.as_any().downcast_ref::<DictionaryArray<$kt>>() {
+                                let values = d.values();
+                                let new_values = rebuild_string_like_arrays(values, replace_fn);
+                                if !Arc::ptr_eq(values, &new_values) {
+                                    let keys = d.keys().clone();
+                                    return Arc::new(
+                                        DictionaryArray::<$kt>::try_new(keys, new_values).unwrap(),
+                                    );
+                                } else {
+                                    return array.clone();
+                                }
+                            }
+                        };
+                    }
+                    match key_type.as_ref() {
+                        DataType::Int8 => rebuild_dict!(Int8Type),
+                        DataType::Int16 => rebuild_dict!(Int16Type),
+                        DataType::Int32 => rebuild_dict!(Int32Type),
+                        DataType::Int64 => rebuild_dict!(Int64Type),
+                        DataType::UInt8 => rebuild_dict!(UInt8Type),
+                        DataType::UInt16 => rebuild_dict!(UInt16Type),
+                        DataType::UInt32 => rebuild_dict!(UInt32Type),
+                        DataType::UInt64 => rebuild_dict!(UInt64Type),
+                        _ => {}
+                    }
+                    // If we didn't early-return in macro (e.g., unexpected key type), fall back
+                    array.clone()
+                }
+                _ => array.clone(),
+            }
+        }
+        // non-string-like type columns, keep as is
+        _ => array.clone(),
+    }
+}
+
 /// Used to clean recorded files as they contain timestamps, etc.
 // TODO: this can be generalized more to accept the list of extensions
 // for files to clean (or split based on extension)
@@ -212,6 +303,7 @@ impl Task for SedTask {
                     ext == "sql"
                         || ext == "stdout"
                         || ext == "json"
+                        || ext == "jsonl"
                         || ext == "err"
                         || ext == "stderr"
                 })
@@ -253,21 +345,7 @@ impl Task for SedTask {
 
                     for i in 0..batch.num_columns() {
                         let array = batch.column(i);
-                        let new_array = if matches!(
-                            array.data_type(),
-                            DataType::Utf8 | DataType::Utf8View | DataType::LargeUtf8
-                        ) {
-                            let string_array =
-                                array.as_any().downcast_ref::<StringArray>().unwrap();
-                            let new_values: Vec<Option<String>> = string_array
-                                .iter()
-                                .map(|opt_str| opt_str.map(replace_fn))
-                                .collect();
-                            Arc::new(StringArray::from(new_values))
-                        } else {
-                            // non-string-like type columns, keep as is
-                            array.clone()
-                        };
+                        let new_array = rebuild_string_like_arrays(array, &replace_fn);
                         new_columns.push(new_array);
                     }
 

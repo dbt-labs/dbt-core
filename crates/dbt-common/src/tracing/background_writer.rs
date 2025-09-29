@@ -3,9 +3,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread::{self, JoinHandle};
 
-use crate::{ErrorCode, FsResult};
+use dbt_error::{ErrorCode, FsResult};
 
-use super::{TelemetryShutdown, shared_writer::SharedWriter};
+use super::{shared_writer::SharedWriter, shutdown::TelemetryShutdown};
 
 /// Channel-based non-blocking writer that performs writes on a separate thread.
 ///

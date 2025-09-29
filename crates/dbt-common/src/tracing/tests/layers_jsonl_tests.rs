@@ -1,47 +1,38 @@
 use std::fs;
 
-use crate::logging::LogFormat;
-use crate::tracing::{
-    FsTraceConfig,
-    init::{TelemetryHandle, create_tracing_subcriber_with_layer},
-};
-
 use super::mocks::{MockDynLogEvent, MockDynSpanEvent};
+use crate::tracing::init::create_tracing_subcriber_with_layer;
+use crate::tracing::layers::data_layer::TelemetryDataLayer;
+use crate::tracing::layers::jsonl_writer::build_jsonl_layer_with_background_writer;
 use dbt_telemetry::TelemetryOutputFlags;
-use tracing_subscriber::{EnvFilter, Layer, Registry, layer::Layered};
 
 #[test]
 fn test_tracing_jsonl() {
-    let invocation_id = uuid::Uuid::new_v4();
-    let trace_id = invocation_id.as_u128();
+    // Initialize tracing with a custom layer to capture events
+    let trace_id = rand::random::<u128>();
 
     // Create a temporary file for the OTM output
     let temp_dir = std::env::temp_dir();
     let temp_file_path = temp_dir.join("test_otm.jsonl");
 
     // Init telemetry using internal API allowing to set thread local subscriber.
-    // This avoids collisions with other unit tests, but prevents us from testing
-    // the fallback logic with the global parent span
-    let (subscriber, shutdown_items) = create_tracing_subcriber_with_layer(
-        FsTraceConfig {
-            package: "test_package",
-            max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
-            invocation_id,
-            otm_file_path: Some(temp_file_path.clone()),
-            otm_parquet_file_path: None,
-            enable_progress: false,
-            export_to_otlp: false,
-            log_format: LogFormat::Default,
-            log_path: temp_dir,
-            enable_query_log: false,
-        },
-        None::<Box<dyn Layer<Layered<EnvFilter, Registry>> + Send + Sync>>,
-    )
-    .expect("Failed to initialize tracing");
+    // This avoids collisions with other unit tests
+    let max_log_verbosity = tracing::level_filters::LevelFilter::TRACE;
 
-    let dummy_root_span = tracing::info_span!("not used");
+    let (jsonl_layer, mut shutdown_handle) = build_jsonl_layer_with_background_writer(
+        fs::File::create(&temp_file_path).expect("Failed to create temporary OTM file"),
+        max_log_verbosity,
+    );
 
-    let mut telemetry_handle = TelemetryHandle::new(shutdown_items, dummy_root_span);
+    let subscriber = create_tracing_subcriber_with_layer(
+        tracing::level_filters::LevelFilter::TRACE,
+        TelemetryDataLayer::new(
+            trace_id,
+            false,
+            std::iter::empty(),
+            std::iter::once(jsonl_layer),
+        ),
+    );
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info_span!("test_root_span").in_scope(|| {
@@ -56,8 +47,9 @@ fn test_tracing_jsonl() {
     });
 
     // Shutdown telemetry to ensure all data is flushed to the file
-    let shutdown_errs = telemetry_handle.shutdown();
-    assert_eq!(shutdown_errs.len(), 0);
+    shutdown_handle
+        .shutdown()
+        .expect("Failed to shutdown telemetry");
 
     // Read the temporary file
     let file_contents =
@@ -191,29 +183,31 @@ fn test_tracing_jsonl() {
 
 #[test]
 fn test_jsonl_dynamic_output_flags_filtering() {
-    let invocation_id = uuid::Uuid::new_v4();
+    // Initialize tracing with a custom layer to capture events
+    let trace_id = rand::random::<u128>();
+
+    // Create a temporary file for the OTM output
     let temp_dir = std::env::temp_dir();
     let temp_file_path = temp_dir.join("test_jsonl_dyn_filtering.jsonl");
 
-    let (subscriber, shutdown_items) = create_tracing_subcriber_with_layer(
-        FsTraceConfig {
-            package: "test_package_dyn",
-            max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
-            invocation_id,
-            otm_file_path: Some(temp_file_path.clone()),
-            otm_parquet_file_path: None,
-            enable_progress: false,
-            export_to_otlp: false,
-            log_format: LogFormat::Default,
-            log_path: temp_dir,
-            enable_query_log: false,
-        },
-        None::<Box<dyn Layer<Layered<EnvFilter, Registry>> + Send + Sync>>,
-    )
-    .expect("Failed to initialize tracing");
+    // Init telemetry using internal API allowing to set thread local subscriber.
+    // This avoids collisions with other unit tests
+    let max_log_verbosity = tracing::level_filters::LevelFilter::TRACE;
 
-    let dummy_root_span = tracing::info_span!("not used");
-    let mut telemetry_handle = TelemetryHandle::new(shutdown_items, dummy_root_span);
+    let (jsonl_layer, mut shutdown_handle) = build_jsonl_layer_with_background_writer(
+        fs::File::create(&temp_file_path).expect("Failed to create temporary OTM file"),
+        max_log_verbosity,
+    );
+
+    let subscriber = create_tracing_subcriber_with_layer(
+        tracing::level_filters::LevelFilter::TRACE,
+        TelemetryDataLayer::new(
+            trace_id,
+            false,
+            std::iter::empty(),
+            std::iter::once(jsonl_layer),
+        ),
+    );
 
     tracing::subscriber::with_default(subscriber, || {
         let exportable_span = create_root_info_span!(
@@ -255,8 +249,10 @@ fn test_jsonl_dynamic_output_flags_filtering() {
         );
     });
 
-    let shutdown_errs = telemetry_handle.shutdown();
-    assert_eq!(shutdown_errs.len(), 0);
+    // Shutdown telemetry to ensure all data is flushed to the file
+    shutdown_handle
+        .shutdown()
+        .expect("Failed to shutdown telemetry");
 
     let file_contents = fs::read_to_string(&temp_file_path).expect("read jsonl");
     fs::remove_file(&temp_file_path).expect("remove jsonl");

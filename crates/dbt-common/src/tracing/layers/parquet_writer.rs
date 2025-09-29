@@ -4,15 +4,28 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::thread::{self, JoinHandle};
 
 use dbt_telemetry::{
-    TelemetryOutputFlags, TelemetryRecord,
+    LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags, TelemetryRecord,
     serialize::arrow::{get_telemetry_arrow_schema, serialize_to_arrow},
 };
 use parquet::{arrow::ArrowWriter, basic::Compression, file::properties::WriterProperties};
-use tracing::{Subscriber, span};
-use tracing_subscriber::{Layer, layer::Context};
 
-use super::super::{event_info::with_current_thread_log_record, init::TelemetryShutdown};
-use crate::{ErrorCode, FsResult};
+use super::super::{
+    data_provider::DataProvider,
+    layer::{ConsumerLayer, TelemetryConsumer},
+    shutdown::{TelemetryShutdown, TelemetryShutdownItem},
+};
+use dbt_error::{ErrorCode, FsResult};
+
+/// Build a parquet writer layer with a background writer. Do not wrap
+/// or buffer the writer, as the layer already does its own buffering
+/// and operates on a non-blocking worker thread.
+pub fn build_parquet_writer_layer<W: Write + Send + 'static>(
+    writer: W,
+) -> FsResult<(ConsumerLayer, TelemetryShutdownItem)> {
+    let (parquet_layer, handle) = TelemetryParquetWriterLayer::new(writer)?;
+
+    Ok((Box::new(parquet_layer), Box::new(handle)))
+}
 
 /// Buffer size for parquet record batching. This is the buffer in our part of the code
 /// used to reduce the number of rust struct -> RecordBatch conversions.
@@ -215,58 +228,33 @@ impl TelemetryParquetWriterLayer {
                 )
             })
     }
-
-    fn should_include_record(&self, record: &TelemetryRecord) -> bool {
-        match record {
-            // Only include SpanEnd records, not SpanStart
-            TelemetryRecord::SpanStart(_) => false,
-            TelemetryRecord::SpanEnd(span) => span
-                .attributes
-                .output_flags()
-                .contains(TelemetryOutputFlags::EXPORT_PARQUET),
-            TelemetryRecord::LogRecord(log_record) => log_record
-                .attributes
-                .output_flags()
-                .contains(TelemetryOutputFlags::EXPORT_PARQUET),
-        }
-    }
 }
 
-impl<S> Layer<S> for TelemetryParquetWriterLayer
-where
-    S: Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
-{
-    fn on_close(&self, id: span::Id, ctx: Context<'_, S>) {
-        let span = ctx
-            .span(&id)
-            .expect("Span must exist for id in the current context");
-
-        // Get the TelemetryRecord from extensions
-        if let Some(record) = span.extensions().get::<dbt_telemetry::SpanEndInfo>() {
-            let telemetry_record = TelemetryRecord::SpanEnd(record.clone());
-
-            // Filter
-            if !self.should_include_record(&telemetry_record) {
-                return;
-            }
-
-            // Ignore error if write fails - we don't want to panic in a layer
-            let _ = self.write_record(telemetry_record);
-        }
+impl TelemetryConsumer for TelemetryParquetWriterLayer {
+    fn is_span_enabled(&self, span: &SpanStartInfo, _meta: &tracing::Metadata) -> bool {
+        span.attributes
+            .output_flags()
+            .contains(TelemetryOutputFlags::EXPORT_PARQUET)
     }
 
-    fn on_event(&self, _event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
-        with_current_thread_log_record(|log_record| {
-            let telemetry_record = TelemetryRecord::LogRecord(log_record.clone());
+    fn is_log_enabled(&self, log_record: &LogRecordInfo, _meta: &tracing::Metadata) -> bool {
+        log_record
+            .attributes
+            .output_flags()
+            .contains(TelemetryOutputFlags::EXPORT_PARQUET)
+    }
 
-            // Filter
-            if !self.should_include_record(&telemetry_record) {
-                return;
-            }
+    // Only include SpanEnd records, not SpanStart
+    fn on_span_end(&self, span: &SpanEndInfo, _: &DataProvider<'_>) {
+        let telemetry_record = TelemetryRecord::SpanEnd(span.clone());
 
-            // Ignore error if write fails - we don't want to panic in a layer
-            let _ = self.write_record(telemetry_record);
-        });
+        let _ = self.write_record(telemetry_record);
+    }
+
+    fn on_log_record(&self, record: &LogRecordInfo, _: &DataProvider<'_>) {
+        let telemetry_record = TelemetryRecord::LogRecord(record.clone());
+
+        let _ = self.write_record(telemetry_record);
     }
 }
 
@@ -320,6 +308,7 @@ impl Drop for TelemetryParquetWriterHandle {
 
 #[cfg(test)]
 mod tests {
+    use super::super::data_layer::TelemetryDataLayer;
     use super::*;
     use arrow_schema::Schema;
     use dbt_telemetry::{
@@ -330,7 +319,6 @@ mod tests {
     use std::io::{self, Cursor, Write};
     use std::sync::{Arc, Mutex};
     use std::time::SystemTime;
-    use tracing_subscriber::{Registry, layer::SubscriberExt};
 
     /// Mock writer that uses an in-memory buffer
     struct MockWriter {
@@ -533,17 +521,19 @@ mod tests {
 
     #[test]
     fn test_layer_with_tracing_registry() {
-        use crate::tracing::layers::data_layer::TelemetryDataLayer;
-
         let (mock, buffer) = MockWriter::new();
         let (parquet_layer, mut handle) = TelemetryParquetWriterLayer::new(mock).unwrap();
 
-        // We need the data layer to populate span extensions
         let trace_id = uuid::Uuid::new_v4().as_u128();
-        let data_layer = TelemetryDataLayer::new(trace_id, false);
-
-        // Create a Registry-based subscriber with both layers
-        let subscriber = Registry::default().with(data_layer).with(parquet_layer);
+        let subscriber = crate::tracing::init::create_tracing_subcriber_with_layer(
+            tracing::level_filters::LevelFilter::TRACE,
+            TelemetryDataLayer::new(
+                trace_id,
+                false,
+                std::iter::empty(),
+                std::iter::once(Box::new(parquet_layer) as ConsumerLayer),
+            ),
+        );
 
         tracing::subscriber::with_default(subscriber, || {
             // Create nested spans

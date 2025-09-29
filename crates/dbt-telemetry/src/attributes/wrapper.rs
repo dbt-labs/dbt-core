@@ -103,6 +103,11 @@ impl TelemetryAttributes {
     pub fn downcast_mut<T: AnyTelemetryEvent + 'static>(&mut self) -> Option<&mut T> {
         self.inner.as_any_mut().downcast_mut::<T>()
     }
+
+    /// Returns `true` if the attributes event type is the same as `T`.
+    pub fn is<T: AnyTelemetryEvent + 'static>(&self) -> bool {
+        self.inner().as_any().is::<T>()
+    }
 }
 
 impl Clone for TelemetryAttributes {

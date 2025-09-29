@@ -1,9 +1,8 @@
-use crate::logging::LogFormat;
+use crate::tracing::layers::{
+    data_layer::TelemetryDataLayer, parquet_writer::build_parquet_writer_layer,
+};
 use crate::tracing::{
-    FsTraceConfig,
-    event_info::store_event_attributes,
-    init::{TelemetryHandle, create_tracing_subcriber_with_layer},
-    span_info,
+    event_info::store_event_attributes, init::create_tracing_subcriber_with_layer, span_info,
 };
 use dbt_telemetry::{
     CallTrace, LogMessage, LogRecordInfo, PackageUpdate, RecordCodeLocation, SeverityNumber,
@@ -11,39 +10,32 @@ use dbt_telemetry::{
     serialize::arrow::deserialize_from_arrow,
 };
 use std::{collections::BTreeMap, fs, panic::Location, time::SystemTime};
-use tracing_subscriber::{EnvFilter, Layer, Registry, layer::Layered};
 
 #[test]
 #[allow(clippy::cognitive_complexity)]
 fn test_tracing_parquet_filtering() {
-    let invocation_id = uuid::Uuid::now_v7();
+    let trace_id = rand::random::<u128>();
 
     // Create a temporary file for the parquet output
     let temp_dir = std::env::temp_dir();
     let temp_file_path = temp_dir.join("test_telemetry_filtering.parquet");
 
-    // Init telemetry using internal API allowing to set thread local subscriber.
-    // This avoids collisions with other unit tests, but prevents us from testing
-    // the fallback logic with the global parent span
-    let (subscriber, shutdown_items) = create_tracing_subcriber_with_layer(
-        FsTraceConfig {
-            package: "test_package",
-            max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
-            invocation_id,
-            otm_file_path: None,
-            otm_parquet_file_path: Some(temp_file_path.clone()),
-            enable_progress: false,
-            export_to_otlp: false,
-            log_format: LogFormat::Default,
-            log_path: temp_dir,
-            enable_query_log: false,
-        },
-        None::<Box<dyn Layer<Layered<EnvFilter, Registry>> + Send + Sync>>,
+    let (parquet_layer, mut shutdown_handle) = build_parquet_writer_layer(
+        fs::File::create(&temp_file_path).expect("Failed to create temporary OTM file"),
     )
-    .expect("Failed to initialize tracing");
+    .expect("Failed to create parquet layer");
 
-    let dummy_root_span = tracing::info_span!("not used");
-    let mut telemetry_handle = TelemetryHandle::new(shutdown_items, dummy_root_span);
+    // Init telemetry using internal API allowing to set thread local subscriber.
+    // This avoids collisions with other unit tests
+    let subscriber = create_tracing_subcriber_with_layer(
+        tracing::level_filters::LevelFilter::TRACE,
+        TelemetryDataLayer::new(
+            trace_id,
+            false,
+            std::iter::empty(),
+            std::iter::once(parquet_layer),
+        ),
+    );
 
     // Pre-create attrs to compare them later
     let mut test_log_attrs: TelemetryAttributes = LogMessage {
@@ -110,8 +102,9 @@ fn test_tracing_parquet_filtering() {
     });
 
     // Shutdown telemetry to ensure all data is flushed to the file
-    let shutdown_errs = telemetry_handle.shutdown();
-    assert_eq!(shutdown_errs.len(), 0);
+    shutdown_handle
+        .shutdown()
+        .expect("Failed to shutdown telemetry");
 
     // Verify the parquet file was created
     assert!(temp_file_path.exists(), "Parquet file should exist");
@@ -146,7 +139,7 @@ fn test_tracing_parquet_filtering() {
 
     // Verify the SpanEnd record is the valid one
     if let TelemetryRecord::SpanEnd(SpanEndInfo {
-        trace_id,
+        trace_id: recorded_trace_id,
         span_id,
         span_name,
         parent_span_id,
@@ -159,7 +152,7 @@ fn test_tracing_parquet_filtering() {
         attributes,
     }) = span_end_record
     {
-        assert_eq!(*trace_id, invocation_id.as_u128());
+        assert_eq!(*recorded_trace_id, trace_id);
         assert_eq!(*span_id, expected_span_id);
         assert!(span_name.starts_with("Dev trace: dev_test ("));
         assert!(parent_span_id.is_none());
@@ -189,7 +182,7 @@ fn test_tracing_parquet_filtering() {
 
     // Verify the LogRecord is the valid one (Log attributes)
     if let TelemetryRecord::LogRecord(LogRecordInfo {
-        trace_id,
+        trace_id: recorded_trace_id,
         span_id,
         event_id: _,
         span_name,
@@ -200,7 +193,7 @@ fn test_tracing_parquet_filtering() {
         attributes,
     }) = log_record_record
     {
-        assert_eq!(*trace_id, invocation_id.as_u128());
+        assert_eq!(*recorded_trace_id, trace_id);
         assert_eq!(*span_id, Some(expected_span_id));
         assert!(
             span_name

@@ -1,9 +1,12 @@
+use crate::task::env::TracingReloadHandle;
+
 use super::TestResult;
 use super::log_capture::JsonLogEvent;
 use clap::Parser;
 use dbt_common::{
-    DiscreteEventEmitter,
+    DiscreteEventEmitter, FsError,
     cancellation::{CancellationToken, never_cancels},
+    tracing::FsTraceConfig,
 };
 use std::{
     fs::File,
@@ -273,13 +276,16 @@ pub fn strip_leading_relative(path: &Path) -> &Path {
 }
 
 // Util function to execute fusion commands in tests
+#[allow(clippy::too_many_arguments)]
 pub async fn exec_fs<Fut, P: Parser>(
     cmd_vec: Vec<String>,
     project_dir: PathBuf,
+    target_dir: PathBuf,
     stdout_file: File,
     stderr_file: File,
     execute_fs: impl FnOnce(SystemArgs, P, Arc<dyn DiscreteEventEmitter>, CancellationToken) -> Fut,
     from_lib: impl FnOnce(&P) -> SystemArgs,
+    tracing_handle: TracingReloadHandle,
 ) -> FsResult<i32>
 where
     Fut: Future<Output = FsResult<i32>>,
@@ -302,8 +308,29 @@ where
 
     let cli = P::parse_from(cmd_vec);
     let arg = from_lib(&cli);
+    let trace_config = FsTraceConfig::new_from_io_args(
+        Some(&project_dir),
+        Some(&target_dir),
+        &arg.io,
+        "dbt-tests",
+    );
+    let (middlewares, consumer_layers, mut shutdown_items) = trace_config.build_layers()?;
+    tracing_handle.with_tracing_consumer(middlewares, consumer_layers);
 
-    execute_fs(arg, cli, event_emitter, token).await
+    let result = execute_fs(arg, cli, event_emitter, token).await;
+
+    let shutdown_errors: Vec<FsError> = shutdown_items
+        .iter_mut()
+        .filter_map(|item| item.shutdown().err())
+        .map(|err| *err)
+        .collect();
+
+    match result {
+        // If the run itself failed - return it's error and ignore shutdown
+        Err(_) => result,
+        Ok(_) if shutdown_errors.is_empty() => result,
+        _ => unexpected_err!("Failed to shutdown telemetry"),
+    }
 }
 
 /// The purpose of this guard is two fold:

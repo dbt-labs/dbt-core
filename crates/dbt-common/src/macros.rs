@@ -794,11 +794,9 @@ macro_rules! show_warning {
         let err = $err;
 
         // New tracing based logic
-        use $crate::tracing::log_level_to_severity;
+        use $crate::tracing::convert::log_level_to_severity;
         use $crate::tracing::emit::_tracing::Level as TracingLevel;
-        use $crate::tracing::metrics::{increment_metric, MetricKey};
         use $crate::macros::_dbt_telemetry::LogMessage;
-        increment_metric(MetricKey::TotalWarnings, 1);
 
         let (original_severity_number, original_severity_text) = log_level_to_severity(&$crate::macros::log_adapter::log::Level::Warn);
 

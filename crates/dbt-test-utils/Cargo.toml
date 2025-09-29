@@ -13,6 +13,7 @@ workspace = true
 [dependencies]
 arrow = { workspace = true }
 async-trait = { workspace = true }
+bytes = { workspace = true }
 clap = { workspace = true }
 dbt-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
@@ -20,6 +21,7 @@ dbt-jinja-utils = { workspace = true }
 dbt-loader = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-serde_yaml = { workspace = true }
+dbt-telemetry = { workspace = true }
 dbt-test-containers = { workspace = true }
 dbt-test-primitives = { workspace = true }
 diffy = { version = "0.4.2" }
@@ -34,11 +36,15 @@ once_cell = { workspace = true }
 parquet = { workspace = true }
 pretty_assertions = { version = "1.4.1" }
 proto-rust = { workspace = true }
+rand = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
 vortex-events = { workspace = true }
 
 [dev-dependencies]

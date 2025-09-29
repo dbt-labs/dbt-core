@@ -1,52 +1,38 @@
-use crate::logging::LogFormat;
-use crate::tracing::{
-    FsTraceConfig,
-    event_info::with_current_thread_log_record,
-    init::{TelemetryHandle, create_tracing_subcriber_with_layer},
-};
 use dbt_telemetry::{
     CallTrace, ExecutionPhase, LogMessage, LogRecordInfo, NodeEvaluated, RecordCodeLocation,
-    SeverityNumber, SpanEndInfo, SpanStartInfo, TelemetryAttributes, Unknown,
+    SeverityNumber, SpanEndInfo, SpanStartInfo, TelemetryAttributes, TelemetryOutputFlags, Unknown,
 };
 use std::collections::BTreeMap;
 use std::panic::Location;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use tracing::Subscriber;
-use tracing_subscriber::{Layer, layer::Context};
+use std::sync::Arc;
 
-use super::mocks::TestLayer;
+use crate::tracing::{
+    data_provider::DataProvider, layer::ConsumerLayer, layers::data_layer::TelemetryDataLayer,
+};
+
+use super::{
+    super::{init::create_tracing_subcriber_with_layer, layer::TelemetryConsumer},
+    mocks::{MockDynSpanEvent, TestLayer},
+};
 
 #[test]
-fn test_emit_event() {
+fn test_emit_event_and_apply_context() {
     // Initialize tracing with a custom layer to capture events
-    let invocation_id = uuid::Uuid::new_v4();
-    let trace_id = invocation_id.as_u128();
+    let trace_id = rand::random::<u128>();
 
     let (test_layer, _, span_ends, log_records) = TestLayer::new();
 
     // Init telemetry using internal API allowing to set thread local subscriber.
-    // This avoids collisions with other unit tests, but prevents us from testing
-    // the fallback logic with the global parent span
-    let (subscriber, shutdown_items) = create_tracing_subcriber_with_layer(
-        FsTraceConfig {
-            package: "test_package",
-            max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
-            invocation_id,
-            otm_file_path: None,
-            otm_parquet_file_path: None,
-            enable_progress: false,
-            export_to_otlp: false,
-            log_format: LogFormat::Default,
-            log_path: PathBuf::new(),
-            enable_query_log: false,
-        },
-        test_layer,
-    )
-    .expect("Failed to initialize tracing");
-
-    let dummy_root_span = tracing::info_span!("not used");
-    let mut telemetry_handle = TelemetryHandle::new(shutdown_items, dummy_root_span);
+    // This avoids collisions with other unit tests
+    let subscriber = create_tracing_subcriber_with_layer(
+        tracing::level_filters::LevelFilter::TRACE,
+        TelemetryDataLayer::new(
+            trace_id,
+            false,
+            std::iter::empty(),
+            std::iter::once(Box::new(test_layer) as ConsumerLayer),
+        ),
+    );
 
     let mut test_attrs: TelemetryAttributes = LogMessage {
         code: Some(42),
@@ -69,7 +55,17 @@ fn test_emit_event() {
     let expected_node_phase = ExecutionPhase::Render;
 
     tracing::subscriber::with_default(subscriber, || {
-        let root_span = create_root_info_span!(
+        let _rs = create_root_info_span!(
+            MockDynSpanEvent {
+                name: "root".to_string(),
+                flags: TelemetryOutputFlags::ALL,
+                ..Default::default()
+            }
+            .into()
+        )
+        .entered();
+
+        let node_span = create_info_span!(
             NodeEvaluated {
                 unique_id: expected_node_unique_id.into(),
                 phase: expected_node_phase as i32,
@@ -77,16 +73,12 @@ fn test_emit_event() {
             }
             .into()
         );
-        root_span.in_scope(|| {
+        node_span.in_scope(|| {
             // Emit the event & save the location (almost, one line off)
             test_location = Location::caller();
             emit_tracing_event!(test_attrs.clone(), "Test info event");
         });
     });
-
-    // Shutdown telemetry to ensure all data is processed
-    let shutdown_errs = telemetry_handle.shutdown();
-    assert_eq!(shutdown_errs.len(), 0);
 
     let log_records = {
         let lr = log_records.lock().expect("Should have no locks");
@@ -98,7 +90,7 @@ fn test_emit_event() {
     };
 
     // Verify captured data
-    assert_eq!(span_ends.len(), 1, "Expected 1 span end record");
+    assert_eq!(span_ends.len(), 2, "Expected 2 span end record");
 
     let (span_id, span_name) = (span_ends[0].span_id, span_ends[0].span_name.clone());
 
@@ -132,34 +124,22 @@ fn test_emit_event() {
 
 #[test]
 fn test_tracing_with_custom_layer() {
-    let invocation_id = uuid::Uuid::new_v4();
-    let trace_id = invocation_id.as_u128();
+    // Initialize tracing with a custom layer to capture events
+    let trace_id = rand::random::<u128>();
 
     let (test_layer, span_starts, span_ends, log_records) = TestLayer::new();
 
     // Init telemetry using internal API allowing to set thread local subscriber.
-    // This avoids collisions with other unit tests, but prevents us from testing
-    // the fallback logic with the global parent span
-    let (subscriber, shutdown_items) = create_tracing_subcriber_with_layer(
-        FsTraceConfig {
-            package: "test_package",
-            max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
-            invocation_id,
-            otm_file_path: None,
-            otm_parquet_file_path: None,
-            enable_progress: false,
-            export_to_otlp: false,
-            log_format: LogFormat::Default,
-            log_path: PathBuf::new(),
-            enable_query_log: false,
-        },
-        test_layer,
-    )
-    .expect("Failed to initialize tracing");
-
-    let dummy_root_span = tracing::info_span!("not used");
-
-    let mut telemetry_handle = TelemetryHandle::new(shutdown_items, dummy_root_span);
+    // This avoids collisions with other unit tests
+    let subscriber = create_tracing_subcriber_with_layer(
+        tracing::level_filters::LevelFilter::TRACE,
+        TelemetryDataLayer::new(
+            trace_id,
+            false,
+            std::iter::empty(),
+            std::iter::once(Box::new(test_layer) as ConsumerLayer),
+        ),
+    );
 
     tracing::subscriber::with_default(subscriber, || {
         tracing::info_span!("test_root_span").in_scope(|| {
@@ -172,10 +152,6 @@ fn test_tracing_with_custom_layer() {
             // Span will be created and closed automatically
         })
     });
-
-    // Shutdown telemetry to ensure all data is processed
-    let shutdown_errs = telemetry_handle.shutdown();
-    assert_eq!(shutdown_errs.len(), 0);
 
     // Verify captured data
     let span_starts = {
@@ -337,66 +313,33 @@ fn test_tracing_with_custom_layer() {
 
 #[test]
 fn test_tracing_log_record_poisoning() {
-    use std::sync::Condvar;
     use std::thread;
 
-    struct SharedLayer {
-        pair: Arc<(Mutex<bool>, Condvar)>,
-    }
+    struct SharedLayer;
 
-    impl<S> Layer<S> for SharedLayer
-    where
-        S: Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
-    {
-        fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
-            // If we are in thread 1 - wait until thread 2 has finished emitting
-            // event before getting the structured data. This effectively tests
-            // whether events from other threads may pollute current thread
-            if event.metadata().target() == "thread 1" {
-                let (lock, cvar) = &*self.pair;
-                let mut finished = lock.lock().unwrap();
-                while !*finished {
-                    finished = cvar.wait(finished).unwrap();
-                }
-            }
-
-            with_current_thread_log_record(|log_record| {
-                assert_eq!(
-                    log_record.body,
-                    format!("event from {}", event.metadata().target())
-                );
-            });
+    impl TelemetryConsumer for SharedLayer {
+        fn on_log_record(&self, record: &LogRecordInfo, _: &DataProvider<'_>) {
+            assert_eq!(
+                record.body,
+                format!("event from thread {:?}", thread::current().id()),
+            );
         }
     }
 
-    let invocation_id = uuid::Uuid::new_v4();
-
-    let pair = Arc::new((Mutex::new(false), Condvar::new()));
-    let test_layer = SharedLayer { pair: pair.clone() };
+    // Initialize tracing with a custom layer to capture events
+    let trace_id = rand::random::<u128>();
 
     // Init telemetry using internal API allowing to set thread local subscriber.
-    // This avoids collisions with other unit tests, but prevents us from testing
-    // the fallback logic with the global parent span
-    let (subscriber, shutdown_items) = create_tracing_subcriber_with_layer(
-        FsTraceConfig {
-            package: "test_package",
-            max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
-            invocation_id,
-            otm_file_path: None,
-            otm_parquet_file_path: None,
-            enable_progress: false,
-            export_to_otlp: false,
-            log_format: LogFormat::Default,
-            log_path: PathBuf::new(),
-            enable_query_log: false,
-        },
-        test_layer,
-    )
-    .expect("Failed to initialize tracing");
-
-    let dummy_root_span = tracing::info_span!("not used");
-
-    let mut telemetry_handle = TelemetryHandle::new(shutdown_items, dummy_root_span);
+    // This avoids collisions with other unit tests
+    let subscriber = create_tracing_subcriber_with_layer(
+        tracing::level_filters::LevelFilter::TRACE,
+        TelemetryDataLayer::new(
+            trace_id,
+            false,
+            std::iter::empty(),
+            std::iter::once(Box::new(SharedLayer) as ConsumerLayer),
+        ),
+    );
 
     let subscriber = Arc::new(subscriber);
 
@@ -409,7 +352,14 @@ fn test_tracing_log_record_poisoning() {
         let t1 = thread::spawn(move || {
             tracing::subscriber::with_default(subscriber1, || {
                 let _g = shared_span.entered();
-                tracing::info!(target: "thread 1", "event from thread 1");
+                emit_tracing_event!(
+                    LogMessage {
+                        ..Default::default()
+                    }
+                    .into(),
+                    "event from thread {:?}",
+                    thread::current().id()
+                );
             })
         });
 
@@ -418,56 +368,40 @@ fn test_tracing_log_record_poisoning() {
         let t2 = thread::spawn(move || {
             tracing::subscriber::with_default(subscriber2, || {
                 let _g = shared_span_clone.entered();
-                tracing::info!(target: "thread 2","event from thread 2");
-
-                let (lock, cvar) = &*pair;
-                let mut finished = lock.lock().unwrap();
-                *finished = true;
-                // We notify the condvar that the value has changed.
-                cvar.notify_one();
+                emit_tracing_event!(
+                    LogMessage {
+                        ..Default::default()
+                    }
+                    .into(),
+                    "event from thread {:?}",
+                    thread::current().id()
+                );
             })
         });
 
         t1.join().unwrap();
         t2.join().unwrap();
     });
-
-    // Shutdown telemetry to ensure all data is processed
-    let shutdown_errs = telemetry_handle.shutdown();
-    assert_eq!(shutdown_errs.len(), 0);
 }
 
 #[test]
 fn test_emit_macros() {
     // Initialize tracing with a custom layer to capture events
-    let invocation_id = uuid::Uuid::new_v4();
-    let trace_id = invocation_id.as_u128();
+    let trace_id = rand::random::<u128>();
 
     let (test_layer, span_starts, span_ends, log_records) = TestLayer::new();
 
     // Init telemetry using internal API allowing to set thread local subscriber.
-    // This avoids collisions with other unit tests, but prevents us from testing
-    // the fallback logic with the global parent span
-    let (subscriber, shutdown_items) = create_tracing_subcriber_with_layer(
-        FsTraceConfig {
-            package: "test_package",
-            max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
-            invocation_id,
-            otm_file_path: None,
-            otm_parquet_file_path: None,
-            enable_progress: false,
-            export_to_otlp: false,
-            log_format: LogFormat::Default,
-            log_path: PathBuf::new(),
-            enable_query_log: false,
-        },
-        test_layer,
-    )
-    .expect("Failed to initialize tracing");
-
-    let dummy_root_span = tracing::info_span!("not used");
-
-    let mut telemetry_handle = TelemetryHandle::new(shutdown_items, dummy_root_span);
+    // This avoids collisions with other unit tests
+    let subscriber = create_tracing_subcriber_with_layer(
+        tracing::level_filters::LevelFilter::TRACE,
+        TelemetryDataLayer::new(
+            trace_id,
+            false,
+            std::iter::empty(),
+            std::iter::once(Box::new(test_layer) as ConsumerLayer),
+        ),
+    );
 
     // Create different test attributes for each call
     let mut root_attrs: TelemetryAttributes = CallTrace {
@@ -535,10 +469,6 @@ fn test_emit_macros() {
         event2_location = Location::caller();
         emit_tracing_event!(event2_attrs.clone());
     });
-
-    // Shutdown telemetry to ensure all data is processed
-    let shutdown_errs = telemetry_handle.shutdown();
-    assert_eq!(shutdown_errs.len(), 0);
 
     // Get captured data
     let span_starts = {

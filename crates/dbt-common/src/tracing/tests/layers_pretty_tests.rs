@@ -1,17 +1,12 @@
-use super::mocks::TestWriter;
-use crate::{
-    logging::LogFormat,
-    tracing::{
-        FsTraceConfig,
-        filter::WithOutputFilter as _,
-        init::{TelemetryHandle, create_tracing_subcriber_with_layer},
-        layers::pretty_writer::TelemetryPrettyWriterLayer,
-    },
+use super::mocks::{TestLayer, TestWriter};
+use crate::tracing::{
+    init::create_tracing_subcriber_with_layer,
+    layer::{ConsumerLayer, TelemetryConsumer},
+    layers::{data_layer::TelemetryDataLayer, pretty_writer::TelemetryPrettyWriterLayer},
 };
 
 use super::mocks::{MockDynLogEvent, MockDynSpanEvent};
 use dbt_telemetry::{TelemetryOutputFlags, TelemetryRecordRef};
-use tracing_subscriber::Layer;
 
 fn mock_format_telemetry_record(record: TelemetryRecordRef, _is_tty: bool) -> Option<String> {
     match record {
@@ -33,41 +28,35 @@ fn mock_format_telemetry_record(record: TelemetryRecordRef, _is_tty: bool) -> Op
 
 #[test]
 fn pretty_layer_applies_filter_and_formatting() {
-    let invocation_id = uuid::Uuid::new_v4();
+    let trace_id = rand::random::<u128>();
     let file_writer = TestWriter::non_terminal();
     let tty_writer = TestWriter::terminal();
 
-    let layer = TelemetryPrettyWriterLayer::new(file_writer.clone(), mock_format_telemetry_record)
-        .and_then(TelemetryPrettyWriterLayer::new(
-            tty_writer.clone(),
-            mock_format_telemetry_record,
-        ))
-        .with_output_filter(|record, _| match record {
-            TelemetryRecordRef::SpanStart(span_start) => span_start.span_name.contains("keep"),
-            TelemetryRecordRef::SpanEnd(span_end) => span_end.span_name.contains("keep"),
-            TelemetryRecordRef::LogRecord(_) => true,
-        });
-    let extra_layer: Option<_> = Some(layer);
+    let (test_layer, _, _, test_logs) = TestLayer::new();
 
-    let (subscriber, shutdown_items) = create_tracing_subcriber_with_layer(
-        FsTraceConfig {
-            package: "pretty-test",
-            max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
-            invocation_id,
-            otm_file_path: None,
-            otm_parquet_file_path: None,
-            enable_progress: false,
-            export_to_otlp: false,
-            log_format: LogFormat::Default,
-            log_path: Default::default(),
-            enable_query_log: false,
-        },
-        extra_layer,
-    )
-    .expect("init tracing");
+    let file_layer =
+        TelemetryPrettyWriterLayer::new(file_writer.clone(), mock_format_telemetry_record)
+            .with_span_filter(|span, _| span.span_name.contains("keep"));
+    let tty_layer =
+        TelemetryPrettyWriterLayer::new(tty_writer.clone(), mock_format_telemetry_record)
+            .with_span_filter(|span, _| span.span_name.contains("keep"));
 
-    let dummy_root_span = tracing::info_span!("not used");
-    let mut telemetry_handle = TelemetryHandle::new(shutdown_items, dummy_root_span);
+    // Init telemetry using internal API allowing to set thread local subscriber.
+    // This avoids collisions with other unit tests
+    let subscriber = create_tracing_subcriber_with_layer(
+        tracing::level_filters::LevelFilter::TRACE,
+        TelemetryDataLayer::new(
+            trace_id,
+            false,
+            std::iter::empty(),
+            vec![
+                Box::new(file_layer) as ConsumerLayer,
+                Box::new(tty_layer) as ConsumerLayer,
+                Box::new(test_layer) as ConsumerLayer,
+            ]
+            .into_iter(),
+        ),
+    );
 
     tracing::subscriber::with_default(subscriber, || {
         let span = create_root_info_span!(
@@ -112,13 +101,28 @@ fn pretty_layer_applies_filter_and_formatting() {
         });
     });
 
-    let shutdown_errs = telemetry_handle.shutdown();
-    assert!(shutdown_errs.is_empty());
-
     // Check that the file writer (non-TTY) received the expected lines
 
     let file_log = file_writer.get_lines().join("");
     let tty_log = tty_writer.get_lines().join("");
+
+    let captured_logs = test_logs.lock().expect("log capture mutex poisoned");
+    assert_eq!(captured_logs.len(), 2);
+    assert!(
+        captured_logs[0]
+            .attributes
+            .output_flags()
+            .contains(TelemetryOutputFlags::OUTPUT_LOG_FILE),
+        "expected first log to target log file"
+    );
+    assert!(
+        !captured_logs[1]
+            .attributes
+            .output_flags()
+            .contains(TelemetryOutputFlags::OUTPUT_LOG_FILE),
+        "expected second log to be console-only, flags={:?}",
+        captured_logs[1].attributes.output_flags()
+    );
 
     // Note that log reports span-drop as parent - that's the current
     // limitation of our custom filtering - see comments in event_info.rs

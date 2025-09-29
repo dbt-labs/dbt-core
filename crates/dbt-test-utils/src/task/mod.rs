@@ -85,8 +85,8 @@ pub use log_capture::{ExecuteAndCaptureLogs, JsonLogEvent};
 pub use manifest_capture::CaptureDbtManifest;
 pub use profiles::HydrateProfilesTask;
 pub use record_and_replay::RrTask;
-pub use tasks::ExecuteAndCompare;
 pub use tasks::prepare_command_vec;
+pub use tasks::{ExecuteAndCompare, ExecuteAndCompareTelemetry};
 
 use async_trait::async_trait;
 

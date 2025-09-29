@@ -662,7 +662,11 @@ impl Statement for ReplayEngineStatement {
         // Query has to match to the recorded one, otherwise we
         // have issues with ordering or recording
         if !fs::exists(&sql_path).map_err(|e| from_io_error(e, Some(&sql_path)))? {
-            panic!("Missing query file ({:?}) during replay", &sql_path);
+            panic!(
+                "Missing query file ({:?}) during replay. Query: {}",
+                &sql_path,
+                replay_sql.as_str()
+            );
         }
         // dbt_tmp_800c2fb4_a0ba_4708_a0b1_813316032bfb
         let record_sql =

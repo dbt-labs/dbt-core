@@ -1,17 +1,18 @@
 use std::sync::{Arc, Mutex};
 
-use crate::logging::LogFormat;
-use crate::tracing::{
-    FsTraceConfig,
-    init::{TelemetryHandle, create_tracing_subcriber_with_layer},
-    layers::otlp::OTLPExporterLayer,
+use crate::{
+    create_root_info_span, emit_tracing_event,
+    tracing::{
+        init::create_tracing_subcriber_with_layer,
+        layer::ConsumerLayer,
+        layers::{data_layer::TelemetryDataLayer, otlp::OTLPExporterLayer},
+    },
 };
 
 use super::mocks::{MockDynLogEvent, MockDynSpanEvent};
 use dbt_telemetry::TelemetryOutputFlags;
 use opentelemetry::Value as OtelValue;
 use opentelemetry_sdk as sdk;
-use tracing_subscriber::{EnvFilter, Registry, layer::Layered};
 
 #[derive(Debug)]
 struct TestSpanExporter {
@@ -79,42 +80,29 @@ impl sdk::logs::LogExporter for TestLogExporter {
 
 #[test]
 fn test_otlp_layer_exports_only_marked_records() {
-    let invocation_id = uuid::Uuid::new_v4();
+    let trace_id = rand::random::<u128>();
 
     // Create test exporters and share state
     let (trace_exporter, spans) = TestSpanExporter::new();
     let (log_exporter, logs) = TestLogExporter::new();
 
     // Build OTLP layer with test exporters
-    let otlp_layer: OTLPExporterLayer<Layered<EnvFilter, Registry>> =
-        OTLPExporterLayer::new(trace_exporter, log_exporter);
+    let otlp_layer = OTLPExporterLayer::new(trace_exporter, log_exporter);
     // Clone providers for graceful shutdown later (batch processors flush on shutdown)
     let trace_provider = otlp_layer.tracer_provider();
     let log_provider = otlp_layer.logger_provider();
 
-    // Init telemetry using internal API, disabling default OTLP (we pass custom layer)
-    let (subscriber, mut shutdown_items) = create_tracing_subcriber_with_layer(
-        FsTraceConfig {
-            package: "test_package",
-            max_log_verbosity: tracing::level_filters::LevelFilter::TRACE,
-            invocation_id,
-            otm_file_path: None,
-            otm_parquet_file_path: None,
-            enable_progress: false,
-            export_to_otlp: false,
-            log_format: LogFormat::Default,
-            log_path: Default::default(),
-            enable_query_log: false,
-        },
-        otlp_layer,
-    )
-    .expect("Failed to initialize tracing");
-
-    let dummy_root_span = tracing::info_span!("not used");
-    // Add OTLP providers to shutdown list so that data is flushed
-    shutdown_items.push(Box::new(trace_provider));
-    shutdown_items.push(Box::new(log_provider));
-    let mut telemetry_handle = TelemetryHandle::new(shutdown_items, dummy_root_span);
+    // Init telemetry using internal API allowing to set thread local subscriber.
+    // This avoids collisions with other unit tests
+    let subscriber = create_tracing_subcriber_with_layer(
+        tracing::level_filters::LevelFilter::TRACE,
+        TelemetryDataLayer::new(
+            trace_id,
+            false,
+            std::iter::empty(),
+            std::iter::once(Box::new(otlp_layer) as ConsumerLayer),
+        ),
+    );
 
     // Emit events under the thread-local subscriber
     tracing::subscriber::with_default(subscriber, || {
@@ -159,8 +147,13 @@ fn test_otlp_layer_exports_only_marked_records() {
         );
     });
 
-    let shutdown_errs = telemetry_handle.shutdown();
-    assert_eq!(shutdown_errs.len(), 0);
+    // Shutdown telemetry to ensure all data is flushed to the file
+    trace_provider
+        .shutdown()
+        .expect("Failed to shutdown telemetry");
+    log_provider
+        .shutdown()
+        .expect("Failed to shutdown telemetry");
 
     // Validate we exported exactly 1 span and 1 log
     let exported_spans = spans.lock().unwrap().clone();

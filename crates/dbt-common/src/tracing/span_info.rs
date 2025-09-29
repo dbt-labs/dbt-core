@@ -57,14 +57,10 @@ pub(super) fn get_span_debug_extra_attrs(values: Recordable<'_>) -> BTreeMap<Str
 ///
 /// Should always return `Some(R)`. None means thread local subscriber missing,
 /// which should not happen in our case.
-pub(super) fn with_current_span<F, R>(f: F) -> Option<R>
+pub(super) fn with_current_span<F, R>(mut f: F) -> Option<R>
 where
-    F: FnOnce(&SpanRef<Registry>) -> R,
+    F: FnMut(SpanRef<Registry>) -> R,
 {
-    // A little dance to accept an `FnOnce` closure and create a compatible
-    // `FnMut` closure.
-    let mut f = Some(f);
-
     tracing::dispatcher::get_default(|dispatch| {
         // If the dispatcher is not a `Registry`, means tracing
         // wasn't initialized and so this is a no-op.
@@ -75,7 +71,7 @@ where
             .span(dispatch.current_span().id()?)
             .expect("Must be an existing span reference");
 
-        f.take().map(|f| f(&span_ref))
+        Some(f(span_ref))
     })
 }
 
@@ -91,14 +87,10 @@ where
 ///
 /// This function will panic if it is called with a span that does not exist
 /// in the current context.
-pub(super) fn with_span<F, R>(span: &Span, f: F) -> Option<R>
+pub(super) fn with_span<F, R>(span: &Span, mut f: F) -> Option<R>
 where
-    F: FnOnce(&SpanRef<Registry>) -> R,
+    F: FnMut(SpanRef<Registry>) -> R,
 {
-    // A little dance to accept an `FnOnce` closure and create a compatible
-    // `FnMut` closure.
-    let mut f = Some(f);
-
     tracing::dispatcher::get_default(|dispatch| {
         // If the dispatcher is not a `Registry`, means tracing
         // wasn't initialized and so this is a no-op.
@@ -109,22 +101,19 @@ where
             .span(&span.id()?)
             .expect("Must be an existing span reference");
 
-        f.take().map(|f| f(&span_ref))
+        Some(f(span_ref))
     })
 }
 
-pub(super) fn with_root_span<F, R>(f: F) -> Option<R>
+pub fn get_root_span_ref(cur_span: SpanRef<Registry>) -> SpanRef<Registry> {
+    cur_span.scope().from_root().next().unwrap_or(cur_span)
+}
+
+pub(super) fn with_root_span<F, R>(mut f: F) -> Option<R>
 where
-    F: FnOnce(&SpanRef<Registry>) -> R,
+    F: FnMut(SpanRef<Registry>) -> R,
 {
-    with_current_span(|cur_span| {
-        // Get the root span
-        match cur_span.scope().from_root().next() {
-            Some(root_span) => f(&root_span),
-            // This is root span itself, so we can just use it
-            None => f(cur_span),
-        }
-    })
+    with_current_span(|cur_span| f(get_root_span_ref(cur_span)))
 }
 
 fn record_span_status_on_ref(span_ext_mut: &mut ExtensionsMut<'_>, error_message: Option<&str>) {
@@ -150,9 +139,12 @@ pub fn record_span_status(span: &Span, error_message: Option<&str>) {
 ///
 /// The `attrs_updater` closure receives a mutable reference to the current
 /// attributes and should modify them in place.
-pub fn record_span_status_with_attrs<F>(span: &Span, attrs_updater: F, error_message: Option<&str>)
-where
-    F: FnOnce(&mut TelemetryAttributes),
+pub fn record_span_status_with_attrs<F>(
+    span: &Span,
+    mut attrs_updater: F,
+    error_message: Option<&str>,
+) where
+    F: FnMut(&mut TelemetryAttributes),
 {
     with_span(span, |span_ref| {
         let mut span_ext_mut = span_ref.extensions_mut();
@@ -175,9 +167,9 @@ where
 ///
 /// The `attrs_updater` closure receives a mutable reference to the current
 /// attributes and should modify them in place.
-pub fn record_span_status_from_attrs<F>(span: &Span, attrs_updater: F)
+pub fn record_span_status_from_attrs<F>(span: &Span, mut attrs_updater: F)
 where
-    F: FnOnce(&mut TelemetryAttributes),
+    F: FnMut(&mut TelemetryAttributes),
 {
     with_span(span, |span_ref| {
         let mut span_ext_mut = span_ref.extensions_mut();
@@ -202,9 +194,9 @@ where
 ///
 /// The `attrs_updater` closure receives a mutable reference to the current
 /// attributes and should modify them in place.
-pub fn record_current_span_status_from_attrs<F>(attrs_updater: F)
+pub fn record_current_span_status_from_attrs<F>(mut attrs_updater: F)
 where
-    F: FnOnce(&mut TelemetryAttributes),
+    F: FnMut(&mut TelemetryAttributes),
 {
     with_current_span(|span_ref| {
         let mut span_ext_mut = span_ref.extensions_mut();

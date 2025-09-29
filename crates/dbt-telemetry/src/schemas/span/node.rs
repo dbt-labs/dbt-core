@@ -13,7 +13,7 @@ use std::borrow::Cow;
 pub use proto_rust::v1::public::events::fusion::node::{
     NodeCacheReason, NodeCancelReason, NodeErrorType, NodeEvaluated, NodeMaterialization,
     NodeOutcome, NodeSkipReason, NodeType, SourceFreshnessDetail, SourceFreshnessOutcome,
-    TestEvaluationDetail, TestOutcome,
+    TestEvaluationDetail, TestOutcome, node_evaluated::NodeOutcomeDetail,
 };
 
 impl ProtoTelemetryEvent for NodeEvaluated {

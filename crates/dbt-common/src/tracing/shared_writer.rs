@@ -45,3 +45,36 @@ impl SharedWriter for io::Stdout {
         io::IsTerminal::is_terminal(self)
     }
 }
+
+impl SharedWriter for io::Stderr {
+    fn write(&self, data: &str) -> io::Result<()> {
+        // Lock stderr for the duration of the write operation
+        let mut handle = self.lock();
+
+        // Write the data
+        handle.write_all(data.as_bytes())?;
+
+        // Immediately flush to ensure data is written
+        handle.flush()?;
+
+        Ok(())
+    }
+
+    fn writeln(&self, data: &str) -> io::Result<()> {
+        // Lock stderr for the duration of the write operation
+        let mut handle = self.lock();
+
+        // Write the data
+        handle.write_all(data.as_bytes())?;
+        handle.write_all(b"\n")?;
+
+        // Immediately flush to ensure data is written
+        handle.flush()?;
+
+        Ok(())
+    }
+
+    fn is_terminal(&self) -> bool {
+        io::IsTerminal::is_terminal(self)
+    }
+}

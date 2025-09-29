@@ -1,4 +1,8 @@
-use super::super::shared_writer::SharedWriter;
+use super::super::{
+    data_provider::{DataProvider, DataProviderMut},
+    layer::{TelemetryConsumer, TelemetryMiddleware},
+    shared_writer::SharedWriter,
+};
 use dbt_telemetry::{AnyTelemetryEvent, TelemetryEventRecType, TelemetryOutputFlags};
 use dbt_telemetry::{LogRecordInfo, SpanEndInfo, SpanStartInfo};
 use serde::Serialize;
@@ -6,8 +10,6 @@ use std::{
     io,
     sync::{Arc, Mutex},
 };
-use tracing::{Subscriber, span};
-use tracing_subscriber::{Layer, layer::Context};
 
 fn serialize_flags<S>(flags: &TelemetryOutputFlags, serializer: S) -> Result<S::Ok, S::Error>
 where
@@ -219,33 +221,106 @@ impl TestLayer {
     }
 }
 
-impl<S> Layer<S> for TestLayer
-where
-    S: Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
-{
-    fn on_new_span(&self, _attrs: &span::Attributes<'_>, id: &span::Id, ctx: Context<'_, S>) {
-        let span = ctx
-            .span(id)
-            .expect("Span must exist for id in the current context");
-
-        if let Some(record) = span.extensions().get::<SpanStartInfo>() {
-            self.span_starts.lock().unwrap().push(record.clone());
-        }
+impl TelemetryConsumer for TestLayer {
+    fn on_span_start(&self, span: &SpanStartInfo, _: &DataProvider<'_>) {
+        self.span_starts.lock().unwrap().push(span.clone());
     }
 
-    fn on_close(&self, id: span::Id, ctx: Context<'_, S>) {
-        let span = ctx
-            .span(&id)
-            .expect("Span must exist for id in the current context");
-
-        if let Some(record) = span.extensions().get::<SpanEndInfo>() {
-            self.span_ends.lock().unwrap().push(record.clone());
-        }
+    fn on_span_end(&self, span: &SpanEndInfo, _: &DataProvider<'_>) {
+        self.span_ends.lock().unwrap().push(span.clone());
     }
 
-    fn on_event(&self, _event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
-        crate::tracing::event_info::with_current_thread_log_record(|log_record| {
-            self.log_records.lock().unwrap().push(log_record.clone());
-        });
+    fn on_log_record(&self, record: &LogRecordInfo, _: &DataProvider<'_>) {
+        self.log_records.lock().unwrap().push(record.clone());
+    }
+}
+
+type SpanStartHandler =
+    dyn for<'a> Fn(SpanStartInfo, &mut DataProviderMut<'a>) -> Option<SpanStartInfo> + Send + Sync;
+type SpanEndHandler =
+    dyn for<'a> Fn(SpanEndInfo, &mut DataProviderMut<'a>) -> Option<SpanEndInfo> + Send + Sync;
+type LogRecordHandler =
+    dyn for<'a> Fn(LogRecordInfo, &mut DataProviderMut<'a>) -> Option<LogRecordInfo> + Send + Sync;
+
+/// A configurable middleware used to test how telemetry data passes through middleware hooks.
+pub struct MockMiddleware {
+    span_start: Box<SpanStartHandler>,
+    span_end: Box<SpanEndHandler>,
+    log_record: Box<LogRecordHandler>,
+}
+
+impl Default for MockMiddleware {
+    fn default() -> Self {
+        Self {
+            span_start: Box::new(|span, _| Some(span)),
+            span_end: Box::new(|span, _| Some(span)),
+            log_record: Box::new(|record, _| Some(record)),
+        }
+    }
+}
+
+impl MockMiddleware {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_span_start<F>(mut self, f: F) -> Self
+    where
+        F: for<'a> Fn(SpanStartInfo, &mut DataProviderMut<'a>) -> Option<SpanStartInfo>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.span_start = Box::new(f);
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn with_span_end<F>(mut self, f: F) -> Self
+    where
+        F: for<'a> Fn(SpanEndInfo, &mut DataProviderMut<'a>) -> Option<SpanEndInfo>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.span_end = Box::new(f);
+        self
+    }
+
+    pub fn with_log_record<F>(mut self, f: F) -> Self
+    where
+        F: for<'a> Fn(LogRecordInfo, &mut DataProviderMut<'a>) -> Option<LogRecordInfo>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.log_record = Box::new(f);
+        self
+    }
+}
+
+impl TelemetryMiddleware for MockMiddleware {
+    fn on_span_start(
+        &self,
+        span: SpanStartInfo,
+        metric_provider: &mut DataProviderMut<'_>,
+    ) -> Option<SpanStartInfo> {
+        (self.span_start)(span, metric_provider)
+    }
+
+    fn on_span_end(
+        &self,
+        span: SpanEndInfo,
+        metric_provider: &mut DataProviderMut<'_>,
+    ) -> Option<SpanEndInfo> {
+        (self.span_end)(span, metric_provider)
+    }
+
+    fn on_log_record(
+        &self,
+        record: LogRecordInfo,
+        metric_provider: &mut DataProviderMut<'_>,
+    ) -> Option<LogRecordInfo> {
+        (self.log_record)(record, metric_provider)
     }
 }

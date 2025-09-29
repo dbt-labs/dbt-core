@@ -1,9 +1,14 @@
-use super::super::{TelemetryShutdown, event_info::with_current_thread_log_record};
+use super::super::{
+    data_provider::DataProvider,
+    layer::{ConsumerLayer, TelemetryConsumer},
+    shutdown::{TelemetryShutdown, TelemetryShutdownItem},
+};
 use crate::constants::DBT_FUSION;
-use crate::{ErrorCode, FsResult};
+
+use dbt_error::{ErrorCode, FsResult};
 
 use dbt_telemetry::serialize::otlp::{export_log, export_span};
-use dbt_telemetry::{SpanEndInfo, TelemetryOutputFlags};
+use dbt_telemetry::{LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags};
 
 use opentelemetry::{KeyValue, global, logs::LoggerProvider, trace::TracerProvider};
 use opentelemetry_otlp::WithExportConfig;
@@ -13,26 +18,29 @@ use opentelemetry_sdk::resource::EnvResourceDetector;
 use opentelemetry_sdk::trace::{SdkTracer, SdkTracerProvider};
 use opentelemetry_sdk::{logs as sdk_logs, trace as sdk_trace};
 use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION};
-use tracing::{Subscriber, span};
-use tracing_subscriber::Layer;
-use tracing_subscriber::layer::Context;
+
+/// Build an OTLP layer with HTTP exporters. If exporters cannot be built,
+/// it will return None.
+pub fn build_otlp_layer() -> Option<(ConsumerLayer, Vec<TelemetryShutdownItem>)> {
+    let layer = OTLPExporterLayer::new_with_http_export()?;
+
+    let shutdown_items: Vec<TelemetryShutdownItem> = vec![
+        Box::new(layer.tracer_provider()),
+        Box::new(layer.logger_provider()),
+    ];
+
+    Some((Box::new(layer), shutdown_items))
+}
 
 /// A tracing layer that reads telemetry data and sends it over HTTP to OTLP endpoint
-pub struct OTLPExporterLayer<S>
-where
-    S: Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
-{
+pub struct OTLPExporterLayer {
     tracer_provider: SdkTracerProvider,
     logger_provider: SdkLoggerProvider,
     tracer: SdkTracer,
     logger: SdkLogger,
-    __phantom: std::marker::PhantomData<S>,
 }
 
-impl<S> OTLPExporterLayer<S>
-where
-    S: Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
-{
+impl OTLPExporterLayer {
     /// Creates a new OTLPExporterLayer from provided exporters
     pub(crate) fn new(
         trace_exporter: impl sdk_trace::SpanExporter + 'static,
@@ -74,7 +82,6 @@ where
             logger_provider,
             tracer,
             logger,
-            __phantom: std::marker::PhantomData,
         }
     }
 
@@ -146,48 +153,26 @@ impl TelemetryShutdown for SdkLoggerProvider {
     }
 }
 
-impl<S> Layer<S> for OTLPExporterLayer<S>
-where
-    S: Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
-{
-    // We record spans to OTLP only when they are closed, so we don't need to do anything on new span
-    fn on_close(&self, id: span::Id, ctx: Context<'_, S>) {
-        let span = ctx
-            .span(&id)
-            .expect("Span must exist for id in the current context");
+impl TelemetryConsumer for OTLPExporterLayer {
+    fn is_span_enabled(&self, span: &SpanStartInfo, _meta: &tracing::Metadata) -> bool {
+        span.attributes
+            .output_flags()
+            .contains(TelemetryOutputFlags::EXPORT_OTLP)
+    }
 
-        // Get the TelemetryRecord from extensions. It must be there unless we messed
-        // up data layer / layer order.
-        let extensions = span.extensions();
-
-        let Some(span_data) = extensions.get::<SpanEndInfo>() else {
-            unreachable!("Unexpectedly missing span end data!");
-        };
-
-        // Honor export flags: only export if OTLP export is enabled
-        if !span_data
+    fn is_log_enabled(&self, log_record: &LogRecordInfo, _meta: &tracing::Metadata) -> bool {
+        log_record
             .attributes
             .output_flags()
             .contains(TelemetryOutputFlags::EXPORT_OTLP)
-        {
-            return;
-        }
-
-        export_span(&self.tracer, span_data);
     }
 
-    fn on_event(&self, _event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
-        // Add log record as events
-        with_current_thread_log_record(|log_record| {
-            // Honor export flags: only export if OTLP export is enabled
-            if !log_record
-                .attributes
-                .output_flags()
-                .contains(TelemetryOutputFlags::EXPORT_OTLP)
-            {
-                return;
-            }
-            export_log(&self.logger, log_record);
-        });
+    // We record spans to OTLP only when they are closed, so we don't need to do anything on new span
+    fn on_span_end(&self, span: &SpanEndInfo, _: &DataProvider<'_>) {
+        export_span(&self.tracer, span);
+    }
+
+    fn on_log_record(&self, record: &LogRecordInfo, _: &DataProvider<'_>) {
+        export_log(&self.logger, record);
     }
 }

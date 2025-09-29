@@ -1,12 +1,29 @@
 use std::path::PathBuf;
 
-use super::convert::log_level_filter_to_tracing;
+use super::{
+    convert::log_level_filter_to_tracing,
+    layer::{ConsumerLayer, MiddlewareLayer},
+    layers::{
+        file_log_layer::build_file_log_layer_with_background_writer,
+        jsonl_writer::{build_jsonl_layer, build_jsonl_layer_with_background_writer},
+        metric_aggregator::TelemetryMetricAggregator,
+        otlp::build_otlp_layer,
+        parquet_writer::build_parquet_writer_layer,
+        query_log::build_query_log_layer_with_background_writer,
+        tui_layer::build_tui_layer,
+    },
+    shutdown::TelemetryShutdownItem,
+};
 use crate::{
-    constants::{DBT_LOG_DIR_NAME, DBT_METADATA_DIR_NAME, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME},
+    constants::{
+        DBT_DEAFULT_LOG_FILE_NAME, DBT_DEAFULT_QUERY_LOG_FILE_NAME, DBT_LOG_DIR_NAME,
+        DBT_METADATA_DIR_NAME, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME,
+    },
     io_args::IoArgs,
     io_utils::determine_project_dir,
     logging::LogFormat,
 };
+use dbt_error::{ErrorCode, FsResult};
 use tracing::level_filters::LevelFilter;
 
 /// Configuration for tracing.
@@ -19,28 +36,27 @@ pub struct FsTraceConfig {
     /// Name of the package emitting the telemetry, e.g. `dbt-cli` or `dbt-lsp`
     pub(super) package: &'static str,
     /// Tracing level filter, which specifies maximum verbosity (inverse
-    /// of log level)
+    /// of log level) for tui & jsonl log sinks.
     pub(super) max_log_verbosity: LevelFilter,
+    /// Maximum verbosity for the file log sink.
+    pub(super) max_file_log_verbosity: LevelFilter,
     /// Fully resolved path for production telemetry output (JSONL format).
     ///
     /// If Some(), enables corresponding output layer.
-    pub(super) otm_file_path: Option<PathBuf>,
+    pub(super) otel_file_path: Option<PathBuf>,
     /// Fully resolved path for production telemetry output (Parquet format)
     ///
     /// If Some(), enables corresponding output layer.
-    pub(super) otm_parquet_file_path: Option<PathBuf>,
+    pub(super) otel_parquet_file_path: Option<PathBuf>,
     /// Fully resolved path to the directory where log-related files
     /// (e.g. dbt.log, query log) should be written.
     pub(super) log_path: PathBuf,
-    /// Invocation ID. Currently used as trace ID for correlation
+    /// Invocation ID. Used as trace ID for correlation
     pub(super) invocation_id: uuid::Uuid,
     /// If True, traces will be forwarded to OTLP endpoints, if any
     /// are set via OTEL environment variables. See `OTLPExporterLayer::new`
     pub(super) export_to_otlp: bool,
-    /// If True, progress bar layer will be enabled
-    pub(super) enable_progress: bool,
-    /// The log format being used. As of today (while old logging infra exists) - this is used to
-    /// enable jsonl output on stdout if needed.
+    /// The log format being used
     pub(super) log_format: LogFormat,
     /// If True, enables separate query log file output
     pub(super) enable_query_log: bool,
@@ -51,11 +67,11 @@ impl Default for FsTraceConfig {
         Self {
             package: "unknown",
             max_log_verbosity: LevelFilter::INFO,
-            otm_file_path: None,
-            otm_parquet_file_path: None,
+            max_file_log_verbosity: LevelFilter::DEBUG,
+            otel_file_path: None,
+            otel_parquet_file_path: None,
             log_path: PathBuf::new(),
-            invocation_id: uuid::Uuid::new_v4(),
-            enable_progress: false,
+            invocation_id: uuid::Uuid::now_v7(),
             export_to_otlp: false,
             log_format: LogFormat::Default,
             enable_query_log: false,
@@ -64,7 +80,7 @@ impl Default for FsTraceConfig {
 }
 
 /// Helper function to calculate in_dir and out_dir for tracing configuration.
-/// This implements the same logic as execute_setup_and_all_phases but without canonicalization.
+/// This implements the same logic as `execute_setup_and_all_phases` but without canonicalization.
 /// Unlike the project setup logic, this function never fails - it falls back to using the current
 /// working directory if no project directory can be determined.
 fn calculate_trace_dirs(
@@ -100,7 +116,9 @@ impl FsTraceConfig {
     ///   `{project_dir}/target`. Target path is used for Parquet trace output.
     /// * `log_path` - Optional custom path for log files. If None, uses `{project_dir}/logs`.
     ///   If relative, resolved relative to `project_dir`
-    /// * `max_log_verbosity` - Maximum tracing level filter (higher = more verbose tracing output)
+    /// * `max_log_verbosity` - Maximum tracing level filter (higher = more verbose tracing output).
+    ///   This controls verbosity for TUI and JSONL log output
+    /// * `max_file_log_verbosity` - Maximum tracing level filter for file log output
     /// * `otel_file_name` - Optional filename for JSONL trace output. If provided,
     ///   creates trace file at `{log_path}/{otel_file_name}`
     /// * `otel_parquet_file_name` - Optional filename for OpenTelemetry Parquet trace output.
@@ -108,9 +126,7 @@ impl FsTraceConfig {
     /// * `invocation_id` - Unique identifier for this execution, used as trace ID for correlation
     /// * `export_to_otlp` - If true, enables forwarding traces to OTLP endpoints configured
     ///   via OTEL environment variables
-    /// * `enable_progress` - If true, enables the progress bar layer (console only)
-    /// * `log_format` - The log format being used. As of today (while old logging infra exists) - this is used to
-    ///   enable jsonl output on stdout if needed.
+    /// * `log_format` - The log format being used
     /// * `enable_query_log` - If true, enables writing a separate query log file
     ///
     /// # Path Resolution
@@ -134,11 +150,11 @@ impl FsTraceConfig {
     ///     None, // Use default target path
     ///     None, // Use default log path
     ///     LevelFilter::INFO,
-    ///     Some("dbt-tm.jsonl".to_string()),
-    ///     Some("dbt-tm.parquet".to_string()),
+    ///     LevelFilter::DEBUG,
+    ///     Some("otel.jsonl".to_string()),
+    ///     Some("otel.parquet".to_string()),
     ///     Uuid::new_v4(),
     ///     false, // Don't export to OTLP
-    ///     true,  // Enable progress bar
     ///     LogFormat::Default, // Use default log format
     ///     true,  // Enable query log
     /// );
@@ -150,11 +166,11 @@ impl FsTraceConfig {
         target_path: Option<&PathBuf>,
         log_path: Option<&PathBuf>,
         max_log_verbosity: LevelFilter,
-        otm_file_name: Option<&str>,
-        otm_parquet_file_name: Option<&str>,
+        max_file_log_verbosity: LevelFilter,
+        otel_file_name: Option<&str>,
+        otel_parquet_file_name: Option<&str>,
         invocation_id: uuid::Uuid,
         export_to_otlp: bool,
-        enable_progress: bool,
         log_format: LogFormat,
         enable_query_log: bool,
     ) -> Self {
@@ -175,12 +191,12 @@ impl FsTraceConfig {
         Self {
             package,
             max_log_verbosity,
-            otm_file_path: otm_file_name.map(|file_name| log_dir_path.join(file_name)),
-            otm_parquet_file_path: otm_parquet_file_name
+            max_file_log_verbosity,
+            otel_file_path: otel_file_name.map(|file_name| log_dir_path.join(file_name)),
+            otel_parquet_file_path: otel_parquet_file_name
                 .map(|file_name| out_dir.join(DBT_METADATA_DIR_NAME).join(file_name)),
             log_path: log_dir_path,
             invocation_id,
-            enable_progress,
             export_to_otlp,
             log_format,
             enable_query_log,
@@ -198,13 +214,12 @@ impl FsTraceConfig {
         let max_log_verbosity = io_args
             .log_level
             .map(|lf| log_level_filter_to_tracing(&lf))
-            .unwrap_or_else(|| {
-                if cfg!(debug_assertions) {
-                    LevelFilter::TRACE
-                } else {
-                    LevelFilter::INFO
-                }
-            });
+            .unwrap_or(LevelFilter::INFO);
+
+        let max_file_log_verbosity = io_args
+            .log_level_file
+            .map(|lf| log_level_filter_to_tracing(&lf))
+            .unwrap_or(LevelFilter::DEBUG);
 
         Self::new(
             package,
@@ -212,13 +227,160 @@ impl FsTraceConfig {
             target_path,
             io_args.log_path.as_ref(),
             max_log_verbosity,
+            max_file_log_verbosity,
             io_args.otel_file_name.as_deref(),
             io_args.otel_parquet_file_name.as_deref(),
             io_args.invocation_id,
             io_args.export_to_otlp,
-            io_args.log_format == LogFormat::Default,
             io_args.log_format,
             true, // Always enable query log for now
         )
+    }
+
+    /// Builds the configured tracing layers and corresponding shutdown items.
+    /// This method handles all path creation and file opening as needed.
+    /// If no layers are configured, returns an empty layer and no shutdown items.
+    pub fn build_layers(
+        &self,
+    ) -> FsResult<(
+        Vec<MiddlewareLayer>,
+        Vec<ConsumerLayer>,
+        Vec<TelemetryShutdownItem>,
+    )> {
+        let mut shutdown_items = Vec::new();
+        let mut consumer_layers = Vec::new();
+
+        // Create jsonl writer layer if file path provided
+        if let Some(file_path) = &self.otel_file_path {
+            // Ensure log directory exists
+            if let Some(log_dir) = file_path.parent() {
+                crate::stdfs::create_dir_all(log_dir)?;
+            }
+
+            // Open file in append mode to avoid overwriting existing telemetry
+            let file = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(file_path)
+                .map_err(|e| {
+                    fs_err!(
+                        ErrorCode::IoError,
+                        "Failed to open telemetry jsonl file for append: {}",
+                        e
+                    )
+                })?;
+
+            let (layer, handle) =
+                build_jsonl_layer_with_background_writer(file, self.max_log_verbosity);
+
+            // Keep a handle for shutdown
+            shutdown_items.push(handle);
+
+            // Create layer and apply user specified filtering
+            consumer_layers.push(layer)
+        };
+
+        // Create jsonl writer layer on stdout if log format is OTEL
+        if self.log_format == LogFormat::Otel {
+            // No shutdown logic as we flushing to stdout as we write anyway
+            consumer_layers.push(build_jsonl_layer(std::io::stdout(), self.max_log_verbosity));
+        };
+
+        // Create parquet writer layer if file path provided
+        if let Some(file_path) = &self.otel_parquet_file_path {
+            // Create the file and initialize the Parquet layer
+            let file_dir = file_path.parent().ok_or_else(|| {
+                fs_err!(
+                    ErrorCode::IoError,
+                    "Failed to get parent directory for file path"
+                )
+            })?;
+
+            crate::stdfs::create_dir_all(file_dir)?;
+
+            let file = std::fs::File::create(file_path)
+                .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create parquet file: {}", e))?;
+
+            let (parquet_layer, writer_handle) = build_parquet_writer_layer(file)?;
+
+            // Keep a handle for shutdown
+            shutdown_items.push(writer_handle);
+
+            // Create layer. User specified filtering is not applied here
+            consumer_layers.push(parquet_layer)
+        };
+
+        // Create progress bar layer if log-format default enabled (but not for Otel)
+        if self.log_format != LogFormat::Otel && self.log_format != LogFormat::Json {
+            // Create layer and apply user specified filtering
+            consumer_layers.push(build_tui_layer(
+                std::io::stdout(),
+                std::io::stderr(),
+                self.max_log_verbosity,
+                self.log_format,
+            ))
+        };
+
+        // If any of the file logs are enabled - create the log directory
+        if self.enable_query_log || self.max_file_log_verbosity != LevelFilter::OFF {
+            // Ensure log directory exists
+            crate::stdfs::create_dir_all(&self.log_path)?;
+        }
+
+        if self.max_file_log_verbosity != LevelFilter::OFF {
+            let file_log_path = self.log_path.join(DBT_DEAFULT_LOG_FILE_NAME);
+
+            // Open file in append mode, same as dbt core.
+            // NOTE: legacy logger based onfra also opens this file with `truncate` as of today.
+            // This is only working because we hold 2 implicit assumptions until full migration to tracing:
+            // 1. We only write end of run summary to the log file, so it comes last anyway
+            // 2. logger based infra flushes on each write, so we shouldn't have interleaved writes
+            let file = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(file_log_path)
+                .map_err(|e| {
+                    fs_err!(
+                        ErrorCode::IoError,
+                        "Failed to open telemetry log file for append: {}",
+                        e
+                    )
+                })?;
+
+            let (file_log_layer, writer_handle) =
+                build_file_log_layer_with_background_writer(file, self.max_file_log_verbosity);
+
+            // Keep a handle for shutdown
+            shutdown_items.push(writer_handle);
+
+            // Create layer. User specified filtering is not applied here
+            consumer_layers.push(file_log_layer)
+        };
+
+        // Create query log writer layer (always enabled; internal-only event sink)
+        if self.enable_query_log {
+            let file_path = self.log_path.join(DBT_DEAFULT_QUERY_LOG_FILE_NAME);
+
+            // Create or truncate existing file
+            let file = crate::stdfs::File::create(&file_path)?;
+
+            let (layer, handle) = build_query_log_layer_with_background_writer(file);
+            shutdown_items.push(handle);
+            consumer_layers.push(layer)
+        };
+
+        // Create OTLP layer - if enabled and endpoint is set via env vars
+        if self.export_to_otlp
+            && let Some((otlp_layer, mut handles)) = build_otlp_layer()
+        {
+            shutdown_items.append(&mut handles);
+            consumer_layers.push(otlp_layer)
+        };
+
+        Ok((
+            vec![Box::new(TelemetryMetricAggregator)],
+            consumer_layers,
+            shutdown_items,
+        ))
     }
 }

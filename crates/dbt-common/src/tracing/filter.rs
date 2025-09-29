@@ -1,98 +1,218 @@
-use dbt_telemetry::{SpanEndInfo, SpanStartInfo, TelemetryRecordRef};
-use tracing_subscriber::{Layer, layer::Context, registry::LookupSpan};
+use super::{data_provider::DataProvider, layer::TelemetryConsumer};
+use dbt_telemetry::{LogRecordInfo, SpanEndInfo, SpanStartInfo};
+use tracing::Metadata;
 
-use crate::tracing::event_info::with_current_thread_log_record;
-use tracing::{Subscriber, span};
+/// A bitmask used to represent which consumers are not interested in a given
+/// telemetry span. Consumers are indexed by their position in the consumer list
+/// of a TelemetryDataLayer.
+#[derive(Debug, Default, Clone, Copy)]
+pub(super) struct FilterMask(u64);
 
-pub struct FilteredOutput<L, S, F> {
-    layer: L,
-    predicate: F,
-    _subscriber: std::marker::PhantomData<S>,
-}
+impl FilterMask {
+    /// Returns an empty filter mask (meaning no consumers are disabled)
+    pub(super) fn empty() -> Self {
+        Self::default()
+    }
 
-pub trait WithOutputFilter<S, F>
-where
-    S: Subscriber + for<'lookup> LookupSpan<'lookup>,
-    F: for<'ctx> Fn(TelemetryRecordRef, &Context<'ctx, S>) -> bool + Send + Sync + 'static,
-    Self: Sized,
-{
-    fn with_output_filter(self, predicate: F) -> FilteredOutput<Self, S, F>;
-}
+    /// Returns a full filter mask (meaning all consumers are disabled)
+    pub(super) fn disabled() -> Self {
+        Self(u64::MAX)
+    }
 
-impl<L, S, F> WithOutputFilter<S, F> for L
-where
-    L: Layer<S>,
-    S: Subscriber + for<'lookup> LookupSpan<'lookup>,
-    F: for<'ctx> Fn(TelemetryRecordRef, &Context<'ctx, S>) -> bool + Send + Sync + 'static,
-{
-    fn with_output_filter(self, predicate: F) -> FilteredOutput<Self, S, F> {
-        FilteredOutput::new(self, predicate)
+    /// Returns true if this is a filter mask that disables all consumers
+    pub(super) fn is_disabled(&self) -> bool {
+        self.0 == u64::MAX
+    }
+
+    pub(super) fn set_filtered(&mut self, index: usize) {
+        // Shift would panic in debug if index >= 64, but we add a nice message via debug_assert
+        debug_assert!(
+            index < 64,
+            "Exceeding mask length. Index must be less than 64"
+        );
+        self.0 |= 1 << index;
+    }
+
+    pub(super) fn is_filtered(&self, index: usize) -> bool {
+        // Shift would panic in debug if index >= 64, but we add a nice message via debug_assert
+        debug_assert!(
+            index < 64,
+            "Exceeding mask length. Index must be less than 64"
+        );
+        self.0 & (1 << index) != 0
     }
 }
 
-impl<L, S, F> FilteredOutput<L, S, F>
+pub trait TelemetryFilter {
+    fn is_span_enabled(&self, span: &SpanStartInfo, meta: &Metadata) -> bool;
+
+    fn is_log_enabled(&self, span: &LogRecordInfo, meta: &Metadata) -> bool;
+}
+
+pub struct FilteredTelemetryConsumer<C, F>
 where
-    L: Layer<S>,
-    S: Subscriber + for<'lookup> LookupSpan<'lookup>,
-    F: for<'ctx> Fn(TelemetryRecordRef, &Context<'ctx, S>) -> bool + Send + Sync + 'static,
+    C: TelemetryConsumer,
+    F: TelemetryFilter,
 {
-    pub fn new(layer: L, predicate: F) -> Self {
+    inner: C,
+    filter: F,
+}
+
+impl<C, F> FilteredTelemetryConsumer<C, F>
+where
+    C: TelemetryConsumer,
+    F: TelemetryFilter,
+{
+    pub fn new(consumer: C, filter: F) -> Self {
         Self {
-            layer,
-            predicate,
-            _subscriber: std::marker::PhantomData,
+            inner: consumer,
+            filter,
         }
     }
 }
 
-impl<L, S, F> Layer<S> for FilteredOutput<L, S, F>
+impl<C, F> TelemetryConsumer for FilteredTelemetryConsumer<C, F>
 where
-    L: Layer<S>,
-    S: Subscriber + for<'lookup> LookupSpan<'lookup> + 'static,
-    F: for<'ctx> Fn(TelemetryRecordRef, &Context<'ctx, S>) -> bool + Send + Sync + 'static,
+    C: TelemetryConsumer,
+    F: TelemetryFilter,
 {
-    fn on_new_span(&self, attrs: &span::Attributes<'_>, id: &span::Id, ctx: Context<'_, S>) {
-        let span = ctx
-            .span(id)
-            .expect("Span must exist for id in the current context");
+    fn is_span_enabled(&self, span: &SpanStartInfo, meta: &Metadata) -> bool {
+        self.filter.is_span_enabled(span, meta) && self.inner.is_span_enabled(span, meta)
+    }
 
-        // Access extension in a separate block to avoid locking it when calling wrapped layer.
-        let enabled = if let Some(span_start) = span.extensions().get::<SpanStartInfo>() {
-            (self.predicate)(TelemetryRecordRef::SpanStart(span_start), &ctx)
-        } else {
-            unreachable!("Unexpectedly missing span start data!");
-        };
+    fn is_log_enabled(&self, span: &LogRecordInfo, meta: &Metadata) -> bool {
+        self.filter.is_log_enabled(span, meta) && self.inner.is_log_enabled(span, meta)
+    }
 
-        if enabled {
-            self.layer.on_new_span(attrs, id, ctx.clone());
+    fn on_span_start(&self, span: &SpanStartInfo, metric_provider: &DataProvider<'_>) {
+        self.inner.on_span_start(span, metric_provider);
+    }
+
+    fn on_span_end(&self, span: &SpanEndInfo, metric_provider: &DataProvider<'_>) {
+        self.inner.on_span_end(span, metric_provider);
+    }
+
+    fn on_log_record(&self, event: &LogRecordInfo, metric_provider: &DataProvider<'_>) {
+        self.inner.on_log_record(event, metric_provider);
+    }
+}
+
+/// A convenience [`TelemetryFilter`] that delegates filtering decisions to user
+/// supplied closure(s).
+///
+/// The generic parameter S is a closure (Fn) that receives a SpanStartInfo and its
+/// Metadata and returns true if the span should be enabled. Likewise, L is a
+/// closure that receives a LogRecordInfo and its Metadata to decide whether the
+/// log event should be enabled.
+///
+/// We provide convenience functions `enable_all_spans`, `disable_all_spans`,
+/// `enable_all_logs`, and `disable_all_logs` that can be used when you only want
+/// to filter one of the two types of telemetry records.
+///
+/// This is useful when constructing lightweight, ad‑hoc filters without having
+/// to implement a dedicated type.
+///
+/// Note that for filtering based on level you can use [`tracing::level_filters::LevelFilter`]
+/// directly as it implements the filter trait.
+pub struct TelemetryFilterFn<S, L>
+where
+    S: Fn(&SpanStartInfo, &Metadata) -> bool,
+    L: Fn(&LogRecordInfo, &Metadata) -> bool,
+{
+    is_span_enabled: S,
+    is_log_enabled: L,
+}
+
+impl<S, L> TelemetryFilterFn<S, L>
+where
+    S: Fn(&SpanStartInfo, &Metadata) -> bool,
+    L: Fn(&LogRecordInfo, &Metadata) -> bool,
+{
+    /// Creates a [`TelemetryFilterFn`] with optional span and log filters.
+    pub fn new(is_span_enabled: S, is_log_enabled: L) -> Self {
+        Self {
+            is_span_enabled,
+            is_log_enabled,
+        }
+    }
+}
+
+// Convenience functions for common cases
+pub fn disable_all_spans(_span: &SpanStartInfo, _meta: &Metadata) -> bool {
+    false
+}
+
+pub fn enable_all_spans(_span: &SpanStartInfo, _meta: &Metadata) -> bool {
+    true
+}
+
+pub fn disable_all_logs(_log: &LogRecordInfo, _meta: &Metadata) -> bool {
+    false
+}
+
+pub fn enable_all_logs(_log: &LogRecordInfo, _meta: &Metadata) -> bool {
+    true
+}
+
+impl<S, L> TelemetryFilter for TelemetryFilterFn<S, L>
+where
+    S: Fn(&SpanStartInfo, &Metadata) -> bool,
+    L: Fn(&LogRecordInfo, &Metadata) -> bool,
+{
+    fn is_span_enabled(&self, span: &SpanStartInfo, meta: &Metadata) -> bool {
+        (self.is_span_enabled)(span, meta)
+    }
+
+    fn is_log_enabled(&self, span: &LogRecordInfo, meta: &Metadata) -> bool {
+        (self.is_log_enabled)(span, meta)
+    }
+}
+
+impl TelemetryFilter for tracing::level_filters::LevelFilter {
+    fn is_span_enabled(&self, _span: &SpanStartInfo, meta: &Metadata) -> bool {
+        meta.level() <= self
+    }
+
+    fn is_log_enabled(&self, _span: &LogRecordInfo, meta: &Metadata) -> bool {
+        meta.level() <= self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FilterMask;
+
+    #[test]
+    fn empty_mask_reports_empty() {
+        let mask = FilterMask::empty();
+
+        for i in 0..64 {
+            assert!(!mask.is_filtered(i));
         }
     }
 
-    fn on_close(&self, id: span::Id, ctx: Context<'_, S>) {
-        let span = ctx
-            .span(&id)
-            .expect("Span must exist for id in the current context");
+    #[test]
+    fn full_mask_reports_full() {
+        let mask = FilterMask::disabled();
 
-        // Access extension in a separate block to avoid locking it when calling wrapped layer.
-        let enabled = if let Some(span_end) = span.extensions().get::<SpanEndInfo>() {
-            (self.predicate)(TelemetryRecordRef::SpanEnd(span_end), &ctx)
-        } else {
-            unreachable!("Unexpectedly missing span start data!");
-        };
-
-        if enabled {
-            self.layer.on_close(id, ctx.clone());
+        assert!(mask.is_disabled());
+        for i in 0..64 {
+            assert!(mask.is_filtered(i));
         }
     }
 
-    fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
-        let mut enabled = false;
-        with_current_thread_log_record(|log_record| {
-            enabled = (self.predicate)(TelemetryRecordRef::LogRecord(log_record), &ctx);
-        });
+    #[test]
+    fn set_filtered_marks_bits() {
+        let mut mask = FilterMask::empty();
 
-        if enabled {
-            self.layer.on_event(event, ctx);
-        }
+        assert!(!mask.is_filtered(1));
+        assert!(!mask.is_filtered(63));
+
+        mask.set_filtered(1);
+        mask.set_filtered(63);
+
+        assert!(mask.is_filtered(1));
+        assert!(mask.is_filtered(63));
+        assert!(!mask.is_filtered(0));
     }
 }

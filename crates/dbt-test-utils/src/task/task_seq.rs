@@ -1,4 +1,5 @@
 use crate::task::TestError;
+use crate::task::env::TracingReloadHandle;
 
 use super::io::{RmTask, TouchTask};
 use super::tasks::{NopTask, ShExecute};
@@ -7,14 +8,22 @@ use super::{ProjectEnv, Task, TestEnv, TestResult};
 
 use dbt_common::error::FsResult;
 use dbt_common::string_utils::split_into_whitespace_and_brackets;
-use dbt_common::tracing::{FsTraceConfig, init_tracing};
+use dbt_common::tracing::init_tracing_with_consumer_layer;
+use dbt_common::tracing::reload::create_data_layer_for_tests;
 use std::future::Future;
 use std::iter;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
 pub type BoxedSendFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
-pub type CommandFn = dyn Fn(Vec<String>, PathBuf, std::fs::File, std::fs::File) -> BoxedSendFuture<FsResult<i32>>
+pub type CommandFn = dyn Fn(
+        Vec<String>,
+        PathBuf,
+        PathBuf,
+        std::fs::File,
+        std::fs::File,
+        TracingReloadHandle,
+    ) -> BoxedSendFuture<FsResult<i32>>
     + Send
     + Sync;
 
@@ -133,16 +142,24 @@ impl TaskSeq {
         project_env: &ProjectEnv,
         set_env: &[(&'static str, &'static str)],
     ) -> TestResult<()> {
-        let test_env = project_env.create_test_env()?;
+        // Try initializing tracing. It will succeed only once per process, because it
+        // sets global subscriber. We initalize with a special reloadable data layer
+        // that can be populated with actual consumer layers by individual tasks.
+        // We use fixed fallback trace ID of 1 for all tests for reproducibility.
+        let (data_layer, reload_handle) = create_data_layer_for_tests(1u128, vec![], vec![]);
+
+        let _ = init_tracing_with_consumer_layer(
+            tracing::level_filters::LevelFilter::TRACE,
+            "dbt-tests",
+            data_layer,
+        )?;
+
+        let mut test_env = project_env.create_test_env()?;
+        test_env = test_env.with_tracing_handle(reload_handle);
+
         let _cwd_guard = CurrentWorkingDirGuard::new(&project_env.absolute_project_dir);
 
-        // Init tracing
-        let mut telemetry_guard = init_tracing(FsTraceConfig::default()).expect("Should init");
-
         run_test_tasks(&self.tasks, project_env, &test_env, set_env).await?;
-
-        // Shutdown tracing
-        telemetry_guard.shutdown();
 
         Ok(())
     }

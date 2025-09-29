@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use dbt_telemetry::{QueryExecuted, TelemetryRecordRef, create_process_event_data};
+use dbt_telemetry::create_process_event_data;
 use tracing::{Subscriber, level_filters::LevelFilter, span};
 
 use tracing_subscriber::{
@@ -10,20 +10,10 @@ use tracing_subscriber::{
 };
 
 use super::{
-    background_writer::BackgroundWriter,
-    config::FsTraceConfig,
-    event_info::store_event_attributes,
-    formatters::query_log::format_query_log_event,
-    layers::{
-        data_layer::TelemetryDataLayer, jsonl_writer::TelemetryJsonlWriterLayer,
-        otlp::OTLPExporterLayer, parquet_writer::TelemetryParquetWriterLayer,
-        pretty_writer::TelemetryPrettyWriterLayer, progress_bar::ProgressBarLayer,
-    },
+    config::FsTraceConfig, event_info::store_event_attributes,
+    layers::data_layer::TelemetryDataLayer, shutdown::TelemetryShutdownItem,
 };
-use crate::{
-    ErrorCode, FsError, FsResult, constants::DBT_DEAFULT_QUERY_LOG_FILE_NAME, logging::LogFormat,
-    tracing::filter::WithOutputFilter,
-};
+use dbt_error::{FsError, FsResult};
 
 // We use a global to store a special "process" span Id, that
 // is created during initialization and used as a fallback span
@@ -52,28 +42,21 @@ where
     ctx.span(process_span_id)
 }
 
-/// This trait is used by the handle that telemetry initialization returns,
-/// to allow the caller to shut down the telemetry system gracefully.
-pub trait TelemetryShutdown {
-    fn shutdown(&mut self) -> FsResult<()>;
-}
+pub type BaseSubscriber = Layered<EnvFilter, Registry>;
 
 /// The handle returned by the telemetry initialization function.
 ///
 /// Make sure to call `shutdown` on it when you are done with telemetry,
 /// to ensure that all telemetry resources are released properly.
 pub struct TelemetryHandle {
-    items: Vec<Box<dyn TelemetryShutdown + Send>>,
+    items: Vec<TelemetryShutdownItem>,
     // We have Option here to allow first dropping the handle
     // during shutdown, and then closing all layers
     process_span_handle: Option<span::Span>,
 }
 
 impl TelemetryHandle {
-    pub(crate) fn new(
-        items: Vec<Box<dyn TelemetryShutdown + Send>>,
-        process_span_handle: span::Span,
-    ) -> Self {
+    pub(crate) fn new(items: Vec<TelemetryShutdownItem>, process_span_handle: span::Span) -> Self {
         TelemetryHandle {
             items,
             process_span_handle: Some(process_span_handle),
@@ -97,54 +80,70 @@ impl TelemetryHandle {
     }
 }
 
-/// Initializes tracing with the provided configuration and default layers (aka consumers).
+/// Initializes tracing with consumer layers defined by the provided configuration.
+///
+/// This function will set up a global tracing subscriber and will fail on re-entry.
+///
+/// If you need to change or add layers after initialization, `init_tracing_with_consumer_layer`
+/// can be used to set up a reloadable data layer. See `super::reload::create_realodable_data_layer`.
+///
+/// # Returns
+///
+/// On success, returns a `TelemetryHandle` that should be used for graceful shutdown.
 pub fn init_tracing(config: FsTraceConfig) -> FsResult<TelemetryHandle> {
-    init_tracing_with_layer(
-        config,
-        None::<Box<dyn Layer<Layered<EnvFilter, Registry>> + Send + Sync>>,
-    )
+    // Convert invocation ID to trace ID
+    let trace_id = config.invocation_id.as_u128();
+
+    let (middlewares, consumer_layers, shutdown_items) = config.build_layers()?;
+
+    // Strip code location in non-debug builds
+    let strip_code_location = !cfg!(debug_assertions);
+
+    let data_layer = TelemetryDataLayer::new(
+        trace_id,
+        strip_code_location,
+        middlewares.into_iter(),
+        consumer_layers.into_iter(),
+    );
+
+    let process_span =
+        init_tracing_with_consumer_layer(config.max_log_verbosity, config.package, data_layer)?;
+
+    Ok(TelemetryHandle::new(shutdown_items, process_span))
 }
 
-/// Initializes tracing with the provided configuration and an optional extra (consuming) layer(s).
+/// Initializes tracing with the provided data layer, which is ultimately
+/// composed of middleware and consumer layers.
 ///
-/// If you need to add multiple consumers, remember that `Vec<Layer>` is also a valid layer!
+/// This function will set up a global tracing subscriber and will fail on re-entry.
 ///
-/// IMPORTANT: there are a number of extra constraints on the `extra_layer` beyond what
-/// `tracing` itself implies:
-/// - Never rely on or read span/event attributes (aka structured fields)! All of the
-///   necessary data for your layer must either come from span/event metadata or
-///   from structured data as described below. If you lack something, you must
-///   extend the schema of `SpanAttributes` or `LogRecordInfo` definitions and pass
-///   new fields at call-sites accordingly.
-/// - Prefer structured data available in span extensions for spans
-///   See `dbt-common::tracing::jsonl_writer::TelemetryWriterLayer` `on_new_span` and
-///   `on_close` methods for example.
-/// - Use data available via `event_info::with_current_thread_event_data` to
-///   access structured event data. See `dbt-common::tracing::jsonl_writer::TelemetryWriterLayer`
-///   `on_event` method for example.
-/// - Extra layer should never return `false` from `enabled` method. Remember that any layer
-///   that returns `false` turns that span/event off for all layers, which will break
-///   our guarantees about structured data availability.
-///   Instead use `with_filter` method to apply filtering and access structured data
-///   inside the filtered closure if needed.
-/// - Layers must extract event data in the thread where `on_event` is called. Thus,
-///   even if some processing must be moved into a different thread (including async tasks),
-///   the data should be extracted first and cloned into the new thread.
-pub fn init_tracing_with_layer<L>(
-    config: FsTraceConfig,
-    extra_layer: L,
-) -> FsResult<TelemetryHandle>
-where
-    L: Layer<Layered<EnvFilter, Registry>> + Send + Sync + 'static,
-{
+/// If you need to change or add layers after initialization, use `super::reload::create_realodable_data_layer`,
+/// to get a reloadable data layer.
+///
+/// IMPORTANT: there are a number of extra constraints on consumer layers beyond what
+/// the `TelemetryConsumer` trait itself implies:
+/// - Never rely on or read span/event attributes provided by `tracing` directly! All of the
+///   necessary data for your consumer must come from the structured records (`SpanStartInfo`,
+///   `SpanEndInfo`, `LogRecordInfo`). If you lack something, extend the schema of
+///   an existing event or add new one and pass new fields at call-sites accordingly.
+/// - Apply filtering via `with_filter`, `with_span_filter` and/or `with_log_filter`
+///   methods defined for all consumer layers - this will facilitate modularity
+///
+/// # Returns
+///
+/// On success, returns the "process" span, used as a parent span fallback of last resort
+/// in data layer for events (but not for spans!).
+pub fn init_tracing_with_consumer_layer<D: Layer<BaseSubscriber> + Send + Sync + 'static>(
+    max_log_verbosity: LevelFilter,
+    package: &str,
+    data_layer: D,
+) -> FsResult<span::Span> {
     // Check if tracing is already initialized
     if PROCESS_SPAN.get().is_some() {
         return Err(unexpected_fs_err!("Tracing is already initialized"));
     }
 
-    let package = config.package;
-
-    let (subscriber, shutdown_items) = create_tracing_subcriber_with_layer(config, extra_layer)?;
+    let subscriber = create_tracing_subcriber_with_layer(max_log_verbosity, data_layer);
 
     tracing::subscriber::set_global_default(subscriber)
         .map_err(|_| unexpected_fs_err!("Failed to set-up tracing"))?;
@@ -157,25 +156,18 @@ where
         .set(process_span.id().expect("Process span must have an ID"))
         .expect("Process span must be set only once");
 
-    Ok(TelemetryHandle::new(shutdown_items, process_span))
+    Ok(process_span)
 }
 
-pub(crate) fn create_tracing_subcriber_with_layer<L>(
-    config: FsTraceConfig,
-    extra_layer: L,
-) -> FsResult<(
-    impl Subscriber + Send + Sync + 'static,
-    Vec<Box<dyn TelemetryShutdown + Send>>,
-)>
-where
-    L: Layer<Layered<EnvFilter, Registry>> + Send + Sync + 'static,
-{
-    // Convert invocation ID to trace ID
-    let trace_id = config.invocation_id.as_u128();
-
-    // This will hold all items that need to be shutdown before the process exits.
-    let mut shutdown_items: Vec<Box<dyn TelemetryShutdown + Send>> = Vec::new();
-
+/// Creates a tracing subscriber implementing our telemetry data pipeline.
+///
+/// See module README for details on the pipeline.
+pub(super) fn create_tracing_subcriber_with_layer<
+    D: Layer<BaseSubscriber> + Send + Sync + 'static,
+>(
+    max_log_verbosity: LevelFilter,
+    data_layer: D,
+) -> impl Subscriber + Send + Sync + 'static {
     // Set-up global filters first.
     //
     // IMPORTANT! This is not the user provided output log level!
@@ -187,7 +179,7 @@ where
     // and other consumers.
     //
     // In addition to that, in debug builds we allow RUST_LOG to control the global level filter
-    let base_telemetry_level = if config.max_log_verbosity > LevelFilter::DEBUG {
+    let base_telemetry_level = if max_log_verbosity > LevelFilter::DEBUG {
         LevelFilter::TRACE
     } else {
         LevelFilter::DEBUG
@@ -211,132 +203,8 @@ where
         // Shut off OTLP exporter's own logging
         .add_directive("opentelemetry=off".parse().expect("Must be ok"));
 
-    // Strip code location in non-debug builds
-    let strip_code_location = !cfg!(debug_assertions);
-
-    // Create the data layer
-    let data_layer = TelemetryDataLayer::new(trace_id, strip_code_location);
-
-    // Create jsonl writer layer if file path provided
-    let jsonl_writer_layer = if let Some(file_path) = config.otm_file_path {
-        // Open file in append mode to avoid overwriting existing telemetry
-        let file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&file_path)
-            .map_err(|e| {
-                fs_err!(
-                    ErrorCode::IoError,
-                    "Failed to open telemetry jsonl file for append: {}",
-                    e
-                )
-            })?;
-        let (writer, handle) = BackgroundWriter::new(file);
-
-        // Keep a handle for shutdown
-        shutdown_items.push(Box::new(handle));
-
-        // Create layer and apply user specified filtering
-        Some(TelemetryJsonlWriterLayer::new(writer).with_filter(config.max_log_verbosity))
-    } else {
-        None
-    };
-
-    // Create jsonl writer layer on stdout if log format is OTEL
-    let jsonl_stdout_writer_layer = if config.log_format == LogFormat::Otel {
-        // No shutdown logic as we flushing to stdout as we write anyway
-        Some(
-            TelemetryJsonlWriterLayer::new(std::io::stdout()).with_filter(config.max_log_verbosity),
-        )
-    } else {
-        None
-    };
-
-    // Create parquet writer layer if file path provided
-    let parquet_writer_layer = if let Some(file_path) = config.otm_parquet_file_path {
-        // Create the file and initialize the Parquet layer
-        let file_dir = file_path.parent().ok_or_else(|| {
-            fs_err!(
-                ErrorCode::IoError,
-                "Failed to get parent directory for file path"
-            )
-        })?;
-
-        crate::stdfs::create_dir_all(file_dir)?;
-
-        let file = std::fs::File::create(&file_path)
-            .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to create parquet file: {}", e))?;
-
-        let (parquet_layer, writer_handle) = TelemetryParquetWriterLayer::new(file)?;
-
-        shutdown_items.push(Box::new(writer_handle));
-
-        // Create layer. User specified filtering is not applied here
-        Some(parquet_layer)
-    } else {
-        None
-    };
-
-    // Create progress bar layer if log-format default enabled (but not for Otel)
-    let progress_bar_layer = if config.enable_progress && config.log_format != LogFormat::Otel {
-        // Create layer and apply user specified filtering
-        Some(ProgressBarLayer.with_filter(config.max_log_verbosity))
-    } else {
-        None
-    };
-
-    // Create query log writer layer (always enabled; internal-only event sink)
-    let query_log_writer_layer = if config.enable_query_log {
-        // Ensure log directory exists
-        crate::stdfs::create_dir_all(&config.log_path)?;
-
-        let file_path = config.log_path.join(DBT_DEAFULT_QUERY_LOG_FILE_NAME);
-
-        // Create or truncate existing file
-        let file = crate::stdfs::File::create(&file_path)?;
-
-        let (writer, handle) = BackgroundWriter::new(file);
-        shutdown_items.push(Box::new(handle));
-        Some(
-            TelemetryPrettyWriterLayer::new(writer, format_query_log_event).with_output_filter(
-                |record, _| match record {
-                    TelemetryRecordRef::SpanEnd(span_end) => span_end
-                        .attributes
-                        .downcast_ref::<QueryExecuted>()
-                        .is_some(),
-                    _ => false,
-                },
-            ),
-        )
-    } else {
-        None
-    };
-
-    // Create OTLP layer - if enabled and endpoint is set via env vars
-    let maybe_otlp_layer = if config.export_to_otlp
-        && let Some(otlp_layer) = OTLPExporterLayer::new_with_http_export()
-    {
-        shutdown_items.push(Box::new(otlp_layer.tracer_provider()));
-        shutdown_items.push(Box::new(otlp_layer.logger_provider()));
-        Some(otlp_layer)
-    } else {
-        None
-    };
-
-    // Compose all layers as sequential except the global filter. The latter
-    // must be passed via `with` below, otherwise registry elides that LevelFilter is off
-    // and disables all tracing
-    let layers = data_layer
-        .and_then(jsonl_writer_layer)
-        .and_then(jsonl_stdout_writer_layer)
-        .and_then(parquet_writer_layer)
-        .and_then(progress_bar_layer)
-        .and_then(query_log_writer_layer)
-        .and_then(maybe_otlp_layer)
-        .and_then(extra_layer);
-
-    // Compose the registry with global filter and all layers
-    let subscriber = Registry::default().with(base_telemetry_filter).with(layers);
-
-    Ok((subscriber, shutdown_items))
+    // Compose the registry with global filter and data layer
+    Registry::default()
+        .with(base_telemetry_filter)
+        .with(data_layer)
 }

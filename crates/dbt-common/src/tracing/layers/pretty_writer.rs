@@ -1,8 +1,10 @@
-use dbt_telemetry::{SpanEndInfo, SpanStartInfo, TelemetryOutputFlags, TelemetryRecordRef};
-use tracing::{Event, Subscriber, span};
-use tracing_subscriber::{Layer, layer::Context, registry::LookupSpan};
+use dbt_telemetry::{
+    LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags, TelemetryRecordRef,
+};
 
-use super::super::{event_info::with_current_thread_log_record, shared_writer::SharedWriter};
+use super::super::{
+    data_provider::DataProvider, layer::TelemetryConsumer, shared_writer::SharedWriter,
+};
 
 pub type TelemetryRecordPrettyFormatter =
     Box<dyn Fn(TelemetryRecordRef, bool) -> Option<String> + Send + Sync>;
@@ -40,78 +42,42 @@ impl TelemetryPrettyWriterLayer {
     }
 }
 
-impl<S> Layer<S> for TelemetryPrettyWriterLayer
-where
-    S: Subscriber + for<'lookup> LookupSpan<'lookup>,
-{
-    fn on_new_span(&self, _attrs: &span::Attributes<'_>, id: &span::Id, ctx: Context<'_, S>) {
-        let span = ctx
-            .span(id)
-            .expect("Span must exist for id in the current context");
+impl TelemetryConsumer for TelemetryPrettyWriterLayer {
+    fn is_span_enabled(&self, span: &SpanStartInfo, _meta: &tracing::Metadata) -> bool {
+        span.attributes.output_flags().contains(self.filter_flag)
+    }
 
-        // Get the TelemetryRecord from extensions. It must be there unless we messed
-        // up data layer / layer order.
-        if let Some(record) = span.extensions().get::<SpanStartInfo>() {
-            // Honor export flags: only write if appropriate output is enabled
-            if !record.attributes.output_flags().contains(self.filter_flag) {
-                return;
-            }
+    fn is_log_enabled(&self, log_record: &LogRecordInfo, _meta: &tracing::Metadata) -> bool {
+        log_record
+            .attributes
+            .output_flags()
+            .contains(self.filter_flag)
+    }
 
-            if let Some(line) = (self.formatter)(TelemetryRecordRef::SpanStart(record), self.is_tty)
-            {
-                // Currently we silently ignore write errors. We expect writers to be
-                // smart enough to avoid trying to write after fatal errors and report
-                // them during shutdown.
-                let _ = self.writer.writeln(&line);
-            }
-        } else {
-            unreachable!("Unexpectedly missing span start data!");
+    fn on_span_start(&self, span: &SpanStartInfo, _: &DataProvider<'_>) {
+        if let Some(line) = (self.formatter)(TelemetryRecordRef::SpanStart(span), self.is_tty) {
+            // Currently we silently ignore write errors. We expect writers to be
+            // smart enough to avoid trying to write after fatal errors and report
+            // them during shutdown.
+            let _ = self.writer.writeln(&line);
         }
     }
 
-    fn on_close(&self, id: span::Id, ctx: Context<'_, S>) {
-        let span = ctx
-            .span(&id)
-            .expect("Span must exist for id in the current context");
-
-        // Get the TelemetryRecord from extensions. It must be there unless we messed
-        // up data layer / layer order.
-        if let Some(record) = span.extensions().get::<SpanEndInfo>() {
-            // Honor export flags: only write if appropriate output is enabled
-            if !record.attributes.output_flags().contains(self.filter_flag) {
-                return;
-            }
-
-            if let Some(line) = (self.formatter)(TelemetryRecordRef::SpanEnd(record), self.is_tty) {
-                // Currently we silently ignore write errors. We expect writers to be
-                // smart enough to avoid trying to write after fatal errors and report
-                // them during shutdown.
-                let _ = self.writer.writeln(&line);
-            }
-        } else {
-            unreachable!("Unexpectedly missing span end data!");
+    fn on_span_end(&self, span: &SpanEndInfo, _: &DataProvider<'_>) {
+        if let Some(line) = (self.formatter)(TelemetryRecordRef::SpanEnd(span), self.is_tty) {
+            // Currently we silently ignore write errors. We expect writers to be
+            // smart enough to avoid trying to write after fatal errors and report
+            // them during shutdown.
+            let _ = self.writer.writeln(&line);
         }
     }
 
-    fn on_event(&self, _event: &Event<'_>, _ctx: Context<'_, S>) {
-        with_current_thread_log_record(|log_record| {
-            // Honor export flags: only write if appropriate output is enabled
-            if !log_record
-                .attributes
-                .output_flags()
-                .contains(self.filter_flag)
-            {
-                return;
-            }
-
-            if let Some(line) =
-                (self.formatter)(TelemetryRecordRef::LogRecord(log_record), self.is_tty)
-            {
-                // Currently we silently ignore write errors. We expect writers to be
-                // smart enough to avoid trying to write after fatal errors and report
-                // them during shutdown.
-                let _ = self.writer.writeln(&line);
-            }
-        });
+    fn on_log_record(&self, record: &LogRecordInfo, _: &DataProvider<'_>) {
+        if let Some(line) = (self.formatter)(TelemetryRecordRef::LogRecord(record), self.is_tty) {
+            // Currently we silently ignore write errors. We expect writers to be
+            // smart enough to avoid trying to write after fatal errors and report
+            // them during shutdown.
+            let _ = self.writer.writeln(&line);
+        }
     }
 }

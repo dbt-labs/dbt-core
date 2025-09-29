@@ -1,7 +1,7 @@
 # Tracing Infrastructure
 
 This module provides a comprehensive tracing infrastructure for Fusion, serving multiple purposes:
-1. **Unified span & events data layer** - The single source of truth for all operations and events in the system
+1. **Unified span & log data layer** - The single source of truth for all operations and events in the system
 2. **Structured telemetry** - Capturing application performance data and metrics for downstream systems (e.g. cloud clients, orchestration, metadata etc.)
 3. **Interactive user experience** - [TBD] Formats data for CLI and user logs
 2. **Developer debugging** - Providing rich debugging information compiled away in release builds
@@ -12,16 +12,10 @@ The tracing infrastructure follows a layered architecture:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Log Facade                                   │
-│                  (log crate API)                                │
-│                 Legacy log! macros                              │
-└─────────────────────────┬───────────────────────────────────────┘
-                          │ (Bridge forwards to tracing)
-                          ▼
-┌─────────────────────────────────────────────────────────────────┐
 │                    Tracing Facade                               │
 │                (tracing crate API)                              │
-│          tracing::instrument, tracing::info!, etc.              │
+│  - tracing::instrument,                                         │
+   - crate::tracing::emit::create_info_span!, etc.                │
 └─────────────────────────┬───────────────────────────────────────┘
                           │
 ┌─────────────────────────▼───────────────────────────────────────┐
@@ -91,34 +85,23 @@ CAVEAT: as of time of writing we are in transitioning from legacy `log` crate to
 ### Basic Span Instrumentation
 
 ```rust
-use tracing::{instrument, info_span};
-
-// On rare ocasion you may want to create spans manually instead of
-// using `#[instrument]` attribute.
-let session_span = tracing::info_span!(
-    "Invocation",
-    _e = ?store_event_attributes(SpanAttributes::Invocation {
-        invocation_id: arg.io.invocation_id.to_string(),
-        version: env!("CARGO_PKG_VERSION").to_string(),
-        host_os: std::env::consts::OS.to_string(),
-        host_arch: std::env::consts::ARCH.to_string(),
-        target: arg.target.clone(),
-        metrics: None,
-    }),
-);
-
-// But be very careful with async boundaties. To see a complex Usage
-// of manually created spans that are used across async boundaries
-// see `run_tasks_with_listener` in `crates/dbt-tasks/src/task_runner.rs`
-// and the associated nested spans in specific tasks like:
-// `run_task` in `crates/dbt-tasks/src/runnable/mod.rs`
+let _sp = create_info_span!(
+    ArtifactWritten {
+        artifact_type: artifact_type as i32,
+        relative_path: rel_path,
+    }
+    .into()
+)
+.entered();
 ```
 
-### About async
+TODO: document recording span status
 
-If your function spawns a task or awaits on an async operation, you must either:
+### About async & thread spawning
+
+If your function spawns a thread, a task or awaits on an async operation, you must either:
 - Instrument the async function itself with `#[instrument]`
-- Or use `.in_current_span()` or ` to ensure the span context is preserved.
+- Or use `.in_current_span()` to ensure the span context is preserved.
 
 ```rust
 use tracing::Instrument;
@@ -148,7 +131,9 @@ The goal is to never pass any unstructured data to the tracing system. Instead, 
 any desired output format, including fancy colored tty logs & progress bars.
 
 ```rust
-tracing::warn!(
+use dbt_common::tracing::emit::create_info_span;
+
+create_info_span!(
     _e = ?store_event_attributes(LogAttributes::Log {
         code: Some(err.code as u16 as u32),
         dbt_core_code: None,
@@ -169,11 +154,10 @@ Trace level spans are captured when `--log-level trace` is set via CLI argument.
 This works in both debug and production builds, allowing for detailed debugging
 in any environment when needed.
 
-Functions instrumented at TRACE level automatically become `SpanAttributes::DevInternal`, capturing:
+Functions instrumented at TRACE level without a telemetry data struct automatically become `CallTrace`, capturing:
 - Function name
 - Code location (file, line, module)
-- Function arguments (when --log-level trace is set)
-- Custom debug fields
+- All structured fields passed to instrumentation, including function arguments if you are using `#[instrument(level = "trace")]`
 
 
 When using `#[instrument(level = "trace")]` and `--log-level trace` is set, function arguments are automatically captured:
@@ -211,42 +195,22 @@ dbt --log-level warn run
 
 **Note**: The `RUST_LOG` environment variable is only respected in debug builds. In production builds, use the `--log-level` CLI argument instead.
 
-## Legacy Log Bridge
-
-The infrastructure includes a bridge that forwards existing `log` crate messages to the tracing system:
-
-### Bridge Implementation
-- **Location**: `fs/sa/crates/dbt-common/src/logging/logger.rs`
-- **Purpose**: Captures legacy log messages and forwards them to tracing
-- **Features**:
-  - Converts log levels to tracing levels
-  - Strips ANSI codes for structured output
-  - Marks bridged messages to prevent double-processing
-  - Maintains backward compatibility during migration
-
-### Usage in Legacy Code
-```rust
-use log::{info, error};
-
-// These will be automatically forwarded to tracing
-info!("Legacy log message");
-error!("Legacy error message");
-```
-
 ## Exporters and Configuration
 
 Tracing output is controlled by configuration and event-level export flags:
 
-- JSONL file: enabled when an `otel_file_name` is configured, written under the resolved log path.
+- JSONL file: enabled via `--otel-file-name` cli arg, written under the resolved log path.
 - JSONL stdout: enabled automatically when `--log-format otel` is selected.
-- Parquet file: enabled when an `otel_parquet_file_name` is configured, written to `{target_path}/metadata/...`.
+- Parquet file: enabled via `--otel-parquet-file-name`, written to `{target_path}/metadata/...`.
 - OTLP export: enabled via the CLI/export flag and standard OTEL env vars for endpoints.
 
-Each event carries export flags that determine destinations. Writers honor these flags:
+Each event carries `TelemetryOutputFlags` flags that determine destinations. Writers honor these flags:
 - `EXPORT_JSONL` → JSONL writers only
 - `EXPORT_PARQUET` → Parquet writer only
 - `EXPORT_OTLP` → OTLP exporter only
 - `EXPORT_ALL` and `EXPORT_JSONL_AND_OTLP` for convenience
+- `OUTPUT_CONSOLE` -> output on the console
+- `OUTPUT_LOG_FILE` -> output to unstructured log file (i.e. dbt.log)
 
 ## Best Practices
 
@@ -254,10 +218,8 @@ Each event carries export flags that determine destinations. Writers honor these
 2. **Prefer `#[instrument]`** over manual span creation for functions
 3. **Use TRACE level** for developer debugging spans with argument capture
 4. **Always use `.in_current_span()`** for all futures that are not async functions, and all async operations that should inherit span context. Prefer instrumenting the async function itself.
-5. **Avoid sensitive data** in span names or attributes - use `skip_all` liberally
 
 ## WIP
 
 * Metrics infrastructure
-* OpenTelemetry configuration
 * Bridging to progress bars and CLI output
