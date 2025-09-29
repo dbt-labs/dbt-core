@@ -70,7 +70,9 @@ pub trait AdapterTyping {
     fn engine(&self) -> &Arc<SqlEngine>;
 
     /// Get the [ResolvedQuoting]
-    fn quoting(&self) -> ResolvedQuoting;
+    fn quoting(&self) -> ResolvedQuoting {
+        self.engine().quoting()
+    }
 
     /// Quote a component of a relation
     fn quote_component(

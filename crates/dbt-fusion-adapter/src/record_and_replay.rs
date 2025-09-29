@@ -13,6 +13,7 @@ use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaBuilder};
 use dashmap::DashMap;
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
+use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_xdbc::{Backend, Connection, QueryCtx, Statement};
 use minijinja::State;
 use once_cell::sync::Lazy;
@@ -204,6 +205,10 @@ impl RecordEngine {
 
     pub fn adapter_type(&self) -> AdapterType {
         self.0.engine.adapter_type()
+    }
+
+    pub fn quoting(&self) -> ResolvedQuoting {
+        self.0.engine.quoting()
     }
 
     pub fn splitter(&self) -> &dyn StmtSplitter {
@@ -440,6 +445,7 @@ struct ReplayEngineInner {
     path: PathBuf,
     /// Adapter config
     config: AdapterConfig,
+    quoting: ResolvedQuoting,
     stmt_splitter: Arc<dyn StmtSplitter>,
     query_comment: QueryCommentConfig,
     type_formatter: Box<dyn TypeFormatter>,
@@ -462,6 +468,7 @@ impl ReplayEngine {
         adapter_type: AdapterType,
         path: PathBuf,
         config: AdapterConfig,
+        quoting: ResolvedQuoting,
         stmt_splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
         type_formatter: Box<dyn TypeFormatter>,
@@ -472,6 +479,7 @@ impl ReplayEngine {
             backend: backend_of(adapter_type),
             path,
             config,
+            quoting,
             stmt_splitter,
             query_comment,
             type_formatter,
@@ -503,6 +511,10 @@ impl ReplayEngine {
 
     pub fn get_config(&self) -> &AdapterConfig {
         &self.0.config
+    }
+
+    pub fn quoting(&self) -> ResolvedQuoting {
+        self.0.quoting
     }
 
     pub fn splitter(&self) -> &dyn StmtSplitter {

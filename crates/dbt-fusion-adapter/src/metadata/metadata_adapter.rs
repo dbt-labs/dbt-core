@@ -229,7 +229,7 @@ pub fn create_schemas_if_not_exists(
             schema.clone(),
             None,
             None,
-            adapter.get_resolved_quoting(),
+            adapter.quoting()
         )?;
         let res =
         match execute_macro(state, &[mock_relation.as_value()], "create_schema") {

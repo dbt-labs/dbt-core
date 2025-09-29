@@ -725,7 +725,7 @@ impl BaseAdapter for BridgeAdapter {
                 schema.to_string(),
                 Some(identifier.to_string()),
                 None,
-                self.typed_adapter().get_resolved_quoting(),
+                self.typed_adapter().quoting(),
             )?;
 
             if let Some(cached_entry) = self.relation_cache.get_relation(&temp_relation) {

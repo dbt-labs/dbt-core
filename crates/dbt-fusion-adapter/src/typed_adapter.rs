@@ -21,7 +21,6 @@ use dbt_schemas::schemas::common::Constraint;
 use dbt_schemas::schemas::common::ConstraintSupport;
 use dbt_schemas::schemas::common::ConstraintType;
 use dbt_schemas::schemas::common::DbtIncrementalStrategy;
-use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfig};
 use dbt_schemas::schemas::project::ModelConfig;
@@ -184,7 +183,23 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         fetch: bool,
         limit: Option<i64>,
         options: Option<HashMap<String, String>>,
-    ) -> AdapterResult<(AdapterResponse, AgateTable)>;
+    ) -> AdapterResult<(AdapterResponse, AgateTable)> {
+        if let Some(replay_adapter) = self.as_replay() {
+            return replay_adapter
+                .replay_execute(state, conn, query_ctx, auto_begin, fetch, limit, options);
+        }
+        self.execute_inner(
+            self.adapter_type().into(),
+            Arc::clone(self.engine()),
+            state,
+            conn,
+            query_ctx,
+            auto_begin,
+            fetch,
+            limit,
+            options,
+        )
+    }
 
     /// Execute a statement, expect no results.
     fn exec_stmt(
@@ -386,15 +401,12 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         identifier: &str,
         quote_key: &ComponentName,
     ) -> AdapterResult<String> {
-        if self.get_resolved_quoting().get_part(quote_key) {
+        if self.quoting().get_part(quote_key) {
             self.quote(state, identifier)
         } else {
             Ok(identifier.to_string())
         }
     }
-
-    /// Get resolved quoting
-    fn get_resolved_quoting(&self) -> ResolvedQuoting;
 
     /// Quote seed column, default to true if not provided
     /// reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1072
@@ -1074,6 +1086,18 @@ pub trait ReplayAdapter: TypedBaseAdapter {
         state: Option<&State>,
         node_id: Option<String>,
     ) -> AdapterResult<Box<dyn Connection>>;
+
+    #[allow(clippy::too_many_arguments)]
+    fn replay_execute(
+        &self,
+        state: Option<&State>,
+        conn: &'_ mut dyn Connection,
+        query_ctx: &QueryCtx,
+        auto_begin: bool,
+        fetch: bool,
+        limit: Option<i64>,
+        options: Option<HashMap<String, String>>,
+    ) -> AdapterResult<(AdapterResponse, AgateTable)>;
 
     fn replay_convert_type(&self, state: &State, data_type: &DataType) -> AdapterResult<String>;
 

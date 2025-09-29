@@ -21,6 +21,7 @@ use dbt_common::create_debug_span;
 use dbt_common::hashing::code_hash;
 use dbt_common::tracing::span_info::record_current_span_status_from_attrs;
 use dbt_frontend_common::dialect::Dialect;
+use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::telemetry::{QueryExecuted, QueryOutcome};
 use dbt_xdbc::semaphore::Semaphore;
 use dbt_xdbc::{Backend, Connection, Database, QueryCtx, Statement, connection, database, driver};
@@ -132,6 +133,8 @@ pub struct ActualEngine {
     configured_databases: RwLock<DatabaseMap>,
     /// Semaphore for limiting the number of concurrent connections
     semaphore: Arc<Semaphore>,
+    /// Resolved quoting policy
+    quoting: ResolvedQuoting,
     /// Statement splitter
     splitter: Arc<dyn StmtSplitter>,
     /// Query comment config
@@ -148,6 +151,7 @@ impl ActualEngine {
         adapter_type: AdapterType,
         auth: Arc<dyn Auth>,
         config: AdapterConfig,
+        quoting: ResolvedQuoting,
         splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
         type_formatter: Box<dyn TypeFormatter>,
@@ -168,6 +172,7 @@ impl ActualEngine {
             adapter_type,
             auth,
             config,
+            quoting,
             configured_databases: RwLock::new(DatabaseMap::default()),
             semaphore: Arc::new(Semaphore::new(permits)),
             splitter,
@@ -285,6 +290,7 @@ impl SqlEngine {
         adapter_type: AdapterType,
         auth: Arc<dyn Auth>,
         config: AdapterConfig,
+        quoting: ResolvedQuoting,
         stmt_splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
         type_formatter: Box<dyn TypeFormatter>,
@@ -294,6 +300,7 @@ impl SqlEngine {
             adapter_type,
             auth,
             config,
+            quoting,
             stmt_splitter,
             query_comment,
             type_formatter,
@@ -308,6 +315,7 @@ impl SqlEngine {
         adapter_type: AdapterType,
         path: PathBuf,
         config: AdapterConfig,
+        quoting: ResolvedQuoting,
         stmt_splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
         type_formatter: Box<dyn TypeFormatter>,
@@ -317,6 +325,7 @@ impl SqlEngine {
             adapter_type,
             path,
             config,
+            quoting,
             stmt_splitter,
             query_comment,
             type_formatter,
@@ -333,6 +342,15 @@ impl SqlEngine {
 
     pub fn is_mock(&self) -> bool {
         matches!(self, SqlEngine::Mock(_))
+    }
+
+    pub fn quoting(&self) -> ResolvedQuoting {
+        match self {
+            SqlEngine::Warehouse(engine) => engine.quoting,
+            SqlEngine::Record(engine) => engine.quoting(),
+            SqlEngine::Replay(engine) => engine.quoting(),
+            SqlEngine::Mock(_) => ResolvedQuoting::default(),
+        }
     }
 
     /// Get the statement splitter for this engine

@@ -57,8 +57,6 @@ pub struct ParseAdapter {
     unsafe_nodes: DashSet<String>,
     /// SQLs that are found passed in to adapter.execute in the hidden Parse phase
     execute_sqls: DashSet<String>,
-    /// The quoting policy for the adapter
-    quoting: ResolvedQuoting,
     /// The global CLI cancellation token
     cancellation_token: CancellationToken,
 }
@@ -78,7 +76,7 @@ impl fmt::Debug for ParseAdapter {
             )
             .field("unsafe_nodes", &self.unsafe_nodes)
             .field("execute_sqls", &self.execute_sqls)
-            .field("quoting", &self.quoting)
+            .field("quoting", &self.engine.quoting())
             .finish()
     }
 }
@@ -102,6 +100,9 @@ impl ParseAdapter {
 
         let auth: Arc<dyn Auth> = auth_for_backend(backend).into();
         let adapter_config = AdapterConfig::new(config);
+        let quoting = package_quoting
+            .try_into()
+            .expect("Failed to convert quoting to resolved quoting");
         let stmt_splitter = Arc::new(NaiveStmtSplitter {});
         let query_comment = QueryCommentConfig::from_query_comment(None, adapter_type, false);
 
@@ -109,6 +110,7 @@ impl ParseAdapter {
             adapter_type,
             auth,
             adapter_config,
+            quoting,
             stmt_splitter,
             query_comment,
             type_formatter,
@@ -123,9 +125,6 @@ impl ParseAdapter {
             patterned_dangling_sources: DashMap::new(),
             unsafe_nodes: DashSet::new(),
             execute_sqls: DashSet::new(),
-            quoting: package_quoting
-                .try_into()
-                .expect("Failed to convert quoting to resolved quoting"),
             cancellation_token: token,
         }
     }
@@ -144,7 +143,7 @@ impl ParseAdapter {
             schema.to_string(),
             Some(identifier.to_string()),
             None,
-            self.quoting,
+            self.engine().quoting(),
         )?
         .as_value();
 
@@ -266,7 +265,7 @@ impl AdapterTyping for ParseAdapter {
     }
 
     fn quoting(&self) -> ResolvedQuoting {
-        self.quoting
+        self.engine.quoting()
     }
 
     fn cancellation_token(&self) -> CancellationToken {
