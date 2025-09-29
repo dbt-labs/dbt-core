@@ -815,18 +815,7 @@ impl BaseAdapter for BridgeAdapter {
         let relation = parser.get::<Value>("relation")?;
         let relation = downcast_value_to_dyn_base_relation(&relation)?;
 
-        if self.typed_adapter.as_replay().is_some() {
-            // TODO: move this logic to the [ReplayAdapter]
-            return match self.typed_adapter.get_columns_in_relation(state, relation) {
-                Ok(result) => Ok(Value::from(result)),
-                Err(e) => Err(MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
-                    e.to_string(),
-                )),
-            };
-        }
-
-        if let Some(db) = &self.db {
+        let maybe_from_local = if let Some(db) = &self.db {
             // skip local compilation results if it's invoked upon a snapshot
             // as we considered risk is too high to trust the types to be consistent with the remote
             if !state.is_relation_snapshot(&relation.render_self_as_str())
@@ -884,9 +873,27 @@ impl BaseAdapter for BridgeAdapter {
                             }
                         }
                     }
-                    return Ok(Value::from(from_local));
+                    Some(from_local)
+                } else {
+                    None
                 }
+            } else {
+                None
             }
+        } else {
+            None
+        };
+
+        if let Some(replay_adapter) = self.typed_adapter.as_replay() {
+            return replay_adapter.replay_get_columns_in_relation(
+                state,
+                relation,
+                maybe_from_local,
+            );
+        }
+
+        if let Some(from_local) = maybe_from_local {
+            return Ok(Value::from(from_local));
         }
 
         let from_remote = self

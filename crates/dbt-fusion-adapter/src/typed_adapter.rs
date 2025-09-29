@@ -1090,4 +1090,11 @@ pub trait ReplayAdapter: TypedBaseAdapter {
         _conn: &mut dyn Connection,
         _query_ctx: &QueryCtx,
     ) -> AdapterResult<Vec<StdColumn>>;
+
+    fn replay_get_columns_in_relation(
+        &self,
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
+        cache_result: Option<Vec<StdColumn>>,
+    ) -> Result<Value, minijinja::Error>;
 }

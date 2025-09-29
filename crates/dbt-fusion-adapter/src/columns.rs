@@ -660,7 +660,7 @@ impl StdColumn {
 
     // TODO: impl data_type - need to handle nested types
     // https://github.com/dbt-labs/dbt-adapters/blob/6f2aae13e39c5df1c93e5d514678914142d71768/dbt-bigquery/src/dbt/adapters/bigquery/column.py#L80
-    fn data_type(&self) -> String {
+    pub fn data_type(&self) -> String {
         match self._adapter_type {
             AdapterType::Bigquery => self.dtype.to_lowercase(),
             _ => {
