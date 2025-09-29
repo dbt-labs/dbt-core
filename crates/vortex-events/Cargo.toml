@@ -19,6 +19,7 @@ dbt-jinja-utils = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-serde_yaml = { workspace = true }
 md5 = { workspace = true }
+serde = { workspace = true }
 uuid = { workspace = true }
 vortex-client = { workspace = true }
 
