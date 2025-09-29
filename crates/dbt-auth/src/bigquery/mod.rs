@@ -164,6 +164,45 @@ impl BigqueryAuth {
         }
         Ok(())
     }
+
+    fn config_impersonate_user(
+        config: &AdapterConfig,
+        builder: &mut database::Builder,
+    ) -> Result<(), AuthError> {
+        if let Some(impersonate_principal) = config.get_string("impersonate_service_account") {
+            builder.with_named_option(
+                bigquery::IMPERSONATE_TARGET_PRINCIPAL,
+                impersonate_principal,
+            )?;
+        }
+        Ok(())
+    }
+
+    fn config_scopes(
+        config: &AdapterConfig,
+        builder: &mut database::Builder,
+    ) -> Result<(), AuthError> {
+        let mut scopes = bigquery::IMPERSONATE_DEFAULT_SCOPES.join(",");
+        if let Some(impersonate_scopes) = config.get("scopes")
+            && let Some(impersonate_scopes) = match impersonate_scopes {
+                YmlValue::Sequence(scope_seq, _) => {
+                    let mut scopes = Vec::with_capacity(scope_seq.len());
+                    for item in scope_seq {
+                        if let YmlValue::String(scope, _) = item {
+                            scopes.push(scope.to_string())
+                        }
+                    }
+                    Some(scopes)
+                }
+                _ => None,
+            }
+        {
+            scopes = impersonate_scopes.join(",");
+        }
+
+        builder.with_named_option(bigquery::IMPERSONATE_SCOPES, scopes)?;
+        Ok(())
+    }
 }
 
 impl Auth for BigqueryAuth {
@@ -211,6 +250,9 @@ impl Auth for BigqueryAuth {
                 "Missing required 'method' field in BigQuery config",
             ));
         }
+
+        Self::config_impersonate_user(config, &mut builder)?;
+        Self::config_scopes(config, &mut builder)?;
 
         Ok(builder)
     }
@@ -365,6 +407,9 @@ location: my_location
                     bigquery::LOCATION => {
                         assert_eq!(value, "my_location".to_string())
                     }
+                    bigquery::IMPERSONATE_SCOPES => {
+                        assert_eq!(value, bigquery::IMPERSONATE_DEFAULT_SCOPES.join(","));
+                    }
                     _ => panic!("Unexpected BigQuery auth option for service account json"),
                 },
                 _ => panic!("Unexpected option field: {:?}", option.0),
@@ -413,6 +458,43 @@ method: oauth
         // No credential‑specific options should be present
         assert!(other_option_value(&builder, bigquery::AUTH_CREDENTIALS).is_none());
         assert!(other_option_value(&builder, bigquery::AUTH_REFRESH_TOKEN).is_none());
+    }
+
+    #[test]
+    fn test_builder_from_auth_config_oauth_with_custom_scopes() {
+        let yaml_doc = r#"
+database: my_db
+schema: my_schema
+method: oauth
+scopes:
+    - https://www.googleapis.com/auth/bigquery
+"#;
+        let config = dbt_serde_yaml::from_str::<Mapping>(yaml_doc).unwrap();
+        let builder = try_configure(config).unwrap();
+        let auth_type = other_option_value(&builder, bigquery::AUTH_TYPE)
+            .expect("Expected AUTH_TYPE option to be set");
+        assert_eq!(auth_type, auth_type::DEFAULT.to_string());
+        let scopes = other_option_value(&builder, bigquery::IMPERSONATE_SCOPES)
+            .expect("Expected IMPERSONATE_SCOPES option to be set");
+        assert_eq!(scopes, "https://www.googleapis.com/auth/bigquery");
+    }
+
+    #[test]
+    fn test_builder_from_auth_config_oauth_with_impersonation() {
+        let yaml_doc = r#"
+database: my_db
+schema: my_schema
+method: oauth
+impersonate_service_account: user@project.iam.gserviceaccount.com
+"#;
+        let config = dbt_serde_yaml::from_str::<Mapping>(yaml_doc).unwrap();
+        let builder = try_configure(config).unwrap();
+        let auth_type = other_option_value(&builder, bigquery::AUTH_TYPE)
+            .expect("Expected AUTH_TYPE option to be set");
+        assert_eq!(auth_type, auth_type::DEFAULT.to_string());
+        let scopes = other_option_value(&builder, bigquery::IMPERSONATE_TARGET_PRINCIPAL)
+            .expect("Expected IMPERSONATE_TARGET_PRINCIPAL option to be set");
+        assert_eq!(scopes, "user@project.iam.gserviceaccount.com");
     }
 
     #[test]

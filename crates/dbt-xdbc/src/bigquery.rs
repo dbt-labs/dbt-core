@@ -24,6 +24,16 @@ pub const AUTH_REFRESH_TOKEN: &str = "adbc.bigquery.sql.auth.refresh_token";
 pub const AUTH_ACCESS_TOKEN_ENDPOINT: &str = "adbc.bigquery.sql.auth.access_token_endpoint";
 pub const AUTH_ACCESS_TOKEN_SERVER_NAME: &str = "adbc.bigquery.sql.auth.access_token_server_name";
 
+pub const IMPERSONATE_TARGET_PRINCIPAL: &str = "adbc.bigquery.sql.impersonate.target_principal";
+pub const IMPERSONATE_SCOPES: &str = "adbc.bigquery.sql.impersonate.scopes";
+
+pub const IMPERSONATE_DEFAULT_SCOPES: [&str; 4] = [
+    "https://www.googleapis.com/auth/bigquery",
+    "https://www.googleapis.com/auth/cloud-platform",
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/userinfo.email",
+];
+
 // The parameter mode specifies if the query uses positional syntax ("?")
 // or the named syntax ("@p"). It is illegal to mix positional and named syntax.
 // Default is QUERY_PARAMETER_MODE_POSITIONAL.
