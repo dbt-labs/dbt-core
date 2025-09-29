@@ -4,7 +4,7 @@ use dbt_common::FsError;
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{DBT_GENERIC_TESTS_DIR_NAME, RESOLVING};
-use dbt_common::io_args::StaticAnalysisKind;
+use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::tracing::event_info::store_event_attributes;
 use dbt_common::{ErrorCode, FsResult, err, fs_err, show_error, with_progress};
@@ -85,11 +85,17 @@ pub async fn resolve(
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
     let _pb = with_progress!(arg.io, spinner => RESOLVING);
 
-    // For nodes, reset static analysis to "on" as they were disabled after
-    // the last resolve. (This is for the LSP - for CLI, nodes is always default (i.e. empty))
+    // For nodes, reset static analysis to "on" as they were switched "off" due
+    // to the inability to fetch schemas or downstream nodes did not have static analysis turned "on".
     for node in nodes.iter_values_mut() {
-        if node.static_analysis() == StaticAnalysisKind::Off {
+        if node.static_analysis() == StaticAnalysisKind::Off
+            && ((node.static_analysis_off_reason()
+                == Some(StaticAnalysisOffReason::UnableToFetchSchema))
+                || (node.static_analysis_off_reason()
+                    == Some(StaticAnalysisOffReason::NoDownstream)))
+        {
             node.set_static_analysis(StaticAnalysisKind::On);
+            node.set_static_analysis_off_reason(None);
         }
     }
 

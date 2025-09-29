@@ -554,6 +554,7 @@ pub enum StaticAnalysisKind {
 pub enum StaticAnalysisOffReason {
     ConfiguredOff,
     UnableToFetchSchema,
+    NoDownstream,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize, Deserialize, Default)]
