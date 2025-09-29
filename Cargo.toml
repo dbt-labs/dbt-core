@@ -467,6 +467,19 @@ log = { version = "0.4.27", features = ["kv_serde"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
 
+# proc macro dependencies
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full"] }
+
+# gRPC dependencies
+tonic = "0.14.1"
+tonic-build = "0.14.1"
+
+# Security and cryptography dependencies
+ed25519-dalek = { version = "2", features = ["pkcs8", "pem"] }
+jsonwebtoken = { version = "9", features = ["use_pem"] }
+
 # OpenTelemetry (optional embedded OTLP exporter for traces, see dbt-common)
 opentelemetry = "0.30.0"
 opentelemetry-otlp = "0.30.0"
