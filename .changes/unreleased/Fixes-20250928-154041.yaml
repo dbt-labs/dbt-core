@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fixed wrong error locations on Yaml map keys
+time: 2025-09-28T15:40:41.808014529Z
+custom:
+    author: sadboy
+    issue: "809"
+    project: dbt-fusion
