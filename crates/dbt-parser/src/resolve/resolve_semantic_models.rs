@@ -384,6 +384,7 @@ pub fn model_props_to_dimensions(model_props: ModelProperties) -> Vec<Dimension>
                         description: column.description.clone(), // defaults to column.description if there is no column.dimension.description
                         label: None,
                         config: None,
+                        validity_params: None,
                     }
                 }
                 ColumnPropertiesDimension::DimensionConfig(ref config) => config.clone(),
@@ -395,6 +396,14 @@ pub fn model_props_to_dimensions(model_props: ModelProperties) -> Vec<Dimension>
                 column_dimension_config.description = column.description.clone();
             }
 
+            let mut type_params = None;
+            if column.granularity.is_some() || column_dimension_config.validity_params.is_some() {
+                type_params = Some(DimensionTypeParams {
+                    time_granularity: column.granularity,
+                    validity_params: column_dimension_config.validity_params,
+                });
+            }
+
             let dimension = Dimension {
                 name: column_dimension_config.name.unwrap_or_default(),
                 column_name: Some(column.name.clone()),
@@ -403,10 +412,7 @@ pub fn model_props_to_dimensions(model_props: ModelProperties) -> Vec<Dimension>
                 expr: None, // only applicable for derived_semantics
                 label: column_dimension_config.label,
                 is_partition: column_dimension_config.is_partition.unwrap_or(false),
-                type_params: column.granularity.map(|granularity| DimensionTypeParams {
-                    time_granularity: Some(granularity),
-                    validity_params: None,
-                }),
+                type_params,
                 config: column_dimension_config.config.clone(),
                 // fields below are always null (for now)
                 metadata: None,
@@ -421,6 +427,14 @@ pub fn model_props_to_dimensions(model_props: ModelProperties) -> Vec<Dimension>
         .dimensions
         .unwrap_or_default();
     for derived_dimension in derived_dimensions {
+        let mut type_params = None;
+        if derived_dimension.granularity.is_some() || derived_dimension.validity_params.is_some() {
+            type_params = Some(DimensionTypeParams {
+                time_granularity: derived_dimension.granularity,
+                validity_params: derived_dimension.validity_params,
+            });
+        }
+
         let dimension = Dimension {
             name: derived_dimension.name.clone(),
             expr: Some(derived_dimension.expr.clone()),
@@ -428,12 +442,7 @@ pub fn model_props_to_dimensions(model_props: ModelProperties) -> Vec<Dimension>
             dimension_type: derived_dimension.type_.clone(),
             is_partition: derived_dimension.is_partition.unwrap_or(false),
             description: derived_dimension.description.clone(),
-            type_params: derived_dimension
-                .granularity
-                .map(|granularity| DimensionTypeParams {
-                    time_granularity: Some(granularity),
-                    validity_params: None,
-                }),
+            type_params,
             label: derived_dimension.label.clone(),
             config: derived_dimension.config.clone(),
             // fields below are always null (for now)

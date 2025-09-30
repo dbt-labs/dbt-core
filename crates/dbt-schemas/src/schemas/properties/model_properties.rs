@@ -1,5 +1,6 @@
 use crate::default_to;
 use crate::schemas::common::ConstraintType;
+use crate::schemas::common::DimensionValidityParams;
 use crate::schemas::common::ModelFreshnessRules;
 use crate::schemas::common::Versions;
 use crate::schemas::data_tests::DataTests;
@@ -167,6 +168,7 @@ pub struct DerivedDimension {
     pub label: Option<String>,
     pub description: Option<String>,
     pub config: Option<SemanticLayerElementConfig>,
+    pub validity_params: Option<DimensionValidityParams>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]

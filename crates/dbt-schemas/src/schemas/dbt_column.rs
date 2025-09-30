@@ -10,7 +10,8 @@ use strum::Display;
 type YmlValue = dbt_serde_yaml::Value;
 
 use crate::schemas::{
-    semantic_layer::semantic_manifest::SemanticLayerElementConfig, serde::StringOrArrayOfStrings,
+    common::DimensionValidityParams, semantic_layer::semantic_manifest::SemanticLayerElementConfig,
+    serde::StringOrArrayOfStrings,
 };
 
 use super::{common::Constraint, data_tests::DataTests};
@@ -236,6 +237,7 @@ pub struct ColumnPropertiesDimensionConfig {
     pub name: Option<String>,
     pub description: Option<String>,
     pub config: Option<SemanticLayerElementConfig>,
+    pub validity_params: Option<DimensionValidityParams>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
