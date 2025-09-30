@@ -1,8 +1,9 @@
-use std::{rc::Rc, sync::Arc};
+use std::{path::PathBuf, rc::Rc, sync::Arc};
 
 use dashmap::DashMap;
 
 use crate::{
+    machinery::Span,
     types::{
         funcsign_parser::parse_type,
         function::{
@@ -251,7 +252,13 @@ impl Object for BuiltinDefinition {
                                 std::format!("parse type {} failed: {}", call.return_type, e),
                             )
                         })?;
-                    let udf = UserDefinedFunctionType::new("udf", args, ret_type);
+                    let udf = UserDefinedFunctionType::new(
+                        "udf",
+                        args,
+                        ret_type,
+                        &PathBuf::from(""),
+                        &Span::default(),
+                    );
                     return udf.resolve_arguments(positional_args, kwargs, listener);
                 }
                 if let Some(parent) = &object.inherit_from {

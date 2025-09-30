@@ -180,7 +180,6 @@ impl JinjaEnvBuilder {
                         template_name.clone(),
                         macro_unit.sql.clone(),
                         Some(filename.clone()),
-                        &listeners,
                     )
                     .map_err(|e| FsError::from_jinja_err(e, "Failed to add template"))?;
                 for listener in listeners {
@@ -236,6 +235,8 @@ impl JinjaEnvBuilder {
                             &macro_name,
                             args,
                             returns,
+                            &macro_unit.info.path,
+                            &macro_unit.info.span,
                         )))
                     }
                     None => DynTypeObject::new(Arc::new(UndefinedFunctionType::new(
@@ -245,6 +246,8 @@ impl JinjaEnvBuilder {
                             offset.col as u32,
                             PathBuf::from(filename.clone()),
                         ),
+                        &macro_unit.info.path,
+                        &macro_unit.info.span,
                     ))),
                 };
                 function_registry.insert(template_name.clone(), funcsign.clone());

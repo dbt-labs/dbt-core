@@ -134,7 +134,7 @@ impl Object for DispatchObject {
                         // For non-internal packages
                         let template_name = format!("{package_name}.{search_name}");
                         attempts.push(template_name.clone());
-                        if template_exists(state, &template_name, listeners) {
+                        if template_exists(state, &template_name) {
                             let rv =
                                 self.execute_template(state, &template_name, args, listeners)?;
                             return Ok(rv);
@@ -146,23 +146,17 @@ impl Object for DispatchObject {
                 for prefix in &adapter_prefixes {
                     let search_name = format!("{}__{}", prefix, self.macro_name);
 
-                    if let Some(template_name) = macro_namespace_template_resolver(
-                        state,
-                        &search_name,
-                        &mut attempts,
-                        listeners,
-                    ) {
+                    if let Some(template_name) =
+                        macro_namespace_template_resolver(state, &search_name, &mut attempts)
+                    {
                         let rv = self.execute_template(state, &template_name, args, listeners)?;
                         return Ok(rv);
                     }
                 }
                 // find the macro without prefix
-                if let Some(template_name) = macro_namespace_template_resolver(
-                    state,
-                    &self.macro_name,
-                    &mut attempts,
-                    listeners,
-                ) {
+                if let Some(template_name) =
+                    macro_namespace_template_resolver(state, &self.macro_name, &mut attempts)
+                {
                     let rv = self.execute_template(state, &template_name, args, listeners)?;
                     return Ok(rv);
                 }
@@ -251,7 +245,7 @@ impl DispatchObject {
         args: &[Value],
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
-        let template = match state.env().get_template(template_name, listeners) {
+        let template = match state.env().get_template(template_name) {
             Ok(template) => template,
             Err(err) => {
                 // If the template name was found in a namespace but the template itself doesn't exist,
@@ -333,12 +327,8 @@ pub fn get_internal_packages(dialect: &str) -> Vec<String> {
 }
 
 /// Helper function to check if a template exists in the environment
-fn template_exists(
-    state: &State<'_, '_>,
-    template_name: &str,
-    listeners: &[Rc<dyn RenderingEventListener>],
-) -> bool {
-    state.env().get_template(template_name, listeners).is_ok()
+fn template_exists(state: &State<'_, '_>, template_name: &str) -> bool {
+    state.env().get_template(template_name).is_ok()
 }
 
 /// Finds a template in the namespace according to dbt's resolution rules
@@ -370,7 +360,6 @@ pub fn macro_namespace_template_resolver(
     state: &State<'_, '_>,
     search_name: &str,
     attempts: &mut Vec<String>,
-    listeners: &[Rc<dyn RenderingEventListener>],
 ) -> Option<String> {
     // Get necessary values from state
     let current_package_name = state
@@ -383,14 +372,14 @@ pub fn macro_namespace_template_resolver(
     // 1. Local namespace (current package)
     let template_name = format!("{current_package_name}.{search_name}");
     attempts.push(template_name.clone());
-    if template_exists(state, &template_name, listeners) {
+    if template_exists(state, &template_name) {
         return Some(template_name);
     }
 
     // 2. Root package namespace
     let template_name = format!("{root_package}.{search_name}");
     attempts.push(template_name.clone());
-    if template_exists(state, &template_name, listeners) {
+    if template_exists(state, &template_name) {
         return Some(template_name);
     }
 
@@ -399,7 +388,7 @@ pub fn macro_namespace_template_resolver(
     if let Some(pkg) = dbt_and_adapters.get(&search_name_value) {
         let template_name = format!("{pkg}.{search_name}");
         attempts.push(template_name.clone());
-        if template_exists(state, &template_name, listeners) {
+        if template_exists(state, &template_name) {
             return Some(template_name);
         }
     }

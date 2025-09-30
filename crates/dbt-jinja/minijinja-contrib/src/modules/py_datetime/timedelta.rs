@@ -321,29 +321,26 @@ mod tests {
         let template = env
             .template_from_str(
                 "{{ timedelta(days=2, hours=3).days }}, {{ timedelta(minutes=90).seconds }}",
-                &[],
             )
             .unwrap();
         let result = template.render(minijinja::context!(), &[]).unwrap();
         assert_eq!(result, "2, 5400");
 
         // Test positional arguments creation
-        let template = env
-            .template_from_str("{{ timedelta(4).days }}", &[])
-            .unwrap();
+        let template = env.template_from_str("{{ timedelta(4).days }}").unwrap();
         let result = template.render(minijinja::context!(), &[]).unwrap();
         assert_eq!(result, "4");
 
         // Test arithmetic
         let template = env
-            .template_from_str("{{ (timedelta(days=2) + timedelta(days=1)).days }}", &[])
+            .template_from_str("{{ (timedelta(days=2) + timedelta(days=1)).days }}")
             .unwrap();
         let result = template.render(minijinja::context!(), &[]).unwrap();
         assert_eq!(result, "3");
 
         // Test the total_seconds() method
         let template = env
-            .template_from_str("{{ timedelta(4).total_seconds() }}", &[])
+            .template_from_str("{{ timedelta(4).total_seconds() }}")
             .unwrap();
         let result = template.render(minijinja::context!(), &[]).unwrap();
         assert_eq!(result, "345600.0");

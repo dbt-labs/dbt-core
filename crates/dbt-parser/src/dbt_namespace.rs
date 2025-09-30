@@ -47,7 +47,7 @@ impl Object for DbtNamespace {
 
                 // Delegate to the original dbt.get_columns_in_relation template
                 let template_name = "dbt.get_columns_in_relation";
-                if let Ok(template) = state.env().get_template(template_name, listeners) {
+                if let Ok(template) = state.env().get_template(template_name) {
                     let base_ctx = state.get_base_context();
                     let template_state = template.eval_to_state(base_ctx, listeners)?;
                     let func = template_state
@@ -78,7 +78,7 @@ impl Object for DbtNamespace {
 
                 // Delegate to the original dbt.get_relation template
                 let template_name = "dbt.get_relation";
-                if let Ok(template) = state.env().get_template(template_name, listeners) {
+                if let Ok(template) = state.env().get_template(template_name) {
                     let base_ctx = state.get_base_context();
                     let template_state = template.eval_to_state(base_ctx, listeners)?;
                     let func = template_state.lookup("get_relation").ok_or_else(|| {
@@ -98,7 +98,7 @@ impl Object for DbtNamespace {
             _ => {
                 // For all other methods, delegate to the original dbt template
                 let template_name = format!("dbt.{name}");
-                if let Ok(template) = state.env().get_template(&template_name, listeners) {
+                if let Ok(template) = state.env().get_template(&template_name) {
                     let base_ctx = state.get_base_context();
                     let template_state = template.eval_to_state(base_ctx, listeners)?;
                     let func = template_state.lookup(name).ok_or_else(|| {

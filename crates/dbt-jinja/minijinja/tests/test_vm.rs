@@ -348,7 +348,6 @@ fn test_deep_recursion() {
         {%- endmacro -%}
         {{- foo(0) -}}
     "#,
-            &[],
         )
         .unwrap();
     let rv = tmpl.render(context!(limit), &[]).unwrap();

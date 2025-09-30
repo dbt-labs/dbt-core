@@ -357,24 +357,21 @@ mod tests {
 
         // Create a template that uses time and strftime
         let template = env
-            .template_from_str("{{ time(14, 30, 45, 123456).strftime('%H:%M:%S') }}", &[])
+            .template_from_str("{{ time(14, 30, 45, 123456).strftime('%H:%M:%S') }}")
             .unwrap();
         let result = template.render(context!(), &[]).unwrap();
         assert_eq!(result, "14:30:45");
 
         // Test with a different format
         let template = env
-            .template_from_str("{{ time(14, 30, 45, 123456).strftime('%I:%M %p') }}", &[])
+            .template_from_str("{{ time(14, 30, 45, 123456).strftime('%I:%M %p') }}")
             .unwrap();
         let result = template.render(context!(), &[]).unwrap();
         assert_eq!(result, "02:30 PM");
 
         // Test with microseconds
         let template = env
-            .template_from_str(
-                "{{ time(14, 30, 45, 123456).strftime('%H:%M:%S.%f') }}",
-                &[],
-            )
+            .template_from_str("{{ time(14, 30, 45, 123456).strftime('%H:%M:%S.%f') }}")
             .unwrap();
         let result = template.render(context!(), &[]).unwrap();
         assert_eq!(result, "14:30:45.123456");
@@ -475,10 +472,7 @@ mod tests {
 
         // Test adding hours
         let template = env
-            .template_from_str(
-                "{{ (time(14, 30, 0) + timedelta(hours=1)).strftime('%H:%M:%S') }}",
-                &[],
-            )
+            .template_from_str("{{ (time(14, 30, 0) + timedelta(hours=1)).strftime('%H:%M:%S') }}")
             .unwrap();
         let result = template.render(context!(), &[]).unwrap();
         assert_eq!(result, "15:30:00");
@@ -487,7 +481,6 @@ mod tests {
         let template = env
             .template_from_str(
                 "{{ (time(14, 30, 0) - timedelta(minutes=45)).strftime('%H:%M:%S') }}",
-                &[],
             )
             .unwrap();
         let result = template.render(context!(), &[]).unwrap();
@@ -495,7 +488,7 @@ mod tests {
 
         // Test time subtraction
         let template = env
-            .template_from_str("{{ (time(14, 30, 0) - time(13, 15, 0)).seconds }}", &[])
+            .template_from_str("{{ (time(14, 30, 0) - time(13, 15, 0)).seconds }}")
             .unwrap();
         let result = template.render(context!(), &[]).unwrap();
         // 1 hour 15 minutes = 75 minutes = 4500 seconds

@@ -635,7 +635,7 @@ pub fn render_fn() -> impl Fn(&State, &[Value], Kwargs) -> Result<Value, Error> 
 
         let env = state.env();
 
-        let template = env.template_from_str(sql, &[])?;
+        let template = env.template_from_str(sql)?;
         let rendered = template.render(state.get_base_context(), &[])?;
         Ok(Value::from(rendered))
     }
@@ -1262,7 +1262,7 @@ mod tests {
         {{ result | sort | join(',') }}
         "#;
 
-        let tmpl = env.template_from_str(template_source, &[]).unwrap();
+        let tmpl = env.template_from_str(template_source).unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
 
         // Should contain all unique elements from both sets: 1,2,3,4
@@ -1284,7 +1284,7 @@ mod tests {
         {{ result | length }}
         "#;
 
-        let tmpl = env.template_from_str(template_source, &[]).unwrap();
+        let tmpl = env.template_from_str(template_source).unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
 
         // Should have 6 unique elements
@@ -1304,7 +1304,7 @@ mod tests {
         {{ result | sort | join(',') }}
         "#;
 
-        let tmpl = env.template_from_str(template_source, &[]).unwrap();
+        let tmpl = env.template_from_str(template_source).unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
 
         // Should remove duplicates: 1,2,3,4,5
@@ -1317,7 +1317,7 @@ mod tests {
         env.add_function("tojson", tojson);
 
         let template_source = r#"{{ tojson({'a': 1, 'b': 'hello'}) }}"#;
-        let tmpl = env.template_from_str(template_source, &[]).unwrap();
+        let tmpl = env.template_from_str(template_source).unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
         assert_eq!(output.trim(), r#"{"a":1,"b":"hello"}"#);
     }
@@ -1328,7 +1328,7 @@ mod tests {
         env.add_function("tojson", tojson);
 
         let template_source = r#"{{ tojson({'a': 1, 'b': {'c': 3}}) }}"#;
-        let tmpl = env.template_from_str(template_source, &[]).unwrap();
+        let tmpl = env.template_from_str(template_source).unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
         assert_eq!(output.trim(), r#"{"a":1,"b":{"c":3}}"#);
     }
@@ -1339,7 +1339,7 @@ mod tests {
         env.add_function("tojson", tojson);
 
         let template_source = r#"{{ tojson({'b': 2, 'a': 1}, sort_keys=True) }}"#;
-        let tmpl = env.template_from_str(template_source, &[]).unwrap();
+        let tmpl = env.template_from_str(template_source).unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
         assert_eq!(output.trim(), r#"{"a":1,"b":2}"#);
     }
@@ -1350,7 +1350,7 @@ mod tests {
         env.add_function("toyaml", toyaml);
 
         let template_source = r#"{{ toyaml({'a': 1, 'b': 'hello'}) }}"#;
-        let tmpl = env.template_from_str(template_source, &[]).unwrap();
+        let tmpl = env.template_from_str(template_source).unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
         assert_eq!(output.trim(), "a: 1\nb: hello");
     }
@@ -1361,7 +1361,7 @@ mod tests {
         env.add_function("toyaml", toyaml);
 
         let template_source = r#"{{ toyaml({'a': 1, 'b': {'c': 3}}) }}"#;
-        let tmpl = env.template_from_str(template_source, &[]).unwrap();
+        let tmpl = env.template_from_str(template_source).unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
         assert_eq!(output.trim(), "a: 1\nb:\n  c: 3");
     }
@@ -1372,7 +1372,7 @@ mod tests {
         env.add_function("toyaml", toyaml);
 
         let template_source = r#"{{ toyaml({'b': 2, 'a': 1}, sort_keys=True) }}"#;
-        let tmpl = env.template_from_str(template_source, &[]).unwrap();
+        let tmpl = env.template_from_str(template_source).unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
         assert_eq!(output.trim(), "a: 1\nb: 2");
     }

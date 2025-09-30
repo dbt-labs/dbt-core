@@ -154,7 +154,9 @@ pub fn build_cfg(code: &[Instruction]) -> CFG {
 
     // 1. Identify block leaders (start of each basic block)
     let mut leaders: BTreeSet<usize> = BTreeSet::new();
-    leaders.insert(0);
+    if !code.is_empty() {
+        leaders.insert(0);
+    }
     for (index, instruction) in code.iter().enumerate() {
         for (target, kind) in branch_targets(index, instruction) {
             if !matches!(kind, FallThrough) && target < code.len() {

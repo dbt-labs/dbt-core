@@ -5,7 +5,6 @@ use std::fs;
 use std::io;
 use std::path::Path;
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::sync::Arc;
 
 use memo_map::MemoMap;
@@ -14,7 +13,6 @@ use self_cell::self_cell;
 use crate::compiler::codegen::CodeGenerationProfile;
 use crate::compiler::instructions::Instructions;
 use crate::error::{Error, ErrorKind};
-use crate::listener::RenderingEventListener;
 use crate::template::CompiledTemplate;
 use crate::template::TemplateConfig;
 
@@ -86,13 +84,8 @@ impl<'source> LoaderStore<'source> {
         }
     }
 
-    pub fn insert(
-        &mut self,
-        name: &'source str,
-        source: &'source str,
-        listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<(), Error> {
-        self.insert_cow(Cow::Borrowed(name), Cow::Borrowed(source), None, listeners)
+    pub fn insert(&mut self, name: &'source str, source: &'source str) -> Result<(), Error> {
+        self.insert_cow(Cow::Borrowed(name), Cow::Borrowed(source), None)
     }
 
     pub fn insert_cow(
@@ -100,7 +93,6 @@ impl<'source> LoaderStore<'source> {
         name: Cow<'source, str>,
         source: Cow<'source, str>,
         filename: Option<String>,
-        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<(), Error> {
         match (source, name) {
             (Cow::Borrowed(source), Cow::Borrowed(name)) => {
@@ -113,7 +105,6 @@ impl<'source> LoaderStore<'source> {
                         &self.template_config,
                         filename,
                         self.profile.clone(),
-                        listeners,
                     ))),
                 );
             }
@@ -127,7 +118,6 @@ impl<'source> LoaderStore<'source> {
                         source.to_string(),
                         filename,
                         self.profile.clone(),
-                        listeners,
                     )),
                 );
             }
@@ -146,11 +136,7 @@ impl<'source> LoaderStore<'source> {
         self.owned_templates.clear();
     }
 
-    pub fn get(
-        &self,
-        name: &str,
-        listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<&CompiledTemplate<'_>, Error> {
+    pub fn get(&self, name: &str) -> Result<&CompiledTemplate<'_>, Error> {
         if let Some(rv) = self.borrowed_templates.get(name) {
             Ok(&**rv)
         } else {
@@ -162,13 +148,7 @@ impl<'source> LoaderStore<'source> {
                         None => None,
                     }
                     .ok_or_else(|| Error::new_not_found(&name));
-                    self.make_owned_template(
-                        name,
-                        ok!(loader_result),
-                        None,
-                        self.profile.clone(),
-                        listeners,
-                    )
+                    self.make_owned_template(name, ok!(loader_result), None, self.profile.clone())
                 })
                 .map(|x| x.borrow_dependent())
         }
@@ -187,19 +167,11 @@ impl<'source> LoaderStore<'source> {
         source: String,
         filename: Option<String>,
         profile: CodeGenerationProfile,
-        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Arc<LoadedTemplate>, Error> {
         LoadedTemplate::try_new(
             (name, source.into_boxed_str()),
             |(name, source)| -> Result<_, Error> {
-                CompiledTemplate::new(
-                    name,
-                    source,
-                    &self.template_config,
-                    filename,
-                    profile,
-                    listeners,
-                )
+                CompiledTemplate::new(name, source, &self.template_config, filename, profile)
             },
         )
         .map(Arc::new)

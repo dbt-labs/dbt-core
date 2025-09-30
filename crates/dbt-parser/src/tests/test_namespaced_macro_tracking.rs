@@ -66,7 +66,6 @@ mod tests {
                 "dbt_utils.get_url_host",
                 r#"{% macro get_url_host(url) %}host{% endmacro %}"#,
                 None,
-                &[],
             )
             .unwrap();
 
@@ -75,7 +74,6 @@ mod tests {
                 "dbt.replace",
                 r#"{% macro replace(text, old, new) %}{{ text | replace(old, new) }}{% endmacro %}"#,
                 None,
-                &[],
             )
             .unwrap();
 

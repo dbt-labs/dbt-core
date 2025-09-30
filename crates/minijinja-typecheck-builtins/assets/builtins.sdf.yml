@@ -54,7 +54,7 @@ object:
       type: adapter.render_raw_columns_constraints
     - name: render_raw_model_constraints
       type: adapter.render_raw_model_constraints
---- 
+---
 object:
   id: adapter.render_raw_model_constraints
   call:
@@ -87,13 +87,13 @@ object:
 ---
 object:
   id: adapter.get_hard_deletes_behavior
-  call: 
+  call:
     arguments:
-      - name: config 
+      - name: config
         type: config
         is-optional: false
     return-type: string
---- 
+---
 object:
   id: adapter.assert_valid_snapshot_target_given_strategy
   call:
@@ -222,7 +222,6 @@ object:
           incremental_predicates: optional[string]
         }
       ) -> string
-
 ---
 object:
   id: adapter.commit
@@ -787,8 +786,8 @@ alias:
       constraints: model.constraints,
       resource_type: string
     }
---- 
-alias: 
+---
+alias:
   id: model.constraints
   type: >-
     struct{
@@ -897,20 +896,16 @@ object:
 object:
   id: node
   attributes:
-    - name: name 
+    - name: name
       type: string
-    - name: version 
+    - name: version
       type: string
-    - name: database 
+    - name: database
       type: string
     - name: schema
       type: string
     - name: alias
       type: string
----
-alias:
-  id: null
-  type: null
 ---
 alias:
   id: post_hooks
@@ -993,13 +988,13 @@ object:
         type: model
         is-optional: false
     return-type: snowflake_node_config
---- 
+---
 object:
   id: relation.get_ddl_prefix_for_alter
   call:
     arguments: []
     return-type: string
---- 
+---
 object:
   id: relation.scd_args
   call:
@@ -1262,7 +1257,7 @@ alias:
 object:
   id: namespace
   call:
-    arguments: 
+    arguments:
       - name: paginated_results
         type: optional[list[ANY]]
         is-optional: true
@@ -1271,16 +1266,16 @@ object:
         is-optional: true
     return-type: "struct{dbt_updated_at_data_type: ANY, column_added: bool}"
 ---
-object: 
+object:
   id: get_columns_in_query
   call:
     arguments:
-      - name: query 
+      - name: query
         type: string
         is-optional: false
     return-type: list[base_column]
 ---
-alias: 
+alias:
   id: query_columns
   type: list[base_column]
 ---
@@ -1307,13 +1302,13 @@ object:
 object:
   id: snowflake_warehouse
   attributes:
-    - name: context 
+    - name: context
       type: string
 ---
 object:
   id: target_lag
   attributes:
-    - name: context 
+    - name: context
       type: string
 ---
 object:

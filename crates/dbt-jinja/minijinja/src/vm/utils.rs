@@ -93,7 +93,11 @@ pub fn find_macro_signatures(
                 funcsigns.insert(
                     macro_name.to_string(),
                     DynObject::new(Arc::new(UserDefinedFunctionType::new(
-                        macro_name, args, returns,
+                        macro_name,
+                        args,
+                        returns,
+                        path,
+                        &macro_decl.span,
                     ))),
                 );
                 *last_func_sign = None;
@@ -107,6 +111,8 @@ pub fn find_macro_signatures(
                             col: macro_decl.span.start_col,
                             file: path.to_path_buf(),
                         },
+                        path,
+                        &macro_decl.span,
                     ))),
                 );
             }

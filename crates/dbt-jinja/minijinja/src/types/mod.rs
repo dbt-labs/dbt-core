@@ -18,6 +18,7 @@ pub mod type_erase;
 
 use dashmap::DashMap;
 
+use crate::machinery::Span;
 use crate::types::builtins::{BuiltinDefinition, Reference};
 use crate::types::dict::DictType;
 use crate::types::function::{LambdaType, UserDefinedFunctionType};
@@ -35,6 +36,7 @@ use crate::TypecheckingEventListener;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::hash::Hasher;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -831,6 +833,12 @@ pub trait Object: Send + Sync + std::fmt::Debug {
         listener.warn(&format!("{self:?} does not support subscript"));
         Ok(Type::Any { hard: false })
     }
+    fn get_span(&self) -> Option<Span> {
+        None
+    }
+    fn get_path(&self) -> Option<PathBuf> {
+        None
+    }
 }
 
 type_erase! {
@@ -838,6 +846,8 @@ type_erase! {
         fn get_attribute(&self, name: &str, listener: Rc<dyn TypecheckingEventListener>) -> Result<Type, crate::Error>;
         fn call(&self, positional_args: &[Type], kwargs: &BTreeMap<String, Type>, listener: Rc<dyn TypecheckingEventListener>) -> Result<Type, crate::Error>;
         fn subscript(&self, index: &Type, listener: Rc<dyn TypecheckingEventListener>) -> Result<Type, crate::Error>;
+        fn get_span(&self) -> Option<Span>;
+        fn get_path(&self) -> Option<PathBuf>;
     }
 }
 

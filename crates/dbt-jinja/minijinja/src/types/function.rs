@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::machinery::Span;
 use crate::types::iterable::IterableType;
 use crate::types::list::ListType;
 use crate::types::utils::CodeLocation;
@@ -7,6 +8,7 @@ use crate::types::{Object, Type};
 use crate::TypecheckingEventListener;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 /// The argument specification of a function.
@@ -80,6 +82,14 @@ pub trait FunctionType: Object + Send + Sync + std::fmt::Debug {
         actual_arguments: &[Type],
         listener: Rc<dyn TypecheckingEventListener>,
     ) -> Result<Type, crate::Error>;
+
+    fn function_get_span(&self) -> Option<Span> {
+        None
+    }
+
+    fn function_get_path(&self) -> Option<PathBuf> {
+        None
+    }
 }
 
 impl<T: FunctionType> Object for T {
@@ -108,6 +118,14 @@ impl<T: FunctionType> Object for T {
     ) -> Result<Type, crate::Error> {
         listener.warn("Subscript not supported for function type");
         Ok(Type::Any { hard: false })
+    }
+
+    fn get_span(&self) -> Option<Span> {
+        self.function_get_span()
+    }
+
+    fn get_path(&self) -> Option<PathBuf> {
+        self.function_get_path()
     }
 }
 
@@ -188,6 +206,10 @@ pub struct UserDefinedFunctionType {
     pub args: Vec<Argument>,
     /// The return type of the function.
     pub ret_type: Type,
+    /// The relative path of the macro.
+    pub path: PathBuf,
+    /// The start span of the macro.
+    pub span: Span,
 }
 
 impl fmt::Debug for UserDefinedFunctionType {
@@ -198,11 +220,13 @@ impl fmt::Debug for UserDefinedFunctionType {
 
 impl UserDefinedFunctionType {
     /// Create a new user defined function type.
-    pub fn new(name: &str, args: Vec<Argument>, ret_type: Type) -> Self {
+    pub fn new(name: &str, args: Vec<Argument>, ret_type: Type, path: &Path, span: &Span) -> Self {
         Self {
             name: name.to_string(),
             args,
             ret_type,
+            path: path.to_path_buf(),
+            span: *span,
         }
     }
 }
@@ -236,6 +260,14 @@ impl FunctionType for UserDefinedFunctionType {
     fn arg_specs(&self) -> Vec<ArgSpec> {
         self.args.iter().map(|arg| arg.clone().into()).collect()
     }
+
+    fn function_get_span(&self) -> Option<Span> {
+        Some(self.span)
+    }
+
+    fn function_get_path(&self) -> Option<PathBuf> {
+        Some(self.path.clone())
+    }
 }
 
 /// The undefined function type.
@@ -245,6 +277,10 @@ pub struct UndefinedFunctionType {
     pub name: String,
     /// The location of the function.
     pub location: CodeLocation,
+    /// The relative path of the function.
+    pub path: PathBuf,
+    /// The start span of the function.
+    pub span: Span,
 }
 
 impl fmt::Debug for UndefinedFunctionType {
@@ -255,10 +291,12 @@ impl fmt::Debug for UndefinedFunctionType {
 
 impl UndefinedFunctionType {
     /// Create a new undefined function type.
-    pub fn new(name: &str, location: CodeLocation) -> Self {
+    pub fn new(name: &str, location: CodeLocation, path: &Path, span: &Span) -> Self {
         Self {
             name: name.to_string(),
             location,
+            path: path.to_path_buf(),
+            span: *span,
         }
     }
 }
@@ -278,6 +316,14 @@ impl FunctionType for UndefinedFunctionType {
 
     fn arg_specs(&self) -> Vec<ArgSpec> {
         vec![]
+    }
+
+    fn function_get_span(&self) -> Option<Span> {
+        Some(self.span)
+    }
+
+    fn function_get_path(&self) -> Option<PathBuf> {
+        Some(self.path.clone())
     }
 }
 
@@ -528,10 +574,9 @@ impl fmt::Debug for PrintFunctionType {
 impl FunctionType for PrintFunctionType {
     fn _resolve_arguments(
         &self,
-        args: &[Type],
+        _args: &[Type],
         _listener: Rc<dyn TypecheckingEventListener>,
     ) -> Result<Type, crate::Error> {
-        println!("print: {args:?}");
         Ok(Type::None)
     }
 

@@ -113,16 +113,18 @@ impl JinjaTypeCheckingEventListenerFactory for DefaultJinjaTypeCheckEventListene
     /// Creates a new rendering event listener
     fn create_listener(
         &self,
-        args: &IoArgs,
-        filename: &Path,
-        noqa_comments: Option<HashSet<u32>>,
+        _args: &IoArgs,
+        _filename: &Path,
+        _noqa_comments: Option<HashSet<u32>>,
     ) -> Rc<dyn TypecheckingEventListener> {
         // create a WarningPrinter instance
-        Rc::new(WarningPrinter::new(
-            args.clone(),
-            filename.to_path_buf(),
-            noqa_comments,
-        ))
+        // TODO: enable warning printer
+        // Rc::new(WarningPrinter::new(
+        //     args.clone(),
+        //     filename.to_path_buf(),
+        //     noqa_comments,
+        // ))
+        Rc::new(DummyJinjaTypeCheckingEventListener::new())
     }
 
     fn destroy_listener(&self, _filename: &Path, _listener: Rc<dyn TypecheckingEventListener>) {
@@ -130,6 +132,38 @@ impl JinjaTypeCheckingEventListenerFactory for DefaultJinjaTypeCheckEventListene
     }
 }
 
+struct DummyJinjaTypeCheckingEventListener {}
+
+impl DummyJinjaTypeCheckingEventListener {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl TypecheckingEventListener for DummyJinjaTypeCheckingEventListener {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn warn(&self, _message: &str) {}
+
+    fn set_span(&self, _span: &minijinja::machinery::Span) {}
+
+    fn new_block(&self, _block_id: usize) {}
+
+    fn flush(&self) {}
+
+    fn on_lookup(
+        &self,
+        _span: &minijinja::machinery::Span,
+        _simple_name: &str,
+        _full_name: &str,
+        _def_spans: Vec<minijinja::machinery::Span>,
+    ) {
+    }
+}
+
+#[allow(dead_code)]
 struct WarningPrinter {
     args: IoArgs,
     path: PathBuf,
@@ -140,6 +174,7 @@ struct WarningPrinter {
 }
 
 impl WarningPrinter {
+    #[allow(dead_code)]
     pub fn new(args: IoArgs, path: PathBuf, noqa_comments: Option<HashSet<u32>>) -> Self {
         Self {
             args,
@@ -176,7 +211,7 @@ impl TypecheckingEventListener for WarningPrinter {
         {
             return;
         }
-        let binding = self.current_span.borrow();
+        let binding = self.current_span.borrow(); // TODO: do not use the current_span
         let current_span = binding.as_ref().unwrap();
         let location = CodeLocation {
             line: current_span.start_line,

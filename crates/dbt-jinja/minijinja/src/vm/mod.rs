@@ -400,7 +400,7 @@ impl<'env> Vm<'env> {
                     // check if it is a regular variable in state first
                     // Somehow a macro try to set all varibale it uses to undefined
                     } else if let Some(template_name) =
-                        macro_namespace_template_resolver(state, name, &mut Vec::new(), listeners)
+                        macro_namespace_template_resolver(state, name, &mut Vec::new())
                     {
                         if let Some((pkg, macro_name)) = template_name.split_once('.') {
                             stack.push(Value::from_object(DispatchObject {
@@ -825,7 +825,7 @@ impl<'env> Vm<'env> {
                     stack.drop_top(arg_count);
                     stack.push(Value::from(rv));
                 }
-                Instruction::CallFunction(name, arg_count, this_span) => {
+                Instruction::CallFunction(name, arg_count, this_span, _) => {
                     // reset_span is a special function that resets the current span
                     // it is only used internally like in run_operation.rs,
                     // where we want to set the location to yml file
@@ -886,23 +886,18 @@ impl<'env> Vm<'env> {
                         recurse_loop!(true, &this_span);
                     } else if (*name == "ref" || *name == "source") && {
                         // we only consider the ref source override in root package
-                        let template_result =
-                            self.env.get_template(name, listeners).or_else(|_| {
-                                self.env.get_template(
-                                    &format!("{}.{}", root_package_name, *name),
-                                    listeners,
-                                )
-                            });
+                        let template_result = self.env.get_template(name).or_else(|_| {
+                            self.env
+                                .get_template(&format!("{}.{}", root_package_name, *name))
+                        });
                         template_result.is_ok()
                     } {
                         let template = self
                             .env
-                            .get_template(name, listeners)
+                            .get_template(name)
                             .or_else(|_| {
-                                self.env.get_template(
-                                    &format!("{}.{}", root_package_name, *name),
-                                    listeners,
-                                )
+                                self.env
+                                    .get_template(&format!("{}.{}", root_package_name, *name))
                             })
                             .unwrap();
                         let template_registry_entry = template_registry.get(&Value::from(*name));
@@ -960,10 +955,10 @@ impl<'env> Vm<'env> {
                         rv
                     // Resolve the template using the dbt macro namespace resolution logic
                     } else if let Some(template_name) =
-                        macro_namespace_template_resolver(state, name, &mut Vec::new(), listeners)
+                        macro_namespace_template_resolver(state, name, &mut Vec::new())
                     {
                         // The template was found, now get and execute it
-                        let template = self.env.get_template(&template_name, listeners)?;
+                        let template = self.env.get_template(&template_name)?;
                         let template_registry_entry =
                             template_registry.get(&Value::from(template_name.clone()));
                         let path = template_registry_entry
@@ -1021,7 +1016,7 @@ impl<'env> Vm<'env> {
                             .map_err(|err| state.with_span_error(err, this_span))?
                     } else if *name == "render" {
                         let raw = args[0].as_str().unwrap_or_default();
-                        let template = state.env().template_from_str(raw, listeners)?;
+                        let template = state.env().template_from_str(raw)?;
                         let rendered_sql = template.render(state.get_base_context(), listeners)?;
                         Value::from(rendered_sql)
                     } else {
@@ -1065,7 +1060,7 @@ impl<'env> Vm<'env> {
                             .for_each(|listener| listener.on_reference(&qualified_name));
                         // if not found, attempt to lookup the template and function using name stripped of test_
                         // see generate_test_macro in resolve_generic_tests.rs -> a subset of generated macro names are prefixed with test_
-                        let Ok(template) = self.env.get_template(&qualified_name, listeners) else {
+                        let Ok(template) = self.env.get_template(&qualified_name) else {
                             return Err(state.with_span_error(
                                 Error::new(
                                     ErrorKind::UnknownFunction,
@@ -1198,7 +1193,7 @@ impl<'env> Vm<'env> {
                         ));
                     }
                     parent_instructions = Some(
-                        self.load_blocks(a, state, listeners)
+                        self.load_blocks(a, state)
                             .map_err(|e| state.with_span_error(e, span))?,
                     );
                     out.begin_capture(CaptureMode::Discard);
@@ -1258,50 +1253,54 @@ impl<'env> Vm<'env> {
                     );
                 }
                 Instruction::MacroStart(line, col, index) => {
-                    let path = state.ctx.current_path.as_path();
-                    let span = state.ctx.current_span;
-                    let line = span.start_line + *line - 1;
-                    let col = *col
-                        + if span.start_line == 1 {
-                            span.start_col - 1
-                        } else {
-                            0
-                        };
-                    let offset = *index + span.start_offset;
-                    listeners.iter().for_each(|listener| {
-                        listener.on_macro_start(
-                            Some(path),
-                            &line,
-                            &col,
-                            &offset,
-                            &current_location.line(),
-                            &current_location.col(),
-                            &current_location.index(),
-                        )
-                    });
+                    if current_macro_name.is_none() {
+                        let path = state.ctx.current_path.as_path();
+                        let span = state.ctx.current_span;
+                        let line = span.start_line + *line - 1;
+                        let col = *col
+                            + if span.start_line == 1 {
+                                span.start_col - 1
+                            } else {
+                                0
+                            };
+                        let offset = *index + span.start_offset;
+                        listeners.iter().for_each(|listener| {
+                            listener.on_macro_start(
+                                Some(path),
+                                &line,
+                                &col,
+                                &offset,
+                                &current_location.line(),
+                                &current_location.col(),
+                                &current_location.index(),
+                            )
+                        });
+                    }
                 }
                 Instruction::MacroStop(line, col, index) => {
-                    let path = state.ctx.current_path.as_path();
-                    let span = state.ctx.current_span;
-                    let line = span.start_line + *line - 1;
-                    let col = *col
-                        + if span.start_line == 1 {
-                            span.start_col - 1
-                        } else {
-                            0
-                        };
-                    let offset = *index + span.start_offset;
-                    listeners.iter().for_each(|listener| {
-                        listener.on_macro_stop(
-                            Some(path),
-                            &line,
-                            &col,
-                            &offset,
-                            &current_location.line(),
-                            &current_location.col(),
-                            &current_location.index(),
-                        )
-                    });
+                    if current_macro_name.is_none() {
+                        let path = state.ctx.current_path.as_path();
+                        let span = state.ctx.current_span;
+                        let line = span.start_line + *line - 1;
+                        let col = *col
+                            + if span.start_line == 1 {
+                                span.start_col - 1
+                            } else {
+                                0
+                            };
+                        let offset = *index + span.start_offset;
+                        listeners.iter().for_each(|listener| {
+                            listener.on_macro_stop(
+                                Some(path),
+                                &line,
+                                &col,
+                                &offset,
+                                &current_location.line(),
+                                &current_location.col(),
+                                &current_location.index(),
+                            )
+                        });
+                    }
                 }
                 Instruction::MacroName(name, _) => {
                     current_macro_name = Some((*name).to_string());
@@ -1360,7 +1359,7 @@ impl<'env> Vm<'env> {
                     "template name was not a string",
                 )
             }));
-            let tmpl = match state.get_template(name, listeners) {
+            let tmpl = match state.get_template(name) {
                 Ok(tmpl) => tmpl,
                 Err(err) => {
                     if err.kind() == ErrorKind::TemplateNotFound {
@@ -1476,7 +1475,6 @@ impl<'env> Vm<'env> {
         &self,
         name: Value,
         state: &mut State<'_, 'env>,
-        listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<&'env Instructions<'env>, Error> {
         let name = match name.as_str() {
             Some(name) => name,
@@ -1493,7 +1491,7 @@ impl<'env> Vm<'env> {
                 format!("cycle in template inheritance. {name:?} was referenced more than once"),
             ));
         }
-        let tmpl = ok!(state.get_template(name, listeners));
+        let tmpl = ok!(state.get_template(name));
         let (new_instructions, new_blocks) = ok!(tmpl.instructions_and_blocks());
         state.loaded_templates.insert(new_instructions.name());
         for (name, instr) in new_blocks.iter() {

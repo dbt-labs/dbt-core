@@ -341,13 +341,9 @@ impl<'template, 'env> State<'template, 'env> {
     /// it will be invoked with the name of the current template as parent template.
     ///
     /// For more information see [`Environment::set_path_join_callback`].
-    pub fn get_template(
-        &self,
-        name: &str,
-        listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Template<'env, 'env>, Error> {
+    pub fn get_template(&self, name: &str) -> Result<Template<'env, 'env>, Error> {
         self.env
-            .get_template(&self.env.join_template_path(name, self.name()), listeners)
+            .get_template(&self.env.join_template_path(name, self.name()))
     }
 
     /// Invokes a filter with some arguments.
