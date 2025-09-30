@@ -1,6 +1,6 @@
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
 use dbt_fusion_adapter::{
-    BaseAdapter, BridgeAdapter, ParseAdapter, SqlEngine, factory::create_static_relation,
+    BaseAdapter, BridgeAdapter, ParseAdapter, factory::create_static_relation,
 };
 use minijinja::{
     Environment, Error as MinijinjaError, State, Template, UndefinedBehavior, Value,
@@ -57,8 +57,6 @@ impl<'env: 'source, 'source> JinjaTemplate<'env, 'source> {
 pub struct JinjaEnv {
     /// The Minijinja Environment instance.
     pub env: Environment<'static>,
-    /// An optional SqlEngine instance.
-    pub sql_engine: Option<Arc<SqlEngine>>,
     /// The Jinja function registry.
     pub jinja_function_registry: Arc<minijinja::compiler::typecheck::FunctionRegistry>,
 }
@@ -74,7 +72,6 @@ impl JinjaEnv {
     pub fn new(env: Environment<'static>) -> Self {
         Self {
             env,
-            sql_engine: None,
             jinja_function_registry: Arc::new(BTreeMap::new()),
         }
     }
@@ -119,11 +116,6 @@ impl JinjaEnv {
         self.env.render_named_str(name, source, ctx, listeners)
     }
 
-    /// Get a reference to the stored [SqlEngine], if available.
-    pub fn sql_engine(&self) -> Option<&Arc<SqlEngine>> {
-        self.sql_engine.as_ref()
-    }
-
     /// Get a global variable.
     pub fn get_global(&self, name: &str) -> Option<Value> {
         self.env.get_global(name)
@@ -147,7 +139,6 @@ impl JinjaEnv {
         self.env.add_global("api", Value::from_object(api_map));
 
         // Add the adapter type to the environment for easy access
-        self.sql_engine = Some(Arc::clone(adapter.engine()));
         self.env
             .add_global("dialect", Value::from(adapter.adapter_type().to_string()));
         self.env.add_global("adapter", adapter.as_value());
