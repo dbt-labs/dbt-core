@@ -336,7 +336,7 @@ pub async fn resolve_data_tests(
             database: test_config.database.clone(),
             schema: test_config.schema.clone(),
             alias: test_config.alias.clone(),
-            store_failures: None,
+            store_failures: test_config.store_failures,
         };
 
         // Update with relation components
