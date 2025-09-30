@@ -279,7 +279,7 @@ pub fn resolve_top_level_metrics(
         let metric_props: MetricsProperties = into_typed_with_error(
             &arg.io,
             mpe.schema_value.clone(),
-            // TODO: set arg 'show_errors_or_warnings' to true after updating conformance tests to use new SL spec
+            // Set show_errors_or_warnings to false for legacy top-level metrics to avoid strict validation errors, since these metrics use a different specification format than the current semantic layer spec.
             false,
             None,
             None,

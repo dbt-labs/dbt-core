@@ -462,22 +462,16 @@ pub async fn resolve_inner(
             false,
         )?;
 
-        // The caveat here is that any yaml errors will be reported with root path as `models.[$].metrics`
-        // meaning if there's an unexpected key such as `models.[$].metrics.[$].non_existent_key` it will
-        // report unexpected key at `.[$].non_existent_key`, when it should be `.metrics.[$].non_existent_key`
+        // The caveat to parsing model.metrics separately is that any yaml errors will be reported with root path
+        // as `models.[$].metrics` meaning if there's an unexpected key such as `models.[$].metrics.[$].non_existent_key`
+        // it will report unexpected key at `.[$].non_existent_key`, when it should be `.metrics.[$].non_existent_key`
         //
         // This will be inconsistent with unexpected keys in `models.[$]` where for example an unexpected
         // key in `models.[$].derived_semantics.made_up_key` will report unexpected key at
         // `derived_semantics.[$].non_existent_key`
         if let Some(model_metrics_yml) = maybe_model_metrics_yml {
-            let typed_model_metrics_props: Option<Vec<MetricsProperties>> = into_typed_with_error(
-                &arg.io,
-                model_metrics_yml,
-                // TODO: set arg 'show_errors_or_warnings' to true after updating conformance tests to use new SL spec
-                false,
-                None,
-                None,
-            )?;
+            let typed_model_metrics_props: Option<Vec<MetricsProperties>> =
+                into_typed_with_error(&arg.io, model_metrics_yml, true, None, None)?;
             typed_model_props.metrics = typed_model_metrics_props;
         }
 

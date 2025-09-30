@@ -270,6 +270,18 @@ impl MinimalProperties {
                 );
             }
         }
+        if let Some(_semantic_models) = other.semantic_models {
+            // Top level semantic models are not allowed anymore
+            // TODO: edit copy to encourage user to use auto-fix.
+            show_warning!(
+                io_args,
+                fs_err!(
+                    ErrorCode::SchemaError,
+                    "This project defines semantic models and metrics using the legacy YAML in file '{}'. Please migrate to the new YAML to use the semantic layer with dbt Fusion.",
+                    properties_path.display(),
+                )
+            );
+        }
         if let Some(metrics) = other.metrics {
             for metric_value in metrics {
                 let metric = into_typed_with_jinja::<MinimalSchemaValue, _>(
