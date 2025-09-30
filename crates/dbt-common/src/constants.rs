@@ -52,6 +52,7 @@ pub const DBT_GENERIC_TESTS_DIR_NAME: &str = "generic_tests";
 pub const DBT_SNAPSHOTS_DIR_NAME: &str = "snapshots";
 // ----------------------------------------------------------------------------------------------
 pub const DBT_MODELS_DIR_NAME: &str = "models";
+pub const DBT_SELECTORS_YML: &str = "selectors.yml";
 
 // ----------------------------------------------------------------------------------------------
 // dbt packages

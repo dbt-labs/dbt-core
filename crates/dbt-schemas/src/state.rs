@@ -404,6 +404,15 @@ impl ResolverState {
         }
         reverse_deps
     }
+
+    pub fn to_resolved_nodes(&self) -> ResolvedNodes {
+        ResolvedNodes {
+            nodes: self.nodes.clone(),
+            disabled_nodes: self.disabled_nodes.clone(),
+            macros: self.macros.clone(),
+            operations: self.operations.clone(),
+        }
+    }
 }
 
 impl fmt::Display for ResolverState {
