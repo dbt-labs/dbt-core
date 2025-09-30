@@ -4,6 +4,7 @@ use dbt_common::FsResult;
 use dbt_serde_yaml::JsonSchema;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_with::skip_serializing_none;
+use strum::Display;
 
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
@@ -72,7 +73,7 @@ pub struct ColumnProperties {
     pub dimension: Option<ColumnPropertiesDimension>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, Default, JsonSchema, Eq, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, Default, JsonSchema, Eq, PartialEq, Display)]
 #[allow(non_camel_case_types)]
 pub enum Granularity {
     #[default]

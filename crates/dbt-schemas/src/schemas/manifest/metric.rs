@@ -205,7 +205,7 @@ impl From<MetricsProperties> for CumulativeTypeParams {
     fn from(props: MetricsProperties) -> Self {
         Self {
             window: props.window.map(MetricTimeWindow::from_string),
-            grain_to_date: None,
+            grain_to_date: props.grain_to_date.map(|value| value.to_string()),
             period_agg: props.period_agg.unwrap_or_default(),
             metric: props.input_metric.map(MetricInput::from),
         }
@@ -261,7 +261,6 @@ impl From<MetricsProperties> for MetricTypeParams {
             None
         };
         let expr = props.expr.clone().map(String::from);
-        let grain_to_date = props.grain_to_date.clone();
 
         let metric_aliases: Option<Vec<MetricInput>> = props
             .metric_aliases
@@ -293,7 +292,6 @@ impl From<MetricsProperties> for MetricTypeParams {
             cumulative_type_params,
             conversion_type_params,
             expr,
-            grain_to_date,
             window,
             metrics: metrics.or(metric_aliases), // TODO: confirm which ones take precedence
             input_measures: Some(vec![]),
