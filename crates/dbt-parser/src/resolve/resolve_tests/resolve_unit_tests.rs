@@ -177,6 +177,9 @@ pub fn resolve_unit_tests(
                         Some(ref fixture) if given.format == Formats::Csv => {
                             file_map.get(&(fixture.clone() + ".csv")).cloned()
                         }
+                        Some(ref fixture) if given.format == Formats::Sql => {
+                            file_map.get(&(fixture.clone() + ".sql")).cloned()
+                        }
                         _ => given.fixture.clone(),
                     };
 
@@ -194,6 +197,9 @@ pub fn resolve_unit_tests(
             let full_path: Option<String> = match unit_test.expect.fixture {
                 Some(ref fixture) if unit_test.expect.format == Formats::Csv => {
                     file_map.get(&(fixture.clone() + ".csv")).cloned()
+                }
+                Some(ref fixture) if unit_test.expect.format == Formats::Sql => {
+                    file_map.get(&(fixture.clone() + ".sql")).cloned()
                 }
                 _ => unit_test.expect.fixture.clone(),
             };

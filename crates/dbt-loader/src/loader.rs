@@ -532,7 +532,7 @@ pub async fn load_inner(
         package_path,
         &dbt_project.name,
         &ResourcePathKind::FixturePaths,
-        &["csv"],
+        &["csv", "sql"],
         &all_files,
     );
     let seed_files = find_files_by_kind_and_extension(
@@ -688,7 +688,18 @@ fn collect_all_files(
     let mut all_paths: HashMap<ResourcePathKind, Vec<(PathBuf, SystemTime)>> = HashMap::new();
     for (kind, paths) in &all_dirs {
         let mut info_paths = Vec::new();
-        collect_file_info(base_path, paths, &mut info_paths, dbtignore.as_ref()).lift(ectx!(
+
+        collect_file_info(
+            base_path,
+            paths,
+            &mut info_paths,
+            dbtignore.as_ref(),
+            |path: &Path| {
+                path.components().next()
+                    != Some(std::path::Component::Normal(OsStr::new("fixtures")))
+            },
+        )
+        .lift(ectx!(
             "Failed to collect file info: {}, {}",
             base_path.display(),
             paths.join(",")

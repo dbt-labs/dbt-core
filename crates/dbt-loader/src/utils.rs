@@ -5,6 +5,7 @@ use dbt_common::{
     err, fs_err, stdfs,
 };
 use dbt_jinja_utils::serde::{value_from_file, yaml_to_fs_error};
+use pathdiff::diff_paths;
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::Read,
@@ -29,11 +30,12 @@ use walkdir::WalkDir;
 // ------------------------------------------------------------------------------------------------
 // path, directory, and file stuff
 
-pub fn collect_file_info<P: AsRef<Path>>(
+pub fn collect_file_info<P: AsRef<Path>, T: Fn(&Path) -> bool>(
     base_path: P,
     relative_paths: &[String],
     info_paths: &mut Vec<(PathBuf, SystemTime)>,
     dbtignore: Option<&Gitignore>,
+    filter: T,
 ) -> io::Result<()> {
     if !base_path.as_ref().exists() {
         return Ok(());
@@ -44,10 +46,15 @@ pub fn collect_file_info<P: AsRef<Path>>(
             continue;
         }
         // Configure WalkDir to respect gitignore patterns at the directory level
-        let walker = WalkDir::new(full_path);
+        let walker = WalkDir::new(full_path.clone());
 
         // Process files as normal, but use a filter function to skip directories that match gitignore
         for entry_result in walker.into_iter().filter_entry(|e| {
+            let diff_path = diff_paths(e.path(), &full_path).unwrap();
+            if !filter(diff_path.as_path()) {
+                return false;
+            }
+
             // If there's no gitignore or if this is not a directory, always process it
             if dbtignore.is_none() || !e.file_type().is_dir() {
                 return true;
