@@ -1,7 +1,7 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
 use crate::utils::{get_node_fqn, get_original_file_path, get_unique_id};
-use dbt_common::FsResult;
+use dbt_common::{ErrorCode, FsResult, fs_err, show_error};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::into_typed_with_error;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
@@ -12,10 +12,11 @@ use dbt_schemas::schemas::properties::metrics_properties::{MetricType, Percentil
 use dbt_schemas::schemas::properties::{MetricsProperties, ModelProperties};
 use dbt_schemas::state::DbtPackage;
 use minijinja::value::Value as MinijinjaValue;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
 use super::resolve_properties::MinimalPropertiesEntry;
+use super::validate_metrics::validate_metric_name;
 
 use dbt_schemas::schemas::manifest::metric::{
     DbtMetric, DbtMetricAttr, MeasureAggregationParameters, MetricAggregationParameters,
@@ -63,6 +64,7 @@ pub async fn resolve_metrics(
 ) -> ResolveMetricsResult {
     let mut metrics: HashMap<String, Arc<DbtMetric>> = HashMap::new();
     let mut disabled_metrics: HashMap<String, Arc<DbtMetric>> = HashMap::new();
+    let mut seen_metric_names = HashSet::new();
 
     let (nested_metrics, nested_disabled_metrics) = resolve_nested_model_metrics(
         arg,
@@ -73,6 +75,7 @@ pub async fn resolve_metrics(
         package_name,
         env,
         base_ctx,
+        &mut seen_metric_names,
     )?;
     metrics.extend(nested_metrics);
     disabled_metrics.extend(nested_disabled_metrics);
@@ -85,6 +88,7 @@ pub async fn resolve_metrics(
         package_name,
         env,
         base_ctx,
+        &mut seen_metric_names,
     )?;
     metrics.extend(top_level_metrics);
     disabled_metrics.extend(top_level_disabled_metrics);
@@ -102,6 +106,7 @@ pub fn resolve_nested_model_metrics(
     package_name: &str,
     env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
+    seen_metric_names: &mut HashSet<String>,
 ) -> ResolveMetricsResult {
     let mut metrics = HashMap::new();
     let mut disabled_metrics = HashMap::new();
@@ -123,9 +128,6 @@ pub fn resolve_nested_model_metrics(
     )?;
 
     for (model_name, model_props) in typed_models_properties.iter() {
-        // TODO: Do we need to validate metric like how we validate
-        // exposure names to only contain letters, numbers, and underscores?
-
         if model_props.metrics.is_none() {
             continue;
         }
@@ -146,6 +148,25 @@ pub fn resolve_nested_model_metrics(
         if let Some(model_metrics_props) = model_props.metrics.clone().as_ref() {
             for metric_props in model_metrics_props {
                 let metric_name = metric_props.name.clone();
+
+                // Validate metric name
+                if let Err(e) = validate_metric_name(&metric_name) {
+                    show_error!(&arg.io, e);
+                    continue;
+                }
+
+                // Check for duplicate metric names
+                if !seen_metric_names.insert(metric_name.clone()) {
+                    let duplicate_error = fs_err!(
+                        ErrorCode::SchemaError,
+                        "Duplicate metric name '{}' found in package '{}'",
+                        metric_name,
+                        package_name
+                    );
+                    show_error!(&arg.io, duplicate_error);
+                    continue;
+                }
+
                 let metric_unique_id = get_unique_id(&metric_name, package_name, None, "metric");
                 let metric_fqn = get_node_fqn(
                     package_name,
@@ -240,6 +261,7 @@ pub fn resolve_nested_model_metrics(
     Ok((metrics, disabled_metrics))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn resolve_top_level_metrics(
     arg: &ResolveArgs,
     package: &DbtPackage,
@@ -248,6 +270,7 @@ pub fn resolve_top_level_metrics(
     package_name: &str,
     env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
+    seen_metric_names: &mut HashSet<String>,
 ) -> ResolveMetricsResult {
     let mut metrics = HashMap::new();
     let mut disabled_metrics = HashMap::new();
@@ -271,9 +294,6 @@ pub fn resolve_top_level_metrics(
         if mpe.schema_value.is_null() {
             continue;
         }
-
-        // TODO: Do we need to validate metric like how we validate
-        // exposure names to only contain letters, numbers, and underscores?
 
         // Parse the metric properties from YAML
         let metric_props: MetricsProperties = into_typed_with_error(
@@ -302,6 +322,25 @@ pub fn resolve_top_level_metrics(
         );
 
         let metric_name = metric_props.name.clone();
+
+        // Validate metric name
+        if let Err(e) = validate_metric_name(&metric_name) {
+            show_error!(&arg.io, e);
+            continue;
+        }
+
+        // Check for duplicate metric names
+        if !seen_metric_names.insert(metric_name.clone()) {
+            let duplicate_error = fs_err!(
+                ErrorCode::SchemaError,
+                "Duplicate metric name '{}' found in package '{}'",
+                metric_name,
+                package_name
+            );
+            show_error!(&arg.io, duplicate_error);
+            continue;
+        }
+
         let metric_unique_id = get_unique_id(&metric_name, package_name, None, "metric");
         let metric_fqn = get_node_fqn(
             package_name,

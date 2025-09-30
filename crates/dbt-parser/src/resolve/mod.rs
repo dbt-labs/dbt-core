@@ -30,3 +30,5 @@ pub(crate) mod resolve_snapshots;
 pub(crate) mod resolve_sources;
 /// Functions for resolving tests
 pub(crate) mod resolve_tests;
+/// Functions for validating metrics
+pub(crate) mod validate_metrics;
