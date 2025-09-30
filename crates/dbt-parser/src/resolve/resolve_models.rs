@@ -316,8 +316,10 @@ pub async fn resolve_models(
                     .clone()
                     .or_else(|| properties.description.clone()),
                 checksum: sql_file_info.checksum.clone(),
+                // NOTE: raw_code has to be this value for dbt-evaluator to return truthy
+                // hydrating it with get_original_file_contents would actually break dbt-evaluator
                 raw_code: Some("--placeholder--".to_string()),
-                language: Some("sql".to_string()),
+                language: Some("sql".to_string()), // TODO: are python models supported?
                 tags: model_config
                     .tags
                     .clone()

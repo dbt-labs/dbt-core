@@ -10,6 +10,7 @@ use crate::utils::RelationComponents;
 use crate::utils::convert_macro_names_to_unique_ids;
 use crate::utils::generate_relation_components;
 use crate::utils::get_node_fqn;
+use crate::utils::get_original_file_contents;
 use crate::utils::get_original_file_path;
 use crate::utils::update_node_relation_components;
 use dbt_common::ErrorCode;
@@ -234,6 +235,17 @@ pub async fn resolve_data_tests(
             .static_analysis
             .unwrap_or(StaticAnalysisKind::On);
 
+        let original_file_path =
+            get_original_file_path(&dbt_asset.base_path, &arg.io.in_dir, &dbt_asset.path);
+        let is_singular_data_test = original_file_path.ends_with(".sql");
+
+        let mut raw_code: Option<String> = None;
+        let mut language: Option<String> = None;
+        if is_singular_data_test {
+            raw_code = get_original_file_contents(&arg.io.in_dir, &original_file_path);
+            language = Some("sql".to_string());
+        }
+
         let mut dbt_test = DbtTest {
             defined_at: test_path_to_test_asset
                 .get(&dbt_asset.path)
@@ -243,11 +255,7 @@ pub async fn resolve_data_tests(
                 package_name: package_name.to_owned(),
                 path: dbt_asset.path.to_owned(),
                 name_span: dbt_common::Span::default(),
-                original_file_path: get_original_file_path(
-                    &dbt_asset.base_path,
-                    &arg.io.in_dir,
-                    &dbt_asset.path,
-                ),
+                original_file_path,
                 patch_path: test_path_to_test_asset
                     .get(&dbt_asset.path)
                     .map(|test_asset| test_asset.original_file_path.clone())
@@ -256,8 +264,13 @@ pub async fn resolve_data_tests(
                 fqn,
                 description: properties.description.clone(),
                 checksum: DbtChecksum::hash(rendered_sql.trim().as_bytes()),
-                raw_code: Some("".to_string()),
-                language: None,
+                // TODO: hydrate for generic + singular tests
+                // Examples in Mantle:
+                // - Generic test: "{{ test_not_null(**_dbt_generic_test_kwargs) }}"
+                // - Generic test with dbt_utils.expression_is_true:"{{ dbt_utils.test_expression_is_true(**_dbt_generic_test_kwargs) }}{{ config(alias=\"dbt_utils_expression_is_true_c_177c20685a18a9071d4a71719e3d9565\") }}"
+                // - Singular test: "SELECT 1\nFROM {{ ref('customers') }}\nLIMIT 0"
+                raw_code,
+                language,
                 tags: test_config
                     .tags
                     .clone()

@@ -260,6 +260,7 @@ pub async fn resolve_snapshots(
             let static_analysis = final_config
                 .static_analysis
                 .unwrap_or(StaticAnalysisKind::On);
+
             // Create initial snapshot with default values
             let mut dbt_snapshot = DbtSnapshot {
                 __common_attr__: CommonAttributes {
@@ -267,7 +268,9 @@ pub async fn resolve_snapshots(
                     package_name: package_name.clone(),
                     path: dbt_asset.path.clone(),
                     name_span: dbt_common::Span::default(),
-                    raw_code: Some("--placeholder--".to_string()), // TODO: This is only so that dbt-evaluator returns truthy
+                    // NOTE: raw_code has to be this value for dbt-evaluator to return truthy
+                    // hydrating it with get_original_file_contents would actually break dbt-evaluator
+                    raw_code: Some("--placeholder--".to_string()),
                     // The path to the YML file, if it is specified
                     original_file_path: dbt_asset.path.clone(),
                     unique_id: unique_id.clone(),
