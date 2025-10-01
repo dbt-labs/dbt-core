@@ -32,3 +32,5 @@ pub(crate) mod resolve_sources;
 pub(crate) mod resolve_tests;
 /// Functions for validating metrics
 pub(crate) mod validate_metrics;
+/// Functions for validating semantic models
+pub(crate) mod validate_semantic_models;

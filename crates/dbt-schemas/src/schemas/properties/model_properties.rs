@@ -41,7 +41,7 @@ pub struct ModelConstraint {
 // todo: consider revising this design: warn_unsupported, warn_unenforced are adapter specific constraint. You don't want to specify them on all models!
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ModelProperties {
     pub columns: Option<Vec<ColumnProperties>>,
     pub config: Option<ModelConfig>,

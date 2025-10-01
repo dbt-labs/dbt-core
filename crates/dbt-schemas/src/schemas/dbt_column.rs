@@ -57,7 +57,7 @@ where
 pub type DbtColumnRef = Arc<DbtColumn>;
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ColumnProperties {
     pub name: String,
     pub data_type: Option<String>,

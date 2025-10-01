@@ -2,7 +2,7 @@ use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
 use crate::utils::{get_node_fqn, get_original_file_path, get_unique_id};
 
-use dbt_common::FsResult;
+use dbt_common::{FsResult, show_error};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::common::{DbtChecksum, Dimension, DimensionTypeParams, NodeDependsOn};
@@ -27,6 +27,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use super::resolve_properties::MinimalPropertiesEntry;
+use super::validate_semantic_models::validate_semantic_model;
 
 /// Helper to compute the effective semantic model config for a given semantic model
 fn get_effective_semantic_model_config(
@@ -55,7 +56,7 @@ fn get_effective_semantic_model_config(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::expect_fun_call)]
 pub async fn resolve_semantic_models(
     args: &ResolveArgs,
     package: &DbtPackage,
@@ -107,6 +108,23 @@ pub async fn resolve_semantic_models(
         }
         if !model_props.semantic_model.clone().unwrap().enabled {
             continue;
+        }
+
+        // Validate semantic model properties (versions, time spine, etc.)
+        match validate_semantic_model(model_props) {
+            Ok(errors) => {
+                if !errors.is_empty() {
+                    // Show each error individually
+                    for error in errors {
+                        show_error!(&args.io, Box::new(error));
+                    }
+                    continue;
+                }
+            }
+            Err(e) => {
+                show_error!(&args.io, e);
+                continue;
+            }
         }
 
         let mpe = minimal_model_properties
@@ -208,26 +226,16 @@ pub async fn resolve_semantic_models(
 
         let mut time_spine: Option<TimeSpine> = None;
         if let Some(props_time_spine) = model_props.time_spine.clone() {
-            let standard_granularity_column_dimension = dimensions
-                .clone()
+            let standard_granularity_column_dimension = model_props.columns.clone().unwrap_or_default()
                 .into_iter()
                 .find(|d| {
-                    d.column_name == Some(props_time_spine.standard_granularity_column.clone())
-                })
-                .unwrap_or_else(|| {
-                    // TODO: validation error should be shown without panicking
-                    panic!(
-                        "Cannot find dimension for standard granularity column '{}'",
-                        props_time_spine.standard_granularity_column
-                    )
-                });
+                    d.name == props_time_spine.standard_granularity_column.clone()
+                }).expect(&format!("Cannot find standard granularity column '{}'. There should have been a validation error.", props_time_spine.standard_granularity_column));
 
             let primary_column = TimeSpinePrimaryColumn {
                 name: props_time_spine.standard_granularity_column.clone(),
                 time_granularity: standard_granularity_column_dimension
-                    .type_params
-                    .unwrap_or_default()
-                    .time_granularity
+                    .granularity
                     .unwrap_or_default(),
             };
 
