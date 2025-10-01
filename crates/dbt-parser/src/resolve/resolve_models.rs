@@ -29,8 +29,11 @@ use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::CommonAttributes;
 use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::DbtModelAttr;
+use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::IntrospectionKind;
 use dbt_schemas::schemas::NodeBaseAttributes;
+use dbt_schemas::schemas::TimeSpine;
+use dbt_schemas::schemas::TimeSpinePrimaryColumn;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::common::ModelFreshnessRules;
@@ -40,6 +43,7 @@ use dbt_schemas::schemas::dbt_column::ColumnInheritanceRules;
 use dbt_schemas::schemas::dbt_column::ColumnProperties;
 use dbt_schemas::schemas::dbt_column::DbtColumnRef;
 use dbt_schemas::schemas::dbt_column::process_columns;
+use dbt_schemas::schemas::manifest::semantic_model::NodeRelation;
 use dbt_schemas::schemas::nodes::AdapterAttr;
 use dbt_schemas::schemas::project::DbtProject;
 use dbt_schemas::schemas::project::ModelConfig;
@@ -58,9 +62,13 @@ use std::sync::Arc;
 
 use super::resolve_properties::MinimalPropertiesEntry;
 use super::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
+use super::validate_models::validate_model;
 
-#[allow(clippy::cognitive_complexity)]
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::cognitive_complexity,
+    clippy::expect_fun_call,
+    clippy::too_many_arguments
+)]
 pub async fn resolve_models(
     arg: &ResolveArgs,
     package: &DbtPackage,
@@ -264,6 +272,24 @@ pub async fn resolve_models(
         } else {
             ModelProperties::empty(model_name.to_owned())
         };
+
+        // Validate model properties (versions, time spine, etc.)
+        match validate_model(&properties) {
+            Ok(errors) => {
+                if !errors.is_empty() {
+                    // Show each error individually
+                    for error in errors {
+                        show_error!(&arg.io, Box::new(error));
+                    }
+                    continue;
+                }
+            }
+            Err(e) => {
+                show_error!(&arg.io, e);
+                continue;
+            }
+        }
+
         let model_constraints = properties.constraints.clone().unwrap_or_default();
 
         // Iterate over metrics and construct the dependencies
@@ -300,6 +326,38 @@ pub async fn resolve_models(
         let static_analysis = model_config
             .static_analysis
             .unwrap_or(StaticAnalysisKind::On);
+
+        // Hydrate time_spine from model properties
+        let mut time_spine: Option<TimeSpine> = None;
+        if let Some(props_time_spine) = properties.time_spine.clone() {
+            let standard_granularity_column_dimension = properties.columns.clone().unwrap_or_default()
+                .into_iter()
+                .find(|d| {
+                    d.name == props_time_spine.standard_granularity_column.clone()
+                }).expect(&format!("Cannot find standard granularity column '{}'. There should have been a validation error.", props_time_spine.standard_granularity_column));
+
+            let primary_column = TimeSpinePrimaryColumn {
+                name: props_time_spine.standard_granularity_column.clone(),
+                time_granularity: standard_granularity_column_dimension
+                    .granularity
+                    .unwrap_or_default(),
+            };
+
+            // Create a temporary node_relation for the time_spine
+            let node_relation = NodeRelation {
+                database: Some(database.to_string()),
+                schema_name: schema.to_string(),
+                alias: model_name.to_string(), // will be updated after relation components are resolved
+                relation_name: None,
+            };
+
+            time_spine = Some(TimeSpine {
+                node_relation,
+                primary_column,
+                custom_granularities: props_time_spine.custom_granularities.unwrap_or_default(),
+            });
+        }
+
         // Create the DbtModel with all properties already set
         let mut dbt_model = DbtModel {
             __common_attr__: CommonAttributes {
@@ -385,7 +443,7 @@ pub async fn resolve_models(
                 constraints: model_constraints,
                 deprecation_date: None,
                 primary_key: vec![],
-                time_spine: None,
+                time_spine,
                 access: model_config.access.clone().unwrap_or_default(),
                 group: model_config.group.clone(),
                 contract: model_config.contract.clone(),
@@ -419,6 +477,23 @@ pub async fn resolve_models(
             &components,
             adapter_type,
         )?;
+
+        // Update time_spine node_relation with the resolved relation components
+        if dbt_model.__model_attr__.time_spine.is_some() {
+            let database = dbt_model.database();
+            let schema = dbt_model.schema();
+            let alias = dbt_model.alias();
+            let relation_name = dbt_model.__base_attr__.relation_name.clone();
+
+            if let Some(ref mut ts) = dbt_model.__model_attr__.time_spine {
+                ts.node_relation = NodeRelation {
+                    database: Some(database),
+                    schema_name: schema,
+                    alias,
+                    relation_name,
+                };
+            }
+        }
         match refs_and_sources.insert_ref(&dbt_model, adapter_type, status, false) {
             Ok(_) => (),
             Err(e) => {

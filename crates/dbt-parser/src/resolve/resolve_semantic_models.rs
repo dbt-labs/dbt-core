@@ -2,7 +2,7 @@ use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
 use crate::utils::{get_node_fqn, get_original_file_path, get_unique_id};
 
-use dbt_common::{FsResult, show_error};
+use dbt_common::FsResult;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::common::{DbtChecksum, Dimension, DimensionTypeParams, NodeDependsOn};
@@ -14,7 +14,6 @@ use dbt_schemas::schemas::manifest::semantic_model::{
     DbtSemanticModel, DbtSemanticModelAttr, NodeRelation, SemanticEntity, SemanticMeasure,
     SemanticModelDefaults,
 };
-use dbt_schemas::schemas::manifest::semantic_model::{TimeSpine, TimeSpinePrimaryColumn};
 use dbt_schemas::schemas::project::{DefaultTo, ModelConfig, SemanticModelConfig};
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::properties::metrics_properties::{AggregationType, PercentileType};
@@ -27,7 +26,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use super::resolve_properties::MinimalPropertiesEntry;
-use super::validate_semantic_models::validate_semantic_model;
 
 /// Helper to compute the effective semantic model config for a given semantic model
 fn get_effective_semantic_model_config(
@@ -108,23 +106,6 @@ pub async fn resolve_semantic_models(
         }
         if !model_props.semantic_model.clone().unwrap().enabled {
             continue;
-        }
-
-        // Validate semantic model properties (versions, time spine, etc.)
-        match validate_semantic_model(model_props) {
-            Ok(errors) => {
-                if !errors.is_empty() {
-                    // Show each error individually
-                    for error in errors {
-                        show_error!(&args.io, Box::new(error));
-                    }
-                    continue;
-                }
-            }
-            Err(e) => {
-                show_error!(&args.io, e);
-                continue;
-            }
         }
 
         let mpe = minimal_model_properties
@@ -224,28 +205,6 @@ pub async fn resolve_semantic_models(
             relation_name: resolved_model.__base_attr__.relation_name.clone(),
         };
 
-        let mut time_spine: Option<TimeSpine> = None;
-        if let Some(props_time_spine) = model_props.time_spine.clone() {
-            let standard_granularity_column_dimension = model_props.columns.clone().unwrap_or_default()
-                .into_iter()
-                .find(|d| {
-                    d.name == props_time_spine.standard_granularity_column.clone()
-                }).expect(&format!("Cannot find standard granularity column '{}'. There should have been a validation error.", props_time_spine.standard_granularity_column));
-
-            let primary_column = TimeSpinePrimaryColumn {
-                name: props_time_spine.standard_granularity_column.clone(),
-                time_granularity: standard_granularity_column_dimension
-                    .granularity
-                    .unwrap_or_default(),
-            };
-
-            time_spine = Some(TimeSpine {
-                node_relation: node_relation.clone(),
-                primary_column,
-                custom_granularities: props_time_spine.custom_granularities.unwrap_or_default(),
-            });
-        }
-
         let dbt_semantic_model = DbtSemanticModel {
             __common_attr__: CommonAttributes {
                 name: semantic_model_name.clone(),
@@ -301,7 +260,6 @@ pub async fn resolve_semantic_models(
                 measures,
                 dimensions,
                 primary_entity: model_props.primary_entity.clone(),
-                time_spine,
             },
             deprecated_config: semantic_model_config.clone(),
             __other__: BTreeMap::new(),

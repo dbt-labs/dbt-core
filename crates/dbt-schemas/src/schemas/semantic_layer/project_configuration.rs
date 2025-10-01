@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::schemas::{
-    dbt_column::Granularity,
-    manifest::{common::SourceFileMetadata, semantic_model::TimeSpine},
-};
+use crate::schemas::{TimeSpine, dbt_column::Granularity, manifest::common::SourceFileMetadata};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct SemanticManifestProjectConfiguration {

@@ -22,6 +22,7 @@ use crate::schemas::{
     },
     macros::DbtMacro,
     manifest::common::DbtOwner,
+    manifest::semantic_model::NodeRelation,
     manifest::{DbtMetric, DbtSavedQuery, DbtSemanticModel},
     project::{
         DataTestConfig, ExposureConfig, ModelConfig, SeedConfig, SnapshotConfig,
@@ -2226,8 +2227,22 @@ pub struct DbtModelAttr {
     pub deprecation_date: Option<String>,
     // TODO: Investigate why primary_key is needed here (constraints already exist)
     pub primary_key: Vec<String>,
-    pub time_spine: Option<YmlValue>,
+    pub time_spine: Option<TimeSpine>,
     pub event_time: Option<String>,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct TimeSpine {
+    pub node_relation: NodeRelation,
+    pub primary_column: TimeSpinePrimaryColumn,
+    pub custom_granularities:
+        Vec<crate::schemas::properties::model_properties::TimeSpineCustomGranularity>,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct TimeSpinePrimaryColumn {
+    pub name: String,
+    pub time_granularity: crate::schemas::dbt_column::Granularity,
 }
 
 fn default_introspection() -> IntrospectionKind {

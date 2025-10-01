@@ -27,6 +27,7 @@ use crate::schemas::{
     properties::{
         ModelConstraint, UnitTestOverrides,
         metrics_properties::{AggregationType, MetricType},
+        model_properties::ModelPropertiesTimeSpine,
     },
     ref_and_source::{DbtRef, DbtSourceWrapper},
     semantic_layer::semantic_manifest::SemanticLayerElementConfig,
@@ -449,7 +450,7 @@ pub struct ManifestModel {
     pub constraints: Option<Vec<ModelConstraint>>,
     pub deprecation_date: Option<String>,
     pub primary_key: Option<Vec<String>>,
-    pub time_spine: Option<YmlValue>,
+    pub time_spine: Option<ModelPropertiesTimeSpine>,
 
     pub __other__: BTreeMap<String, YmlValue>,
 }
@@ -499,7 +500,13 @@ impl From<DbtModel> for ManifestModel {
             constraints: Some(model.__model_attr__.constraints),
             deprecation_date: model.__model_attr__.deprecation_date,
             primary_key: Some(model.__model_attr__.primary_key),
-            time_spine: model.__model_attr__.time_spine,
+            time_spine: model
+                .__model_attr__
+                .time_spine
+                .map(|ts| ModelPropertiesTimeSpine {
+                    custom_granularities: Some(ts.custom_granularities),
+                    standard_granularity_column: ts.primary_column.name,
+                }),
             __other__: model.__other__,
         }
     }

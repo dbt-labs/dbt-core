@@ -46,6 +46,7 @@ pub mod schemas {
         DbtSeedAttr, DbtSnapshot, DbtSnapshotAttr, DbtSource, DbtSourceAttr, DbtTest, DbtTestAttr,
         DbtUnitTest, DbtUnitTestAttr, InternalDbtNode, InternalDbtNodeAttributes,
         InternalDbtNodeWrapper, IntrospectionKind, NodeBaseAttributes, Nodes, TestMetadata,
+        TimeSpine, TimeSpinePrimaryColumn,
     };
 
     pub use sources::{FreshnessResultsArtifact, FreshnessResultsMetadata, FreshnessResultsNode};

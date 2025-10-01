@@ -43,10 +43,10 @@ impl From<Nodes> for SemanticManifest {
                 dsi_package_version: Default::default(),
                 metadata: None,
                 time_spines: nodes
-                    .semantic_models
+                    .models
                     .into_values()
-                    .filter(|m| m.__semantic_model_attr__.time_spine.is_some())
-                    .map(|m| (*m).clone().__semantic_model_attr__.time_spine.unwrap())
+                    .filter(|m| m.__model_attr__.time_spine.is_some())
+                    .map(|m| (*m).clone().__model_attr__.time_spine.unwrap())
                     .collect(),
                 // deprecated fields
                 time_spine_table_configurations: vec![],
