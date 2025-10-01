@@ -442,6 +442,7 @@ pub struct ManifestModel {
 
     // Model Specific Attributes
     pub access: Option<Access>,
+    pub group: Option<String>,
     pub config: ModelConfig,
     pub version: Option<StringOrInteger>,
     pub latest_version: Option<StringOrInteger>,
@@ -491,6 +492,7 @@ impl From<DbtModel> for ManifestModel {
                 contract: model.__model_attr__.contract.unwrap_or_default(),
             },
             access: Some(model.__model_attr__.access),
+            group: model.__model_attr__.group,
             config: model.deprecated_config,
             version: model.__model_attr__.version,
             latest_version: model.__model_attr__.latest_version,
