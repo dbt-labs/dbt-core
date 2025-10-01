@@ -113,7 +113,6 @@ impl Object for DispatchObject {
         let non_internal_namespace = state.env().get_non_internal_packages();
         // get dbt and adapters namespace
         let dbt_and_adapters_namespace = state.env().get_dbt_and_adapters_namespace();
-
         // First try with specific packages if specified
         // The logic below comes from https://github.com/dbt-labs/dbt-core/blob/4aa5169212d8256002095d44dc5f2505dca1b07c/core/dbt/context/providers.py#L158
         for package_name_opt in &search_packages {
@@ -200,12 +199,21 @@ impl DispatchObject {
                 // TODO @venkaa28: I (@akbog) moved the lookup here from the environment
                 // since there was only a single call site for it. However, I don't like that
                 // this would default to empty in the previous implementation.
-                let macro_dispatch_order = state
-                    .lookup(MACRO_DISPATCH_ORDER)
-                    .unwrap_or_default()
-                    .downcast_object::<ValueMap>()
-                    .unwrap_or_else(|| Arc::new(ValueMap::new()));
+                let macro_dispatch_order = {
+                    let value = state.lookup(MACRO_DISPATCH_ORDER).unwrap_or_default();
+                    let mut value_map = ValueMap::new();
 
+                    if let Ok(keys) = value.try_iter() {
+                        for key in keys {
+                            if let Ok(val) = value.get_item(&key) {
+                                // Convert key to string if needed
+                                value_map.insert(key, val);
+                            }
+                        }
+                    }
+
+                    Arc::new(value_map)
+                };
                 if let Some(order) = macro_dispatch_order.get(&Value::from(namespace.as_str())) {
                     // Use configured order
                     order
