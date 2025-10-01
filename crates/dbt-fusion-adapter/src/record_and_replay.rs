@@ -86,19 +86,9 @@ fn compute_file_name(query_ctx: &QueryCtx) -> AdbcResult<String> {
     Ok(file_name)
 }
 
-fn compute_file_name_for_table(
-    catalog: Option<&str>,
-    db_schema: Option<&str>,
-    table_name: &str,
-) -> String {
-    let db_schema = db_schema.map(cleanup_schema_name);
-
-    let id = &[catalog, db_schema.as_deref(), Some(table_name)]
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>()
-        .join(".");
-    let mut entry = COUNTERS.entry(id.clone()).or_insert(0);
+fn compute_file_name_for_node_id(node_id: Option<&str>) -> String {
+    let id = node_id.unwrap_or("unknown");
+    let mut entry = COUNTERS.entry(id.to_string()).or_insert(0);
     let file_name = format!("{}-{}", id, *entry);
     *entry += 1;
     file_name
@@ -186,8 +176,8 @@ impl RecordEngine {
         state: Option<&State>,
         node_id: Option<String>,
     ) -> AdapterResult<Box<dyn Connection>> {
-        let actual_conn = self.0.engine.new_connection(state, node_id)?;
-        let conn = RecordEngineConnection(self.0.clone(), actual_conn);
+        let actual_conn = self.0.engine.new_connection(state, node_id.clone())?;
+        let conn = RecordEngineConnection(self.0.clone(), actual_conn, node_id);
         Ok(Box::new(conn))
     }
 
@@ -228,7 +218,7 @@ impl RecordEngine {
     }
 }
 
-struct RecordEngineConnection(Arc<RecordEngineInner>, Box<dyn Connection>);
+struct RecordEngineConnection(Arc<RecordEngineInner>, Box<dyn Connection>, Option<String>);
 
 impl fmt::Debug for RecordEngineConnection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -266,10 +256,10 @@ impl Connection for RecordEngineConnection {
         let path = self.0.path.clone();
         create_dir_all(&path).map_err(|e| from_io_error(e, Some(&path)))?;
 
-        let table_id = compute_file_name_for_table(catalog, db_schema, table_name);
-        let err_path = path.join(format!("{table_id}.get_table_schema.err"));
-        let parquet_path = path.join(format!("{table_id}.get_table_schema.parquet"));
-        let metadata_path = path.join(format!("{table_id}.get_table_schema.metadata.json"));
+        let file_name = compute_file_name_for_node_id(self.2.as_deref());
+        let err_path = path.join(format!("{file_name}.get_table_schema.err"));
+        let parquet_path = path.join(format!("{file_name}.get_table_schema.parquet"));
+        let metadata_path = path.join(format!("{file_name}.get_table_schema.metadata.json"));
 
         match result {
             Ok(schema) => {
@@ -563,16 +553,16 @@ impl Connection for ReplayEngineConnection {
 
     fn get_table_schema(
         &self,
-        catalog: Option<&str>,
-        db_schema: Option<&str>,
-        table_name: &str,
+        _catalog: Option<&str>,
+        _db_schema: Option<&str>,
+        _table_name: &str,
     ) -> AdbcResult<Schema> {
         let path = self.0.path.clone();
 
-        let table_id = compute_file_name_for_table(catalog, db_schema, table_name);
-        let err_path = path.join(format!("{table_id}.get_table_schema.err"));
-        let parquet_path = path.join(format!("{table_id}.get_table_schema.parquet"));
-        let metadata_path = path.join(format!("{table_id}.get_table_schema.metadata.json"));
+        let file_name = compute_file_name_for_node_id(self.1.as_deref());
+        let err_path = path.join(format!("{file_name}.get_table_schema.err"));
+        let parquet_path = path.join(format!("{file_name}.get_table_schema.parquet"));
+        let metadata_path = path.join(format!("{file_name}.get_table_schema.metadata.json"));
 
         // replay the error
         if err_path.exists() {
