@@ -394,7 +394,9 @@ impl SnowflakeAuth {
                             .with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::JWT)?;
                         // TODO: maybe it's safe to assume from a file we always get header and footer formatted private key
                         // the same for the same logics in `fn build_keypair_parameter_key_value_pairs`
-                        let key_contents = fs::read_to_string(value.to_string())?;
+                        let key_contents = fs::read_to_string(value.to_string()).map_err(|_| {
+                            AuthError::config(format!("Private key file not found: '{}'", value))
+                        })?;
                         builder.with_named_option(
                             snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
                             key_format::normalize_key(&key_contents)?,
@@ -902,6 +904,28 @@ mod tests {
             let msg = format!("{e:?}");
             assert!(
                 msg.contains("Rename") && msg.contains("refresh_token"),
+                "Unexpected error message: {msg}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_invalid_private_key_path() {
+        let mut config = base_config();
+        config.insert("private_key_path".into(), "invalid_path".into());
+
+        let auth = SnowflakeAuth {};
+        let builder = auth.configure(&AdapterConfig::new(config));
+
+        assert!(
+            matches!(builder, Err(ref e) if matches!(e, AuthError::Config(_))),
+            "Expected configuration error, got: {builder:?}"
+        );
+
+        if let Err(e) = builder {
+            let msg = format!("{e:?}");
+            assert!(
+                msg.contains("Private key file not found"),
                 "Unexpected error message: {msg}"
             );
         }
