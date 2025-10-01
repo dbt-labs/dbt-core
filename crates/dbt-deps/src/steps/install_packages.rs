@@ -22,7 +22,7 @@ use crate::{
     hub_client::HubClient,
     package_listing::PackageListing,
     tarball_client::TarballClient,
-    utils::{handle_git_like_package, read_and_validate_dbt_project},
+    utils::{handle_git_like_package, read_and_validate_dbt_project, sanitize_git_url},
 };
 
 #[allow(clippy::cognitive_complexity)]
@@ -183,7 +183,10 @@ pub async fn install_packages(
                 // Keep tmp_dir alive until we're done with checkout_path
                 drop(tmp_dir);
                 if std::env::var("NEXTEST").is_err() {
-                    show_progress!(io_args, fsinfo!(INSTALLING.into(), project_name.clone()));
+                    show_progress!(
+                        io_args,
+                        fsinfo!(INSTALLING.into(), sanitize_git_url(&project_name))
+                    );
                 }
                 if io_args.send_anonymous_usage_stats {
                     package_install_event(
@@ -205,7 +208,10 @@ pub async fn install_packages(
                     .clone()
                     .unwrap_or_else(|| package_path.display().to_string());
                 if std::env::var("NEXTEST").is_err() {
-                    show_progress!(io_args, fsinfo!(INSTALLING.into(), package_name.clone()));
+                    show_progress!(
+                        io_args,
+                        fsinfo!(INSTALLING.into(), sanitize_git_url(&package_name))
+                    );
                 }
                 if io_args.send_anonymous_usage_stats {
                     package_install_event(
@@ -240,7 +246,10 @@ pub async fn install_packages(
                     .clone()
                     .unwrap_or_else(|| private_unpinned_package.private.clone());
                 if std::env::var("NEXTEST").is_err() {
-                    show_progress!(io_args, fsinfo!(INSTALLING.into(), package_name.clone()));
+                    show_progress!(
+                        io_args,
+                        fsinfo!(INSTALLING.into(), sanitize_git_url(&package_name))
+                    );
                 }
                 if io_args.send_anonymous_usage_stats {
                     package_install_event(
@@ -305,7 +314,10 @@ pub async fn install_packages(
                 stdfs::rename(&checkout_path, packages_install_path.join(&project_name))?;
 
                 if std::env::var("NEXTEST").is_err() {
-                    show_progress!(io_args, fsinfo!(INSTALLING.into(), project_name.clone()));
+                    show_progress!(
+                        io_args,
+                        fsinfo!(INSTALLING.into(), sanitize_git_url(&project_name))
+                    );
                 }
                 if io_args.send_anonymous_usage_stats {
                     package_install_event(

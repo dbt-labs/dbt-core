@@ -61,7 +61,8 @@ pub fn handle_git_like_package(
     )?;
     if ["HEAD", "main", "master"].contains(&revision.as_str()) && warn_unpinned {
         println!(
-            "\nWARNING: The package {repo_url} is pinned to the default branch, which is not recommended. Consider pinning to a specific commit SHA instead."
+            "\nWARNING: The package {} is pinned to the default branch, which is not recommended. Consider pinning to a specific commit SHA instead.",
+            sanitize_git_url(repo_url)
         );
     }
     Ok((tmp_dir, checkout_path, commit_sha))
@@ -105,4 +106,183 @@ pub fn read_and_validate_dbt_project(
         show_errors_or_warnings,
         Some(dependency_package_name.as_str()),
     )
+}
+
+/// Sanitizes username/password segments from git urls
+/// e.g. https://username:password@github.com/dbt-labs/secret-project
+///   becomes https://github.com/dbt-labs/secret-project
+pub fn sanitize_git_url(url: &str) -> String {
+    if let Ok(mut parsed) = url::Url::parse(url) {
+        let _ = parsed.set_username("");
+        let _ = parsed.set_password(None);
+        parsed.to_string()
+    } else {
+        // Fallback if Url can't parse - use regex
+        let patterns_to_remove = [
+            // https://token@host
+            r"https://[^@/]+@([^/]+)",
+            // https://user:pass@host
+            r"https://[^:]+:[^@/]+@([^/]+)",
+            // git@host:path
+            r"git@([^:]+):",
+        ];
+
+        let mut sanitized = url.to_string();
+        for pattern in &patterns_to_remove {
+            if let Ok(re) = regex::Regex::new(pattern) {
+                if *pattern == r"git@([^:]+):" {
+                    // Special handling for SSH format: git@host:path -> https://host/path
+                    sanitized = re.replace(&sanitized, "https://$1/").to_string();
+                } else {
+                    sanitized = re.replace(&sanitized, "https://$1").to_string();
+                }
+            }
+        }
+        sanitized
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sanitize_git_url_basic_credentials() {
+        let url = "https://username:password@github.com/dbt-labs/secret-project";
+        let sanitized = sanitize_git_url(url);
+        assert_eq!(sanitized, "https://github.com/dbt-labs/secret-project");
+    }
+
+    #[test]
+    fn test_sanitize_git_url_token_only() {
+        let url = "https://ghp_1234567890abcdef@github.com/dbt-labs/secret-project";
+        let sanitized = sanitize_git_url(url);
+        assert_eq!(sanitized, "https://github.com/dbt-labs/secret-project");
+    }
+
+    #[test]
+    fn test_sanitize_git_url_github_token() {
+        let url = "https://ghp_abcdef1234567890@github.com/dbt-labs/dbt-core.git";
+        let sanitized = sanitize_git_url(url);
+        assert_eq!(sanitized, "https://github.com/dbt-labs/dbt-core.git");
+    }
+
+    #[test]
+    fn test_sanitize_git_url_ssh_format() {
+        let url = "git@github.com:dbt-labs/secret-project.git";
+        let sanitized = sanitize_git_url(url);
+        assert_eq!(sanitized, "https://github.com/dbt-labs/secret-project.git");
+    }
+
+    #[test]
+    fn test_sanitize_git_url_with_path_and_query() {
+        let url = "https://user:pass@github.com/dbt-labs/secret-project.git?ref=main";
+        let sanitized = sanitize_git_url(url);
+        assert_eq!(
+            sanitized,
+            "https://github.com/dbt-labs/secret-project.git?ref=main"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_git_url_already_clean() {
+        let url = "https://github.com/dbt-labs/dbt-core.git";
+        let sanitized = sanitize_git_url(url);
+        assert_eq!(sanitized, "https://github.com/dbt-labs/dbt-core.git");
+    }
+
+    #[test]
+    fn test_sanitize_git_url_http_instead_of_https() {
+        let url = "http://user:pass@github.com/dbt-labs/secret-project.git";
+        let sanitized = sanitize_git_url(url);
+        assert_eq!(sanitized, "http://github.com/dbt-labs/secret-project.git");
+    }
+
+    #[test]
+    fn test_sanitize_git_url_username_only() {
+        let url = "https://username@github.com/dbt-labs/secret-project.git";
+        let sanitized = sanitize_git_url(url);
+        assert_eq!(sanitized, "https://github.com/dbt-labs/secret-project.git");
+    }
+
+    #[test]
+    fn test_sanitize_git_url_special_characters_in_credentials() {
+        let url = "https://user%40domain.com:pass%21word@github.com/dbt-labs/secret-project.git";
+        let sanitized = sanitize_git_url(url);
+        assert_eq!(sanitized, "https://github.com/dbt-labs/secret-project.git");
+    }
+
+    #[test]
+    fn test_sanitize_git_url_gitlab() {
+        let url = "https://oauth2:glpat-1234567890@gitlab.com/dbt-labs/secret-project.git";
+        let sanitized = sanitize_git_url(url);
+        assert_eq!(sanitized, "https://gitlab.com/dbt-labs/secret-project.git");
+    }
+
+    #[test]
+    fn test_sanitize_git_url_azure_devops() {
+        let url = "https://user:pat@dev.azure.com/organization/project/_git/repo";
+        let sanitized = sanitize_git_url(url);
+        assert_eq!(
+            sanitized,
+            "https://dev.azure.com/organization/project/_git/repo"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_git_url_bitbucket() {
+        let url = "https://user:app_password@bitbucket.org/dbt-labs/secret-project.git";
+        let sanitized = sanitize_git_url(url);
+        assert_eq!(
+            sanitized,
+            "https://bitbucket.org/dbt-labs/secret-project.git"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_git_url_invalid_url() {
+        let url = "not-a-valid-url";
+        let sanitized = sanitize_git_url(url);
+        // Should return the original string since it's not a valid URL
+        assert_eq!(sanitized, "not-a-valid-url");
+    }
+
+    #[test]
+    fn test_sanitize_git_url_empty_string() {
+        let url = "";
+        let sanitized = sanitize_git_url(url);
+        assert_eq!(sanitized, "");
+    }
+
+    #[test]
+    fn test_sanitize_git_url_multiple_credentials() {
+        let url = "https://user1:pass1@github.com/dbt-labs/secret-project.git";
+        let sanitized = sanitize_git_url(url);
+        assert_eq!(sanitized, "https://github.com/dbt-labs/secret-project.git");
+    }
+
+    #[test]
+    fn test_sanitize_git_url_with_fragment() {
+        let url = "https://user:pass@github.com/dbt-labs/secret-project.git#v1.0.0";
+        let sanitized = sanitize_git_url(url);
+        assert_eq!(
+            sanitized,
+            "https://github.com/dbt-labs/secret-project.git#v1.0.0"
+        );
+    }
+
+    #[test]
+    fn test_sanitize_git_url_long_token() {
+        let url = "https://ghp_1234567890abcdef1234567890abcdef12345678@github.com/dbt-labs/secret-project.git";
+        let sanitized = sanitize_git_url(url);
+        assert_eq!(sanitized, "https://github.com/dbt-labs/secret-project.git");
+    }
+
+    #[test]
+    fn test_sanitize_git_url_x_access_token() {
+        let url =
+            "https://x-access-token:ghp_1234567890abcdef@github.com/dbt-labs/secret-project.git";
+        let sanitized = sanitize_git_url(url);
+        assert_eq!(sanitized, "https://github.com/dbt-labs/secret-project.git");
+    }
 }
