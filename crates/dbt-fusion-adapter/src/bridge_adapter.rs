@@ -807,14 +807,8 @@ impl BaseAdapter for BridgeAdapter {
     fn get_columns_in_relation(
         &self,
         state: &State,
-        args: &[Value],
+        relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-
-        let relation = parser.get::<Value>("relation")?;
-        let relation = downcast_value_to_dyn_base_relation(&relation)?;
-
         let maybe_from_local = if let Some(db) = &self.db {
             // skip local compilation results if it's invoked upon a snapshot
             // as we considered risk is too high to trust the types to be consistent with the remote

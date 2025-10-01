@@ -164,25 +164,18 @@ impl ParseAdapter {
     pub fn record_get_columns_in_relation_call(
         &self,
         state: &State,
-        args: &[Value],
+        relation: Arc<dyn BaseRelation>,
     ) -> Result<(), MinijinjaError> {
-        let parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-
-        let relation = args
-            .first()
-            .expect("get_columns_in_relation requires one argument");
-
-        let base_relation = downcast_value_to_dyn_base_relation(relation)?;
-        if !base_relation.is_database_relation() {
+        if !relation.is_database_relation() {
             return Ok(());
         }
         if state.is_execute() {
             if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID) {
+                let relation_value = RelationObject::new(relation).into_value();
                 self.call_get_columns_in_relation
                     .entry(unique_id.to_string())
                     .or_default()
-                    .push(relation.to_owned());
+                    .push(relation_value);
             } else {
                 println!("'TARGET_UNIQUE_ID' while get_columns_in_relation is unset");
             }
@@ -334,9 +327,9 @@ impl BaseAdapter for ParseAdapter {
     fn get_columns_in_relation(
         &self,
         state: &State,
-        args: &[Value],
+        relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError> {
-        self.record_get_columns_in_relation_call(state, args)?;
+        self.record_get_columns_in_relation_call(state, relation)?;
         Ok(empty_vec_value())
     }
 

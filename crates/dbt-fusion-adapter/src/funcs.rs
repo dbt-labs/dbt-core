@@ -5,6 +5,7 @@ use crate::errors::AdapterResult;
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::factory::create_static_relation;
 use crate::formatter::SqlLiteralFormatter;
+use crate::relation_object::RelationObject;
 use crate::response::ResultObject;
 
 use arrow::array::RecordBatch;
@@ -106,7 +107,23 @@ pub fn dispatch_adapter_calls(
 
             adapter.get_relation(state, database, schema, identifier)
         }
-        "get_columns_in_relation" => adapter.get_columns_in_relation(state, args),
+        "get_columns_in_relation" => {
+            // relation: BaseRelation
+            let iter = ArgsIter::new(name, &["relation"], args);
+            let relation = iter.next_arg::<&Value>()?;
+            let relation = relation
+                .downcast_object::<RelationObject>()
+                .ok_or_else(|| {
+                    MinijinjaError::new(
+                        MinijinjaErrorKind::InvalidOperation,
+                        "relation must be a BaseRelation object",
+                    )
+                })?
+                .inner();
+            iter.finish()?;
+
+            adapter.get_columns_in_relation(state, relation)
+        }
         "type" => Ok(Value::from(adapter.adapter_type().to_string())),
         "get_hard_deletes_behavior" => adapter.get_hard_deletes_behavior(state, args),
         "cache_added" => adapter.cache_added(state, args),

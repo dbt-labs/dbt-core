@@ -353,10 +353,19 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     fn get_missing_columns(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;
 
     /// Get columns in relation.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L741
+    ///
+    /// ```python
+    /// def get_columns_in_relation(
+    ///     self,
+    ///     relation: BaseRelation
+    /// ) -> List[Column]
+    /// ```
     fn get_columns_in_relation(
         &self,
         state: &State,
-        args: &[Value],
+        relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError>;
 
     /// Render raw columns constants.

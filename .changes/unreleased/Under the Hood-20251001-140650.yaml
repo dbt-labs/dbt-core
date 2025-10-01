@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Refactored get_columns_in_relation for BaseAdapter to no longer use jinja value
+time: 2025-10-01T14:06:50.288563+03:00
+custom:
+    author: dbtagarovat
+    issue: ""
+    project: dbt-fusion
