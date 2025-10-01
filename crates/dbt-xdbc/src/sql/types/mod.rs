@@ -201,7 +201,7 @@ Avoid constructing Snowflake TIME/TIMESTAMP types without an explicit time zone 
 /// realized in the context of a specific [SQL backend](`crate::Backend`).
 /// But this enum aims to be a common representation that can be used
 /// across different backends with slight tweaks in the behavior.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone)] // DO NOT derive PartialEq or Eq, use `to_string(backend)` for comparisons!
 pub enum SqlType {
     /// BOOLEAN
     Boolean,

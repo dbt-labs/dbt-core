@@ -206,6 +206,7 @@ pub fn try_canonicalize_bool_column_field(column_value: &str) -> Result<bool, Ad
     ))
 }
 
+// NOTE: being deprecated in favor of `make_arrow_field`
 pub fn new_arrow_field_with_metadata(
     col_name: &str,
     data_type: DataType,
@@ -214,18 +215,18 @@ pub fn new_arrow_field_with_metadata(
     comment: Option<String>,
 ) -> Field {
     let field = Field::new(col_name, data_type, nullable);
-    let mut field_metadata = HashMap::new();
 
+    let mut metadata = HashMap::new();
     if let Some(original_type_text) = original_type_text {
-        field_metadata.insert(
+        metadata.insert(
             ARROW_FIELD_ORIGINAL_TYPE_METADATA_KEY.to_string(),
             original_type_text,
         );
     }
     if let Some(comment) = comment {
-        field_metadata.insert(ARROW_FIELD_COMMENT_METADATA_KEY.to_string(), comment);
+        metadata.insert(ARROW_FIELD_COMMENT_METADATA_KEY.to_string(), comment);
     }
-    field.with_metadata(field_metadata)
+    field.with_metadata(metadata)
 }
 
 pub fn get_input_schema_database_and_table(

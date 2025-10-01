@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
@@ -152,74 +153,58 @@ pub enum DatabricksColumnTypeInfo {
 }
 
 impl DatabricksColumnTypeInfo {
-    pub fn name(&self) -> &str {
-        match self {
-            DatabricksColumnTypeInfo::TinyInt => "tinyint",
-            DatabricksColumnTypeInfo::SmallInt => "smallint",
-            DatabricksColumnTypeInfo::Int => "int",
-            DatabricksColumnTypeInfo::BigInt => "bigint",
-            DatabricksColumnTypeInfo::Float => "float",
-            DatabricksColumnTypeInfo::Double => "double",
-            DatabricksColumnTypeInfo::Decimal { .. } => "decimal",
-            DatabricksColumnTypeInfo::String { .. } => "string",
-            DatabricksColumnTypeInfo::VarChar { .. } => "varchar",
-            DatabricksColumnTypeInfo::Char { .. } => "char",
-            DatabricksColumnTypeInfo::Binary => "binary",
-            DatabricksColumnTypeInfo::Boolean => "boolean",
-            DatabricksColumnTypeInfo::Date => "date",
-            DatabricksColumnTypeInfo::Timestamp => "timestamp_ltz",
-            DatabricksColumnTypeInfo::TimestampNtz => "timestamp_ntz",
-            DatabricksColumnTypeInfo::Interval { .. } => "interval",
-            DatabricksColumnTypeInfo::Array { .. } => "array",
-            DatabricksColumnTypeInfo::Map { .. } => "map",
-            DatabricksColumnTypeInfo::Struct { .. } => "struct",
-            DatabricksColumnTypeInfo::Variant => "variant",
-        }
-    }
-
     /// Converts [DatabricksColumnTypeInfo] into Raw Databricks SQL Type
     /// https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-datatypes
-    pub fn raw_type(&self) -> String {
+    pub fn sql_type(&self) -> String {
+        let mut out = String::new();
+        self.render_sql_type(&mut out).unwrap();
+        out
+    }
+
+    pub fn render_sql_type(&self, out: &mut String) -> Result<(), fmt::Error> {
+        use fmt::Write as _;
         match &self {
-            DatabricksColumnTypeInfo::TinyInt
-            | DatabricksColumnTypeInfo::SmallInt
-            | DatabricksColumnTypeInfo::Int
-            | DatabricksColumnTypeInfo::BigInt
-            | DatabricksColumnTypeInfo::Float
-            | DatabricksColumnTypeInfo::Double
-            | DatabricksColumnTypeInfo::Binary
-            | DatabricksColumnTypeInfo::Boolean
-            | DatabricksColumnTypeInfo::Date
-            | DatabricksColumnTypeInfo::Timestamp
-            | DatabricksColumnTypeInfo::TimestampNtz
-            | DatabricksColumnTypeInfo::Variant => self.name().to_string(),
+            DatabricksColumnTypeInfo::TinyInt => out.push_str("tinyint"),
+            DatabricksColumnTypeInfo::SmallInt => out.push_str("smallint"),
+            DatabricksColumnTypeInfo::Int => out.push_str("int"),
+            DatabricksColumnTypeInfo::BigInt => out.push_str("bigint"),
+            DatabricksColumnTypeInfo::Float => out.push_str("float"),
+            DatabricksColumnTypeInfo::Double => out.push_str("double"),
+            DatabricksColumnTypeInfo::Binary => out.push_str("binary"),
+            DatabricksColumnTypeInfo::Boolean => out.push_str("boolean"),
+            DatabricksColumnTypeInfo::Date => out.push_str("date"),
+            DatabricksColumnTypeInfo::Timestamp => out.push_str("timestamp_ltz"),
+            DatabricksColumnTypeInfo::TimestampNtz => out.push_str("timestamp_ntz"),
+            DatabricksColumnTypeInfo::Variant => out.push_str("variant"),
             DatabricksColumnTypeInfo::Decimal { precision, scale } => {
-                format!("DECIMAL({precision},{scale})")
+                write!(out, "DECIMAL({precision},{scale})")?;
             }
             DatabricksColumnTypeInfo::String { collation: _ } => {
                 // todo: collation syntax is undocumented, figure out how to apply it
-                "STRING".to_string()
+                out.push_str("STRING")
             }
             DatabricksColumnTypeInfo::VarChar { length } => {
                 // not documented - under the hood it's a String with length constraint
-                format!("VARCHAR({length})")
+                write!(out, "VARCHAR({length})")?;
             }
             DatabricksColumnTypeInfo::Char { length } => {
-                format!("CHAR({length})")
+                write!(out, "CHAR({length})")?;
             }
             DatabricksColumnTypeInfo::Interval {
                 start_unit,
                 end_unit,
             } => match end_unit {
-                Some(end) if start_unit != end => format!("INTERVAL {start_unit} TO {end}"),
-                _ => format!("INTERVAL {start_unit}"),
+                Some(end) if start_unit != end => write!(out, "INTERVAL {start_unit} TO {end}")?,
+                _ => write!(out, "INTERVAL {start_unit}")?,
             },
             DatabricksColumnTypeInfo::Array {
                 element_type,
                 element_nullable: _,
             } => {
                 // todo: element_nullable isn't possible to set here, find workaround
-                format!("ARRAY<{}>", element_type.raw_type())
+                write!(out, "ARRAY<")?;
+                element_type.render_sql_type(out)?;
+                write!(out, ">")?;
             }
             DatabricksColumnTypeInfo::Map {
                 key_type,
@@ -227,32 +212,32 @@ impl DatabricksColumnTypeInfo {
                 element_nullable: _,
             } => {
                 // todo: element_nullable isn't possible to set here
-                format!("MAP<{},{}>", key_type.raw_type(), value_type.raw_type())
+                write!(out, "MAP<")?;
+                key_type.render_sql_type(out)?;
+                write!(out, ",")?;
+                value_type.render_sql_type(out)?;
+                write!(out, ">")?;
             }
             DatabricksColumnTypeInfo::Struct { fields } => {
-                format!(
-                    "STRUCT<{}>",
-                    fields
-                        .iter()
-                        .map(|field| {
-                            format!(
-                                "`{}`:{}{}{}",
-                                field.name,
-                                field.type_.raw_type(),
-                                if field.nullable { "" } else { " NOT NULL" },
-                                if let Some(comment) = &field.comment {
-                                    // escape the comment string literal
-                                    format!(" COMMENT \"{}\"", comment.replace("\"", "\\\""))
-                                } else {
-                                    "".to_string()
-                                }
-                            )
-                        })
-                        .collect::<Vec<_>>()
-                        .join(",")
-                )
+                write!(out, "STRUCT<")?;
+                for (i, field) in fields.iter().enumerate() {
+                    if i > 0 {
+                        write!(out, ",")?;
+                    }
+                    write!(out, "`{}`:", field.name)?;
+                    field.type_.render_sql_type(out)?;
+                    if !field.nullable {
+                        write!(out, " NOT NULL")?;
+                    }
+                    if let Some(comment) = &field.comment {
+                        // escape the comment string literal
+                        write!(out, " COMMENT \"{}\"", comment.replace("\"", "\\\""))?;
+                    }
+                }
+                write!(out, ">")?;
             }
-        }
+        };
+        Ok(())
     }
 }
 
@@ -271,235 +256,230 @@ pub struct DatabricksStructFieldInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use DatabricksColumnTypeInfo::*;
 
     #[test]
-    fn test_basic_type_raw_type() {
+    fn test_basic_type_sql_type() {
         // Test basic primitive types
-        assert_eq!(DatabricksColumnTypeInfo::TinyInt.raw_type(), "tinyint");
-        assert_eq!(DatabricksColumnTypeInfo::SmallInt.raw_type(), "smallint");
-        assert_eq!(DatabricksColumnTypeInfo::Int.raw_type(), "int");
-        assert_eq!(DatabricksColumnTypeInfo::BigInt.raw_type(), "bigint");
-        assert_eq!(DatabricksColumnTypeInfo::Float.raw_type(), "float");
-        assert_eq!(DatabricksColumnTypeInfo::Double.raw_type(), "double");
-        assert_eq!(DatabricksColumnTypeInfo::Binary.raw_type(), "binary");
-        assert_eq!(DatabricksColumnTypeInfo::Boolean.raw_type(), "boolean");
-        assert_eq!(DatabricksColumnTypeInfo::Date.raw_type(), "date");
-        assert_eq!(
-            DatabricksColumnTypeInfo::Timestamp.raw_type(),
-            "timestamp_ltz"
-        );
-        assert_eq!(
-            DatabricksColumnTypeInfo::TimestampNtz.raw_type(),
-            "timestamp_ntz"
-        );
-        assert_eq!(DatabricksColumnTypeInfo::Variant.raw_type(), "variant");
+        assert_eq!(TinyInt.sql_type(), "tinyint");
+        assert_eq!(SmallInt.sql_type(), "smallint");
+        assert_eq!(Int.sql_type(), "int");
+        assert_eq!(BigInt.sql_type(), "bigint");
+        assert_eq!(Float.sql_type(), "float");
+        assert_eq!(Double.sql_type(), "double");
+        assert_eq!(Binary.sql_type(), "binary");
+        assert_eq!(Boolean.sql_type(), "boolean");
+        assert_eq!(Date.sql_type(), "date");
+        assert_eq!(Timestamp.sql_type(), "timestamp_ltz");
+        assert_eq!(TimestampNtz.sql_type(), "timestamp_ntz");
+        assert_eq!(Variant.sql_type(), "variant");
     }
 
     #[test]
-    fn test_decimal_raw_type() {
-        let decimal = DatabricksColumnTypeInfo::Decimal {
+    fn test_decimal_sql_type() {
+        let decimal = Decimal {
             precision: 10,
             scale: 2,
         };
-        assert_eq!(decimal.raw_type(), "DECIMAL(10,2)");
+        assert_eq!(decimal.sql_type(), "DECIMAL(10,2)");
     }
 
     #[test]
-    fn test_string_types_raw_type() {
-        let string = DatabricksColumnTypeInfo::String {
+    fn test_string_types_sql_type() {
+        let string = String {
             collation: Some("UTF8_BINARY".to_string()),
         };
-        assert_eq!(string.raw_type(), "STRING");
+        assert_eq!(string.sql_type(), "STRING");
 
-        let varchar = DatabricksColumnTypeInfo::VarChar { length: 255 };
-        assert_eq!(varchar.raw_type(), "VARCHAR(255)");
+        let varchar = VarChar { length: 255 };
+        assert_eq!(varchar.sql_type(), "VARCHAR(255)");
 
-        let char = DatabricksColumnTypeInfo::Char { length: 10 };
-        assert_eq!(char.raw_type(), "CHAR(10)");
+        let char = Char { length: 10 };
+        assert_eq!(char.sql_type(), "CHAR(10)");
     }
 
     #[test]
-    fn test_interval_raw_type() {
+    fn test_interval_sql_type() {
         // Single unit intervals
-        let year_interval = DatabricksColumnTypeInfo::Interval {
+        let year_interval = Interval {
             start_unit: "year".to_string(),
             end_unit: None,
         };
-        assert_eq!(year_interval.raw_type(), "INTERVAL year");
+        assert_eq!(year_interval.sql_type(), "INTERVAL year");
 
         // Sometimes end and start are the same
-        let year_interval = DatabricksColumnTypeInfo::Interval {
+        let year_interval = Interval {
             start_unit: "year".to_string(),
             end_unit: Some("year".to_string()),
         };
-        assert_eq!(year_interval.raw_type(), "INTERVAL year");
+        assert_eq!(year_interval.sql_type(), "INTERVAL year");
 
-        let month_interval = DatabricksColumnTypeInfo::Interval {
+        let month_interval = Interval {
             start_unit: "month".to_string(),
             end_unit: None,
         };
-        assert_eq!(month_interval.raw_type(), "INTERVAL month");
+        assert_eq!(month_interval.sql_type(), "INTERVAL month");
 
         // Range intervals
-        let year_to_month = DatabricksColumnTypeInfo::Interval {
+        let year_to_month = Interval {
             start_unit: "year".to_string(),
             end_unit: Some("month".to_string()),
         };
-        assert_eq!(year_to_month.raw_type(), "INTERVAL year TO month");
+        assert_eq!(year_to_month.sql_type(), "INTERVAL year TO month");
 
-        let day_to_hour = DatabricksColumnTypeInfo::Interval {
+        let day_to_hour = Interval {
             start_unit: "day".to_string(),
             end_unit: Some("hour".to_string()),
         };
-        assert_eq!(day_to_hour.raw_type(), "INTERVAL day TO hour");
+        assert_eq!(day_to_hour.sql_type(), "INTERVAL day TO hour");
     }
 
     #[test]
-    fn test_simple_array_raw_type() {
+    fn test_simple_array_sql_type() {
         // Array of primitive types
-        let int_array = DatabricksColumnTypeInfo::Array {
-            element_type: Box::new(DatabricksColumnTypeInfo::Int),
+        let int_array = Array {
+            element_type: Box::new(Int),
             element_nullable: true,
         };
-        assert_eq!(int_array.raw_type(), "ARRAY<int>");
+        assert_eq!(int_array.sql_type(), "ARRAY<int>");
 
-        let string_array = DatabricksColumnTypeInfo::Array {
-            element_type: Box::new(DatabricksColumnTypeInfo::String { collation: None }),
+        let string_array = Array {
+            element_type: Box::new(String { collation: None }),
             element_nullable: false,
         };
-        assert_eq!(string_array.raw_type(), "ARRAY<STRING>");
+        assert_eq!(string_array.sql_type(), "ARRAY<STRING>");
 
-        let decimal_array = DatabricksColumnTypeInfo::Array {
-            element_type: Box::new(DatabricksColumnTypeInfo::Decimal {
+        let decimal_array = Array {
+            element_type: Box::new(Decimal {
                 precision: 15,
                 scale: 3,
             }),
             element_nullable: true,
         };
-        assert_eq!(decimal_array.raw_type(), "ARRAY<DECIMAL(15,3)>");
+        assert_eq!(decimal_array.sql_type(), "ARRAY<DECIMAL(15,3)>");
     }
 
     #[test]
-    fn test_nested_array_raw_type() {
-        let nested_array = DatabricksColumnTypeInfo::Array {
-            element_type: Box::new(DatabricksColumnTypeInfo::Array {
-                element_type: Box::new(DatabricksColumnTypeInfo::Int),
+    fn test_nested_array_sql_type() {
+        let nested_array = Array {
+            element_type: Box::new(Array {
+                element_type: Box::new(Int),
                 element_nullable: true,
             }),
             element_nullable: false,
         };
-        assert_eq!(nested_array.raw_type(), "ARRAY<ARRAY<int>>");
+        assert_eq!(nested_array.sql_type(), "ARRAY<ARRAY<int>>");
 
-        let triple_nested = DatabricksColumnTypeInfo::Array {
-            element_type: Box::new(DatabricksColumnTypeInfo::Array {
-                element_type: Box::new(DatabricksColumnTypeInfo::Array {
-                    element_type: Box::new(DatabricksColumnTypeInfo::String { collation: None }),
+        let triple_nested = Array {
+            element_type: Box::new(Array {
+                element_type: Box::new(Array {
+                    element_type: Box::new(String { collation: None }),
                     element_nullable: true,
                 }),
                 element_nullable: false,
             }),
             element_nullable: true,
         };
-        assert_eq!(triple_nested.raw_type(), "ARRAY<ARRAY<ARRAY<STRING>>>");
+        assert_eq!(triple_nested.sql_type(), "ARRAY<ARRAY<ARRAY<STRING>>>");
     }
 
     #[test]
-    fn test_array_with_complex_elements_raw_type() {
+    fn test_array_with_complex_elements_sql_type() {
         // Array of structs
         let struct_field = DatabricksStructFieldInfo {
             name: "id".to_string(),
-            type_: DatabricksColumnTypeInfo::Int,
+            type_: Int,
             nullable: false,
             comment: None,
             default: None,
         };
 
-        let struct_type = DatabricksColumnTypeInfo::Struct {
+        let struct_type = Struct {
             fields: vec![struct_field],
         };
 
-        let struct_array = DatabricksColumnTypeInfo::Array {
+        let struct_array = Array {
             element_type: Box::new(struct_type),
             element_nullable: true,
         };
-        assert_eq!(struct_array.raw_type(), "ARRAY<STRUCT<`id`:int NOT NULL>>");
+        assert_eq!(struct_array.sql_type(), "ARRAY<STRUCT<`id`:int NOT NULL>>");
 
         // Array of maps
-        let map_type = DatabricksColumnTypeInfo::Map {
-            key_type: Box::new(DatabricksColumnTypeInfo::String { collation: None }),
-            value_type: Box::new(DatabricksColumnTypeInfo::Int),
+        let map_type = Map {
+            key_type: Box::new(String { collation: None }),
+            value_type: Box::new(Int),
             element_nullable: true,
         };
 
-        let map_array = DatabricksColumnTypeInfo::Array {
+        let map_array = Array {
             element_type: Box::new(map_type),
             element_nullable: false,
         };
-        assert_eq!(map_array.raw_type(), "ARRAY<MAP<STRING,int>>");
+        assert_eq!(map_array.sql_type(), "ARRAY<MAP<STRING,int>>");
     }
 
     #[test]
-    fn test_simple_map_raw_type() {
+    fn test_simple_map_sql_type() {
         // Map with primitive types
-        let string_int_map = DatabricksColumnTypeInfo::Map {
-            key_type: Box::new(DatabricksColumnTypeInfo::String { collation: None }),
-            value_type: Box::new(DatabricksColumnTypeInfo::Int),
+        let string_int_map = Map {
+            key_type: Box::new(String { collation: None }),
+            value_type: Box::new(Int),
             element_nullable: true,
         };
-        assert_eq!(string_int_map.raw_type(), "MAP<STRING,int>");
+        assert_eq!(string_int_map.sql_type(), "MAP<STRING,int>");
 
-        let int_double_map = DatabricksColumnTypeInfo::Map {
-            key_type: Box::new(DatabricksColumnTypeInfo::Int),
-            value_type: Box::new(DatabricksColumnTypeInfo::Double),
+        let int_double_map = Map {
+            key_type: Box::new(Int),
+            value_type: Box::new(Double),
             element_nullable: false,
         };
-        assert_eq!(int_double_map.raw_type(), "MAP<int,double>");
+        assert_eq!(int_double_map.sql_type(), "MAP<int,double>");
     }
 
     #[test]
-    fn test_complex_map_raw_type() {
+    fn test_complex_map_sql_type() {
         // Map with complex key/value types
-        let map_with_decimal_key = DatabricksColumnTypeInfo::Map {
-            key_type: Box::new(DatabricksColumnTypeInfo::Decimal {
+        let map_with_decimal_key = Map {
+            key_type: Box::new(Decimal {
                 precision: 10,
                 scale: 2,
             }),
-            value_type: Box::new(DatabricksColumnTypeInfo::String { collation: None }),
+            value_type: Box::new(String { collation: None }),
             element_nullable: true,
         };
-        assert_eq!(map_with_decimal_key.raw_type(), "MAP<DECIMAL(10,2),STRING>");
+        assert_eq!(map_with_decimal_key.sql_type(), "MAP<DECIMAL(10,2),STRING>");
 
-        let map_with_array_values = DatabricksColumnTypeInfo::Map {
-            key_type: Box::new(DatabricksColumnTypeInfo::Int),
-            value_type: Box::new(DatabricksColumnTypeInfo::Array {
-                element_type: Box::new(DatabricksColumnTypeInfo::String { collation: None }),
+        let map_with_array_values = Map {
+            key_type: Box::new(Int),
+            value_type: Box::new(Array {
+                element_type: Box::new(String { collation: None }),
                 element_nullable: true,
             }),
             element_nullable: false,
         };
-        assert_eq!(map_with_array_values.raw_type(), "MAP<int,ARRAY<STRING>>");
+        assert_eq!(map_with_array_values.sql_type(), "MAP<int,ARRAY<STRING>>");
     }
 
     #[test]
-    fn test_nested_map_raw_type() {
-        let nested_map = DatabricksColumnTypeInfo::Map {
-            key_type: Box::new(DatabricksColumnTypeInfo::String { collation: None }),
-            value_type: Box::new(DatabricksColumnTypeInfo::Map {
-                key_type: Box::new(DatabricksColumnTypeInfo::Int),
-                value_type: Box::new(DatabricksColumnTypeInfo::Double),
+    fn test_nested_map_sql_type() {
+        let nested_map = Map {
+            key_type: Box::new(String { collation: None }),
+            value_type: Box::new(Map {
+                key_type: Box::new(Int),
+                value_type: Box::new(Double),
                 element_nullable: true,
             }),
             element_nullable: false,
         };
-        assert_eq!(nested_map.raw_type(), "MAP<STRING,MAP<int,double>>");
+        assert_eq!(nested_map.sql_type(), "MAP<STRING,MAP<int,double>>");
 
         // Map with array of maps as values
-        let map_with_array_of_maps = DatabricksColumnTypeInfo::Map {
-            key_type: Box::new(DatabricksColumnTypeInfo::Int),
-            value_type: Box::new(DatabricksColumnTypeInfo::Array {
-                element_type: Box::new(DatabricksColumnTypeInfo::Map {
-                    key_type: Box::new(DatabricksColumnTypeInfo::String { collation: None }),
-                    value_type: Box::new(DatabricksColumnTypeInfo::Boolean),
+        let map_with_array_of_maps = Map {
+            key_type: Box::new(Int),
+            value_type: Box::new(Array {
+                element_type: Box::new(Map {
+                    key_type: Box::new(String { collation: None }),
+                    value_type: Box::new(Boolean),
                     element_nullable: true,
                 }),
                 element_nullable: false,
@@ -507,26 +487,26 @@ mod tests {
             element_nullable: true,
         };
         assert_eq!(
-            map_with_array_of_maps.raw_type(),
+            map_with_array_of_maps.sql_type(),
             "MAP<int,ARRAY<MAP<STRING,boolean>>>"
         );
     }
 
     #[test]
-    fn test_simple_struct_raw_type() {
+    fn test_simple_struct_sql_type() {
         // Struct with basic fields
-        let simple_struct = DatabricksColumnTypeInfo::Struct {
+        let simple_struct = Struct {
             fields: vec![
                 DatabricksStructFieldInfo {
                     name: "id".to_string(),
-                    type_: DatabricksColumnTypeInfo::Int,
+                    type_: Int,
                     nullable: false,
                     comment: None,
                     default: None,
                 },
                 DatabricksStructFieldInfo {
                     name: "name".to_string(),
-                    type_: DatabricksColumnTypeInfo::String { collation: None },
+                    type_: String { collation: None },
                     nullable: true,
                     comment: None,
                     default: None,
@@ -534,26 +514,26 @@ mod tests {
             ],
         };
         assert_eq!(
-            simple_struct.raw_type(),
+            simple_struct.sql_type(),
             "STRUCT<`id`:int NOT NULL,`name`:STRING>"
         );
     }
 
     #[test]
-    fn test_struct_with_comments_raw_type() {
+    fn test_struct_with_comments_sql_type() {
         // Struct with field comments
-        let struct_with_comments = DatabricksColumnTypeInfo::Struct {
+        let struct_with_comments = Struct {
             fields: vec![
                 DatabricksStructFieldInfo {
                     name: "user_id".to_string(),
-                    type_: DatabricksColumnTypeInfo::BigInt,
+                    type_: BigInt,
                     nullable: false,
                     comment: Some("Unique user identifier".to_string()),
                     default: None,
                 },
                 DatabricksStructFieldInfo {
                     name: "email".to_string(),
-                    type_: DatabricksColumnTypeInfo::String { collation: None },
+                    type_: String { collation: None },
                     nullable: true,
                     comment: Some("User email address".to_string()),
                     default: None,
@@ -561,40 +541,38 @@ mod tests {
             ],
         };
         assert_eq!(
-            struct_with_comments.raw_type(),
+            struct_with_comments.sql_type(),
             "STRUCT<`user_id`:bigint NOT NULL COMMENT \"Unique user identifier\",`email`:STRING COMMENT \"User email address\">"
         );
     }
 
     #[test]
-    fn test_struct_with_escaped_comments_raw_type() {
+    fn test_struct_with_escaped_comments_sql_type() {
         // Struct with comments containing quotes that need escaping
-        let struct_with_escaped_comments = DatabricksColumnTypeInfo::Struct {
+        let struct_with_escaped_comments = Struct {
             fields: vec![DatabricksStructFieldInfo {
                 name: "description".to_string(),
-                type_: DatabricksColumnTypeInfo::String { collation: None },
+                type_: String { collation: None },
                 nullable: true,
                 comment: Some("Contains \"quoted\" text".to_string()),
                 default: None,
             }],
         };
         assert_eq!(
-            struct_with_escaped_comments.raw_type(),
+            struct_with_escaped_comments.sql_type(),
             "STRUCT<`description`:STRING COMMENT \"Contains \\\"quoted\\\" text\">"
         );
     }
 
     #[test]
-    fn test_struct_with_complex_fields_raw_type() {
+    fn test_struct_with_complex_fields_sql_type() {
         // Struct with array and map fields
-        let complex_struct = DatabricksColumnTypeInfo::Struct {
+        let complex_struct = Struct {
             fields: vec![
                 DatabricksStructFieldInfo {
                     name: "tags".to_string(),
-                    type_: DatabricksColumnTypeInfo::Array {
-                        element_type: Box::new(DatabricksColumnTypeInfo::String {
-                            collation: None,
-                        }),
+                    type_: Array {
+                        element_type: Box::new(String { collation: None }),
                         element_nullable: true,
                     },
                     nullable: true,
@@ -603,9 +581,9 @@ mod tests {
                 },
                 DatabricksStructFieldInfo {
                     name: "metadata".to_string(),
-                    type_: DatabricksColumnTypeInfo::Map {
-                        key_type: Box::new(DatabricksColumnTypeInfo::String { collation: None }),
-                        value_type: Box::new(DatabricksColumnTypeInfo::String { collation: None }),
+                    type_: Map {
+                        key_type: Box::new(String { collation: None }),
+                        value_type: Box::new(String { collation: None }),
                         element_nullable: true,
                     },
                     nullable: false,
@@ -615,26 +593,26 @@ mod tests {
             ],
         };
         assert_eq!(
-            complex_struct.raw_type(),
+            complex_struct.sql_type(),
             "STRUCT<`tags`:ARRAY<STRING>,`metadata`:MAP<STRING,STRING> NOT NULL>"
         );
     }
 
     #[test]
-    fn test_nested_struct_raw_type() {
+    fn test_nested_struct_sql_type() {
         // Struct containing nested structs
-        let address_struct = DatabricksColumnTypeInfo::Struct {
+        let address_struct = Struct {
             fields: vec![
                 DatabricksStructFieldInfo {
                     name: "street".to_string(),
-                    type_: DatabricksColumnTypeInfo::String { collation: None },
+                    type_: String { collation: None },
                     nullable: true,
                     comment: None,
                     default: None,
                 },
                 DatabricksStructFieldInfo {
                     name: "city".to_string(),
-                    type_: DatabricksColumnTypeInfo::String { collation: None },
+                    type_: String { collation: None },
                     nullable: true,
                     comment: None,
                     default: None,
@@ -642,11 +620,11 @@ mod tests {
             ],
         };
 
-        let person_struct = DatabricksColumnTypeInfo::Struct {
+        let person_struct = Struct {
             fields: vec![
                 DatabricksStructFieldInfo {
                     name: "name".to_string(),
-                    type_: DatabricksColumnTypeInfo::String { collation: None },
+                    type_: String { collation: None },
                     nullable: false,
                     comment: None,
                     default: None,
@@ -661,26 +639,26 @@ mod tests {
             ],
         };
         assert_eq!(
-            person_struct.raw_type(),
+            person_struct.sql_type(),
             "STRUCT<`name`:STRING NOT NULL,`address`:STRUCT<`street`:STRING,`city`:STRING>>"
         );
     }
 
     #[test]
-    fn test_deeply_nested_complex_types_raw_type() {
+    fn test_deeply_nested_complex_types_sql_type() {
         // Test cominations of arrays, maps, and structs
-        let inner_struct = DatabricksColumnTypeInfo::Struct {
+        let inner_struct = Struct {
             fields: vec![
                 DatabricksStructFieldInfo {
                     name: "key".to_string(),
-                    type_: DatabricksColumnTypeInfo::String { collation: None },
+                    type_: String { collation: None },
                     nullable: false,
                     comment: None,
                     default: None,
                 },
                 DatabricksStructFieldInfo {
                     name: "value".to_string(),
-                    type_: DatabricksColumnTypeInfo::Int,
+                    type_: Int,
                     nullable: true,
                     comment: None,
                     default: None,
@@ -688,23 +666,23 @@ mod tests {
             ],
         };
 
-        let struct_array = DatabricksColumnTypeInfo::Array {
+        let struct_array = Array {
             element_type: Box::new(inner_struct),
             element_nullable: true,
         };
 
-        let map_of_struct_arrays = DatabricksColumnTypeInfo::Map {
-            key_type: Box::new(DatabricksColumnTypeInfo::String { collation: None }),
+        let map_of_struct_arrays = Map {
+            key_type: Box::new(String { collation: None }),
             value_type: Box::new(struct_array),
             element_nullable: false,
         };
 
-        let array_of_maps = DatabricksColumnTypeInfo::Array {
+        let array_of_maps = Array {
             element_type: Box::new(map_of_struct_arrays),
             element_nullable: true,
         };
 
-        let final_struct = DatabricksColumnTypeInfo::Struct {
+        let final_struct = Struct {
             fields: vec![DatabricksStructFieldInfo {
                 name: "complex_data".to_string(),
                 type_: array_of_maps,
@@ -715,37 +693,37 @@ mod tests {
         };
 
         assert_eq!(
-            final_struct.raw_type(),
+            final_struct.sql_type(),
             "STRUCT<`complex_data`:ARRAY<MAP<STRING,ARRAY<STRUCT<`key`:STRING NOT NULL,`value`:int>>>> COMMENT \"Complex nested data structure\">"
         );
     }
 
     #[test]
-    fn test_interval_in_complex_types_raw_type() {
+    fn test_interval_in_complex_types_sql_type() {
         // Test intervals within complex types
-        let interval_array = DatabricksColumnTypeInfo::Array {
-            element_type: Box::new(DatabricksColumnTypeInfo::Interval {
+        let interval_array = Array {
+            element_type: Box::new(Interval {
                 start_unit: "day".to_string(),
                 end_unit: Some("hour".to_string()),
             }),
             element_nullable: true,
         };
-        assert_eq!(interval_array.raw_type(), "ARRAY<INTERVAL day TO hour>");
+        assert_eq!(interval_array.sql_type(), "ARRAY<INTERVAL day TO hour>");
 
-        let interval_map = DatabricksColumnTypeInfo::Map {
-            key_type: Box::new(DatabricksColumnTypeInfo::String { collation: None }),
-            value_type: Box::new(DatabricksColumnTypeInfo::Interval {
+        let interval_map = Map {
+            key_type: Box::new(String { collation: None }),
+            value_type: Box::new(Interval {
                 start_unit: "year".to_string(),
                 end_unit: None,
             }),
             element_nullable: false,
         };
-        assert_eq!(interval_map.raw_type(), "MAP<STRING,INTERVAL year>");
+        assert_eq!(interval_map.sql_type(), "MAP<STRING,INTERVAL year>");
 
-        let struct_with_interval = DatabricksColumnTypeInfo::Struct {
+        let struct_with_interval = Struct {
             fields: vec![DatabricksStructFieldInfo {
                 name: "duration".to_string(),
-                type_: DatabricksColumnTypeInfo::Interval {
+                type_: Interval {
                     start_unit: "month".to_string(),
                     end_unit: None,
                 },
@@ -755,65 +733,65 @@ mod tests {
             }],
         };
         assert_eq!(
-            struct_with_interval.raw_type(),
+            struct_with_interval.sql_type(),
             "STRUCT<`duration`:INTERVAL month>"
         );
     }
 
     #[test]
-    fn test_decimal_in_complex_types_raw_type() {
-        let decimal_array = DatabricksColumnTypeInfo::Array {
-            element_type: Box::new(DatabricksColumnTypeInfo::Decimal {
+    fn test_decimal_in_complex_types_sql_type() {
+        let decimal_array = Array {
+            element_type: Box::new(Decimal {
                 precision: 38,
                 scale: 18,
             }),
             element_nullable: true,
         };
-        assert_eq!(decimal_array.raw_type(), "ARRAY<DECIMAL(38,18)>");
+        assert_eq!(decimal_array.sql_type(), "ARRAY<DECIMAL(38,18)>");
 
-        let map_with_decimal = DatabricksColumnTypeInfo::Map {
-            key_type: Box::new(DatabricksColumnTypeInfo::Decimal {
+        let map_with_decimal = Map {
+            key_type: Box::new(Decimal {
                 precision: 10,
                 scale: 2,
             }),
-            value_type: Box::new(DatabricksColumnTypeInfo::Decimal {
+            value_type: Box::new(Decimal {
                 precision: 20,
                 scale: 10,
             }),
             element_nullable: true,
         };
         assert_eq!(
-            map_with_decimal.raw_type(),
+            map_with_decimal.sql_type(),
             "MAP<DECIMAL(10,2),DECIMAL(20,10)>"
         );
     }
 
     #[test]
-    fn test_timestamp_types_in_complex_types_raw_type() {
-        let timestamp_array = DatabricksColumnTypeInfo::Array {
-            element_type: Box::new(DatabricksColumnTypeInfo::Timestamp),
+    fn test_timestamp_types_in_complex_types_sql_type() {
+        let timestamp_array = Array {
+            element_type: Box::new(Timestamp),
             element_nullable: true,
         };
-        assert_eq!(timestamp_array.raw_type(), "ARRAY<timestamp_ltz>");
+        assert_eq!(timestamp_array.sql_type(), "ARRAY<timestamp_ltz>");
 
-        let timestamp_ntz_array = DatabricksColumnTypeInfo::Array {
-            element_type: Box::new(DatabricksColumnTypeInfo::TimestampNtz),
+        let timestamp_ntz_array = Array {
+            element_type: Box::new(TimestampNtz),
             element_nullable: false,
         };
-        assert_eq!(timestamp_ntz_array.raw_type(), "ARRAY<timestamp_ntz>");
+        assert_eq!(timestamp_ntz_array.sql_type(), "ARRAY<timestamp_ntz>");
 
-        let struct_with_timestamps = DatabricksColumnTypeInfo::Struct {
+        let struct_with_timestamps = Struct {
             fields: vec![
                 DatabricksStructFieldInfo {
                     name: "created_at".to_string(),
-                    type_: DatabricksColumnTypeInfo::Timestamp,
+                    type_: Timestamp,
                     nullable: false,
                     comment: None,
                     default: None,
                 },
                 DatabricksStructFieldInfo {
                     name: "updated_at".to_string(),
-                    type_: DatabricksColumnTypeInfo::TimestampNtz,
+                    type_: TimestampNtz,
                     nullable: true,
                     comment: None,
                     default: None,
@@ -821,7 +799,7 @@ mod tests {
             ],
         };
         assert_eq!(
-            struct_with_timestamps.raw_type(),
+            struct_with_timestamps.sql_type(),
             "STRUCT<`created_at`:timestamp_ltz NOT NULL,`updated_at`:timestamp_ntz>"
         );
     }
