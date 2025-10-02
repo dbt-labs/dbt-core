@@ -903,6 +903,10 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     version: unit_test.version,
                     overrides: unit_test.overrides,
                 },
+                field_event_status: unit_test.field_event_status,
+                field_pre_injected_sql: unit_test.field_pre_injected_sql,
+                tested_node_unique_id: unit_test.tested_node_unique_id,
+                this_input_node_unique_id: unit_test.this_input_node_unique_id,
                 deprecated_config: unit_test.config,
             }),
         );

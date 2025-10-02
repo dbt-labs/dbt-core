@@ -1769,6 +1769,13 @@ pub struct DbtUnitTest {
 
     pub __unit_test_attr__: DbtUnitTestAttr,
 
+    #[serde(rename = "_event_status")]
+    pub field_event_status: Option<BTreeMap<String, YmlValue>>,
+    #[serde(rename = "_pre_injected_sql")]
+    pub field_pre_injected_sql: Option<String>,
+    pub tested_node_unique_id: Option<String>,
+    pub this_input_node_unique_id: Option<String>,
+
     // To be deprecated
     #[serde(rename = "config")]
     pub deprecated_config: UnitTestConfig,

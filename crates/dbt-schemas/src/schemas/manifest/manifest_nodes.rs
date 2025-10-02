@@ -198,6 +198,12 @@ pub struct ManifestUnitTest {
     pub versions: Option<IncludeExclude>,
     pub version: Option<StringOrInteger>,
     pub overrides: Option<UnitTestOverrides>,
+    #[serde(rename = "_event_status")]
+    pub field_event_status: Option<BTreeMap<String, YmlValue>>,
+    #[serde(rename = "_pre_injected_sql")]
+    pub field_pre_injected_sql: Option<String>,
+    pub tested_node_unique_id: Option<String>,
+    pub this_input_node_unique_id: Option<String>,
 }
 
 impl From<DbtUnitTest> for ManifestUnitTest {
@@ -244,6 +250,10 @@ impl From<DbtUnitTest> for ManifestUnitTest {
             versions: unit_test.__unit_test_attr__.versions,
             version: unit_test.__unit_test_attr__.version,
             overrides: unit_test.__unit_test_attr__.overrides,
+            field_event_status: unit_test.field_event_status,
+            field_pre_injected_sql: unit_test.field_pre_injected_sql,
+            tested_node_unique_id: unit_test.tested_node_unique_id,
+            this_input_node_unique_id: unit_test.this_input_node_unique_id,
         }
     }
 }

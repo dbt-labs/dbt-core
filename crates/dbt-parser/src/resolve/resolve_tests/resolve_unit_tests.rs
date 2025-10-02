@@ -265,6 +265,7 @@ pub fn resolve_unit_tests(
                 overrides: unit_test.overrides.clone(),
             },
             deprecated_config: properties_config,
+            ..Default::default()
         };
         // Check if this model has versions
         if let Some(version_info) = model_properties
