@@ -988,7 +988,9 @@ class RuntimeFunctionResolver(BaseFunctionResolver):
         )
 
 
-# TODO: Add RuntimeUnitTestFunctionResolver CT-12024
+# TODO: Right now the RuntimeUnitTestProvider uses the RuntimeFunctionResolver for functions,
+# but for CT-12025 we'll likely need to create a separate RuntimeUnitTestFunctionResolver to
+# handle function overrides (mocking functions)
 
 
 # Providers
