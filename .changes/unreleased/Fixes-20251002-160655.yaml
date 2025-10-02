@@ -1,0 +1,6 @@
+kind: Fixes
+body: Exclude `functions` from being filtered by `empty` and `event_time`
+time: 2025-10-02T16:06:55.689911-05:00
+custom:
+  Author: QMalcolm
+  Issue: "12066"
