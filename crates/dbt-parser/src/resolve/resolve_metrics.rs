@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
 use super::resolve_properties::MinimalPropertiesEntry;
-use super::validate_metrics::validate_metric_name;
+use super::validate_metrics::validate_metric;
 
 use dbt_schemas::schemas::manifest::metric::{
     DbtMetric, DbtMetricAttr, MeasureAggregationParameters, MetricAggregationParameters,
@@ -149,8 +149,8 @@ pub fn resolve_nested_model_metrics(
             for metric_props in model_metrics_props {
                 let metric_name = metric_props.name.clone();
 
-                // Validate metric name
-                if let Err(e) = validate_metric_name(&metric_name) {
+                // Validate metric (name and window)
+                if let Err(e) = validate_metric(metric_props) {
                     show_error!(&arg.io, e);
                     continue;
                 }
@@ -323,8 +323,8 @@ pub fn resolve_top_level_metrics(
 
         let metric_name = metric_props.name.clone();
 
-        // Validate metric name
-        if let Err(e) = validate_metric_name(&metric_name) {
+        // Validate metric (name and window)
+        if let Err(e) = validate_metric(&metric_props) {
             show_error!(&arg.io, e);
             continue;
         }

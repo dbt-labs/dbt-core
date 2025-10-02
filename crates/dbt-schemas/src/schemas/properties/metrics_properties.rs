@@ -8,7 +8,7 @@ use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Default)]
 pub struct MetricsProperties {
     pub name: String,
     pub description: Option<String>,
@@ -109,7 +109,7 @@ pub enum WindowChoice {
     Max,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 pub struct MetricPropertiesMetricInput {
     pub name: String,
     pub filter: Option<String>,
@@ -124,7 +124,7 @@ pub enum StringOrMetricPropertiesMetricInput {
     MetricPropertiesMetricInput(MetricPropertiesMetricInput),
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, JsonSchema, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum ConversionCalculationType {
     conversions,
@@ -132,7 +132,7 @@ pub enum ConversionCalculationType {
     conversion_rate,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 pub struct ConstantProperty {
     pub base_property: String,
     pub conversion_property: String,

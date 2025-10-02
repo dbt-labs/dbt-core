@@ -145,15 +145,65 @@ pub struct MetricTimeWindow {
 }
 
 impl MetricTimeWindow {
-    pub fn from_string(str: String) -> Self {
+    pub fn from_string(str: String) -> Result<Self, String> {
         let parts: Vec<&str> = str.split_whitespace().collect();
-        let count = parts[0].parse().unwrap_or(1);
-        // remove last 's' if plural, ex. 'days' -> 'day'
-        let mut granularity = parts[1].parse().unwrap_or_else(|_| "month".to_string());
-        if granularity.ends_with('s') {
-            granularity.pop();
+
+        // Check if we have exactly 2 parts
+        if parts.len() != 2 {
+            return Err(format!(
+                "Invalid window ({}). Should be of the form `<count> <granularity>`, e.g., `28 days`",
+                str
+            ));
         }
-        Self { count, granularity }
+
+        // Parse count - must be a digit
+        let count_str = parts[0];
+        if !count_str.chars().all(|c| c.is_ascii_digit()) {
+            return Err(format!(
+                "Invalid count ({}) in window string: ({})",
+                count_str, str
+            ));
+        }
+
+        let count: i32 = count_str
+            .parse()
+            .map_err(|_| format!("Invalid count ({}) in window string: ({})", count_str, str))?;
+
+        // Parse granularity
+        let mut granularity = parts[1].to_lowercase();
+
+        // Valid granularities from the Granularity enum
+        let valid_granularities = [
+            "nanosecond",
+            "microsecond",
+            "millisecond",
+            "second",
+            "minute",
+            "hour",
+            "day",
+            "week",
+            "month",
+            "quarter",
+            "year",
+        ];
+
+        // Check if granularity ends with 's' and the base form is valid
+        if granularity.ends_with('s') {
+            let singular_form = &granularity[..granularity.len() - 1];
+            if valid_granularities.contains(&singular_form) {
+                granularity = singular_form.to_string();
+            }
+        }
+
+        // Validate final granularity
+        if !valid_granularities.contains(&granularity.as_str()) {
+            return Err(format!(
+                "Invalid granularity ({}) in window string: ({})",
+                parts[1], str
+            ));
+        }
+
+        Ok(Self { count, granularity })
     }
 }
 
@@ -182,7 +232,9 @@ impl From<MetricsProperties> for ConversionTypeParams {
     fn from(props: MetricsProperties) -> Self {
         Self {
             entity: props.entity.unwrap_or_default(),
-            window: props.window.map(MetricTimeWindow::from_string),
+            window: props
+                .window
+                .and_then(|w| MetricTimeWindow::from_string(w).ok()),
             base_measure: None,
             base_metric: props.base_metric.map(MetricInput::from),
             conversion_measure: None,
@@ -204,7 +256,9 @@ pub struct CumulativeTypeParams {
 impl From<MetricsProperties> for CumulativeTypeParams {
     fn from(props: MetricsProperties) -> Self {
         Self {
-            window: props.window.map(MetricTimeWindow::from_string),
+            window: props
+                .window
+                .and_then(|w| MetricTimeWindow::from_string(w).ok()),
             grain_to_date: props.grain_to_date.map(|value| value.to_string()),
             period_agg: props.period_agg.unwrap_or_default(),
             metric: props.input_metric.map(MetricInput::from),
@@ -240,7 +294,7 @@ impl From<MetricPropertiesMetricInput> for MetricInput {
             alias: metric_input.alias,
             offset_window: metric_input
                 .offset_window
-                .map(MetricTimeWindow::from_string),
+                .and_then(|w| MetricTimeWindow::from_string(w).ok()),
             offset_to_grain: None,
         }
     }
@@ -283,7 +337,9 @@ impl From<MetricsProperties> for MetricTypeParams {
         let window: Option<MetricTimeWindow> = match &metric_type {
             MetricType::Cumulative => None,
             MetricType::Conversion => None,
-            _ => props.window.map(MetricTimeWindow::from_string),
+            _ => props
+                .window
+                .and_then(|w| MetricTimeWindow::from_string(w).ok()),
         };
 
         let mut type_params = MetricTypeParams {
