@@ -20,7 +20,7 @@ from typing_extensions import Protocol
 
 from dbt import selected_resources
 from dbt.adapters.base.column import Column
-from dbt.adapters.base.relation import EventTimeFilter
+from dbt.adapters.base.relation import EventTimeFilter, RelationType
 from dbt.adapters.contracts.connection import AdapterResponse
 from dbt.adapters.exceptions import MissingConfigError
 from dbt.adapters.factory import (
@@ -953,7 +953,7 @@ class ParseFunctionResolver(BaseFunctionResolver):
     def resolve(self, name: str, package: Optional[str] = None):
         # When you call function(), this is what happens at parse time
         self.model.functions.append(self._repack_args(name, package))
-        return self.Relation.create_from(self.config, self.model)
+        return self.Relation.create_from(self.config, self.model, type=RelationType.Function)
 
 
 class RuntimeFunctionResolver(BaseFunctionResolver):
@@ -984,6 +984,7 @@ class RuntimeFunctionResolver(BaseFunctionResolver):
             target_function,
             limit=self.resolve_limit,
             event_time_filter=self.resolve_event_time_filter(target_function),
+            type=RelationType.Function,
         )
 
 
