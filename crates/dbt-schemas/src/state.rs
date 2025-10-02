@@ -388,6 +388,7 @@ pub struct ResolverState {
     pub defer_nodes: Option<Nodes>,
     /// Nodes that had resolution errors (e.g., unresolved refs/sources)
     pub nodes_with_resolution_errors: HashSet<String>,
+    pub semantic_layer_spec_is_legacy: bool,
 }
 
 impl ResolverState {

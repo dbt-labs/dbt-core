@@ -189,50 +189,62 @@ pub async fn resolve(
 
     let package_waves = utils::prepare_package_dependency_levels(dbt_state.clone());
 
+    let mut semantic_layer_spec_is_legacy = false;
+
     // Use sequential processing if num_threads is 1, otherwise use parallel processing
     if arg.num_threads == Some(1) {
-        let (resolved_nodes, resolved_disabled_nodes, resolved_collector) =
-            resolve_packages_sequentially(
-                package_waves,
-                arg,
-                dbt_state.clone(),
-                root_project_name,
-                root_project_configs.clone(),
-                adapter_type,
-                &macros,
-                jinja_env.clone(),
-                &mut refs_and_sources,
-                &mut all_runtime_configs,
-                token,
-            )
-            .await?;
+        let (
+            resolved_nodes,
+            resolved_disabled_nodes,
+            resolved_collector,
+            resolved_semantic_layer_spec_is_legacy,
+        ) = resolve_packages_sequentially(
+            package_waves,
+            arg,
+            dbt_state.clone(),
+            root_project_name,
+            root_project_configs.clone(),
+            adapter_type,
+            &macros,
+            jinja_env.clone(),
+            &mut refs_and_sources,
+            &mut all_runtime_configs,
+            token,
+        )
+        .await?;
         nodes.extend(resolved_nodes);
         disabled_nodes.extend(resolved_disabled_nodes);
         collector
             .rendering_results
             .extend(resolved_collector.rendering_results);
+        semantic_layer_spec_is_legacy |= resolved_semantic_layer_spec_is_legacy;
     } else {
         // Parallel processing (original implementation)
-        let (resolved_nodes, resolved_disabled_nodes, resolved_collector) =
-            resolve_packages_parallel(
-                package_waves,
-                arg,
-                dbt_state.clone(),
-                root_project_name,
-                root_project_configs.clone(),
-                adapter_type,
-                &macros,
-                jinja_env.clone(),
-                &mut refs_and_sources,
-                &mut all_runtime_configs,
-                token,
-            )
-            .await?;
+        let (
+            resolved_nodes,
+            resolved_disabled_nodes,
+            resolved_collector,
+            resolved_semantic_layer_spec_is_legacy,
+        ) = resolve_packages_parallel(
+            package_waves,
+            arg,
+            dbt_state.clone(),
+            root_project_name,
+            root_project_configs.clone(),
+            adapter_type,
+            &macros,
+            jinja_env.clone(),
+            &mut refs_and_sources,
+            &mut all_runtime_configs,
+            token,
+        )
+        .await?;
         nodes.extend(resolved_nodes);
         disabled_nodes.extend(resolved_disabled_nodes);
         collector
             .rendering_results
             .extend(resolved_collector.rendering_results);
+        semantic_layer_spec_is_legacy |= resolved_semantic_layer_spec_is_legacy;
     }
     // Ensure that there are no duplicate relations
     check_relation_uniqueness(&nodes)?;
@@ -283,6 +295,7 @@ pub async fn resolve(
             resolved_selectors,
             root_project_quoting: root_project_quoting.try_into()?,
             defer_nodes: None,
+            semantic_layer_spec_is_legacy,
         },
         jinja_env,
     ))
@@ -390,7 +403,7 @@ pub async fn resolve_inner(
     refs_and_sources: &mut RefsAndSources,
     runtime_config: Arc<DbtRuntimeConfig>,
     token: &CancellationToken,
-) -> FsResult<(Nodes, Nodes, RenderResults, RefsAndSources)> {
+) -> FsResult<(Nodes, Nodes, RenderResults, RefsAndSources, bool)> {
     let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
 
@@ -584,53 +597,57 @@ pub async fn resolve_inner(
     nodes.exposures.extend(exposures);
     disabled_nodes.exposures.extend(disabled_exposures);
 
-    let (semantic_models, disabled_semantic_models) = resolve_semantic_models(
-        arg,
-        package,
-        root_project_configs,
-        &mut min_properties.models.clone(),
-        &typed_models_properties,
-        nodes.clone().models,
-        package_name,
-        &jinja_env,
-        &base_ctx,
-    )
-    .await?;
-    nodes.semantic_models.extend(semantic_models);
-    disabled_nodes
-        .semantic_models
-        .extend(disabled_semantic_models);
+    let semantic_layer_spec_is_legacy = min_properties.semantic_layer_spec_is_legacy;
 
-    let (metrics, disabled_metrics) = resolve_metrics(
-        arg,
-        package,
-        root_project_configs,
-        &mut min_properties.models.clone(),
-        &mut min_properties.metrics.clone(),
-        &typed_models_properties,
-        package_name,
-        &jinja_env,
-        &base_ctx,
-    )
-    .await?;
-    nodes.metrics.extend(metrics);
-    disabled_nodes.metrics.extend(disabled_metrics);
+    if !semantic_layer_spec_is_legacy {
+        let (semantic_models, disabled_semantic_models) = resolve_semantic_models(
+            arg,
+            package,
+            root_project_configs,
+            &mut min_properties.models.clone(),
+            &typed_models_properties,
+            nodes.clone().models,
+            package_name,
+            &jinja_env,
+            &base_ctx,
+        )
+        .await?;
+        nodes.semantic_models.extend(semantic_models);
+        disabled_nodes
+            .semantic_models
+            .extend(disabled_semantic_models);
 
-    let (saved_queries, disabled_saved_queries) = resolve_saved_queries(
-        arg,
-        package,
-        root_package_name,
-        root_project_configs,
-        &mut min_properties.saved_queries,
-        database,
-        schema,
-        package_name,
-        jinja_env.clone(),
-        &base_ctx,
-    )
-    .await?;
-    nodes.saved_queries.extend(saved_queries);
-    disabled_nodes.saved_queries.extend(disabled_saved_queries);
+        let (metrics, disabled_metrics) = resolve_metrics(
+            arg,
+            package,
+            root_project_configs,
+            &mut min_properties.models.clone(),
+            &mut min_properties.metrics.clone(),
+            &typed_models_properties,
+            package_name,
+            &jinja_env,
+            &base_ctx,
+        )
+        .await?;
+        nodes.metrics.extend(metrics);
+        disabled_nodes.metrics.extend(disabled_metrics);
+
+        let (saved_queries, disabled_saved_queries) = resolve_saved_queries(
+            arg,
+            package,
+            root_package_name,
+            root_project_configs,
+            &mut min_properties.saved_queries,
+            database,
+            schema,
+            package_name,
+            jinja_env.clone(),
+            &base_ctx,
+        )
+        .await?;
+        nodes.saved_queries.extend(saved_queries);
+        disabled_nodes.saved_queries.extend(disabled_saved_queries);
+    }
 
     let (data_tests, disabled_tests) = resolve_data_tests(
         arg,
@@ -693,7 +710,13 @@ pub async fn resolve_inner(
 
     clear_package_diagnostics(&arg.io, package);
 
-    Ok((nodes, disabled_nodes, collector, refs_and_sources.clone()))
+    Ok((
+        nodes,
+        disabled_nodes,
+        collector,
+        refs_and_sources.clone(),
+        semantic_layer_spec_is_legacy,
+    ))
 }
 
 /// Function to check models, seeds, and snapshots for relation uniqueness
@@ -749,6 +772,7 @@ async fn resolve_package(
     Nodes,
     RenderResults,
     RefsAndSources,
+    bool,
 )> {
     let package = dbt_state
         .packages
@@ -775,21 +799,26 @@ async fn resolve_package(
         &dbt_state.cli_vars.clone(),
     ));
 
-    let (new_nodes, new_disabled_nodes, rendering_results, updated_refs_and_sources) =
-        resolve_inner(
-            &arg,
-            package,
-            dbt_state.clone(),
-            &root_project_name,
-            &root_project_configs,
-            adapter_type,
-            &macros,
-            jinja_env.clone(),
-            &mut refs_and_sources.clone(),
-            runtime_config.clone(),
-            token,
-        )
-        .await?;
+    let (
+        new_nodes,
+        new_disabled_nodes,
+        rendering_results,
+        updated_refs_and_sources,
+        semantic_layer_spec_is_legacy,
+    ) = resolve_inner(
+        &arg,
+        package,
+        dbt_state.clone(),
+        &root_project_name,
+        &root_project_configs,
+        adapter_type,
+        &macros,
+        jinja_env.clone(),
+        &mut refs_and_sources.clone(),
+        runtime_config.clone(),
+        token,
+    )
+    .await?;
 
     // Return everything needed for merging
     Ok((
@@ -799,6 +828,7 @@ async fn resolve_package(
         new_disabled_nodes,
         rendering_results,
         updated_refs_and_sources,
+        semantic_layer_spec_is_legacy,
     ))
 }
 
@@ -816,13 +846,13 @@ async fn resolve_packages_sequentially(
     refs_and_sources: &mut RefsAndSources,
     all_runtime_configs: &mut BTreeMap<String, Arc<DbtRuntimeConfig>>,
     token: &CancellationToken,
-) -> FsResult<(Nodes, Nodes, RenderResults)> {
+) -> FsResult<(Nodes, Nodes, RenderResults, bool)> {
     let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
     let mut collector = RenderResults {
         rendering_results: BTreeMap::new(),
     };
-
+    let mut semantic_layer_spec_is_legacy = false;
     for package_wave in package_waves {
         token.check_cancellation()?;
 
@@ -849,7 +879,10 @@ async fn resolve_packages_sequentially(
                 new_disabled_nodes,
                 rendering_results,
                 updated_refs_and_sources,
+                resolved_semantic_layer_spec_is_legacy,
             ) = result;
+
+            semantic_layer_spec_is_legacy |= resolved_semantic_layer_spec_is_legacy;
 
             // Update runtime configs for next wave
             all_runtime_configs.insert(package_name, runtime_config);
@@ -864,7 +897,12 @@ async fn resolve_packages_sequentially(
         }
     }
 
-    Ok((nodes, disabled_nodes, collector))
+    Ok((
+        nodes,
+        disabled_nodes,
+        collector,
+        semantic_layer_spec_is_legacy,
+    ))
 }
 
 /// Resolves packages in parallel using tokio::spawn.
@@ -881,13 +919,13 @@ async fn resolve_packages_parallel(
     refs_and_sources: &mut RefsAndSources,
     all_runtime_configs: &mut BTreeMap<String, Arc<DbtRuntimeConfig>>,
     token: &CancellationToken,
-) -> FsResult<(Nodes, Nodes, RenderResults)> {
+) -> FsResult<(Nodes, Nodes, RenderResults, bool)> {
     let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
     let mut collector = RenderResults {
         rendering_results: BTreeMap::new(),
     };
-
+    let mut semantic_layer_spec_is_legacy = false;
     for package_wave in package_waves {
         token.check_cancellation()?;
 
@@ -932,11 +970,14 @@ async fn resolve_packages_parallel(
                 new_disabled_nodes,
                 rendering_results,
                 updated_refs_and_sources,
+                resolved_semantic_layer_spec_is_legacy,
             ) = match result {
                 Ok(Ok(val)) => val,
                 Ok(Err(e)) => return Err(Box::new(e)),
                 Err(e) => return Err(fs_err!(ErrorCode::Unexpected, "Join error: {}", e)),
             };
+            semantic_layer_spec_is_legacy |= resolved_semantic_layer_spec_is_legacy;
+
             // Update runtime configs for next wave
             all_runtime_configs.insert(package_name.clone(), runtime_config);
             // Merge results in main thread
@@ -950,7 +991,12 @@ async fn resolve_packages_parallel(
         }
     }
 
-    Ok((nodes, disabled_nodes, collector))
+    Ok((
+        nodes,
+        disabled_nodes,
+        collector,
+        semantic_layer_spec_is_legacy,
+    ))
 }
 
 /// Prepares inline SQL for processing by writing it to a file and adding it to the DbtState.

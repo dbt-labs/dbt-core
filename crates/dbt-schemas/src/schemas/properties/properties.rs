@@ -23,7 +23,7 @@ use super::SnapshotProperties;
 use super::SourceProperties;
 use super::unit_test_properties::UnitTestProperties;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct DbtPropertiesFileValues {
     pub version: Option<FloatOrString>,
     pub analyses: Option<Vec<dbt_serde_yaml::Value>>,

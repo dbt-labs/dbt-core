@@ -44,6 +44,7 @@ pub struct MinimalProperties {
     pub metrics: BTreeMap<String, MinimalPropertiesEntry>,
     pub saved_queries: BTreeMap<String, MinimalPropertiesEntry>,
     pub groups: BTreeMap<String, MinimalPropertiesEntry>,
+    pub semantic_layer_spec_is_legacy: bool,
 }
 
 // impl try extend from MinimalResolvedProperties
@@ -270,18 +271,6 @@ impl MinimalProperties {
                 );
             }
         }
-        if let Some(_semantic_models) = other.semantic_models {
-            // Top level semantic models are not allowed anymore
-            // TODO: edit copy to encourage user to use auto-fix.
-            show_warning!(
-                io_args,
-                fs_err!(
-                    ErrorCode::SchemaError,
-                    "This project defines semantic models and metrics using the legacy YAML in file '{}'. Please migrate to the new YAML to use the semantic layer with dbt Fusion.",
-                    properties_path.display(),
-                )
-            );
-        }
         if let Some(metrics) = other.metrics {
             for metric_value in metrics {
                 let metric = into_typed_with_jinja::<MinimalSchemaValue, _>(
@@ -474,6 +463,7 @@ impl MinimalProperties {
                 }
             }
         }
+
         Ok(())
     }
 }
@@ -493,6 +483,7 @@ fn validate_resource_name(name: &str) -> FsResult<String> {
     }
 }
 
+#[allow(clippy::cognitive_complexity)]
 pub fn resolve_minimal_properties(
     arg: &ResolveArgs,
     package: &DbtPackage,
@@ -501,7 +492,11 @@ pub fn resolve_minimal_properties(
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     token: &CancellationToken,
 ) -> FsResult<MinimalProperties> {
-    let mut minimal_resolved_properties = MinimalProperties::default();
+    let mut minimal_resolved_properties = MinimalProperties {
+        semantic_layer_spec_is_legacy: false,
+        ..Default::default()
+    };
+
     for dbt_asset in package.dbt_properties.iter().dedup() {
         token.check_cancellation()?;
         let absolute_path = dbt_asset.base_path.join(&dbt_asset.path);
@@ -532,13 +527,29 @@ pub fn resolve_minimal_properties(
             dependency_package_name,
         ) {
             Ok(properties_file_values) => {
+                let properties_path = &dbt_asset.path;
                 minimal_resolved_properties.extend_from_minimal_properties_file(
                     &arg.io,
-                    properties_file_values,
+                    properties_file_values.clone(),
                     jinja_env,
-                    &dbt_asset.path,
+                    properties_path,
                     base_ctx,
                 )?;
+
+                if !minimal_resolved_properties.semantic_layer_spec_is_legacy
+                    && let Some(_semantic_models) = properties_file_values.semantic_models
+                {
+                    // Top level semantic models are not allowed anymore
+                    // TODO: edit copy to encourage user to use auto-fix.
+                    show_warning!(
+                        arg.io,
+                        fs_err!(
+                            ErrorCode::SchemaError,
+                            "This project defines semantic models and metrics using the legacy YAML. Please migrate to the new YAML to use the semantic layer with dbt Fusion.",
+                        )
+                    );
+                    minimal_resolved_properties.semantic_layer_spec_is_legacy = true;
+                }
             }
             Err(e) => {
                 if let Some(package_name) = dependency_package_name
